@@ -12,6 +12,8 @@ Reading guide: [recommendation](#1-recommendation),
 
 The [compiler profiles](compiler-profiles.md) contain measured C, C++, and Rust
 check costs. They are evidence about existing compilers, not an RMD speed result.
+The [systems source study](systems-capabilities.md) records concrete Linux, GCC,
+LLVM, and Coho requirements. It explains the direct-link representation target.
 
 ## 1. Recommendation
 
@@ -36,21 +38,26 @@ The first experiment should have these properties:
 - Complete function signatures. Local expressions can determine local variable types.
 - One owner for each resource. Moves transfer ownership without user code.
 - Automatic cleanup on normal scope exits, including explicit error returns.
-- Lexical shared or exclusive borrows. Borrowed data cannot enter persistent storage.
+- Lexical shared or exclusive borrows for local views.
+- Direct embedded links with a separate persistent-pointer lifetime contract.
 - Explicit result values, allocation, C calls, and unsafe operations.
 - No mandatory garbage collector, reference count, exception runtime, or scheduler.
 
-The largest design risk is the borrow interface. A rule that forbids all borrowed
-returns is small, but it forces many container APIs to use callbacks. Those callbacks
-can add calls, obscure control flow, and make ordinary code harder to write.
-Compare this strict rule with a narrow extension: a returned view names one input
-as its source. Do not start with a general lifetime language.
+Use direct C/C++-style intrusive links as the primary representation. Keep
+membership separate from ownership. Add automatic unlinking, explicit address
+stability, and clear destruction rules. Do not require a pool, arena, generation
+table, or per-node list identity to use a list. Section 6.9 defines this target.
 
-Use opt-in checked pool keys for reclaimable intrusive links. They support
-individual destruction and reuse without a heap-shape solver. Their generation
-metadata and validity checks are an explicit selected cost. Ordinary owners and
-borrows do not acquire that metadata. Section 6.9 specifies the contract and
-compares the stronger static alternative.
+The main open contract is safe access through persistent aliases after individual
+destruction. Automatic unlinking alone does not solve it. The earlier combination
+of forbidden stored borrows and unsafe raw dereferences forced a pool workaround.
+That combination is not a complete language design for this target. Compare a
+small static contract with opt-in checked pointers; keep their costs explicit.
+
+The local borrow interface also needs a test. A ban on borrowed returns forces
+callbacks, which can add calls and obscure control flow. Compare it with a narrow
+extension in which a returned view names one input as its source. Neither version
+by itself establishes the lifetime of stored graph links.
 
 This document proposes rules. It does not claim a soundness proof, a completed
 language, or a measured RMD speed result. The source research used three parallel
@@ -69,17 +76,21 @@ Use this priority order:
 
 The intrusive-list requirement includes writing the list algorithm itself.
 Calling a compiler-provided list or a list implemented with unsafe code is not
-sufficient evidence. The allocator and identity issuer are trusted primitives.
-The splice and unlink algorithm must remain safe user code.
+sufficient evidence. Allocation and primitive memory access need explicit trust
+contracts. The splice and unlink algorithm must remain safe user code.
+Linux, GCC, LLVM, and the Coho list define the required capability level.
+Their storage and mutation patterns must not be rejected just to simplify a
+local-borrow experiment.
 
 “Zero overhead” means comparison with C code that has the same behavior.
 A checked array access has a possible branch. A resource must be released.
 An optional value may need a tag. These costs do not disappear because a feature
 has a useful name. List them and measure them.
 
-Opt-in checked links are permitted to pay for generation checks and identity
-metadata. Compare them with equivalent checked-key C to measure language overhead.
-Also report their cost against raw-pointer C. Do not call that added safety free.
+Opt-in checks are permitted. That permission does not select a pool architecture.
+Use direct C/C++ as the primary representation and operation baseline. For a
+checked-pointer or handle experiment, also measure equivalent checked C.
+Report every metadata field, check, allocation, and pointer update it adds.
 
 Code that does not use a feature must not acquire its runtime support.
 For compilation, every language has some shared parser and type-system cost.
@@ -341,8 +352,8 @@ types still need a usability and compilation experiment for this project.
 
 The `generational-arena` implementation demonstrates another route: a safe Rust
 pool with generation-bearing indices. It forbids unsafe code in its implementation.
-This supports the feasibility of a safe pool, not raw-pointer performance or all
-the identity rules proposed here.
+This supports an optional safe-pool library. It does not establish direct-pointer
+performance or justify requiring that storage model for ordinary lists.
 [Generational arena source](https://docs.rs/generational-arena/latest/src/generational_arena/lib.rs.html)
 
 Static fractional ownership is another useful lead. The public
@@ -375,8 +386,10 @@ constructor must establish a unique valid resource and its release contract.
 
 Define normal record field order and padding rules. Mark C records explicitly.
 Do not add hidden vtables, reference counts, or ownership headers. Raw C pointers
-are permitted, but dereference and construction of safe views require an unsafe
-contract. Use a tagged optional type when absence is valid.
+are permitted. Foreign pointers and unclassified raw storage require an unsafe
+contract before safe access. The direct-link pointer contract in section 6.9
+must permit the user-written list algorithm; it is not established by these raw
+pointer rules. Use a tagged optional type when absence is valid.
 
 Use compiler-known `Option[T]` and `Result[T, E]` in the first experiment.
 They describe tagged data, not arbitrary generic function bodies. Do not assume
@@ -385,13 +398,16 @@ tag removal or a special ABI until it is specified and tested.
 ### 6.2 Ownership and cleanup
 
 Each resource has one cleanup obligation. Successful initialization creates it.
-A move transfers it and makes the source unusable. Moves do not call user code.
+A permitted move transfers it and makes the source unusable. Moves do not call
+user code. Initialized address-stable objects need a separate rule that prohibits
+implicit relocation. Their owning handles can still move.
 Assignment evaluates the new value before it releases an old live value.
 
 A safe `replace(place, value)` operation installs the new complete value and
 returns the old owned value. It leaves the place initialized on every normal path.
-Use it to extract an occupied pool slot without a partial move from an array.
-This is a fixed ownership operation, not a generic function search.
+Use it to extract an array element of a movable type without a partial move.
+It cannot relocate an initialized address-stable object. This is a fixed
+ownership operation, not a generic function search.
 
 A nominal resource can define one drop action. Drop cannot return a recoverable
 error or unwind. A drop action cannot publish the object again. Resource fields
@@ -494,13 +510,16 @@ Check overlap across all call arguments. If one argument is exclusive, no other
 argument can access the same root. Safe calls cannot bypass this rule through a
 different parameter name.
 
-A borrowed value is second-class: it can be a parameter or a local view, but
-cannot enter a record, global, heap object, or escaping callback. This applies
-through aggregate and pointer conversions too. Raw operations cannot turn a
-borrow into a safe long-lived value.
-An integer pool key is different: it is a copyable identity, not permission to
-dereference memory. It can be stored in a record. Access requires a live pool
-and validation, as described in section 6.9.
+This local-view experiment uses second-class borrows. Such a view can be a
+parameter or local value, but cannot escape into persistent storage. Aggregate
+and pointer conversions must preserve that restriction.
+
+This is a rule for the local view category, not a ban on all stored references
+in the language. Direct list links, graph edges, and scoped stack attachments
+need their own lifetime and alias contract. Section 6.9 states the required
+witness. An address is not automatically an exclusive borrow, and it does not
+prove that the target remains alive. Optional integer handles are another
+library representation; they are not the required replacement for pointers.
 
 For the strict experiment, functions cannot return borrowed values. Built-in
 array indexing and slicing are checked projections of a known owner. Custom
@@ -553,9 +572,11 @@ not follow automatically.
 
 ### 6.5 Safety boundary and allocation
 
-The checked subset must prevent use after move, duplicate resource release,
-dangling local views, and conflicting access. It must also prevent uninitialized
-reads, out-of-bounds access, and use of an unchecked union variant.
+The local-borrow subset must prevent use after move, duplicate resource release,
+dangling local views, and conflicting borrowed access. It must also prevent
+uninitialized reads, out-of-bounds access, and unchecked union access.
+The direct-link extension must state and establish its own access guarantees.
+The rules above do not prove full temporal memory safety for stored pointers.
 
 Unsafe code establishes contracts for raw storage, C handles, aliasing, and
 callbacks. A safe wrapper must preserve these contracts for every safe caller.
@@ -575,8 +596,9 @@ elements, or explicitly pay for a destructor list and its traversal.
 
 Shared reads are transitively read-only. The first core has no safe mutation
 through a shared view. An unsafe wrapper cannot override this rule while a read
-loan exists. Interior-mutable storage would need a compiler-visible type rule
-before safe atomics or cells can use it.
+loan exists. Aliased mutable storage needs an explicit type rule before safe
+link fields, atomics, or cells can use it. Ordinary shared reads must not
+silently acquire that behavior. This missing rule is part of the systems test.
 Mutable global access, asynchronous foreign callbacks, and
 raw thread launch are unsafe in this first experiment. A safe thread API needs
 an ownership-transfer rule and a guarantee that borrowed workers finish before
@@ -615,8 +637,9 @@ buffer builders; a generic collection framework is not a prerequisite.
 
 ### 6.7 Generics and other omitted machinery
 
-The first measured slice has no user-defined generics. Use concrete records,
-byte buffers, and typed function pointers with explicit concrete context
+The first measured slice has no user-defined generics. This bounds the experiment;
+it does not establish a complete language for GCC or LLVM workloads.
+Use concrete records, byte buffers, and typed function pointers with concrete context
 parameters. A `void*` context needs an audited cast; it is not automatically safe.
 
 This choice can cause repeated code. Do not hide that cost by declaring every
@@ -653,222 +676,187 @@ Accepted examples alone do not test the ownership contract.
 | Consume a resource, then break from a possibly empty loop | Reject unequal resource states at the loop exit. |
 | Move an argument, then fail while evaluating the next argument | Release the completed temporary exactly once. |
 | Construct two resource wrappers from one raw handle | Require an unsafe ownership assertion; safe construction rejects it. |
-| Put a borrowed view inside a returned ordinary record | Reject the escape through the record. |
+| Put a local lexical view inside a returned ordinary record | Reject that view's escape; this does not decide the stored-link contract. |
 | Return a view of a local copy under `from input` | Reject the false storage origin. |
 | Retain a returned view from a call-only temporary owner | Reject the missing lexical owner. |
 | Re-enter a mutable global from a callback | Require an unsafe boundary; no hidden shared alias is permitted. |
 | Return storage tied to a local allocator | Reject the independent owner contract or keep it scoped. |
 | Register a borrowed context for a later foreign callback | Require owned registration state and completion of all uses before release. |
 | Reset an arena that contains live resource values | Run explicit destructors or reject those element types. |
+| Move an initialized self-linked hook by value | Reject implicit relocation under the address-stable rule. |
+| Destroy a linked node, then use a saved independent pointer | Reject or check the stale access under the selected pointer contract; auto-unlink alone is insufficient. |
 
 ### 6.9 Intrusive lists with individual destruction and reuse
 
-The node contains its own `prev` and `next` fields. There is no separately
-allocated list cell around each payload. The same object can contain a second
-hook for another list. This follows the useful storage property of intrusive
-containers.
-[Boost intrusive and non-intrusive containers](https://www.boost.org/doc/libs/latest/doc/html/intrusive/intrusive_vs_nontrusive.html)
+Use direct embedded links as the primary representation. A list must not dictate
+how its nodes are allocated. Support stack objects, separate heap allocations,
+and application-selected slabs or arenas. Individual destruction and storage
+reuse remain required. A pool is an optional container library.
 
-There are two different safety questions:
+Patrick Wyatt's example is the practical starting point: embedded hooks and
+automatic unlinking on destruction. The linked Coho source separates list
+membership from payload ownership. Its hook has two pointers. Its list destructor
+detaches nodes; a separate operation deletes them.
+[Article](https://www.codeofhonor.com/blog/avoiding-game-crashes-related-to-linked-lists/),
+[Coho source](https://github.com/webcoyote/coho/blob/c545721bac81f9bff567a29c337ce18c56766b32/Base/List.h#L111-L234)
 
-1. Who may read or mutate a node now?
-2. Does a saved link still identify the same live node?
+The [systems source study](systems-capabilities.md) adds stack waiters, bulk
+splice, compiler use lists, callbacks, and controlled relocation. These are
+requirements for the language target. The two-hook example alone does not
+establish that target.
 
-A unique token can answer the first question without answering the second.
-After `saved = victim`, unlinking and destroying `victim` does not remove
-`saved` or a copied link inside another live node. Reusing the address makes
-the stale identity problem harder. Ending temporary borrows does not fix it.
+#### Direct representation and operations
 
-| Candidate | Individual destruction and reuse | Representation and cost | Decision |
-|---|---|---|---|
-| Arena plus erased access token | No individual storage reuse in the simple model | Ordinary links; memory retained for all nodes | Does not satisfy the requirement |
-| Static node permissions and recursive store types | Yes, when permissions prove access and release | Pointer-sized links are possible; stronger type checking and annotations | Not selected for the small core |
-| Checked pool keys | Yes, with a new identity on reuse | Embedded keys, slot metadata, and lookup checks | Selected opt-in design |
-| Permanent slot without generations | Destroys payload, but old keys can identify a new occupant | Smaller identity and an empty-slot test | Does not preserve node identity |
-| Compiler-defined splice and auto-unlink primitives | Possible only under their restricted contracts | User cannot freely implement the pointer algorithm | Does not prove the requested language expressiveness |
-
-Automatic unlinking also does not invalidate arbitrary saved cursors.
-Boost's auto-unlink hook illustrates useful cleanup behavior and restrictions,
-including its interaction with constant-time size tracking. It is not a general
-proof that every pointer to a removed object is gone.
-[Boost auto-unlink hooks](https://www.boost.org/doc/libs/latest/doc/html/intrusive/auto_unlink_hooks.html)
-
-#### Concrete checked-key experiment
-
-Use a concrete `TaskPool` library and a copyable `TaskKey`.
-The list links are keys inside each task. This is an intrusive list implemented
-with handles. It is not the same representation as a pair of C pointers.
-No user-defined generics or special compiler list operations are needed.
+Start with a circular head and two address fields per hook. A detached hook
+points to itself. Each payload can contain several independent hooks.
+The following is representation pseudocode. It is not a checked RMD program.
 
 ~~~text
-struct Task {
-    ready_prev: TaskKey;
-    ready_next: TaskKey;
-    ready_list: u64;
-    timer_prev: TaskKey;
-    timer_next: TaskKey;
-    timer_list: u64;
-    payload: TaskData;
+record Hook {
+    prev: address Hook;
+    next: address Hook;
 }
 
-resource struct ReadyList {
-    pool_id: u64;
-    list_id: u64;
-    head: TaskKey;
-    tail: TaskKey;
-}
+unlink(h):
+    p = h.prev
+    n = h.next
+    p.next = n
+    n.prev = p
+    h.prev = h
+    h.next = h
 ~~~
 
-An empty key denotes a list end. A stale key denotes an error. Never silently
-treat a stale key as an empty link.
+This operation needs live, stable hooks and permission to change their links.
+It must not run concurrently with conflicting link changes. The pseudocode
+states the algorithm; it does not prove those preconditions.
 
-One concrete layout uses a 64-bit pool identity, a 32-bit slot index, and a
-32-bit generation. Each key then needs 16 bytes on the selected ordinary ABI.
-Reserve pool identity zero for the empty key. Two links need 32 bytes, compared
-with 16 bytes for two pointers on a 64-bit target. Slots also need a generation,
-an occupied/free/retired state, and allocator bookkeeping.
-The selected nullable-link witness also has an explicit 64-bit list identity
-per hook. Each hook therefore uses 40 bytes before any enclosing padding.
-Two hooks use 80 bytes before payload and slot metadata. This membership cost
-is part of the chosen container, not hidden language metadata.
+Use `node.hook.unlink()` as the basic removal interface. There is no list
+argument whose membership must be checked. Insertion can transfer a hook from
+its current list. Define insertion relative to the same hook as a no-op before
+any detach. Keep head-only operations distinct from payload removal.
 
-Pool identities must not be reused while an old key can exist. A process-wide
-monotonic allocator can provide them; exhaustion is an explicit failure.
-Do not use an allocator address as identity. Generation counters never wrap:
-retire an exhausted slot. The capacity and generation limits are part of this
-particular layout, not undocumented safety assumptions.
-Use one optional identity service with a safe issuance API. It must serialize
-concurrent issuance and cannot reset its counter. Its cost occurs at pool creation;
-programs without these pools need no service. Pool code uses this primitive as it
-uses an allocation primitive. It does not contain privileged list operations.
-Keys are identities within the creating process, not serialized cross-process IDs.
+A whole-list `splice_init(destination, source)` changes boundary links and
+resets the source head. It must work between two nonempty lists without a walk
+over the moved nodes. Handle equal heads before editing. Do not attach a list
+identity to every node merely to support an unused wrong-list removal API.
+An API that asks whether a node belongs to a named list can pay for a scan or
+an explicit membership mechanism.
 
-The pool is move-only, even when every payload is copyable. Its identity and slot
-metadata are private. A move preserves its identity; a newly created pool receives
-a fresh identity. Copying backing storage must not create another pool with the
-same identity.
+Plain unlink and insertion must allocate nothing. The two-pointer layout uses
+16 bytes per hook under an ordinary 64-bit pointer ABI. This is a layout target,
+not a measured RMD result. Additional checked-pointer metadata must be specified
+and measured separately. Do not hide it in the allocator or call it free.
 
-The pool owns initialized tagged slots and can reuse a vacant slot immediately.
-A key lookup checks pool identity, index bounds, occupancy, and generation before
-it exposes the payload. An old key fails after removal and after exact-slot
-reuse. It also fails against a different pool with the same slot index.
-Pool destruction releases the remaining payloads and storage. Old integer keys
-can still exist, but lookup requires a live pool with the same unique identity.
-Reusing the old pool's address does not make those keys valid.
-Retain vacant and retired slot metadata while that pool identity remains live.
-Shrinking and regrowing must not reset the generation at an old index.
-The first pool therefore retains its slot capacity until destruction.
+#### Ownership and automatic cleanup
 
-Keys identify a slot incarnation, not immutable payload contents. Assigning or
-replacing contents through a valid mutable view changes the same live node.
-Only pool removal ends that incarnation. Insertion into the vacant slot creates
-the next one. Code that needs a new identity must use remove and insert.
+List membership does not own the payload. An owner can destroy one node while
+other nodes remain linked. For an automatic hook, destruction first removes its
+membership before the hook storage becomes invalid. A non-owning list destructor
+detaches all surviving nodes; it does not destroy their payloads. Thus, either
+the node or the head can be destroyed first.
 
-A node view borrows the pool. A live view prevents destruction, reuse, pool growth,
-or pool destruction that could invalidate it. End one mutable view before opening
-another. Copying keys is safe because a key alone does not permit memory access.
-Hold the pool borrow across both validation and payload access. A generation check
-alone does not prevent concurrent reclamation. Foreign code must preserve this
-same exclusivity contract.
+Section 6.2 runs the enclosing drop body before field cleanup. Thus, automatic
+hook cleanup can occur after that body. If teardown can call back into a list,
+detach all hooks before those callbacks or before payload fields become invalid.
+Later hook cleanup is an idempotent unlink. The pointer contract must prevent
+new external views of an object whose destruction has started.
 
-Removal replaces the occupied slot with a vacant or retired state and takes
-ownership of the old payload. It runs that payload's cleanup exactly once.
-Advance the generation before the slot becomes reusable. At the counter limit,
-retire the slot instead. Publish a free slot only after cleanup completes.
-A safe reentrant destructor cannot acquire the already borrowed pool.
-This is a static loan rule, not a runtime lock. Abort has the same cleanup rule
-as other resources.
+Use separate owning-list operations when the list owns its elements. Detach
+returns a live node. Erase destroys it. Transfer changes the owner when the
+container contract requires it. These distinctions also occur in LLVM.
 
-Use `replace`, checked arrays, tagged values, and ordinary functions to implement
-a concrete pool. The list author can implement the pool and list with safe code.
-A dynamic allocator remains an ordinary trusted storage primitive.
-If stable payload addresses are required, use nonmoving slot blocks. Growing a
-single relocatable array does not provide that property.
+A hook initialized with self-links needs a stable address even while detached.
+Move-only is insufficient: a move can still change an object's address.
+Test an explicit address-stable type rule, propagated through containing records.
+Initialize such objects in their final storage. An owning handle may move while
+its pointee stays fixed. Do not insert user code into implicit moves.
 
-This meets individual object destruction and reuse. A pool can retain backing
-capacity for reuse. It does not imply that every node's bytes return immediately
-to the system allocator. Index keys need no access to freed payload memory for
-validation. A direct pointer-plus-generation variant must instead keep its
-validation metadata alive, or it will dereference freed storage to check safety.
+Explicit relocation can be a separate operation that repairs references.
+GCC PHI growth is a real witness for this operation. The permission to relocate
+must cover every affected reference, or checked references must become invalid.
+A stable-address rule does not supply that permission by itself.
 
-The list algorithm remains ordinary sequential code:
+Automatic unlink is useful for a single-threaded owner or a correctly held lock.
+For concurrent lists, detach under the required locks. Follow the reader-lifetime
+protocol before destroying reader-visible state or reusing storage. RCU can
+require a grace period for both steps. Other cleanup can run after lock release.
+Do not make every resource destructor acquire a lock or reclaim storage at once.
+
+#### Exact safety question
+
+Automatic unlink repairs the list's own neighbor links. It does not revoke
+an independent pointer or iterator:
 
 ~~~text
-copy the victim's predecessor and successor keys;
-check that all named nodes are live and the hook belongs to this list;
-check the applicable head, tail, and reciprocal-link conditions;
-set predecessor.next, or replace list.head;
-set successor.prev, or replace list.tail;
-clear the victim's membership in this hook;
+saved = node
+destroy(node)       // its hooks unlink correctly
+use(saved)          // the payload is dead
 ~~~
 
-This operation unlinks one hook and preserves the payload and all other hooks.
-A separate destroy operation first validates every affected membership and
-neighbor. It then removes all hooks, destroys the payload, and releases the slot.
-It must not change the ready list before discovering an invalid timer membership.
+The same issue occurs when a callback destroys the saved successor during
+iteration. Reuse of the same address does not restore the old object's identity.
+A generation stored only inside freed payload memory cannot be read safely.
 
-~~~text
-destroy_task(pool, ready, timer, task);
-~~~
+There are three separate obligations:
 
-The first block gives algorithm steps, not proposed language keywords.
-The second block calls an ordinary library helper with this complete validation
-contract. Each access uses a safe pool operation. A scalar-field helper can return
-copied keys. A scoped view can support payload access.
-The single-source return experiment must also test
-`lookup(pool, key) -> Result[mut Task, LookupError] from pool`.
+| Obligation | Required mechanism |
+|---|---|
+| Cleanup and stable storage | Run hook cleanup on every normal exit; prevent implicit movement after address-dependent initialization. |
+| Valid link edits | Establish live endpoints and permitted aliasing throughout the edit; restore the library's link invariants. |
+| Saved access after destruction | Reject the access statically, invalidate a tracked observer before reuse, or validate an identity through live metadata. |
 
-Complete all recoverable validation before changing the links. Hold exclusive
-pool access throughout the operation, and do not call user callbacks during the
-edit. Internal link failures are invariant failures, not a request to skip nodes.
-Do not add rollback allocations or hidden retries.
+A lexical access guard can prevent destruction during a current view. It does
+not invalidate an address saved before that guard. A lock protects the state
+covered by its contract. It does not prove that a pointer retained after unlock
+still has live storage. Do not give aliased link pointers an exclusive `mut`
+contract or emit `noalias` merely because the enclosing function mutates a list.
 
-Membership is a container invariant, not a consequence of memory safety.
-The witness uses a unique nonzero list identity per hook; zero means detached.
-List identities do not repeat within a live pool. Check the header's pool identity
-and the hook's list identity before unlinking. This detects wrong-list removal
-even for an interior node with valid reciprocal links. A boolean cannot do that.
-List-identity exhaustion also fails explicitly. Keep hook representation private
-to the list module. Pool admission initializes detached hooks; it must not inherit
-another task's copied membership.
-List headers are move-only. Dropping a header does not destroy pool-owned tasks;
-clear its memberships explicitly. Pool teardown still destroys every live task.
+The required list algorithm must still be writable without `unsafe`.
+Renaming unchecked pointer operations does not meet that requirement.
+The local-borrow rules in section 6.4 do not yet establish a safe direct-link
+contract. The design must state this gap instead of routing all nodes through
+a pool to avoid it.
 
-A circular-hook design is an alternative. A detached self-link can avoid a
-separate linked flag, but it does not alone prove membership in a named list.
-Changing that representation needs a separate layout and API comparison.
+Use a bounded comparison to resolve the gap:
 
-Traversal copies the next key before it destroys the current node. It ends the
-current payload loan, removes the current node, then resolves the saved next key.
-It must not return several mutable payload views at once. Cyclic or corrupt
-topology can still cause wrong results or nontermination; a safe language does not
-prove every list invariant.
+| Candidate | Concrete proof or cost to establish |
+|---|---|
+| Scoped cursors plus static link permissions | Show safe user-written insert, unlink, and destruction with two hooks. Prove the validity of surviving links. A scope token alone is insufficient. |
+| Opt-in tracked observer pointers | Track every relevant alias, invalidate it before reuse, and protect each live access. Include assignments, subobjects, stack exit, callbacks, and metadata lifetime. Test direct field syntax without imposing a pool. |
+| Plain pointers with RAII | Useful C/C++ reliability baseline. Lifetime preconditions remain on the programmer; this alone does not pass the stronger safe-code requirement. |
+| Generation keys | Optional library choice when stable IDs are useful. Specify live metadata, identity reuse, and lookup cost. Do not make it the language's allocation model. |
 
-#### Static-pointer alternative
+No candidate in this table has passed the combined safety, simplicity, and
+C-speed gates. First specify a complete contract for one direct two-hook example.
+Test the invalid programs in section 10.2, then measure the checker and generated
+code. Stop that candidate if it needs a global heap solver, hidden alias metadata,
+or a difficult proof language to meet its stated guarantees. Do not add a larger
+container system before this decision.
 
-If raw-pointer representation and no validity checks are required, the checked
-pool does not pass that requirement. A different contract could use Alias Types:
-a pointer names a location, while an affine permission authorizes access.
-Deallocation consumes that permission. Recursive container descriptions explain
-how the program regains access to the remaining nodes.
+### 6.10 Systems programming capability target
 
-Require explicit local operations for opening a node's permissions, changing
-links, closing the container invariant, and consuming the removed node.
-Signatures must summarize these effects, so callers do not inspect callee bodies.
-Do not add global lifetime inference, arbitrary theorem proving, or an assertion
-that users merely promise to keep all links valid.
+Linux, GCC, and LLVM set the required level of storage and mutation control.
+Their source does not imply that every operation must enter the safe subset.
+Hardware access, foreign code, and raw layout primitives still need explicit
+contracts. The safe user-written list remains a separate hard requirement.
 
-Its decisive test would be a readable user-written erase function that returns or
-destroys one node while preserving the remaining list. Include external cursors
-and two hooks in one payload. Count annotations, generated code, and front-end
-work. A proof-oriented API that is harder to use than a small C implementation
-fails the pragmatic requirement even if it is sound.
+Preserve these capabilities:
 
-The exact additional contract is recovery of permissions for the surviving graph
-after removing one allocation. An arena token and lexical loan stack cannot supply
-that information. A small static rule has not been established by this research.
-The selected checked-key design does not depend on solving this problem.
-Do not add this type machinery while the accepted checked-link contract suffices.
+- Several hooks per object, with ownership independent of membership.
+- Stack, static, heap, slab, and arena storage selected by the application.
+- Stable published addresses and explicit relocation with reference repair.
+- Constant-time plain-list splice and individual destruction with storage reuse.
+- Persistent graph edges, pointers to fields, and variable-size operand storage.
+- Explicit lock scopes, atomics, lifetime pins, and deferred reclamation.
+- Callbacks that can change a registry under a defined notification protocol.
+- Exact layout, alignment, foreign ABI, and optional pointer tagging.
+- Reusable typed container operations without mandatory indirect calls.
+
+The [source study](systems-capabilities.md) maps each item to real functions.
+The first measured slice can use concrete types. That choice is an experiment
+boundary, not a decision that a complete language needs no reusable abstraction.
+General templates, inheritance, and unrestricted compile-time execution do not
+follow from these capability requirements.
 
 ## 7. Syntax that is simple to parse and read
 
@@ -1020,7 +1008,8 @@ LLVM context; use backend-supported independent work units at handoff.
 | Arena | Arena state, allocation, and optional destructor traversal | Ordinary calls plus borrow constraints | No global arena or collector |
 | Explicit erased interface | Function table and indirect calls | Ordinary concrete types | No mandatory vtable on records |
 | Parallel compilation | No application cost | Scheduling, synchronization, and worker memory | One-worker execution remains available |
-| Checked intrusive keys | Larger links, slot state, and validity tests | Ordinary concrete types and local loans | No metadata on ordinary owners or references |
+| Direct hooks with RAII | Pointer fields and required unlink writes | Cleanup and address-stability checks; persistent-pointer contract still to establish | No hook fields on other records |
+| Opt-in checked pointers or handles | Declared metadata and access or assignment checks | Checks for the selected contract | No mandatory pool or metadata on ordinary values |
 
 “Absent” refers to feature-specific work, not the removal of basic parsing and
 type checks. Compare cleanup control flow and layout before making a cost claim.
@@ -1134,59 +1123,65 @@ Do not compare only with a C version that already pays for the proposed abstract
 
 ### 10.2 Intrusive list witness
 
-Use one concrete task record with two embedded hooks. One hook belongs to a ready
-list; the other belongs to a timer list. Use a preallocated pool for repeatable
-allocation behavior. The application must write insertion, unlinking, and traversal
-in the proposed safe language.
+Use a concrete node with two embedded hooks, as in the Coho example.
+Write insertion, unlinking, traversal, and cleanup in ordinary user code.
+Use stack nodes and separately allocated nodes. Reuse one node's storage while
+the list and its other nodes remain live. The application selects its allocator.
 
-The test sequence must include all of these cases:
+Require these cases:
 
 - Empty, singleton, first-node, last-node, and middle-node operations.
-- Forward and reverse traversal, plus transfer between two lists.
-- One payload present in two lists through separate hooks.
-- Duplicate insertion and wrong-list removal under the selected membership contract.
-- Wrong-list removal of an interior node with valid neighbors.
-- Failure in the second hook's validation before a combined destruction changes either list.
-- Removal from both lists, one payload destruction, and immediate reuse of the same slot.
-- A saved cursor and a saved embedded link to the destroyed identity.
-- Rejection of both saved identities after that slot receives a new payload.
-- A key from a different pool with the same slot index and generation.
-- Pool destruction and a new pool created at the old pool's address.
-- Deletion of the current node during traversal.
-- Deletion of a saved successor before the next access; report a stale key.
-- Rejection of removal while a payload loan is active.
-- Generation exhaustion: retire the slot and report exhausted capacity.
-- Rebuilding the free list without resetting any vacant or retired generation.
-- Rejection of pool shrink that would discard identity metadata needed for later reuse.
-- Rejection of safe destructor re-entry while the pool has an exclusive loan.
-- Exactly-once payload cleanup during erase, failed construction, and pool teardown.
+- Forward and reverse traversal; removal of the current node.
+- One payload in two lists through different hooks.
+- Transfer of a linked hook, repeated unlink, and self-insertion.
+- Bulk splice between two nonempty lists with a constant number of link writes.
+- Node destruction before head destruction, and the reverse order.
+- Exactly-once cleanup of initialized fields after failed construction.
+- No enclosing drop action before successful construction; normal cleanup on early return.
+- Rejection of an implicit move of an initialized address-stable hook or head.
+- Immediate storage reuse after permitted individual destruction.
+- A saved external cursor across destruction and exact-address reuse.
+- A callback that destroys the current node or saved successor.
+- A destructor or field cleanup that re-enters a list containing the node.
+  Detach before exposing partial teardown, or reject that re-entry.
+- Rejection of destruction or relocation during a live protected view.
+- A stack iterator marker that unlinks on early exit.
+- Detach under a lock followed by cleanup outside that lock.
 
-Reach the real counter boundary by controlled allocator-state setup. Do not change
-the production wrap rule to make tests faster. If a smaller test counter is used,
-it must use the identical checked successor and retirement operation.
+The direct C/C++ baseline has lifetime preconditions for saved pointers.
+For the proposed safe version, each invalid access must have a stated static
+rejection or defined checked failure. An uncontrolled crash, undefined behavior,
+or a changed allocation policy does not satisfy that safety gate.
+A no-op for self-insertion is part of the declared valid-operation contract.
 
-After the initial pool allocation, insertion and unlinking must allocate no wrapper
-nodes. Destruction must make reusable storage available immediately, except for
-an exhausted slot. Repeated insert/erase cycles with bounded live nodes must not
-retain every destroyed payload. Report retained pool capacity separately.
+Require no unsafe code in the user-written list algorithm. Document every trusted
+primitive. No built-in list operation can hide the algorithm being tested.
+If checked observer pointers are tested, include their complete assignment,
+destruction, subobject, and metadata-lifetime rules. Do not count only the small
+surface program.
 
-Require no unsafe code in the user-written list or concrete fixed-capacity pool.
-Require no per-node reference count or runtime borrow flag. A key is not a direct
-reference; resolving it performs the declared checks. Node borrowing still uses
-the local shared/exclusive rules.
+Insertion and unlinking should each fit within 40 nonblank lines, excluding shared
+helpers. Count helper code and annotations separately. This is a proposed
+readability gate, not a measured result. Reject permission syntax that makes the
+example substantially harder to read than its C/C++ baseline.
 
-The first ergonomic gate is that insertion and unlinking each fit within 40
-nonblank lines, excluding shared storage helpers. Count helper lines separately.
-No permission proof terms, per-node lifetime annotations, or compiler-recognized
-list functions may be hidden in those helpers. This is a proposed review gate,
-not a measured result. Include the complete pool, hooks, and client in the review.
+Measure hook, head, node, and external metadata sizes. Count allocations, pointer
+writes, dependent loads, validity branches, and bytes retained after destruction.
+Report traversal and mutation costs for working sets inside and outside cache.
+For bulk splice, count touched nodes as the moved list grows.
+With bounded live nodes and saved observers, repeated erase and reuse must retain
+bounded payload and identity storage. Do not retain each destroyed object or
+one permanent metadata record per past allocation.
 
-Compare both equivalent checked-key C and a conventional C intrusive list.
-Record link and node sizes, slot metadata, retained capacity, dependent loads,
-validity branches, allocations, operation throughput, and compiler stage times.
-Use a working set that fits in cache and another that exceeds it.
-Matching checked-key C is the abstraction-cost gate. Raw-pointer C reports the
-explicit cost of the selected safety policy.
+Compare direct C/C++ first. If an opt-in checking policy is used, also compare
+equivalent checked C and report its extra cost against direct C/C++.
+Checks are permitted; mandatory pools, wrapper allocations on insertion, and
+hidden reference counting are not assumed.
+
+The [systems source study](systems-capabilities.md#acceptance-experiments) defines
+the next bounded witnesses: Linux stack waiters and reclamation, GCC operand
+relocation, and LLVM replacement with observers. They test required capabilities.
+Passing the two-hook list does not establish all of them.
 
 ### 10.3 Define the timing boundary
 
@@ -1225,7 +1220,8 @@ from one side of the comparison.
 |---|---|
 | Small arithmetic and array modules | Prevent large-header savings from hiding a slow basic frontend |
 | SQLite reader in C and the candidate | Test a real ownership boundary and final output |
-| Intrusive lists with destruction and exact-slot reuse | Test safe user implementation and stale identities |
+| Direct intrusive lists with destruction and exact-address reuse | Test user implementation, stable storage, and stale access |
+| Linux, GCC, and LLVM source-derived slices | Test stack attachment, concurrency, graph edits, and operand relocation |
 | Allocation-failure and early-return paths | Check resource release and error preservation |
 | Wide and deep module graphs | Separate available parallelism from dependency depth |
 | One large function with many branches and loans | Expose ownership-state and cleanup costs |
@@ -1269,10 +1265,11 @@ count, runtime loan table, owner metadata, or required indirect call on a
 direct-access path. A resource wrapper must have the C representation's size
 and alignment. Reject an abstraction that adds those costs for the same operation.
 
-Checked intrusive links are the explicit exception for identity metadata and
-validity tests. They still must match equivalent checked-key C without extra
-language machinery. Use the same runtime ratio and confidence rule for that
-comparison. Report raw-pointer C separately; it is not the selected safety contract.
+The direct list's representation and operations use C/C++ as the primary baseline.
+Opt-in pointer checks can add declared costs. Compare them with equivalent checked
+C using the same ratio and confidence rule. Also report their full cost against
+the direct baseline. A match against checked C does not prove raw-pointer cost,
+and checks do not authorize a mandatory pool or hidden runtime service.
 
 Also run repeated in-memory column processing with a checksum instead of output.
 This prevents disk and terminal time from hiding callback cost. Require a median
@@ -1283,16 +1280,16 @@ is free because it is small beside database I/O.
 
 ### 10.5 Decision sequence and stop conditions
 
-1. Freeze both C witnesses, expected output, failure cases, and measurement boundary.
-2. Specify and test the grammar independently of names and types.
-3. Implement only the two complete witnesses: the SQLite ownership boundary and
-   the intrusive lists with safe individual destruction and reuse.
-4. Test forbidden programs as well as successful executions.
-5. Measure one-worker check and handoff time. Stop feature expansion on failure.
-6. Inspect runtime code and client readability. If scoped access makes either
-   witness unsuitable, test only the single-source return extension.
-7. Re-run all gates for that extension. Keep the smaller successful design.
-8. Test parallel scheduling after the single-worker path passes.
+1. Freeze the direct C/C++ witnesses, expected output, failure cases, and timing boundary.
+2. State the direct-link lifetime contract. Reject contracts that hide unchecked access.
+3. Specify and test the grammar independently of names and types.
+4. Implement only the SQLite boundary and the direct intrusive-list witness.
+5. Test forbidden programs as well as successful executions.
+6. Measure one-worker check and handoff time. Stop feature expansion on failure.
+7. Compare the declared view-return and pointer-check alternatives only where needed.
+8. Re-run safety, readability, layout, and runtime gates for each changed contract.
+9. Test the source-derived systems slices before claiming that capability level.
+10. Test parallel scheduling after the single-worker path passes.
 
 Do not authorize a general compiler framework, trait system, or container
 ecosystem from parser throughput or synthetic ownership tests.
@@ -1306,13 +1303,16 @@ safe node reuse, measured compilation, and measured runtime cost.
 | Explicit signatures and semantic modules | Bound dependencies and expose independent work |
 | Regular keyword-based syntax | Parse without name resolution |
 | Move-only resources and lexical cleanup | Remove repeated manual release logic |
-| Restricted shared and exclusive borrows | Check common lifetime and alias errors locally |
+| Restricted shared and exclusive local views | Check common lifetime and alias errors locally |
 | Tagged data and explicit results | Make absence and failure visible |
 | Explicit allocation and unsafe boundaries | Preserve storage control and name trust assumptions |
-| Opt-in checked intrusive links | Permit safe user-written lists with individual destruction and reuse |
+| Direct embedded links and independent ownership | Preserve the requested representation and storage control |
+| Address stability and hook cleanup | Prevent accidental relocation and missed unlinking |
 
 | Require a separate successful experiment | Concrete question |
 |---|---|
+| Safe direct-link pointer contract | Can user-written links allow individual reuse without unsafe code, pools, or a large proof system? |
+| Optional checked observers or handles | Can checks keep direct code simple with acceptable explicit cost? |
 | Single-source borrowed returns | Can ordinary view APIs stay simple without general lifetime solving? |
 | User generics | Can useful containers avoid both specialization growth and unwanted indirect calls? |
 | Safe thread and retained callback APIs | Can transfer and quiescence be proved without hidden lifetime escape? |
@@ -1323,8 +1323,9 @@ safe node reuse, measured compilation, and measured runtime cost.
 | General compile-time execution and generated declarations | Open-ended work and changing dependency graphs |
 | Open overload or trait search | Resolution work not bounded by one explicit interface |
 | Exceptions, mandatory GC, and automatic reference counting | Runtime policy is imposed on programs |
-| Stored borrowed references and self-referential movable values | Require a larger lifetime or address-stability contract |
-| Static graph and heap-shape proof machinery | Checked links satisfy the selected reclamation contract with a smaller core |
+| Escaping local lexical views and implicit moves of address-stable values | Violate the stated scope or address contract |
+| General graph and heap-shape proof machinery | No evidence yet that its checking cost and annotations meet the primary gates |
+| Mandatory pools and per-node list identities | Impose storage or mutation costs not required by direct intrusive lists |
 | Implicit allocation, cloning, and conversions | Hide cost and ownership changes |
 
 The next artifact after this exploration is a frozen witness and a small

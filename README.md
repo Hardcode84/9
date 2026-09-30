@@ -9,5 +9,8 @@ proposed rules, syntax, compiler stages, and acceptance tests.
 Read the [compiler profiles](docs/compiler-profiles.md) for measured C, C++, and
 Rust frontend costs, profiler overhead, and repeatable commands.
 
+Read the [systems source study](docs/systems-capabilities.md) for direct intrusive
+lists and storage requirements from Linux, GCC, LLVM, and Coho.
+
 The repository does not contain an RMD compiler. The proposed language has no
 measured speed result.

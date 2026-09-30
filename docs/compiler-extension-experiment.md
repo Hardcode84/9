@@ -6,6 +6,10 @@ This document extends the [metacompilation study](metacompilation.md).
 It defines how much of the compiler a user can replace. It adds no compiler
 implementation or timing result.
 
+The [RMD0 specification](rmd0-spec.md) defines the concrete bootstrap language
+and takes precedence over seed proposals in this study. Its core has explicit
+declaration bindings; module management belongs to a metastage.
+
 Reading guide: [interface](#1-extension-boundary),
 [ownership and unsafe](#ownership-and-unsafe-are-language-stages),
 [syntax](#2-replace-the-base-syntax),
@@ -25,6 +29,7 @@ It does not require a universal grammar engine or a plugin registry.
 |---|---|---|
 | Reader | Replace tokenization, grammar, operators, and whitespace rules | Source locations and declared parsing dependencies |
 | Frontend | Replace binding, types, conversions, lifetime rules, and lowering | State which language rules the result satisfies |
+| Module library | Replace source discovery, imports, visibility, interfaces, and dependency policy | Supply consistent declaration bindings before dependent checks |
 | Intermediate representation, or IR | Construct, inspect, edit, or replace it | Publish its meaning and the preconditions of each consumer |
 | Driver | Add, remove, combine, or reorder stages | Supply each stage's inputs before execution |
 | Backend adapter | Replace target queries, ABI lowering, IR construction, passes, and emission | Preserve source meaning and satisfy the chosen backend contract |
@@ -54,7 +59,7 @@ Keep three layers distinct:
 | Layer | Contents |
 |---|---|
 | Bootstrap seed | Primitive values, storage, calls, control flow, and basic type and layout operations sufficient to build compiler libraries |
-| Standard RMD language libraries | Reader, binding and type rules, ownership and borrowing, address stability, unsafe policy, and cleanup lowering |
+| Standard RMD language libraries | Reader, module management, binding and type rules, ownership and borrowing, address stability, unsafe policy, and cleanup lowering |
 | Backend libraries | Target description, ABI operations, backend IR construction, optimization, and emission |
 
 The seed does not contain a special ownership algorithm. It admits low-level

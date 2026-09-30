@@ -7,6 +7,11 @@ It keeps C-level compilation speed as the first requirement. This study adds
 source evidence, not new compiler timings. The earlier
 [C, C++, and Rust profiles](compiler-profiles.md) remain separate measurements.
 
+The [RMD0 specification](rmd0-spec.md) now defines the bootstrap language and
+its public construction contract. Module management is a library stage, along
+with richer syntax, ownership policy, and backend adaptation. The candidate
+features in this study are not additional seed requirements.
+
 Reading guide: [Jai evidence](#2-what-public-jai-evidence-establishes),
 [research](#3-research-that-applies),
 [Forth and Factor](#36-forth-compiler-construction-through-ordinary-words),

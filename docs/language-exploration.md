@@ -2,6 +2,10 @@
 
 Date: 2026-09-30. Updated: 2026-10-01. Status: research and a proposed experiment.
 
+The [RMD0 specification](rmd0-spec.md) now defines the bootstrap language.
+The richer syntax and checked rules below remain research candidates, not seed
+features. Module management is a library stage under that specification.
+
 Reading guide: [recommendation](#1-recommendation),
 [language research](#3-lessons-from-existing-languages),
 [Jai](#4-jai-public-evidence), [academic work](#5-academic-ideas),
@@ -23,11 +27,12 @@ complete language replacement, backend metastages, and a C frontend benchmark.
 
 ## 1. Recommendation
 
-Start with a small language of values, functions, records, tagged unions, and
-explicit storage. Add move-only resources, automatic scope cleanup, and local
-borrows. Use explicit module interfaces and function types. Make syntax independent
-of name resolution. Permit independent files and function bodies to compile in
-parallel.
+Start with the [minimal seed](rmd0-spec.md) and public compiler libraries.
+For the separate checked-language experiment, evaluate tagged unions,
+move-only resources, automatic scope cleanup, and local borrows. Use explicit
+interfaces and function types. Keep module policy in a library. Make the default
+syntax independent of name resolution. Permit independent files and function
+bodies to compile in parallel.
 
 Expose the compiler core, representations, checkers, and stages as public
 libraries. Implement the standard compiler pipeline through those same
@@ -194,7 +199,8 @@ D separates checked code from trusted wrappers and unrestricted operations.
 Its `@nogc` excludes GC allocation, not all allocation. Its CTFE can execute
 function bodies; an infinite compile-time loop can hang compilation.
 Use a small unsafe boundary. Omit GC instead of adding a no-GC effect.
-Do not execute ordinary functions during compilation.
+Do not execute ordinary functions implicitly during type or interface resolution.
+Explicit prepared stages can execute ordinary functions before dependent checks.
 [D functions](https://dlang.org/spec/function.html)
 
 D also provides useful evidence about compiler phase separation. Walter Bright
@@ -421,9 +427,10 @@ contract before safe access. The direct-link pointer contract in section 6.9
 must permit the user-written list algorithm; it is not established by these raw
 pointer rules. Use a tagged optional type when absence is valid.
 
-Use compiler-known `Option[T]` and `Result[T, E]` in the first experiment.
-They describe tagged data, not arbitrary generic function bodies. Do not assume
-tag removal or a special ABI until it is specified and tested.
+Evaluate `Option[T]` and `Result[T, E]` as standard-language library forms in the
+checked experiment. They are not privileged seed types. They describe tagged
+data, not arbitrary generic function bodies. Do not assume tag removal or a
+special ABI until it is specified and tested.
 
 ### 6.2 Ownership and cleanup
 

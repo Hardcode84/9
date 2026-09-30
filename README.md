@@ -12,5 +12,8 @@ Rust frontend costs, profiler overhead, and repeatable commands.
 Read the [systems source study](docs/systems-capabilities.md) for direct intrusive
 lists and storage requirements from Linux, GCC, LLVM, and Coho.
 
+Read the [metacompilation study](docs/metacompilation.md) for Jai, Lisp, Scheme,
+Forth, staged language extensions, a public compiler pipeline, and caching.
+
 The repository does not contain an RMD compiler. The proposed language has no
 measured speed result.

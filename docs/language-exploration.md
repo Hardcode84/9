@@ -8,12 +8,16 @@ Reading guide: [recommendation](#1-recommendation),
 [intrusive lists](#69-intrusive-lists-with-individual-destruction-and-reuse),
 [syntax](#7-syntax-that-is-simple-to-parse-and-read),
 [parallel stages](#8-compiler-stages-that-permit-parallel-work),
+[metacompilation](metacompilation.md),
 [acceptance gates](#10-production-witness-and-acceptance-gates).
 
 The [compiler profiles](compiler-profiles.md) contain measured C, C++, and Rust
 check costs. They are evidence about existing compilers, not an RMD speed result.
 The [systems source study](systems-capabilities.md) records concrete Linux, GCC,
 LLVM, and Coho requirements. It explains the direct-link representation target.
+The [metacompilation study](metacompilation.md) examines a small core with
+language features implemented as libraries, full access to compiler stages,
+and explicit cache and stage dependencies.
 
 ## 1. Recommendation
 
@@ -22,6 +26,11 @@ explicit storage. Add move-only resources, automatic scope cleanup, and local
 borrows. Use explicit module interfaces and function types. Make syntax independent
 of name resolution. Permit independent files and function bodies to compile in
 parallel.
+
+Expose the compiler core, representations, checkers, and stages as public
+libraries. Implement the standard compiler pipeline through those same
+interfaces. Users can replace the driver and its stages. A custom pipeline
+must state the semantic guarantees of its selected checks.
 
 **C-level front-end speed is the first acceptance condition.** A feature that fails
 this condition does not enter the core, even if it has no runtime cost.
@@ -34,7 +43,8 @@ does not meet this requirement.
 The first experiment should have these properties:
 
 - A regular grammar with visible declarations, blocks, and statement ends.
-- No textual headers, source macros, overload search, or user code execution during compilation.
+- No textual headers or open overload search.
+- A baseline run without expansion work, followed by the bounded metacompilation experiment.
 - Complete function signatures. Local expressions can determine local variable types.
 - One owner for each resource. Moves transfer ownership without user code.
 - Automatic cleanup on normal scope exits, including explicit error returns.
@@ -194,8 +204,9 @@ control-flow rules.
 [Rust drop elaboration](https://rustc-dev-guide.rust-lang.org/mir/drop-elaboration.html)
 
 Trait candidate search, nested obligations, macro expansion, and generic
-specialization are separate costs. Exclude open trait search and generated
-declarations from the core. Monomorphization remains in our pre-backend timing
+specialization are separate costs. Exclude open trait search from the first
+experiment. Test generated declarations through explicit stages in the
+metacompilation experiment. Monomorphization remains in our pre-backend timing
 budget even if a compiler calls it a backend phase.
 [Rust trait resolution](https://rustc-dev-guide.rust-lang.org/traits/resolution.html),
 [Rust macro expansion](https://rustc-dev-guide.rust-lang.org/macro-expansion.html),
@@ -263,8 +274,10 @@ The talk identifies type checking as a major cost. Its compiler report counts
 compile-time executions, polymorphism solves, reused instances, and new instances.
 Reusing an instance still needs solver work. External metaprograms can run alongside
 compilation. In-program compile-time values and generated definitions can block
-progress. Keep stage reports and visible generated code. Exclude arbitrary
-compile-time execution and declaration-changing plugins from the initial core.
+progress. Keep stage reports and visible generated code. The
+[metacompilation study](metacompilation.md) separates a baseline without
+expansion from an experiment with explicit generation stages and a public
+compiler pipeline.
 [Blow, Jai Demo and Design Explanation, LambdaConf 2025](https://www.youtube.com/watch?v=IdpD5QIVOKQ)
 
 The speech was inspected through a
@@ -296,7 +309,8 @@ cores, or isolated front-end speed. Those claims need a public compiler version,
 a fixed corpus, stage timings, and the same C baseline.
 
 Keep Jai's focus on fast complete builds, visible data representation, and
-compiler reports. Do not assume that its broad metaprogramming design satisfies
+compiler reports. Investigate its ordinary-language build driver and typed-code
+interface. Do not assume that its broad metaprogramming design satisfies
 our stronger restriction on bounded front-end work.
 
 ## 5. Academic ideas
@@ -878,9 +892,13 @@ Proposed surface rules:
 - Use type arguments only in type positions in the first grammar.
 - Use `make Type { field: value }` for record construction. This separates a
   constructor from an `if condition { ... }` block without type lookup.
-- Do not add textual macros, user-defined syntax, or newline-dependent insertion.
+- Keep textual macros, global grammar mutation, and newline-dependent insertion
+  out of the default grammar. Test fixed expansion sites separately.
 - Use a small fixed token set. ASCII identifiers are sufficient for the first
   slice; UTF-8 remains available in comments and string data.
+
+The parser is a public, replaceable compiler stage. A custom driver can use
+another syntax. Measure that frontend against the same speed requirement.
 
 Illustrative syntax follows. These are design examples, not executable tests.
 
@@ -947,8 +965,10 @@ flowchart LR
     G --> H["Backend optimization and machine code"]
 ~~~
 
-The graph shows dependencies, not global barriers. A ready module can advance
-while another file is still being parsed. A function can start after its own
+The graph shows the default baseline without generation. The public driver can
+insert explicit generation stages. The arrows show dependencies, not global
+barriers. A ready module can advance while another file is still being parsed.
+A function can start after its own
 declarations and required imported interfaces are ready.
 The build manifest fixes the source files in each module. Publish a module's
 interface only after discovering declarations in all of those files. A later file
@@ -965,19 +985,22 @@ must not change an interface that workers already use.
 
 Use acyclic module imports for the first design. An invalid by-value type cycle
 is an error. Pointer recursion does not require an infinite object layout.
-Constants form a finite dependency graph and use literals, fixed arithmetic,
-and type-layout queries. No loops, recursion, I/O, or arbitrary function calls
-run during interface construction.
+For the baseline, constants form a finite dependency graph and use literals,
+fixed arithmetic, and type-layout queries. The interface resolver does not
+execute arbitrary user functions. In the extension experiment, an earlier
+generation stage can compute inputs before resolution starts.
 
 Public interfaces include type identity, visible fields and layout, function
 signatures, ownership modes, drop properties, and required constants. A private
 body edit must not change an interface. A private layout change can still affect
 an exported by-value type; record that dependency instead of hiding it.
 
-Use fixed target configuration for conditional declarations. Do not let function
-execution discover imports or inject declarations while other workers check
-bodies. External source generation is an explicit build step with declared
-inputs; include its cost when reporting the complete build.
+Use fixed target configuration for conditional declarations in the default
+driver. Complete generation before dependent workers check bodies. An explicit
+earlier generation stage can publish new declarations and imports. Include
+its preparation, execution, and output processing in the measured build.
+The [metacompilation study](metacompilation.md#52-make-each-dependency-stage-explicit)
+defines this candidate schedule and its cache boundaries.
 
 Keep parsed data and published interfaces immutable. Give workers local
 allocation regions and mutable function state. Avoid a global lock for every
@@ -992,6 +1015,12 @@ Classify parsing, lookup, type checking, and lowering as compiler hot paths.
 Cache files and source input are validation boundaries. Checked internal types
 and plans are trusted data. Use values or `void` for infallible internal steps.
 Do not add error-return branches for impossible producer states.
+
+The core representations, passes, and driver setup are fully exposed.
+Users can replace, remove, reorder, and add stages. Stage preconditions and
+postconditions define valid composition. A custom checker becomes part of
+that compiler's trusted implementation. Editing checked IR requires preservation
+of its facts or renewed checking. Include the selected pipeline in cache identity.
 
 Parallel workers can increase memory traffic and total CPU time. A long function
 or deep import chain limits available parallel work. Report these limits in
@@ -1371,6 +1400,7 @@ safe node reuse, measured compilation, and measured runtime cost.
 | Keep in the first experiment | Reason |
 |---|---|
 | Explicit signatures and semantic modules | Bound dependencies and expose independent work |
+| Public core representations and compiler stages | Let ordinary user code configure and replace the compiler pipeline |
 | Regular keyword-based syntax | Parse without name resolution |
 | Move-only resources and lexical cleanup | Remove repeated manual release logic |
 | Restricted shared and exclusive local views | Check common lifetime and alias errors locally |
@@ -1387,10 +1417,12 @@ safe node reuse, measured compilation, and measured runtime cost.
 | User generics | Can useful containers avoid both specialization growth and unwanted indirect calls? |
 | Safe thread and retained callback APIs | Can transfer and quiescence be proved without hidden lifetime escape? |
 | Arbitrary deferred blocks | Can capture and cleanup stay clear without a general closure model? |
+| Staged language extensions and a small bootstrap core | Can useful generators and custom drivers meet the cold C-speed gate? |
+| Persistent expansion caches | Can validation cost and invalidation remain correct with exposed compiler stages? |
 
 | Exclude from the initial core | Reason |
 |---|---|
-| General compile-time execution and generated declarations | Open-ended work and changing dependency graphs |
+| Unrestricted live compiler mutation in the default driver | Requires dependency and checking contracts beyond the bounded staged experiment |
 | Open overload or trait search | Resolution work not bounded by one explicit interface |
 | Exceptions, mandatory GC, and automatic reference counting | Runtime policy is imposed on programs |
 | Escaping local lexical views and implicit moves of address-stable values | Violate the stated scope or address contract |

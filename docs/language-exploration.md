@@ -1,6 +1,6 @@
 # RMD: exploration of a small systems language
 
-Date: 2026-09-30. Status: research and a proposed experiment.
+Date: 2026-09-30. Updated: 2026-10-01. Status: research and a proposed experiment.
 
 Reading guide: [recommendation](#1-recommendation),
 [language research](#3-lessons-from-existing-languages),
@@ -18,6 +18,8 @@ LLVM, and Coho requirements. It explains the direct-link representation target.
 The [metacompilation study](metacompilation.md) examines a small core with
 language features implemented as libraries, full access to compiler stages,
 and explicit cache and stage dependencies.
+The [compiler extension experiment](compiler-extension-experiment.md) defines
+complete language replacement, backend metastages, and a C frontend benchmark.
 
 ## 1. Recommendation
 
@@ -31,9 +33,19 @@ Expose the compiler core, representations, checkers, and stages as public
 libraries. Implement the standard compiler pipeline through those same
 interfaces. Users can replace the driver and its stages. A custom pipeline
 must state the semantic guarantees of its selected checks.
+This includes the lexer, complete grammar, language rules, and backend adapter.
+Select a language before parsing its input. The default RMD grammar and checks
+remain one compiler configuration, implemented through the public interfaces.
+
+Keep the bootstrap seed smaller than the standard language. Implement ownership,
+borrowing, address stability, cleanup, and the meaning of `unsafe` in compiled
+standard language stages. The seed has no hidden ownership solver. The
+[ownership stage contract](compiler-extension-experiment.md#ownership-and-unsafe-are-language-stages)
+preserves resource operations until checking and cleanup lowering are complete.
+The semantics below describe the standard checked RMD configuration.
 
 **C-level front-end speed is the first acceptance condition.** A feature that fails
-this condition does not enter the core, even if it has no runtime cost.
+this condition does not enter the standard language, even if it has no runtime cost.
 
 A required production witness is an intrusive doubly-linked list implemented in
 ordinary safe user code. Nodes must support individual destruction and storage
@@ -246,7 +258,7 @@ design evidence. They do not provide a reproducible baseline for this repository
 |---|---|---|
 | Go | Explicit dependencies and exported type information | Use interfaces that do not require imported function bodies. |
 | Odin | Explicit memory policies and scope cleanup | Keep allocation visible. Do not require an allocator context in every function. |
-| Hare | A small language with manual ownership conventions | Keep the small vocabulary. Add enforcement where the core promises it. |
+| Hare | A small language with manual ownership conventions | Keep the small vocabulary. Add enforcement where the language promises it. |
 | C3 | C-oriented code, defer, errors, and modules | Study the combinations. Exclude unrestricted compile-time work from the core. |
 
 Go's design account explains how export data and acyclic package dependencies
@@ -346,7 +358,7 @@ flow and cleanup rules. Compare it with ordinary lexical views before adding it.
 The Swift Ownership Manifesto distinguishes static and dynamic exclusivity.
 Its discussion of global storage, reference properties, and closure captures
 shows why local nonescape rules do not remove all hidden aliases. The small
-core must restrict those aliases if it has no runtime exclusivity checks.
+checker must restrict those aliases if it has no runtime exclusivity checks.
 [Swift Ownership Manifesto](https://github.com/swiftlang/swift/blob/main/docs/OwnershipManifesto.md)
 
 None of these results measures the combined proposal against the C compilation
@@ -612,8 +624,8 @@ Use a whole-arena exclusive operation to prevent reset during a loan. A raw
 arena release does not run arbitrary element destructors. Support only trivial
 elements, or explicitly pay for a destructor list and its traversal.
 
-Shared reads are transitively read-only. The first core has no safe mutation
-through a shared view. An unsafe wrapper cannot override this rule while a read
+Shared reads are transitively read-only. The first standard language has no
+safe mutation through a shared view. An unsafe wrapper cannot override this rule while a read
 loan exists. Aliased mutable storage needs an explicit type rule before safe
 link fields, atomics, or cells can use it. Ordinary shared reads must not
 silently acquire that behavior. This missing rule is part of the systems test.
@@ -679,7 +691,7 @@ Also omit inheritance, user-defined operators, implicit conversions, variadic
 type machinery, dynamic reflection, implicit async state machines, and general
 closures. Function pointers remain available. Reflection, code generation,
 reference counting, and asynchronous runtimes need separate evidence before
-they become core features.
+they become standard language features.
 
 ### 6.8 Required counterexamples
 
@@ -878,9 +890,9 @@ follow from these capability requirements.
 
 ## 7. Syntax that is simple to parse and read
 
-Prefer keywords and visible boundaries over minimum character count.
-The parser must not consult declarations to decide whether an expression is a
-type. It must not backtrack over arbitrary token sequences.
+For the default RMD grammar, prefer keywords and visible boundaries over minimum
+character count. Its parser must not consult declarations to decide whether an
+expression is a type. It must not backtrack over arbitrary token sequences.
 
 Proposed surface rules:
 
@@ -898,7 +910,10 @@ Proposed surface rules:
   slice; UTF-8 remains available in comments and string data.
 
 The parser is a public, replaceable compiler stage. A custom driver can use
-another syntax. Measure that frontend against the same speed requirement.
+another lexer, complete grammar, and language rules. It can combine parsing
+with name resolution when that language requires it. The
+[C frontend experiment](compiler-extension-experiment.md#4-c-compiler-witness)
+tests this boundary. Measure that frontend against the same speed requirement.
 
 Illustrative syntax follows. These are design examples, not executable tests.
 
@@ -1294,6 +1309,10 @@ Record two measurements:
 Handoff time ends before backend optimization, instruction selection, register
 allocation, and object emission. If LLVM IR is the handoff, building that IR is
 included. Moving a pass into a file named “backend” does not exclude it.
+The [backend adapter is a public metastage](compiler-extension-experiment.md#3-the-backend-adapter-is-a-metastage).
+Its package name does not change this timing boundary. Include native code
+generation and linking needed to prepare a project stage before that stage
+can run. Report compiler construction separately from application compilation.
 
 Clang's `-fsyntax-only` stops after syntax and semantic checks. It is useful for
 the check measurement, not the complete handoff measurement. LLVM-emission
@@ -1401,6 +1420,7 @@ safe node reuse, measured compilation, and measured runtime cost.
 |---|---|
 | Explicit signatures and semantic modules | Bound dependencies and expose independent work |
 | Public core representations and compiler stages | Let ordinary user code configure and replace the compiler pipeline |
+| Ownership, cleanup, and unsafe policy in standard language stages | Keep the seed small without removing the standard language checks |
 | Regular keyword-based syntax | Parse without name resolution |
 | Move-only resources and lexical cleanup | Remove repeated manual release logic |
 | Restricted shared and exclusive local views | Check common lifetime and alias errors locally |
@@ -1418,9 +1438,10 @@ safe node reuse, measured compilation, and measured runtime cost.
 | Safe thread and retained callback APIs | Can transfer and quiescence be proved without hidden lifetime escape? |
 | Arbitrary deferred blocks | Can capture and cleanup stay clear without a general closure model? |
 | Staged language extensions and a small bootstrap core | Can useful generators and custom drivers meet the cold C-speed gate? |
+| Complete C frontend and replaceable backend adapter | Can public stages compile unchanged C and preserve the check and handoff speed gates? |
 | Persistent expansion caches | Can validation cost and invalidation remain correct with exposed compiler stages? |
 
-| Exclude from the initial core | Reason |
+| Exclude from the initial standard language | Reason |
 |---|---|
 | Unrestricted live compiler mutation in the default driver | Requires dependency and checking contracts beyond the bounded staged experiment |
 | Open overload or trait search | Resolution work not bounded by one explicit interface |

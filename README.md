@@ -15,5 +15,9 @@ lists and storage requirements from Linux, GCC, LLVM, and Coho.
 Read the [metacompilation study](docs/metacompilation.md) for Jai, Lisp, Scheme,
 Forth, staged language extensions, a public compiler pipeline, and caching.
 
+Read the [compiler extension experiment](docs/compiler-extension-experiment.md)
+for a small seed, ownership and unsafe stages, complete syntax replacement,
+backend metastages, and a C compiler benchmark.
+
 The repository does not contain an RMD compiler. The proposed language has no
 measured speed result.

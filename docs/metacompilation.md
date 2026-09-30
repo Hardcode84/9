@@ -1,6 +1,6 @@
 # Metacompilation and a small language core
 
-Date: 2026-09-30. Status: source study and a proposed experiment.
+Date: 2026-09-30. Updated: 2026-10-01. Status: source study and a proposed experiment.
 
 This study extends the [language exploration](language-exploration.md).
 It keeps C-level compilation speed as the first requirement. This study adds
@@ -12,6 +12,7 @@ Reading guide: [Jai evidence](#2-what-public-jai-evidence-establishes),
 [Forth and Factor](#36-forth-compiler-construction-through-ordinary-words),
 [Lisp, Scheme, and Racket](#37-lisp-scheme-and-racket-language-features-as-libraries),
 [public core and stages](#44-full-access-to-core-and-stages),
+[language and backend replacement](compiler-extension-experiment.md),
 [parallel stages](#5-parsing-and-parallel-stages),
 [costs](#6-can-it-be-fast), [caching](#7-caching-without-changing-program-meaning),
 [experiment](#8-a-bounded-experiment).
@@ -26,9 +27,13 @@ establishes the required C-level frontend speed for this language.
 Make the compiler a public library. Expose the core representations and every
 compilation stage. Implement the standard compiler as a driver written against
 that library. Users can inspect, replace, remove, and compose its stages.
+This includes complete base syntax replacement and the interface to LLVM or
+another backend. The [compiler extension experiment](compiler-extension-experiment.md)
+defines these interfaces and a C compiler witness.
 
-Test a small checked core with standard extension libraries. Compile those
-libraries when the compiler is built. In the default driver, run project
+Test a small bootstrap seed with compiled standard language libraries.
+Implement ownership, cleanup, and unsafe policy in those libraries. Compile
+them when the compiler is built. In the default driver, run project
 generators over explicit inputs, then check their output as ordinary code.
 Use a fixed default grammar and immutable interfaces between parallel tasks.
 
@@ -400,18 +405,25 @@ A small bootstrap implementation and a small trusted language are different
 things. Moving a checker into a library reduces the bootstrap implementation.
 It does not remove that checker's rules, maintenance cost, or compilation cost.
 
-The candidate core needs values, storage, functions, control flow, explicit
-types and layout, and a defined resource-lifetime contract. It also needs
-binding and source-location support for generated code. An extension can
-translate a feature into these constructs.
+The candidate seed needs primitive values, storage, calls, control flow, and
+enough type and layout operations to implement compiler libraries. It does
+not need a borrow solver, resource cleanup policy, or an `unsafe` grammar rule.
+Binding, source locations, and richer representations can be library facilities.
 
-| Feature | Possible library implementation | Contract that must exist underneath |
+Standard language stages define the resource-lifetime contract. Their IR must
+retain moves, borrows, resource operations, and source scopes until checking
+and cleanup lowering finish. Those stages then produce low-level operations.
+The seed does not reconstruct ownership from raw pointer instructions.
+See the [ownership and unsafe stage contract](compiler-extension-experiment.md#ownership-and-unsafe-are-language-stages).
+
+| Feature | Possible library implementation | Required contract |
 |---|---|---|
 | Enum names and dispatch tables | Read an enum descriptor and emit constants and functions | Stable type identity and explicit representation |
 | Serialization | Generate field access and encoding calls | Defined field access and external-data validation |
 | Container specialization | Generate concrete types and operations from explicit parameters | Layout, alias, and lifetime rules |
 | Iteration syntax | Expand to loops and calls | Evaluation order, binding, and loop exits |
 | Resource conveniences | Expand to owner operations and scope cleanup | Cleanup on every supported exit and valid moves |
+| Ownership and unsafe policy | Standard language checker and resource IR | Explicit lifetime rules, permitted unchecked operations, and rejection cases |
 | Intrusive-list conveniences | Generate ordinary hook access or repeated operations | Stable addresses and safe access after individual reuse |
 | New type-system rules | Implement an additional checker or a compiler pass | That component joins the trusted implementation |
 
@@ -421,8 +433,8 @@ persistent-alias lifetime contract. Generating unchecked pointer operations
 behind a safe-looking wrapper does not meet that requirement.
 
 A resource macro also cannot obtain correct cleanup from textual replacement
-alone. It must use a core cleanup operation or implement the full exit
-transformation, including early return, loop exit, and partial initialization.
+alone. It must use the standard library's cleanup operation or implement the
+full exit transformation, including early return, loop exit, and partial initialization.
 If that transformation carries a safety guarantee, its implementation is part
 of the trusted language.
 
@@ -433,9 +445,10 @@ An implementation can use this build sequence:
 ~~~text
 small seed compiler
     -> compiler modules and standard extensions written in the seed language
-    -> compiler distribution with compiled standard extensions
+    -> compiler distribution with compiled parser, checkers, and extensions
     -> application source and optional project extensions
-    -> checked core program
+    -> checked standard language IR
+    -> cleanup lowering and low-level IR
     -> backend input
 ~~~
 
@@ -455,7 +468,11 @@ consistency; it does not prove the source compiler correct.
 
 Compiler construction is outside application frontend timing, just as building
 Clang is. Building a project's changed extension is inside that timing.
-A prebuilt user extension is a separate warm configuration and must be labeled.
+A prebuilt project extension is a separate prepared configuration and must be
+labeled. Record application-result cache state independently: a prepared
+extension can still process a cold application build. The
+[C experiment](compiler-extension-experiment.md#5-cost-and-parallelism)
+separates installed language components, project preparation, and full construction.
 
 ### 4.3 Extension code and generated code have different trust
 
@@ -478,8 +495,9 @@ This property is called hygiene.
 Hygiene is not resource safety. A quoted expression that consumes an owner
 cannot be inserted twice merely because both copies have the same result type.
 The final ownership check must reject the duplicate consumption, or the
-quotation system must track captured owners itself. Start with the existing
-core checker rather than a second ownership system for quotations.
+quotation system must track captured owners itself. Use the standard language
+checker rather than a second ownership system for quotations. That checker is
+itself a replaceable compiled metastage, not a hidden seed operation.
 
 Under the standard rules, unsafe operations in generated code retain their
 unsafe contract. Hiding their spelling does not establish safety. A user can
@@ -493,7 +511,9 @@ Expose these facilities as ordinary library interfaces:
 - Lexer, parser, source locations, and binding operations.
 - Core and intermediate representations, constructors, editors, and traversal.
 - Declaration collection, type layout, type checking, and ownership checking.
+- Address-stability rules, unsafe syntax and policy, and resource representations.
 - Cleanup, specialization, target lowering, and backend-input construction.
+- Backend selection, target queries, backend passes, object emission, and linking.
 - Stage dependencies, workspaces, scheduling, diagnostics, and cost reports.
 - Cache lookup, validation, serialization, invalidation, and cache policy.
 
@@ -511,8 +531,8 @@ This is illustrative driver code, not a completed API:
 
 ~~~text
 syntax  = parse(inputs)
-core    = elaborate(syntax)
-typed   = check_types(core)
+program = elaborate(syntax)
+typed   = check_types(program)
 checked = check_ownership(typed)
 lowered = lower_cleanup(checked)
 output  = lower_target(lowered, target)
@@ -537,6 +557,29 @@ on which compiler operation users can access.
 Configure the driver once per build. Public stage access must not require
 dynamic dispatch for each token or syntax node. Count the selected driver's
 setup, scheduling, and enabled passes in the same frontend timing boundary.
+
+### 4.5 Replace a language or a backend
+
+The user can replace the lexer and the whole grammar, including declarations,
+operators, and whitespace rules. Select the reader before it reads the target
+source. Use a build driver or manifest for this selection. A custom reader can
+also define explicit changes in parsing rules within a file.
+
+Syntax extensions that produce standard RMD code or IR use its checkers.
+A complete C frontend supplies C binding, type, conversion, and pointer rules. It can use
+its own syntax and semantic representations, then lower to shared low-level
+operations. Do not require C source to satisfy RMD ownership rules.
+
+The backend adapter is also a metastage: compiler code that runs during the
+build. It can construct LLVM IR, set the LLVM pass pipeline, and request object
+output. It can instead select another backend. It can be compiled with the
+compiler distribution; metacompilation does not require repeated interpretation
+or native compilation of unchanged stage code.
+
+The [extension experiment](compiler-extension-experiment.md) specifies the
+target contract, LLVM boundary, and timing rules. Its C benchmark tests full
+frontend replacement. It does not replace the safe direct-list witness or
+establish RMD ownership-checking speed.
 
 ## 5. Parsing and parallel stages
 

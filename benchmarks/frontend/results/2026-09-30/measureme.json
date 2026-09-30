@@ -1,0 +1,13 @@
+{
+  "source_url": "https://github.com/rust-lang/measureme",
+  "source_revision": "5ac839c602b59eee9c908b3b35b6d6c0cd1c42f7",
+  "version": "12.0.3",
+  "cargo_lock_sha256": "657c55313695f8254e8c8fcb21a82d4268d0571a597a9a4e2a220d97974bb73b",
+  "summarize_sha256": "b853ee1f380ffa1759f5cc87d5d6a2d465a5da8b86930d2e5dde91a2b8f8a0f4",
+  "command": [
+    ".profile-cache/tools/measureme/target/release/summarize",
+    "summarize",
+    "--json",
+    "PROFILE.mm_profdata"
+  ]
+}

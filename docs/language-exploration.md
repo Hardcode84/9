@@ -10,6 +10,9 @@ Reading guide: [recommendation](#1-recommendation),
 [parallel stages](#8-compiler-stages-that-permit-parallel-work),
 [acceptance gates](#10-production-witness-and-acceptance-gates).
 
+The [compiler profiles](compiler-profiles.md) contain measured C, C++, and Rust
+check costs. They are evidence about existing compilers, not an RMD speed result.
+
 ## 1. Recommendation
 
 Start with a small language of values, functions, records, tagged unions, and
@@ -50,7 +53,7 @@ borrows do not acquire that metadata. Section 6.9 specifies the contract and
 compares the stronger static alternative.
 
 This document proposes rules. It does not claim a soundness proof, a completed
-language, or a measured speed result. The source research used three parallel
+language, or a measured RMD speed result. The source research used three parallel
 investigations: C/C++/D, Rust/Zig, and academic ownership models. The C/C++/D
 investigation also covers public Jai material.
 

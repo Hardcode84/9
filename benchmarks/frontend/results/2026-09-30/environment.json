@@ -1,0 +1,157 @@
+{
+  "utc": "2026-09-30T20:00:26Z",
+  "cpu": "AMD Ryzen Threadripper PRO 7995WX 96-Cores",
+  "logical_cpus": 192,
+  "pinned_cpu": 4,
+  "smt_siblings": "4,100",
+  "governor": "performance",
+  "kernel": "7.0.0-28-generic",
+  "os_release": "PRETTY_NAME=\"Ubuntu 24.04.2 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.2 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+  "memory_kib": 527581144,
+  "load_start": [
+    "0.21",
+    "0.28",
+    "0.17"
+  ],
+  "versions": {
+    "clang": "Ubuntu clang version 20.1.8 (++20250804090239+87f0227cb601-1~exp1~20250804210352.139)",
+    "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "rustc": "rustc 1.90.0 (1159e78c4 2025-09-14)\nbinary: rustc\ncommit-hash: 1159e78c4747b02ef996e55082b704c09b970588\ncommit-date: 2025-09-14\nhost: x86_64-unknown-linux-gnu\nrelease: 1.90.0\nLLVM version: 20.1.8",
+    "libstdc++": "13.3.0-6ubuntu2~24.04.1",
+    "python": "3.12.11"
+  },
+  "inputs": [
+    {
+      "name": "sqlite",
+      "url": "https://sqlite.org/2025/sqlite-amalgamation-3500400.zip",
+      "sha256": "1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032"
+    },
+    {
+      "name": "json",
+      "url": "https://raw.githubusercontent.com/nlohmann/json/v3.12.0/single_include/nlohmann/json.hpp",
+      "sha256": "aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63"
+    },
+    {
+      "name": "regex",
+      "url": "https://static.crates.io/crates/regex-syntax/regex-syntax-0.8.8.crate",
+      "sha256": "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58"
+    }
+  ],
+  "commands": {
+    "sqlite-clang-20": [
+      "clang-20",
+      "-std=gnu11",
+      "-O0",
+      "-g0",
+      "-fsyntax-only",
+      ".profile-cache/sources/sqlite3.c"
+    ],
+    "sqlite-gcc": [
+      "gcc",
+      "-std=gnu11",
+      "-O0",
+      "-g0",
+      "-fsyntax-only",
+      ".profile-cache/sources/sqlite3.c"
+    ],
+    "json-include-clang++-20": [
+      "clang++-20",
+      "-std=c++17",
+      "-O0",
+      "-g0",
+      "-fsyntax-only",
+      "-I",
+      ".profile-cache/sources",
+      "benchmarks/frontend/json_include.cpp"
+    ],
+    "json-client-clang++-20": [
+      "clang++-20",
+      "-std=c++17",
+      "-O0",
+      "-g0",
+      "-fsyntax-only",
+      "-I",
+      ".profile-cache/sources",
+      "benchmarks/frontend/json_client.cpp"
+    ],
+    "json-include-g++": [
+      "g++",
+      "-std=c++17",
+      "-O0",
+      "-g0",
+      "-fsyntax-only",
+      "-I",
+      ".profile-cache/sources",
+      "benchmarks/frontend/json_include.cpp"
+    ],
+    "json-client-g++": [
+      "g++",
+      "-std=c++17",
+      "-O0",
+      "-g0",
+      "-fsyntax-only",
+      "-I",
+      ".profile-cache/sources",
+      "benchmarks/frontend/json_client.cpp"
+    ],
+    "regex-default-rustc": [
+      "rustc",
+      "--crate-name",
+      "regex_syntax",
+      "--crate-type",
+      "lib",
+      "--edition=2021",
+      "--emit=metadata",
+      "-Copt-level=0",
+      "-Cdebuginfo=0",
+      "-Zthreads=1",
+      "--cfg",
+      "feature=\"std\"",
+      "--cfg",
+      "feature=\"unicode\"",
+      "--cfg",
+      "feature=\"unicode-age\"",
+      "--cfg",
+      "feature=\"unicode-bool\"",
+      "--cfg",
+      "feature=\"unicode-case\"",
+      "--cfg",
+      "feature=\"unicode-gencat\"",
+      "--cfg",
+      "feature=\"unicode-perl\"",
+      "--cfg",
+      "feature=\"unicode-script\"",
+      "--cfg",
+      "feature=\"unicode-segment\"",
+      ".profile-cache/sources/regex-syntax-0.8.8/src/lib.rs",
+      "-o",
+      ".profile-cache/regex-default.rmeta"
+    ],
+    "regex-std-rustc": [
+      "rustc",
+      "--crate-name",
+      "regex_syntax",
+      "--crate-type",
+      "lib",
+      "--edition=2021",
+      "--emit=metadata",
+      "-Copt-level=0",
+      "-Cdebuginfo=0",
+      "-Zthreads=1",
+      "--cfg",
+      "feature=\"std\"",
+      ".profile-cache/sources/regex-syntax-0.8.8/src/lib.rs",
+      "-o",
+      ".profile-cache/regex-std.rmeta"
+    ]
+  },
+  "environment_overrides": {
+    "LC_ALL": "C",
+    "RUSTC_BOOTSTRAP": "1"
+  },
+  "seed": 20260930,
+  "repeats": 20,
+  "filesystem_cache": "warm after one discarded run per case",
+  "compiler_cache": "no PCH, modules, incremental cache, or compiler daemon",
+  "standard_libraries": "installed C/C++ headers and prebuilt Rust sysroot"
+}

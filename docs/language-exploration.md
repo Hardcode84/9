@@ -175,6 +175,10 @@ Use a small unsafe boundary. Omit GC instead of adding a no-GC effect.
 Do not execute ordinary functions during compilation.
 [D functions](https://dlang.org/spec/function.html)
 
+D also provides useful evidence about compiler phase separation. Walter Bright
+described the design intent and the incomplete parallel implementation at
+different dates. See the [historical sources](#81-d-design-for-parallel-compilation).
+
 ### Rust
 
 Keep explicit ownership transfer, exclusive mutation, tagged results, and a
@@ -993,6 +997,72 @@ Parallel workers can increase memory traffic and total CPU time. A long function
 or deep import chain limits available parallel work. Report these limits in
 measurements. Do not promise linear speedup. Avoid concurrent mutation of one
 LLVM context; use backend-supported independent work units at handoff.
+
+### 8.1 D design for parallel compilation
+
+Walter Bright's posts support separating the language design from the compiler's
+implementation status. These are historical statements, not a current DMD audit.
+
+**4 April 2009: Multithreaded I/O.** Bright states that D was designed to permit
+compilation in parallel threads. His implemented experiment reads files on one
+thread while another thread lexes and parses previously read files.
+He then proposes a separate lex/parse thread for each module. That step was a
+plan in this article, not an implemented parallel parser.
+Cached local files gave no measurable gain from the I/O experiment. A test with
+uncached removable storage did improve. His many-core parser estimate was not
+a measured scaling result.
+[Original article](https://digitalmars.com/articles/b28.html)
+
+**17 August 2010: C++ Compilation Speed.** Bright explains how textual headers
+and context-dependent translation obstruct lookahead, reuse, and parallel work.
+This is historical context for the D design. It is not a description of current
+C++ module implementations.
+[Original article](https://digitalmars.com/articles/b54.html)
+
+**February 2016: Official compiler.** Bright identifies substantial work inside
+the compiler that could run in parallel, but explicitly excludes semantic
+analysis from that statement. He distinguishes this from separate compiler
+processes started by a build tool.
+[Walter's forum message](https://forum.dlang.org/post/nao7mi%242m2o%241%40digitalmars.com)
+
+**2 May 2020: independent stages.** Bright says the lexer is independent of the
+parser, and the parser is independent of the rest of the implementation.
+He says he rejected enhancement proposals that would break these boundaries.
+[Walter's comment](https://news.ycombinator.com/item?id=23054712)
+
+**12 July 2023: design versus implementation.** Asked whether D can compile
+modules in parallel, Bright says the language permits it but the compiler does
+not do it. He also says parallel file reading had been removed because its speed
+benefit was insufficient. This describes the compiler at that date.
+[Question](https://news.ycombinator.com/item?id=36689544),
+[Walter's answer](https://news.ycombinator.com/item?id=36695523)
+
+**29 April 2024: modules and parsing.** Bright describes module meaning as
+independent of the importer. He also identifies separation of lexing and parsing
+from semantic analysis as a deliberate response to C/C++ compilation costs.
+[Walter's comment](https://news.ycombinator.com/item?id=40194136)
+
+The D specification supports the phase-boundary claim. Earlier phases do not
+depend on later phases; in particular, semantic analysis does not control the
+scanner. This does not mean that later phases need no output from earlier ones.
+[D compilation phases](https://dlang.org/spec/intro.html#phases-of-compilation)
+
+There is a related 10 November 2011 post by **Don, not Walter**. It describes
+parallel evaluation after an ordered `static if` and mixin pass. It explicitly
+says the compiler did not implement that parallelism. It also explains why
+compile-time mutation of globals would impose an order.
+[Don's message](https://forum.dlang.org/post/j9f8id%24pf3%241%40digitalmars.com)
+
+For RMD, the design inference is to preserve the phase boundaries in the language.
+Do not make lexing or parsing call semantic analysis to interpret source syntax.
+Keep a module's meaning independent of the context that imports it.
+These rules expose parallel work in files. They do not prove independent semantic
+analysis of arbitrary modules. The explicit signatures and fixed interface
+dependencies above address that separate problem.
+
+Measure parallel I/O, parsing, and body checking separately. A faster storage
+device or a warm cache can remove the benefit of I/O overlap. A language design
+claim is not speedup evidence. The single-worker C-speed gate still applies.
 
 ## 9. Cost ledger
 

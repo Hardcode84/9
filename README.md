@@ -49,3 +49,8 @@ the third runs it.
 - [Compilation programs and stage APIs](docs/source-runner.md)
 - [Build, tests, and contributor setup](docs/bootstrap.md)
 - [Research and design exploration](docs/exploration/README.md)
+
+## Credits
+
+[Joseph Huber (@jhuber6)](https://github.com/jhuber6) is Crust's spiritual
+leader and the author of its name.

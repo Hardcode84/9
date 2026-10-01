@@ -91,25 +91,22 @@ extern const CrustX64Ops crust_x64_default_ops;
 
 /* Preparation requires checked declarations with assigned link names.
    Expression and statement nodes must form trees of distinct occurrences. */
-bool crust_x64_prepare(CrustContext *context, CrustX64Program **result,
-                     CrustDecl *entry);
+bool crust_x64_prepare(CrustContext *context, CrustX64Program **result, CrustDecl *entry);
 bool crust_x64_emit_program(CrustX64Program *program, FILE *output);
 /* Null operations select direct calls to the default emitter operations. */
 bool crust_x64_emit_program_with_ops(CrustX64Program *program, FILE *output,
-                                    const CrustX64Ops *operations);
+                                     const CrustX64Ops *operations);
 bool crust_x64_emit(CrustContext *context, FILE *output, CrustDecl *entry);
 
 /* These stage operations require an active context failure frame. */
-CrustX64Slot crust_x64_reserve(CrustContext *context, CrustX64Function *function,
-                          uint64_t size, uint32_t alignment, CrustLoc location);
+CrustX64Slot crust_x64_reserve(CrustContext *context, CrustX64Function *function, uint64_t size,
+                               uint32_t alignment, CrustLoc location);
 /* On failure, the output slot is unchanged and a diagnostic is retained. */
-bool crust_x64_try_reserve(CrustContext *context, CrustX64Function *function,
-                          uint64_t size, uint32_t alignment, CrustSource *source,
-                          size_t offset, CrustX64Slot *result);
-void crust_x64_prepare_function(CrustX64Program *program,
-                              CrustX64Function *function);
-bool crust_x64_try_prepare_function(CrustX64Program *program,
-                                  CrustX64Function *function);
+bool crust_x64_try_reserve(CrustContext *context, CrustX64Function *function, uint64_t size,
+                           uint32_t alignment, CrustSource *source, size_t offset,
+                           CrustX64Slot *result);
+void crust_x64_prepare_function(CrustX64Program *program, CrustX64Function *function);
+bool crust_x64_try_prepare_function(CrustX64Program *program, CrustX64Function *function);
 void crust_x64_output(CrustX64Emitter *emitter, const char *format, ...);
 /* Return false and retain an output diagnostic on failure. */
 bool crust_x64_write(CrustX64Emitter *emitter, const char *text);

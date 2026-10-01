@@ -1,6 +1,5 @@
 """Check Python file, interactive input, and import boundaries; print JSON."""
 
-from pathlib import Path
 import code
 import contextlib
 import hashlib
@@ -9,6 +8,7 @@ import json
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 
 def check_boundaries(work):
@@ -25,19 +25,19 @@ def check_boundaries(work):
         source.write_text(body, encoding="utf-8")
         result = subprocess.run(
             [sys.executable, "-I", "-S", str(source), str(marker)],
-            capture_output=True, text=True, check=False,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         return result, marker.exists()
 
-    preamble = (
-        "from pathlib import Path\nimport sys\n"
-        'Path(sys.argv[1]).write_text("early")\n'
-    )
+    preamble = "from pathlib import Path\nimport sys\n" 'Path(sys.argv[1]).write_text("early")\n'
     result, exists = run_file("later_syntax_error", preamble + "if:\n    pass\n")
     observe(
         "file: later syntax error prevents first side effect",
         result.returncode != 0 and "SyntaxError" in result.stderr and not exists,
-        status=result.returncode, marker=exists,
+        status=result.returncode,
+        marker=exists,
     )
     result, exists = run_file(
         "function_body_syntax_error",
@@ -46,13 +46,15 @@ def check_boundaries(work):
     observe(
         "file: syntax error in unused body prevents first side effect",
         result.returncode != 0 and "SyntaxError" in result.stderr and not exists,
-        status=result.returncode, marker=exists,
+        status=result.returncode,
+        marker=exists,
     )
     result, exists = run_file("later_runtime_error", preamble + "undefined_name\n")
     observe(
         "file: later runtime error retains earlier side effect",
         result.returncode != 0 and "NameError" in result.stderr and exists,
-        status=result.returncode, marker=exists,
+        status=result.returncode,
+        marker=exists,
     )
 
     events = []
@@ -62,8 +64,7 @@ def check_boundaries(work):
         caught = True
     else:
         caught = False
-    observe("exec string: parse before execution", caught and not events,
-            events=events)
+    observe("exec string: parse before execution", caught and not events, events=events)
 
     events = []
     console = code.InteractiveConsole({"events": events})
@@ -73,9 +74,12 @@ def check_boundaries(work):
         second = console.push("if:")
     observe(
         "interactive: a later invalid unit retains the prior unit effect",
-        first is False and second is False and events == ["early"]
+        first is False
+        and second is False
+        and events == ["early"]
         and "SyntaxError" in errors.getvalue(),
-        events=events, incomplete=[first, second],
+        events=events,
+        incomplete=[first, second],
     )
 
     events = []
@@ -84,16 +88,18 @@ def check_boundaries(work):
     second = console.push("    events.append('body')")
     observe(
         "interactive: incomplete compound unit does not execute",
-        first is True and second is True and not events, events=list(events),
+        first is True and second is True and not events,
+        events=list(events),
     )
     third = console.push("")
     observe(
         "interactive: complete compound unit executes once",
-        third is False and events == ["body"], events=list(events),
+        third is False and events == ["body"],
+        events=list(events),
     )
 
     (work / "answer.toy").write_text("answer => 42!\n", encoding="utf-8")
-    loader_source = '''from pathlib import Path
+    loader_source = """from pathlib import Path
 import importlib.abc
 import importlib.util
 import sys
@@ -117,19 +123,23 @@ class Finder(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, Finder())
 import custom_answer
 assert custom_answer.answer == 42
-'''
+"""
     result, exists = run_file("custom_import_loader", loader_source)
     observe(
         "import hook: earlier execution can interpret a later imported input",
-        result.returncode == 0 and exists, status=result.returncode, marker=exists,
+        result.returncode == 0 and exists,
+        status=result.returncode,
+        marker=exists,
     )
     result, exists = run_file(
-        "hook_then_current_file_invalid", loader_source + "\nanswer => 42!\n",
+        "hook_then_current_file_invalid",
+        loader_source + "\nanswer => 42!\n",
     )
     observe(
         "import hook: cannot repair later invalid syntax in its current file",
         result.returncode != 0 and "SyntaxError" in result.stderr and not exists,
-        status=result.returncode, marker=exists,
+        status=result.returncode,
+        marker=exists,
     )
     return observations
 

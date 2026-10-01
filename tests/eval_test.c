@@ -55,9 +55,11 @@ static void *test_allocate(void *user, size_t size)
     AllocatorState *state = user;
     void *allocation;
     ++state->calls;
-    if (state->fail || state->calls == state->fail_at) return NULL;
+    if (state->fail || state->calls == state->fail_at)
+        return NULL;
     allocation = malloc(size);
-    if (allocation != NULL) ++state->live;
+    if (allocation != NULL)
+        ++state->live;
     return allocation;
 }
 
@@ -74,8 +76,8 @@ static bool resolve_native(void *user, CrustDecl *declaration, void **address)
     const char *error;
     ++resolver->lookups;
     if (!resolver->enabled) {
-        crust_set_error(resolver->context, declaration->loc.source,
-                       declaration->loc.offset, "native lookup disabled by test");
+        crust_set_error(resolver->context, declaration->loc.source, declaration->loc.offset,
+                        "native lookup disabled by test");
         return false;
     }
     (void)dlerror();
@@ -102,8 +104,9 @@ static CrustEval *new_eval(CrustContext *context, Resolver *resolver)
 static bool parse(CrustContext *context, CrustSource *source, CrustUnit **unit)
 {
     bool success = crust_read(context, source, unit) && crust_collect(context) &&
-        crust_resolve(context) && crust_check(context);
-    if (!success) fprintf(stderr, "test source diagnostic: %s\n", context->error);
+                   crust_resolve(context) && crust_check(context);
+    if (!success)
+        fprintf(stderr, "test source diagnostic: %s\n", context->error);
     return success;
 }
 
@@ -118,7 +121,8 @@ static CrustDecl *named(CrustUnit *unit, const char *name)
 {
     CrustDecl *declaration;
     for (declaration = unit->declarations; declaration != NULL; declaration = declaration->next)
-        if (strcmp(declaration->name->text, name) == 0) return declaration;
+        if (strcmp(declaration->name->text, name) == 0)
+            return declaration;
     abort();
 }
 
@@ -126,7 +130,8 @@ static bool prepare_all(CrustEval *eval, CrustUnit *unit)
 {
     CrustDecl *declaration;
     for (declaration = unit->declarations; declaration != NULL; declaration = declaration->next)
-        if (!crust_eval_prepare(eval, declaration)) return false;
+        if (!crust_eval_prepare(eval, declaration))
+            return false;
     return true;
 }
 
@@ -136,10 +141,12 @@ static unsigned char *read_file(const char *path, size_t *size)
     unsigned char *bytes;
     long length;
     if (file == NULL || fseek(file, 0, SEEK_END) != 0 || (length = ftell(file)) < 0 ||
-        fseek(file, 0, SEEK_SET) != 0) abort();
+        fseek(file, 0, SEEK_SET) != 0)
+        abort();
     bytes = malloc((size_t)length + 1);
     if (bytes == NULL || fread(bytes, 1, (size_t)length, file) != (size_t)length ||
-        fclose(file) != 0) abort();
+        fclose(file) != 0)
+        abort();
     bytes[length] = 0;
     *size = (size_t)length;
     return bytes;
@@ -159,13 +166,17 @@ static void test_runtime(void)
     int32_t result = -1;
     source.bytes = read_file(source.path, &source.size);
     crust_context_init(&context, NULL);
-    if (!parse(&context, &source, &unit)) { check(false, "runtime source checks"); goto done; }
+    if (!parse(&context, &source, &unit)) {
+        check(false, "runtime source checks");
+        goto done;
+    }
     eval = new_eval(&context, &resolver);
     check(eval != NULL && prepare_all(eval, unit), "runtime declarations prepare");
     check(resolver.lookups == 0, "preparation does not resolve native symbols");
     check(crust_eval_call(eval, named(unit, "main"), arguments, 2, &result) && result == 0,
           "full runtime witness: scalar ABI, aggregates, alias copies, order, loops, callbacks");
-    if (result != 0) fprintf(stderr, "runtime result: %d, diagnostic: %s\n", result, context.error);
+    if (result != 0)
+        fprintf(stderr, "runtime result: %d, diagnostic: %s\n", result, context.error);
     check(context.failure == NULL, "runtime leaves no failure frame");
 done:
     crust_eval_destroy(eval);
@@ -204,15 +215,20 @@ static void test_reentry(void)
     int8_t (*again)(int8_t) = NULL;
     size_t reserved;
     crust_context_init(&context, NULL);
-    if (!parse(&context, &source, &unit)) { check(false, "reentry source checks"); goto done; }
+    if (!parse(&context, &source, &unit)) {
+        check(false, "reentry source checks");
+        goto done;
+    }
     eval = new_eval(&context, &resolver);
     check(eval != NULL && prepare_all(eval, unit), "reentry declarations prepare");
     check(crust_eval_call(eval, named(unit, "recurse"), &argument, 1, &result) && result == 57,
           "native callback recursion keeps each live frame separate");
     reserved = context.arena.bytes_reserved;
     check(crust_eval_call(eval, named(unit, "recurse"), &argument, 1, &result) && result == 57 &&
-          context.arena.bytes_reserved == reserved, "completed frames are reused");
-    check(crust_eval_call(eval, named(unit, "keep"), NULL, 0, NULL), "native retains interpreted callback");
+              context.arena.bytes_reserved == reserved,
+          "completed frames are reused");
+    check(crust_eval_call(eval, named(unit, "keep"), NULL, 0, NULL),
+          "native retains interpreted callback");
     check(crust_eval_call(eval, named(unit, "use"), NULL, 0, &narrow) && narrow == INT8_MIN,
           "retained narrow callback remains callable after the original call");
     check(crust_eval_function(eval, named(unit, "narrow"), &callback) && callback(-127) == INT8_MIN,
@@ -220,7 +236,8 @@ static void test_reentry(void)
     check(crust_eval_function(eval, named(unit, "narrow"), &again) && again == callback,
           "function pointer identity is stable");
     check(crust_eval_call(eval, named(unit, "alias"), NULL, 0, &wide) &&
-          wide == UINT64_C(18446744069414584362), "native alias store is visible in a wide local read");
+              wide == UINT64_C(18446744069414584362),
+          "native alias store is visible in a wide local read");
     check(crust_eval_call(eval, named(unit, "direct"), &depth_argument, 1, &direct) && direct == 51,
           "direct interpreted recursion");
     saved_callback = NULL;
@@ -231,12 +248,11 @@ done:
 
 static void test_native_identity(void)
 {
-    const char *text =
-        "extern fn a(p:*u8)->u64=\"shared\";"
-        "extern fn b(p:*i32)->usize=\"shared\";"
-        "extern fn bad(p:*u8)->u8=\"shared\";"
-        "extern fn identity(n:i32)->i32=\"native_i32\";"
-        "fn owned(n:i32)->i32{return n+1i32;}";
+    const char *text = "extern fn a(p:*u8)->u64=\"shared\";"
+                       "extern fn b(p:*i32)->usize=\"shared\";"
+                       "extern fn bad(p:*u8)->u8=\"shared\";"
+                       "extern fn identity(n:i32)->i32=\"native_i32\";"
+                       "fn owned(n:i32)->i32{return n+1i32;}";
     CrustSource source = source_text(text);
     CrustContext context;
     CrustUnit *unit;
@@ -246,27 +262,35 @@ static void test_native_identity(void)
     int32_t (*owned)(int32_t) = NULL;
     CrustDecl copy;
     crust_context_init(&context, NULL);
-    if (!parse(&context, &source, &unit)) { check(false, "native identity source checks"); goto done; }
+    if (!parse(&context, &source, &unit)) {
+        check(false, "native identity source checks");
+        goto done;
+    }
     eval = new_eval(&context, &resolver);
     resolver.enabled = false;
     check(crust_eval_prepare(eval, named(unit, "a")) && crust_eval_prepare(eval, named(unit, "b")),
           "native aliases accept matching pointer and integer ABI types");
-    check(!crust_eval_prepare(eval, named(unit, "bad")) && strstr(context.error, "conflicting native ABI") != NULL,
+    check(!crust_eval_prepare(eval, named(unit, "bad")) &&
+              strstr(context.error, "conflicting native ABI") != NULL,
           "native aliases reject incompatible ABI before lookup");
     check(resolver.lookups == 0, "ABI validation needs no loaded native library");
-    check(crust_eval_prepare(eval, named(unit, "identity")), "extern prepares before a link is available");
+    check(crust_eval_prepare(eval, named(unit, "identity")),
+          "extern prepares before a link is available");
     resolver.enabled = true;
     check(crust_eval_function(eval, named(unit, "identity"), &external) && external(42) == 42,
           "first function value resolves the linked native symbol");
     named(unit, "owned")->link_name = "native_i32";
-    check(!crust_eval_prepare(eval, named(unit, "owned")) && strstr(context.error, "already published") != NULL,
+    check(!crust_eval_prepare(eval, named(unit, "owned")) &&
+              strstr(context.error, "already published") != NULL,
           "late definition cannot replace a published extern identity");
     crust_eval_destroy(eval);
     eval = new_eval(&context, &resolver);
-    check(crust_eval_prepare(eval, named(unit, "identity")) && crust_eval_prepare(eval, named(unit, "owned")),
+    check(crust_eval_prepare(eval, named(unit, "identity")) &&
+              crust_eval_prepare(eval, named(unit, "owned")),
           "owned function and extern alias register before publication");
     check(crust_eval_function(eval, named(unit, "identity"), &external) &&
-          crust_eval_function(eval, named(unit, "owned"), &owned) && external == owned && owned(41) == 42,
+              crust_eval_function(eval, named(unit, "owned"), &owned) && external == owned &&
+              owned(41) == 42,
           "extern and owned aliases share one interpreted callable");
     check(resolver.lookups == 0, "owned native identity needs no external lookup");
     copy = *named(unit, "owned");
@@ -299,13 +323,18 @@ static void test_callback_types(void)
     int8_t (*(*function)(void))(int8_t) = NULL;
     uint8_t byte = 0;
     crust_context_init(&context, NULL);
-    if (!parse(&context, &source, &unit)) { check(false, "callback scalar source checks"); goto done; }
+    if (!parse(&context, &source, &unit)) {
+        check(false, "callback scalar source checks");
+        goto done;
+    }
     eval = crust_eval_create(&context, NULL);
-#define CHECK_CALLBACK(TYPE, NAME, VALUE) do { \
-    TYPE (*callback)(TYPE) = NULL; \
-    check(crust_eval_function(eval, named(unit, NAME), &callback) && callback(VALUE) == (VALUE), \
-          "native callback parameter and result: " NAME); \
-} while (0)
+#define CHECK_CALLBACK(TYPE, NAME, VALUE)                                                          \
+    do {                                                                                           \
+        TYPE (*callback)(TYPE) = NULL;                                                             \
+        check(crust_eval_function(eval, named(unit, NAME), &callback) &&                           \
+                  callback(VALUE) == (VALUE),                                                      \
+              "native callback parameter and result: " NAME);                                      \
+    } while (0)
     CHECK_CALLBACK(int8_t, "i8_value", INT8_MIN);
     CHECK_CALLBACK(uint8_t, "u8_value", UINT8_MAX);
     CHECK_CALLBACK(int16_t, "i16_value", INT16_MIN);
@@ -317,15 +346,19 @@ static void test_callback_types(void)
     CHECK_CALLBACK(intptr_t, "isize_value", INTPTR_MIN);
     CHECK_CALLBACK(uintptr_t, "usize_value", UINTPTR_MAX);
 #undef CHECK_CALLBACK
-    check(crust_eval_function(eval, named(unit, "bool_value"), &boolean) &&
-          boolean(false) && !boolean(true), "native bool callback");
+    check(crust_eval_function(eval, named(unit, "bool_value"), &boolean) && boolean(false) &&
+              !boolean(true),
+          "native bool callback");
     check(crust_eval_function(eval, named(unit, "pointer_value"), &pointer) &&
-          pointer(&byte) == &byte, "native pointer callback");
-    check(crust_eval_function(eval, named(unit, "unit_value"), &procedure), "native unit callback prepares");
+              pointer(&byte) == &byte,
+          "native pointer callback");
+    check(crust_eval_function(eval, named(unit, "unit_value"), &procedure),
+          "native unit callback prepares");
     procedure(&byte);
     check(byte == 42, "native unit callback writes its argument");
     check(crust_eval_function(eval, named(unit, "function_value"), &function) &&
-          function()(INT8_MIN) == INT8_MIN, "native callback returns a callable function pointer");
+              function()(INT8_MIN) == INT8_MIN,
+          "native callback returns a callable function pointer");
 done:
     crust_eval_destroy(eval);
     crust_context_destroy(&context);
@@ -362,7 +395,8 @@ static void test_root(void)
         begin = action.end;
         ++actions;
     }
-    check(returned && status == 42 && actions == 6, "root variables and addresses survive later actions");
+    check(returned && status == 42 && actions == 6,
+          "root variables and addresses survive later actions");
     {
         CrustSymbol symbol;
         CrustExpr expression;
@@ -378,7 +412,8 @@ static void test_root(void)
         expression.symbol = &symbol;
         expression.place = true;
         expression.writable = true;
-        check(crust_eval_bind(eval, &symbol, &borrowed) && crust_eval_bind(eval, &symbol, &borrowed),
+        check(crust_eval_bind(eval, &symbol, &borrowed) &&
+                  crust_eval_bind(eval, &symbol, &borrowed),
               "borrowed root storage binds once or repeats its address");
         check(crust_eval_expression(eval, &expression, &result) && result == 17,
               "expression API reads bound host storage");
@@ -420,7 +455,8 @@ static void test_arithmetic(void)
                            types[type_index], types[type_index], types[type_index], ops[op_index]);
             source = source_text(text);
             crust_context_init(&context, NULL);
-            if (!parse(&context, &source, &unit)) abort();
+            if (!parse(&context, &source, &unit))
+                abort();
             eval = crust_eval_create(&context, NULL);
             for (index = 0; index < 100; ++index) {
                 uint64_t a;
@@ -428,20 +464,40 @@ static void test_arithmetic(void)
                 uint64_t expected = 0;
                 uint64_t result = 0;
                 void *arguments[2] = {&a, &b};
-                state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
                 a = state & mask;
-                state ^= state << 13; state ^= state >> 7; state ^= state << 17;
+                state ^= state << 13;
+                state ^= state >> 7;
+                state ^= state << 17;
                 b = state & mask;
-                if (op_index == 6 || op_index == 7) b %= width;
-                if (op_index >= 8 && (b == 0 || (signed_type && a == sign && b == mask))) b = 1;
+                if (op_index == 6 || op_index == 7)
+                    b %= width;
+                if (op_index >= 8 && (b == 0 || (signed_type && a == sign && b == mask)))
+                    b = 1;
                 switch (op_index) {
-                case 0: expected = a + b; break;
-                case 1: expected = a - b; break;
-                case 2: expected = a * b; break;
-                case 3: expected = a & b; break;
-                case 4: expected = a | b; break;
-                case 5: expected = a ^ b; break;
-                case 6: expected = a << (unsigned)b; break;
+                case 0:
+                    expected = a + b;
+                    break;
+                case 1:
+                    expected = a - b;
+                    break;
+                case 2:
+                    expected = a * b;
+                    break;
+                case 3:
+                    expected = a & b;
+                    break;
+                case 4:
+                    expected = a | b;
+                    break;
+                case 5:
+                    expected = a ^ b;
+                    break;
+                case 6:
+                    expected = a << (unsigned)b;
+                    break;
                 case 7:
                     expected = a >> (unsigned)b;
                     if (signed_type && (a & sign) != 0 && b != 0)
@@ -458,11 +514,13 @@ static void test_arithmetic(void)
                         memcpy(&signed_b, &extended_b, sizeof(signed_b));
                         answer = op_index == 8 ? signed_a / signed_b : signed_a % signed_b;
                         memcpy(&expected, &answer, sizeof(expected));
-                    } else expected = op_index == 8 ? a / b : a % b;
+                    } else
+                        expected = op_index == 8 ? a / b : a % b;
                     break;
                 }
                 check(crust_eval_call(eval, unit->declarations, arguments, 2, &result) &&
-                      result == (expected & mask), "dynamic integer operation matches its width");
+                          result == (expected & mask),
+                      "dynamic integer operation matches its width");
             }
             crust_eval_destroy(eval);
             crust_context_destroy(&context);
@@ -488,51 +546,58 @@ static void test_conversions_and_comparisons(void)
         size_t a;
         size_t b;
         (void)snprintf(text, sizeof(text),
-            "fn f(a:%s,b:%s)->u8{return ((a==b) as u8)|(((a!=b) as u8)<<1u8)|"
-            "(((a<b) as u8)<<2u8)|(((a<=b) as u8)<<3u8)|"
-            "(((a>b) as u8)<<4u8)|(((a>=b) as u8)<<5u8);}", types[from], types[from]);
+                       "fn f(a:%s,b:%s)->u8{return ((a==b) as u8)|(((a!=b) as u8)<<1u8)|"
+                       "(((a<b) as u8)<<2u8)|(((a<=b) as u8)<<3u8)|"
+                       "(((a>b) as u8)<<4u8)|(((a>=b) as u8)<<5u8);}",
+                       types[from], types[from]);
         source = source_text(text);
         crust_context_init(&context, NULL);
-        if (!parse(&context, &source, &unit)) abort();
+        if (!parse(&context, &source, &unit))
+            abort();
         eval = crust_eval_create(&context, NULL);
-        for (a = 0; a < 5; ++a) for (b = 0; b < 5; ++b) {
-            uint8_t result = 0;
-            uint8_t expected;
-            void *arguments[2] = {&inputs[a], &inputs[b]};
-            if (from % 2 == 0) {
-                uint64_t extended_a = (inputs[a] & sign) != 0 ? inputs[a] | ~mask : inputs[a];
-                uint64_t extended_b = (inputs[b] & sign) != 0 ? inputs[b] | ~mask : inputs[b];
-                int64_t x;
-                int64_t y;
-                memcpy(&x, &extended_a, sizeof(x));
-                memcpy(&y, &extended_b, sizeof(y));
-                expected = (uint8_t)((x == y) | ((x != y) << 1) | ((x < y) << 2) |
-                                      ((x <= y) << 3) | ((x > y) << 4) | ((x >= y) << 5));
-            } else {
-                uint64_t x = inputs[a];
-                uint64_t y = inputs[b];
-                expected = (uint8_t)((x == y) | ((x != y) << 1) | ((x < y) << 2) |
-                                      ((x <= y) << 3) | ((x > y) << 4) | ((x >= y) << 5));
+        for (a = 0; a < 5; ++a)
+            for (b = 0; b < 5; ++b) {
+                uint8_t result = 0;
+                uint8_t expected;
+                void *arguments[2] = {&inputs[a], &inputs[b]};
+                if (from % 2 == 0) {
+                    uint64_t extended_a = (inputs[a] & sign) != 0 ? inputs[a] | ~mask : inputs[a];
+                    uint64_t extended_b = (inputs[b] & sign) != 0 ? inputs[b] | ~mask : inputs[b];
+                    int64_t x;
+                    int64_t y;
+                    memcpy(&x, &extended_a, sizeof(x));
+                    memcpy(&y, &extended_b, sizeof(y));
+                    expected = (uint8_t)((x == y) | ((x != y) << 1) | ((x < y) << 2) |
+                                         ((x <= y) << 3) | ((x > y) << 4) | ((x >= y) << 5));
+                } else {
+                    uint64_t x = inputs[a];
+                    uint64_t y = inputs[b];
+                    expected = (uint8_t)((x == y) | ((x != y) << 1) | ((x < y) << 2) |
+                                         ((x <= y) << 3) | ((x > y) << 4) | ((x >= y) << 5));
+                }
+                check(crust_eval_call(eval, unit->declarations, arguments, 2, &result) &&
+                          result == expected,
+                      "ordered comparisons include signed extrema");
             }
-            check(crust_eval_call(eval, unit->declarations, arguments, 2, &result) && result == expected,
-                  "ordered comparisons include signed extrema");
-        }
         crust_eval_destroy(eval);
         crust_context_destroy(&context);
         for (to = 0; to < 10; ++to) {
-            (void)snprintf(text, sizeof(text), "fn f(a:%s)->%s{return a as %s;}",
-                           types[from], types[to], types[to]);
+            (void)snprintf(text, sizeof(text), "fn f(a:%s)->%s{return a as %s;}", types[from],
+                           types[to], types[to]);
             source = source_text(text);
             crust_context_init(&context, NULL);
-            if (!parse(&context, &source, &unit)) abort();
+            if (!parse(&context, &source, &unit))
+                abort();
             eval = crust_eval_create(&context, NULL);
             for (a = 0; a < 5; ++a) {
                 uint64_t result = 0;
                 uint64_t expected = inputs[a];
                 void *argument = &inputs[a];
-                if (from % 2 == 0 && (inputs[a] & sign) != 0) expected |= ~mask;
+                if (from % 2 == 0 && (inputs[a] & sign) != 0)
+                    expected |= ~mask;
                 expected &= width_mask(widths[to]);
-                check(crust_eval_call(eval, unit->declarations, &argument, 1, &result) && result == expected,
+                check(crust_eval_call(eval, unit->declarations, &argument, 1, &result) &&
+                          result == expected,
                       "integer cast extends signed source before destination truncation");
             }
             crust_eval_destroy(eval);
@@ -550,8 +615,9 @@ static void test_registration_failures(void)
     size_t failure;
     for (index = 0; index < 200; ++index) {
         int length = snprintf(text + used, sizeof(text) - used,
-                               "fn f%zu(n:i32)->i32{return n+1i32;}\n", index);
-        if (length < 0 || (size_t)length >= sizeof(text) - used) abort();
+                              "fn f%zu(n:i32)->i32{return n+1i32;}\n", index);
+        if (length < 0 || (size_t)length >= sizeof(text) - used)
+            abort();
         used += (size_t)length;
     }
     for (failure = 0; failure <= failures_to_test; ++failure) {
@@ -567,17 +633,21 @@ static void test_registration_failures(void)
         size_t callback_count = 0;
         bool failed = false;
         crust_context_init(&context, &allocator);
-        if (!parse(&context, &source, &unit)) abort();
+        if (!parse(&context, &source, &unit))
+            abort();
         initial_calls = state.calls;
-        if (failure != 0) state.fail_at = initial_calls + failure;
+        if (failure != 0)
+            state.fail_at = initial_calls + failure;
         eval = crust_eval_create(&context, NULL);
         if (eval == NULL) {
             failed = true;
             state.fail_at = 0;
             eval = crust_eval_create(&context, NULL);
         }
-        if (eval == NULL) abort();
-        for (declaration = unit->declarations; declaration != NULL; declaration = declaration->next) {
+        if (eval == NULL)
+            abort();
+        for (declaration = unit->declarations; declaration != NULL;
+             declaration = declaration->next) {
             int32_t (*callback)(int32_t) = NULL;
             declaration->link_name = declaration->name->text;
             if (!crust_eval_function(eval, declaration, &callback)) {
@@ -585,16 +655,21 @@ static void test_registration_failures(void)
                 state.fail_at = 0;
                 check(strstr(context.error, "allocation") != NULL && context.failure == NULL,
                       "registration allocation failure returns through local C frames");
-                check(crust_eval_function(eval, declaration, &callback), "registration can retry after allocation recovery");
+                check(crust_eval_function(eval, declaration, &callback),
+                      "registration can retry after allocation recovery");
             }
-            if (callback == NULL) abort();
+            if (callback == NULL)
+                abort();
             callbacks[callback_count++] = callback;
         }
-        if (failure == 0) failures_to_test = state.calls - initial_calls;
-        else check(failed, "each evaluator arena allocation failure is observed");
+        if (failure == 0)
+            failures_to_test = state.calls - initial_calls;
+        else
+            check(failed, "each evaluator arena allocation failure is observed");
         state.fail_at = 0;
         for (index = 0; index < callback_count; ++index)
-            if (callbacks[index](41) != 42) abort();
+            if (callbacks[index](41) != 42)
+                abort();
         crust_eval_destroy(eval);
         crust_context_destroy(&context);
         check(state.live == 0, "failed registration releases all context allocations");
@@ -616,32 +691,40 @@ static void expect_trap(const char *expression)
     (void)snprintf(text, sizeof(text), "fn f()->unit{\n%s;\n}", expression);
     source = source_text(text);
     crust_context_init(&context, NULL);
-    if (!parse(&context, &source, &unit)) abort();
+    if (!parse(&context, &source, &unit))
+        abort();
     eval = crust_eval_create(&context, NULL);
-    if (pipe(errors) != 0) abort();
+    if (pipe(errors) != 0)
+        abort();
     child = fork();
     if (child == 0) {
         struct rlimit limit = {0, 0};
-        if (close(errors[0]) != 0 || dup2(errors[1], STDERR_FILENO) < 0 ||
-            close(errors[1]) != 0 || setrlimit(RLIMIT_CORE, &limit) != 0) _exit(98);
+        if (close(errors[0]) != 0 || dup2(errors[1], STDERR_FILENO) < 0 || close(errors[1]) != 0 ||
+            setrlimit(RLIMIT_CORE, &limit) != 0)
+            _exit(98);
         (void)crust_eval_call(eval, unit->declarations, NULL, 0, NULL);
         _exit(99);
     }
-    if (close(errors[1]) != 0) abort();
+    if (close(errors[1]) != 0)
+        abort();
     length = read(errors[0], diagnostic, sizeof(diagnostic) - 1);
-    if (length < 0 || close(errors[0]) != 0) abort();
+    if (length < 0 || close(errors[0]) != 0)
+        abort();
     diagnostic[length] = 0;
-    if (child < 0 || waitpid(child, &status, 0) != child) abort();
+    if (child < 0 || waitpid(child, &status, 0) != child)
+        abort();
     check(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT, "required trap ends the process");
     check(strstr(diagnostic, "eval-test:2:") != NULL &&
-          strstr(diagnostic, "required execution trap") != NULL, "trap reports the original source line and column");
+              strstr(diagnostic, "required execution trap") != NULL,
+          "trap reports the original source line and column");
     crust_eval_destroy(eval);
     crust_context_destroy(&context);
 }
 
 static void test_failures(void)
 {
-    const char *text = "fn huge()->i32{var a:[u8;1000000]=uninit;a[0usize]=42u8;return a[0usize] as i32;}";
+    const char *text =
+        "fn huge()->i32{var a:[u8;1000000]=uninit;a[0usize]=42u8;return a[0usize] as i32;}";
     CrustSource source = source_text(text);
     CrustContext context;
     CrustUnit *unit;
@@ -653,28 +736,34 @@ static void test_failures(void)
     pid_t child;
     int status = 0;
     crust_context_init(&context, &allocator);
-    if (!parse(&context, &source, &unit)) abort();
+    if (!parse(&context, &source, &unit))
+        abort();
     eval = crust_eval_create(&context, NULL);
-    check(crust_eval_function(eval, unit->declarations, &callback), "prepare callback before allocation failure");
+    check(crust_eval_function(eval, unit->declarations, &callback),
+          "prepare callback before allocation failure");
     state.fail = true;
     check(!crust_eval_call(eval, unit->declarations, NULL, 0, &value) &&
-          strstr(context.error, "allocation") != NULL && context.failure == NULL,
+              strstr(context.error, "allocation") != NULL && context.failure == NULL,
           "ordinary evaluator allocation failure returns a diagnostic");
     child = fork();
     if (child == 0) {
         struct rlimit limit = {0, 0};
-        if (setrlimit(RLIMIT_CORE, &limit) != 0 || freopen("/dev/null", "w", stderr) == NULL) _exit(98);
+        if (setrlimit(RLIMIT_CORE, &limit) != 0 || freopen("/dev/null", "w", stderr) == NULL)
+            _exit(98);
         (void)callback();
         _exit(99);
     }
-    if (child < 0 || waitpid(child, &status, 0) != child) abort();
+    if (child < 0 || waitpid(child, &status, 0) != child)
+        abort();
     check(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT,
           "callback resource failure aborts instead of returning a fabricated value");
     state.fail = false;
     check(crust_eval_call(eval, unit->declarations, NULL, 0, &value) && value == 42,
           "ordinary evaluation retries after resource recovery");
-    check(!crust_eval_call(eval, unit->declarations, NULL, 1, &value), "call validates argument count");
-    check(!crust_eval_call(eval, unit->declarations, NULL, 0, NULL), "call validates result storage");
+    check(!crust_eval_call(eval, unit->declarations, NULL, 1, &value),
+          "call validates argument count");
+    check(!crust_eval_call(eval, unit->declarations, NULL, 0, NULL),
+          "call validates result storage");
     crust_eval_destroy(eval);
     crust_eval_destroy(eval);
     crust_context_destroy(&context);

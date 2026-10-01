@@ -1,0 +1,62 @@
+minimum_pre_commit_version: '4.0.0'
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        # These reports and inputs must retain their recorded bytes and hashes.
+        exclude: &recorded_inputs >-
+          (?x)^(
+            benchmarks/.*\.(json|patch|stderr)|
+            benchmarks/resources/(callbacks\.c|common\.h|contracts\.c|direct\.c|verify\.py)|
+            benchmarks/source-stages/measure\.py|
+            examples/resources/sqlite/(initialization-before|validation)\.json
+          )$
+      - id: end-of-file-fixer
+        exclude: *recorded_inputs
+      - id: mixed-line-ending
+        args: [--fix=lf]
+        exclude: *recorded_inputs
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-ast
+      - id: debug-statements
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: check-executables-have-shebangs
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: detect-private-key
+
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v19.1.6
+    hooks:
+      - id: clang-format
+        types_or: [c, c++]
+        exclude: *recorded_inputs
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.7
+    hooks:
+      - id: ruff
+        args: [--fix]
+        exclude: *recorded_inputs
+
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        exclude: *recorded_inputs
+
+  - repo: local
+    hooks:
+      - id: crust-api
+        name: check generated Crust APIs
+        language: python
+        entry: python tools/api.py --check
+        files: ^(include/crust0.*\.h|api/.*\.crs|tools/api\.py|\.pre-commit-config\.yaml)$
+        pass_filenames: false

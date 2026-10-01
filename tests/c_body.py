@@ -7,7 +7,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -24,15 +23,29 @@ def main():
         output = work / "program"
         library = work / "ordinary-backend.so"
         shutil.copyfile(build / "crust-c-library.so", library)
-        sources = ["api/crust0.crs", "api/crust0_stage.crs", "stages/c/model.crs",
-                   "stages/c/api.crs", "stages/c/extension.crs", "tests/c_body.crs"]
-        subprocess.run([str(build / "crust-c"), "-o", str(harness), *sources,
-                        *("--cflag=" + flag for flag in shlex.split(args.cflags)),
-                        "--ldflag=" + str(library),
-                        "--ldflag=" + str(build / "libcrust0.a"),
-                        "--ldflag=" + str(build / "libcrust0_host.a"),
-                        *("--ldflag=" + flag for flag in shlex.split(args.ldflags))],
-                       cwd=ROOT, check=True)
+        sources = [
+            "api/crust0.crs",
+            "api/crust0_stage.crs",
+            "stages/c/model.crs",
+            "stages/c/api.crs",
+            "stages/c/extension.crs",
+            "tests/c_body.crs",
+        ]
+        subprocess.run(
+            [
+                str(build / "crust-c"),
+                "-o",
+                str(harness),
+                *sources,
+                *("--cflag=" + flag for flag in shlex.split(args.cflags)),
+                "--ldflag=" + str(library),
+                "--ldflag=" + str(build / "libcrust0.a"),
+                "--ldflag=" + str(build / "libcrust0_host.a"),
+                *("--ldflag=" + flag for flag in shlex.split(args.ldflags)),
+            ],
+            cwd=ROOT,
+            check=True,
+        )
         subprocess.run([str(harness), str(output)], cwd=ROOT, check=True)
         result = subprocess.run([str(output)], cwd=ROOT, check=False)
         if result.returncode != 42:

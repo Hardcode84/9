@@ -27,9 +27,11 @@ static void *count_allocate(void *user, size_t size)
 {
     AllocationCounts *counts = user;
     void *allocation;
-    if (++counts->calls == counts->fail_at) return NULL;
+    if (++counts->calls == counts->fail_at)
+        return NULL;
     allocation = malloc(size);
-    if (allocation != NULL) ++counts->live;
+    if (allocation != NULL)
+        ++counts->live;
     return allocation;
 }
 
@@ -82,7 +84,8 @@ static void tables_stage(CrustContext *ctx, void *data)
         char name[32];
         int length = snprintf(name, sizeof(name), "name_%zu", index);
         CrustName *interned = crust_intern(ctx, (const unsigned char *)name, (size_t)length);
-        if (index == 0) first = interned;
+        if (index == 0)
+            first = interned;
         values[index] = (int)index;
         crust_map_set(ctx, &map, index + 1, &values[index]);
     }
@@ -131,8 +134,9 @@ static bool compile_text(CrustContext *ctx, CrustSource *source)
     CrustUnit *unit;
     CrustDecl *decl;
     CrustX64Program *program;
-    if (!crust_read(ctx, source, &unit) || !crust_collect(ctx) ||
-        !crust_resolve(ctx) || !crust_check(ctx)) return false;
+    if (!crust_read(ctx, source, &unit) || !crust_collect(ctx) || !crust_resolve(ctx) ||
+        !crust_check(ctx))
+        return false;
     for (decl = unit->declarations; decl != NULL; decl = decl->next) {
         decl->link_name = decl->name->text;
     }
@@ -152,7 +156,8 @@ static void test_allocation_failure(void)
     for (index = 0; index < 200; ++index) {
         int length = snprintf(text + used, sizeof(text) - used,
                               "fn f%zu(p:u64)->u64{return p+%zuu64;}\n", index, index);
-        if (length < 0 || (size_t)length >= sizeof(text) - used) abort();
+        if (length < 0 || (size_t)length >= sizeof(text) - used)
+            abort();
         used += (size_t)length;
     }
     source.size = used;
@@ -190,29 +195,33 @@ static void wrappers_stage(CrustContext *ctx, void *data)
     (void)data;
     grown = crust_try_grow_array(ctx, values, 2, 3, sizeof(*values), CRUST_ALIGNOF(int));
     check(grown != NULL && grown[0] == 17 && grown[1] == 29 && grown[2] == 0 &&
-          ctx->failure == outer, "nonthrowing growth copies values and restores the frame");
+              ctx->failure == outer,
+          "nonthrowing growth copies values and restores the frame");
     errors = ctx->error_count;
     check(crust_try_grow_array(ctx, NULL, 0, 0, sizeof(int), CRUST_ALIGNOF(int)) == NULL &&
-          ctx->error_count == errors && ctx->failure == outer,
+              ctx->error_count == errors && ctx->failure == outer,
           "zero-capacity growth returns null without a diagnostic");
     check(crust_try_grow_array(ctx, values, 2, 1, sizeof(*values), CRUST_ALIGNOF(int)) == NULL &&
-          ctx->error_count == errors + 1 && ctx->failure == outer,
+              ctx->error_count == errors + 1 && ctx->failure == outer,
           "invalid growth reports failure inside the wrapper");
     copy = crust_try_copy_string(ctx, text, sizeof(text));
     check(copy != NULL && memcmp(copy, text, sizeof(text)) == 0 && copy[3] == '\0' &&
-          ctx->failure == outer, "nonthrowing copy retains embedded zero bytes");
+              ctx->failure == outer,
+          "nonthrowing copy retains embedded zero bytes");
     copy = crust_try_copy_string(ctx, NULL, 0);
     check(copy != NULL && copy[0] == '\0' && ctx->failure == outer,
           "nonthrowing empty copy creates a terminator");
     errors = ctx->error_count;
-    check(crust_try_copy_string(ctx, NULL, SIZE_MAX) == NULL &&
-          ctx->error_count == errors + 1 && ctx->failure == outer,
+    check(crust_try_copy_string(ctx, NULL, SIZE_MAX) == NULL && ctx->error_count == errors + 1 &&
+              ctx->failure == outer,
           "copy overflow reports failure inside the wrapper");
     check(crust_try_map_set(ctx, &map, 7, grown) && crust_map_get(&map, 7) == grown &&
-          ctx->failure == outer, "nonthrowing map update restores the frame");
+              ctx->failure == outer,
+          "nonthrowing map update restores the frame");
     errors = ctx->error_count;
     check(!crust_try_map_set(ctx, &map, 0, grown) && ctx->error_count == errors + 1 &&
-          ctx->failure == outer, "invalid map key reports failure inside the wrapper");
+              ctx->failure == outer,
+          "invalid map key reports failure inside the wrapper");
     check(crust_try_map_set(ctx, &map, 7, NULL) && crust_map_get(&map, 7) == NULL,
           "nonthrowing map update removes a scoped value");
     memset(&scalar, 0, sizeof(scalar));
@@ -222,19 +231,20 @@ static void wrappers_stage(CrustContext *ctx, void *data)
     pointer.base = &scalar;
     type = crust_try_resolve_type(ctx, &pointer);
     check(type != NULL && type->kind == CRUST_T_POINTER &&
-          type->base == &ctx->builtins[CRUST_T_U32] && ctx->failure == outer,
+              type->base == &ctx->builtins[CRUST_T_U32] && ctx->failure == outer,
           "nonthrowing type resolution restores the frame");
     errors = ctx->error_count;
     pointer.base = NULL;
     check(crust_try_resolve_type(ctx, &pointer) == NULL && ctx->error_count == errors + 1 &&
-          ctx->failure == outer, "nested type failure stays inside the native wrapper");
+              ctx->failure == outer,
+          "nested type failure stays inside the native wrapper");
     type = crust_try_pointer_type(ctx, &ctx->builtins[CRUST_T_U64]);
-    check(type != NULL && type->base == &ctx->builtins[CRUST_T_U64] &&
-          type->size == 8 && ctx->failure == outer,
+    check(type != NULL && type->base == &ctx->builtins[CRUST_T_U64] && type->size == 8 &&
+              ctx->failure == outer,
           "nonthrowing pointer construction restores the frame");
     errors = ctx->error_count;
     check(crust_try_pointer_type(ctx, &ctx->builtins[CRUST_T_UNIT]) == NULL &&
-          ctx->error_count == errors + 1 && ctx->failure == outer,
+              ctx->error_count == errors + 1 && ctx->failure == outer,
           "invalid pointer target reports failure inside the wrapper");
 }
 
@@ -273,9 +283,8 @@ static bool pointer_request(CrustContext *ctx)
 
 static void test_wrapper_allocation_failures(void)
 {
-    static bool (*const requests[])(CrustContext *) = {
-        grow_request, copy_request, map_request, resolve_request, pointer_request
-    };
+    static bool (*const requests[])(CrustContext *) = {grow_request, copy_request, map_request,
+                                                       resolve_request, pointer_request};
     size_t index;
     for (index = 0; index < sizeof(requests) / sizeof(requests[0]); ++index) {
         AllocationCounts counts = {0, 0, 1};
@@ -283,7 +292,7 @@ static void test_wrapper_allocation_failures(void)
         CrustContext ctx;
         crust_context_init(&ctx, &allocator);
         check(!requests[index](&ctx) && ctx.error_count == 1 && ctx.failure == NULL &&
-              strstr(ctx.error, "allocation") != NULL,
+                  strstr(ctx.error, "allocation") != NULL,
               "nonthrowing helper reports allocator failure without escaping its frame");
         check(requests[index](&ctx) && ctx.failure == NULL,
               "nonthrowing helper can retry after allocator failure");
@@ -318,7 +327,8 @@ int main(void)
     counts.calls = 0;
     crust_context_init(&ctx, &allocator);
     check(crust_try_intern(&ctx, (const unsigned char *)"name", 4) == NULL &&
-          ctx.error_count == 1 && ctx.failure == NULL, "nonthrowing interning reports failure");
+              ctx.error_count == 1 && ctx.failure == NULL,
+          "nonthrowing interning reports failure");
     check(crust_try_intern(&ctx, (const unsigned char *)"name", 4) != NULL,
           "interning can retry after a reported allocation failure");
     crust_context_destroy(&ctx);

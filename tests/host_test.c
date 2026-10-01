@@ -33,12 +33,14 @@ int main(void)
         return 1;
     }
     check(close(descriptor) == 0, "close temporary file descriptor");
-    for (index = 0; index < sizeof(contents); ++index) contents[index] = (unsigned char)index;
+    for (index = 0; index < sizeof(contents); ++index)
+        contents[index] = (unsigned char)index;
     check(crust0_host_read_file(path, &data, &size) == 0 && data == NULL && size == 0,
           "empty read returns no allocation");
     check(crust0_host_write_file(path, contents, sizeof(contents)) == 0, "write binary bytes");
     check(crust0_host_read_file(path, &data, &size) == 0 && size == sizeof(contents) &&
-          memcmp(data, contents, size) == 0, "read grows the buffer and preserves bytes");
+              memcmp(data, contents, size) == 0,
+          "read grows the buffer and preserves bytes");
     crust0_host_free(data);
     check(crust0_host_write_file(path, NULL, 0) == 0, "empty write truncates");
     check(crust0_host_read_file(path, &data, &size) == 0 && size == 0 && data == NULL,

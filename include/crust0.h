@@ -1,13 +1,18 @@
 #ifndef CRUST0_H
 #define CRUST0_H
 
+#include <setjmp.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <setjmp.h>
 
 #define CRUST_VERSION "0.1"
-#define CRUST_ALIGNOF(T) (sizeof(struct { char byte; T value; }) - sizeof(T))
+#define CRUST_ALIGNOF(T)                                                                           \
+    (sizeof(struct {                                                                               \
+         char byte;                                                                                \
+         T value;                                                                                  \
+     }) -                                                                                          \
+     sizeof(T))
 
 typedef struct CrustArena CrustArena;
 typedef struct CrustArenaBlock CrustArenaBlock;
@@ -69,10 +74,22 @@ typedef struct {
 } CrustMap;
 
 typedef enum {
-    CRUST_T_I8, CRUST_T_U8, CRUST_T_I16, CRUST_T_U16,
-    CRUST_T_I32, CRUST_T_U32, CRUST_T_I64, CRUST_T_U64,
-    CRUST_T_ISIZE, CRUST_T_USIZE, CRUST_T_BOOL, CRUST_T_UNIT,
-    CRUST_T_POINTER, CRUST_T_ARRAY, CRUST_T_FUNCTION, CRUST_T_RECORD,
+    CRUST_T_I8,
+    CRUST_T_U8,
+    CRUST_T_I16,
+    CRUST_T_U16,
+    CRUST_T_I32,
+    CRUST_T_U32,
+    CRUST_T_I64,
+    CRUST_T_U64,
+    CRUST_T_ISIZE,
+    CRUST_T_USIZE,
+    CRUST_T_BOOL,
+    CRUST_T_UNIT,
+    CRUST_T_POINTER,
+    CRUST_T_ARRAY,
+    CRUST_T_FUNCTION,
+    CRUST_T_RECORD,
     CRUST_T_NAME
 } CrustTypeKind;
 
@@ -98,18 +115,48 @@ struct CrustType {
 };
 
 typedef enum {
-    CRUST_OP_ADD, CRUST_OP_SUB, CRUST_OP_MUL, CRUST_OP_DIV, CRUST_OP_REM,
-    CRUST_OP_SHL, CRUST_OP_SHR, CRUST_OP_BIT_AND, CRUST_OP_BIT_OR,
-    CRUST_OP_BIT_XOR, CRUST_OP_EQ, CRUST_OP_NE, CRUST_OP_LT, CRUST_OP_LE,
-    CRUST_OP_GT, CRUST_OP_GE, CRUST_OP_AND, CRUST_OP_OR, CRUST_OP_NEG,
-    CRUST_OP_NOT, CRUST_OP_BIT_NOT, CRUST_OP_DEREF, CRUST_OP_ADDRESS
+    CRUST_OP_ADD,
+    CRUST_OP_SUB,
+    CRUST_OP_MUL,
+    CRUST_OP_DIV,
+    CRUST_OP_REM,
+    CRUST_OP_SHL,
+    CRUST_OP_SHR,
+    CRUST_OP_BIT_AND,
+    CRUST_OP_BIT_OR,
+    CRUST_OP_BIT_XOR,
+    CRUST_OP_EQ,
+    CRUST_OP_NE,
+    CRUST_OP_LT,
+    CRUST_OP_LE,
+    CRUST_OP_GT,
+    CRUST_OP_GE,
+    CRUST_OP_AND,
+    CRUST_OP_OR,
+    CRUST_OP_NEG,
+    CRUST_OP_NOT,
+    CRUST_OP_BIT_NOT,
+    CRUST_OP_DEREF,
+    CRUST_OP_ADDRESS
 } CrustOp;
 
 typedef enum {
-    CRUST_E_NAME, CRUST_E_INTEGER, CRUST_E_BOOL, CRUST_E_STRING,
-    CRUST_E_GROUP, CRUST_E_UNARY, CRUST_E_BINARY, CRUST_E_CALL,
-    CRUST_E_INDEX, CRUST_E_FIELD, CRUST_E_CAST, CRUST_E_RECORD,
-    CRUST_E_ARRAY, CRUST_E_NULL, CRUST_E_SIZEOF, CRUST_E_ALIGNOF,
+    CRUST_E_NAME,
+    CRUST_E_INTEGER,
+    CRUST_E_BOOL,
+    CRUST_E_STRING,
+    CRUST_E_GROUP,
+    CRUST_E_UNARY,
+    CRUST_E_BINARY,
+    CRUST_E_CALL,
+    CRUST_E_INDEX,
+    CRUST_E_FIELD,
+    CRUST_E_CAST,
+    CRUST_E_RECORD,
+    CRUST_E_ARRAY,
+    CRUST_E_NULL,
+    CRUST_E_SIZEOF,
+    CRUST_E_ALIGNOF,
     CRUST_E_OFFSETOF
 } CrustExprKind;
 
@@ -145,8 +192,16 @@ struct CrustExpr {
 };
 
 typedef enum {
-    CRUST_S_BLOCK, CRUST_S_VAR, CRUST_S_IF, CRUST_S_WHILE, CRUST_S_BREAK,
-    CRUST_S_CONTINUE, CRUST_S_RETURN, CRUST_S_TRAP, CRUST_S_EXPR, CRUST_S_ASSIGN
+    CRUST_S_BLOCK,
+    CRUST_S_VAR,
+    CRUST_S_IF,
+    CRUST_S_WHILE,
+    CRUST_S_BREAK,
+    CRUST_S_CONTINUE,
+    CRUST_S_RETURN,
+    CRUST_S_TRAP,
+    CRUST_S_EXPR,
+    CRUST_S_ASSIGN
 } CrustStmtKind;
 
 struct CrustStmt {
@@ -182,13 +237,14 @@ struct CrustParam {
     CrustParam *next;
 };
 
-typedef enum {
-    CRUST_D_RECORD, CRUST_D_FUNCTION, CRUST_D_EXTERN, CRUST_D_CONST
-} CrustDeclKind;
+typedef enum { CRUST_D_RECORD, CRUST_D_FUNCTION, CRUST_D_EXTERN, CRUST_D_CONST } CrustDeclKind;
 
 typedef enum {
-    CRUST_SYM_RECORD, CRUST_SYM_FUNCTION, CRUST_SYM_CONST,
-    CRUST_SYM_LOCAL, CRUST_SYM_PARAM
+    CRUST_SYM_RECORD,
+    CRUST_SYM_FUNCTION,
+    CRUST_SYM_CONST,
+    CRUST_SYM_LOCAL,
+    CRUST_SYM_PARAM
 } CrustSymbolKind;
 
 struct CrustSymbol {
@@ -275,16 +331,16 @@ void crust_set_error(CrustContext *ctx, CrustSource *source, size_t offset, cons
 void *crust_try_alloc(CrustContext *ctx, size_t size, size_t alignment);
 CrustName *crust_try_intern(CrustContext *ctx, const unsigned char *text, size_t size);
 /* Retain a diagnostic and return null on failure. A zero capacity returns null. */
-void *crust_try_grow_array(CrustContext *ctx, const void *old, size_t count,
-                         size_t capacity, size_t item_size, size_t alignment);
+void *crust_try_grow_array(CrustContext *ctx, const void *old, size_t count, size_t capacity,
+                           size_t item_size, size_t alignment);
 /* Return a zero-terminated copy, or null with a retained diagnostic on failure. */
 char *crust_try_copy_string(CrustContext *ctx, const unsigned char *text, size_t size);
 /* Return false and retain a diagnostic if the map update fails. */
 bool crust_try_map_set(CrustContext *ctx, CrustMap *map, uintptr_t key, void *value);
 /* crust_alloc returns zeroed storage. Construction helpers require a failure frame. */
 void *crust_alloc(CrustContext *ctx, size_t size, size_t alignment);
-void *crust_grow_array(CrustContext *ctx, const void *old, size_t count,
-                     size_t capacity, size_t item_size, size_t alignment);
+void *crust_grow_array(CrustContext *ctx, const void *old, size_t count, size_t capacity,
+                       size_t item_size, size_t alignment);
 CrustName *crust_intern(CrustContext *ctx, const unsigned char *text, size_t size);
 char *crust_copy_string(CrustContext *ctx, const unsigned char *text, size_t size);
 void crust_fail(CrustContext *ctx, CrustLoc loc, const char *format, ...);
@@ -297,14 +353,14 @@ bool crust_read(CrustContext *ctx, CrustSource *source, CrustUnit **result);
    Invalid ranges or syntax return false, retain a diagnostic, and set result to null.
    Input bytes and source descriptors remain live until the context is destroyed. */
 bool crust_read_range(CrustContext *ctx, CrustSource *source, size_t begin, size_t end,
-                    CrustUnit **result);
+                      CrustUnit **result);
 /* Read one root action without reading past its final delimiter. The result is
    unlinked. Exactly one node is nonnull, or both are null at EOF. End is the
    absolute offset after the delimiter, or the range end at EOF. Root blocks,
    if, and while require a final semicolon. Failure clears result.
    Input bytes and source descriptors remain live until context destruction. */
 bool crust_read_one(CrustContext *ctx, CrustSource *source, size_t begin, size_t end,
-                  CrustAction *result);
+                    CrustAction *result);
 /* A binding borrows complete resolved facts. The provider must outlive this context. */
 bool crust_bind(CrustContext *ctx, CrustName *name, CrustDecl *declaration);
 /* Owned syntax has one expression or statement node per occurrence. */

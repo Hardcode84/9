@@ -76,3 +76,15 @@ backend metastages, and a C compiler benchmark.
 Crust0 has raw memory preconditions. The checked language's direct-list lifetime
 rule still requires a specified rule and a checked implementation. The C99
 bootstrap and its measurements do not establish that safety claim.
+
+Install the commit checks once per checkout:
+
+```sh
+python3 -m pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+The hooks check text and configuration files, format C and Python, lint Python,
+and check the generated Crust APIs. Recorded benchmark inputs and reports are
+excluded from formatters because their hashes identify the measured bytes.

@@ -21,10 +21,7 @@ void *crust0_host_alloc(size_t size, size_t alignment)
     return result;
 }
 
-void crust0_host_free(void *data)
-{
-    free(data);
-}
+void crust0_host_free(void *data) { free(data); }
 
 void crust0_host_move_bytes(void *dst, const void *src, size_t size)
 {

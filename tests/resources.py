@@ -3,7 +3,6 @@
 
 import argparse
 import fnmatch
-from pathlib import Path
 import re
 import resource
 import shlex
@@ -12,7 +11,7 @@ import signal
 import subprocess
 import sys
 import tempfile
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = """
@@ -25,190 +24,421 @@ fn drop_token(value:mut Token)->unit { unsafe { putchar(value.id); } }
 
 
 def program(body, declarations="", common=True):
-    return ((COMMON if common else "") + declarations +
-            "\nfn main(argc:i32,argv:**u8)->i32 {\n" + body + "\nreturn 0i32;\n}\n")
+    return (
+        (COMMON if common else "")
+        + declarations
+        + "\nfn main(argc:i32,argv:**u8)->i32 {\n"
+        + body
+        + "\nreturn 0i32;\n}\n"
+    )
 
 
 def runtime_cases():
     return [
-        ("empty-main-and-zero-argument-functions", program(
-            "noop(); if answer()!=42i32 { return 1i32; }",
-            "fn noop()->unit {} fn answer()->i32 { return 42i32; }", common=False), b""),
-        ("raii-reverse-declarations", program(
-            "var a:Token=token(65i32); var b:Token=token(66i32); emit(88i32);"), b"XBA"),
+        (
+            "empty-main-and-zero-argument-functions",
+            program(
+                "noop(); if answer()!=42i32 { return 1i32; }",
+                "fn noop()->unit {} fn answer()->i32 { return 42i32; }",
+                common=False,
+            ),
+            b"",
+        ),
+        (
+            "raii-reverse-declarations",
+            program("var a:Token=token(65i32); var b:Token=token(66i32); emit(88i32);"),
+            b"XBA",
+        ),
         ("discarded-resource-temporary", program("token(65i32); emit(88i32);"), b"AX"),
-        ("move-local", program(
-            "var a:Token=token(65i32); var b:Token=move a; emit(88i32);"), b"XA"),
-        ("move-parameter", program(
-            "var a:Token=token(65i32); consume(move a); emit(89i32);",
-            "fn consume(value:Token)->unit { emit(88i32); }"), b"XAY"),
-        ("move-result", program("var a:Token=relay(token(65i32)); emit(88i32);",
-            "fn relay(value:Token)->Token { return move value; }"), b"XA"),
-        ("defer-scalar-snapshot", program(
-            "var code:i32=65i32; defer emit(code); code=66i32; emit(88i32);"), b"XA"),
-        ("defer-callee-and-argument-snapshot", program(
-            "var selected:fn(i32)->unit=first; var code:i32=65i32; "
-            "defer selected(code); selected=second; code=66i32; emit(88i32);",
-            "fn first(code:i32)->unit { emit(49i32); emit(code); } "
-            "fn second(code:i32)->unit { emit(50i32); emit(code); }"), b"X1A"),
-        ("defer-owned-argument", program(
-            "var a:Token=token(65i32); defer consume(move a); emit(88i32);",
-            "fn consume(value:Token)->unit { emit(67i32); }"), b"XCA"),
-        ("defer-shared-borrow", program(
-            "var a:Token=token(65i32); defer show(read a); emit(88i32);",
-            "fn show(value:read Token)->unit { unsafe { emit(value.id+32i32); } }"), b"XaA"),
-        ("defer-exclusive-borrow", program(
-            "var a:Token=token(65i32); defer change(mut a,66i32); emit(88i32);",
-            "fn change(value:mut Token,code:i32)->unit { unsafe { value.id=code; } }"), b"XB"),
-        ("defer-loan-ends-at-block-exit", program(
-            "var a:Token=token(65i32); { defer show(read a); } change(mut a,66i32);",
-            "fn show(value:read Token)->unit { unsafe { emit(value.id+32i32); } } "
-            "fn change(value:mut Token,code:i32)->unit { unsafe { value.id=code; } }"), b"aB"),
-        ("borrow-ends-at-block-exit", program(
-            "var a:Token=token(65i32); { var view:read Token=read a; "
-            "unsafe { emit(view.id+32i32); } } change(mut a,66i32);",
-            "fn change(value:mut Token,code:i32)->unit { unsafe { value.id=code; } }"), b"aB"),
-        ("scalar-borrow-repeated-read", program(
-            "var code:i32=65i32; { var view:read i32=read code; emit(view); emit(view); } "
-            "code=66i32; emit(code);"), b"AAB"),
-        ("nested-exclusive-reborrow-release", program(
-            "var code:i32=65i32; { var view:mut i32=mut code; "
-            "{ var child:mut i32=mut view; child=66i32; } emit(view); } emit(code);"), b"BB"),
-        ("defer-reborrow-release", program(
-            "var code:i32=65i32; { var view:mut i32=mut code; "
-            "{ defer change(mut view,66i32); } emit(view); } emit(code);",
-            "fn change(value:mut i32,code:i32)->unit {value=code;}"), b"BB"),
-        ("loop-deferred-loans-release", program(
-            "var code:i32=65i32; var index:i32=0i32; while index<2i32 { "
-            "{ defer change(mut code,66i32+index); } emit(code); index=index+1i32; }",
-            "fn change(value:mut i32,next:i32)->unit {value=next;}"), b"BC"),
-        ("continue-releases-deferred-loan", program(
-            "var code:i32=65i32; var index:i32=0i32; while index<2i32 { "
-            "defer change(mut code,66i32+index); index=index+1i32; continue; } emit(code);",
-            "fn change(value:mut i32,next:i32)->unit {value=next; emit(value);}"), b"BCC"),
-        ("break-releases-deferred-loan", program(
-            "var code:i32=65i32; while true { defer change(mut code,66i32); break; } emit(code);",
-            "fn change(value:mut i32,next:i32)->unit {value=next; emit(value);}"), b"BB"),
-        ("raw-initialize-one-array-byte", program(
-            "var storage:[u8;4]=uninit; unsafe { var data:*u8=(&storage) as *u8; "
-            "data[0usize]=65u8; emit(data[0usize] as i32); }"), b"A"),
-        ("assignment-destroys-old-value", program(
-            "var a:Token=token(65i32); a=token(66i32); emit(88i32);"), b"AXB"),
-        ("self-move-assignment", program(
-            "var a:Token=token(65i32); a=move a; emit(88i32);"), b"XA"),
-        ("reinitialize-moved-owner", program(
-            "var a:Token=token(65i32); consume(move a); a=token(66i32); emit(88i32);",
-            "fn consume(value:Token)->unit {}"), b"AXB"),
-        ("assignment-owned-field", program(
-            "var pair:Pair=make Pair { first:token(65i32), last:token(66i32) }; "
-            "pair.first=token(67i32); emit(88i32);",
-            "record Pair { first:Token; last:Token; }"), b"AXBC"),
-        ("nested-block-cleanup", program(
-            "var a:Token=token(65i32); { var b:Token=token(66i32); defer emit(68i32); "
-            "{ var c:Token=token(67i32); emit(88i32); } } emit(89i32);"), b"XCDBYA"),
-        ("nested-return-cleanup", program(
-            "if nested()!=7i32 { return 1i32; } emit(88i32);",
-            "fn nested()->i32 { var a:Token=token(65i32); { var b:Token=token(66i32); "
-            "defer emit(68i32); return 7i32; } }"), b"DBAX"),
-        ("both-branches-return", program(
-            "if choose(true)!=1i32 || choose(false)!=2i32 { return 1i32; }",
-            "fn choose(flag:bool)->i32 { var a:Token=token(65i32); "
-            "if flag { var b:Token=token(66i32); return 1i32; } "
-            "else { var c:Token=token(67i32); return 2i32; } }"), b"BACA"),
-        ("equal-move-state-at-join", program(
-            "var a:Token=token(65i32); if argc>0i32 { consume(move a); } "
-            "else { consume(move a); } emit(88i32);",
-            "fn consume(value:Token)->unit {}"), b"AX"),
-        ("equal-initialization-at-join", program(
-            "var a:Token=uninit; if argc>0i32 { a=token(65i32); } "
-            "else { a=token(66i32); } emit(88i32);"), b"XA"),
-        ("loop-normal-exit", program(
-            "var index:i32=0i32; while index<3i32 { var a:Token=token(65i32+index); "
-            "index=index+1i32; } emit(88i32);"), b"ABCX"),
-        ("loop-continue-cleanup", program(
-            "var outer:Token=token(90i32); var index:i32=0i32; while index<3i32 { "
-            "var a:Token=token(65i32+index); defer emit(48i32+index); "
-            "index=index+1i32; continue; } emit(88i32);"), b"0A1B2CXZ"),
-        ("loop-break-cleanup", program(
-            "var outer:Token=token(90i32); while true { var a:Token=token(65i32); "
-            "{ var b:Token=token(66i32); defer emit(68i32); break; } } emit(88i32);"), b"DBAXZ"),
-        ("loop-return-cleanup", program(
-            "if nested()!=7i32 { return 1i32; } emit(88i32);",
-            "fn nested()->i32 { var a:Token=token(65i32); while true { "
-            "var b:Token=token(66i32); defer emit(68i32); return 7i32; } }"), b"DBAX"),
-        ("loop-restores-owner", program(
-            "var value:Token=token(65i32); var index:i32=0i32; while index<2i32 { "
-            "consume(move value); value=token(66i32+index); index=index+1i32; } emit(88i32);",
-            "fn consume(value:Token)->unit {}"), b"ABXC"),
-        ("record-callback-before-reverse-fields", program(
-            "var value:Outer=make Outer { inner:crate(), tail:token(69i32) }; emit(88i32);",
-            "resource Crate { first:Token; values:[Token;2]; last:Token; } drop drop_crate; "
-            "record Outer { inner:Crate; tail:Token; } "
-            "fn drop_crate(value:mut Crate)->unit { emit(80i32); } "
-            "fn crate()->Crate { unsafe { return make Crate { first:token(65i32), "
-            "values:make [Token;2] { token(66i32),token(67i32) }, last:token(68i32) }; } }"), b"XEPDCBA"),
-        ("nested-array-cleanup", program(
-            "var values:[[Token;2];2]=make [[Token;2];2] { "
-            "make [Token;2] {token(65i32),token(66i32)}, "
-            "make [Token;2] {token(67i32),token(68i32)} };"), b"DCBA"),
-        ("partial-resource-argument-evaluation", program(
-            "take(marked(65i32),later(),marked(66i32)); emit(88i32);",
-            "fn marked(code:i32)->Token { emit(code+32i32); return token(code); } "
-            "fn later()->i32 { emit(76i32); return 0i32; } "
-            "fn take(first:Token,ignored:i32,last:Token)->unit { emit(84i32); }"), b"aLbTBAX"),
-        ("nested-resource-argument-result", program(
-            "consume(pass(marked(65i32)));",
-            "fn marked(code:i32)->Token { emit(code+32i32); return token(code); } "
-            "fn pass(value:Token)->Token { emit(80i32); return move value; } "
-            "fn consume(value:Token)->unit {}"), b"aPA"),
-        ("resource-temporary-field-read", program(
-            "unsafe { emit(token(65i32).id); }"), b"AA"),
-        ("defer-partial-resource-arguments", program(
-            "defer take(marked(65i32),later(),marked(66i32)); emit(88i32);",
-            "fn marked(code:i32)->Token { emit(code+32i32); return token(code); } "
-            "fn later()->i32 { emit(76i32); return 0i32; } "
-            "fn take(first:Token,ignored:i32,last:Token)->unit { emit(84i32); }"), b"aLbXTBA"),
-        ("defer-owned-snapshot-before-reuse", program(
-            "var value:Token=token(65i32); defer consume(move value); "
-            "value=token(66i32); emit(88i32);", "fn consume(value:Token)->unit {}"), b"XAB"),
-        ("function-pointer-borrow-signature", program(
-            "var callback:fn(read Token)->unit=show; var value:Token=token(65i32); callback(read value);",
-            "fn show(value:read Token)->unit { unsafe { emit(value.id+32i32); } }"), b"aA"),
-        ("explicit-unsafe-forget", program(
-            "var value:Token=token(65i32); unsafe { forget move value; } emit(88i32);"), b"X"),
-        ("mixed-defer-and-owner-order", program(
-            "defer emit(65i32); var b:Token=token(66i32); defer emit(67i32); var d:Token=token(68i32);"), b"DCBA"),
-        ("short-circuit-temporary-cleanup", program(
-            "if false && condition(token(65i32),true) { return 1i32; } "
-            "if !(true || condition(token(66i32),false)) { return 2i32; } "
-            "if true && condition(token(67i32),true) { emit(88i32); } "
-            "if false || condition(token(68i32),true) { emit(89i32); }",
-            "fn condition(value:Token,result:bool)->bool { return result; }"), b"CXDY"),
-        ("terminating-branch-does-not-constrain-join", program(
-            "branch(true); branch(false);",
-            "fn consume(value:Token)->unit {} "
-            "fn branch(flag:bool)->unit { var value:Token=token(65i32); "
-            "if flag { consume(move value); return; } emit(88i32); }"), b"AXA"),
-        ("safe-function-constant", program(
-            "selected(65i32);", "const selected:fn(i32)->unit=emit;"), b"A"),
-        ("safe-aggregate-function-constants", program(
-            "var value:Cell=make Cell {value:14i32}; "
-            "if callback(read value)+callbacks.function(read value)+functions[1usize](read value)!=42i32 {return 1i32;} "
-            "if negative != -7i32 || cell_size!=4usize || cell_align!=4usize || field_offset!=0usize {return 2i32;} "
-            "if optional!=null(fn(read Cell)->i32) {return 3i32;}",
-            "record Cell {value:i32;} fn read_cell(value:read Cell)->i32 {return value.value;} "
-            "const callback:fn(read Cell)->i32=read_cell; "
-            "record Callbacks {function:fn(read Cell)->i32;} "
-            "const callbacks:Callbacks=make Callbacks {function:read_cell}; "
-            "const functions:[fn(read Cell)->i32;2]=make [fn(read Cell)->i32;2] {read_cell,read_cell}; "
-            "const optional:fn(read Cell)->i32=null(fn(read Cell)->i32); "
-            "const negative:i32=-7i32; const cell_size:usize=sizeof(Cell); "
-            "const cell_align:usize=alignof(Cell); const field_offset:usize=offsetof(Cell,value);"), b""),
-        ("null-function-call-traps", program(
-            "var selected:fn()->unit=null(fn()->unit); selected();"), None),
-        ("deferred-null-snapshot-traps", program(
-            "var selected:fn()->unit=null(fn()->unit); defer selected(); selected=noop;",
-            "fn noop()->unit {}"), None),
+        (
+            "move-local",
+            program("var a:Token=token(65i32); var b:Token=move a; emit(88i32);"),
+            b"XA",
+        ),
+        (
+            "move-parameter",
+            program(
+                "var a:Token=token(65i32); consume(move a); emit(89i32);",
+                "fn consume(value:Token)->unit { emit(88i32); }",
+            ),
+            b"XAY",
+        ),
+        (
+            "move-result",
+            program(
+                "var a:Token=relay(token(65i32)); emit(88i32);",
+                "fn relay(value:Token)->Token { return move value; }",
+            ),
+            b"XA",
+        ),
+        (
+            "defer-scalar-snapshot",
+            program("var code:i32=65i32; defer emit(code); code=66i32; emit(88i32);"),
+            b"XA",
+        ),
+        (
+            "defer-callee-and-argument-snapshot",
+            program(
+                "var selected:fn(i32)->unit=first; var code:i32=65i32; "
+                "defer selected(code); selected=second; code=66i32; emit(88i32);",
+                "fn first(code:i32)->unit { emit(49i32); emit(code); } "
+                "fn second(code:i32)->unit { emit(50i32); emit(code); }",
+            ),
+            b"X1A",
+        ),
+        (
+            "defer-owned-argument",
+            program(
+                "var a:Token=token(65i32); defer consume(move a); emit(88i32);",
+                "fn consume(value:Token)->unit { emit(67i32); }",
+            ),
+            b"XCA",
+        ),
+        (
+            "defer-shared-borrow",
+            program(
+                "var a:Token=token(65i32); defer show(read a); emit(88i32);",
+                "fn show(value:read Token)->unit { unsafe { emit(value.id+32i32); } }",
+            ),
+            b"XaA",
+        ),
+        (
+            "defer-exclusive-borrow",
+            program(
+                "var a:Token=token(65i32); defer change(mut a,66i32); emit(88i32);",
+                "fn change(value:mut Token,code:i32)->unit { unsafe { value.id=code; } }",
+            ),
+            b"XB",
+        ),
+        (
+            "defer-loan-ends-at-block-exit",
+            program(
+                "var a:Token=token(65i32); { defer show(read a); } change(mut a,66i32);",
+                "fn show(value:read Token)->unit { unsafe { emit(value.id+32i32); } } "
+                "fn change(value:mut Token,code:i32)->unit { unsafe { value.id=code; } }",
+            ),
+            b"aB",
+        ),
+        (
+            "borrow-ends-at-block-exit",
+            program(
+                "var a:Token=token(65i32); { var view:read Token=read a; "
+                "unsafe { emit(view.id+32i32); } } change(mut a,66i32);",
+                "fn change(value:mut Token,code:i32)->unit { unsafe { value.id=code; } }",
+            ),
+            b"aB",
+        ),
+        (
+            "scalar-borrow-repeated-read",
+            program(
+                "var code:i32=65i32; { var view:read i32=read code; emit(view); emit(view); } "
+                "code=66i32; emit(code);"
+            ),
+            b"AAB",
+        ),
+        (
+            "nested-exclusive-reborrow-release",
+            program(
+                "var code:i32=65i32; { var view:mut i32=mut code; "
+                "{ var child:mut i32=mut view; child=66i32; } emit(view); } emit(code);"
+            ),
+            b"BB",
+        ),
+        (
+            "defer-reborrow-release",
+            program(
+                "var code:i32=65i32; { var view:mut i32=mut code; "
+                "{ defer change(mut view,66i32); } emit(view); } emit(code);",
+                "fn change(value:mut i32,code:i32)->unit {value=code;}",
+            ),
+            b"BB",
+        ),
+        (
+            "loop-deferred-loans-release",
+            program(
+                "var code:i32=65i32; var index:i32=0i32; while index<2i32 { "
+                "{ defer change(mut code,66i32+index); } emit(code); index=index+1i32; }",
+                "fn change(value:mut i32,next:i32)->unit {value=next;}",
+            ),
+            b"BC",
+        ),
+        (
+            "continue-releases-deferred-loan",
+            program(
+                "var code:i32=65i32; var index:i32=0i32; while index<2i32 { "
+                "defer change(mut code,66i32+index); index=index+1i32; continue; } emit(code);",
+                "fn change(value:mut i32,next:i32)->unit {value=next; emit(value);}",
+            ),
+            b"BCC",
+        ),
+        (
+            "break-releases-deferred-loan",
+            program(
+                "var code:i32=65i32; while true { defer change(mut code,66i32); break; } emit(code);",
+                "fn change(value:mut i32,next:i32)->unit {value=next; emit(value);}",
+            ),
+            b"BB",
+        ),
+        (
+            "raw-initialize-one-array-byte",
+            program(
+                "var storage:[u8;4]=uninit; unsafe { var data:*u8=(&storage) as *u8; "
+                "data[0usize]=65u8; emit(data[0usize] as i32); }"
+            ),
+            b"A",
+        ),
+        (
+            "assignment-destroys-old-value",
+            program("var a:Token=token(65i32); a=token(66i32); emit(88i32);"),
+            b"AXB",
+        ),
+        (
+            "self-move-assignment",
+            program("var a:Token=token(65i32); a=move a; emit(88i32);"),
+            b"XA",
+        ),
+        (
+            "reinitialize-moved-owner",
+            program(
+                "var a:Token=token(65i32); consume(move a); a=token(66i32); emit(88i32);",
+                "fn consume(value:Token)->unit {}",
+            ),
+            b"AXB",
+        ),
+        (
+            "assignment-owned-field",
+            program(
+                "var pair:Pair=make Pair { first:token(65i32), last:token(66i32) }; "
+                "pair.first=token(67i32); emit(88i32);",
+                "record Pair { first:Token; last:Token; }",
+            ),
+            b"AXBC",
+        ),
+        (
+            "nested-block-cleanup",
+            program(
+                "var a:Token=token(65i32); { var b:Token=token(66i32); defer emit(68i32); "
+                "{ var c:Token=token(67i32); emit(88i32); } } emit(89i32);"
+            ),
+            b"XCDBYA",
+        ),
+        (
+            "nested-return-cleanup",
+            program(
+                "if nested()!=7i32 { return 1i32; } emit(88i32);",
+                "fn nested()->i32 { var a:Token=token(65i32); { var b:Token=token(66i32); "
+                "defer emit(68i32); return 7i32; } }",
+            ),
+            b"DBAX",
+        ),
+        (
+            "both-branches-return",
+            program(
+                "if choose(true)!=1i32 || choose(false)!=2i32 { return 1i32; }",
+                "fn choose(flag:bool)->i32 { var a:Token=token(65i32); "
+                "if flag { var b:Token=token(66i32); return 1i32; } "
+                "else { var c:Token=token(67i32); return 2i32; } }",
+            ),
+            b"BACA",
+        ),
+        (
+            "equal-move-state-at-join",
+            program(
+                "var a:Token=token(65i32); if argc>0i32 { consume(move a); } "
+                "else { consume(move a); } emit(88i32);",
+                "fn consume(value:Token)->unit {}",
+            ),
+            b"AX",
+        ),
+        (
+            "equal-initialization-at-join",
+            program(
+                "var a:Token=uninit; if argc>0i32 { a=token(65i32); } "
+                "else { a=token(66i32); } emit(88i32);"
+            ),
+            b"XA",
+        ),
+        (
+            "loop-normal-exit",
+            program(
+                "var index:i32=0i32; while index<3i32 { var a:Token=token(65i32+index); "
+                "index=index+1i32; } emit(88i32);"
+            ),
+            b"ABCX",
+        ),
+        (
+            "loop-continue-cleanup",
+            program(
+                "var outer:Token=token(90i32); var index:i32=0i32; while index<3i32 { "
+                "var a:Token=token(65i32+index); defer emit(48i32+index); "
+                "index=index+1i32; continue; } emit(88i32);"
+            ),
+            b"0A1B2CXZ",
+        ),
+        (
+            "loop-break-cleanup",
+            program(
+                "var outer:Token=token(90i32); while true { var a:Token=token(65i32); "
+                "{ var b:Token=token(66i32); defer emit(68i32); break; } } emit(88i32);"
+            ),
+            b"DBAXZ",
+        ),
+        (
+            "loop-return-cleanup",
+            program(
+                "if nested()!=7i32 { return 1i32; } emit(88i32);",
+                "fn nested()->i32 { var a:Token=token(65i32); while true { "
+                "var b:Token=token(66i32); defer emit(68i32); return 7i32; } }",
+            ),
+            b"DBAX",
+        ),
+        (
+            "loop-restores-owner",
+            program(
+                "var value:Token=token(65i32); var index:i32=0i32; while index<2i32 { "
+                "consume(move value); value=token(66i32+index); index=index+1i32; } emit(88i32);",
+                "fn consume(value:Token)->unit {}",
+            ),
+            b"ABXC",
+        ),
+        (
+            "record-callback-before-reverse-fields",
+            program(
+                "var value:Outer=make Outer { inner:crate(), tail:token(69i32) }; emit(88i32);",
+                "resource Crate { first:Token; values:[Token;2]; last:Token; } drop drop_crate; "
+                "record Outer { inner:Crate; tail:Token; } "
+                "fn drop_crate(value:mut Crate)->unit { emit(80i32); } "
+                "fn crate()->Crate { unsafe { return make Crate { first:token(65i32), "
+                "values:make [Token;2] { token(66i32),token(67i32) }, last:token(68i32) }; } }",
+            ),
+            b"XEPDCBA",
+        ),
+        (
+            "nested-array-cleanup",
+            program(
+                "var values:[[Token;2];2]=make [[Token;2];2] { "
+                "make [Token;2] {token(65i32),token(66i32)}, "
+                "make [Token;2] {token(67i32),token(68i32)} };"
+            ),
+            b"DCBA",
+        ),
+        (
+            "partial-resource-argument-evaluation",
+            program(
+                "take(marked(65i32),later(),marked(66i32)); emit(88i32);",
+                "fn marked(code:i32)->Token { emit(code+32i32); return token(code); } "
+                "fn later()->i32 { emit(76i32); return 0i32; } "
+                "fn take(first:Token,ignored:i32,last:Token)->unit { emit(84i32); }",
+            ),
+            b"aLbTBAX",
+        ),
+        (
+            "nested-resource-argument-result",
+            program(
+                "consume(pass(marked(65i32)));",
+                "fn marked(code:i32)->Token { emit(code+32i32); return token(code); } "
+                "fn pass(value:Token)->Token { emit(80i32); return move value; } "
+                "fn consume(value:Token)->unit {}",
+            ),
+            b"aPA",
+        ),
+        ("resource-temporary-field-read", program("unsafe { emit(token(65i32).id); }"), b"AA"),
+        (
+            "defer-partial-resource-arguments",
+            program(
+                "defer take(marked(65i32),later(),marked(66i32)); emit(88i32);",
+                "fn marked(code:i32)->Token { emit(code+32i32); return token(code); } "
+                "fn later()->i32 { emit(76i32); return 0i32; } "
+                "fn take(first:Token,ignored:i32,last:Token)->unit { emit(84i32); }",
+            ),
+            b"aLbXTBA",
+        ),
+        (
+            "defer-owned-snapshot-before-reuse",
+            program(
+                "var value:Token=token(65i32); defer consume(move value); "
+                "value=token(66i32); emit(88i32);",
+                "fn consume(value:Token)->unit {}",
+            ),
+            b"XAB",
+        ),
+        (
+            "function-pointer-borrow-signature",
+            program(
+                "var callback:fn(read Token)->unit=show; var value:Token=token(65i32); callback(read value);",
+                "fn show(value:read Token)->unit { unsafe { emit(value.id+32i32); } }",
+            ),
+            b"aA",
+        ),
+        (
+            "explicit-unsafe-forget",
+            program("var value:Token=token(65i32); unsafe { forget move value; } emit(88i32);"),
+            b"X",
+        ),
+        (
+            "mixed-defer-and-owner-order",
+            program(
+                "defer emit(65i32); var b:Token=token(66i32); defer emit(67i32); var d:Token=token(68i32);"
+            ),
+            b"DCBA",
+        ),
+        (
+            "short-circuit-temporary-cleanup",
+            program(
+                "if false && condition(token(65i32),true) { return 1i32; } "
+                "if !(true || condition(token(66i32),false)) { return 2i32; } "
+                "if true && condition(token(67i32),true) { emit(88i32); } "
+                "if false || condition(token(68i32),true) { emit(89i32); }",
+                "fn condition(value:Token,result:bool)->bool { return result; }",
+            ),
+            b"CXDY",
+        ),
+        (
+            "terminating-branch-does-not-constrain-join",
+            program(
+                "branch(true); branch(false);",
+                "fn consume(value:Token)->unit {} "
+                "fn branch(flag:bool)->unit { var value:Token=token(65i32); "
+                "if flag { consume(move value); return; } emit(88i32); }",
+            ),
+            b"AXA",
+        ),
+        (
+            "safe-function-constant",
+            program("selected(65i32);", "const selected:fn(i32)->unit=emit;"),
+            b"A",
+        ),
+        (
+            "safe-aggregate-function-constants",
+            program(
+                "var value:Cell=make Cell {value:14i32}; "
+                "if callback(read value)+callbacks.function(read value)+functions[1usize](read value)!=42i32 {return 1i32;} "
+                "if negative != -7i32 || cell_size!=4usize || cell_align!=4usize || field_offset!=0usize {return 2i32;} "
+                "if optional!=null(fn(read Cell)->i32) {return 3i32;}",
+                "record Cell {value:i32;} fn read_cell(value:read Cell)->i32 {return value.value;} "
+                "const callback:fn(read Cell)->i32=read_cell; "
+                "record Callbacks {function:fn(read Cell)->i32;} "
+                "const callbacks:Callbacks=make Callbacks {function:read_cell}; "
+                "const functions:[fn(read Cell)->i32;2]=make [fn(read Cell)->i32;2] {read_cell,read_cell}; "
+                "const optional:fn(read Cell)->i32=null(fn(read Cell)->i32); "
+                "const negative:i32=-7i32; const cell_size:usize=sizeof(Cell); "
+                "const cell_align:usize=alignof(Cell); const field_offset:usize=offsetof(Cell,value);",
+            ),
+            b"",
+        ),
+        (
+            "null-function-call-traps",
+            program("var selected:fn()->unit=null(fn()->unit); selected();"),
+            None,
+        ),
+        (
+            "deferred-null-snapshot-traps",
+            program(
+                "var selected:fn()->unit=null(fn()->unit); defer selected(); selected=noop;",
+                "fn noop()->unit {}",
+            ),
+            None,
+        ),
     ]
 
 
@@ -217,121 +447,448 @@ def reject_cases():
     observe = "fn observe(value:read Token)->unit {}"
     condition = "fn condition(value:Token)->bool { return true; }"
     return [
-        ("copy-in-initializer", program("var a:Token=token(65i32); var b:Token=a;"), "explicit move"),
-        ("copy-into-parameter", program("var a:Token=token(65i32); consume(a);", consume), "explicit move"),
-        ("copy-in-result", program("", "fn bad(value:Token)->Token { return value; }"), "explicit move"),
-        ("use-after-move", program("var a:Token=token(65i32); var b:Token=move a; observe(read a);", observe), "uninitialized or has been moved"),
-        ("double-move", program("var a:Token=token(65i32); consume(move a); consume(move a);", consume), "uninitialized or has been moved"),
-        ("uninitialized-owner-read", program("var a:Token=uninit; observe(read a);", observe), "uninitialized or has been moved"),
-        ("forged-resource", program("var a:Token=make Token {id:65i32};"), "raw resource construction requires an unsafe region"),
-        ("resource-field-access", program("var a:Token=token(65i32); emit(a.id);"), "resource fields require unsafe access"),
-        ("raw-dereference", program("var p:*i32=null(*i32); var value:i32=*p;"), "raw pointer access requires unsafe"),
-        ("raw-address", program("var value:i32=1i32; var p:*i32=&value;"), "raw addresses require an unsafe region"),
-        ("raw-index", program("var p:*i32=null(*i32); var value:i32=p[0usize];"), "raw pointer access requires unsafe"),
-        ("raw-pointer-arithmetic", program("var p:*u8=null(*u8); var q:*u8=p+1isize;"), "pointer arithmetic requires an unsafe region"),
-        ("raw-pointer-cast", program("var p:*u8=0usize as *u8;"), "pointer and function casts require an unsafe region"),
+        (
+            "copy-in-initializer",
+            program("var a:Token=token(65i32); var b:Token=a;"),
+            "explicit move",
+        ),
+        (
+            "copy-into-parameter",
+            program("var a:Token=token(65i32); consume(a);", consume),
+            "explicit move",
+        ),
+        (
+            "copy-in-result",
+            program("", "fn bad(value:Token)->Token { return value; }"),
+            "explicit move",
+        ),
+        (
+            "use-after-move",
+            program("var a:Token=token(65i32); var b:Token=move a; observe(read a);", observe),
+            "uninitialized or has been moved",
+        ),
+        (
+            "double-move",
+            program("var a:Token=token(65i32); consume(move a); consume(move a);", consume),
+            "uninitialized or has been moved",
+        ),
+        (
+            "uninitialized-owner-read",
+            program("var a:Token=uninit; observe(read a);", observe),
+            "uninitialized or has been moved",
+        ),
+        (
+            "forged-resource",
+            program("var a:Token=make Token {id:65i32};"),
+            "raw resource construction requires an unsafe region",
+        ),
+        (
+            "resource-field-access",
+            program("var a:Token=token(65i32); emit(a.id);"),
+            "resource fields require unsafe access",
+        ),
+        (
+            "raw-dereference",
+            program("var p:*i32=null(*i32); var value:i32=*p;"),
+            "raw pointer access requires unsafe",
+        ),
+        (
+            "raw-address",
+            program("var value:i32=1i32; var p:*i32=&value;"),
+            "raw addresses require an unsafe region",
+        ),
+        (
+            "raw-index",
+            program("var p:*i32=null(*i32); var value:i32=p[0usize];"),
+            "raw pointer access requires unsafe",
+        ),
+        (
+            "raw-pointer-arithmetic",
+            program("var p:*u8=null(*u8); var q:*u8=p+1isize;"),
+            "pointer arithmetic requires an unsafe region",
+        ),
+        (
+            "raw-pointer-cast",
+            program("var p:*u8=0usize as *u8;"),
+            "pointer and function casts require an unsafe region",
+        ),
         ("foreign-call", program("putchar(65i32);"), "call requires an unsafe region"),
-        ("unsafe-function-call", program("raw();", "unsafe fn raw()->unit {}"), "call requires an unsafe region"),
-        ("unsafe-function-value", program("var callback:fn()->unit=raw;", "unsafe fn raw()->unit {}"), "unsafe functions can only be called directly"),
-        ("direct-destructor-call", program("var value:Token=token(65i32); drop_token(mut value);"), "call requires an unsafe region"),
-        ("deferred-destructor-call", program("var value:Token=token(65i32); defer drop_token(mut value);"), "call requires an unsafe region"),
-        ("destructor-function-value", program("var callback:fn(mut Token)->unit=drop_token;"), "unsafe functions can only be called directly"),
-        ("partial-record-move", program(
-            "var pair:Pair=make Pair {value:token(65i32)}; var value:Token=move pair.value;",
-            "record Pair {value:Token;}"), "move requires a whole local owner"),
-        ("partial-array-move", program(
-            "var values:[Token;1]=make [Token;1] {token(65i32)}; var value:Token=move values[0usize];"), "move requires a whole local owner"),
-        ("move-nonowner", program("var value:i32=1i32; var copy:i32=move value;"), "move requires a whole local owner"),
-        ("write-with-shared-borrow", program("var value:i32=65i32; var view:read i32=read value; value=66i32;"), "active borrow"),
-        ("write-through-shared-borrow", program("var value:i32=65i32; var view:read i32=read value; view=66i32;"), "active borrow"),
-        ("read-with-exclusive-borrow", program("var value:i32=65i32; var view:mut i32=mut value; emit(value);"), "active borrow"),
-        ("move-borrowed-owner", program("var value:Token=token(65i32); var view:read Token=read value; consume(move value);", consume), "active borrow"),
-        ("defer-shared-reserves-owner", program("var value:Token=token(65i32); defer observe(read value); consume(move value);", observe+consume), "active borrow"),
-        ("defer-shared-blocks-assignment", program("var value:Token=token(65i32); defer observe(read value); value=token(66i32);", observe), "active borrow"),
-        ("defer-exclusive-blocks-read", program("var value:i32=65i32; defer change(mut value); emit(value);", "fn change(value:mut i32)->unit {value=66i32;}"), "active borrow"),
-        ("scalar-borrow-read-keeps-loan", program("var value:i32=65i32; var view:read i32=read value; var copy:i32=view; value=66i32;"), "active borrow"),
-        ("field-borrow-read-keeps-loan", program(
-            "var value:Cell=make Cell {code:65i32}; var view:read Cell=read value; "
-            "var copy:i32=view.code; value.code=66i32;", "record Cell {code:i32;}"), "active borrow"),
-        ("array-borrow-read-keeps-loan", program(
-            "var value:[i32;1]=make [i32;1] {65i32}; var view:read [i32;1]=read value; "
-            "var copy:i32=view[0usize]; value[0usize]=66i32;"), "active borrow"),
-        ("reborrow-blocks-parent-access", program(
-            "var value:i32=65i32; var view:mut i32=mut value; var child:mut i32=mut view; emit(view);"), "active borrow"),
-        ("reborrow-cannot-escalate-shared-view", program(
-            "var value:i32=65i32; var view:read i32=read value; var child:mut i32=mut view;"), "active borrow"),
-        ("borrowed-temporary-cannot-escape-initializer", program(
-            "var view:read Token=read box().value;",
-            "record Box {value:Token;} fn box()->Box {return make Box {value:token(65i32)};}"), "borrow would outlive its source storage"),
-        ("deferred-borrow-cannot-retain-temporary", program(
-            "defer observe(read box().value);",
-            "record Box {value:Token;} fn box()->Box {return make Box {value:token(65i32)};}" + observe), "borrow would outlive its source storage"),
-        ("raw-store-does-not-initialize-array", program(
-            "var storage:[u8;4]=uninit;\n"
-            "unsafe {var data:*u8=(&storage) as *u8; data[0usize]=65u8;}\n"
-            "// expect-error\nvar byte:u8=storage[0usize];"), "uninitialized or has been moved"),
-        ("borrowed-result", program("", "fn bad(value:read Token)->read Token {return read value;}"), "function results cannot be borrowed views"),
-        ("borrowed-record-field", program("", "record Bad {view:read Token;}"), "borrowed views cannot be record fields"),
-        ("borrowed-array-element", program("var values:[read Token;1]=uninit;"), "borrow types cannot be stored in pointers or arrays"),
-        ("borrowed-pointer-element", program("var value:*read Token=uninit;"), "borrow types cannot be stored in pointers or arrays"),
-        ("stacked-shared-borrow-type", program("",
-            "fn bad(value:read read i32)->unit {}"), "borrow modes require a value type, not another borrow mode"),
-        ("stacked-exclusive-shared-borrow-type", program("",
-            "fn bad(value:mut read i32)->unit {}"), "borrow modes require a value type, not another borrow mode"),
-        ("different-move-state-at-join", program("var value:Token=token(65i32); if argc>0i32 {consume(move value);}", consume), "continuing paths must agree"),
-        ("different-initialization-at-join", program("var value:Token=uninit; if argc>0i32 {value=token(65i32);}"), "continuing paths must agree"),
-        ("loop-missing-owner-restoration", program("var value:Token=token(65i32); while argc>0i32 {consume(move value);}", consume), "loop edges must restore"),
-        ("break-missing-owner-restoration", program("var value:Token=token(65i32); while true {consume(move value); break;}", consume), "loop edges must restore"),
-        ("continue-missing-owner-restoration", program("var value:Token=token(65i32); while true {consume(move value); continue;}", consume), "loop edges must restore"),
-        ("loop-condition-moves-owner", program("var value:Token=token(65i32); while condition(move value) {}", condition), "loop edges must restore"),
-        ("short-circuit-moves-owner", program("var value:Token=token(65i32); if argc>0i32 && condition(move value) {}", condition), "continuing paths must agree"),
-        ("function-pointer-read-mut-mismatch", program("var callback:fn(read Token)->unit=change;", "fn change(value:mut Token)->unit {}"), "incompatible type or borrow mode"),
-        ("function-pointer-borrow-raw-mismatch", program("var callback:fn(*Token)->unit=observe;", observe), "incompatible type or borrow mode"),
-        ("function-pointer-null-borrow-mismatch", program(
-            "var callback:fn(read Token)->unit=null(fn(mut Token)->unit);"), "incompatible type or borrow mode"),
-        ("nested-function-pointer-borrow-mismatch", program(
-            "var callback:fn(fn(read Token)->unit)->unit=install;",
-            "fn install(callback:fn(mut Token)->unit)->unit {}"), "incompatible type or borrow mode"),
-        ("returned-function-borrow-mismatch", program("",
-            "fn change(value:mut Token)->unit {} "
-            "fn choose()->fn(read Token)->unit {return change;}"), "incompatible type or borrow mode"),
-        ("record-function-borrow-mismatch", program(
-            "var selected:Callbacks=make Callbacks {function:change};",
-            "record Callbacks {function:fn(read Token)->unit;} fn change(value:mut Token)->unit {}"), "incompatible type or borrow mode"),
-        ("shared-then-exclusive-call-borrows", program(
-            "var value:i32=65i32; both(read value,mut value);",
-            "fn both(a:read i32,b:mut i32)->unit {}"), "active borrow"),
-        ("exclusive-then-shared-call-borrows", program(
-            "var value:i32=65i32; both(mut value,read value);",
-            "fn both(a:mut i32,b:read i32)->unit {}"), "active borrow"),
-        ("unsafe-direct-constant", program("alias();",
-            'extern fn raw()->unit="abort"; const alias:fn()->unit=raw;'), "constant initializer cannot retain an unsafe function"),
-        ("unsafe-owned-function-constant", program("",
-            "unsafe fn raw()->unit {} const alias:fn()->unit=raw;"), "constant initializer cannot retain an unsafe function"),
-        ("unsafe-record-constant", program("aliases.function();",
-            'extern fn raw()->unit="abort"; record Callbacks {function:fn()->unit;} '
-            "const aliases:Callbacks=make Callbacks {function:raw};"), "constant initializer cannot retain an unsafe function"),
-        ("unsafe-array-constant", program("aliases[0usize]();",
-            'extern fn raw()->unit="abort"; const aliases:[fn()->unit;1]=make [fn()->unit;1] {raw};'), "constant initializer cannot retain an unsafe function"),
-        ("destructor-constant", program("",
-            "const alias:fn(mut Token)->unit=drop_token;"), "constant initializer cannot retain an unsafe function"),
-        ("constant-function-borrow-mismatch", program("",
-            "fn change(value:mut Token)->unit {} const alias:fn(read Token)->unit=change;"), "constant function value has incompatible source types or borrow modes"),
-        ("constant-null-borrow-mismatch", program("",
-            "const alias:fn(read Token)->unit=null(fn(mut Token)->unit);"), "constant initializer has incompatible source types or borrow modes"),
-        ("defer-nonunit-result", program("defer answer();", "fn answer()->i32 {return 1i32;}"), "deferred calls must return unit"),
+        (
+            "unsafe-function-call",
+            program("raw();", "unsafe fn raw()->unit {}"),
+            "call requires an unsafe region",
+        ),
+        (
+            "unsafe-function-value",
+            program("var callback:fn()->unit=raw;", "unsafe fn raw()->unit {}"),
+            "unsafe functions can only be called directly",
+        ),
+        (
+            "direct-destructor-call",
+            program("var value:Token=token(65i32); drop_token(mut value);"),
+            "call requires an unsafe region",
+        ),
+        (
+            "deferred-destructor-call",
+            program("var value:Token=token(65i32); defer drop_token(mut value);"),
+            "call requires an unsafe region",
+        ),
+        (
+            "destructor-function-value",
+            program("var callback:fn(mut Token)->unit=drop_token;"),
+            "unsafe functions can only be called directly",
+        ),
+        (
+            "partial-record-move",
+            program(
+                "var pair:Pair=make Pair {value:token(65i32)}; var value:Token=move pair.value;",
+                "record Pair {value:Token;}",
+            ),
+            "move requires a whole local owner",
+        ),
+        (
+            "partial-array-move",
+            program(
+                "var values:[Token;1]=make [Token;1] {token(65i32)}; var value:Token=move values[0usize];"
+            ),
+            "move requires a whole local owner",
+        ),
+        (
+            "move-nonowner",
+            program("var value:i32=1i32; var copy:i32=move value;"),
+            "move requires a whole local owner",
+        ),
+        (
+            "write-with-shared-borrow",
+            program("var value:i32=65i32; var view:read i32=read value; value=66i32;"),
+            "active borrow",
+        ),
+        (
+            "write-through-shared-borrow",
+            program("var value:i32=65i32; var view:read i32=read value; view=66i32;"),
+            "active borrow",
+        ),
+        (
+            "read-with-exclusive-borrow",
+            program("var value:i32=65i32; var view:mut i32=mut value; emit(value);"),
+            "active borrow",
+        ),
+        (
+            "move-borrowed-owner",
+            program(
+                "var value:Token=token(65i32); var view:read Token=read value; consume(move value);",
+                consume,
+            ),
+            "active borrow",
+        ),
+        (
+            "defer-shared-reserves-owner",
+            program(
+                "var value:Token=token(65i32); defer observe(read value); consume(move value);",
+                observe + consume,
+            ),
+            "active borrow",
+        ),
+        (
+            "defer-shared-blocks-assignment",
+            program(
+                "var value:Token=token(65i32); defer observe(read value); value=token(66i32);",
+                observe,
+            ),
+            "active borrow",
+        ),
+        (
+            "defer-exclusive-blocks-read",
+            program(
+                "var value:i32=65i32; defer change(mut value); emit(value);",
+                "fn change(value:mut i32)->unit {value=66i32;}",
+            ),
+            "active borrow",
+        ),
+        (
+            "scalar-borrow-read-keeps-loan",
+            program(
+                "var value:i32=65i32; var view:read i32=read value; var copy:i32=view; value=66i32;"
+            ),
+            "active borrow",
+        ),
+        (
+            "field-borrow-read-keeps-loan",
+            program(
+                "var value:Cell=make Cell {code:65i32}; var view:read Cell=read value; "
+                "var copy:i32=view.code; value.code=66i32;",
+                "record Cell {code:i32;}",
+            ),
+            "active borrow",
+        ),
+        (
+            "array-borrow-read-keeps-loan",
+            program(
+                "var value:[i32;1]=make [i32;1] {65i32}; var view:read [i32;1]=read value; "
+                "var copy:i32=view[0usize]; value[0usize]=66i32;"
+            ),
+            "active borrow",
+        ),
+        (
+            "reborrow-blocks-parent-access",
+            program(
+                "var value:i32=65i32; var view:mut i32=mut value; var child:mut i32=mut view; emit(view);"
+            ),
+            "active borrow",
+        ),
+        (
+            "reborrow-cannot-escalate-shared-view",
+            program(
+                "var value:i32=65i32; var view:read i32=read value; var child:mut i32=mut view;"
+            ),
+            "active borrow",
+        ),
+        (
+            "borrowed-temporary-cannot-escape-initializer",
+            program(
+                "var view:read Token=read box().value;",
+                "record Box {value:Token;} fn box()->Box {return make Box {value:token(65i32)};}",
+            ),
+            "borrow would outlive its source storage",
+        ),
+        (
+            "deferred-borrow-cannot-retain-temporary",
+            program(
+                "defer observe(read box().value);",
+                "record Box {value:Token;} fn box()->Box {return make Box {value:token(65i32)};}"
+                + observe,
+            ),
+            "borrow would outlive its source storage",
+        ),
+        (
+            "raw-store-does-not-initialize-array",
+            program(
+                "var storage:[u8;4]=uninit;\n"
+                "unsafe {var data:*u8=(&storage) as *u8; data[0usize]=65u8;}\n"
+                "// expect-error\nvar byte:u8=storage[0usize];"
+            ),
+            "uninitialized or has been moved",
+        ),
+        (
+            "borrowed-result",
+            program("", "fn bad(value:read Token)->read Token {return read value;}"),
+            "function results cannot be borrowed views",
+        ),
+        (
+            "borrowed-record-field",
+            program("", "record Bad {view:read Token;}"),
+            "borrowed views cannot be record fields",
+        ),
+        (
+            "borrowed-array-element",
+            program("var values:[read Token;1]=uninit;"),
+            "borrow types cannot be stored in pointers or arrays",
+        ),
+        (
+            "borrowed-pointer-element",
+            program("var value:*read Token=uninit;"),
+            "borrow types cannot be stored in pointers or arrays",
+        ),
+        (
+            "stacked-shared-borrow-type",
+            program("", "fn bad(value:read read i32)->unit {}"),
+            "borrow modes require a value type, not another borrow mode",
+        ),
+        (
+            "stacked-exclusive-shared-borrow-type",
+            program("", "fn bad(value:mut read i32)->unit {}"),
+            "borrow modes require a value type, not another borrow mode",
+        ),
+        (
+            "different-move-state-at-join",
+            program("var value:Token=token(65i32); if argc>0i32 {consume(move value);}", consume),
+            "continuing paths must agree",
+        ),
+        (
+            "different-initialization-at-join",
+            program("var value:Token=uninit; if argc>0i32 {value=token(65i32);}"),
+            "continuing paths must agree",
+        ),
+        (
+            "loop-missing-owner-restoration",
+            program(
+                "var value:Token=token(65i32); while argc>0i32 {consume(move value);}", consume
+            ),
+            "loop edges must restore",
+        ),
+        (
+            "break-missing-owner-restoration",
+            program(
+                "var value:Token=token(65i32); while true {consume(move value); break;}", consume
+            ),
+            "loop edges must restore",
+        ),
+        (
+            "continue-missing-owner-restoration",
+            program(
+                "var value:Token=token(65i32); while true {consume(move value); continue;}", consume
+            ),
+            "loop edges must restore",
+        ),
+        (
+            "loop-condition-moves-owner",
+            program("var value:Token=token(65i32); while condition(move value) {}", condition),
+            "loop edges must restore",
+        ),
+        (
+            "short-circuit-moves-owner",
+            program(
+                "var value:Token=token(65i32); if argc>0i32 && condition(move value) {}", condition
+            ),
+            "continuing paths must agree",
+        ),
+        (
+            "function-pointer-read-mut-mismatch",
+            program(
+                "var callback:fn(read Token)->unit=change;", "fn change(value:mut Token)->unit {}"
+            ),
+            "incompatible type or borrow mode",
+        ),
+        (
+            "function-pointer-borrow-raw-mismatch",
+            program("var callback:fn(*Token)->unit=observe;", observe),
+            "incompatible type or borrow mode",
+        ),
+        (
+            "function-pointer-null-borrow-mismatch",
+            program("var callback:fn(read Token)->unit=null(fn(mut Token)->unit);"),
+            "incompatible type or borrow mode",
+        ),
+        (
+            "nested-function-pointer-borrow-mismatch",
+            program(
+                "var callback:fn(fn(read Token)->unit)->unit=install;",
+                "fn install(callback:fn(mut Token)->unit)->unit {}",
+            ),
+            "incompatible type or borrow mode",
+        ),
+        (
+            "returned-function-borrow-mismatch",
+            program(
+                "",
+                "fn change(value:mut Token)->unit {} "
+                "fn choose()->fn(read Token)->unit {return change;}",
+            ),
+            "incompatible type or borrow mode",
+        ),
+        (
+            "record-function-borrow-mismatch",
+            program(
+                "var selected:Callbacks=make Callbacks {function:change};",
+                "record Callbacks {function:fn(read Token)->unit;} fn change(value:mut Token)->unit {}",
+            ),
+            "incompatible type or borrow mode",
+        ),
+        (
+            "shared-then-exclusive-call-borrows",
+            program(
+                "var value:i32=65i32; both(read value,mut value);",
+                "fn both(a:read i32,b:mut i32)->unit {}",
+            ),
+            "active borrow",
+        ),
+        (
+            "exclusive-then-shared-call-borrows",
+            program(
+                "var value:i32=65i32; both(mut value,read value);",
+                "fn both(a:mut i32,b:read i32)->unit {}",
+            ),
+            "active borrow",
+        ),
+        (
+            "unsafe-direct-constant",
+            program("alias();", 'extern fn raw()->unit="abort"; const alias:fn()->unit=raw;'),
+            "constant initializer cannot retain an unsafe function",
+        ),
+        (
+            "unsafe-owned-function-constant",
+            program("", "unsafe fn raw()->unit {} const alias:fn()->unit=raw;"),
+            "constant initializer cannot retain an unsafe function",
+        ),
+        (
+            "unsafe-record-constant",
+            program(
+                "aliases.function();",
+                'extern fn raw()->unit="abort"; record Callbacks {function:fn()->unit;} '
+                "const aliases:Callbacks=make Callbacks {function:raw};",
+            ),
+            "constant initializer cannot retain an unsafe function",
+        ),
+        (
+            "unsafe-array-constant",
+            program(
+                "aliases[0usize]();",
+                'extern fn raw()->unit="abort"; const aliases:[fn()->unit;1]=make [fn()->unit;1] {raw};',
+            ),
+            "constant initializer cannot retain an unsafe function",
+        ),
+        (
+            "destructor-constant",
+            program("", "const alias:fn(mut Token)->unit=drop_token;"),
+            "constant initializer cannot retain an unsafe function",
+        ),
+        (
+            "constant-function-borrow-mismatch",
+            program(
+                "", "fn change(value:mut Token)->unit {} const alias:fn(read Token)->unit=change;"
+            ),
+            "constant function value has incompatible source types or borrow modes",
+        ),
+        (
+            "constant-null-borrow-mismatch",
+            program("", "const alias:fn(read Token)->unit=null(fn(mut Token)->unit);"),
+            "constant initializer has incompatible source types or borrow modes",
+        ),
+        (
+            "defer-nonunit-result",
+            program("defer answer();", "fn answer()->i32 {return 1i32;}"),
+            "deferred calls must return unit",
+        ),
         ("defer-noncall", program("defer 1i32;"), "defer requires a call expression"),
-        ("defer-resource-copy", program("var value:Token=token(65i32); defer consume(value);", consume), "explicit move"),
-        ("forget-outside-unsafe", program("var value:Token=token(65i32); forget move value;"), "forget requires an unsafe region"),
-        ("borrow-without-initializer", program("var view:read i32=uninit;"), "borrowed bindings require an initializer"),
-        ("drop-missing-definition", "resource Bad {id:i32;} drop absent;", "resource drop must name a safe defined function"),
-        ("drop-wrong-borrow-mode", "resource Bad {id:i32;} drop cleanup; fn cleanup(value:read Bad)->unit {}", "drop parameter must borrow its resource exclusively"),
-        ("drop-wrong-result", "resource Bad {id:i32;} drop cleanup; fn cleanup(value:mut Bad)->i32 {return 0i32;}", "drop requires one mut resource parameter and a unit result"),
+        (
+            "defer-resource-copy",
+            program("var value:Token=token(65i32); defer consume(value);", consume),
+            "explicit move",
+        ),
+        (
+            "forget-outside-unsafe",
+            program("var value:Token=token(65i32); forget move value;"),
+            "forget requires an unsafe region",
+        ),
+        (
+            "borrow-without-initializer",
+            program("var view:read i32=uninit;"),
+            "borrowed bindings require an initializer",
+        ),
+        (
+            "drop-missing-definition",
+            "resource Bad {id:i32;} drop absent;",
+            "resource drop must name a safe defined function",
+        ),
+        (
+            "drop-wrong-borrow-mode",
+            "resource Bad {id:i32;} drop cleanup; fn cleanup(value:read Bad)->unit {}",
+            "drop parameter must borrow its resource exclusively",
+        ),
+        (
+            "drop-wrong-result",
+            "resource Bad {id:i32;} drop cleanup; fn cleanup(value:mut Bad)->i32 {return 0i32;}",
+            "drop requires one mut resource parameter and a unit result",
+        ),
         ("malformed-resource-clause", "resource Bad {id:i32;}", "expected drop FUNCTION"),
         ("malformed-resource-field", "resource Bad {id:i32} drop cleanup;", "expected ';'"),
         ("malformed-defer-call", program("defer emit(65i32;"), "expected ')'"),
         ("malformed-type", "fn broken(value:)->unit {}", "expected a type"),
-        ("malformed-number", "const bad:u64=18446744073709551616u64;", "integer token exceeds 64 bits"),
+        (
+            "malformed-number",
+            "const bad:u64=18446744073709551616u64;",
+            "integer token exceeds 64 bits",
+        ),
         ("malformed-string", 'const bad:*u8="unfinished', "unterminated string"),
         ("invalid-source-byte", b"\0", "invalid source byte 0x00"),
     ]
@@ -342,8 +899,7 @@ def depth_reject_cases():
     # Flat syntax must not bypass the semantic traversal limit.
     count = 120000
     constant = "const x:i32=" + "+".join(["1i32"] * count) + ";\n"
-    records = "".join(f"record R{index} {{ v:R{index + 1}; }}\n"
-                      for index in range(count - 1))
+    records = "".join(f"record R{index} {{ v:R{index + 1}; }}\n" for index in range(count - 1))
     records += f"record R{count - 1} {{ v:i32; }}\nconst x:R0=0i32;\n"
     return [
         ("flat-constant-semantic-depth", constant, "nesting"),
@@ -360,8 +916,11 @@ class Suite:
         self.build = args.build.resolve()
         self.compiler = self.build / "crust-resource"
         self.work = work
-        self.options = ["--cflag=-O2", *("--cflag=" + flag for flag in args.cflag),
-                        *("--ldflag=" + flag for flag in args.ldflag)]
+        self.options = [
+            "--cflag=-O2",
+            *("--cflag=" + flag for flag in args.cflag),
+            *("--ldflag=" + flag for flag in args.ldflag),
+        ]
         self.timeout = args.timeout
         self.commands = 0
 
@@ -371,12 +930,16 @@ class Suite:
         try:
             result = subprocess.run(command, cwd=cwd, capture_output=True, timeout=self.timeout)
         except subprocess.TimeoutExpired as error:
-            raise Failure(f"timeout after {self.timeout}s: {shlex.join(command)}\n"
-                          f"{(error.stdout or b'').decode(errors='replace')}\n"
-                          f"{(error.stderr or b'').decode(errors='replace')}") from error
+            raise Failure(
+                f"timeout after {self.timeout}s: {shlex.join(command)}\n"
+                f"{(error.stdout or b'').decode(errors='replace')}\n"
+                f"{(error.stderr or b'').decode(errors='replace')}"
+            ) from error
         if result.returncode != expected:
-            raise Failure(f"{shlex.join(command)}\nstatus {result.returncode}, expected {expected}\n"
-                          f"stdout: {result.stdout!r}\nstderr:\n{result.stderr.decode(errors='replace')}")
+            raise Failure(
+                f"{shlex.join(command)}\nstatus {result.returncode}, expected {expected}\n"
+                f"stdout: {result.stdout!r}\nstderr:\n{result.stderr.decode(errors='replace')}"
+            )
         return result
 
     def source(self, name, source):
@@ -391,9 +954,13 @@ class Suite:
             raise Failure(f"check produced output: {checked.stdout!r} {checked.stderr!r}")
         generated = self.work / (name + ".c")
         symbols = self.work / (name + ".rsp")
-        emitted = self.command([self.compiler, "--emit-c", "-o", generated, "--symbols", symbols, path])
+        emitted = self.command(
+            [self.compiler, "--emit-c", "-o", generated, "--symbols", symbols, path]
+        )
         if emitted.stdout or emitted.stderr or not generated.stat().st_size or not symbols.exists():
-            raise Failure(f"C emission did not produce both artifacts: {emitted.stdout!r} {emitted.stderr!r}")
+            raise Failure(
+                f"C emission did not produce both artifacts: {emitted.stdout!r} {emitted.stderr!r}"
+            )
         output = self.work / name
         compiled = self.command([self.compiler, "-o", output, *self.options, path])
         if compiled.stdout or compiled.stderr:
@@ -402,21 +969,29 @@ class Suite:
         # SIGSEGV from an unchecked null call must not satisfy these cases.
         executed = self.command([output], expected=-signal.SIGILL if expected is None else 0)
         if executed.stdout != (b"" if expected is None else expected) or executed.stderr:
-            raise Failure(f"{output}\nstdout {executed.stdout!r}, expected {expected!r}\n"
-                          f"stderr: {executed.stderr.decode(errors='replace')}")
+            raise Failure(
+                f"{output}\nstdout {executed.stdout!r}, expected {expected!r}\n"
+                f"stderr: {executed.stderr.decode(errors='replace')}"
+            )
 
     def reject(self, name, source, diagnostic):
         path = self.source(name, source)
         result = self.command([self.compiler, "--check", path], expected=1)
         located = re.search(rb":\d+:\d+: error: ", result.stderr)
         if result.stdout or diagnostic.encode() not in result.stderr or not located:
-            raise Failure(f"expected a located diagnostic containing {diagnostic!r}\n"
-                          f"stdout: {result.stdout!r}\nstderr: {result.stderr.decode(errors='replace')}")
+            raise Failure(
+                f"expected a located diagnostic containing {diagnostic!r}\n"
+                f"stdout: {result.stdout!r}\nstderr: {result.stderr.decode(errors='replace')}"
+            )
         if isinstance(source, str) and "// expect-error\n" in source:
-            expected_line = source[:source.index("// expect-error\n")].count("\n") + 2
-            if not re.search(rb":" + str(expected_line).encode() + rb":\d+: error: ", result.stderr):
-                raise Failure(f"expected rejection at marked line {expected_line}, not at an earlier valid operation\n"
-                              f"{result.stderr.decode(errors='replace')}")
+            expected_line = source[: source.index("// expect-error\n")].count("\n") + 2
+            if not re.search(
+                rb":" + str(expected_line).encode() + rb":\d+: error: ", result.stderr
+            ):
+                raise Failure(
+                    f"expected rejection at marked line {expected_line}, not at an earlier valid operation\n"
+                    f"{result.stderr.decode(errors='replace')}"
+                )
 
     def cli(self, name):
         if name == "cli-empty-source":
@@ -427,7 +1002,9 @@ class Suite:
                 raise Failure(f"empty library did not emit C: {result.stdout!r} {result.stderr!r}")
         elif name == "cli-multiple-sources":
             library = self.source(name + "-library", COMMON)
-            application = self.source(name + "-application", program("var value:Token=token(65i32);", common=False))
+            application = self.source(
+                name + "-application", program("var value:Token=token(65i32);", common=False)
+            )
             empty = self.source(name + "-empty", "")
             output = self.work / name
             self.command([self.compiler, "--check", empty, library, application])
@@ -444,20 +1021,27 @@ class Suite:
                     raise Failure(f"failed compilation changed {output}")
         elif name == "cli-source-root":
             package = self.work / "ordinary resource package"
-            for relative in ("api/crust0_stage.crs", "stages/resources/api.crs",
-                             "examples/resources/hello/main.crs"):
+            for relative in (
+                "api/crust0_stage.crs",
+                "stages/resources/api.crs",
+                "examples/resources/hello/main.crs",
+            ):
                 destination = package / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / relative, destination)
             output = package / "build/resource-hello"
             output.parent.mkdir()
-            shutil.copyfile(self.build / "crust-resource-library.so",
-                            output.parent / "crust-resource-library.so")
+            shutil.copyfile(
+                self.build / "crust-resource-library.so",
+                output.parent / "crust-resource-library.so",
+            )
             source = package / "examples/resources/hello/main.crs"
             runner = self.build / "crust"
             result = self.command([runner, source], cwd=self.work)
             if result.stdout or result.stderr:
-                raise Failure(f"root compilation produced output: {result.stdout!r} {result.stderr!r}")
+                raise Failure(
+                    f"root compilation produced output: {result.stdout!r} {result.stderr!r}"
+                )
             result = self.command([output], cwd=self.work)
             if result.stdout != b"Hello, resources!\n" or result.stderr:
                 raise Failure(f"resource hello failed: {result.stdout!r} {result.stderr!r}")
@@ -465,8 +1049,11 @@ class Suite:
             original = source.read_text()
             source.write_text(original + "fn invalid()->i32{return missing;}\n")
             result = self.command([runner, source], expected=1, cwd=self.work)
-            if (f"{source}:{original.count(chr(10)) + 1}:".encode() not in result.stderr or
-                    b"unknown value name" not in result.stderr or result.stdout):
+            if (
+                f"{source}:{original.count(chr(10)) + 1}:".encode() not in result.stderr
+                or b"unknown value name" not in result.stderr
+                or result.stdout
+            ):
                 raise Failure(f"root lost the target source location: {result.stderr!r}")
             if output.read_bytes() != retained:
                 raise Failure("failed inline target changed the previous executable")
@@ -478,8 +1065,10 @@ def source_report(source):
     if isinstance(source, bytes):
         return repr(source)
     if len(source) > 8192:
-        return (f"{len(source)} characters; the complete source is retained in the case file.\n"
-                f"{source[:2048]}\n... source excerpt omitted ...\n{source[-2048:]}")
+        return (
+            f"{len(source)} characters; the complete source is retained in the case file.\n"
+            f"{source[:2048]}\n... source excerpt omitted ...\n{source[-2048:]}"
+        )
     return "\n".join(f"{line:3}: {text}" for line, text in enumerate(source.splitlines(), 1))
 
 
@@ -487,19 +1076,36 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=ROOT / "build")
     parser.add_argument("--group", choices=("all", "runtime", "reject", "cli"), default="all")
-    parser.add_argument("--case", action="append", default=[], help="run names that match this shell pattern")
-    parser.add_argument("--cflag", action="append", default=[], help="append one generated-C compiler argument")
-    parser.add_argument("--ldflag", action="append", default=[], help="append one native linker argument")
+    parser.add_argument(
+        "--case", action="append", default=[], help="run names that match this shell pattern"
+    )
+    parser.add_argument(
+        "--cflag", action="append", default=[], help="append one generated-C compiler argument"
+    )
+    parser.add_argument(
+        "--ldflag", action="append", default=[], help="append one native linker argument"
+    )
     parser.add_argument("--timeout", type=float, default=45.0)
     parser.add_argument("--keep-going", action="store_true")
     parser.add_argument("--list", action="store_true")
     args = parser.parse_args()
     cases = [("runtime", *case) for case in runtime_cases()]
     cases += [("reject", *case) for case in reject_cases() + depth_reject_cases()]
-    cases += [("cli", name, None, None) for name in
-              ("cli-empty-source", "cli-multiple-sources", "cli-failure-preserves-output", "cli-source-root")]
-    cases = [case for case in cases if (args.group == "all" or case[0] == args.group) and
-             (not args.case or any(fnmatch.fnmatchcase(case[1], pattern) for pattern in args.case))]
+    cases += [
+        ("cli", name, None, None)
+        for name in (
+            "cli-empty-source",
+            "cli-multiple-sources",
+            "cli-failure-preserves-output",
+            "cli-source-root",
+        )
+    ]
+    cases = [
+        case
+        for case in cases
+        if (args.group == "all" or case[0] == args.group)
+        and (not args.case or any(fnmatch.fnmatchcase(case[1], pattern) for pattern in args.case))
+    ]
     if not cases:
         parser.error("no test cases selected")
     if args.list:
@@ -533,8 +1139,10 @@ def main():
                     print("Source:\n" + source_report(source), file=sys.stderr)
                 if not args.keep_going:
                     break
-        print(f"Resource suite: {counts['runtime']} runtime, {counts['reject']} rejection, "
-              f"{counts['cli']} CLI cases passed; {suite.commands} process checks; {failures} failures")
+        print(
+            f"Resource suite: {counts['runtime']} runtime, {counts['reject']} rejection, "
+            f"{counts['cli']} CLI cases passed; {suite.commands} process checks; {failures} failures"
+        )
     finally:
         if failures:
             print(f"Failure inputs and artifacts retained in {work}", file=sys.stderr)

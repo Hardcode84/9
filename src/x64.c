@@ -50,14 +50,11 @@ static void emit_statement(CrustX64Emitter *emitter, CrustStmt *statement)
 
 static CrustLoc no_location(void)
 {
-    CrustLoc location = { NULL, 0 };
+    CrustLoc location = {NULL, 0};
     return location;
 }
 
-static CrustContext *context(CrustX64Emitter *emitter)
-{
-    return emitter->program->context;
-}
+static CrustContext *context(CrustX64Emitter *emitter) { return emitter->program->context; }
 
 static void output_bytes(CrustX64Emitter *emitter, const char *bytes, size_t size)
 {
@@ -186,7 +183,8 @@ static void output_format(CrustX64Emitter *emitter, const char *format, ...)
     va_end(arguments);
     output_flush(&buffer);
     if (buffer.failed)
-        crust_fail(context(emitter), no_location(), "assembly output failed: %s", strerror(buffer.error));
+        crust_fail(context(emitter), no_location(), "assembly output failed: %s",
+                   strerror(buffer.error));
 }
 
 void crust_x64_output(CrustX64Emitter *emitter, const char *format, ...)
@@ -199,8 +197,7 @@ void crust_x64_output(CrustX64Emitter *emitter, const char *format, ...)
     error = errno;
     va_end(arguments);
     if (result < 0)
-        crust_fail(context(emitter), no_location(), "assembly output failed: %s",
-                 strerror(error));
+        crust_fail(context(emitter), no_location(), "assembly output failed: %s", strerror(error));
 }
 
 bool crust_x64_write(CrustX64Emitter *emitter, const char *text)
@@ -216,8 +213,8 @@ bool crust_x64_write(CrustX64Emitter *emitter, const char *text)
     return true;
 }
 
-CrustX64Slot crust_x64_reserve(CrustContext *ctx, CrustX64Function *function,
-                          uint64_t size, uint32_t alignment, CrustLoc location)
+CrustX64Slot crust_x64_reserve(CrustContext *ctx, CrustX64Function *function, uint64_t size,
+                               uint32_t alignment, CrustLoc location)
 {
     CrustX64Slot slot;
     uint64_t end;
@@ -236,9 +233,9 @@ CrustX64Slot crust_x64_reserve(CrustContext *ctx, CrustX64Function *function,
     return slot;
 }
 
-bool crust_x64_try_reserve(CrustContext *ctx, CrustX64Function *function,
-                          uint64_t size, uint32_t alignment, CrustSource *source,
-                          size_t offset, CrustX64Slot *result)
+bool crust_x64_try_reserve(CrustContext *ctx, CrustX64Function *function, uint64_t size,
+                           uint32_t alignment, CrustSource *source, size_t offset,
+                           CrustX64Slot *result)
 {
     CrustFailureFrame failure;
     failure.previous = ctx->failure;
@@ -247,7 +244,7 @@ bool crust_x64_try_reserve(CrustContext *ctx, CrustX64Function *function,
         ctx->failure = failure.previous;
         return false;
     }
-    *result = crust_x64_reserve(ctx, function, size, alignment, (CrustLoc){ source, offset });
+    *result = crust_x64_reserve(ctx, function, size, alignment, (CrustLoc){source, offset});
     ctx->failure = failure.previous;
     return true;
 }
@@ -309,22 +306,27 @@ static void prepare_alias(CrustX64Program *program, CrustDecl *declaration, bool
     if (alias && (!definition || alias->definition))
         return;
     if (!declaration->link_name || !declaration->link_name[0])
-        crust_fail(program->context, declaration->loc, "backend declaration has no nonempty link name");
+        crust_fail(program->context, declaration->loc,
+                   "backend declaration has no nonempty link name");
     for (cursor = (const unsigned char *)declaration->link_name; *cursor; ++cursor)
         if (*cursor > 127)
             crust_fail(program->context, declaration->loc, "native link name is not ASCII");
     if (program->entry && strcmp(declaration->link_name, "main") == 0)
-        crust_fail(program->context, declaration->loc, "native symbol main conflicts with the hosted entry adapter");
+        crust_fail(program->context, declaration->loc,
+                   "native symbol main conflicts with the hosted entry adapter");
     name = crust_intern(program->context, (const unsigned char *)declaration->link_name,
-                       (size_t)(cursor - (const unsigned char *)declaration->link_name));
+                        (size_t)(cursor - (const unsigned char *)declaration->link_name));
     previous = crust_map_get(&program->native_symbols, (uintptr_t)name);
     if (previous) {
         if (function_symbol(previous->declaration) != function_symbol(declaration) ||
-            (function_symbol(declaration) ? !native_type_equal(previous->declaration->type, declaration->type) :
-             !crust_type_equal(previous->declaration->type, declaration->type)))
-            crust_fail(program->context, declaration->loc, "conflicting native ABI for symbol %s", declaration->link_name);
+            (function_symbol(declaration)
+                 ? !native_type_equal(previous->declaration->type, declaration->type)
+                 : !crust_type_equal(previous->declaration->type, declaration->type)))
+            crust_fail(program->context, declaration->loc, "conflicting native ABI for symbol %s",
+                       declaration->link_name);
         if (previous != alias && previous->definition && definition)
-            crust_fail(program->context, declaration->loc, "duplicate native definition for symbol %s", declaration->link_name);
+            crust_fail(program->context, declaration->loc,
+                       "duplicate native definition for symbol %s", declaration->link_name);
     }
     if (!alias) {
         alias = crust_alloc(program->context, sizeof(*alias), CRUST_ALIGNOF(CrustX64Alias));
@@ -358,7 +360,8 @@ static void choose_label_prefix(CrustX64Program *program)
             continue;
         while (*cursor >= '0' && *cursor <= '9') {
             unsigned digit = (unsigned)(*cursor - '0');
-            if (digit > program->alias_count || value > ((uint64_t)program->alias_count - digit) / 10)
+            if (digit > program->alias_count ||
+                value > ((uint64_t)program->alias_count - digit) / 10)
                 break;
             value = value * 10 + digit;
             ++cursor;
@@ -369,11 +372,12 @@ static void choose_label_prefix(CrustX64Program *program)
     for (candidate = 0; candidate <= program->alias_count; ++candidate)
         if (!used[candidate])
             break;
-    (void)snprintf(program->label_prefix, sizeof(program->label_prefix), "%s%zu_", prefix, candidate);
+    (void)snprintf(program->label_prefix, sizeof(program->label_prefix), "%s%zu_", prefix,
+                   candidate);
 }
 
 static CrustX64Expr *prepare_storage(CrustX64Program *program, CrustX64Function *function,
-                                    CrustExpr *expression, bool value, bool scratch)
+                                     CrustExpr *expression, bool value, bool scratch)
 {
     CrustX64Expr *plan;
     plan = crust_map_get(&function->expressions, (uintptr_t)expression);
@@ -383,8 +387,8 @@ static CrustX64Expr *prepare_storage(CrustX64Program *program, CrustX64Function 
         crust_map_set(program->context, &function->expressions, (uintptr_t)expression, plan);
     }
     if (value && !plan->value.size)
-        plan->value = crust_x64_reserve(program->context, function,
-            expression->type->size, expression->type->align, expression->loc);
+        plan->value = crust_x64_reserve(program->context, function, expression->type->size,
+                                        expression->type->align, expression->loc);
     if (scratch && !plan->scratch.size)
         plan->scratch = crust_x64_reserve(program->context, function, 8, 8, expression->loc);
     return plan;
@@ -401,26 +405,32 @@ static void prepare_expression(CrustX64Program *program, CrustX64Function *funct
     if (expression->kind == CRUST_E_STRING)
         prepare_string(program, expression);
     if (expression->kind == CRUST_E_NAME && expression->symbol &&
-        (expression->symbol->kind == CRUST_SYM_FUNCTION || expression->symbol->kind == CRUST_SYM_CONST))
+        (expression->symbol->kind == CRUST_SYM_FUNCTION ||
+         expression->symbol->kind == CRUST_SYM_CONST))
         prepare_alias(program, expression->symbol->decl, false);
     if (function) {
         bool scratch = expression->kind == CRUST_E_CALL || expression->kind == CRUST_E_INDEX ||
-            (expression->kind == CRUST_E_BINARY && expression->op != CRUST_OP_AND && expression->op != CRUST_OP_OR);
-        bool value = !place && !crust_type_scalar(expression->type) && expression->type->kind != CRUST_T_UNIT;
+                       (expression->kind == CRUST_E_BINARY && expression->op != CRUST_OP_AND &&
+                        expression->op != CRUST_OP_OR);
+        bool value = !place && !crust_type_scalar(expression->type) &&
+                     expression->type->kind != CRUST_T_UNIT;
         if (scratch || value) {
             CrustX64Expr *plan = prepare_storage(program, function, expression, value, scratch);
-            if (expression->kind == CRUST_E_CALL && expression->arg_count && !plan->arguments.size) {
+            if (expression->kind == CRUST_E_CALL && expression->arg_count &&
+                !plan->arguments.size) {
                 if (expression->arg_count > (uint64_t)INT64_MAX / 8)
-                    crust_fail(program->context, expression->loc, "too many backend call arguments");
-                plan->arguments = crust_x64_reserve(program->context, function,
-                    (uint64_t)expression->arg_count * 8, 8, expression->loc);
+                    crust_fail(program->context, expression->loc,
+                               "too many backend call arguments");
+                plan->arguments =
+                    crust_x64_reserve(program->context, function,
+                                      (uint64_t)expression->arg_count * 8, 8, expression->loc);
             }
         }
     }
     left_place = (expression->kind == CRUST_E_GROUP && place) ||
-        (expression->kind == CRUST_E_UNARY && expression->op == CRUST_OP_ADDRESS) ||
-        ((expression->kind == CRUST_E_FIELD || expression->kind == CRUST_E_INDEX) &&
-         expression->left->place && expression->left->type->kind != CRUST_T_POINTER);
+                 (expression->kind == CRUST_E_UNARY && expression->op == CRUST_OP_ADDRESS) ||
+                 ((expression->kind == CRUST_E_FIELD || expression->kind == CRUST_E_INDEX) &&
+                  expression->left->place && expression->left->type->kind != CRUST_T_POINTER);
     prepare_expression(program, function, expression->left, left_place);
     prepare_expression(program, function, expression->right, false);
     for (index = 0; index < expression->arg_count; ++index)
@@ -434,13 +444,11 @@ static void prepare_statements(CrustX64Program *program, CrustX64Function *funct
 {
     for (; statement; statement = statement->next) {
         if (statement->kind == CRUST_S_VAR) {
-            CrustX64Slot *slot = crust_alloc(program->context, sizeof(*slot),
-                                         CRUST_ALIGNOF(CrustX64Slot));
-            *slot = crust_x64_reserve(program->context, function,
-                statement->symbol->type->size, statement->symbol->type->align,
-                statement->loc);
-            crust_map_set(program->context, &function->symbols,
-                         (uintptr_t)statement->symbol, slot);
+            CrustX64Slot *slot =
+                crust_alloc(program->context, sizeof(*slot), CRUST_ALIGNOF(CrustX64Slot));
+            *slot = crust_x64_reserve(program->context, function, statement->symbol->type->size,
+                                      statement->symbol->type->align, statement->loc);
+            crust_map_set(program->context, &function->symbols, (uintptr_t)statement->symbol, slot);
         }
         prepare_expression(program, function, statement->expr, statement->kind == CRUST_S_ASSIGN);
         if (statement->kind == CRUST_S_ASSIGN)
@@ -455,9 +463,10 @@ void crust_x64_prepare_function(CrustX64Program *program, CrustX64Function *func
 {
     CrustParam *parameter;
     for (parameter = function->declaration->params; parameter; parameter = parameter->next) {
-        CrustX64Slot *slot = crust_alloc(program->context, sizeof(*slot), CRUST_ALIGNOF(CrustX64Slot));
-        *slot = crust_x64_reserve(program->context, function,
-            parameter->type->size, parameter->type->align, parameter->loc);
+        CrustX64Slot *slot =
+            crust_alloc(program->context, sizeof(*slot), CRUST_ALIGNOF(CrustX64Slot));
+        *slot = crust_x64_reserve(program->context, function, parameter->type->size,
+                                  parameter->type->align, parameter->loc);
         crust_map_set(program->context, &function->symbols, (uintptr_t)parameter->symbol, slot);
     }
     prepare_statements(program, function, function->declaration->body);
@@ -507,8 +516,8 @@ bool crust_x64_prepare(CrustContext *ctx, CrustX64Program **result, CrustDecl *e
         CrustDecl *declaration;
         for (declaration = unit->declarations; declaration; declaration = declaration->next) {
             if (declaration->kind == CRUST_D_FUNCTION) {
-                CrustX64Function *function = crust_alloc(ctx, sizeof(*function),
-                                                     CRUST_ALIGNOF(CrustX64Function));
+                CrustX64Function *function =
+                    crust_alloc(ctx, sizeof(*function), CRUST_ALIGNOF(CrustX64Function));
                 function->declaration = declaration;
                 function->identity = program->next_identity++;
                 if (program->last_function)
@@ -561,7 +570,7 @@ static void address_slot(CrustX64Emitter *emitter, uint64_t offset, const char *
         output_format(emitter, "\tleaq -%" PRIu64 "(%%rbp), %%%s\n", offset, reg);
     else
         output_format(emitter, "\tmovabsq $0x%016" PRIx64 ", %%%s\n\taddq %%rbp, %%%s\n",
-                        (uint64_t)0 - offset, reg, reg);
+                      (uint64_t)0 - offset, reg, reg);
 }
 
 static void load_slot64(CrustX64Emitter *emitter, uint64_t offset, const char *reg)
@@ -587,11 +596,14 @@ static void save_slot64(CrustX64Emitter *emitter, uint64_t offset)
 static void normalize(CrustX64Emitter *emitter, CrustType *type)
 {
     if (type->size == 1)
-        output_text(emitter, crust_type_signed(type) ? "\tmovsbq %al, %rax\n" : "\tmovzbq %al, %rax\n");
+        output_text(emitter,
+                    crust_type_signed(type) ? "\tmovsbq %al, %rax\n" : "\tmovzbq %al, %rax\n");
     else if (type->size == 2)
-        output_text(emitter, crust_type_signed(type) ? "\tmovswq %ax, %rax\n" : "\tmovzwq %ax, %rax\n");
+        output_text(emitter,
+                    crust_type_signed(type) ? "\tmovswq %ax, %rax\n" : "\tmovzwq %ax, %rax\n");
     else if (type->size == 4)
-        output_text(emitter, crust_type_signed(type) ? "\tmovslq %eax, %rax\n" : "\tmovl %eax, %eax\n");
+        output_text(emitter,
+                    crust_type_signed(type) ? "\tmovslq %eax, %rax\n" : "\tmovl %eax, %eax\n");
 }
 
 static void load_value(CrustX64Emitter *emitter, CrustType *type)
@@ -599,11 +611,14 @@ static void load_value(CrustX64Emitter *emitter, CrustType *type)
     if (!crust_type_scalar(type))
         return;
     if (type->size == 1)
-        output_text(emitter, crust_type_signed(type) ? "\tmovsbq (%rax), %rax\n" : "\tmovzbq (%rax), %rax\n");
+        output_text(emitter, crust_type_signed(type) ? "\tmovsbq (%rax), %rax\n"
+                                                     : "\tmovzbq (%rax), %rax\n");
     else if (type->size == 2)
-        output_text(emitter, crust_type_signed(type) ? "\tmovswq (%rax), %rax\n" : "\tmovzwq (%rax), %rax\n");
+        output_text(emitter, crust_type_signed(type) ? "\tmovswq (%rax), %rax\n"
+                                                     : "\tmovzwq (%rax), %rax\n");
     else if (type->size == 4)
-        output_text(emitter, crust_type_signed(type) ? "\tmovslq (%rax), %rax\n" : "\tmovl (%rax), %eax\n");
+        output_text(emitter,
+                    crust_type_signed(type) ? "\tmovslq (%rax), %rax\n" : "\tmovl (%rax), %eax\n");
     else
         output_text(emitter, "\tmovq (%rax), %rax\n");
 }
@@ -616,17 +631,19 @@ static void load_scalar_slot(CrustX64Emitter *emitter, CrustType *type, uint64_t
         load_value(emitter, type);
         return;
     }
-    instruction = type->size == 1 ? (crust_type_signed(type) ? "movsbq" : "movzbq") :
-        type->size == 2 ? (crust_type_signed(type) ? "movswq" : "movzwq") :
-        type->size == 4 ? (crust_type_signed(type) ? "movslq" : "movl") : "movq";
+    instruction = type->size == 1   ? (crust_type_signed(type) ? "movsbq" : "movzbq")
+                  : type->size == 2 ? (crust_type_signed(type) ? "movswq" : "movzwq")
+                  : type->size == 4 ? (crust_type_signed(type) ? "movslq" : "movl")
+                                    : "movq";
     output_format(emitter, "\t%s -%" PRIu64 "(%%rbp), %%%s\n", instruction, offset,
-                    type->size == 4 && !crust_type_signed(type) ? "eax" : "rax");
+                  type->size == 4 && !crust_type_signed(type) ? "eax" : "rax");
 }
 
 static void store_value(CrustX64Emitter *emitter, CrustType *type)
 {
     if (!crust_type_scalar(type))
-        output_format(emitter, "\tmovq %%rax, %%rsi\n\tmovabsq $%" PRIu64 ", %%rcx\n\trep movsb\n", type->size);
+        output_format(emitter, "\tmovq %%rax, %%rsi\n\tmovabsq $%" PRIu64 ", %%rcx\n\trep movsb\n",
+                      type->size);
     else if (type->size == 1)
         output_text(emitter, "\tmovb %al, (%rdi)\n");
     else if (type->size == 2)
@@ -652,7 +669,7 @@ static void symbol_address(CrustX64Emitter *emitter, CrustDecl *declaration)
 {
     CrustX64Alias *alias = crust_map_get(&emitter->program->alias_map, (uintptr_t)declaration);
     output_format(emitter, "\tmovq %salias_%" PRIu64 "@GOTPCREL(%%rip), %%rax\n",
-                    emitter->program->label_prefix, alias->identity);
+                  emitter->program->label_prefix, alias->identity);
 }
 
 static void emit_label(CrustX64Emitter *emitter, uint64_t identity)
@@ -662,7 +679,8 @@ static void emit_label(CrustX64Emitter *emitter, uint64_t identity)
 
 static void emit_jump(CrustX64Emitter *emitter, const char *instruction, uint64_t identity)
 {
-    output_format(emitter, "\t%s %slabel_%" PRIu64 "\n", instruction, emitter->program->label_prefix, identity);
+    output_format(emitter, "\t%s %slabel_%" PRIu64 "\n", instruction,
+                  emitter->program->label_prefix, identity);
 }
 
 static void reserve_stack(CrustX64Emitter *emitter, uint64_t size)
@@ -708,7 +726,7 @@ void crust_x64_emit_place(CrustX64Emitter *emitter, CrustExpr *expression)
         else
             emit_expression(emitter, expression->left);
         output_format(emitter, "\tmovabsq $%" PRIu64 ", %%r10\n\taddq %%r10, %%rax\n",
-                        expression->field->offset);
+                      expression->field->offset);
         return;
     case CRUST_E_INDEX: {
         CrustX64Expr *plan = expression_plan(emitter, expression);
@@ -718,8 +736,9 @@ void crust_x64_emit_place(CrustX64Emitter *emitter, CrustExpr *expression)
             emit_place(emitter, expression->left);
         save_slot64(emitter, plan->scratch.offset);
         emit_expression(emitter, expression->right);
-        output_format(emitter, "\tmovabsq $%" PRIu64 ", %%r10\n\timulq %%r10, %%rax\n\tmovq %%rax, %%rcx\n",
-                        expression->type->size);
+        output_format(emitter,
+                      "\tmovabsq $%" PRIu64 ", %%r10\n\timulq %%r10, %%rax\n\tmovq %%rax, %%rcx\n",
+                      expression->type->size);
         load_slot64(emitter, plan->scratch.offset, "rax");
         output_text(emitter, "\taddq %rcx, %rax\n");
         return;
@@ -732,7 +751,7 @@ void crust_x64_emit_place(CrustX64Emitter *emitter, CrustExpr *expression)
 
 static void emit_call(CrustX64Emitter *emitter, CrustExpr *expression)
 {
-    static const char *const registers[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
+    static const char *const registers[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
     CrustX64Expr *plan = expression_plan(emitter, expression);
     size_t index;
     uint64_t stack_size = expression->arg_count > 6 ? (uint64_t)(expression->arg_count - 6) * 8 : 0;
@@ -746,8 +765,9 @@ static void emit_call(CrustX64Emitter *emitter, CrustExpr *expression)
     reserve_stack(emitter, stack_size);
     for (index = 6; index < expression->arg_count; ++index) {
         load_slot64(emitter, plan->arguments.offset - (uint64_t)index * 8, "rax");
-        output_format(emitter, "\tmovabsq $%" PRIu64 ", %%r10\n\taddq %%rsp, %%r10\n\tmovq %%rax, (%%r10)\n",
-                        (uint64_t)(index - 6) * 8);
+        output_format(emitter,
+                      "\tmovabsq $%" PRIu64 ", %%r10\n\taddq %%rsp, %%r10\n\tmovq %%rax, (%%r10)\n",
+                      (uint64_t)(index - 6) * 8);
     }
     for (index = 0; index < expression->arg_count && index < 6; ++index)
         load_slot64(emitter, plan->arguments.offset - (uint64_t)index * 8, registers[index]);
@@ -781,14 +801,26 @@ static void emit_binary(CrustX64Emitter *emitter, CrustExpr *expression)
     if (expression->left->type->kind == CRUST_T_POINTER &&
         (expression->op == CRUST_OP_ADD || expression->op == CRUST_OP_SUB))
         output_format(emitter, "\tmovabsq $%" PRIu64 ", %%r10\n\timulq %%r10, %%rcx\n",
-                        expression->left->type->base->size);
+                      expression->left->type->base->size);
     switch (expression->op) {
-    case CRUST_OP_ADD: output_text(emitter, "\taddq %rcx, %rax\n"); break;
-    case CRUST_OP_SUB: output_text(emitter, "\tsubq %rcx, %rax\n"); break;
-    case CRUST_OP_MUL: output_text(emitter, "\timulq %rcx, %rax\n"); break;
-    case CRUST_OP_BIT_AND: output_text(emitter, "\tandq %rcx, %rax\n"); break;
-    case CRUST_OP_BIT_OR: output_text(emitter, "\torq %rcx, %rax\n"); break;
-    case CRUST_OP_BIT_XOR: output_text(emitter, "\txorq %rcx, %rax\n"); break;
+    case CRUST_OP_ADD:
+        output_text(emitter, "\taddq %rcx, %rax\n");
+        break;
+    case CRUST_OP_SUB:
+        output_text(emitter, "\tsubq %rcx, %rax\n");
+        break;
+    case CRUST_OP_MUL:
+        output_text(emitter, "\timulq %rcx, %rax\n");
+        break;
+    case CRUST_OP_BIT_AND:
+        output_text(emitter, "\tandq %rcx, %rax\n");
+        break;
+    case CRUST_OP_BIT_OR:
+        output_text(emitter, "\torq %rcx, %rax\n");
+        break;
+    case CRUST_OP_BIT_XOR:
+        output_text(emitter, "\txorq %rcx, %rax\n");
+        break;
     case CRUST_OP_DIV:
     case CRUST_OP_REM: {
         uint64_t nonzero = emitter->next_label++;
@@ -802,7 +834,8 @@ static void emit_binary(CrustX64Emitter *emitter, CrustExpr *expression)
             uint64_t minimum = UINT64_MAX << (bits - 1);
             output_text(emitter, "\tcmpq $-1, %rcx\n");
             emit_jump(emitter, "jne", valid);
-            output_format(emitter, "\tmovabsq $0x%016" PRIx64 ", %%r10\n\tcmpq %%r10, %%rax\n", minimum);
+            output_format(emitter, "\tmovabsq $0x%016" PRIx64 ", %%r10\n\tcmpq %%r10, %%rax\n",
+                          minimum);
             emit_jump(emitter, "jne", valid);
             output_text(emitter, "\tud2\n");
             emit_label(emitter, valid);
@@ -822,15 +855,29 @@ static void emit_binary(CrustX64Emitter *emitter, CrustExpr *expression)
         output_text(emitter, "\tud2\n");
         emit_label(emitter, valid);
         output_format(emitter, "\t%s %%cl, %%rax\n",
-                        expression->op == CRUST_OP_SHL ? "shlq" : signed_type ? "sarq" : "shrq");
+                      expression->op == CRUST_OP_SHL ? "shlq"
+                      : signed_type                  ? "sarq"
+                                                     : "shrq");
         break;
     }
-    case CRUST_OP_EQ: condition = "e"; goto compare;
-    case CRUST_OP_NE: condition = "ne"; goto compare;
-    case CRUST_OP_LT: condition = signed_type ? "l" : "b"; goto compare;
-    case CRUST_OP_LE: condition = signed_type ? "le" : "be"; goto compare;
-    case CRUST_OP_GT: condition = signed_type ? "g" : "a"; goto compare;
-    case CRUST_OP_GE: condition = signed_type ? "ge" : "ae"; goto compare;
+    case CRUST_OP_EQ:
+        condition = "e";
+        goto compare;
+    case CRUST_OP_NE:
+        condition = "ne";
+        goto compare;
+    case CRUST_OP_LT:
+        condition = signed_type ? "l" : "b";
+        goto compare;
+    case CRUST_OP_LE:
+        condition = signed_type ? "le" : "be";
+        goto compare;
+    case CRUST_OP_GT:
+        condition = signed_type ? "g" : "a";
+        goto compare;
+    case CRUST_OP_GE:
+        condition = signed_type ? "ge" : "ae";
+        goto compare;
     default:
         abort();
     }
@@ -855,9 +902,10 @@ void crust_x64_emit_expression(CrustX64Emitter *emitter, CrustExpr *expression)
         output_text(emitter, "\txorl %eax, %eax\n");
         break;
     case CRUST_E_STRING: {
-        CrustX64String *string = crust_map_get(&emitter->program->string_map, (uintptr_t)expression);
+        CrustX64String *string =
+            crust_map_get(&emitter->program->string_map, (uintptr_t)expression);
         output_format(emitter, "\tleaq %sstring_%" PRIu64 "(%%rip), %%rax\n",
-                        emitter->program->label_prefix, string->identity);
+                      emitter->program->label_prefix, string->identity);
         break;
     }
     case CRUST_E_NAME:
@@ -867,7 +915,8 @@ void crust_x64_emit_expression(CrustX64Emitter *emitter, CrustExpr *expression)
         }
         if (expression->symbol->kind != CRUST_SYM_CONST && crust_type_scalar(expression->type) &&
             (!emitter->operations || !emitter->operations->place)) {
-            CrustX64Slot *slot = crust_map_get(&emitter->function->symbols, (uintptr_t)expression->symbol);
+            CrustX64Slot *slot =
+                crust_map_get(&emitter->function->symbols, (uintptr_t)expression->symbol);
             load_scalar_slot(emitter, expression->type, slot->offset);
             break;
         }
@@ -931,7 +980,9 @@ void crust_x64_emit_expression(CrustX64Emitter *emitter, CrustExpr *expression)
         size_t index;
         for (index = 0; index < expression->arg_count; ++index) {
             emit_expression(emitter, expression->args[index]);
-            address_slot(emitter, plan->value.offset - (uint64_t)index * expression->type->base->size, "rdi");
+            address_slot(emitter,
+                         plan->value.offset - (uint64_t)index * expression->type->base->size,
+                         "rdi");
             store_value(emitter, expression->type->base);
         }
         address_slot(emitter, plan->value.offset, "rax");
@@ -1080,44 +1131,49 @@ bool crust_x64_try_emit_function(CrustX64Emitter *emitter, CrustX64Function *fun
     return try_operation(emitter, function, 5);
 }
 
-const CrustX64Ops crust_x64_default_ops = {
-    crust_x64_try_emit_expression, crust_x64_try_emit_place, crust_x64_try_emit_statement
-};
+const CrustX64Ops crust_x64_default_ops = {crust_x64_try_emit_expression, crust_x64_try_emit_place,
+                                           crust_x64_try_emit_statement};
 
 void crust_x64_emit_function(CrustX64Emitter *emitter, CrustX64Function *function)
 {
-    static const char *const registers[] = { "rdi", "rsi", "rdx", "rcx", "r8", "r9" };
-    static const char *const narrow_registers[][6] = {
-        { "dil", "sil", "dl", "cl", "r8b", "r9b" },
-        { "di", "si", "dx", "cx", "r8w", "r9w" },
-        { "edi", "esi", "edx", "ecx", "r8d", "r9d" }
-    };
+    static const char *const registers[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
+    static const char *const narrow_registers[][6] = {{"dil", "sil", "dl", "cl", "r8b", "r9b"},
+                                                      {"di", "si", "dx", "cx", "r8w", "r9w"},
+                                                      {"edi", "esi", "edx", "ecx", "r8d", "r9d"}};
     CrustParam *parameter;
     size_t index;
     emitter->function = function;
     emitter->return_label = emitter->next_label++;
     output_text(emitter, "\t.text\n\t.globl ");
     symbol_name(emitter, function->declaration->link_name);
-    output_format(emitter, "\n\t.type %sfunction_%" PRIu64 ", @function\n%sfunction_%" PRIu64
-                    ":\n\tpushq %%rbp\n\tmovq %%rsp, %%rbp\n", emitter->program->label_prefix,
-                    function->identity, emitter->program->label_prefix, function->identity);
+    output_format(emitter,
+                  "\n\t.type %sfunction_%" PRIu64 ", @function\n%sfunction_%" PRIu64
+                  ":\n\tpushq %%rbp\n\tmovq %%rsp, %%rbp\n",
+                  emitter->program->label_prefix, function->identity,
+                  emitter->program->label_prefix, function->identity);
     reserve_stack(emitter, function->frame_size);
     for (parameter = function->declaration->params, index = 0; parameter;
          parameter = parameter->next, ++index) {
         CrustX64Slot *slot = crust_map_get(&function->symbols, (uintptr_t)parameter->symbol);
         if (index < 6 && slot->offset <= INT32_MAX) {
             unsigned width = parameter->type->size == 1 ? 0 : parameter->type->size == 2 ? 1 : 2;
-            const char *reg = parameter->type->size == 8 ? registers[index] : narrow_registers[width][index];
-            const char *instruction = parameter->type->size == 1 ? "movb" :
-                parameter->type->size == 2 ? "movw" : parameter->type->size == 4 ? "movl" : "movq";
-            output_format(emitter, "\t%s %%%s, -%" PRIu64 "(%%rbp)\n", instruction, reg, slot->offset);
+            const char *reg =
+                parameter->type->size == 8 ? registers[index] : narrow_registers[width][index];
+            const char *instruction = parameter->type->size == 1   ? "movb"
+                                      : parameter->type->size == 2 ? "movw"
+                                      : parameter->type->size == 4 ? "movl"
+                                                                   : "movq";
+            output_format(emitter, "\t%s %%%s, -%" PRIu64 "(%%rbp)\n", instruction, reg,
+                          slot->offset);
             continue;
         }
         if (index < 6)
             output_format(emitter, "\tmovq %%%s, %%rax\n", registers[index]);
         else
-            output_format(emitter, "\tmovabsq $%" PRIu64 ", %%r10\n\taddq %%rbp, %%r10\n\tmovq (%%r10), %%rax\n",
-                            16 + (uint64_t)(index - 6) * 8);
+            output_format(emitter,
+                          "\tmovabsq $%" PRIu64
+                          ", %%r10\n\taddq %%rbp, %%r10\n\tmovq (%%r10), %%rax\n",
+                          16 + (uint64_t)(index - 6) * 8);
         address_slot(emitter, slot->offset, "r10");
         if (parameter->type->size == 1)
             output_text(emitter, "\tmovb %al, (%r10)\n");
@@ -1130,11 +1186,14 @@ void crust_x64_emit_function(CrustX64Emitter *emitter, CrustX64Function *functio
     }
     emit_statement(emitter, function->declaration->body);
     emit_label(emitter, emitter->return_label);
-    output_format(emitter, "\tleave\n\tret\n\t.size %sfunction_%" PRIu64
-                    ", .-%sfunction_%" PRIu64 "\n\t.set ", emitter->program->label_prefix,
-                    function->identity, emitter->program->label_prefix, function->identity);
+    output_format(emitter,
+                  "\tleave\n\tret\n\t.size %sfunction_%" PRIu64 ", .-%sfunction_%" PRIu64
+                  "\n\t.set ",
+                  emitter->program->label_prefix, function->identity,
+                  emitter->program->label_prefix, function->identity);
     symbol_name(emitter, function->declaration->link_name);
-    output_format(emitter, ", %sfunction_%" PRIu64 "\n", emitter->program->label_prefix, function->identity);
+    output_format(emitter, ", %sfunction_%" PRIu64 "\n", emitter->program->label_prefix,
+                  function->identity);
 }
 
 void crust_x64_emit_constant_value(CrustX64Emitter *emitter, CrustExpr *expression)
@@ -1151,7 +1210,8 @@ void crust_x64_emit_constant_value(CrustX64Emitter *emitter, CrustExpr *expressi
         CrustInit *init;
         CrustField *field;
         uint64_t offset = 0;
-        values = crust_alloc(context(emitter), type->record_decl->field_count * sizeof(*values), CRUST_ALIGNOF(CrustExpr *));
+        values = crust_alloc(context(emitter), type->record_decl->field_count * sizeof(*values),
+                             CRUST_ALIGNOF(CrustExpr *));
         for (init = expression->inits; init; init = init->next)
             values[init->field->index] = init->value;
         for (field = type->record_decl->fields; field; field = field->next) {
@@ -1171,13 +1231,17 @@ void crust_x64_emit_constant_value(CrustX64Emitter *emitter, CrustExpr *expressi
         return;
     }
     case CRUST_E_STRING: {
-        CrustX64String *string = crust_map_get(&emitter->program->string_map, (uintptr_t)expression);
-        output_format(emitter, "\t.quad %sstring_%" PRIu64 "\n", emitter->program->label_prefix, string->identity);
+        CrustX64String *string =
+            crust_map_get(&emitter->program->string_map, (uintptr_t)expression);
+        output_format(emitter, "\t.quad %sstring_%" PRIu64 "\n", emitter->program->label_prefix,
+                      string->identity);
         return;
     }
     case CRUST_E_NAME: {
-        CrustX64Alias *alias = crust_map_get(&emitter->program->alias_map, (uintptr_t)expression->symbol->decl);
-        output_format(emitter, "\t.quad %salias_%" PRIu64 "\n", emitter->program->label_prefix, alias->identity);
+        CrustX64Alias *alias =
+            crust_map_get(&emitter->program->alias_map, (uintptr_t)expression->symbol->decl);
+        output_format(emitter, "\t.quad %salias_%" PRIu64 "\n", emitter->program->label_prefix,
+                      alias->identity);
         return;
     }
     case CRUST_E_NULL:
@@ -1198,7 +1262,10 @@ void crust_x64_emit_constant_value(CrustX64Emitter *emitter, CrustExpr *expressi
     }
     if (type->size < 8)
         value &= (UINT64_C(1) << (type->size * 8)) - 1;
-    directive = type->size == 1 ? "byte" : type->size == 2 ? "short" : type->size == 4 ? "long" : "quad";
+    directive = type->size == 1   ? "byte"
+                : type->size == 2 ? "short"
+                : type->size == 4 ? "long"
+                                  : "quad";
     output_format(emitter, "\t.%s 0x%016" PRIx64 "\n", directive, value);
 }
 
@@ -1230,21 +1297,23 @@ static bool constant_has_address(CrustExpr *expression)
 void crust_x64_emit_constant(CrustX64Emitter *emitter, CrustDecl *declaration)
 {
     uint64_t identity = emitter->next_label++;
-    const char *section = constant_has_address(declaration->init) ?
-        ".data.rel.ro,\"aw\",@progbits" : ".rodata";
-    output_format(emitter, "\t.section %s\n\t.balign %u\n\t.globl ", section, declaration->type->align);
+    const char *section =
+        constant_has_address(declaration->init) ? ".data.rel.ro,\"aw\",@progbits" : ".rodata";
+    output_format(emitter, "\t.section %s\n\t.balign %u\n\t.globl ", section,
+                  declaration->type->align);
     symbol_name(emitter, declaration->link_name);
     output_format(emitter, "\n\t.type %sdata_%" PRIu64 ", @object\n%sdata_%" PRIu64 ":\n",
-                    emitter->program->label_prefix, identity, emitter->program->label_prefix, identity);
+                  emitter->program->label_prefix, identity, emitter->program->label_prefix,
+                  identity);
     crust_x64_emit_constant_value(emitter, declaration->init);
     output_format(emitter, "\t.size %sdata_%" PRIu64 ", %" PRIu64 "\n\t.set ",
-                    emitter->program->label_prefix, identity, declaration->type->size);
+                  emitter->program->label_prefix, identity, declaration->type->size);
     symbol_name(emitter, declaration->link_name);
     output_format(emitter, ", %sdata_%" PRIu64 "\n", emitter->program->label_prefix, identity);
 }
 
 bool crust_x64_emit_program_with_ops(CrustX64Program *program, FILE *output,
-                                    const CrustX64Ops *operations)
+                                     const CrustX64Ops *operations)
 {
     CrustContext *ctx = program->context;
     CrustFailureFrame failure;
@@ -1267,7 +1336,8 @@ bool crust_x64_emit_program_with_ops(CrustX64Program *program, FILE *output,
     for (alias = program->aliases; alias; alias = alias->next) {
         output_text(&emitter, "\t.globl ");
         symbol_name(&emitter, alias->declaration->link_name);
-        output_format(&emitter, "\n\t.weakref %salias_%" PRIu64 ", ", program->label_prefix, alias->identity);
+        output_format(&emitter, "\n\t.weakref %salias_%" PRIu64 ", ", program->label_prefix,
+                      alias->identity);
         symbol_name(&emitter, alias->declaration->link_name);
         output_text(&emitter, "\n");
     }

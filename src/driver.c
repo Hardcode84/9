@@ -14,7 +14,8 @@
 static void usage(FILE *stream)
 {
     fputs("usage: crust0 [--check | --prepare | -S] [--library | --entry NAME]\n"
-          "            [--export NAME] [-o OUTPUT] SOURCE...\n", stream);
+          "            [--export NAME] [-o OUTPUT] SOURCE...\n",
+          stream);
 }
 
 static void crust_driver_diagnostic(const CrustContext *ctx)
@@ -58,8 +59,8 @@ static bool crust_driver_names(CrustContext *ctx)
                 if (length < 0 || (size_t)length >= sizeof(buffer)) {
                     crust_fail(ctx, decl->loc, "cannot format native link identity");
                 }
-                decl->link_name = crust_copy_string(ctx, (const unsigned char *)buffer,
-                                                 (size_t)length);
+                decl->link_name =
+                    crust_copy_string(ctx, (const unsigned char *)buffer, (size_t)length);
             }
         }
     }
@@ -223,9 +224,12 @@ int main(int argc, char **argv)
                 fprintf(stderr, "crust0: missing argument for %s\n", arg);
                 goto done;
             }
-            if (strcmp(arg, "-o") == 0) output = argv[argument];
-            else if (strcmp(arg, "--entry") == 0) entry_name = argv[argument];
-            else exports = true;
+            if (strcmp(arg, "-o") == 0)
+                output = argv[argument];
+            else if (strcmp(arg, "--entry") == 0)
+                entry_name = argv[argument];
+            else
+                exports = true;
         } else if (arg[0] == '-') {
             fprintf(stderr, "crust0: unknown option %s\n", arg);
             goto done;
@@ -252,17 +256,21 @@ int main(int argc, char **argv)
         } else {
             sources[index].bytes = bytes;
         }
-        if (!crust_read(&ctx, &sources[index], &unit)) goto compile_error;
+        if (!crust_read(&ctx, &sources[index], &unit))
+            goto compile_error;
     }
-    if (!crust_collect(&ctx) || !crust_resolve(&ctx) || !crust_check(&ctx)) goto compile_error;
+    if (!crust_collect(&ctx) || !crust_resolve(&ctx) || !crust_check(&ctx))
+        goto compile_error;
     if (exports) {
         for (argument = 1; argument < argc; ++argument) {
             if (strcmp(argv[argument], "-o") == 0 || strcmp(argv[argument], "--entry") == 0) {
                 ++argument;
             } else if (strcmp(argv[argument], "--export") == 0) {
                 CrustDecl *decl = crust_driver_find(&ctx, argv[++argument]);
-                if (decl == NULL || (decl->kind != CRUST_D_FUNCTION && decl->kind != CRUST_D_CONST)) {
-                    fprintf(stderr, "crust0: export '%s' must name a defined function or constant\n",
+                if (decl == NULL ||
+                    (decl->kind != CRUST_D_FUNCTION && decl->kind != CRUST_D_CONST)) {
+                    fprintf(stderr,
+                            "crust0: export '%s' must name a defined function or constant\n",
                             argv[argument]);
                     goto done;
                 }
@@ -274,7 +282,8 @@ int main(int argc, char **argv)
         status = 0;
         goto done;
     }
-    if (!crust_driver_names(&ctx)) goto compile_error;
+    if (!crust_driver_names(&ctx))
+        goto compile_error;
     if (!library) {
         entry = crust_driver_find(&ctx, entry_name);
         if (!hosted_entry(entry)) {
@@ -283,12 +292,14 @@ int main(int argc, char **argv)
             goto done;
         }
     }
-    if (!crust_x64_prepare(&ctx, &program, entry)) goto compile_error;
+    if (!crust_x64_prepare(&ctx, &program, entry))
+        goto compile_error;
     if (mode == PREPARE || emit_file(program, output)) {
         status = 0;
         goto done;
     }
-    if (ctx.error_count == 0) goto done;
+    if (ctx.error_count == 0)
+        goto done;
 compile_error:
     crust_driver_diagnostic(&ctx);
 done:

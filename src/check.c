@@ -49,7 +49,7 @@ static bool check_stmt(Checker *checker, CrustStmt *stmt);
 
 static CrustLoc no_location(void)
 {
-    CrustLoc loc = { NULL, 0 };
+    CrustLoc loc = {NULL, 0};
     return loc;
 }
 
@@ -61,8 +61,8 @@ static void check_depth(CrustContext *ctx, CrustLoc loc, unsigned depth)
 
 static bool same_name(const CrustName *a, const CrustName *b)
 {
-    return a == b || (a != NULL && b != NULL && a->size == b->size &&
-                     memcmp(a->text, b->text, a->size) == 0);
+    return a == b ||
+           (a != NULL && b != NULL && a->size == b->size && memcmp(a->text, b->text, a->size) == 0);
 }
 
 static CrustType *new_type(CrustContext *ctx, CrustTypeKind kind)
@@ -74,8 +74,7 @@ static CrustType *new_type(CrustContext *ctx, CrustTypeKind kind)
 
 bool crust_type_integer(const CrustType *type)
 {
-    return type != NULL && type->kind >= CRUST_T_I8 &&
-           type->kind <= CRUST_T_USIZE;
+    return type != NULL && type->kind >= CRUST_T_I8 && type->kind <= CRUST_T_USIZE;
 }
 
 bool crust_type_signed(const CrustType *type)
@@ -96,9 +95,8 @@ bool crust_type_signed(const CrustType *type)
 
 bool crust_type_scalar(const CrustType *type)
 {
-    return type != NULL &&
-           (crust_type_integer(type) || type->kind == CRUST_T_BOOL ||
-            type->kind == CRUST_T_POINTER || type->kind == CRUST_T_FUNCTION);
+    return type != NULL && (crust_type_integer(type) || type->kind == CRUST_T_BOOL ||
+                            type->kind == CRUST_T_POINTER || type->kind == CRUST_T_FUNCTION);
 }
 
 unsigned crust_type_bits(const CrustType *type)
@@ -141,8 +139,7 @@ bool crust_type_equal(const CrustType *a, const CrustType *b)
     case CRUST_T_ARRAY:
         return a->count == b->count && crust_type_equal(a->base, b->base);
     case CRUST_T_FUNCTION:
-        if (a->param_count != b->param_count ||
-            !crust_type_equal(a->base, b->base))
+        if (a->param_count != b->param_count || !crust_type_equal(a->base, b->base))
             return false;
         for (i = 0; i < a->param_count; ++i) {
             if (!crust_type_equal(a->params[i], b->params[i]))
@@ -165,9 +162,8 @@ bool crust_type_equal(const CrustType *a, const CrustType *b)
 
 static uintptr_t identity_key(const CrustDecl *decl)
 {
-    uint64_t hash = decl->identity ^
-        (decl->unit_identity + UINT64_C(0x9e3779b97f4a7c15) +
-         (decl->identity << 6) + (decl->identity >> 2));
+    uint64_t hash = decl->identity ^ (decl->unit_identity + UINT64_C(0x9e3779b97f4a7c15) +
+                                      (decl->identity << 6) + (decl->identity >> 2));
     uintptr_t key = (uintptr_t)hash;
     return key == 0 ? 1 : key;
 }
@@ -175,8 +171,7 @@ static uintptr_t identity_key(const CrustDecl *decl)
 static Identity *identity_find(const CrustMap *map, const CrustDecl *decl)
 {
     Identity *entry;
-    for (entry = crust_map_get(map, identity_key(decl)); entry != NULL;
-         entry = entry->next) {
+    for (entry = crust_map_get(map, identity_key(decl)); entry != NULL; entry = entry->next) {
         if (entry->decl->identity == decl->identity &&
             entry->decl->unit_identity == decl->unit_identity)
             return entry;
@@ -247,8 +242,7 @@ static bool constant_equal(CrustContext *ctx, CrustExpr *a, CrustExpr *b, unsign
         return false;
     switch (a->kind) {
     case CRUST_E_STRING:
-        return a->byte_count == b->byte_count &&
-               memcmp(a->bytes, b->bytes, a->byte_count) == 0;
+        return a->byte_count == b->byte_count && memcmp(a->bytes, b->bytes, a->byte_count) == 0;
     case CRUST_E_NAME:
         return a->symbol != NULL && b->symbol != NULL &&
                a->symbol->decl->unit_identity == b->symbol->decl->unit_identity &&
@@ -264,8 +258,8 @@ static bool constant_equal(CrustContext *ctx, CrustExpr *a, CrustExpr *b, unsign
         }
         return true;
     case CRUST_E_RECORD:
-        fields = crust_grow_array(ctx, NULL, 0, a->type->record_decl->field_count,
-                                sizeof(*fields), CRUST_ALIGNOF(CrustInit *));
+        fields = crust_grow_array(ctx, NULL, 0, a->type->record_decl->field_count, sizeof(*fields),
+                                  CRUST_ALIGNOF(CrustInit *));
         for (init = a->inits; init != NULL; init = init->next)
             fields[init->field->index] = init;
         for (init = b->inits; init != NULL; init = init->next) {
@@ -306,8 +300,7 @@ static bool same_declaration_facts(CrustContext *ctx, CrustDecl *a, CrustDecl *b
         }
         return left == NULL && right == NULL;
     }
-    if (a->link_name == NULL || b->link_name == NULL ||
-        strcmp(a->link_name, b->link_name) != 0)
+    if (a->link_name == NULL || b->link_name == NULL || strcmp(a->link_name, b->link_name) != 0)
         return false;
     return a_function || constant_equal(ctx, a->init, b->init, 0);
 }
@@ -382,8 +375,8 @@ static CrustSymbolKind declaration_kind(CrustDecl *decl)
     return CRUST_SYM_RECORD;
 }
 
-static CrustSymbol *new_symbol(CrustContext *ctx, CrustName *name,
-                             CrustSymbolKind kind, CrustLoc loc)
+static CrustSymbol *new_symbol(CrustContext *ctx, CrustName *name, CrustSymbolKind kind,
+                               CrustLoc loc)
 {
     CrustSymbol *symbol = crust_alloc(ctx, sizeof(*symbol), CRUST_ALIGNOF(CrustSymbol));
     symbol->name = name;
@@ -423,8 +416,7 @@ static CrustType *resolve_syntax(CrustContext *ctx, CrustTypeSyntax *syntax, uns
     case CRUST_T_NAME:
         symbol = global_symbol(ctx, syntax->name, syntax->loc);
         if (symbol->kind != CRUST_SYM_RECORD) {
-            crust_fail(ctx, syntax->loc, "'%s' is not a record type",
-                     syntax->name->text);
+            crust_fail(ctx, syntax->loc, "'%s' is not a record type", syntax->name->text);
             return NULL;
         }
         return symbol->type;
@@ -458,9 +450,8 @@ static CrustType *resolve_syntax(CrustContext *ctx, CrustTypeSyntax *syntax, uns
             return NULL;
         }
         type->param_count = syntax->param_count;
-        type->params = crust_grow_array(ctx, NULL, 0, syntax->param_count,
-                                      sizeof(*type->params),
-                                      CRUST_ALIGNOF(CrustType *));
+        type->params = crust_grow_array(ctx, NULL, 0, syntax->param_count, sizeof(*type->params),
+                                        CRUST_ALIGNOF(CrustType *));
         for (i = 0; i < syntax->param_count; ++i) {
             type->params[i] = resolve_syntax(ctx, syntax->params[i], depth + 1);
             require_scalar(ctx, type->params[i], syntax->params[i]->loc);
@@ -472,8 +463,7 @@ static CrustType *resolve_syntax(CrustContext *ctx, CrustTypeSyntax *syntax, uns
     }
 }
 
-static uint64_t align_size(CrustContext *ctx, uint64_t size, uint32_t align,
-                           CrustLoc loc)
+static uint64_t align_size(CrustContext *ctx, uint64_t size, uint32_t align, CrustLoc loc)
 {
     uint64_t remainder = size % align;
     uint64_t padding = remainder == 0 ? 0 : align - remainder;
@@ -496,9 +486,8 @@ static void check_bound_shape(CrustContext *ctx, CrustType *type, CrustLoc loc, 
             crust_fail(ctx, loc, "bound scalar layout does not match the target profile");
         return;
     }
-    if (type->size == 0 || type->size > (uint64_t)INT64_MAX ||
-        type->align == 0 || type->align > 8 ||
-        (type->align & (type->align - 1)) != 0)
+    if (type->size == 0 || type->size > (uint64_t)INT64_MAX || type->align == 0 ||
+        type->align > 8 || (type->align & (type->align - 1)) != 0)
         crust_fail(ctx, loc, "incomplete bound storage layout");
     switch (type->kind) {
     case CRUST_T_POINTER:
@@ -510,15 +499,13 @@ static void check_bound_shape(CrustContext *ctx, CrustType *type, CrustLoc loc, 
         check_bound_shape(ctx, type->base, loc, depth + 1);
         if (type->base->kind == CRUST_T_UNIT || type->count == 0 ||
             type->count > (uint64_t)INT64_MAX / type->base->size ||
-            type->size != type->count * type->base->size ||
-            type->align != type->base->align)
+            type->size != type->count * type->base->size || type->align != type->base->align)
             crust_fail(ctx, loc, "invalid bound array layout");
         break;
     case CRUST_T_FUNCTION:
         check_bound_shape(ctx, type->base, loc, depth + 1);
         if ((type->base->kind != CRUST_T_UNIT && !crust_type_scalar(type->base)) ||
-            type->size != 8 || type->align != 8 ||
-            (type->param_count != 0 && type->params == NULL))
+            type->size != 8 || type->align != 8 || (type->param_count != 0 && type->params == NULL))
             crust_fail(ctx, loc, "invalid bound function signature");
         for (i = 0; i < type->param_count; ++i) {
             check_bound_shape(ctx, type->params[i], loc, depth + 1);
@@ -538,7 +525,7 @@ static void check_bound_shape(CrustContext *ctx, CrustType *type, CrustLoc loc, 
 static void queue_bound_record(Binding *binding, CrustDecl *decl)
 {
     CrustContext *ctx = binding->ctx;
-    CrustMap fields = { NULL, 0, 0 };
+    CrustMap fields = {NULL, 0, 0};
     CrustField *field;
     BindWork *work;
     Identity *entry = identity_find(&ctx->identities, decl);
@@ -668,7 +655,8 @@ static unsigned bound_layout_path(Binding *binding, CrustType *type, unsigned de
         if (work->layout_state == 2)
             return work->layout_depth;
         if (work->layout_state == 1)
-            crust_fail(binding->ctx, type->record_decl->loc, "by-value cycle in bound record facts");
+            crust_fail(binding->ctx, type->record_decl->loc,
+                       "by-value cycle in bound record facts");
         work->layout_state = 1;
         for (field = type->record_decl->fields; field != NULL; field = field->next) {
             unsigned field_height = 1 + bound_layout_path(binding, field->type, depth + 1);
@@ -759,7 +747,7 @@ static void resolve_declaration(CrustContext *ctx, CrustDecl *decl, unsigned dep
     CrustField *field;
     CrustParam *param;
     CrustType *type;
-    CrustMap field_names = { NULL, 0, 0 };
+    CrustMap field_names = {NULL, 0, 0};
     uint64_t size;
     uint32_t align;
     size_t index;
@@ -768,8 +756,7 @@ static void resolve_declaration(CrustContext *ctx, CrustDecl *decl, unsigned dep
     if (decl->resolve_state == 2)
         return;
     if (decl->resolve_state == 1) {
-        crust_fail(ctx, decl->loc, "by-value layout cycle involving '%s'",
-                 decl->name->text);
+        crust_fail(ctx, decl->loc, "by-value layout cycle involving '%s'", decl->name->text);
         return;
     }
     decl->resolve_state = 1;
@@ -828,7 +815,7 @@ static void resolve_declaration(CrustContext *ctx, CrustDecl *decl, unsigned dep
         type->param_count = index;
         decl->param_count = index;
         type->params = crust_grow_array(ctx, NULL, 0, index, sizeof(*type->params),
-                                      CRUST_ALIGNOF(CrustType *));
+                                        CRUST_ALIGNOF(CrustType *));
         index = 0;
         for (param = decl->params; param != NULL; param = param->next) {
             if (crust_map_get(&field_names, (uintptr_t)param->name) != NULL ||
@@ -879,8 +866,7 @@ static void collect_unit_impl(CrustContext *ctx, CrustUnit *unit)
             entry->decl = decl;
             identity_insert(ctx, &ctx->identities, entry);
         }
-        decl->symbol = new_symbol(ctx, decl->name, declaration_kind(decl),
-                                  decl->loc);
+        decl->symbol = new_symbol(ctx, decl->name, declaration_kind(decl), decl->loc);
         decl->symbol->decl = decl;
         if (decl->kind == CRUST_D_RECORD) {
             decl->type = new_type(ctx, CRUST_T_RECORD);
@@ -1041,15 +1027,13 @@ bool crust_resolve_unit(CrustContext *ctx, CrustUnit *unit_value)
     return true;
 }
 
-static void same_type(Checker *checker, CrustType *expected, CrustType *actual,
-                      CrustLoc loc)
+static void same_type(Checker *checker, CrustType *expected, CrustType *actual, CrustLoc loc)
 {
     if (!crust_type_equal(expected, actual))
         crust_fail(checker->ctx, loc, "type mismatch");
 }
 
-static CrustField *find_field(Checker *checker, CrustType *type, CrustName *name,
-                            CrustLoc loc)
+static CrustField *find_field(Checker *checker, CrustType *type, CrustName *name, CrustLoc loc)
 {
     CrustField *field;
     if (type->kind != CRUST_T_RECORD) {
@@ -1057,7 +1041,7 @@ static CrustField *find_field(Checker *checker, CrustType *type, CrustName *name
         return NULL;
     }
     field = crust_map_get(&identity_find(&checker->ctx->identities, type->record_decl)->fields,
-                        (uintptr_t)name);
+                          (uintptr_t)name);
     if (field != NULL)
         return field;
     crust_fail(checker->ctx, loc, "record has no field '%s'", name->text);
@@ -1134,11 +1118,11 @@ static CrustType *check_expr(Checker *checker, CrustExpr *expr)
         }
         expr->symbol = symbol;
         if (checker->constant && symbol->kind != CRUST_SYM_FUNCTION)
-            crust_fail(ctx, expr->loc, "only function names are permitted in constant initializers");
+            crust_fail(ctx, expr->loc,
+                       "only function names are permitted in constant initializers");
         type = symbol->type;
         expr->place = symbol->kind != CRUST_SYM_FUNCTION;
-        expr->writable = symbol->kind == CRUST_SYM_LOCAL ||
-                         symbol->kind == CRUST_SYM_PARAM;
+        expr->writable = symbol->kind == CRUST_SYM_LOCAL || symbol->kind == CRUST_SYM_PARAM;
         break;
     case CRUST_E_INTEGER:
         type = check_integer(checker, expr, false);
@@ -1211,8 +1195,8 @@ static CrustType *check_expr(Checker *checker, CrustExpr *expr)
         } else {
             if (!crust_type_integer(left))
                 crust_fail(ctx, expr->loc, "integer operation requires matching integer types");
-            type = expr->op >= CRUST_OP_LT && expr->op <= CRUST_OP_GE ?
-                   &ctx->builtins[CRUST_T_BOOL] : left;
+            type = expr->op >= CRUST_OP_LT && expr->op <= CRUST_OP_GE ? &ctx->builtins[CRUST_T_BOOL]
+                                                                      : left;
         }
         break;
     case CRUST_E_CALL:
@@ -1282,8 +1266,7 @@ static CrustType *check_expr(Checker *checker, CrustExpr *expr)
         if (type->count != expr->arg_count)
             crust_fail(ctx, expr->loc, "array construction must initialize every element");
         for (i = 0; i < expr->arg_count; ++i)
-            same_type(checker, type->base, check_expr(checker, expr->args[i]),
-                      expr->args[i]->loc);
+            same_type(checker, type->base, check_expr(checker, expr->args[i]), expr->args[i]->loc);
         break;
     case CRUST_E_NULL:
         type = crust_resolve_type(ctx, expr->syntax_type);
@@ -1310,7 +1293,7 @@ static CrustType *check_expr(Checker *checker, CrustExpr *expr)
 }
 
 static CrustSymbol *add_local(Checker *checker, CrustName *name, CrustType *type,
-                            CrustSymbolKind kind, CrustLoc loc)
+                              CrustSymbolKind kind, CrustLoc loc)
 {
     CrustSymbol *symbol;
     if (crust_map_get(&checker->locals, (uintptr_t)name) != NULL ||
@@ -1431,16 +1414,15 @@ static void check_body_impl(CrustContext *ctx, CrustDecl *function)
     Checker checker;
     CrustParam *param;
     bool falls;
-    if (function == NULL || function->kind != CRUST_D_FUNCTION ||
-        function->type == NULL || function->resolve_state != 2)
+    if (function == NULL || function->kind != CRUST_D_FUNCTION || function->type == NULL ||
+        function->resolve_state != 2)
         crust_fail(ctx, no_location(), "body checking requires a resolved function");
     memset(&checker, 0, sizeof(checker));
     checker.ctx = ctx;
     checker.return_type = function->type->base;
     function->checked = false;
     for (param = function->params; param != NULL; param = param->next)
-        param->symbol = add_local(&checker, param->name, param->type,
-                                  CRUST_SYM_PARAM, param->loc);
+        param->symbol = add_local(&checker, param->name, param->type, CRUST_SYM_PARAM, param->loc);
     falls = check_stmt(&checker, function->body);
     if (falls && function->type->base->kind != CRUST_T_UNIT)
         crust_fail(ctx, function->loc, "non-unit function can reach the end of its body");

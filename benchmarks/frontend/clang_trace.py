@@ -8,10 +8,10 @@ Output describes the instrumented run. It does not estimate normal run time.
 """
 
 import argparse
-from collections import Counter, defaultdict
-from dataclasses import dataclass
 import hashlib
 import json
+from collections import Counter, defaultdict
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -49,8 +49,7 @@ def span(event, index, end=None):
         end = start + integer(event, "dur")
     if end < start:
         raise TraceError(f"Negative event duration at event {index}")
-    return Span(start, end, index, name, integer(event, "pid"),
-                integer(event, "tid"))
+    return Span(start, end, index, name, integer(event, "pid"), integer(event, "tid"))
 
 
 def union(spans):
@@ -70,8 +69,7 @@ def duration(intervals):
 def intersection_duration(left, right):
     total = i = j = 0
     while i < len(left) and j < len(right):
-        total += max(0, min(left[i][1], right[j][1])
-                     - max(left[i][0], right[j][0]))
+        total += max(0, min(left[i][1], right[j][1]) - max(left[i][0], right[j][0]))
         if left[i][1] <= right[j][1]:
             i += 1
         else:
@@ -84,8 +82,7 @@ def category(name):
         return "template_scope_self"
     if name.startswith("Parse"):
         return "parse_scope_self"
-    if name.startswith("Evaluate") or name in (
-            "isIntegerConstantExpr", "isPotentialConstantExpr"):
+    if name.startswith("Evaluate") or name in ("isIntegerConstantExpr", "isPotentialConstantExpr"):
         return "constant_evaluation_scope_self"
     if name == "PerformPendingInstantiations":
         return "pending_instantiation_scope_self"
@@ -126,8 +123,11 @@ def analyze(document):
                 raise TraceError(f"Unsupported async begin at event {index}")
             ending = events[index + 1]
             fields = ("name", "pid", "tid", "cat", "id")
-            if (ending.get("ph") != "e" or "id" not in event
-                    or any(event.get(k) != ending.get(k) for k in fields)):
+            if (
+                ending.get("ph") != "e"
+                or "id" not in event
+                or any(event.get(k) != ending.get(k) for k in fields)
+            ):
                 raise TraceError(f"Expected an adjacent matching Source end after event {index}")
             headers.append(span(event, index, integer(ending, "ts")))
             phase_counts["e"] += 1
@@ -146,8 +146,9 @@ def analyze(document):
         if item.start < root.start or item.end > root.end:
             raise TraceError(f"Scope outside ExecuteCompiler: event {item.index} ({item.name})")
 
-    positive = sorted((s for s in complete if s.duration),
-                      key=lambda s: (s.start, -s.end, -s.index))
+    positive = sorted(
+        (s for s in complete if s.duration), key=lambda s: (s.start, -s.end, -s.index)
+    )
     if positive[0] != root:
         raise TraceError("ExecuteCompiler is not the outer complete scope")
     self_us = {s.index: s.duration for s in complete}
@@ -158,7 +159,9 @@ def analyze(document):
         if stack:
             parent = stack[-1]
             if item.end > parent.end:
-                raise TraceError(f"Crossing complete scopes: events {parent.index} and {item.index}")
+                raise TraceError(
+                    f"Crossing complete scopes: events {parent.index} and {item.index}"
+                )
             self_us[parent.index] -= item.duration
         elif item != root:
             raise TraceError(f"Complete scope has no parent: event {item.index}")
@@ -196,20 +199,31 @@ def analyze(document):
     return {
         "schema": "clang-frontend-trace-v1",
         "unit": "microseconds",
-        "boundary": {"name": root.name, "pid": root.pid, "tid": root.tid,
-                     "start_us": root.start, "end_us": root.end,
-                     "instrumented_duration_us": root.duration},
+        "boundary": {
+            "name": root.name,
+            "pid": root.pid,
+            "tid": root.tid,
+            "start_us": root.start,
+            "end_us": root.end,
+            "instrumented_duration_us": root.duration,
+        },
         "event_phase_counts": dict(phase_counts),
         "complete_scope_count": len(complete),
         "source_scope_count": len(headers),
         "source_scopes_observed": bool(headers),
-        "self_time_by_X_name": [dict(name=name, **entry) for name, entry in
-                                sorted(by_name.items(), key=lambda pair: (-pair[1]["self_us"], pair[0]))],
+        "self_time_by_X_name": [
+            dict(name=name, **entry)
+            for name, entry in sorted(
+                by_name.items(), key=lambda pair: (-pair[1]["self_us"], pair[0])
+            )
+        ],
         "disjoint_X_categories_us": dict(categories),
         "inclusive_interval_union_us": {
             "template_scopes": template_us,
-            **{name: duration(union(s for s in complete if s.name == name))
-               for name in template_names},
+            **{
+                name: duration(union(s for s in complete if s.name == name))
+                for name in template_names
+            },
             "header_source_scopes": header_us,
         },
         "disjoint_header_template_partition_us": partition,

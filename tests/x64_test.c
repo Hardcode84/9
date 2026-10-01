@@ -76,39 +76,41 @@ static void test_native_contract(void)
     CrustDecl *first;
     CrustX64Program *program = NULL;
     abi_case("extern fn a(x: usize) -> isize = \"same\";"
-             "extern fn b(x: u64) -> i64 = \"same\";", true,
-             "pointer-sized integers share their selected native integer ABI");
+             "extern fn b(x: u64) -> i64 = \"same\";",
+             true, "pointer-sized integers share their selected native integer ABI");
     abi_case("record A { x: u8; } record B { y: u64; }"
              "extern fn a(x: *A) -> *u8 = \"same\";"
-             "extern fn b(x: *B) -> **u8 = \"same\";", true,
-             "data-pointer pointee types do not change the native scalar ABI");
+             "extern fn b(x: *B) -> **u8 = \"same\";",
+             true, "data-pointer pointee types do not change the native scalar ABI");
     abi_case("extern fn a(x: i8) -> unit = \"same\";"
-             "extern fn b(x: u8) -> unit = \"same\";", false,
-             "signed and unsigned narrow native parameters conflict");
+             "extern fn b(x: u8) -> unit = \"same\";",
+             false, "signed and unsigned narrow native parameters conflict");
     abi_case("extern fn a(x: bool) -> unit = \"same\";"
-             "extern fn b(x: u8) -> unit = \"same\";", false,
-             "native bool and byte parameters conflict");
+             "extern fn b(x: u8) -> unit = \"same\";",
+             false, "native bool and byte parameters conflict");
     abi_case("extern fn a(x: fn(usize) -> isize) -> unit = \"same\";"
-             "extern fn b(x: fn(u64) -> i64) -> unit = \"same\";", true,
-             "function-pointer native signatures compare recursively");
+             "extern fn b(x: fn(u64) -> i64) -> unit = \"same\";",
+             true, "function-pointer native signatures compare recursively");
     abi_case("extern fn a(x: fn(i8) -> unit) -> unit = \"same\";"
-             "extern fn b(x: fn(u8) -> unit) -> unit = \"same\";", false,
-             "different nested native function signatures conflict");
+             "extern fn b(x: fn(u8) -> unit) -> unit = \"same\";",
+             false, "different nested native function signatures conflict");
     abi_case("extern fn a(x: *u8) -> unit = \"same\";"
-             "extern fn b(x: fn() -> unit) -> unit = \"same\";", false,
-             "data pointers and function values have distinct mapped signatures");
+             "extern fn b(x: fn() -> unit) -> unit = \"same\";",
+             false, "data pointers and function values have distinct mapped signatures");
     fixture_init(&fixture, "fn a() -> unit {} fn b() -> unit {}");
     first = fixture.context.units->declarations;
     first->next->link_name = first->link_name;
-    check(!crust_x64_prepare(&fixture.context, &program, NULL), "distinct native definitions cannot share a name");
+    check(!crust_x64_prepare(&fixture.context, &program, NULL),
+          "distinct native definitions cannot share a name");
     check(strstr(fixture.context.error, "duplicate native definition") != NULL,
           "duplicate native definition has a precise diagnostic");
     check(!crust_x64_prepare(&fixture.context, &program, first),
           "entry selection cannot conceal duplicate native definitions");
     crust_context_destroy(&fixture.context);
     fixture_init(&fixture, "extern fn reference(x: usize) -> i64 = \"implementation\";"
-                 "fn implementation(x: u64) -> isize { return x as isize; }");
-    check(crust_x64_prepare(&fixture.context, &program, NULL), "compatible native reference and definition agree");
+                           "fn implementation(x: u64) -> isize { return x as isize; }");
+    check(crust_x64_prepare(&fixture.context, &program, NULL),
+          "compatible native reference and definition agree");
     crust_context_destroy(&fixture.context);
 }
 
@@ -126,11 +128,12 @@ static void test_imported_definitions(void)
     CrustX64Alias *alias;
     size_t definitions = 0;
     size_t references = 0;
-    CrustName left = { "left", 4, 0 };
-    CrustName right = { "right", 5, 0 };
-    CrustName left_number = { "left_number", 11, 0 };
-    CrustName right_number = { "right_number", 12, 0 };
-    const char *source = "fn use() -> u64 { return left() + right() + left_number + right_number; }";
+    CrustName left = {"left", 4, 0};
+    CrustName right = {"right", 5, 0};
+    CrustName left_number = {"left_number", 11, 0};
+    CrustName right_number = {"right_number", 12, 0};
+    const char *source =
+        "fn use() -> u64 { return left() + right() + left_number + right_number; }";
     const char *provider = "const number: u64 = 3u64; fn provided() -> u64 { return 7u64; }";
     fixture_init(&first, provider);
     fixture_init(&second, provider);
@@ -166,13 +169,17 @@ static void test_imported_definitions(void)
         check(definitions == 1 && references == 4,
               "native definition roles come only from owned source units");
         check(program->functions && !program->functions->next &&
-              program->functions->declaration == unit->declarations,
+                  program->functions->declaration == unit->declarations,
               "consumer emits only its own function body");
     }
-    check(memcmp(&first_function, first.context.units->declarations->next, sizeof(first_function)) == 0 &&
-          memcmp(&second_function, second.context.units->declarations->next, sizeof(second_function)) == 0 &&
-          memcmp(&first_constant, first.context.units->declarations, sizeof(first_constant)) == 0 &&
-          memcmp(&second_constant, second.context.units->declarations, sizeof(second_constant)) == 0,
+    check(memcmp(&first_function, first.context.units->declarations->next,
+                 sizeof(first_function)) == 0 &&
+              memcmp(&second_function, second.context.units->declarations->next,
+                     sizeof(second_function)) == 0 &&
+              memcmp(&first_constant, first.context.units->declarations, sizeof(first_constant)) ==
+                  0 &&
+              memcmp(&second_constant, second.context.units->declarations,
+                     sizeof(second_constant)) == 0,
           "native preparation preserves imported provider descriptors");
     crust_context_destroy(&consumer.context);
     crust_context_destroy(&second.context);
@@ -192,9 +199,9 @@ static void test_plan_and_symbols(void)
     char text[16384];
     size_t count;
     fixture_init(&fixture, "extern fn first() -> unit = \".Lcrust_0_alias_1\";"
-                 "extern fn second() -> unit = \".Lcrust_1_string_1\";"
-                 "extern fn unusual() -> unit = \"line\\nquote\\\"back\\\\slash\";"
-                 "fn value() -> u64 { return 7u64 + 3u64; }");
+                           "extern fn second() -> unit = \".Lcrust_1_string_1\";"
+                           "extern fn unusual() -> unit = \"line\\nquote\\\"back\\\\slash\";"
+                           "fn value() -> u64 { return 7u64 + 3u64; }");
     check(crust_x64_prepare(&fixture.context, &program, NULL), "prepare public backend plan");
     check(strcmp(program->label_prefix, ".Lcrust_2_") == 0,
           "internal labels avoid complete native symbol prefixes");
@@ -202,12 +209,14 @@ static void test_plan_and_symbols(void)
     memset(&replacement_function, 0, sizeof(replacement_function));
     replacement_function.declaration = function->declaration;
     check(crust_x64_try_prepare_function(program, &replacement_function) &&
-          replacement_function.frame_size == function->frame_size && fixture.context.failure == NULL,
+              replacement_function.frame_size == function->frame_size &&
+              fixture.context.failure == NULL,
           "native scalar API can prepare one replacement function plan");
     value = function->declaration->body->body->expr;
     plan = crust_map_get(&function->expressions, (uintptr_t)value);
-    check(crust_x64_try_reserve(&fixture.context, function, 8, 16, &fixture.source, 0, &replacement),
-          "native scalar API can reserve a replacement scratch slot");
+    check(
+        crust_x64_try_reserve(&fixture.context, function, 8, 16, &fixture.source, 0, &replacement),
+        "native scalar API can reserve a replacement scratch slot");
     plan->scratch = replacement;
     value->left->integer = 42;
     output = output_file();
@@ -230,8 +239,8 @@ static void test_plan_and_symbols(void)
 
 static bool failing_expression(CrustX64Emitter *emitter, CrustExpr *expression)
 {
-    crust_set_error(emitter->program->context, expression->loc.source,
-                  expression->loc.offset, "custom expression rejected");
+    crust_set_error(emitter->program->context, expression->loc.source, expression->loc.offset,
+                    "custom expression rejected");
     callback_returned = true;
     return false;
 }
@@ -263,28 +272,26 @@ static bool replaced_value(CrustX64Emitter *emitter, CrustExpr *expression)
 static void test_place_and_group_operations(void)
 {
     static const char *const sources[] = {
-        "fn read(x: u64) -> u64 { return x; }",
-        "fn read(p: *u64) -> u64 { return *p; }",
+        "fn read(x: u64) -> u64 { return x; }", "fn read(p: *u64) -> u64 { return *p; }",
         "record Box { x: u64; } fn read(p: *Box) -> u64 { return (*p).x; }",
         "fn read(p: *u64) -> u64 { return p[1usize]; }",
-        "record Box { x: u64; } fn read() -> u64 { return make Box { x: 7u64 }.x; }"
-    };
-    static const char *const groups[] = {
-        "fn read(x: u64) -> u64 { return x; }",
-        "fn read(x: u64) -> u64 { return (x); }"
-    };
+        "record Box { x: u64; } fn read() -> u64 { return make Box { x: 7u64 }.x; }"};
+    static const char *const groups[] = {"fn read(x: u64) -> u64 { return x; }",
+                                         "fn read(x: u64) -> u64 { return (x); }"};
     Fixture fixture;
     CrustX64Program *program;
-    CrustX64Ops operations = { NULL, counted_place, NULL };
+    CrustX64Ops operations = {NULL, counted_place, NULL};
     size_t index;
     FILE *output;
     for (index = 0; index < sizeof(sources) / sizeof(*sources); ++index) {
         fixture_init(&fixture, sources[index]);
-        check(crust_x64_prepare(&fixture.context, &program, NULL), "prepare a place-read hook fixture");
+        check(crust_x64_prepare(&fixture.context, &program, NULL),
+              "prepare a place-read hook fixture");
         watched_expression = program->functions->declaration->body->body->expr;
         place_hits = 0;
         output = output_file();
-        check(crust_x64_emit_program_with_ops(program, output, &operations), "emit a custom place read");
+        check(crust_x64_emit_program_with_ops(program, output, &operations),
+              "emit a custom place read");
         check(place_hits == 1, "each stored-value read invokes its place operation once");
         check(fclose(output) == 0, "close place-read output");
         crust_context_destroy(&fixture.context);
@@ -292,14 +299,16 @@ static void test_place_and_group_operations(void)
     operations.expression = replaced_value;
     for (index = 0; index < sizeof(groups) / sizeof(*groups); ++index) {
         fixture_init(&fixture, groups[index]);
-        check(crust_x64_prepare(&fixture.context, &program, NULL), "prepare a grouped expression override");
+        check(crust_x64_prepare(&fixture.context, &program, NULL),
+              "prepare a grouped expression override");
         watched_expression = program->functions->declaration->body->body->expr;
         if (watched_expression->kind == CRUST_E_GROUP)
             watched_expression = watched_expression->left;
         expression_hits = 0;
         place_hits = 0;
         output = output_file();
-        check(crust_x64_emit_program_with_ops(program, output, &operations), "emit an expression override with both hooks installed");
+        check(crust_x64_emit_program_with_ops(program, output, &operations),
+              "emit an expression override with both hooks installed");
         check(expression_hits == 1 && place_hits == 0,
               "grouping preserves an expression override without an added storage read");
         check(fclose(output) == 0, "close grouped override output");
@@ -312,22 +321,24 @@ static void test_callback_failure(void)
 {
     Fixture fixture;
     CrustX64Program *program;
-    CrustX64Ops operations = { failing_expression, NULL, NULL };
+    CrustX64Ops operations = {failing_expression, NULL, NULL};
     FILE *output;
     fixture_init(&fixture, "fn value() -> u64 { return 7u64; }");
     check(crust_x64_prepare(&fixture.context, &program, NULL), "prepare callback fixture");
     callback_returned = false;
     output = output_file();
-    check(!crust_x64_emit_program_with_ops(program, output, &operations), "custom callback can reject emission");
+    check(!crust_x64_emit_program_with_ops(program, output, &operations),
+          "custom callback can reject emission");
     check(callback_returned, "failure reaches the callback return before C propagation");
     check(strcmp(fixture.context.error, "custom expression rejected") == 0 &&
-          fixture.context.error_count == 1 && fixture.context.failure == NULL,
+              fixture.context.error_count == 1 && fixture.context.failure == NULL,
           "callback diagnostic and failure-frame ownership survive propagation");
     check(fclose(output) == 0, "close callback output");
     callback_returned = false;
     operations.expression = silent_failure;
     output = output_file();
-    check(!crust_x64_emit_program_with_ops(program, output, &operations), "silent callback failure is rejected");
+    check(!crust_x64_emit_program_with_ops(program, output, &operations),
+          "silent callback failure is rejected");
     check(callback_returned && strstr(fixture.context.error, "without a diagnostic") != NULL,
           "a failed custom operation cannot reuse a stale diagnostic");
     check(fclose(output) == 0, "close silent-failure output");
@@ -354,7 +365,7 @@ static void test_failure_boundaries(void)
     CrustX64Program *program;
     CrustX64Emitter emitter;
     CrustX64Function function;
-    CrustX64Slot slot = { 123, 45, 8 };
+    CrustX64Slot slot = {123, 45, 8};
     CrustDecl *constant;
     FILE *output;
     fixture_init(&fixture, "const number: u64 = 7u64; fn value(x: u64) -> u64 { return x; }");
@@ -363,7 +374,8 @@ static void test_failure_boundaries(void)
     check(!crust_x64_try_reserve(&fixture.context, &function, 8, 3, &fixture.source, 0, &slot),
           "invalid frame alignment returns failure through scalar API");
     check(slot.offset == 123 && slot.size == 45 && function.frame_size == 0 &&
-          fixture.context.failure == NULL, "failed slot reservation changes neither output nor frame");
+              fixture.context.failure == NULL,
+          "failed slot reservation changes neither output nor frame");
     function.declaration = program->functions->declaration;
     function.frame_size = INT64_MAX;
     check(!crust_x64_try_prepare_function(program, &function) && fixture.context.failure == NULL,
@@ -377,37 +389,40 @@ static void test_failure_boundaries(void)
     emitter.program = program;
     emitter.function = program->functions;
     emitter.output = output;
-    check(!crust_x64_write(&emitter, "output"), "non-variadic output returns I/O failure without jumping");
+    check(!crust_x64_write(&emitter, "output"),
+          "non-variadic output returns I/O failure without jumping");
     check(strstr(fixture.context.error, "assembly output failed") != NULL,
           "I/O failure retains a concrete diagnostic");
-    check(!crust_x64_try_emit_expression(&emitter, program->functions->declaration->body->body->expr),
-          "expression wrapper contains native output failure");
+    check(
+        !crust_x64_try_emit_expression(&emitter, program->functions->declaration->body->body->expr),
+        "expression wrapper contains native output failure");
     check(!crust_x64_try_emit_place(&emitter, program->functions->declaration->body->body->expr),
           "place wrapper contains native output failure");
     check(!crust_x64_try_emit_statement(&emitter, program->functions->declaration->body),
           "statement wrapper contains native output failure");
     constant = fixture.context.units->declarations;
-    check(!crust_x64_try_emit_constant(&emitter, constant), "constant wrapper contains native output failure");
+    check(!crust_x64_try_emit_constant(&emitter, constant),
+          "constant wrapper contains native output failure");
     check(!crust_x64_try_emit_constant_value(&emitter, constant->init),
           "constant-value wrapper contains native output failure");
     check(!crust_x64_try_emit_function(&emitter, program->functions),
           "function wrapper contains native output failure");
-    check(fixture.context.failure == NULL, "all nonthrowing wrappers restore the outer failure boundary");
+    check(fixture.context.failure == NULL,
+          "all nonthrowing wrappers restore the outer failure boundary");
     check(fclose(output) == 0, "close the unbuffered failed output sink");
     crust_context_destroy(&fixture.context);
 }
 
 static void test_constant_sections(void)
 {
-    static const bool relocations[] = {
-        false, false, false, false, true, true, true, true, false
-    };
+    static const bool relocations[] = {false, false, false, false, true, true, true, true, false};
     Fixture fixture;
     CrustX64Program *program;
     CrustX64Emitter emitter;
     CrustDecl *declaration;
     size_t index = 0;
-    fixture_init(&fixture,
+    fixture_init(
+        &fixture,
         "record Item { number: u64; text: *u8; }"
         "record Nested { items: [Item; 2]; }"
         "const number: u64 = 7u64;"
@@ -418,13 +433,16 @@ static void test_constant_sections(void)
         "const function: fn() -> u64 = (target);"
         "const functions: [fn() -> u64; 2] = make [fn() -> u64; 2] { null(fn() -> u64), target };"
         "const nested: Nested = make Nested { items: make [Item; 2] {"
-        "make Item { number: 1u64, text: null(*u8) }, make Item { number: 2u64, text: \"nested\" } } };"
+        "make Item { number: 1u64, text: null(*u8) }, make Item { number: 2u64, text: \"nested\" } "
+        "} };"
         "const no_address: Item = make Item { number: 3u64, text: null(*u8) };"
         "fn target() -> u64 { return 42u64; }");
-    check(crust_x64_prepare(&fixture.context, &program, NULL), "prepare constant relocation fixture");
+    check(crust_x64_prepare(&fixture.context, &program, NULL),
+          "prepare constant relocation fixture");
     memset(&emitter, 0, sizeof(emitter));
     emitter.program = program;
-    for (declaration = fixture.context.units->declarations; declaration; declaration = declaration->next) {
+    for (declaration = fixture.context.units->declarations; declaration;
+         declaration = declaration->next) {
         char line[128];
         const char *expected;
         if (declaration->kind != CRUST_D_CONST)
@@ -433,15 +451,19 @@ static void test_constant_sections(void)
             check(false, "constant relocation fixture has an expected result for every constant");
             break;
         }
-        expected = relocations[index++] ? "\t.section .data.rel.ro,\"aw\",@progbits\n" : "\t.section .rodata\n";
+        expected = relocations[index++] ? "\t.section .data.rel.ro,\"aw\",@progbits\n"
+                                        : "\t.section .rodata\n";
         emitter.output = output_file();
-        check(crust_x64_try_emit_constant(&emitter, declaration), "emit a checked constant independently");
+        check(crust_x64_try_emit_constant(&emitter, declaration),
+              "emit a checked constant independently");
         rewind(emitter.output);
-        check(fgets(line, sizeof(line), emitter.output) != NULL && strcmp(line, expected) == 0,
-              "only constants with stored addresses require relocation before read-only protection");
+        check(
+            fgets(line, sizeof(line), emitter.output) != NULL && strcmp(line, expected) == 0,
+            "only constants with stored addresses require relocation before read-only protection");
         check(fclose(emitter.output) == 0, "close constant relocation output");
     }
-    check(index == sizeof(relocations) / sizeof(*relocations), "all constant relocation cases were checked");
+    check(index == sizeof(relocations) / sizeof(*relocations),
+          "all constant relocation cases were checked");
     crust_context_destroy(&fixture.context);
 }
 

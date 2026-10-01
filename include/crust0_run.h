@@ -32,8 +32,8 @@ struct CrustRun {
 /* Initialize an empty runner using a context with checked installed interfaces.
    Arguments exclude the executable and root path, and end with a null pointer.
    Failure retains a diagnostic. Destroy an initialized runner before context. */
-bool crust_run_init(CrustRun *run, CrustContext *context, CrustSource *source,
-                  int32_t argc, char **argv);
+bool crust_run_init(CrustRun *run, CrustContext *context, CrustSource *source, int32_t argc,
+                    char **argv);
 /* All operations and callbacks must be complete. Retain a diagnostic on failure. */
 bool crust_run_destroy(CrustRun *run);
 /* Execute in source order through EOF or explicit return. Retain a diagnostic

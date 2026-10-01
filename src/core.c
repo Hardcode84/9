@@ -1,7 +1,7 @@
 #include "crust0.h"
 
-#include <stdarg.h>
 #include <limits.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,10 +10,12 @@
 #error CRUST0 version 0.1 requires a Linux x86-64 host
 #endif
 
-typedef char CrustHostProfile[(CHAR_BIT == 8 && sizeof(void *) == 8 &&
-                            sizeof(size_t) == 8 && sizeof(CrustTypeKind) == 4 &&
-                            sizeof(short) == 2 && sizeof(int) == 4 && sizeof(long) == 8 &&
-                            sizeof(bool) == 1 && sizeof(void (*)(void)) == 8) ? 1 : -1];
+typedef char
+    CrustHostProfile[(CHAR_BIT == 8 && sizeof(void *) == 8 && sizeof(size_t) == 8 &&
+                      sizeof(CrustTypeKind) == 4 && sizeof(short) == 2 && sizeof(int) == 4 &&
+                      sizeof(long) == 8 && sizeof(bool) == 1 && sizeof(void (*)(void)) == 8)
+                         ? 1
+                         : -1];
 
 typedef union {
     long double floating;
@@ -71,8 +73,7 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
     size_t offset;
     size_t capacity;
     size_t prefix = offsetof(CrustArenaBlock, data);
-    if (size == 0 || alignment == 0 ||
-        (alignment & (alignment - 1)) != 0 ||
+    if (size == 0 || alignment == 0 || (alignment & (alignment - 1)) != 0 ||
         alignment > CRUST_ALIGNOF(CrustArenaAlign)) {
         return NULL;
     }
@@ -84,8 +85,7 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
         }
     }
     capacity = size > 65536 ? size : 65536;
-    if (capacity > SIZE_MAX - prefix ||
-        arena->bytes_reserved > SIZE_MAX - (prefix + capacity)) {
+    if (capacity > SIZE_MAX - prefix || arena->bytes_reserved > SIZE_MAX - (prefix + capacity)) {
         return NULL;
     }
     block = arena->allocator.allocate(arena->allocator.user, prefix + capacity);
@@ -136,7 +136,8 @@ bool crust_run_stage(CrustContext *ctx, void (*stage)(CrustContext *, void *), v
 void crust_set_error(CrustContext *ctx, CrustSource *source, size_t offset, const char *message)
 {
     size_t length = 0;
-    while (length < sizeof(ctx->error) - 1 && message[length] != '\0') ++length;
+    while (length < sizeof(ctx->error) - 1 && message[length] != '\0')
+        ++length;
     memmove(ctx->error, message, length);
     ctx->error[length] = '\0';
     ctx->error_loc.source = source;
@@ -144,8 +145,16 @@ void crust_set_error(CrustContext *ctx, CrustSource *source, size_t offset, cons
     ++ctx->error_count;
 }
 
-typedef struct { size_t size; size_t alignment; void *result; } AllocRequest;
-typedef struct { const unsigned char *text; size_t size; CrustName *result; } NameRequest;
+typedef struct {
+    size_t size;
+    size_t alignment;
+    void *result;
+} AllocRequest;
+typedef struct {
+    const unsigned char *text;
+    size_t size;
+    CrustName *result;
+} NameRequest;
 
 static void allocate_stage(CrustContext *ctx, void *data)
 {
@@ -173,8 +182,8 @@ CrustName *crust_try_intern(CrustContext *ctx, const unsigned char *text, size_t
     return request.result;
 }
 
-void *crust_try_grow_array(CrustContext *ctx, const void *old, size_t count,
-                         size_t capacity, size_t item_size, size_t alignment)
+void *crust_try_grow_array(CrustContext *ctx, const void *old, size_t count, size_t capacity,
+                           size_t item_size, size_t alignment)
 {
     CrustFailureFrame frame;
     void *result;
@@ -250,8 +259,8 @@ void *crust_alloc(CrustContext *ctx, size_t size, size_t alignment)
     return result;
 }
 
-void *crust_grow_array(CrustContext *ctx, const void *old, size_t count,
-                    size_t capacity, size_t item_size, size_t alignment)
+void *crust_grow_array(CrustContext *ctx, const void *old, size_t count, size_t capacity,
+                       size_t item_size, size_t alignment)
 {
     void *result;
     if (item_size == 0 || count > capacity || capacity > SIZE_MAX / item_size) {
@@ -299,8 +308,8 @@ static void grow_names(CrustContext *ctx)
         CrustLoc loc = {NULL, 0};
         crust_fail(ctx, loc, "name table size overflow");
     }
-    entries = crust_grow_array(ctx, NULL, 0, capacity, sizeof(*entries),
-                             CRUST_ALIGNOF(CrustName *));
+    entries =
+        crust_grow_array(ctx, NULL, 0, capacity, sizeof(*entries), CRUST_ALIGNOF(CrustName *));
     for (index = 0; index < ctx->name_capacity; ++index) {
         CrustName *name = ctx->names[index];
         if (name != NULL) {
@@ -383,7 +392,7 @@ void crust_map_set(CrustContext *ctx, CrustMap *map, uintptr_t key, void *value)
             crust_fail(ctx, loc, "map allocation size overflow");
         }
         entries = crust_grow_array(ctx, NULL, 0, capacity, sizeof(*entries),
-                                 CRUST_ALIGNOF(CrustMapEntry));
+                                   CRUST_ALIGNOF(CrustMapEntry));
         for (index = 0; index < map->capacity; ++index) {
             if (map->entries[index].key != 0) {
                 slot = map_hash(map->entries[index].key) & (capacity - 1);

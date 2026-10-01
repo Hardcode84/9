@@ -10,7 +10,6 @@ import hashlib
 import io
 import json
 import os
-from pathlib import Path
 import platform
 import random
 import signal
@@ -20,7 +19,7 @@ import tarfile
 import time
 import urllib.request
 import zipfile
-
+from pathlib import Path
 
 CACHE = Path(".profile-cache")
 SOURCES = CACHE / "sources"
@@ -41,8 +40,16 @@ INPUTS = [
         "sha256": "7a2d987857b319362043e95f5353c0535c1f58eec5336fdfcf626430af7def58",
     },
 ]
-UNICODE = ["unicode", "unicode-age", "unicode-bool", "unicode-case",
-           "unicode-gencat", "unicode-perl", "unicode-script", "unicode-segment"]
+UNICODE = [
+    "unicode",
+    "unicode-age",
+    "unicode-bool",
+    "unicode-case",
+    "unicode-gencat",
+    "unicode-perl",
+    "unicode-script",
+    "unicode-segment",
+]
 
 
 def save(path, value):
@@ -64,7 +71,8 @@ def prepare():
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
                 for filename in ("sqlite3.c", "sqlite3.h"):
                     (SOURCES / filename).write_bytes(
-                        archive.read("sqlite-amalgamation-3500400/" + filename))
+                        archive.read("sqlite-amalgamation-3500400/" + filename)
+                    )
         elif spec["name"] == "json":
             (SOURCES / "nlohmann").mkdir(exist_ok=True)
             (SOURCES / "nlohmann/json.hpp").write_bytes(data)
@@ -77,21 +85,46 @@ def prepare():
 def cases():
     result = {}
     for compiler in ("clang-20", "gcc"):
-        result[f"sqlite-{compiler}"] = [compiler, "-std=gnu11", "-O0", "-g0",
-                                       "-fsyntax-only", str(SOURCES / "sqlite3.c")]
+        result[f"sqlite-{compiler}"] = [
+            compiler,
+            "-std=gnu11",
+            "-O0",
+            "-g0",
+            "-fsyntax-only",
+            str(SOURCES / "sqlite3.c"),
+        ]
     for compiler in ("clang++-20", "g++"):
         for kind in ("include", "client"):
             result[f"json-{kind}-{compiler}"] = [
-                compiler, "-std=c++17", "-O0", "-g0", "-fsyntax-only",
-                "-I", str(SOURCES), f"benchmarks/frontend/json_{kind}.cpp"]
+                compiler,
+                "-std=c++17",
+                "-O0",
+                "-g0",
+                "-fsyntax-only",
+                "-I",
+                str(SOURCES),
+                f"benchmarks/frontend/json_{kind}.cpp",
+            ]
     for variant, features in (("default", ["std"] + UNICODE), ("std", ["std"])):
-        command = ["rustc", "--crate-name", "regex_syntax", "--crate-type", "lib",
-                   "--edition=2021", "--emit=metadata", "-Copt-level=0",
-                   "-Cdebuginfo=0", "-Zthreads=1"]
+        command = [
+            "rustc",
+            "--crate-name",
+            "regex_syntax",
+            "--crate-type",
+            "lib",
+            "--edition=2021",
+            "--emit=metadata",
+            "-Copt-level=0",
+            "-Cdebuginfo=0",
+            "-Zthreads=1",
+        ]
         for feature in features:
             command += ["--cfg", f'feature="{feature}"']
-        command += [str(SOURCES / "regex-syntax-0.8.8/src/lib.rs"), "-o",
-                    str(CACHE / f"regex-{variant}.rmeta")]
+        command += [
+            str(SOURCES / "regex-syntax-0.8.8/src/lib.rs"),
+            "-o",
+            str(CACHE / f"regex-{variant}.rmeta"),
+        ]
         result[f"regex-{variant}-rustc"] = command
     return result
 
@@ -103,14 +136,19 @@ def verify_inputs():
             raise ValueError(f"Changed input archive: {spec['name']}")
         if spec["name"] == "sqlite":
             with zipfile.ZipFile(io.BytesIO(data)) as archive:
-                expected = {filename: archive.read("sqlite-amalgamation-3500400/" + filename)
-                            for filename in ("sqlite3.c", "sqlite3.h")}
+                expected = {
+                    filename: archive.read("sqlite-amalgamation-3500400/" + filename)
+                    for filename in ("sqlite3.c", "sqlite3.h")
+                }
         elif spec["name"] == "json":
             expected = {"nlohmann/json.hpp": data}
         else:
             with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
-                expected = {member.name: archive.extractfile(member).read()
-                            for member in archive.getmembers() if member.isfile()}
+                expected = {
+                    member.name: archive.extractfile(member).read()
+                    for member in archive.getmembers()
+                    if member.isfile()
+                }
         for filename, content in expected.items():
             if (SOURCES / filename).read_bytes() != content:
                 raise ValueError(f"Changed extracted input: {filename}")
@@ -149,14 +187,20 @@ def command_output(command):
 
 def metadata(args, selected):
     cpuinfo = Path("/proc/cpuinfo").read_text().splitlines()
-    model = next(line.split(":", 1)[1].strip() for line in cpuinfo
-                 if line.startswith("model name"))
+    model = next(line.split(":", 1)[1].strip() for line in cpuinfo if line.startswith("model name"))
     return {
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "cpu": model, "logical_cpus": os.cpu_count(), "pinned_cpu": args.cpu,
-        "smt_siblings": Path(f"/sys/devices/system/cpu/cpu{args.cpu}/topology/thread_siblings_list").read_text().strip(),
-        "governor": Path(f"/sys/devices/system/cpu/cpu{args.cpu}/cpufreq/scaling_governor").read_text().strip(),
-        "kernel": platform.release(), "os_release": Path("/etc/os-release").read_text(),
+        "cpu": model,
+        "logical_cpus": os.cpu_count(),
+        "pinned_cpu": args.cpu,
+        "smt_siblings": Path(f"/sys/devices/system/cpu/cpu{args.cpu}/topology/thread_siblings_list")
+        .read_text()
+        .strip(),
+        "governor": Path(f"/sys/devices/system/cpu/cpu{args.cpu}/cpufreq/scaling_governor")
+        .read_text()
+        .strip(),
+        "kernel": platform.release(),
+        "os_release": Path("/etc/os-release").read_text(),
         "memory_kib": int(Path("/proc/meminfo").read_text().splitlines()[0].split()[1]),
         "load_start": Path("/proc/loadavg").read_text().split()[:3],
         "versions": {
@@ -166,9 +210,11 @@ def metadata(args, selected):
             "libstdc++": command_output(["dpkg-query", "-W", "-f=${Version}", "libstdc++-13-dev"]),
             "python": platform.python_version(),
         },
-        "inputs": INPUTS, "commands": selected,
+        "inputs": INPUTS,
+        "commands": selected,
         "environment_overrides": {"LC_ALL": "C", "RUSTC_BOOTSTRAP": "1"},
-        "seed": args.seed, "repeats": args.repeats,
+        "seed": args.seed,
+        "repeats": args.repeats,
         "filesystem_cache": "warm after one discarded run per case",
         "compiler_cache": "no PCH, modules, incremental cache, or compiler daemon",
         "standard_libraries": "installed C/C++ headers and prebuilt Rust sysroot",
@@ -178,17 +224,26 @@ def metadata(args, selected):
 def run(command, stem, cpu):
     time_path = stem.with_suffix(".time.json")
     stderr_path = stem.with_suffix(".stderr")
-    invocation = ["/usr/bin/time", "-f",
-                  '{"user_s":%U,"system_s":%S,"max_rss_kib":%M}',
-                  "-o", str(time_path), "taskset", "-c", str(cpu)] + command
+    invocation = [
+        "/usr/bin/time",
+        "-f",
+        '{"user_s":%U,"system_s":%S,"max_rss_kib":%M}',
+        "-o",
+        str(time_path),
+        "taskset",
+        "-c",
+        str(cpu),
+    ] + command
     start = time.perf_counter_ns()
     with stderr_path.open("w") as stderr:
-        process = run_process(invocation, stdout=subprocess.PIPE, stderr=stderr,
-                              text=True, env=environment())
+        process = run_process(
+            invocation, stdout=subprocess.PIPE, stderr=stderr, text=True, env=environment()
+        )
     wall_s = (time.perf_counter_ns() - start) / 1e9
     if process.returncode:
-        raise RuntimeError(f"Compiler failed ({process.returncode}): {command}\n"
-                           + stderr_path.read_text())
+        raise RuntimeError(
+            f"Compiler failed ({process.returncode}): {command}\n" + stderr_path.read_text()
+        )
     if process.stdout:
         stem.with_suffix(".stdout").write_text(process.stdout)
     measurement = json.loads(time_path.read_text())
@@ -217,8 +272,10 @@ def measure(args, selected):
         rows = [row for row in records if row["case"] == name]
         wall = [row["wall_s"] for row in rows]
         summary[name] = {
-            "n": len(rows), "median_wall_s": statistics.median(wall),
-            "min_wall_s": min(wall), "max_wall_s": max(wall),
+            "n": len(rows),
+            "median_wall_s": statistics.median(wall),
+            "min_wall_s": min(wall),
+            "max_wall_s": max(wall),
             "median_cpu_s": statistics.median(row["user_s"] + row["system_s"] for row in rows),
             "median_rss_kib": statistics.median(row["max_rss_kib"] for row in rows),
         }
@@ -233,13 +290,20 @@ def profile(args, selected):
             command = original.copy()
             stem = args.output / f"{index:02d}-{name}"
             if command[0].startswith("clang"):
-                command += ["-Xclang", f"-ftime-trace={stem}.trace.json",
-                            "-Xclang", "-ftime-trace-granularity=0"]
+                command += [
+                    "-Xclang",
+                    f"-ftime-trace={stem}.trace.json",
+                    "-Xclang",
+                    "-ftime-trace-granularity=0",
+                ]
             elif command[0] in ("gcc", "g++"):
                 command += ["-ftime-report"]
             else:
-                command += ["-Ztime-passes", "-Ztime-passes-format=json",
-                            f"-Zself-profile={stem}.self"]
+                command += [
+                    "-Ztime-passes",
+                    "-Ztime-passes-format=json",
+                    f"-Zself-profile={stem}.self",
+                ]
             result = run(command, stem, args.cpu)
             result.update(case=name, repetition=index)
             records.append(result)

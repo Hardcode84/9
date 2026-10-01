@@ -26,15 +26,14 @@ bool crust_eval_prepare(CrustEval *eval, CrustDecl *declaration);
 bool crust_eval_function(CrustEval *eval, CrustDecl *declaration, void *result);
 /* Arguments and result point to exact typed storage. A unit result needs no
    storage. Resource and lookup failures return false with a diagnostic. */
-bool crust_eval_call(CrustEval *eval, CrustDecl *declaration,
-                   void *const *arguments, size_t count, void *result);
+bool crust_eval_call(CrustEval *eval, CrustDecl *declaration, void *const *arguments, size_t count,
+                     void *result);
 /* Local references must refer to persistent root variables or bound storage. */
 bool crust_eval_expression(CrustEval *eval, CrustExpr *expression, void *result);
 /* Execute one checked root statement. Top-level variables retain their storage.
    A root return sets returned and its i32 status. Other statements clear returned.
    Required traps and failures inside native callbacks end the process. */
-bool crust_eval_statement(CrustEval *eval, CrustStmt *statement,
-                        bool *returned, int32_t *status);
+bool crust_eval_statement(CrustEval *eval, CrustStmt *statement, bool *returned, int32_t *status);
 /* Bind a root symbol to borrowed storage of its exact type. The storage address
    for a bound symbol cannot change before evaluator destruction. */
 bool crust_eval_bind(CrustEval *eval, CrustSymbol *symbol, void *storage);

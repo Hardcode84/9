@@ -43,10 +43,7 @@ static void unlink_node(Hook *h)
     init(h);
 }
 
-static Node *node_of(Hook *h)
-{
-    return (Node *)((unsigned char *)h - offsetof(Node, hook));
-}
+static Node *node_of(Hook *h) { return (Node *)((unsigned char *)h - offsetof(Node, hook)); }
 
 int main(int argc, char **argv)
 {

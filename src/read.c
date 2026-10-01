@@ -4,12 +4,42 @@
 #include <string.h>
 
 enum {
-    TOK_EOF = 256, TOK_NAME, TOK_INTEGER, TOK_COUNT, TOK_STRING,
-    TOK_TYPE, TOK_RECORD, TOK_FN, TOK_EXTERN, TOK_CONST, TOK_VAR,
-    TOK_UNINIT, TOK_IF, TOK_ELSE, TOK_WHILE, TOK_BREAK, TOK_CONTINUE,
-    TOK_RETURN, TOK_TRAP, TOK_AS, TOK_MAKE, TOK_NULL, TOK_SIZEOF,
-    TOK_ALIGNOF, TOK_OFFSETOF, TOK_TRUE, TOK_FALSE, TOK_ARROW,
-    TOK_EQ, TOK_NE, TOK_LE, TOK_GE, TOK_SHL, TOK_SHR, TOK_AND, TOK_OR
+    TOK_EOF = 256,
+    TOK_NAME,
+    TOK_INTEGER,
+    TOK_COUNT,
+    TOK_STRING,
+    TOK_TYPE,
+    TOK_RECORD,
+    TOK_FN,
+    TOK_EXTERN,
+    TOK_CONST,
+    TOK_VAR,
+    TOK_UNINIT,
+    TOK_IF,
+    TOK_ELSE,
+    TOK_WHILE,
+    TOK_BREAK,
+    TOK_CONTINUE,
+    TOK_RETURN,
+    TOK_TRAP,
+    TOK_AS,
+    TOK_MAKE,
+    TOK_NULL,
+    TOK_SIZEOF,
+    TOK_ALIGNOF,
+    TOK_OFFSETOF,
+    TOK_TRUE,
+    TOK_FALSE,
+    TOK_ARROW,
+    TOK_EQ,
+    TOK_NE,
+    TOK_LE,
+    TOK_GE,
+    TOK_SHL,
+    TOK_SHR,
+    TOK_AND,
+    TOK_OR
 };
 
 typedef struct {
@@ -38,46 +68,60 @@ typedef struct {
     CrustTypeKind type;
 } Keyword;
 
-#define KEYWORD(text, token) { text, sizeof(text) - 1, token, CRUST_T_UNIT }
-#define TYPEWORD(text, type) { text, sizeof(text) - 1, TOK_TYPE, type }
+#define KEYWORD(text, token) {text, sizeof(text) - 1, token, CRUST_T_UNIT}
+#define TYPEWORD(text, type) {text, sizeof(text) - 1, TOK_TYPE, type}
 #define NEW(reader, type) crust_alloc((reader)->ctx, sizeof(type), CRUST_ALIGNOF(type))
 #define READ_DEPTH_LIMIT 256u
 
-static const Keyword keywords[] = {
-    KEYWORD("record", TOK_RECORD), KEYWORD("fn", TOK_FN),
-    KEYWORD("extern", TOK_EXTERN), KEYWORD("const", TOK_CONST),
-    KEYWORD("var", TOK_VAR), KEYWORD("uninit", TOK_UNINIT),
-    KEYWORD("if", TOK_IF), KEYWORD("else", TOK_ELSE),
-    KEYWORD("while", TOK_WHILE), KEYWORD("break", TOK_BREAK),
-    KEYWORD("continue", TOK_CONTINUE), KEYWORD("return", TOK_RETURN),
-    KEYWORD("trap", TOK_TRAP), KEYWORD("as", TOK_AS),
-    KEYWORD("make", TOK_MAKE), KEYWORD("null", TOK_NULL),
-    KEYWORD("sizeof", TOK_SIZEOF), KEYWORD("alignof", TOK_ALIGNOF),
-    KEYWORD("offsetof", TOK_OFFSETOF), KEYWORD("true", TOK_TRUE),
-    KEYWORD("false", TOK_FALSE),
-    TYPEWORD("i8", CRUST_T_I8), TYPEWORD("u8", CRUST_T_U8),
-    TYPEWORD("i16", CRUST_T_I16), TYPEWORD("u16", CRUST_T_U16),
-    TYPEWORD("i32", CRUST_T_I32), TYPEWORD("u32", CRUST_T_U32),
-    TYPEWORD("i64", CRUST_T_I64), TYPEWORD("u64", CRUST_T_U64),
-    TYPEWORD("isize", CRUST_T_ISIZE), TYPEWORD("usize", CRUST_T_USIZE),
-    TYPEWORD("bool", CRUST_T_BOOL), TYPEWORD("unit", CRUST_T_UNIT)
-};
+static const Keyword keywords[] = {KEYWORD("record", TOK_RECORD),
+                                   KEYWORD("fn", TOK_FN),
+                                   KEYWORD("extern", TOK_EXTERN),
+                                   KEYWORD("const", TOK_CONST),
+                                   KEYWORD("var", TOK_VAR),
+                                   KEYWORD("uninit", TOK_UNINIT),
+                                   KEYWORD("if", TOK_IF),
+                                   KEYWORD("else", TOK_ELSE),
+                                   KEYWORD("while", TOK_WHILE),
+                                   KEYWORD("break", TOK_BREAK),
+                                   KEYWORD("continue", TOK_CONTINUE),
+                                   KEYWORD("return", TOK_RETURN),
+                                   KEYWORD("trap", TOK_TRAP),
+                                   KEYWORD("as", TOK_AS),
+                                   KEYWORD("make", TOK_MAKE),
+                                   KEYWORD("null", TOK_NULL),
+                                   KEYWORD("sizeof", TOK_SIZEOF),
+                                   KEYWORD("alignof", TOK_ALIGNOF),
+                                   KEYWORD("offsetof", TOK_OFFSETOF),
+                                   KEYWORD("true", TOK_TRUE),
+                                   KEYWORD("false", TOK_FALSE),
+                                   TYPEWORD("i8", CRUST_T_I8),
+                                   TYPEWORD("u8", CRUST_T_U8),
+                                   TYPEWORD("i16", CRUST_T_I16),
+                                   TYPEWORD("u16", CRUST_T_U16),
+                                   TYPEWORD("i32", CRUST_T_I32),
+                                   TYPEWORD("u32", CRUST_T_U32),
+                                   TYPEWORD("i64", CRUST_T_I64),
+                                   TYPEWORD("u64", CRUST_T_U64),
+                                   TYPEWORD("isize", CRUST_T_ISIZE),
+                                   TYPEWORD("usize", CRUST_T_USIZE),
+                                   TYPEWORD("bool", CRUST_T_BOOL),
+                                   TYPEWORD("unit", CRUST_T_UNIT)};
 
 static bool name_start(unsigned char c)
 {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
 }
 
-static bool name_continue(unsigned char c)
-{
-    return name_start(c) || (c >= '0' && c <= '9');
-}
+static bool name_continue(unsigned char c) { return name_start(c) || (c >= '0' && c <= '9'); }
 
 static int hex_digit(unsigned char c)
 {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
     return -1;
 }
 
@@ -85,8 +129,8 @@ static const Keyword *keyword(const unsigned char *text, size_t size)
 {
     size_t i;
     for (i = 0; i < sizeof(keywords) / sizeof(keywords[0]); ++i) {
-        if (keywords[i].size == size &&
-            memcmp(keywords[i].text, text, size) == 0) return &keywords[i];
+        if (keywords[i].size == size && memcmp(keywords[i].text, text, size) == 0)
+            return &keywords[i];
     }
     return NULL;
 }
@@ -94,11 +138,16 @@ static const Keyword *keyword(const unsigned char *text, size_t size)
 static unsigned char escape_byte(unsigned char c)
 {
     switch (c) {
-    case 'n': return '\n';
-    case 'r': return '\r';
-    case 't': return '\t';
-    case '0': return 0;
-    default: return c;
+    case 'n':
+        return '\n';
+    case 'r':
+        return '\r';
+    case 't':
+        return '\t';
+    case '0':
+        return 0;
+    default:
+        return c;
     }
 }
 
@@ -120,12 +169,11 @@ static void read_string(Reader *reader)
                 crust_fail(reader->ctx, reader->token.loc, "unterminated string escape");
             c = source[end++];
             if (c == 'x') {
-                if (size - end < 2 || hex_digit(source[end]) < 0 ||
-                    hex_digit(source[end + 1]) < 0)
-                    crust_fail(reader->ctx, reader->token.loc, "expected two hexadecimal escape digits");
+                if (size - end < 2 || hex_digit(source[end]) < 0 || hex_digit(source[end + 1]) < 0)
+                    crust_fail(reader->ctx, reader->token.loc,
+                               "expected two hexadecimal escape digits");
                 end += 2;
-            } else if (c != '\\' && c != '"' && c != 'n' && c != 'r' &&
-                       c != 't' && c != '0') {
+            } else if (c != '\\' && c != '"' && c != 'n' && c != 'r' && c != 't' && c != '0') {
                 crust_fail(reader->ctx, reader->token.loc, "unknown string escape");
             }
         }
@@ -142,8 +190,7 @@ static void read_string(Reader *reader)
         if (c == '\\') {
             c = source[start++];
             if (c == 'x') {
-                c = (unsigned char)(hex_digit(source[start]) * 16 +
-                                    hex_digit(source[start + 1]));
+                c = (unsigned char)(hex_digit(source[start]) * 16 + hex_digit(source[start + 1]));
                 start += 2;
             } else {
                 c = escape_byte(c);
@@ -168,7 +215,8 @@ static void read_number(Reader *reader)
     unsigned base = 10;
     uint64_t value = 0;
     const Keyword *suffix;
-    while (end < size && name_continue(source[end])) ++end;
+    while (end < size && name_continue(source[end]))
+        ++end;
     if (end - start >= 2 && source[start] == '0' && source[start + 1] == 'x') {
         base = 16;
         start += 2;
@@ -176,7 +224,8 @@ static void read_number(Reader *reader)
     digits = start;
     while (start < end) {
         int digit = hex_digit(source[start]);
-        if (digit < 0 || (unsigned)digit >= base) break;
+        if (digit < 0 || (unsigned)digit >= base)
+            break;
         if (value > (UINT64_MAX - (unsigned)digit) / base)
             crust_fail(reader->ctx, reader->token.loc, "integer token exceeds 64 bits");
         value = value * base + (unsigned)digit;
@@ -205,11 +254,13 @@ static inline void skip_trivia(Reader *reader)
     for (;;) {
         while (reader->offset < size) {
             c = source[reader->offset];
-            if (c != ' ' && c != '\t' && c != '\r' && c != '\n') break;
+            if (c != ' ' && c != '\t' && c != '\r' && c != '\n')
+                break;
             ++reader->offset;
         }
         if (size - reader->offset < 2 || source[reader->offset] != '/' ||
-            source[reader->offset + 1] != '/') break;
+            source[reader->offset + 1] != '/')
+            break;
         reader->offset += 2;
         while (reader->offset < size && source[reader->offset] != '\n') {
             if (source[reader->offset] == 0) {
@@ -264,18 +315,28 @@ static void next_token(Reader *reader)
     }
     reader->token.kind = c;
     ++reader->offset;
-    if (c == ';' || c == '}') return;
+    if (c == ';' || c == '}')
+        return;
     if (reader->offset < size) {
         unsigned char second = source[reader->offset];
-        if (c == '-' && second == '>') reader->token.kind = TOK_ARROW;
-        else if (c == '=' && second == '=') reader->token.kind = TOK_EQ;
-        else if (c == '!' && second == '=') reader->token.kind = TOK_NE;
-        else if (c == '<' && second == '=') reader->token.kind = TOK_LE;
-        else if (c == '>' && second == '=') reader->token.kind = TOK_GE;
-        else if (c == '<' && second == '<') reader->token.kind = TOK_SHL;
-        else if (c == '>' && second == '>') reader->token.kind = TOK_SHR;
-        else if (c == '&' && second == '&') reader->token.kind = TOK_AND;
-        else if (c == '|' && second == '|') reader->token.kind = TOK_OR;
+        if (c == '-' && second == '>')
+            reader->token.kind = TOK_ARROW;
+        else if (c == '=' && second == '=')
+            reader->token.kind = TOK_EQ;
+        else if (c == '!' && second == '=')
+            reader->token.kind = TOK_NE;
+        else if (c == '<' && second == '=')
+            reader->token.kind = TOK_LE;
+        else if (c == '>' && second == '=')
+            reader->token.kind = TOK_GE;
+        else if (c == '<' && second == '<')
+            reader->token.kind = TOK_SHL;
+        else if (c == '>' && second == '>')
+            reader->token.kind = TOK_SHR;
+        else if (c == '&' && second == '&')
+            reader->token.kind = TOK_AND;
+        else if (c == '|' && second == '|')
+            reader->token.kind = TOK_OR;
         if (reader->token.kind != c) {
             ++reader->offset;
             return;
@@ -287,7 +348,8 @@ static void next_token(Reader *reader)
 
 static bool take(Reader *reader, int kind)
 {
-    if (reader->token.kind != kind) return false;
+    if (reader->token.kind != kind)
+        return false;
     next_token(reader);
     return true;
 }
@@ -314,7 +376,8 @@ static CrustName *read_name(Reader *reader)
 static void enter(Reader *reader)
 {
     if (reader->depth == READ_DEPTH_LIMIT)
-        crust_fail(reader->ctx, reader->token.loc, "parser nesting limit of %u exceeded", READ_DEPTH_LIMIT);
+        crust_fail(reader->ctx, reader->token.loc, "parser nesting limit of %u exceeded",
+                   READ_DEPTH_LIMIT);
     ++reader->depth;
 }
 
@@ -350,7 +413,8 @@ static CrustTypeSyntax *read_type(Reader *reader)
         type->base = read_type(reader);
         expect(reader, ';', "';' in array type");
         if (reader->token.kind != TOK_COUNT)
-            crust_fail(reader->ctx, reader->token.loc, "expected an unsuffixed decimal array count");
+            crust_fail(reader->ctx, reader->token.loc,
+                       "expected an unsuffixed decimal array count");
         type->count = reader->token.integer;
         next_token(reader);
         expect(reader, ']', "']'");
@@ -362,11 +426,13 @@ static CrustTypeSyntax *read_type(Reader *reader)
             for (;;) {
                 if (type->param_count == capacity) {
                     capacity = grow_capacity(reader, capacity);
-                    type->params = crust_grow_array(reader->ctx, type->params, type->param_count,
-                        capacity, sizeof(*type->params), CRUST_ALIGNOF(CrustTypeSyntax *));
+                    type->params =
+                        crust_grow_array(reader->ctx, type->params, type->param_count, capacity,
+                                         sizeof(*type->params), CRUST_ALIGNOF(CrustTypeSyntax *));
                 }
                 type->params[type->param_count++] = read_type(reader);
-                if (!take(reader, ',') || reader->token.kind == ')') break;
+                if (!take(reader, ',') || reader->token.kind == ')')
+                    break;
             }
         }
         expect(reader, ')', "')'");
@@ -394,11 +460,12 @@ static void read_arguments(Reader *reader, CrustExpr *expr, int end)
         for (;;) {
             if (expr->arg_count == capacity) {
                 capacity = grow_capacity(reader, capacity);
-                expr->args = crust_grow_array(reader->ctx, expr->args, expr->arg_count,
-                    capacity, sizeof(*expr->args), CRUST_ALIGNOF(CrustExpr *));
+                expr->args = crust_grow_array(reader->ctx, expr->args, expr->arg_count, capacity,
+                                              sizeof(*expr->args), CRUST_ALIGNOF(CrustExpr *));
             }
             expr->args[expr->arg_count++] = read_expr(reader);
-            if (!take(reader, ',') || reader->token.kind == end) break;
+            if (!take(reader, ',') || reader->token.kind == end)
+                break;
         }
     }
     expect(reader, end, end == ')' ? "')'" : "'}'");
@@ -427,12 +494,14 @@ static CrustExpr *read_constructor(Reader *reader, CrustLoc loc)
                 init->value = read_expr(reader);
                 *tail = init;
                 tail = &init->next;
-                if (!take(reader, ',') || reader->token.kind == '}') break;
+                if (!take(reader, ',') || reader->token.kind == '}')
+                    break;
             }
         }
         expect(reader, '}', "'}'");
     } else {
-        crust_fail(reader->ctx, reader->token.loc, "expected a record name or an array type after 'make'");
+        crust_fail(reader->ctx, reader->token.loc,
+                   "expected a record name or an array type after 'make'");
         return NULL;
     }
     return expr;
@@ -479,8 +548,11 @@ static CrustExpr *read_primary(Reader *reader)
     case TOK_SIZEOF:
     case TOK_ALIGNOF:
         next_token(reader);
-        expr = new_expr(reader, token.kind == TOK_NULL ? CRUST_E_NULL :
-            token.kind == TOK_SIZEOF ? CRUST_E_SIZEOF : CRUST_E_ALIGNOF, token.loc);
+        expr = new_expr(reader,
+                        token.kind == TOK_NULL     ? CRUST_E_NULL
+                        : token.kind == TOK_SIZEOF ? CRUST_E_SIZEOF
+                                                   : CRUST_E_ALIGNOF,
+                        token.loc);
         expect(reader, '(', "'('");
         expr->syntax_type = read_type(reader);
         expect(reader, ')', "')'");
@@ -536,11 +608,21 @@ static CrustExpr *read_unary(Reader *reader)
     CrustLoc loc = reader->token.loc;
     enter(reader);
     switch (reader->token.kind) {
-    case '-': op = CRUST_OP_NEG; break;
-    case '!': op = CRUST_OP_NOT; break;
-    case '~': op = CRUST_OP_BIT_NOT; break;
-    case '*': op = CRUST_OP_DEREF; break;
-    case '&': op = CRUST_OP_ADDRESS; break;
+    case '-':
+        op = CRUST_OP_NEG;
+        break;
+    case '!':
+        op = CRUST_OP_NOT;
+        break;
+    case '~':
+        op = CRUST_OP_BIT_NOT;
+        break;
+    case '*':
+        op = CRUST_OP_DEREF;
+        break;
+    case '&':
+        op = CRUST_OP_ADDRESS;
+        break;
     default:
         expr = read_postfix(reader);
         --reader->depth;
@@ -570,25 +652,62 @@ static CrustExpr *read_cast(Reader *reader)
 static unsigned binary_operator(int token, CrustOp *op)
 {
     switch (token) {
-    case TOK_OR: *op = CRUST_OP_OR; return 1;
-    case TOK_AND: *op = CRUST_OP_AND; return 2;
-    case '|': *op = CRUST_OP_BIT_OR; return 3;
-    case '^': *op = CRUST_OP_BIT_XOR; return 4;
-    case '&': *op = CRUST_OP_BIT_AND; return 5;
-    case TOK_EQ: *op = CRUST_OP_EQ; return 6;
-    case TOK_NE: *op = CRUST_OP_NE; return 6;
-    case '<': *op = CRUST_OP_LT; return 7;
-    case TOK_LE: *op = CRUST_OP_LE; return 7;
-    case '>': *op = CRUST_OP_GT; return 7;
-    case TOK_GE: *op = CRUST_OP_GE; return 7;
-    case TOK_SHL: *op = CRUST_OP_SHL; return 8;
-    case TOK_SHR: *op = CRUST_OP_SHR; return 8;
-    case '+': *op = CRUST_OP_ADD; return 9;
-    case '-': *op = CRUST_OP_SUB; return 9;
-    case '*': *op = CRUST_OP_MUL; return 10;
-    case '/': *op = CRUST_OP_DIV; return 10;
-    case '%': *op = CRUST_OP_REM; return 10;
-    default: return 0;
+    case TOK_OR:
+        *op = CRUST_OP_OR;
+        return 1;
+    case TOK_AND:
+        *op = CRUST_OP_AND;
+        return 2;
+    case '|':
+        *op = CRUST_OP_BIT_OR;
+        return 3;
+    case '^':
+        *op = CRUST_OP_BIT_XOR;
+        return 4;
+    case '&':
+        *op = CRUST_OP_BIT_AND;
+        return 5;
+    case TOK_EQ:
+        *op = CRUST_OP_EQ;
+        return 6;
+    case TOK_NE:
+        *op = CRUST_OP_NE;
+        return 6;
+    case '<':
+        *op = CRUST_OP_LT;
+        return 7;
+    case TOK_LE:
+        *op = CRUST_OP_LE;
+        return 7;
+    case '>':
+        *op = CRUST_OP_GT;
+        return 7;
+    case TOK_GE:
+        *op = CRUST_OP_GE;
+        return 7;
+    case TOK_SHL:
+        *op = CRUST_OP_SHL;
+        return 8;
+    case TOK_SHR:
+        *op = CRUST_OP_SHR;
+        return 8;
+    case '+':
+        *op = CRUST_OP_ADD;
+        return 9;
+    case '-':
+        *op = CRUST_OP_SUB;
+        return 9;
+    case '*':
+        *op = CRUST_OP_MUL;
+        return 10;
+    case '/':
+        *op = CRUST_OP_DIV;
+        return 10;
+    case '%':
+        *op = CRUST_OP_REM;
+        return 10;
+    default:
+        return 0;
     }
 }
 
@@ -601,11 +720,15 @@ static CrustExpr *read_binary(Reader *reader, unsigned minimum)
         CrustOp op = CRUST_OP_ADD;
         unsigned precedence = binary_operator(reader->token.kind, &op);
         CrustExpr *expr;
-        if (precedence < minimum) return left;
+        if (precedence < minimum)
+            return left;
         if ((precedence == 7 && compared) || (precedence == 6 && equated))
-            crust_fail(reader->ctx, reader->token.loc, "comparisons cannot chain at the same precedence");
-        if (precedence == 7) compared = true;
-        if (precedence == 6) equated = true;
+            crust_fail(reader->ctx, reader->token.loc,
+                       "comparisons cannot chain at the same precedence");
+        if (precedence == 7)
+            compared = true;
+        if (precedence == 6)
+            equated = true;
         expr = new_expr(reader, CRUST_E_BINARY, reader->token.loc);
         expr->op = op;
         expr->left = left;
@@ -643,7 +766,8 @@ static CrustStmt *read_simple_statement(Reader *reader)
         stmt->syntax_type = read_type(reader);
         expect(reader, '=', "'='");
         stmt->uninitialized = take(reader, TOK_UNINIT);
-        if (!stmt->uninitialized) stmt->value = read_expr(reader);
+        if (!stmt->uninitialized)
+            stmt->value = read_expr(reader);
     } else if (take(reader, TOK_BREAK)) {
         stmt = new_stmt(reader, CRUST_S_BREAK, loc);
     } else if (take(reader, TOK_CONTINUE)) {
@@ -652,7 +776,8 @@ static CrustStmt *read_simple_statement(Reader *reader)
         stmt = new_stmt(reader, CRUST_S_TRAP, loc);
     } else if (take(reader, TOK_RETURN)) {
         stmt = new_stmt(reader, CRUST_S_RETURN, loc);
-        if (reader->token.kind != ';') stmt->expr = read_expr(reader);
+        if (reader->token.kind != ';')
+            stmt->expr = read_expr(reader);
     } else {
         stmt = new_stmt(reader, CRUST_S_EXPR, loc);
         stmt->expr = read_expr(reader);
@@ -669,12 +794,14 @@ static CrustStmt *read_statement(Reader *reader)
 {
     CrustStmt *stmt;
     CrustLoc loc = reader->token.loc;
-    if (reader->token.kind == '{') return read_block(reader);
+    if (reader->token.kind == '{')
+        return read_block(reader);
     if (take(reader, TOK_IF)) {
         stmt = new_stmt(reader, CRUST_S_IF, loc);
         stmt->expr = read_expr(reader);
         stmt->body = read_block(reader);
-        if (take(reader, TOK_ELSE)) stmt->otherwise = read_block(reader);
+        if (take(reader, TOK_ELSE))
+            stmt->otherwise = read_block(reader);
         return stmt;
     }
     if (take(reader, TOK_WHILE)) {
@@ -738,7 +865,8 @@ static CrustDecl *read_declaration(Reader *reader)
         CrustParam **tail = &decl->params;
         decl->kind = token.kind == TOK_FN ? CRUST_D_FUNCTION : CRUST_D_EXTERN;
         next_token(reader);
-        if (decl->kind == CRUST_D_EXTERN) expect(reader, TOK_FN, "'fn'");
+        if (decl->kind == CRUST_D_EXTERN)
+            expect(reader, TOK_FN, "'fn'");
         decl->name = read_name(reader);
         expect(reader, '(', "'('");
         if (reader->token.kind != ')') {
@@ -751,7 +879,8 @@ static CrustDecl *read_declaration(Reader *reader)
                 *tail = param;
                 tail = &param->next;
                 ++decl->param_count;
-                if (!take(reader, ',') || reader->token.kind == ')') break;
+                if (!take(reader, ',') || reader->token.kind == ')')
+                    break;
             }
         }
         expect(reader, ')', "')'");
@@ -768,7 +897,8 @@ static CrustDecl *read_declaration(Reader *reader)
                 crust_fail(reader->ctx, reader->token.loc, "native symbol name must not be empty");
             for (i = 0; i + 1 < reader->token.byte_count; ++i) {
                 if (reader->token.bytes[i] == 0 || reader->token.bytes[i] >= 128)
-                    crust_fail(reader->ctx, reader->token.loc, "native symbol name must be ASCII without zero bytes");
+                    crust_fail(reader->ctx, reader->token.loc,
+                               "native symbol name must be ASCII without zero bytes");
             }
             decl->link_name = (const char *)reader->token.bytes;
             next_token(reader);
@@ -817,14 +947,14 @@ static CrustUnit *read_unit(CrustContext *ctx, CrustSource *source, size_t begin
 }
 
 bool crust_read_range(CrustContext *ctx, CrustSource *source, size_t begin, size_t end,
-                    CrustUnit **result)
+                      CrustUnit **result)
 {
     CrustFailureFrame failure;
     CrustUnit *unit;
     *result = NULL;
     if (begin > end || end > source->size) {
         crust_set_error(ctx, source, begin <= source->size ? begin : source->size,
-                      "source range must satisfy begin <= end <= source size");
+                        "source range must satisfy begin <= end <= source size");
         return false;
     }
     failure.previous = ctx->failure;
@@ -834,8 +964,10 @@ bool crust_read_range(CrustContext *ctx, CrustSource *source, size_t begin, size
         return false;
     }
     unit = read_unit(ctx, source, begin, end);
-    if (ctx->last_unit == NULL) ctx->units = unit;
-    else ctx->last_unit->next = unit;
+    if (ctx->last_unit == NULL)
+        ctx->units = unit;
+    else
+        ctx->last_unit->next = unit;
     ctx->last_unit = unit;
     *result = unit;
     ctx->failure = failure.previous;
@@ -843,14 +975,14 @@ bool crust_read_range(CrustContext *ctx, CrustSource *source, size_t begin, size
 }
 
 bool crust_read_one(CrustContext *ctx, CrustSource *source, size_t begin, size_t end,
-                  CrustAction *result)
+                    CrustAction *result)
 {
     CrustFailureFrame failure;
     Reader reader;
     memset(result, 0, sizeof(*result));
     if (begin > end || end > source->size) {
         crust_set_error(ctx, source, begin <= source->size ? begin : source->size,
-                      "source range must satisfy begin <= end <= source size");
+                        "source range must satisfy begin <= end <= source size");
         return false;
     }
     failure.previous = ctx->failure;

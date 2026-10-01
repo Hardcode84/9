@@ -4,7 +4,10 @@
 
 typedef struct ProofSession ProofSession;
 typedef struct ProofAction ProofAction;
-struct ProofAction { CrustExpr *call; size_t next_offset; };
+struct ProofAction {
+    CrustExpr *call;
+    size_t next_offset;
+};
 struct ProofSession {
     CrustContext *owner;
     CrustSource *source;

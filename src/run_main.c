@@ -1,6 +1,6 @@
 #define _XOPEN_SOURCE 700
-#include "crust0_run.h"
 #include "crust0_host.h"
+#include "crust0_run.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -44,7 +44,8 @@ static bool installed_program(CrustContext *context)
     size_t index;
     for (index = 0; index < sizeof(installed_sources) / sizeof(installed_sources[0]); ++index) {
         CrustUnit *unit;
-        if (!crust_read(context, &installed_sources[index], &unit)) return false;
+        if (!crust_read(context, &installed_sources[index], &unit))
+            return false;
     }
     return crust_collect(context) && crust_resolve(context) && crust_check(context);
 }
@@ -52,14 +53,17 @@ static bool installed_program(CrustContext *context)
 static bool bind_run(CrustRun *run, CrustRun **storage)
 {
     CrustContext *context = run->context;
-    CrustName *type_name = crust_try_intern(context, (const unsigned char *)"CrustRun", sizeof("CrustRun") - 1);
+    CrustName *type_name =
+        crust_try_intern(context, (const unsigned char *)"CrustRun", sizeof("CrustRun") - 1);
     CrustSymbol *type;
     CrustSymbol *parameter;
-    if (type_name == NULL) return false;
+    if (type_name == NULL)
+        return false;
     type = crust_map_get(&context->globals, (uintptr_t)type_name);
     assert(type != NULL && type->kind == CRUST_SYM_RECORD && type->type->size == sizeof(CrustRun));
     parameter = crust_try_alloc(context, sizeof(*parameter), CRUST_ALIGNOF(CrustSymbol));
-    if (parameter == NULL) return false;
+    if (parameter == NULL)
+        return false;
     parameter->kind = CRUST_SYM_PARAM;
     parameter->name = crust_try_intern(context, (const unsigned char *)"run", 3);
     parameter->loc.source = run->source;
@@ -75,7 +79,8 @@ static int flush_output(int status)
 {
     if (fflush(stdout) != 0 || ferror(stdout)) {
         fputs("crust: cannot write standard output\n", stderr);
-        if (status == 0) status = 1;
+        if (status == 0)
+            status = 1;
     }
     return status;
 }
@@ -95,7 +100,8 @@ int main(int argc, char **argv)
         return 1;
     }
     if (strcmp(argv[1], "--help") == 0) {
-        puts("usage: crust ROOT [ARGUMENT...]\nExecute the root compilation program in source order.");
+        puts("usage: crust ROOT [ARGUMENT...]\nExecute the root compilation program in source "
+             "order.");
         return flush_output(0);
     }
     if (strcmp(argv[1], "--version") == 0) {
@@ -106,7 +112,8 @@ int main(int argc, char **argv)
     memset(&source_input, 0, sizeof(source_input));
     source_input.identity = sizeof(installed_sources) / sizeof(installed_sources[0]) + 1;
     source_input.path = root_path(&context, argv[1]);
-    if (source_input.path == NULL) goto done;
+    if (source_input.path == NULL)
+        goto done;
     if (crust0_host_read_file(source_input.path, &bytes, &source_input.size) != 0) {
         char message[512];
         (void)snprintf(message, sizeof(message),
@@ -115,23 +122,30 @@ int main(int argc, char **argv)
         goto done;
     }
     source_input.bytes = bytes;
-    if (!installed_program(&context)) goto done;
+    if (!installed_program(&context))
+        goto done;
     initialized = true;
-    if (!crust_run_init(&run, &context, &source_input, argc - 2, argv + 2)) goto done;
+    if (!crust_run_init(&run, &context, &source_input, argc - 2, argv + 2))
+        goto done;
     for (unit = context.units; unit != NULL; unit = unit->next) {
         CrustDecl *declaration;
-        for (declaration = unit->declarations; declaration != NULL; declaration = declaration->next) {
-            if (!crust_eval_prepare(run.eval, declaration)) goto done;
+        for (declaration = unit->declarations; declaration != NULL;
+             declaration = declaration->next) {
+            if (!crust_eval_prepare(run.eval, declaration))
+                goto done;
         }
     }
-    if (!bind_run(&run, &run_pointer) || !crust_run_loop(&run)) goto done;
+    if (!bind_run(&run, &run_pointer) || !crust_run_loop(&run))
+        goto done;
     status = run.status;
 done:
     if (context.error_count != 0) {
         crust_run_diagnostic(&context);
-        if (status == 0) status = 1;
+        if (status == 0)
+            status = 1;
     }
-    if (initialized && !crust_run_destroy(&run) && status == 0) status = 1;
+    if (initialized && !crust_run_destroy(&run) && status == 0)
+        status = 1;
     status = flush_output(status);
     crust_context_destroy(&context);
     free(bytes);

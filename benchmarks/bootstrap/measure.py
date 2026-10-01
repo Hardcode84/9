@@ -10,17 +10,16 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import platform
 import random
 import re
-import signal
 import shlex
 import shutil
+import signal
 import statistics
 import subprocess
 import time
-
+from pathlib import Path
 
 ENDPOINTS = {
     "gcc-syntax": "GCC C99 parsing and semantic checks; -fsyntax-only",
@@ -52,8 +51,7 @@ def relative(path):
 
 
 def capture(command):
-    result = run_process(command, text=True, stdout=subprocess.PIPE,
-                         stderr=subprocess.PIPE)
+    result = run_process(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     result.check_returncode()
     if result.stderr:
         raise RuntimeError(f"Unexpected diagnostic from {command}: {result.stderr}")
@@ -78,8 +76,10 @@ def run_process(command, **options):
 def generate(directory, count):
     directory.mkdir(parents=True, exist_ok=True)
     stem = directory / f"ordinary-{count}"
-    c = ["typedef unsigned long u64;\ntypedef struct Node Node;\n"
-         "struct Node { u64 value; u64 salt; Node *next; };\n"]
+    c = [
+        "typedef unsigned long u64;\ntypedef struct Node Node;\n"
+        "struct Node { u64 value; u64 salt; Node *next; };\n"
+    ]
     crust = ["record Node { value: u64; salt: u64; next: *Node; }\n"]
     for index in range(count):
         literal = (index * 53) % 4093 + 1
@@ -93,7 +93,8 @@ def generate(directory, count):
             "        y = y - node->value;\n"
             "    }\n"
             "    node->value = y;\n"
-            "    return y + x;\n}\n")
+            "    return y + x;\n}\n"
+        )
         crust.append(
             f"fn {name}(node: *Node, x: u64) -> u64 {{\n"
             f"    var y: u64 = (x + {literal}u64) ^ (*node).value;\n"
@@ -103,25 +104,50 @@ def generate(directory, count):
             "        y = y - (*node).value;\n"
             "    }\n"
             "    (*node).value = y;\n"
-            "    return y + x;\n}\n")
+            "    return y + x;\n}\n"
+        )
     paths = {"c": stem.with_suffix(".c"), "crust": stem.with_suffix(".crs")}
     paths["c"].write_text("".join(c))
     paths["crust"].write_text("".join(crust))
-    return {"name": f"ordinary-{count}", "functions": count, "paths": paths,
-            "library": True, "expected_assembly_functions": count}
+    return {
+        "name": f"ordinary-{count}",
+        "functions": count,
+        "paths": paths,
+        "library": True,
+        "expected_assembly_functions": count,
+    }
 
 
 def commands(workload, compiler):
     include = ["-Iinclude"] if not workload["library"] else []
     result = {
-        "gcc-syntax": ["gcc", "-std=c99", "-pedantic-errors", "-O0", "-g0",
-                       "-fsyntax-only", *include, str(workload["paths"]["c"])],
-        "clang-syntax": ["clang-20", "-std=c99", "-pedantic-errors", "-O0", "-g0",
-                         "-fsyntax-only", *include, str(workload["paths"]["c"])],
+        "gcc-syntax": [
+            "gcc",
+            "-std=c99",
+            "-pedantic-errors",
+            "-O0",
+            "-g0",
+            "-fsyntax-only",
+            *include,
+            str(workload["paths"]["c"]),
+        ],
+        "clang-syntax": [
+            "clang-20",
+            "-std=c99",
+            "-pedantic-errors",
+            "-O0",
+            "-g0",
+            "-fsyntax-only",
+            *include,
+            str(workload["paths"]["c"]),
+        ],
     }
     library = ["--library"] if workload["library"] else []
-    for name, option in (("crust-check", "--check"), ("crust-prepare", "--prepare"),
-                         ("crust-assembly", "-S")):
+    for name, option in (
+        ("crust-check", "--check"),
+        ("crust-prepare", "--prepare"),
+        ("crust-assembly", "-S"),
+    ):
         result[name] = [str(compiler), *library, option, str(workload["paths"]["crust"])]
     return result
 
@@ -131,8 +157,10 @@ def measure(command):
     process = run_process(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     elapsed = time.perf_counter_ns() - start
     if process.returncode != 0 or process.stderr:
-        raise RuntimeError(f"Compiler failed or wrote a diagnostic: {command}\n"
-                           + process.stderr.decode("utf-8", "replace"))
+        raise RuntimeError(
+            f"Compiler failed or wrote a diagnostic: {command}\n"
+            + process.stderr.decode("utf-8", "replace")
+        )
     return elapsed
 
 
@@ -184,8 +212,9 @@ def dependency_manifest(command):
         except ValueError:
             label = path.name
             kind = "system_header"
-        result.append({"name": label, "kind": kind, "bytes": path.stat().st_size,
-                       "sha256": sha256(path)})
+        result.append(
+            {"name": label, "kind": kind, "bytes": path.stat().st_size, "sha256": sha256(path)}
+        )
     return result
 
 
@@ -198,22 +227,30 @@ def optional_text(path):
 
 def environment(cpu):
     cpuinfo = Path("/proc/cpuinfo").read_text().splitlines()
-    model = next(line.split(":", 1)[1].strip() for line in cpuinfo
-                 if line.startswith("model name"))
+    model = next(line.split(":", 1)[1].strip() for line in cpuinfo if line.startswith("model name"))
     return {
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "cpu_model": model, "logical_cpus": os.cpu_count(), "pinned_cpu": cpu,
-        "smt_siblings": optional_text(f"/sys/devices/system/cpu/cpu{cpu}/topology/thread_siblings_list"),
+        "cpu_model": model,
+        "logical_cpus": os.cpu_count(),
+        "pinned_cpu": cpu,
+        "smt_siblings": optional_text(
+            f"/sys/devices/system/cpu/cpu{cpu}/topology/thread_siblings_list"
+        ),
         "governor": optional_text(f"/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_governor"),
-        "kernel": platform.release(), "machine": platform.machine(),
+        "kernel": platform.release(),
+        "machine": platform.machine(),
         "os_release": Path("/etc/os-release").read_text(),
         "memory_kib": int(Path("/proc/meminfo").read_text().splitlines()[0].split()[1]),
         "load_start": Path("/proc/loadavg").read_text().split()[:3],
         "cpu_reserved": False,
         "frequency_control": "governor recorded; frequency and turbo are not fixed",
         "python": platform.python_version(),
-        "child_environment": {"LC_ALL": "C", "LANG": "C", "TZ": "UTC",
-                              "PATH": "inherited for executable lookup; all other variables omitted"},
+        "child_environment": {
+            "LC_ALL": "C",
+            "LANG": "C",
+            "TZ": "UTC",
+            "PATH": "inherited for executable lookup; all other variables omitted",
+        },
     }
 
 
@@ -228,9 +265,14 @@ def summarize(samples, workloads, count, draws, seed):
     output = {}
     for workload in workloads:
         name = workload["name"]
-        rounds = [{row["endpoint"]: row["wall_ns"] for row in samples
-                   if row["workload"] == name and row["round"] == index}
-                  for index in range(count)]
+        rounds = [
+            {
+                row["endpoint"]: row["wall_ns"]
+                for row in samples
+                if row["workload"] == name and row["round"] == index
+            }
+            for index in range(count)
+        ]
         if any(set(row) != set(ENDPOINTS) for row in rounds):
             raise ValueError(f"Incomplete paired coverage for {name}")
         medians = {case: statistics.median(row[case] for row in rounds) for case in ENDPOINTS}
@@ -242,25 +284,31 @@ def summarize(samples, workloads, count, draws, seed):
             fastest_draws = {case: 0 for case in C_CASES}
             for _ in range(draws):
                 selected = rng.choices(rounds, k=count)
-                c_medians = {case: statistics.median(row[case] for row in selected)
-                             for case in C_CASES}
+                c_medians = {
+                    case: statistics.median(row[case] for row in selected) for case in C_CASES
+                }
                 selected_fastest = min(C_CASES, key=c_medians.get)
                 fastest_draws[selected_fastest] += 1
-                ratios.append(statistics.median(row[endpoint] for row in selected) /
-                              c_medians[selected_fastest])
+                ratios.append(
+                    statistics.median(row[endpoint] for row in selected)
+                    / c_medians[selected_fastest]
+                )
             ratios.sort()
-            interval = [percentile(ratios, .025), percentile(ratios, .975)]
+            interval = [percentile(ratios, 0.025), percentile(ratios, 0.975)]
             comparisons[endpoint] = {
                 "crust_over_fastest_c_median_ratio": medians[endpoint] / medians[fastest],
                 "paired_bootstrap_percentile_95_ci": interval,
-                "fastest_c_observed": fastest, "fastest_c_bootstrap_selections": fastest_draws,
+                "fastest_c_observed": fastest,
+                "fastest_c_bootstrap_selections": fastest_draws,
                 "upper_ci_at_most_one": interval[1] <= 1,
             }
-        output[name] = {"samples_per_endpoint": count,
-                        "median_wall_ms": {key: value / 1e6 for key, value in medians.items()},
-                        "min_wall_ms": {key: min(row[key] for row in rounds) / 1e6 for key in ENDPOINTS},
-                        "max_wall_ms": {key: max(row[key] for row in rounds) / 1e6 for key in ENDPOINTS},
-                        "comparisons": comparisons}
+        output[name] = {
+            "samples_per_endpoint": count,
+            "median_wall_ms": {key: value / 1e6 for key, value in medians.items()},
+            "min_wall_ms": {key: min(row[key] for row in rounds) / 1e6 for key in ENDPOINTS},
+            "max_wall_ms": {key: max(row[key] for row in rounds) / 1e6 for key in ENDPOINTS},
+            "comparisons": comparisons,
+        }
     return output
 
 
@@ -289,11 +337,27 @@ def main():
     os.sched_setaffinity(0, {args.cpu})
     workloads = [generate(args.inputs, count) for count in (1000, 8000)]
     witness_source = Path("examples/intrusive/program.crs")
-    workloads.append({"name": "intrusive", "functions": len(re.findall(r"^fn ", witness_source.read_text(), re.M)),
-                      "paths": {"c": Path("benchmarks/bootstrap/intrusive.c"), "crust": witness_source},
-                      "library": False,
-                      "expected_assembly_functions": len(re.findall(r"^fn ", witness_source.read_text(), re.M)) + 1})
-    build = ["make", "-B", "-j1", f"BUILD={args.compiler.parent}", "CC=gcc", "CFLAGS=-O2 -g0", "all"]
+    workloads.append(
+        {
+            "name": "intrusive",
+            "functions": len(re.findall(r"^fn ", witness_source.read_text(), re.M)),
+            "paths": {"c": Path("benchmarks/bootstrap/intrusive.c"), "crust": witness_source},
+            "library": False,
+            "expected_assembly_functions": len(
+                re.findall(r"^fn ", witness_source.read_text(), re.M)
+            )
+            + 1,
+        }
+    )
+    build = [
+        "make",
+        "-B",
+        "-j1",
+        f"BUILD={args.compiler.parent}",
+        "CC=gcc",
+        "CFLAGS=-O2 -g0",
+        "all",
+    ]
     source_hashes = compiler_sources()
     script_hash = sha256("benchmarks/bootstrap/measure.py")
     start = time.perf_counter_ns()
@@ -302,8 +366,15 @@ def main():
     if compiler_sources() != source_hashes:
         raise RuntimeError("Compiler source changed during the isolated build")
     print("Isolated compiler build complete", flush=True)
-    witness_build = ["make", "-j1", f"BUILD={args.compiler.parent}", "CC=gcc", "CFLAGS=-O2 -g0",
-                     str(args.compiler.parent / "intrusive"), str(args.compiler.parent / "intrusive-c")]
+    witness_build = [
+        "make",
+        "-j1",
+        f"BUILD={args.compiler.parent}",
+        "CC=gcc",
+        "CFLAGS=-O2 -g0",
+        str(args.compiler.parent / "intrusive"),
+        str(args.compiler.parent / "intrusive-c"),
+    ]
     capture(witness_build)
     witness_runs = {}
     for name in ("intrusive", "intrusive-c"):
@@ -311,8 +382,10 @@ def main():
         if output != "intrusive: ok":
             raise RuntimeError(f"Unexpected executable witness output: {output!r}")
         witness_runs[name] = output
-    toolchains = {name: tool_info(command) for name, command in
-                  (("gcc", "gcc"), ("clang", "clang-20"), ("crust", str(args.compiler)))}
+    toolchains = {
+        name: tool_info(command)
+        for name, command in (("gcc", "gcc"), ("clang", "clang-20"), ("crust", str(args.compiler)))
+    }
     cc1 = capture(["gcc", "-print-prog-name=cc1"])
     toolchains["gcc"]["cc1"] = binary_info(cc1)
     toolchains["gcc"]["cc1"]["shared_libraries"] = shared_libraries(cc1)
@@ -323,57 +396,99 @@ def main():
     assembly = {}
     for workload in workloads:
         name = workload["name"]
-        input_info[name] = {"functions": workload["functions"], "library": workload["library"],
-                            "sources": {kind: {"path": str(path), "bytes": path.stat().st_size,
-                                                "sha256": sha256(path)}
-                                        for kind, path in workload["paths"].items()},
-                            "c_header_dependencies": {case: dependency_manifest(selected[name][case])
-                                                      for case in C_CASES}}
+        input_info[name] = {
+            "functions": workload["functions"],
+            "library": workload["library"],
+            "sources": {
+                kind: {"path": str(path), "bytes": path.stat().st_size, "sha256": sha256(path)}
+                for kind, path in workload["paths"].items()
+            },
+            "c_header_dependencies": {
+                case: dependency_manifest(selected[name][case]) for case in C_CASES
+            },
+        }
         path = args.inputs / (name + ".s")
         with path.open("wb") as output:
-            process = run_process(selected[name]["crust-assembly"], stdout=output,
-                                  stderr=subprocess.PIPE)
+            process = run_process(
+                selected[name]["crust-assembly"], stdout=output, stderr=subprocess.PIPE
+            )
         if process.returncode != 0 or process.stderr:
             raise RuntimeError(f"Assembly preflight failed for {name}: {process.stderr!r}")
         count = path.read_bytes().count(b", @function\n")
         if count != workload["expected_assembly_functions"]:
             raise RuntimeError(f"Incomplete assembly for {name}: {count} functions")
-        assembly[name] = {"bytes": path.stat().st_size, "sha256": sha256(path),
-                          "function_definitions": count, "preflight_path": str(path)}
+        assembly[name] = {
+            "bytes": path.stat().st_size,
+            "sha256": sha256(path),
+            "function_definitions": count,
+            "preflight_path": str(path),
+        }
     result = {
-        "schema": 1, "status": "running", "environment": environment(args.cpu),
-        "measurement_command": ["python3", "benchmarks/bootstrap/measure.py",
-            "--output", str(args.output), "--compiler", str(args.compiler),
-            "--inputs", str(args.inputs), "--samples", str(args.samples),
-            "--bootstrap-draws", str(args.bootstrap_draws), "--cpu", str(args.cpu),
-            "--seed", str(args.seed)],
-        "method": {"samples_per_endpoint": args.samples, "seed": args.seed,
-                   "bootstrap_draws": args.bootstrap_draws, "confidence": 0.95,
-                   "randomization": "shuffle workloads each round; shuffle five endpoints within each workload",
-                   "pairing": "one sample for every endpoint per workload and round",
-                   "bootstrap": "resample complete paired rounds; ratio of medians; reselect fastest C median in each draw",
-                   "intervals": "per comparison; no simultaneous coverage claim",
-                   "timing": "perf_counter_ns around process launch and completion, including fresh process startup and wait",
-                   "stdout": "DEVNULL for every timed command; -S has no -o argument",
-                   "warmup": "one discarded timed run per command after build and preflight",
-                   "os_file_cache": "warm; no cache eviction", "compiler_cache": "none",
-                   "cpu_affinity": "controller and all compiler descendants pinned to one logical CPU",
-                   "excluded": "installed compiler/stage preparation, input generation, preflight, and final assembling/linking",
-                   "scope": "ordinary generated functions and the direct intrusive witness; no SQLite, self-host, or checked-language speed claim",
-                   "handoff": "--prepare retains source AST operations and is not full backend handoff; full assembly is a conservative upper bound that includes lowering and emission"},
-        "build": {"command": build, "wall_ns": build_ns, "stdout_sha256": hashlib.sha256(build_output.encode()).hexdigest(),
-                  "source_sha256": source_hashes, "compiler_binary": toolchains["crust"],
-                  "stage_preparation_in_frontend_samples": False},
-        "script_sha256": script_hash, "toolchains": toolchains,
-        "endpoints": ENDPOINTS, "commands": selected, "inputs": input_info,
-        "assembly_preflight": assembly, "executable_witness": witness_runs,
-        "warmups": [], "samples": [],
+        "schema": 1,
+        "status": "running",
+        "environment": environment(args.cpu),
+        "measurement_command": [
+            "python3",
+            "benchmarks/bootstrap/measure.py",
+            "--output",
+            str(args.output),
+            "--compiler",
+            str(args.compiler),
+            "--inputs",
+            str(args.inputs),
+            "--samples",
+            str(args.samples),
+            "--bootstrap-draws",
+            str(args.bootstrap_draws),
+            "--cpu",
+            str(args.cpu),
+            "--seed",
+            str(args.seed),
+        ],
+        "method": {
+            "samples_per_endpoint": args.samples,
+            "seed": args.seed,
+            "bootstrap_draws": args.bootstrap_draws,
+            "confidence": 0.95,
+            "randomization": "shuffle workloads each round; shuffle five endpoints within each workload",
+            "pairing": "one sample for every endpoint per workload and round",
+            "bootstrap": "resample complete paired rounds; ratio of medians; reselect fastest C median in each draw",
+            "intervals": "per comparison; no simultaneous coverage claim",
+            "timing": "perf_counter_ns around process launch and completion, including fresh process startup and wait",
+            "stdout": "DEVNULL for every timed command; -S has no -o argument",
+            "warmup": "one discarded timed run per command after build and preflight",
+            "os_file_cache": "warm; no cache eviction",
+            "compiler_cache": "none",
+            "cpu_affinity": "controller and all compiler descendants pinned to one logical CPU",
+            "excluded": "installed compiler/stage preparation, input generation, preflight, and final assembling/linking",
+            "scope": "ordinary generated functions and the direct intrusive witness; no SQLite, self-host, or checked-language speed claim",
+            "handoff": "--prepare retains source AST operations and is not full backend handoff; full assembly is a conservative upper bound that includes lowering and emission",
+        },
+        "build": {
+            "command": build,
+            "wall_ns": build_ns,
+            "stdout_sha256": hashlib.sha256(build_output.encode()).hexdigest(),
+            "source_sha256": source_hashes,
+            "compiler_binary": toolchains["crust"],
+            "stage_preparation_in_frontend_samples": False,
+        },
+        "script_sha256": script_hash,
+        "toolchains": toolchains,
+        "endpoints": ENDPOINTS,
+        "commands": selected,
+        "inputs": input_info,
+        "assembly_preflight": assembly,
+        "executable_witness": witness_runs,
+        "warmups": [],
+        "samples": [],
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     save(args.output, result)
     for name, cases in selected.items():
         for endpoint, command in cases.items():
-            result["warmups"].append({"workload": name, "endpoint": endpoint, "wall_ns": measure(command)})
+            result["warmups"].append(
+                {"workload": name, "endpoint": endpoint, "wall_ns": measure(command)}
+            )
     print("Warmup complete; starting timing rounds", flush=True)
     rng = random.Random(args.seed)
     for index in range(args.samples):
@@ -383,8 +498,15 @@ def main():
             endpoints = list(selected[name])
             rng.shuffle(endpoints)
             for endpoint in endpoints:
-                result["samples"].append({"round": index, "sequence": len(result["samples"]),
-                    "workload": name, "endpoint": endpoint, "wall_ns": measure(selected[name][endpoint])})
+                result["samples"].append(
+                    {
+                        "round": index,
+                        "sequence": len(result["samples"]),
+                        "workload": name,
+                        "endpoint": endpoint,
+                        "wall_ns": measure(selected[name][endpoint]),
+                    }
+                )
         save(args.output, result)
         print(f"Completed paired round {index + 1}/{args.samples}", flush=True)
     if compiler_sources() != source_hashes:
@@ -397,15 +519,23 @@ def main():
                 raise RuntimeError("Workload source changed during the experiment")
     for name, command in (("gcc", "gcc"), ("clang", "clang-20"), ("crust", str(args.compiler))):
         current = tool_info(command)
-        if current["sha256"] != toolchains[name]["sha256"] or current["shared_libraries"] != toolchains[name]["shared_libraries"]:
+        if (
+            current["sha256"] != toolchains[name]["sha256"]
+            or current["shared_libraries"] != toolchains[name]["shared_libraries"]
+        ):
             raise RuntimeError("Compiler binary changed during the experiment")
-    if binary_info(cc1)["sha256"] != toolchains["gcc"]["cc1"]["sha256"] or shared_libraries(cc1) != toolchains["gcc"]["cc1"]["shared_libraries"]:
+    if (
+        binary_info(cc1)["sha256"] != toolchains["gcc"]["cc1"]["sha256"]
+        or shared_libraries(cc1) != toolchains["gcc"]["cc1"]["shared_libraries"]
+    ):
         raise RuntimeError("GCC frontend binary changed during the experiment")
     for name, cases in selected.items():
         for case in C_CASES:
             if dependency_manifest(cases[case]) != input_info[name]["c_header_dependencies"][case]:
                 raise RuntimeError("A C input dependency changed during the experiment")
-    result["summary"] = summarize(result["samples"], workloads, args.samples, args.bootstrap_draws, args.seed)
+    result["summary"] = summarize(
+        result["samples"], workloads, args.samples, args.bootstrap_draws, args.seed
+    )
     result["environment"]["load_end"] = Path("/proc/loadavg").read_text().split()[:3]
     result["status"] = "complete"
     save(args.output, result)

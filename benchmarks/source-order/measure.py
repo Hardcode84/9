@@ -13,7 +13,6 @@ import hashlib
 import importlib.util
 import json
 import os
-from pathlib import Path
 import platform
 import random
 import re
@@ -22,7 +21,7 @@ import subprocess
 import sys
 import tempfile
 import time
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BASE_PATH = ROOT / "benchmarks/bootstrap/measure.py"
@@ -30,14 +29,31 @@ SPEC = importlib.util.spec_from_file_location("bootstrap_measure", BASE_PATH)
 BASE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BASE)
 
-LIBRARY_SOURCES = [ROOT / path for path in (
-    "api/crust0.crs", "api/crust0_host.crs", "api/crust0_stage.crs",
-    "stages/c/model.crs", "stages/c/base.crs", "stages/c/types.crs",
-    "stages/c/emit.crs", "stages/c/driver.crs", "stages/c/program.crs")]
-HOST_INTERFACES = [ROOT / path for path in (
-    "api/crust0_stage.crs", "stages/c/api.crs", "stages/c/build.crs")]
-C_FLAGS = ["-std=c99", "-pedantic-errors", "-O2", "-g0",
-           "-fstack-clash-protection", "-Wno-overlength-strings"]
+LIBRARY_SOURCES = [
+    ROOT / path
+    for path in (
+        "api/crust0.crs",
+        "api/crust0_host.crs",
+        "api/crust0_stage.crs",
+        "stages/c/model.crs",
+        "stages/c/base.crs",
+        "stages/c/types.crs",
+        "stages/c/emit.crs",
+        "stages/c/driver.crs",
+        "stages/c/program.crs",
+    )
+]
+HOST_INTERFACES = [
+    ROOT / path for path in ("api/crust0_stage.crs", "stages/c/api.crs", "stages/c/build.crs")
+]
+C_FLAGS = [
+    "-std=c99",
+    "-pedantic-errors",
+    "-O2",
+    "-g0",
+    "-fstack-clash-protection",
+    "-Wno-overlength-strings",
+]
 SYNTAX_FLAGS = ["-std=c99", "-pedantic-errors", "-O0", "-g0", "-fsyntax-only"]
 ENDPOINTS = {
     "source-order-c-output": "Fresh crust process: installed prelude read/check, root source-order read/check/evaluation, host inputs, dlopen/dlsym/libffi calls, target frontend, complete C and rename output, and cleanup; no target GCC",
@@ -54,22 +70,41 @@ COMPARISONS = {
 def file_info(path):
     path = Path(path)
     data = path.read_bytes()
-    return {"path": str(path), "bytes": len(data), "lines": data.count(b"\n"),
-            "sha256": hashlib.sha256(data).hexdigest()}
+    return {
+        "path": str(path),
+        "bytes": len(data),
+        "lines": data.count(b"\n"),
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
 
 
 def checked(command, stdout=subprocess.PIPE):
     process = BASE.run_process(command, stdout=stdout, stderr=subprocess.PIPE)
     if process.returncode != 0 or process.stderr:
-        raise RuntimeError(f"Command failed or wrote a diagnostic: {command}\n"
-                           + process.stderr.decode("utf-8", "replace"))
+        raise RuntimeError(
+            f"Command failed or wrote a diagnostic: {command}\n"
+            + process.stderr.decode("utf-8", "replace")
+        )
     return process.stdout
 
 
 def source_hashes():
-    paths = [ROOT / "Makefile", ROOT / "tools/api.py", ROOT / "tools/prelude.py", BASE_PATH, Path(__file__).resolve()]
-    for directory, pattern in (("src", "*.c"), ("src", "*.h"), ("include", "*.h"),
-                               ("runtime", "*.c"), ("api", "*.crs"), ("stages", "*.crs"), ("stages/c", "*.crs")):
+    paths = [
+        ROOT / "Makefile",
+        ROOT / "tools/api.py",
+        ROOT / "tools/prelude.py",
+        BASE_PATH,
+        Path(__file__).resolve(),
+    ]
+    for directory, pattern in (
+        ("src", "*.c"),
+        ("src", "*.h"),
+        ("include", "*.h"),
+        ("runtime", "*.c"),
+        ("api", "*.crs"),
+        ("stages", "*.crs"),
+        ("stages/c", "*.crs"),
+    ):
         paths.extend(sorted((ROOT / directory).glob(pattern)))
     return {str(path.relative_to(ROOT)): BASE.sha256(path) for path in paths}
 
@@ -94,10 +129,18 @@ def crust_string(path):
 
 
 def staged_source(target, output, native_library):
-    lines = [f"host_source(run, {crust_string(os.path.relpath(path, output.parent))});" for path in HOST_INTERFACES]
-    lines.extend((f"host_link(run, {crust_string(os.path.relpath(native_library, output.parent))});",
-                  f"var target: *CrustSource = host_input(run, {crust_string(os.path.relpath(target, output.parent))}, 1u64);",
-                  "return c_build(target, 0usize, (*run).argc, (*run).argv);", ""))
+    lines = [
+        f"host_source(run, {crust_string(os.path.relpath(path, output.parent))});"
+        for path in HOST_INTERFACES
+    ]
+    lines.extend(
+        (
+            f"host_link(run, {crust_string(os.path.relpath(native_library, output.parent))});",
+            f"var target: *CrustSource = host_input(run, {crust_string(os.path.relpath(target, output.parent))}, 1u64);",
+            "return c_build(target, 0usize, (*run).argc, (*run).argv);",
+            "",
+        )
+    )
     program = "\n".join(lines).encode("ascii")
     output.write_bytes(program)
     return len(program)
@@ -106,12 +149,19 @@ def staged_source(target, output, native_library):
 def workloads_in(directory, native_library):
     workloads = [BASE.generate(directory, count) for count in (1000, 8000)]
     intrusive = ROOT / "examples/intrusive/program.crs"
-    workloads.append({"name": "intrusive", "library": False,
-                      "functions": len(re.findall(r"^fn ", intrusive.read_text(), re.M)),
-                      "paths": {"crust": intrusive, "c": ROOT / "benchmarks/bootstrap/intrusive.c"}})
+    workloads.append(
+        {
+            "name": "intrusive",
+            "library": False,
+            "functions": len(re.findall(r"^fn ", intrusive.read_text(), re.M)),
+            "paths": {"crust": intrusive, "c": ROOT / "benchmarks/bootstrap/intrusive.c"},
+        }
+    )
     for workload in workloads:
         staged = directory / f"{workload['name']}-staged.crs"
-        workload["root_source_bytes"] = staged_source(workload["paths"]["crust"], staged, native_library)
+        workload["root_source_bytes"] = staged_source(
+            workload["paths"]["crust"], staged, native_library
+        )
         workload["paths"]["staged"] = staged
     return workloads
 
@@ -119,10 +169,22 @@ def workloads_in(directory, native_library):
 def output_command(workload, binaries, route, response):
     options = ["--library"] if workload["library"] else []
     if route == "source-order":
-        return [str(binaries["launcher"]), str(workload["paths"]["staged"]),
-                *options, "--emit-c", "--symbols", str(response)]
-    return [str(binaries["prepared"]), *options, "--emit-c", "--symbols", str(response),
-            str(workload["paths"]["crust"])]
+        return [
+            str(binaries["launcher"]),
+            str(workload["paths"]["staged"]),
+            *options,
+            "--emit-c",
+            "--symbols",
+            str(response),
+        ]
+    return [
+        str(binaries["prepared"]),
+        *options,
+        "--emit-c",
+        "--symbols",
+        str(response),
+        str(workload["paths"]["crust"]),
+    ]
 
 
 def syntax_command(path, original_intrusive=False):
@@ -142,12 +204,16 @@ def preflight(workload, binaries, directory, build):
         outputs[route] = {"c": c_path, "response": response, "command": command}
     for kind in ("c", "response"):
         if outputs["source-order"][kind].read_bytes() != outputs["prepared"][kind].read_bytes():
-            raise RuntimeError(f"Source-order runner and prepared backend emit different {kind} bytes for {name}")
+            raise RuntimeError(
+                f"Source-order runner and prepared backend emit different {kind} bytes for {name}"
+            )
     c_path = outputs["source-order"]["c"]
     response = outputs["source-order"]["response"]
     definitions = len(re.findall(r"^[^;\n]*\br_g[0-9]+\([^;\n]*\)\n\{", c_path.read_text(), re.M))
     if definitions != workload["functions"]:
-        raise RuntimeError(f"Incomplete target C output for {name}: {definitions} function definitions")
+        raise RuntimeError(
+            f"Incomplete target C output for {name}: {definitions} function definitions"
+        )
     commands = {
         "source-order-c-output": output_command(workload, binaries, "source-order", "/dev/null"),
         "prepared-c-output": output_command(workload, binaries, "prepared", "/dev/null"),
@@ -164,9 +230,24 @@ def preflight(workload, binaries, directory, build):
         witness_commands = [
             ["gcc", *C_FLAGS, "-c", str(c_path), "-o", str(raw)],
             ["objcopy", "@" + str(response), str(raw), str(renamed)],
-            ["gcc", "-no-pie", str(renamed), str(build / "libcrust0_host.a"), "-o", str(executable)],
-            ["gcc", *C_FLAGS, "-I" + str(ROOT / "include"), str(workload["paths"]["c"]),
-             str(build / "libcrust0_host.a"), "-no-pie", "-o", str(reference)],
+            [
+                "gcc",
+                "-no-pie",
+                str(renamed),
+                str(build / "libcrust0_host.a"),
+                "-o",
+                str(executable),
+            ],
+            [
+                "gcc",
+                *C_FLAGS,
+                "-I" + str(ROOT / "include"),
+                str(workload["paths"]["c"]),
+                str(build / "libcrust0_host.a"),
+                "-no-pie",
+                "-o",
+                str(reference),
+            ],
         ]
         for command in witness_commands:
             checked(command)
@@ -181,18 +262,26 @@ def preflight(workload, binaries, directory, build):
         needed = re.findall(rb"\(NEEDED\).*Shared library: \[([^]]+)\]", dynamic)
         if any(b"crust" in name for name in needed):
             raise RuntimeError("The target executable depends on a compiler library")
-        witness = {"commands": witness_commands, "source_order_and_reference_stdout": "intrusive: ok\n",
-                   "target_executable": artifact_info(executable), "reference_executable": artifact_info(reference),
-                   "host_compiler_symbols": [], "symbol_table_sha256": hashlib.sha256(symbols).hexdigest(),
-                   "target_needed_libraries": [name.decode() for name in needed]}
+        witness = {
+            "commands": witness_commands,
+            "source_order_and_reference_stdout": "intrusive: ok\n",
+            "target_executable": artifact_info(executable),
+            "reference_executable": artifact_info(reference),
+            "host_compiler_symbols": [],
+            "symbol_table_sha256": hashlib.sha256(symbols).hexdigest(),
+            "target_needed_libraries": [name.decode() for name in needed],
+        }
     return commands, {
         "identical_source_order_and_prepared_bytes": True,
         "commands": {route: output["command"] for route, output in outputs.items()},
-        "c": file_info(c_path), "rename_response": file_info(response),
-        "function_definitions": definitions, "executable_witness": witness,
+        "c": file_info(c_path),
+        "rename_response": file_info(response),
+        "function_definitions": definitions,
+        "executable_witness": witness,
         "c_header_dependencies": {
             endpoint: BASE.dependency_manifest(commands[endpoint])
-            for endpoint in ("gcc-original-syntax",)},
+            for endpoint in ("gcc-original-syntax",)
+        },
     }
 
 
@@ -200,41 +289,80 @@ def prepare_library(build, directory):
     object_path = directory / "changed-library.o"
     library_path = directory / "changed-library.so"
     commands = [
-        ("all-library-CRUST-to-object", [str(build / "crust-c"), "--library", "--object",
-            "--export", "c_backend_build", "--export", "c_program", "--cflag=-fPIC",
-            "--cflag=-fno-semantic-interposition",
-            "-o", str(object_path), *map(str, LIBRARY_SOURCES)]),
-        ("shared-library-link", ["gcc", "-shared", "-Wl,-Bsymbolic,-z,text,-z,relro,-z,now",
-            str(object_path), "-o", str(library_path)]),
+        (
+            "all-library-CRUST-to-object",
+            [
+                str(build / "crust-c"),
+                "--library",
+                "--object",
+                "--export",
+                "c_backend_build",
+                "--export",
+                "c_program",
+                "--cflag=-fPIC",
+                "--cflag=-fno-semantic-interposition",
+                "-o",
+                str(object_path),
+                *map(str, LIBRARY_SOURCES),
+            ],
+        ),
+        (
+            "shared-library-link",
+            [
+                "gcc",
+                "-shared",
+                "-Wl,-Bsymbolic,-z,text,-z,relro,-z,now",
+                str(object_path),
+                "-o",
+                str(library_path),
+            ],
+        ),
     ]
     observations = []
     for phase, command in commands:
         start = time.perf_counter_ns()
         output = checked(command)
-        observations.append({"phase": phase, "command": command,
-                             "wall_ns": time.perf_counter_ns() - start,
-                             "stdout_sha256": hashlib.sha256(output).hexdigest()})
-    return {"measured": True, "observations_per_phase": 1,
-            "statistic": "one preparation observation, not a median or confidence interval",
-            "commands": observations, "observed_total_wall_ns": sum(row["wall_ns"] for row in observations),
-            "sources": [file_info(path) for path in LIBRARY_SOURCES],
-            "object": artifact_info(object_path), "library": artifact_info(library_path, dynamic=True),
-            "scope": "Read/check/lower all library CRUST sources, emit C, GCC -O2 -fPIC -fno-semantic-interposition compilation, objcopy renaming, and shared linking; installed crust-c and system tools are inputs",
-            "included_in_frontend_samples": False,
-            "used_as_measured_native_input": False,
-            "reason": "A separate output measures a complete source-library rebuild without changing the installed input library"}
+        observations.append(
+            {
+                "phase": phase,
+                "command": command,
+                "wall_ns": time.perf_counter_ns() - start,
+                "stdout_sha256": hashlib.sha256(output).hexdigest(),
+            }
+        )
+    return {
+        "measured": True,
+        "observations_per_phase": 1,
+        "statistic": "one preparation observation, not a median or confidence interval",
+        "commands": observations,
+        "observed_total_wall_ns": sum(row["wall_ns"] for row in observations),
+        "sources": [file_info(path) for path in LIBRARY_SOURCES],
+        "object": artifact_info(object_path),
+        "library": artifact_info(library_path, dynamic=True),
+        "scope": "Read/check/lower all library CRUST sources, emit C, GCC -O2 -fPIC -fno-semantic-interposition compilation, objcopy renaming, and shared linking; installed crust-c and system tools are inputs",
+        "included_in_frontend_samples": False,
+        "used_as_measured_native_input": False,
+        "reason": "A separate output measures a complete source-library rebuild without changing the installed input library",
+    }
 
 
 def summarize(samples, workloads, rounds, draws, seed):
     result = {}
     for workload in workloads:
         name = workload["name"]
-        paired = [{row["endpoint"]: row["wall_ns"] for row in samples
-                   if row["workload"] == name and row["round"] == index}
-                  for index in range(rounds)]
+        paired = [
+            {
+                row["endpoint"]: row["wall_ns"]
+                for row in samples
+                if row["workload"] == name and row["round"] == index
+            }
+            for index in range(rounds)
+        ]
         if any(set(row) != set(ENDPOINTS) for row in paired):
             raise RuntimeError(f"Incomplete paired coverage for {name}")
-        medians = {endpoint: statistics.median(row[endpoint] for row in paired) for endpoint in ENDPOINTS}
+        medians = {
+            endpoint: statistics.median(row[endpoint] for row in paired) for endpoint in ENDPOINTS
+        }
         comparisons = {}
         for label, (numerator, denominator) in COMPARISONS.items():
             rng = random.Random(f"{seed}:{name}:{label}")
@@ -242,29 +370,42 @@ def summarize(samples, workloads, rounds, draws, seed):
             paired_ratios = []
             for _ in range(draws):
                 selected = rng.choices(paired, k=rounds)
-                ratios.append(statistics.median(row[numerator] for row in selected) /
-                              statistics.median(row[denominator] for row in selected))
-                paired_ratios.append(statistics.median(row[numerator] / row[denominator] for row in selected))
+                ratios.append(
+                    statistics.median(row[numerator] for row in selected)
+                    / statistics.median(row[denominator] for row in selected)
+                )
+                paired_ratios.append(
+                    statistics.median(row[numerator] / row[denominator] for row in selected)
+                )
             ratios.sort()
             paired_ratios.sort()
-            interval = [BASE.percentile(ratios, .025), BASE.percentile(ratios, .975)]
+            interval = [BASE.percentile(ratios, 0.025), BASE.percentile(ratios, 0.975)]
             comparisons[label] = {
-                "numerator": numerator, "denominator": denominator,
+                "numerator": numerator,
+                "denominator": denominator,
                 "ratio_of_medians": medians[numerator] / medians[denominator],
                 "paired_bootstrap_percentile_95_ci": interval,
-                "median_of_paired_ratios": statistics.median(row[numerator] / row[denominator] for row in paired),
-                "paired_ratio_bootstrap_percentile_95_ci":
-                    [BASE.percentile(paired_ratios, .025), BASE.percentile(paired_ratios, .975)],
+                "median_of_paired_ratios": statistics.median(
+                    row[numerator] / row[denominator] for row in paired
+                ),
+                "paired_ratio_bootstrap_percentile_95_ci": [
+                    BASE.percentile(paired_ratios, 0.025),
+                    BASE.percentile(paired_ratios, 0.975),
+                ],
                 "upper_ci_at_most_one": interval[1] <= 1,
             }
         differences = [row["source-order-c-output"] - row["prepared-c-output"] for row in paired]
-        result[name] = {"rounds": rounds,
+        result[name] = {
+            "rounds": rounds,
             "median_wall_ms": {key: value / 1e6 for key, value in medians.items()},
             "min_wall_ms": {key: min(row[key] for row in paired) / 1e6 for key in ENDPOINTS},
             "max_wall_ms": {key: max(row[key] for row in paired) / 1e6 for key in ENDPOINTS},
             "comparisons": comparisons,
-            "source_order_minus_prepared": {"median_paired_difference_ms": statistics.median(differences) / 1e6,
-                "scope": "Difference between complete process endpoints; not isolated host-preparation phase attribution"}}
+            "source_order_minus_prepared": {
+                "median_paired_difference_ms": statistics.median(differences) / 1e6,
+                "scope": "Difference between complete process endpoints; not isolated host-preparation phase attribution",
+            },
+        }
     return result
 
 
@@ -293,9 +434,13 @@ def verify_frozen(result, workloads, binaries, tools, cc1):
             if file_info(Path(expected["path"])) != expected:
                 raise RuntimeError(f"Generated backend input changed during the run: {name}/{kind}")
         for endpoint in ("gcc-original-syntax",):
-            if BASE.dependency_manifest(result["commands"][name][endpoint]) != \
-                    result["artifacts"][name]["c_header_dependencies"][endpoint]:
-                raise RuntimeError(f"C preprocessing input changed during the run: {name}/{endpoint}")
+            if (
+                BASE.dependency_manifest(result["commands"][name][endpoint])
+                != result["artifacts"][name]["c_header_dependencies"][endpoint]
+            ):
+                raise RuntimeError(
+                    f"C preprocessing input changed during the run: {name}/{endpoint}"
+                )
 
 
 def main():
@@ -321,8 +466,12 @@ def main():
     if args.cpu not in os.sched_getaffinity(0):
         parser.error("The selected CPU is outside the allowed affinity set")
     build = args.build_dir.resolve()
-    binaries = {"launcher": build / "crust", "prepared": build / "crust-c",
-                "native-library": build / "crust-c-library.so", "host-runtime": build / "libcrust0_host.a"}
+    binaries = {
+        "launcher": build / "crust",
+        "prepared": build / "crust-c",
+        "native-library": build / "crust-c-library.so",
+        "host-runtime": build / "libcrust0_host.a",
+    }
     for path in binaries.values():
         if not path.is_file():
             parser.error(f"Missing prepared input: {path}; build outside this measurement")
@@ -336,18 +485,37 @@ def main():
     tools = {name: name for name in ("gcc", "as", "ld", "objcopy", "nm", "readelf")}
     cc1 = Path(BASE.capture(["gcc", "-print-prog-name=cc1"])).resolve()
     result = {
-        "schema": 1, "status": "preflight", "environment": BASE.environment(args.cpu),
-        "measurement_command": [sys.executable, str(Path(__file__).resolve().relative_to(ROOT)), *sys.argv[1:]],
+        "schema": 1,
+        "status": "preflight",
+        "environment": BASE.environment(args.cpu),
+        "measurement_command": [
+            sys.executable,
+            str(Path(__file__).resolve().relative_to(ROOT)),
+            *sys.argv[1:],
+        ],
         "source_sha256": source_hashes(),
-        "installed_inputs": {name: artifact_info(path, name != "host-runtime") for name, path in binaries.items()},
+        "installed_inputs": {
+            name: artifact_info(path, name != "host-runtime") for name, path in binaries.items()
+        },
         "installed_build_provenance": "Existing artifacts are identified by hashes; their build commands and flags are not inferred from file names",
         "toolchains": {name: BASE.tool_info(command) for name, command in tools.items()},
         "gcc_cc1": artifact_info(cc1, dynamic=True),
-        "endpoints": ENDPOINTS, "commands": {}, "inputs": {}, "artifacts": {}, "warmups": [], "samples": [],
-        "library_preparation": {"measured": False, "reason": "Use --prepare-library for one separate complete source-library rebuild observation"},
+        "endpoints": ENDPOINTS,
+        "commands": {},
+        "inputs": {},
+        "artifacts": {},
+        "warmups": [],
+        "samples": [],
+        "library_preparation": {
+            "measured": False,
+            "reason": "Use --prepare-library for one separate complete source-library rebuild observation",
+        },
         "method": {
-            "rounds_per_endpoint": args.rounds, "warmups_per_endpoint": args.warmup,
-            "seed": args.seed, "bootstrap_draws": args.bootstrap_draws, "confidence": .95,
+            "rounds_per_endpoint": args.rounds,
+            "warmups_per_endpoint": args.warmup,
+            "seed": args.seed,
+            "bootstrap_draws": args.bootstrap_draws,
+            "confidence": 0.95,
             "randomization": "Shuffle workloads each round and all three endpoints within each workload",
             "pairing": "One sample for every endpoint in the same workload and round",
             "bootstrap": "Resample complete paired rounds; report ratio of medians and median of paired ratios separately",
@@ -376,11 +544,14 @@ def main():
         workloads = workloads_in(directory, ordinary_library)
         for workload in workloads:
             name = workload["name"]
-            result["inputs"][name] = {"functions": workload["functions"], "library": workload["library"],
+            result["inputs"][name] = {
+                "functions": workload["functions"],
+                "library": workload["library"],
                 "root_source_bytes": workload["root_source_bytes"],
                 "sources": {kind: file_info(path) for kind, path in workload["paths"].items()},
                 "explicit_host_sources": [file_info(path) for path in HOST_INTERFACES],
-                "native_library": file_info(ordinary_library)}
+                "native_library": file_info(ordinary_library),
+            }
             commands, artifacts = preflight(workload, binaries, directory, build)
             result["commands"][name] = commands
             result["artifacts"][name] = artifacts
@@ -401,8 +572,14 @@ def main():
         for index in range(args.warmup):
             for name, endpoints in result["commands"].items():
                 for endpoint, command in endpoints.items():
-                    result["warmups"].append({"round": index, "workload": name, "endpoint": endpoint,
-                                              "wall_ns": BASE.measure(command)})
+                    result["warmups"].append(
+                        {
+                            "round": index,
+                            "workload": name,
+                            "endpoint": endpoint,
+                            "wall_ns": BASE.measure(command),
+                        }
+                    )
         rng = random.Random(args.seed)
         for index in range(args.rounds):
             order = list(result["commands"])
@@ -411,23 +588,39 @@ def main():
                 endpoints = list(ENDPOINTS)
                 rng.shuffle(endpoints)
                 for endpoint in endpoints:
-                    result["samples"].append({"round": index, "sequence": len(result["samples"]),
-                        "workload": name, "endpoint": endpoint,
-                        "wall_ns": BASE.measure(result["commands"][name][endpoint])})
+                    result["samples"].append(
+                        {
+                            "round": index,
+                            "sequence": len(result["samples"]),
+                            "workload": name,
+                            "endpoint": endpoint,
+                            "wall_ns": BASE.measure(result["commands"][name][endpoint]),
+                        }
+                    )
             BASE.save(args.output, result)
             print(f"Paired round {index + 1}/{args.rounds}", flush=True)
         verify_frozen(result, workloads, binaries, tools, cc1)
         if list(temporary.iterdir()):
             raise RuntimeError("Stage temporary files remain after measurement")
-        result["summary"] = summarize(result["samples"], workloads, args.rounds, args.bootstrap_draws, args.seed)
-        failed = [name for name, summary in result["summary"].items()
-                  if not summary["comparisons"]["source-order-over-original-c"]["upper_ci_at_most_one"]]
-        result["speed_gate"] = {"passed": not failed, "failed_workloads": failed,
-                                "comparison": "source-order-over-original-c"}
+        result["summary"] = summarize(
+            result["samples"], workloads, args.rounds, args.bootstrap_draws, args.seed
+        )
+        failed = [
+            name
+            for name, summary in result["summary"].items()
+            if not summary["comparisons"]["source-order-over-original-c"]["upper_ci_at_most_one"]
+        ]
+        result["speed_gate"] = {
+            "passed": not failed,
+            "failed_workloads": failed,
+            "comparison": "source-order-over-original-c",
+        }
         result["environment"]["load_end"] = Path("/proc/loadavg").read_text().split()[:3]
         result["status"] = "complete"
         BASE.save(args.output, result)
-        print(json.dumps({"summary": result["summary"], "speed_gate": result["speed_gate"]}, indent=2))
+        print(
+            json.dumps({"summary": result["summary"], "speed_gate": result["speed_gate"]}, indent=2)
+        )
     except BaseException as error:
         result["status"] = "failed"
         result["error"] = f"{type(error).__name__}: {error}"

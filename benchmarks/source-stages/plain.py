@@ -5,12 +5,11 @@ import argparse
 import importlib.util
 import json
 import os
-from pathlib import Path
 import random
 import statistics
 import subprocess
 import tempfile
-
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("measure", ROOT / "benchmarks/bootstrap/measure.py")
@@ -36,14 +35,27 @@ def main():
     cache.mkdir(exist_ok=True)
     directory = Path(tempfile.mkdtemp(prefix="plain-source-", dir=cache))
     workloads = [BASE.generate(directory, count) for count in (1000, 8000)]
-    workloads.append({"name": "intrusive", "library": False,
-                      "paths": {"crust": ROOT / "examples/intrusive/program.crs"}})
+    workloads.append(
+        {
+            "name": "intrusive",
+            "library": False,
+            "paths": {"crust": ROOT / "examples/intrusive/program.crs"},
+        }
+    )
     binaries = {"before": args.before.resolve(), "after": args.after.resolve()}
     hashes = {name: BASE.binary_info(path) for name, path in binaries.items()}
-    commands = {workload["name"]: {
-        name: [str(binary), str(workload["paths"]["crust"]),
-               *(["--library"] if workload["library"] else []), "-S"]
-        for name, binary in binaries.items()} for workload in workloads}
+    commands = {
+        workload["name"]: {
+            name: [
+                str(binary),
+                str(workload["paths"]["crust"]),
+                *(["--library"] if workload["library"] else []),
+                "-S",
+            ]
+            for name, binary in binaries.items()
+        }
+        for workload in workloads
+    }
     for name, routes in commands.items():
         outputs = []
         for command in routes.values():
@@ -69,22 +81,38 @@ def main():
     summary = {}
     for name in commands:
         rows = [row for row in samples if row["workload"] == name]
-        ratios = sorted(statistics.median(row["after"] / row["before"]
-                        for row in rng.choices(rows, k=len(rows))) for _ in range(10000))
+        ratios = sorted(
+            statistics.median(
+                row["after"] / row["before"] for row in rng.choices(rows, k=len(rows))
+            )
+            for _ in range(10000)
+        )
         summary[name] = {
             "before_ms": statistics.median(row["before"] for row in rows) / 1e6,
             "after_ms": statistics.median(row["after"] for row in rows) / 1e6,
             "median_paired_ratio": statistics.median(row["after"] / row["before"] for row in rows),
-            "paired_bootstrap_95_ci": [BASE.percentile(ratios, .025), BASE.percentile(ratios, .975)]}
+            "paired_bootstrap_95_ci": [
+                BASE.percentile(ratios, 0.025),
+                BASE.percentile(ratios, 0.975),
+            ],
+        }
     for name, path in binaries.items():
         if BASE.binary_info(path) != hashes[name]:
             raise RuntimeError(f"Compiler changed during measurement: {name}")
-    result = {"environment": BASE.environment(args.cpu), "before_revision": args.before_revision,
-              "boundary": "Source-first plain CRUST to complete assembly; no native assembly or linking; identical output bytes",
-              "method": "Fresh processes; 25 or more randomized paired rounds; 10000 bootstrap draws; warm OS cache",
-              "binaries": hashes, "commands": commands, "samples": samples, "summary": summary,
-              "input_hashes": {workload["name"]: BASE.sha256(workload["paths"]["crust"]) for workload in workloads},
-              "source_sha256": BASE.compiler_sources()}
+    result = {
+        "environment": BASE.environment(args.cpu),
+        "before_revision": args.before_revision,
+        "boundary": "Source-first plain CRUST to complete assembly; no native assembly or linking; identical output bytes",
+        "method": "Fresh processes; 25 or more randomized paired rounds; 10000 bootstrap draws; warm OS cache",
+        "binaries": hashes,
+        "commands": commands,
+        "samples": samples,
+        "summary": summary,
+        "input_hashes": {
+            workload["name"]: BASE.sha256(workload["paths"]["crust"]) for workload in workloads
+        },
+        "source_sha256": BASE.compiler_sources(),
+    }
     BASE.save(args.output, result)
     print(json.dumps(summary, indent=2))
 

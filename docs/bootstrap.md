@@ -284,6 +284,21 @@ explicit. Raw pointer access has the preconditions in the specification and
 does not receive automatic lifetime or bounds checks. Large stack reservations
 probe each page so that they cannot skip a stack guard.
 
+## Development checks
+
+Install the commit checks once per checkout:
+
+```sh
+python3 -m pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+The hooks check text and configuration files, format C and Python, lint Python,
+and check the generated Crust APIs. Lizard limits functions in `src/`,
+`include/`, and `runtime/` to CCN 15. Recorded benchmark inputs and reports are
+excluded from formatters because their hashes identify the measured bytes.
+
 ## Validation and measurements
 
 Run `make check` for reader, checker, allocator, host, parallel, evaluator, and backend API

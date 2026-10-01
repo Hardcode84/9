@@ -1,91 +1,50 @@
-# crust
+# Crust
 
-Crust is a small systems programming language project.
-The main requirement is C-level compilation speed before backend processing.
+Crust is an experimental systems programming language with a small core,
+explicit memory control, and compiler stages written in Crust.
 
-The Crust0 bootstrap compiler is implemented in pedantic C99 with arena
-allocation. `crust` executes compilation programs; `crust0` emits textual x86-64
-assembly for the system assembler and linker. Run `make` to build them and
-`make check` to run the tests. The host runner uses libffi.
-Read the [bootstrap guide](docs/bootstrap.md) for commands, public stage APIs,
-the compiled replacement-stage example, and measurement boundaries.
+The core has explicit types, integers, records, arrays, pointers, and native
+function calls. Optional compiler libraries provide ownership, RAII, `defer`,
+function overloads, and a C backend. The raw core has no lifetime checks;
+the selected stage defines and enforces its ownership rules.
 
-An optional [C backend stage](docs/c-backend.md) is written entirely in Crust0.
-Run `make c-stage` to build it through the seed and then through its own C
-output. It uses GCC for native code and retains the C99 reader and checker.
+## Design principles
 
-Run a [compilation program](docs/source-runner.md) with `crust main.crs`.
-The root selects its sources, stages, and outputs through ordinary calls.
-It can change the reader for its remaining bytes. The
-[hello-world example](examples/hello/main.crs) keeps the compilation program
-and target program in the same file:
+- **Compilation speed first.** C-level compilation speed before backend
+  processing is the main requirement.
+- **A small, extensible core.** Add language features through libraries.
+  Keep the compiler interfaces open to replacement readers, checkers, and
+  backends.
+- **Compilation is a program.** `crust main.crs` executes the source from
+  the beginning. That program selects inputs, stages, and outputs. It can
+  change how the following source is read.
+- **Explicit costs.** No implicit heap allocation or garbage collection.
+  Programs use only the language stages they select.
+- **Independent work.** Keep stage dependencies explicit so independent
+  work can run in parallel. Root actions retain their source order.
+
+## Quick start
+
+The current prototype targets Linux x86-64. It uses a pedantic C99 bootstrap
+compiler. Install GCC, GNU Make, GNU binutils, Python 3, and the libffi
+development headers and library.
+
+From the repository root:
 
 ```sh
 make all c-stage
 build/crust examples/hello/main.crs
 build/hello
-make check-examples
 ```
 
-The root controls reading, checking, and output through public APIs.
-Root and target code use separate namespaces, even when they share a file.
-The [example index](examples/README.md) also covers arguments, multiple target
-files, intrusive lists, a new root grammar, and a custom assembly stage.
+The program prints `Hello, world!`. The [example source](examples/hello/main.crs)
+contains both the compilation program and the target program. The first
+command builds the compiler and C backend; the second builds the example;
+the third runs it.
 
-Start with the [Crust0 language specification](docs/crust0-spec.md). It defines the
-minimal bootstrap language, complete grammar, execution rules, and public stage
-contracts. Module management, ownership, richer syntax, and backend adapters
-belong to compiled libraries. The seed has no import or module syntax.
+## Documentation
 
-Read the [language exploration](docs/language-exploration.md) for the research,
-candidate checked-language rules, systems requirements, and acceptance tests.
-
-The optional [resource stage](stages/resources/README.md) implements ownership,
-local loans, RAII, and `defer` entirely in Crust. It uses a generic Crust reader and
-a generic C function-body callback. Run `make resource-stage` to build it.
-The [design record](docs/resource-metastage.md) explains its contracts and
-bounded SQLite application test.
-
-The optional [overload stage](stages/overload/README.md) selects functions by
-exact parameter types and assigns stable native names. It is also written in
-Crust. The root can select it alone or compose it with the resource stage.
-Run `make overload-stage`, then try the
-[same-file example](examples/overload/hello/main.crs) or the
-[separate-object example](examples/overload/separate/main.crs).
-
-Read the [compiler profiles](docs/compiler-profiles.md) for measured C, C++, and
-Rust frontend costs, profiler overhead, and repeatable commands.
-
-Read the [systems source study](docs/systems-capabilities.md) for direct intrusive
-lists and storage requirements from Linux, GCC, LLVM, and Coho.
-
-Read the [metacompilation study](docs/metacompilation.md) for Jai, Lisp, Scheme,
-Forth, staged language extensions, a public compiler pipeline, and caching.
-
-Read the [source metastage review](docs/source-metastages.md) for the Zig and
-Jai comparison and the phase contract used by the source-stage design.
-
-Read the [source-order design study](docs/source-order-compilation.md) for
-the research and experiment plan. The [runner contract](docs/source-runner.md)
-defines the implemented interface and its measurement boundary.
-
-Read the [compiler extension experiment](docs/compiler-extension-experiment.md)
-for a small seed, ownership and unsafe stages, complete syntax replacement,
-backend metastages, and a C compiler benchmark.
-
-Crust0 has raw memory preconditions. The checked language's direct-list lifetime
-rule still requires a specified rule and a checked implementation. The C99
-bootstrap and its measurements do not establish that safety claim.
-
-Install the commit checks once per checkout:
-
-```sh
-python3 -m pip install pre-commit
-pre-commit install
-pre-commit run --all-files
-```
-
-The hooks check text and configuration files, format C and Python, lint Python,
-and check the generated Crust APIs. Recorded benchmark inputs and reports are
-excluded from formatters because their hashes identify the measured bytes.
-Lizard limits functions in `src/`, `include/`, and `runtime/` to CCN 15.
+- [Language specification](docs/crust0-spec.md)
+- [Examples](examples/README.md)
+- [Compilation programs and stage APIs](docs/source-runner.md)
+- [Build, tests, and contributor setup](docs/bootstrap.md)

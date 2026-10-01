@@ -11,9 +11,13 @@ const tokenTypes = [
 ];
 const tokenModifiers = ['declaration', 'readonly'];
 const maxSourceBytes = 4 * 1024 * 1024;
-const maxOutputBytes = 128 * 1024 * 1024;
+const maxOutputBytes = 8 * 1024 * 1024;
+const maxTokenCount = 500000;
 
 function snapshot(text) {
+    if (text.length > maxSourceBytes) {
+        throw new Error('Highlight input exceeds the 4 MiB editor limit');
+    }
     for (let index = 0; index < text.length; index++) {
         const code = text.charCodeAt(index);
         if (code >= 0xd800 && code <= 0xdbff) {
@@ -45,16 +49,30 @@ function decodeTokens(response, text) {
         !sameLegend(response.tokenModifiers, tokenModifiers) || !Array.isArray(response.spans)) {
         throw new Error('Invalid Crust highlight response or legend');
     }
-    const data = [];
+    if (response.spans.length > maxTokenCount) {
+        throw new Error('Highlight response exceeds the 500000 span limit');
+    }
+    let data = new Uint32Array(response.spans.length * 5);
+    let used = 0;
     const issues = new Map();
     let byte = 0, index = 0, line = 0, column = 0;
     let previousLine = 0, previousColumn = 0, previousEnd = 0;
 
     function emit(startLine, startColumn, endColumn, kind, modifiers) {
         if (startColumn === endColumn) return;
-        data.push(startLine - previousLine,
-            startLine === previousLine ? startColumn - previousColumn : startColumn,
-            endColumn - startColumn, kind, modifiers);
+        if (used === maxTokenCount * 5) {
+            throw new Error('Highlight result exceeds the 500000 semantic token limit');
+        }
+        if (used === data.length) {
+            const grown = new Uint32Array(Math.min(maxTokenCount * 5, Math.max(5, data.length * 2)));
+            grown.set(data);
+            data = grown;
+        }
+        data[used++] = startLine - previousLine;
+        data[used++] = startLine === previousLine ? startColumn - previousColumn : startColumn;
+        data[used++] = endColumn - startColumn;
+        data[used++] = kind;
+        data[used++] = modifiers;
         previousLine = startLine;
         previousColumn = startColumn;
         if (kind >= 10 && !issues.has(kind)) {
@@ -100,7 +118,7 @@ function decodeTokens(response, text) {
         if (issueStart && !issues.has(kind)) issues.set(kind, issueStart);
         previousEnd = end;
     }
-    return { data: new Uint32Array(data), issues: [...issues.values()] };
+    return { data: data.subarray(0, used), issues: [...issues.values()] };
 }
 
 async function runHighlighter({ executable, args = [], text, signal, timeoutMs = 5000 }) {
@@ -133,7 +151,7 @@ async function runHighlighter({ executable, args = [], text, signal, timeoutMs =
             const timer = setTimeout(() => stop(new Error('Crust highlighter timed out')), timeoutMs);
             child.stdout.on('data', chunk => {
                 size += chunk.length;
-                if (size > maxOutputBytes) stop(new Error('Highlight output exceeds 128 MiB'));
+                if (size > maxOutputBytes) stop(new Error('Highlight output exceeds 8 MiB'));
                 else if (!failure) chunks.push(chunk);
             });
             child.stderr.on('data', chunk => {

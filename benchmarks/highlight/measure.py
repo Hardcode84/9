@@ -8,6 +8,7 @@ import platform
 import statistics
 import subprocess
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -112,7 +113,7 @@ def main():
         "build/libcrust0_host.a",
     ]
     report = {
-        "date": "2026-10-01",
+        "date": datetime.now(timezone.utc).date().isoformat(),
         "base_revision": run(["git", "rev-parse", "HEAD"], capture_output=True)
         .stdout.decode()
         .strip(),

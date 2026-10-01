@@ -96,6 +96,8 @@ Input paths are relative to the working directory. Prefix a path that
 starts with `-` with `./`. Status 2 means invalid command arguments. Status
 1 means an input, output, allocation, or service error. Invalid source
 tokens are represented in the successful result so editing can continue.
+Token mode permits at most 500000 spans. It fails with a diagnostic and no
+JSON output if the service exceeds that budget. HTML mode has no span budget.
 
 ## 4. Select another grammar
 
@@ -139,6 +141,10 @@ the caller retains the source bytes until then.
 inside it. `hl_add` checks ordering, bounds, classes, and modifier bits.
 A failed allocation or service sets `result.failed` and a context diagnostic.
 Callers stop on failure. A null service emits an `unresolved` span.
+`hl_init` sets `result.span_limit` to the largest `usize` value. Set this field
+before adding spans to select a smaller budget. All services that append to
+the same result share that budget. A budget failure retains the diagnostic;
+the caller must reject the partial result.
 
 If this profile cannot find its marker, it marks the document unresolved.
 It does not execute the original program to guess which reader it selects.
@@ -209,10 +215,12 @@ make check-vscode
 python3 stages/highlight/test.py --build build --sanitize
 ```
 
-The library checks cover source boundaries, rejected service output, arena
-allocation failures, HTML text preservation, and input/output errors. The
-editor checks run actual Crust processes and check unsaved text, Unicode,
-CRLF, stale results, cancellation, timeouts, trust, and invalid responses.
+The library checks cover source boundaries, rejected service output, span
+budgets, arena allocation failures, HTML text preservation, and input/output
+errors. The editor checks run actual Crust processes and check unsaved text,
+Unicode, CRLF, stale results, cancellation, timeouts, trust, invalid responses, and
+output and token budgets. A multiline span must fit the token budget after
+line splitting.
 The provider tests supply a VS Code API test double; they do not operate a
 graphical editor.
 

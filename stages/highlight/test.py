@@ -144,6 +144,15 @@ def main():
         failure = subprocess.run([str(tool), str(actual)], stdout=stream, stderr=subprocess.PIPE)
         assert failure.returncode != 0 and b"cannot write" in failure.stderr
 
+    budget = work / "budget.crs"
+    budget.write_bytes(b";" * 500000)
+    assert len(json.loads(run(tool, "--tokens", budget))["spans"]) == 500000
+    budget.write_bytes(b";" * 500001)
+    failure = subprocess.run([str(tool), "--tokens", str(budget)], capture_output=True)
+    assert failure.returncode != 0 and not failure.stdout
+    assert b"highlight span limit exceeded" in failure.stderr
+    subprocess.run([str(tool), "--html", str(budget)], stdout=subprocess.DEVNULL, check=True)
+
     run(
         build / "crust-c",
         "-o",
@@ -164,7 +173,7 @@ def main():
     run(work / "library-tests", large, *production)
     print(
         f"Highlighting: {len(cases)} boundary inputs, {len(production)} strict lexer comparisons, "
-        "all allocation failures, 9 rejected API contracts, native/root equivalence, custom grammar, "
+        "all allocation failures, 11 rejected API contracts, token budget, native/root equivalence, custom grammar, "
         "effect isolation, and I/O errors passed"
     )
 

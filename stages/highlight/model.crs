@@ -25,6 +25,7 @@ record HlResult {
     spans:*HlSpan;
     count:usize;
     capacity:usize;
+    span_limit:usize;
     failed:bool;
 }
 record HlText { bytes:*u8; size:usize; capacity:usize; }
@@ -38,10 +39,11 @@ record HlLexer {
 }
 
 // Borrow source through the last use of this result. Storage belongs to context.
+// The span budget is unlimited. Callers can reduce span_limit before adding spans.
 fn hl_init(result:*HlResult, context:*CrustContext, source:*CrustSource)->unit {
     *result = make HlResult {
         context:context, source:source, spans:null(*HlSpan), count:0usize,
-        capacity:0usize, failed:false
+        capacity:0usize, span_limit:~0usize, failed:false
     };
 }
 
@@ -61,6 +63,9 @@ fn hl_alloc(result:*HlResult, size:usize, alignment:usize)->*u8 {
 // Append an ordered, disjoint range inside source. Reject invalid classifications.
 fn hl_add(result:*HlResult, begin:usize, end:usize, kind:u32, modifiers:u32)->bool {
     if (*result).failed { return false; }
+    if (*result).count >= (*result).span_limit {
+        hl_error(result, "highlight span limit exceeded"); return false;
+    }
     if begin >= end || end > (*(*result).source).size || kind >= 12u32 || modifiers > 3u32 {
         hl_error(result, "invalid highlight span"); return false;
     }

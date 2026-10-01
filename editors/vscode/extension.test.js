@@ -3,6 +3,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+const launcher = process.env.CRUST_LAUNCHER;
+if (!launcher) throw new Error('Run make check-vscode to supply the source launcher');
+
 const state = { trusted: true, config: {}, providers: [], diagnostics: new Map(), messages: [] };
 const disposable = () => ({ dispose() {} });
 class EventEmitter {
@@ -59,7 +62,7 @@ test('provider publishes current tokens, discards stale snapshots, and gates cus
         expect(await cancelled).toBeUndefined();
         state.trusted = true;
         state.config = {
-            'highlighter.path': 'build/crust',
+            'highlighter.path': '${workspaceFolder}/' + path.relative(process.cwd(), launcher),
             'highlighter.arguments': ['${workspaceFolder}/examples/highlight/reader-switch.crs'],
         };
         const readerText = await fs.readFile(path.join(process.cwd(), 'examples/reader-switch/main.crs'), 'utf8');

@@ -6,6 +6,8 @@ import { tokenTypes, tokenModifiers, snapshot, decodeTokens, runHighlighter } fr
 
 const executable = process.env.CRUST_HIGHLIGHT;
 if (!executable) throw new Error('Run make check-vscode to supply the built highlighter');
+const launcher = process.env.CRUST_LAUNCHER;
+if (!launcher) throw new Error('Run make check-vscode to supply the source launcher');
 
 function response(text, spans) {
     return { version: 1, byteLength: Buffer.byteLength(text), tokenTypes, tokenModifiers, spans };
@@ -34,6 +36,18 @@ test('external token responses reject invalid ranges, legends, and byte boundari
     expect(() => snapshot('x'.repeat(4 * 1024 * 1024 + 1))).toThrow('4 MiB');
 });
 
+test('response and multiline token budgets reject excess without truncation', () => {
+    const text = 'x\n'.repeat(500000);
+    const result = decodeTokens(response(text, [[0, text.length, 2, 0]]), text);
+    expect(result.data.length).toBe(500000 * 5);
+    expect([...result.data.slice(-5)]).toEqual([1, 0, 1, 2, 0]);
+    const excess = text + 'x';
+    expect(() => decodeTokens(response(excess, [[0, excess.length, 2, 0]]), excess)).toThrow('semantic token limit');
+    const many = 'x'.repeat(500001);
+    const spans = Array.from({ length: many.length }, (_, index) => [index, index + 1, 2, 0]);
+    expect(() => decodeTokens(response(many, spans), many)).toThrow('span limit');
+});
+
 test('native service colors an unsaved Unicode snapshot and recovers after errors', async () => {
     const text = '// 😀é\r\n"unfinished\r\nfn after()->unit{}';
     const raw = await runHighlighter({ executable, text });
@@ -48,7 +62,7 @@ test('a user Crust program supplies a different grammar through the same process
     const root = path.resolve(import.meta.dir, '../..');
     const text = await fs.readFile(path.join(root, 'examples/reader-switch/main.crs'), 'utf8');
     const raw = await runHighlighter({
-        executable: path.join(root, 'build/crust'),
+        executable: launcher,
         args: [path.join(root, 'examples/highlight/reader-switch.crs')], text,
     });
     const spans = raw.spans.map(([begin, end, kind]) => [Buffer.from(text).subarray(begin, end).toString(), tokenTypes[kind]]);
@@ -86,4 +100,15 @@ test('process and protocol failures reach the caller', async () => {
     await expect(runHighlighter({ executable: 'python3', args: ['-c', 'import sys;sys.stderr.write("bad profile");sys.exit(3)'], text: '' })).rejects.toThrow('bad profile');
     await expect(runHighlighter({ executable: 'python3', args: ['-c', 'print("not json")'], text: '' })).rejects.toThrow();
     await expect(runHighlighter({ executable: 'python3', args: ['-c', 'import sys;sys.stderr.write("x"*65537)'], text: '' })).rejects.toThrow('64 KiB');
+});
+
+test('JSON output is bounded before parsing and the native producer bounds dense tokens', async () => {
+    const padded = 'import sys;value=sys.argv[1];sys.stdout.write(value+" "*(8*1024*1024-len(value)))';
+    const exact = await runHighlighter({
+        executable: 'python3', args: ['-c', padded, JSON.stringify(response('', []))], text: '',
+    });
+    expect(decodeTokens(exact, '').data.length).toBe(0);
+    const script = 'import sys;sys.stdout.write(" "*(8*1024*1024+1))';
+    await expect(runHighlighter({ executable: 'python3', args: ['-c', script], text: '' })).rejects.toThrow('8 MiB');
+    await expect(runHighlighter({ executable, text: ';x'.repeat(250001) })).rejects.toThrow('highlight span limit exceeded');
 });

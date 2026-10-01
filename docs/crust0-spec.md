@@ -888,6 +888,12 @@ invalid constant forms, and missing returns. Diagnostics identify the input
 and source position when one exists. A stated implementation resource limit
 must fail explicitly; it must not omit a check or accept partial output.
 
+The current repository implements seed syntax, execution, and root control.
+Its stage libraries provide bounded construction witnesses. They do not establish
+full compiler self-compilation or the C frontend experiment. The checked direct
+intrusive-list witness is also absent. Passing the seed tests does not complete
+compiler-construction or checked-language acceptance.
+
 The first implementation must establish these cases before adding language
 facilities:
 

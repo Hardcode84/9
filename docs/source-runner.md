@@ -320,10 +320,13 @@ Operating-system file caches are not cleared between samples.
 | 8,000 functions | 109.335 | 106.080 | 111.387 | [0.97278, 0.98677] |
 
 The upper bound of each paired-bootstrap ratio interval is below 1.0. These
-results pass the required gate for the three recorded inputs and host. All
-225 timed samples used unchanged source and binary hashes. Complete C and
-symbol bytes match the prepared backend. The intrusive output also compiles
-and runs without a compiler-library dependency.
+results pass the recorded prepared-stage comparison against GCC for these
+three inputs and this host. This report does not compare Clang or include stage
+preparation in those intervals. It does not establish the full specification
+performance gate or the speed of the current checkout. All 225 timed samples
+used unchanged source and binary hashes. Complete C and symbol bytes match the
+prepared backend. The intrusive output also compiles and runs without a
+compiler-library dependency.
 
 The [experiment record](../benchmarks/source-order/performance-experiments.md)
 retains the first failed large-input gate, profiles, rejected changes, and the

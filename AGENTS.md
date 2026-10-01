@@ -37,6 +37,11 @@ Do not add a feature before a concrete program requires it.
   action needed to remove it.
 - Write technical documentation in ASD-STE100. Use repository-relative
   links. Do not put local absolute paths or issue tracker IDs in repo docs.
+- Do not create review reports or review documents unless the user requests
+  them. Record actionable findings in Beads and report results in the reply.
+  Keep necessary scratch files and generated test outputs in the ignored
+  build directory. Do not commit temporary investigation artifacts. Correct
+  existing product documentation when its claims or contracts need a change.
 - Function and type documentation describes user-visible behavior and
   preconditions and postconditions. Local comments explain non-obvious
   intent or invariants. Do not repeat the code in comments.
@@ -132,6 +137,7 @@ Build with `make all`. Use the checks that cover the change:
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |
 | Overloads and resource composition | `make check-overload check-overload-alloc` |
 | Compilation program examples | `make check-examples` |
+| Highlighting and editor integration | `make check-highlight check-vscode` |
 
 A core or shared API change requires the full matrix. Run the relevant
 sanitizer checks when allocation, native calls, or resource lifetimes change.

@@ -1,4 +1,4 @@
-// Include api/crust0.crust and api/crust0_stage.crust before this consumer interface.
+// Include api/crust0.crs and api/crust0_stage.crs before this consumer interface.
 // Mode 0 emits an executable, 1 emits an object, and 2 emits C text.
 // Native outputs require a file path. Null or "-" selects stdout for C text.
 // Symbols is an optional separate response-file path for C text only.

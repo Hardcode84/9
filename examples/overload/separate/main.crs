@@ -1,10 +1,10 @@
-host_source(run, "../../../api/crust0_stage.crust");
-host_source(run, "../../../stages/overload/api.crust");
+host_source(run, "../../../api/crust0_stage.crs");
+host_source(run, "../../../stages/overload/api.crs");
 host_link(run, "../../../build/crust-overload-library.so");
 
-var provider:*CrustSource = host_input(run, "provider.crust", 1u64);
+var provider:*CrustSource = host_input(run, "provider.crs", 1u64);
 var object:*u8 = host_path(run, "../../../build/overload-format.o");
-var interface:*u8 = host_path(run, "interface.crust");
+var interface:*u8 = host_path(run, "interface.crs");
 var provider_arguments:[*u8;5] = make [*u8;5] {
     "--library", "--object", "-o", object, interface
 };

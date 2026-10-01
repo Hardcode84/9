@@ -82,7 +82,7 @@ def main():
                     *map(Path, make_words(makefile, "C_STAGE"))]
     if args.stage_compiler:
         frozen_paths.append(args.stage_compiler)
-        frozen_paths += [*map(Path, make_words(makefile, "OVERLOAD_LIBRARY")), Path("stages/overload/main.crust")]
+        frozen_paths += [*map(Path, make_words(makefile, "OVERLOAD_LIBRARY")), Path("stages/overload/main.crs")]
     frozen = {str(path): sha(path) for path in frozen_paths}
     workloads = []
     for count in counts:
@@ -94,7 +94,7 @@ def main():
                 directory = args.work / f"family-{count}" / label
                 directory.mkdir(parents=True, exist_ok=True)
                 provider, caller, expected = source_pair(count, args.calls, overloaded, short)
-                paths = [directory / "provider.crust", directory / "caller.crust"]
+                paths = [directory / "provider.crs", directory / "caller.crs"]
                 for path, text in zip(paths, (provider, caller)):
                     path.write_text(text)
                 variants[label] = {"sources": {str(path): {"bytes": path.stat().st_size, "sha256": sha(path)} for path in paths},

@@ -55,8 +55,8 @@ def main():
             raise AssertionError(record)
         return result
 
-    library = EXAMPLE / "library.crust"
-    program = EXAMPLE / "program.crust"
+    library = EXAMPLE / "library.crs"
+    program = EXAMPLE / "program.crs"
     sqlite = baseline_work / "sqlite3.o"
     if not sqlite.is_file():
         raise SystemExit("Run benchmarks/resources/verify.py before this check.")
@@ -65,8 +65,8 @@ def main():
     command([args.compiler, "--check", library, program])
     command([args.compiler, "--cflag=-O2", "-o", compiler_target, library, program,
              "--ldflag", sqlite, "--ldflag=-ldl", "--ldflag=-lm", "--ldflag=-pthread"])
-    command([args.runner, EXAMPLE / "main.crust"])
-    command([args.runner, EXAMPLE / "main.crust", "--check"])
+    command([args.runner, EXAMPLE / "main.crs"])
+    command([args.runner, EXAMPLE / "main.crs", "--check"])
     executables = [compiler_target, root_target]
     if args.sanitizers:
         sanitized = args.work / "sqlite-resource-sanitize"
@@ -110,13 +110,13 @@ def main():
         "callback-mode": ("fn wrong(value:mut Bytes, context:mut QueryContext)->i32 { return 0i32; } fn bad(value:mut Statement, context:mut QueryContext)->i32 { return with_blob(mut value,0i32,mut context,wrong); }", "incompatible type or borrow mode"),
     }
     for name, (text, diagnostic) in negatives.items():
-        path = args.work / (name + ".crust")
+        path = args.work / (name + ".crs")
         path.write_text(text + "\n")
         result = command([args.compiler, "--library", "--check", library, path], expected=1)
         assert diagnostic.encode() in result.stderr, (name, result.stderr)
         report["rejections"].append({"name": name, "diagnostic": result.stderr.decode(),
                                      "source": text, "source_sha256": sha(path)})
-    format_source = args.work / "format.crust"
+    format_source = args.work / "format.crs"
     format_source.write_text('''fn main(argc:i32,argv:**u8)->i32 {
     if write_number(1i32,0u64)!=0i32 {return 1i32;}
     unsafe {if write_bytes(1i32," ",1usize)!=0i32 {return 1i32;}}
@@ -181,10 +181,10 @@ int main(void) {
                                  "native_symbol": native_name,
                                  "observed_instructions": [line.strip() for line in disassembly.decode().splitlines()
                                                            if any(op in line for op in ("pxor", "movaps", "movl   $0x0"))]}
-    paths = [*sorted(EXAMPLE.glob("*.crust")), EXAMPLE / "verify.py",
-             *sorted(Path("stages/resources").glob("*.crust")),
-             *sorted(Path("stages/reader").glob("*.crust")),
-             *sorted(Path("stages/c").glob("*.crust"))]
+    paths = [*sorted(EXAMPLE.glob("*.crs")), EXAMPLE / "verify.py",
+             *sorted(Path("stages/resources").glob("*.crs")),
+             *sorted(Path("stages/reader").glob("*.crs")),
+             *sorted(Path("stages/c").glob("*.crs"))]
     report["source_sha256"] = {str(path): sha(path) for path in paths}
     report["binary_sha256"] = {str(path): sha(path) for path in
                                [args.compiler, args.runner, Path("build/crust-resource-library.so"),

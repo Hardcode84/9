@@ -4,11 +4,11 @@ This library reads the Crust0 declaration grammar. All lexer and parser code is
 ordinary Crust. It calls the public arena, name, and diagnostic APIs. It does not
 call the seed reader.
 
-Load these files after `api/crust0.crust`:
+Load these files after `api/crust0.crs`:
 
-1. `model.crust`
-2. `lex.crust`
-3. `parse.crust`
+1. `model.crs`
+2. `lex.crs`
+3. `parse.crs`
 
 Call `rr_read(context, source, begin, end, hooks)`. A null hook pointer selects
 the standard grammar. Success returns a unit and appends it to the context.

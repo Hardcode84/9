@@ -17,15 +17,15 @@ import overload_resources
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = [
-    "api/crust0.crust", "api/crust0_host.crust",
-    "stages/c/model.crust", "stages/c/base.crust",
-    *[f"stages/reader/{name}.crust" for name in ("model", "lex", "parse")],
-    *[f"stages/resources/{name}.crust" for name in (
+    "api/crust0.crs", "api/crust0_host.crs",
+    "stages/c/model.crs", "stages/c/base.crs",
+    *[f"stages/reader/{name}.crs" for name in ("model", "lex", "parse")],
+    *[f"stages/resources/{name}.crs" for name in (
         "model", "base", "read", "types", "constants", "state", "cleanup",
         "places", "expr", "control")],
-    *[f"stages/overload/{name}.crust" for name in (
+    *[f"stages/overload/{name}.crs" for name in (
         "model", "base", "types", "collect", "read", "resolve", "resources")],
-    "tests/overload_alloc.crust",
+    "tests/overload_alloc.crs",
 ]
 
 
@@ -125,7 +125,7 @@ def main():
         for name, mode, sources in selected:
             inputs = []
             for index, source in enumerate(sources):
-                path = work / f"{name}-{index}.crust"
+                path = work / f"{name}-{index}.crs"
                 path.write_text(source)
                 inputs.append(path)
             result = run([executable, mode, *inputs])

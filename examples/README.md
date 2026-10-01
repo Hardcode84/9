@@ -6,7 +6,7 @@ Run the commands below from the repository root. Build the tools once:
 make all c-stage
 ```
 
-Each example has its own directory. Start with [hello](hello/main.crust).
+Each example has its own directory. Start with [hello](hello/main.crs).
 
 | Directory | Example | Output |
 | --- | --- | --- |

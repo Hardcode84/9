@@ -28,8 +28,8 @@ def checked(command):
         raise RuntimeError((command, result.returncode, result.stderr))
     return result.stdout
 
-interfaces = [ROOT / p for p in ('api/crust0.crust', 'api/crust0_stage.crust', 'stages/c/api.crust')]
-interfaces += [HERE / 'model.crust', HERE / 'interface.crust']
+interfaces = [ROOT / p for p in ('api/crust0.crs', 'api/crust0_stage.crs', 'stages/c/api.crs')]
+interfaces += [HERE / 'model.crs', HERE / 'interface.crs']
 
 def proof_command(source):
     result = [str(HERE / 'runner'), str(source)]
@@ -39,17 +39,17 @@ def proof_command(source):
     return result + ['--', '/dev/null']
 
 commands = {
-    'source-order-output': proof_command(HERE / 'main.crust'),
-    'fixed-reader-output': proof_command(HERE / 'native-no-reader-change.crust'),
-    'prepared-output': [str(BUILD / 'crust-c'), '--emit-c', '--symbols', '/dev/null', str(ROOT / 'examples/intrusive/program.crust')],
+    'source-order-output': proof_command(HERE / 'main.crs'),
+    'fixed-reader-output': proof_command(HERE / 'native-no-reader-change.crs'),
+    'prepared-output': [str(BUILD / 'crust-c'), '--emit-c', '--symbols', '/dev/null', str(ROOT / 'examples/intrusive/program.crs')],
     'gcc-original-syntax': ['gcc', '-std=c99', '-pedantic-errors', '-O0', '-g0', '-fsyntax-only', '-Iinclude', 'benchmarks/bootstrap/intrusive.c'],
 }
-paths = [HERE / p for p in ('runner', 'reader.plugin', 'output.plugin', 'runner.c', 'proof.h', 'model.crust', 'interface.crust', 'plugin.crust', 'main.crust', 'native-no-reader-change.crust', 'verify.py', 'verification.json', 'measure.py')]
+paths = [HERE / p for p in ('runner', 'reader.plugin', 'output.plugin', 'runner.c', 'proof.h', 'model.crs', 'interface.crs', 'plugin.crs', 'main.crs', 'native-no-reader-change.crs', 'verify.py', 'verification.json', 'measure.py')]
 paths += [BUILD / p for p in ('crust-c','crust-c-library.so','libcrust0_host.a')]
 paths += [HERE / 'replay-build.json']
-paths += interfaces + [ROOT / p for p in ( 'examples/intrusive/program.crust', 'benchmarks/bootstrap/intrusive.c', 'benchmarks/bootstrap/measure.py')]
+paths += interfaces + [ROOT / p for p in ( 'examples/intrusive/program.crs', 'benchmarks/bootstrap/intrusive.c', 'benchmarks/bootstrap/measure.py')]
 paths += [BUILD / p for p in ('core.o', 'read.o', 'check.o', 'host.o')]
-paths += sorted((ROOT / 'src').glob('*.c')) + sorted((ROOT / 'include').glob('*.h')) + sorted((ROOT / 'stages/c').glob('*.crust'))
+paths += sorted((ROOT / 'src').glob('*.c')) + sorted((ROOT / 'include').glob('*.h')) + sorted((ROOT / 'stages/c').glob('*.crs'))
 hashes = {str(path): info(path) for path in paths}
 if info(HERE / 'output.plugin')['sha256'] != info(BUILD / 'crust-c-library.so')['sha256']:
     raise RuntimeError('Ordinary backend copy differs from prepared input')

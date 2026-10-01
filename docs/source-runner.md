@@ -11,7 +11,7 @@ and the required experiments.
 Run a compilation program with:
 
 ```sh
-crust main.crust
+crust main.crs
 ```
 
 The root runs from its first action. It selects compiler stages, reads target
@@ -27,7 +27,7 @@ The optional C backend also requires GCC, GNU assembler, and GNU `objcopy`.
 
 ```sh
 make all c-stage
-build/crust examples/hello/main.crust
+build/crust examples/hello/main.crs
 build/hello
 make check check-c check-stage
 ```
@@ -36,13 +36,13 @@ The target prints `Hello, world!`. The
 [example index](../examples/README.md) also covers compiler and target arguments,
 multiple files, intrusive lists, reader replacement, and a custom assembly stage.
 
-The [hello example](../examples/hello/main.crust) contains the complete build
+The [hello example](../examples/hello/main.crs) contains the complete build
 description and target program in one file:
 
 ```crust
-host_source(run, "../../api/crust0_stage.crust");
-host_source(run, "../../stages/c/api.crust");
-host_source(run, "../../stages/c/build.crust");
+host_source(run, "../../api/crust0_stage.crs");
+host_source(run, "../../stages/c/api.crs");
+host_source(run, "../../stages/c/build.crs");
 host_link(run, "../../build/crust-c-library.so");
 
 var arguments: [*u8; 2] = make [*u8; 2] {
@@ -84,15 +84,15 @@ root path. `argv[argc]` is null. The root gives those arguments their meaning.
 The launcher accepts `--help` and `--version` in place of a root operand.
 Use a directory prefix for a root file with one of those names.
 
-The installed declarations are `api/crust0.crust`, `api/crust0_host.crust`,
-`api/crust0_eval.crust`, and `api/crust0_run.crust`. The installed helper source is
-`stages/host.crust`. The build embeds these version-matched sources. Every
+The installed declarations are `api/crust0.crs`, `api/crust0_host.crs`,
+`api/crust0_eval.crs`, and `api/crust0_run.crs`. The installed helper source is
+`stages/host.crs`. The build embeds these version-matched sources. Every
 invocation reads and checks them. No saved checked tree or execution result
 is reused. A root must not load those same declarations a second time.
 
 These interfaces expose syntax, types, bindings, incremental checks,
 evaluation calls, and the root cursor and operation fields. Include
-`api/crust0_x64.crust` to call the optional seed assembly backend. Include a
+`api/crust0_x64.crs` to call the optional seed assembly backend. Include a
 library's consumer declarations before calling that library.
 
 The `host_` names are ordinary functions. Their prefix avoids conflicts with

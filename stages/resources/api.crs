@@ -1,4 +1,4 @@
-// Include api/crust0.crust and api/crust0_stage.crust before this consumer interface.
+// Include api/crust0.crs and api/crust0_stage.crs before this consumer interface.
 
 // Require an empty initialized context and source storage live through its destruction.
 // Arguments are compiler options and extra source paths, without an executable name.

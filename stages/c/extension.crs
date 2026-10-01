@@ -1,5 +1,5 @@
-// Include api/crust0.crust, api/crust0_stage.crust, stages/c/model.crust,
-// and stages/c/api.crust before this consumer interface.
+// Include api/crust0.crs, api/crust0_stage.crs, stages/c/model.crs,
+// and stages/c/api.crs before this consumer interface.
 // Retain valid target types, layouts, signatures, parameter symbols, assigned link
 // names, checked constant initializers, and a valid hosted entry or null.
 // A body callback runs after its function signature and emits the complete body.

@@ -14,15 +14,15 @@ An optional [C backend stage](docs/c-backend.md) is written entirely in Crust0.
 Run `make c-stage` to build it through the seed and then through its own C
 output. It uses GCC for native code and retains the C99 reader and checker.
 
-Run a [compilation program](docs/source-runner.md) with `crust main.crust`.
+Run a [compilation program](docs/source-runner.md) with `crust main.crs`.
 The root selects its sources, stages, and outputs through ordinary calls.
 It can change the reader for its remaining bytes. The
-[hello-world example](examples/hello/main.crust) keeps the compilation program
+[hello-world example](examples/hello/main.crs) keeps the compilation program
 and target program in the same file:
 
 ```sh
 make all c-stage
-build/crust examples/hello/main.crust
+build/crust examples/hello/main.crs
 build/hello
 make check-examples
 ```
@@ -50,8 +50,8 @@ The optional [overload stage](stages/overload/README.md) selects functions by
 exact parameter types and assigns stable native names. It is also written in
 Crust. The root can select it alone or compose it with the resource stage.
 Run `make overload-stage`, then try the
-[same-file example](examples/overload/hello/main.crust) or the
-[separate-object example](examples/overload/separate/main.crust).
+[same-file example](examples/overload/hello/main.crs) or the
+[separate-object example](examples/overload/separate/main.crs).
 
 Read the [compiler profiles](docs/compiler-profiles.md) for measured C, C++, and
 Rust frontend costs, profiler overhead, and repeatable commands.

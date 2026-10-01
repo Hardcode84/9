@@ -58,18 +58,18 @@ def main():
     args.work.mkdir(parents=True, exist_ok=True)
     paths = [args.baseline, args.candidate, Path(__file__).relative_to(ROOT),
              Path("benchmarks/resources/measure.py"), Path("Makefile"),
-             *sorted(Path("stages/overload").glob("*.crust")),
-             *sorted(Path("stages/reader").glob("*.crust")),
-             *sorted(Path("stages/c").glob("*.crust")),
+             *sorted(Path("stages/overload").glob("*.crs")),
+             *sorted(Path("stages/reader").glob("*.crs")),
+             *sorted(Path("stages/c").glob("*.crs")),
              *sorted(Path("src").glob("*.c")), *sorted(Path("include").glob("*.h")),
-             *sorted(Path("api").glob("*.crust"))]
+             *sorted(Path("api").glob("*.crs"))]
     delta = Path("benchmarks/overload/field-index.patch")
     if delta.is_file():
         paths.append(delta)
     frozen = {str(path): sha(path) for path in paths}
     cases = []
     for count in counts:
-        path = args.work / f"fields-{count}.crust"
+        path = args.work / f"fields-{count}.crs"
         path.write_text(workload(count))
         frozen[str(path)] = sha(path)
         commands = {"scan": [str(args.baseline), "--check", str(path)],
@@ -127,7 +127,7 @@ def main():
         "baseline": {"binary": str(args.baseline), "sha256": sha(args.baseline),
                      "source_provenance": "saved binary before the three-file field-index change; no source manifest was captured at its build"},
         "candidate": {"binary": str(args.candidate), "sha256": sha(args.candidate)},
-        "field_change": {"files": ["stages/overload/model.crust", "stages/overload/collect.crust", "stages/overload/resolve.crust"],
+        "field_change": {"files": ["stages/overload/model.crs", "stages/overload/collect.crs", "stages/overload/resolve.crs"],
                          "description": "add a per-record field map, populate it once during collection with duplicate rejection, and replace the linear lookup",
                          "patch": str(delta) if delta.is_file() else None},
         "frozen_sha256": frozen, "workloads": cases,

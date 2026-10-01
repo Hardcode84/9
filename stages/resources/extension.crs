@@ -1,5 +1,5 @@
-// Include api/crust0.crust, stages/c/model.crust, and stages/resources/model.crust
-// before this consumer interface. Use stages/c/extension.crust for backend services.
+// Include api/crust0.crs, stages/c/model.crs, and stages/resources/model.crs
+// before this consumer interface. Use stages/c/extension.crs for backend services.
 
 // Initialize at a stable address with an empty target context.
 // Retain the stage and context through preparation and all resource body emission.

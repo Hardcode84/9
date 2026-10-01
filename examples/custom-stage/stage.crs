@@ -1,5 +1,5 @@
 // This reader accepts one decimal exit status and an optional final line feed.
-// Supply api/crust0.crust, api/crust0_host.crust, and api/crust0_x64.crust to build it.
+// Supply api/crust0.crs, api/crust0_host.crs, and api/crust0_x64.crs to build it.
 
 extern fn file_open(path: *u8, mode: *u8) -> *u8 = "fopen";
 extern fn file_close(file: *u8) -> i32 = "fclose";

@@ -24,9 +24,9 @@ def main():
         harness = work / "harness"
         library = work / "ordinary-overload.so"
         shutil.copyfile(build / "crust-overload-library.so", library)
-        sources = ["api/crust0.crust", "api/crust0_host.crust", "stages/overload/model.crust",
-                   "stages/overload/extension.crust", "stages/reader/model.crust",
-                   "stages/reader/lex.crust", "stages/reader/parse.crust", "tests/overload_hooks.crust"]
+        sources = ["api/crust0.crs", "api/crust0_host.crs", "stages/overload/model.crs",
+                   "stages/overload/extension.crs", "stages/reader/model.crs",
+                   "stages/reader/lex.crs", "stages/reader/parse.crs", "tests/overload_hooks.crs"]
         subprocess.run([str(build / "crust-c"), "-o", str(harness), *sources,
                         *("--cflag=" + flag for flag in shlex.split(args.cflags)),
                         "--ldflag=" + str(library),

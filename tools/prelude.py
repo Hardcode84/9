@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUTS = ("api/crust0.crust", "api/crust0_host.crust", "api/crust0_eval.crust",
-          "api/crust0_run.crust", "stages/host.crust")
+INPUTS = ("api/crust0.crs", "api/crust0_host.crs", "api/crust0_eval.crs",
+          "api/crust0_run.crs", "stages/host.crs")
 
 
 def main():

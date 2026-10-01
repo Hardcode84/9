@@ -62,23 +62,23 @@ and linking. The seed and the default compilation path have no overload pass.
 
 ```sh
 make all overload-stage
-build/crust examples/overload/hello/main.crust
+build/crust examples/overload/hello/main.crs
 build/overload-hello
-build/crust examples/overload/separate/main.crust
+build/crust examples/overload/separate/main.crs
 build/overload-separate
-build/crust examples/overload/resources/main.crust
+build/crust examples/overload/resources/main.crs
 build/overload-resources
 make check-overload
 make check-overload-alloc
 ```
 
-The [hello root](../../examples/overload/hello/main.crust) loads `api.crust` and an
+The [hello root](../../examples/overload/hello/main.crs) loads `api.crs` and an
 ordinary compiled Crust library. It calls `overload_build` with the unread range
 of its own source. The seed has no package-name check or overload syntax.
-The [separate-object root](../../examples/overload/separate/main.crust) controls
+The [separate-object root](../../examples/overload/separate/main.crs) controls
 both compiler calls and the link input. The
-[resource root](../../examples/overload/resources/main.crust) selects the composed
-package through `resource_api.crust`.
+[resource root](../../examples/overload/resources/main.crs) selects the composed
+package through `resource_api.crs`.
 
 `build/crust-overload` and `build/crust-overload-resource` are command wrappers for
 these same libraries. They accept the C stage's input and output options.
@@ -135,7 +135,7 @@ crust_ov1_d13_crust0_x64_v1n5_twicea1_b4_rb4_c1_s
 
 ## Public composition API
 
-`model.crust` and `extension.crust` expose the stage state and operations.
+`model.crs` and `extension.crs` expose the stage state and operations.
 `ov_init` takes a context, an ABI domain, and optional hooks. Call `ov_read`
 for each source range, then `ov_prepare`. That last call runs `ov_collect`,
 `ov_resolve`, and `ov_mangle` in order. The individual operations are also

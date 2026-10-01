@@ -104,7 +104,7 @@ def generate(directory, count):
             "    }\n"
             "    (*node).value = y;\n"
             "    return y + x;\n}\n")
-    paths = {"c": stem.with_suffix(".c"), "crust": stem.with_suffix(".crust")}
+    paths = {"c": stem.with_suffix(".c"), "crust": stem.with_suffix(".crs")}
     paths["c"].write_text("".join(c))
     paths["crust"].write_text("".join(crust))
     return {"name": f"ordinary-{count}", "functions": count, "paths": paths,
@@ -288,7 +288,7 @@ def main():
         parser.error("This experiment requires the Linux x86-64 execution profile")
     os.sched_setaffinity(0, {args.cpu})
     workloads = [generate(args.inputs, count) for count in (1000, 8000)]
-    witness_source = Path("examples/intrusive/program.crust")
+    witness_source = Path("examples/intrusive/program.crs")
     workloads.append({"name": "intrusive", "functions": len(re.findall(r"^fn ", witness_source.read_text(), re.M)),
                       "paths": {"c": Path("benchmarks/bootstrap/intrusive.c"), "crust": witness_source},
                       "library": False,

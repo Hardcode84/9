@@ -15,12 +15,12 @@ import resources
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = [
-    "api/crust0.crust", "api/crust0_host.crust",
-    "stages/reader/model.crust", "stages/reader/lex.crust", "stages/reader/parse.crust",
-    *[f"stages/resources/{name}.crust" for name in (
+    "api/crust0.crs", "api/crust0_host.crs",
+    "stages/reader/model.crs", "stages/reader/lex.crs", "stages/reader/parse.crs",
+    *[f"stages/resources/{name}.crs" for name in (
         "model", "base", "read", "types", "constants", "state", "cleanup",
         "places", "expr", "control")],
-    "tests/resources_alloc.crust",
+    "tests/resources_alloc.crs",
 ]
 
 
@@ -67,12 +67,12 @@ def main():
         for name, source, _ in resources.runtime_cases():
             if args.case and not any(fnmatch.fnmatchcase(name, pattern) for pattern in args.case):
                 continue
-            path = work / f"{name}.crust"
+            path = work / f"{name}.crs"
             path.write_text(source)
             cases.append((name, [path]))
         if not args.case or any(fnmatch.fnmatchcase("sqlite", pattern) for pattern in args.case):
-            cases.append(("sqlite", [ROOT / "examples/resources/sqlite/library.crust",
-                                      ROOT / "examples/resources/sqlite/program.crust"]))
+            cases.append(("sqlite", [ROOT / "examples/resources/sqlite/library.crs",
+                                      ROOT / "examples/resources/sqlite/program.crs"]))
         if not cases:
             parser.error("no test cases selected")
         total = 0

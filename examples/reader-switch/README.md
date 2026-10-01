@@ -3,7 +3,7 @@
 Run from the repository root after `make all`:
 
 ```sh
-build/crust examples/reader-switch/main.crust
+build/crust examples/reader-switch/main.crs
 ```
 
 The root prints:
@@ -13,7 +13,7 @@ Hello from a reader written in CRUST!
 These lines use the new grammar.
 ```
 
-[main.crust](main.crust) first defines a Crust reader and executor. One root block
+[main.crs](main.crs) first defines a Crust reader and executor. One root block
 installs both callbacks and their state. The block's final semicolon ends the
 Crust action. The new reader owns all bytes after it, including the line break.
 

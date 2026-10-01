@@ -3,14 +3,14 @@
 Run from the repository root after `make all c-stage`:
 
 ```sh
-build/crust examples/multiple-files/main.crust
+build/crust examples/multiple-files/main.crs
 build/multiple-files
 ```
 
 The executable prints `Hello from another source file!` and returns zero.
 
-[main.crust](main.crust) is the compilation program. It captures
-[program.crust](program.crust) and supplies [greeting.crust](greeting.crust) as another
+[main.crs](main.crs) is the compilation program. It captures
+[program.crs](program.crs) and supplies [greeting.crs](greeting.crs) as another
 target input. The function in the first file can call `greeting`, whose
 definition is in the second file. Both target units use one checked namespace.
 

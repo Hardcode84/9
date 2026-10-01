@@ -160,16 +160,16 @@ def main():
     runner = Path("build/crust")
     dso = Path("build/crust-resource-library.so")
     inputs = [*Path("src").glob("*.c"), *Path("include").glob("*.h"),
-              *Path("stages/resources").glob("*.crust"), *Path("stages/reader").glob("*.crust"),
-              *Path("stages/c").glob("*.crust"), *Path("api").glob("*.crust"),
-              *Path("examples/resources/sqlite").glob("*.crust"),
+              *Path("stages/resources").glob("*.crs"), *Path("stages/reader").glob("*.crs"),
+              *Path("stages/c").glob("*.crs"), *Path("api").glob("*.crs"),
+              *Path("examples/resources/sqlite").glob("*.crs"),
               Path("benchmarks/resources/direct.c"), Path("benchmarks/resources/callbacks.c"),
               Path("benchmarks/resources/common.h"), Path(__file__).relative_to(ROOT),
-              Path("Makefile"), Path("stages/host.crust"), Path("build/crust-c"), compiler, runner, dso]
+              Path("Makefile"), Path("stages/host.crs"), Path("build/crust-c"), compiler, runner, dso]
     frozen = {str(path): sha(path) for path in sorted(inputs)}
     gcc = ["gcc", "-std=c99", "-pedantic-errors", "-fsyntax-only"]
     clang = ["clang-20", "-std=c99", "-pedantic-errors", "-fsyntax-only"]
-    sqlite_crust = ["examples/resources/sqlite/library.crust", "examples/resources/sqlite/program.crust"]
+    sqlite_crust = ["examples/resources/sqlite/library.crs", "examples/resources/sqlite/program.crs"]
     workloads = [{"name": "sqlite", "commands": {
         "gcc-syntax": [*gcc, "-I.profile-cache/sources", "benchmarks/resources/direct.c"],
         "gcc-callback-syntax": [*gcc, "-I.profile-cache/sources", "benchmarks/resources/callbacks.c"],
@@ -177,20 +177,20 @@ def main():
         "clang-callback-syntax": [*clang, "-I.profile-cache/sources", "benchmarks/resources/callbacks.c"],
         "resource-check": [str(compiler), "--check", *sqlite_crust],
         "resource-prepare": [str(compiler), "--prepare", *sqlite_crust],
-        "root-prepare": [str(runner), "examples/resources/sqlite/main.crust", "--prepare"]},
+        "root-prepare": [str(runner), "examples/resources/sqlite/main.crs", "--prepare"]},
         "crust_input_bytes": sum(Path(path).stat().st_size for path in sqlite_crust),
         "crust_source_sha256": {path: sha(path) for path in sqlite_crust}}]
     for count in (16, 64, 256):
         crust, c, expected = stress_source(count)
-        crust_path = args.work / f"owners-{count}.crust"
+        crust_path = args.work / f"owners-{count}.crs"
         c_path = args.work / f"owners-{count}.c"
-        root_path = args.work / f"owners-{count}.root.crust"
+        root_path = args.work / f"owners-{count}.root.crs"
         crust_path.write_text(crust)
         c_path.write_text(c)
         relative = lambda path: os.path.relpath(ROOT / path, root_path.parent.resolve())
         root_source = '\n'.join([
-            f'host_source(run,"{relative("api/crust0_stage.crust")}");',
-            f'host_source(run,"{relative("stages/resources/api.crust")}");',
+            f'host_source(run,"{relative("api/crust0_stage.crs")}");',
+            f'host_source(run,"{relative("stages/resources/api.crs")}");',
             f'host_link(run,"{relative(dso)}");',
             f'var target:*CrustSource=host_input(run,"{crust_path.name}",1u64);',
             'var arguments:[*u8;1]=make [*u8;1]{"--prepare"};',

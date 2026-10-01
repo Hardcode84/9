@@ -9,12 +9,12 @@ document. Then run these commands from the repository root:
 
 ```sh
 make all resource-stage
-build/crust examples/resources/sqlite/main.crust
+build/crust examples/resources/sqlite/main.crs
 build/sqlite-resource .profile-cache/resources-baseline/normal.db
 python3 examples/resources/sqlite/verify.py --sanitizers
 ```
 
-`main.crust` loads the ordinary resource API and shared library. It selects the
+`main.crs` loads the ordinary resource API and shared library. It selects the
 target files and SQLite object. The runner has no resource-stage selector.
 The root accepts compiler arguments after its path. For example, append
 `--check` to check the target or `-o OUTPUT` to change the executable path.

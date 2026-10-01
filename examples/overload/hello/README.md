@@ -4,7 +4,7 @@ Build the optional stage, then run this source file:
 
 ```sh
 make all overload-stage
-build/crust examples/overload/hello/main.crust
+build/crust examples/overload/hello/main.crs
 build/overload-hello
 ```
 

@@ -1,5 +1,5 @@
-host_source(run, "../../../api/crust0_stage.crust");
-host_source(run, "../../../stages/overload/api.crust");
+host_source(run, "../../../api/crust0_stage.crs");
+host_source(run, "../../../stages/overload/api.crs");
 host_link(run, "../../../build/crust-overload-library.so");
 
 var arguments:[*u8;2] = make [*u8;2] {

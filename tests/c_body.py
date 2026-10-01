@@ -24,8 +24,8 @@ def main():
         output = work / "program"
         library = work / "ordinary-backend.so"
         shutil.copyfile(build / "crust-c-library.so", library)
-        sources = ["api/crust0.crust", "api/crust0_stage.crust", "stages/c/model.crust",
-                   "stages/c/api.crust", "stages/c/extension.crust", "tests/c_body.crust"]
+        sources = ["api/crust0.crs", "api/crust0_stage.crs", "stages/c/model.crs",
+                   "stages/c/api.crs", "stages/c/extension.crs", "tests/c_body.crs"]
         subprocess.run([str(build / "crust-c"), "-o", str(harness), *sources,
                         *("--cflag=" + flag for flag in shlex.split(args.cflags)),
                         "--ldflag=" + str(library),

@@ -106,7 +106,7 @@ def main():
             rendered = ", ".join(f"{param}: {kind}" for param, kind in params)
             lines.append(f'extern fn {name}({rendered}) -> {ctype(result)} = "{name}";')
         output = "\n".join(lines).rstrip() + "\n"
-        path = ROOT / "api" / f"{stem}.crust"
+        path = ROOT / "api" / f"{stem}.crs"
         if args.check:
             if not path.exists() or path.read_text() != output:
                 raise SystemExit(f"API declarations differ: {path.relative_to(ROOT)}; run tools/api.py")

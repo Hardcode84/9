@@ -148,7 +148,7 @@ static unsigned char *read_file(const char *path, size_t *size)
 static void test_runtime(void)
 {
     CrustContext context;
-    CrustSource source = {"tests/runtime.crust", NULL, 0, 1};
+    CrustSource source = {"tests/runtime.crs", NULL, 0, 1};
     CrustUnit *unit;
     CrustEval *eval = NULL;
     Resolver resolver;

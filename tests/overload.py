@@ -221,7 +221,7 @@ class Suite:
         return result
 
     def source(self, name, source):
-        path = self.work / (name + ".crust")
+        path = self.work / (name + ".crs")
         path.write_text(source)
         return path
 
@@ -322,9 +322,9 @@ class Suite:
         elif name in ("source-root-hello", "source-root-separate", "source-root-resources"):
             example = name.removeprefix("source-root-")
             package = self.work / name
-            interface = "resource_api.crust" if example == "resources" else "api.crust"
-            examples = (ROOT / "examples/overload" / example).glob("*.crust")
-            for relative in (Path("api/crust0_stage.crust"), Path("stages/overload") / interface,
+            interface = "resource_api.crs" if example == "resources" else "api.crs"
+            examples = (ROOT / "examples/overload" / example).glob("*.crs")
+            for relative in (Path("api/crust0_stage.crs"), Path("stages/overload") / interface,
                              *[path.relative_to(ROOT) for path in examples]):
                 destination = package / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
@@ -333,7 +333,7 @@ class Suite:
             library.parent.mkdir()
             original_library = "crust-overload-resource-library.so" if example == "resources" else "crust-overload-library.so"
             shutil.copyfile(self.build / original_library, library)
-            source = package / "examples/overload" / example / "main.crust"
+            source = package / "examples/overload" / example / "main.crs"
             source.write_text(source.read_text().replace(original_library, library.name))
             result = self.command([self.build / "crust", source])
             if result.stdout or result.stderr:

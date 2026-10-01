@@ -30,7 +30,7 @@ this target profile accepts.
 
 ```sh
 make
-build/crust0 -S -o build/intrusive.s examples/intrusive/program.crust
+build/crust0 -S -o build/intrusive.s examples/intrusive/program.crs
 gcc -no-pie build/intrusive.s build/libcrust0_host.a -o build/intrusive
 build/intrusive
 make check
@@ -225,14 +225,14 @@ each reported failure. Failed work is not a published interface.
 
 ## A compiled replacement stage
 
-`examples/custom-stage/stage.crust` is an ordinary Crust0 program. Its reader accepts a decimal
+`examples/custom-stage/stage.crs` is an ordinary Crust0 program. Its reader accepts a decimal
 exit status, such as `42`, instead of Crust0 syntax. It creates a function through
 the public syntax records, invokes the checker, and emits a library. It also
 replaces integer addition by zero with a direct value transfer through the
 public backend API. The remaining operations use the standard emitter.
 
 ```sh
-build/crust0 -o build/stage.s api/crust0.crust api/crust0_host.crust api/crust0_x64.crust examples/custom-stage/stage.crust
+build/crust0 -o build/stage.s api/crust0.crs api/crust0_host.crs api/crust0_x64.crs examples/custom-stage/stage.crs
 gcc -no-pie build/stage.s build/libcrust0.a build/libcrust0_host.a -o build/stage
 build/stage examples/custom-stage/answer.txt build/answer.s
 gcc -no-pie build/answer.s examples/custom-stage/answer_main.c -o build/answer

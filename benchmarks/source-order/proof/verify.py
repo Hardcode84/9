@@ -7,9 +7,9 @@ import subprocess
 
 ROOT = Path.cwd()
 HERE = Path(os.environ.get("CRUST_PROOF_DIR", ROOT / ".profile-cache/source-order-proof-replay"))
-APIS = [ROOT / p for p in ("api/crust0.crust", "api/crust0_stage.crust", "stages/c/api.crust")]
-APIS += [HERE / "model.crust", HERE / "interface.crust"]
-TARGET = ROOT / "examples/intrusive/program.crust"
+APIS = [ROOT / p for p in ("api/crust0.crs", "api/crust0_stage.crs", "stages/c/api.crs")]
+APIS += [HERE / "model.crs", HERE / "interface.crs"]
+TARGET = ROOT / "examples/intrusive/program.crs"
 PREFIX = b"set_backend(session, c_backend_build);\nset_reader(session, alternate);"
 source = PREFIX + b"\0@include |" + str(TARGET).encode() + b"|\n@emit\n"
 ENV = os.environ.copy()
@@ -30,7 +30,7 @@ def command(root, directory, response, report):
 
 def run(name, contents, directory, status=0, diagnostic=None, emits=None, selections=None, reads=None):
     variant = "san" if directory.name == "san" else "native"
-    root = HERE / f"{variant}-{name}.crust"
+    root = HERE / f"{variant}-{name}.crs"
     root.write_bytes(contents)
     response = HERE / f"{variant}-{name}.rsp"
     report = HERE / f"{variant}-{name}.json"
@@ -87,13 +87,13 @@ for directory in (HERE, HERE / "san"):
         diagnostic=b"proof expected a name", emits=0, selections=0, reads=0)
     run("old-reader-hostile", source.replace(b"set_reader(session, alternate);", b""), directory,
         status=1, diagnostic=b"proof expected a name", emits=0, selections=0, reads=0)
-    bad_target = HERE / "target-host-name.crust"
+    bad_target = HERE / "target-host-name.crs"
     bad_target.write_text("fn main(argc:i32,argv:**u8)->i32 { return set_reader(); }\n")
     process, _ = run("host-name-not-target", source.replace(str(TARGET).encode(), str(bad_target).encode()), directory,
                      status=1, diagnostic=b"unknown name 'set_reader'", emits=0, selections=1, reads=3)
     column = bad_target.read_text().index("set_reader") + 1
     assert str(bad_target).encode() + f":1:{column}:".encode() in process.stderr, process.stderr
-    forward = HERE / "forward-target.crust"
+    forward = HERE / "forward-target.crs"
     forward.write_text("fn main(argc:i32,argv:**u8)->i32 { return later(); }\nfn later()->i32 { return 0i32; }\n")
     process, _ = run("target-forward-reference", source.replace(str(TARGET).encode(), str(forward).encode()), directory,
                      emits=1, selections=1, reads=3)

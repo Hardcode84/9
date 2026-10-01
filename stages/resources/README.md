@@ -6,12 +6,12 @@ the library with ordinary source calls.
 
 ```sh
 make all resource-stage
-build/crust examples/resources/hello/main.crust
+build/crust examples/resources/hello/main.crs
 build/resource-hello
 make check-reader check-resources
 ```
 
-The [hello source](../../examples/resources/hello/main.crust) contains the
+The [hello source](../../examples/resources/hello/main.crs) contains the
 compilation program and target program. The [SQLite application](../../examples/resources/sqlite/README.md)
 uses separate target files and tests actual connection, statement, and byte-view
 lifetimes. Its root also contains all compiler and linker options.
@@ -96,11 +96,11 @@ retains the seed's defined wrapping and trap rules.
 
 ## Compiler interfaces
 
-[api.crust](api.crust) provides `resource_build` and `resource_program` for a root.
+[api.crs](api.crs) provides `resource_build` and `resource_program` for a root.
 Both take ordinary source and option data. There is no special runner path,
 package name, destructor name, or foreign API recognized by the seed.
 
-[extension.crust](extension.crust) exposes the lower-level sequence:
+[extension.crs](extension.crs) exposes the lower-level sequence:
 
 1. Initialize a context and `RsStage`.
 2. Call `rs_read` for each retained source range.
@@ -120,7 +120,7 @@ declaration has the source stage's unsafe marker. A safe source import can suppl
 a resource's drop function. It has the same exclusive-borrow signature and
 explicit-call restrictions as a local drop definition.
 
-The optional [overload adapter](../overload/resources.crust) reads bare function
+The optional [overload adapter](../overload/resources.crs) reads bare function
 prototypes, selects calls with source borrow modes, and assigns structural native
 names. Initialize `RsStage`, then call `ov_resources_init`, `ov_resources_read`
 for each source, and `ov_resources_prepare`. Call `rs_prepare` after that sequence.
@@ -144,7 +144,7 @@ The [Crust reader](../reader/README.md) is independent of resources. Its four ho
 can add declarations, statements, prefix expressions, and type syntax. A stage
 can also replace the complete reader. The reader contains no resource keyword.
 
-The [C backend extension](../c/extension.crust) accepts a callback for each complete
+The [C backend extension](../c/extension.crs) accepts a callback for each complete
 function body. The callback can emit its own control flow and can use checked
 expression and statement services. It does not require a seed body. A separate
 test emits labels and branches from an external library with null seed bodies.

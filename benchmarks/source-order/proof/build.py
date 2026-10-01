@@ -28,7 +28,7 @@ def main():
             raise SystemExit("missing input " + str(build / name) + "; run make all c-stage first")
     work.mkdir(parents=True, exist_ok=True)
     (work / "san").mkdir(exist_ok=True)
-    for name in ("runner.c", "proof.h", "model.crust", "interface.crust", "plugin.crust", "verify.py", "measure.py"):
+    for name in ("runner.c", "proof.h", "model.crs", "interface.crs", "plugin.crs", "verify.py", "measure.py"):
         shutil.copyfile(source / name, work / name)
     env = os.environ.copy()
     env["CRUST_PROOF_DIR"] = str(work)
@@ -51,15 +51,15 @@ def main():
 
     strict = ["-std=c99", "-pedantic-errors", "-Wall", "-Wextra", "-Werror",
               "-Wstrict-prototypes", "-Wmissing-prototypes", "-Wshadow", "-Wvla"]
-    interfaces = [root / item for item in ("api/crust0.crust", "api/crust0_host.crust", "api/crust0_stage.crust", "stages/c/api.crust")]
+    interfaces = [root / item for item in ("api/crust0.crs", "api/crust0_host.crs", "api/crust0_stage.crs", "stages/c/api.crs")]
     exports = []
     for name in ("set_backend", "set_reader", "alternate", "include_input", "queue_emit", "reject_reader"):
         exports += ["--export", name]
     run([build / "crust-c", "--library", "--emit-c", "--symbols", work / "plugin.rsp", *exports,
-         *interfaces, work / "model.crust", work / "plugin.crust"], work / "plugin.c")
+         *interfaces, work / "model.crs", work / "plugin.crs"], work / "plugin.c")
     backend_sources = [root / item for item in (
-        "api/crust0.crust", "api/crust0_host.crust", "api/crust0_stage.crust", "stages/c/model.crust",
-        "stages/c/base.crust", "stages/c/types.crust", "stages/c/emit.crust", "stages/c/driver.crust", "stages/c/program.crust")]
+        "api/crust0.crs", "api/crust0_host.crs", "api/crust0_stage.crs", "stages/c/model.crs",
+        "stages/c/base.crs", "stages/c/types.crs", "stages/c/emit.crs", "stages/c/driver.crs", "stages/c/program.crs")]
     run([build / "crust-c", "--library", "--emit-c", "--symbols", work / "backend.rsp",
          "--export", "c_backend_build", "--export", "c_program", *backend_sources], work / "backend.c")
 
@@ -80,11 +80,11 @@ def main():
          "src/check.c", "runtime/host.c", "-rdynamic", "-ldl", "-lffi", "-no-pie", "-o", work / "san/runner"])
     library("plugin", "reader.plugin", sanitized, work / "san")
     library("backend", "output.plugin", sanitized, work / "san")
-    run([build / "crust-c", "--emit-c", "--symbols", work / "reference.rsp", "examples/intrusive/program.crust"], work / "reference.c")
+    run([build / "crust-c", "--emit-c", "--symbols", work / "reference.rsp", "examples/intrusive/program.crs"], work / "reference.c")
     prefix = b"set_backend(session, c_backend_build);\nset_reader(session, alternate);"
-    (work / "main.crust").write_bytes(prefix + b"\0@include |" + str(root / "examples/intrusive/program.crust").encode() + b"|\n@emit\n")
-    command = [work / "runner", work / "main.crust"]
-    for path in (root / "api/crust0.crust", root / "api/crust0_stage.crust", root / "stages/c/api.crust", work / "model.crust", work / "interface.crust"):
+    (work / "main.crs").write_bytes(prefix + b"\0@include |" + str(root / "examples/intrusive/program.crs").encode() + b"|\n@emit\n")
+    command = [work / "runner", work / "main.crs"]
+    for path in (root / "api/crust0.crs", root / "api/crust0_stage.crs", root / "stages/c/api.crs", work / "model.crs", work / "interface.crs"):
         command += ["--api", path]
     command += ["--load", work / "reader.plugin", "--load", work / "output.plugin", "--", work / "output.rsp"]
     run(command, work / "output.c")

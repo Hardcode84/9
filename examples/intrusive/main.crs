@@ -1,9 +1,9 @@
-host_source(run, "../../api/crust0_stage.crust");
-host_source(run, "../../stages/c/api.crust");
-host_source(run, "../../stages/c/build.crust");
+host_source(run, "../../api/crust0_stage.crs");
+host_source(run, "../../stages/c/api.crs");
+host_source(run, "../../stages/c/build.crs");
 host_link(run, "../../build/crust-c-library.so");
 
-var target: *CrustSource = host_input(run, "program.crust", 1u64);
+var target: *CrustSource = host_input(run, "program.crs", 1u64);
 if (*run).argc != 0i32 {
     return c_build(target, 0usize, (*run).argc, (*run).argv);
 };

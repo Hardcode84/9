@@ -1,4 +1,4 @@
-// Include api/crust0.crust and stages/overload/model.crust before this interface.
+// Include api/crust0.crs and stages/overload/model.crs before this interface.
 // Keep the context, stage, hooks, ABI domain, and source storage live through use.
 // Use a different ABI domain when type encodings, contracts, or calling rules differ.
 extern fn ov_init(stage:*OvStage, context:*CrustContext, abi:*u8, hooks:*OvHooks)->unit = "ov_init";

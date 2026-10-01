@@ -2,7 +2,7 @@
 
 ```sh
 make all overload-stage
-build/crust examples/overload/separate/main.crust
+build/crust examples/overload/separate/main.crs
 build/overload-separate
 nm -g build/overload-format.o
 ```
@@ -10,7 +10,7 @@ nm -g build/overload-format.o
 Expected output is `types: 42` followed by a newline.
 
 The root first compiles the provider to an object. It then compiles its own
-target source and links that object. Both compilations use `interface.crust`.
+target source and links that object. Both compilations use `interface.crs`.
 The provider's definitions complete the interface declarations. The caller
 uses the same declarations as imports.
 

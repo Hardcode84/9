@@ -1,4 +1,4 @@
-// Include api/crust0.crust and api/crust0_stage.crust before this interface.
+// Include api/crust0.crs and api/crust0_stage.crs before this interface.
 // Keep request sources live through context destruction. Return the compiler status.
 extern fn overload_program(request:*CrustBuild)->i32 = "overload_program";
 // Compile the retained source range, print failures, and release its target context.

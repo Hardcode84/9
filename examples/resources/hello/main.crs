@@ -1,5 +1,5 @@
-host_source(run, "../../../api/crust0_stage.crust");
-host_source(run, "../../../stages/resources/api.crust");
+host_source(run, "../../../api/crust0_stage.crs");
+host_source(run, "../../../stages/resources/api.crs");
 host_link(run, "../../../build/crust-resource-library.so");
 
 var arguments:[*u8;2] = make [*u8;2] {

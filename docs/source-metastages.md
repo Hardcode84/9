@@ -210,7 +210,7 @@ Three current mechanisms need explicit treatment:
    mechanism has a real cost and a different ownership contract.
 
 These points are verified in `src/check.c`, `src/x64.c`,
-`stages/c/emit.crust`, and `stages/c/driver.crust`. They are the work required by
+`stages/c/emit.crs`, and `stages/c/driver.crs`. They are the work required by
 the source model. New syntax alone would not fix them.
 
 The generic `crust_read_range` API reads a selected byte range with locations in

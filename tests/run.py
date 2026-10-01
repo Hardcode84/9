@@ -96,13 +96,13 @@ def main():
 
     def executable(name, source=None, inputs=None, libraries=(), entry=None):
         if source is not None:
-            path = work / f"{name}.crust"
+            path = work / f"{name}.crs"
             path.write_text(source)
             inputs = [path]
         output = work / name
         entry_options = ["--entry", entry] if entry is not None else []
         if args.backend == "c":
-            obj = work / f"{name}.crust.o"
+            obj = work / f"{name}.crs.o"
             command([compiler, "--object", "-o", obj, *c_options, *entry_options, *inputs])
         else:
             assembly = work / f"{name}.s"
@@ -113,8 +113,8 @@ def main():
 
     native = work / "native.o"
     command([*cc, *STRICT, "-O2", "-c", "tests/native.c", "-o", native])
-    command([executable("runtime", inputs=["tests/runtime.crust"], libraries=[native])])
-    intrusive = executable("intrusive", inputs=["examples/intrusive/program.crust"])
+    command([executable("runtime", inputs=["tests/runtime.crs"], libraries=[native])])
+    intrusive = executable("intrusive", inputs=["examples/intrusive/program.crs"])
     assert command([intrusive]).stdout == b"intrusive: ok\n"
 
     dynamic = """
@@ -178,8 +178,8 @@ fn main(argc:i32,argv:**u8)->i32 {
     long_string += 'if text[0usize]!=120u8 || text[4999usize]!=120u8 || text[5000usize]!=0u8{return 1i32;}return 0i32;}'
     command([executable("long-string", long_string)])
 
-    foundation = executable("c-stage-foundation", inputs=["api/crust0.crust", "api/crust0_host.crust",
-                             "stages/c/model.crust", "stages/c/base.crust", "tests/c_stage.crust"])
+    foundation = executable("c-stage-foundation", inputs=["api/crust0.crs", "api/crust0_host.crs",
+                             "stages/c/model.crs", "stages/c/base.crs", "tests/c_stage.crs"])
     quoted_source = work / "c-stage-quoted.c"
     quoted_source.write_bytes(command([foundation]).stdout)
     command([*cc, *STRICT, "-O3", quoted_source, "-o", work / "c-stage-quoted"])
@@ -300,14 +300,14 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         "native-conflict": 'extern fn a()->u8="shared"; extern fn b()->u64="shared";',
         "wrong-entry": "fn main()->u32{return 0u32;}",
     }.items():
-        path = work / f"reject-{name}.crust"
+        path = work / f"reject-{name}.crs"
         path.write_text(source)
         result = command([compiler, "--prepare", path], expected=1)
         if not result.stderr or b"error" not in result.stderr and b"entry" not in result.stderr:
             raise AssertionError(f"missing diagnostic for {name}: {result.stderr!r}")
 
     api_stems = ("crust0", "crust0_host", "crust0_x64", "crust0_stage", "crust0_eval", "crust0_run")
-    api_paths = [ROOT / "api" / f"{stem}.crust" for stem in api_stems]
+    api_paths = [ROOT / "api" / f"{stem}.crs" for stem in api_stems]
     probe = [*(f'#include "{stem}.h"' for stem in api_stems), '#include <stdio.h>', 'int main(void) {']
     for path in api_paths:
         for record, body in re.findall(r"record (\w+) \{(.*?)\}", path.read_text(), re.S):
@@ -321,7 +321,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     probe_path.write_text("\n".join(probe) + "\n")
     command([*cc, *STRICT, "-Iinclude", probe_path, "-o", work / "layout-probe"])
     layout_checks = command([work / "layout-probe"]).stdout.decode()
-    layout_path = work / "layout.crust"
+    layout_path = work / "layout.crs"
     layout_path.write_text("fn main(argc:i32,argv:**u8)->i32{\n" + layout_checks + "return 0i32;}\n")
     command([executable("api-layout", inputs=[*api_paths, layout_path], libraries=[build / "libcrust0.a"])])
     print(f"public layouts: {len(layout_checks.splitlines())} C/CRUST0 comparisons passed")
@@ -334,7 +334,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
                    "change_seconds": "st_ctim.tv_sec", "change_nanoseconds": "st_ctim.tv_nsec",
                    "reserved": "__glibc_reserved"}
     stat_record = re.search(r"^record CDriverStat \{.*?^\}",
-                            (ROOT / "stages/c/driver.crust").read_text(), re.M | re.S).group()
+                            (ROOT / "stages/c/driver.crs").read_text(), re.M | re.S).group()
     probe = ["#define _POSIX_C_SOURCE 200809L", "#include <sys/stat.h>", "#include <stddef.h>",
              "#include <stdio.h>", "struct Alignment {char byte; struct stat value;};", "int main(void) {"]
     for expression, native_expression in [("sizeof(CDriverStat)", "sizeof(struct stat)"),
@@ -351,8 +351,8 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     command([executable("stat-layout", stat_record + "\nfn main(argc:i32,argv:**u8)->i32{" + stat_checks + "return 0i32;}")])
     print(f"driver stat layout: {len(stat_checks.splitlines())} C/CRUST0 comparisons passed")
 
-    if (ROOT / "examples" / "custom-stage" / "stage.crust").exists():
-        stage = executable("stage", inputs=[*api_paths, "examples/custom-stage/stage.crust"], libraries=[build / "libcrust0.a"])
+    if (ROOT / "examples" / "custom-stage" / "stage.crs").exists():
+        stage = executable("stage", inputs=[*api_paths, "examples/custom-stage/stage.crs"], libraries=[build / "libcrust0.a"])
         custom_input = work / "answer.txt"
         custom_input.write_text("42\n")
         custom_assembly = work / "answer.s"
@@ -391,8 +391,8 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     else:
         raise AssertionError("missing ordinary CRUST0 stage example")
 
-    valid = work / "valid.crust"
-    invalid = work / "invalid.crust"
+    valid = work / "valid.crs"
+    invalid = work / "invalid.crs"
     output = work / ("atomic.c" if args.backend == "c" else "atomic.s")
     dump_options = ["--emit-c"] if args.backend == "c" else []
     valid.write_text("fn main(argc:i32,argv:**u8)->i32{return 0i32;}")
@@ -401,7 +401,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     command([compiler, *dump_options, "-o", output, invalid], expected=1)
     assert output.read_text() == "retained output\n"
     command([compiler, *dump_options, "-o", work / "absent-directory" / "output", valid], expected=1)
-    command([compiler, "--check", work / "absent.crust"], expected=1)
+    command([compiler, "--check", work / "absent.crs"], expected=1)
     for arguments in ([*dump_options, valid], ["--help"], ["--version"]):
         with open("/dev/full", "wb") as failed_output:
             result = subprocess.run([str(compiler), *map(str, arguments)], stdout=failed_output,
@@ -498,7 +498,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
             after = Path(destination).lstat()
             assert (before.st_mode, before.st_dev, before.st_ino) == (after.st_mode, after.st_dev, after.st_ino)
         assert link.is_symlink() and target.read_bytes() == expected_c
-        spaced_source = work / "source with spaces.crust"
+        spaced_source = work / "source with spaces.crs"
         spaced_source.write_bytes(valid.read_bytes())
         spaced_executable = work / "output with spaces"
         command([compiler, "-o", spaced_executable, *c_options, *c_link_options, spaced_source])
@@ -509,7 +509,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
             command([work / name])
         assert not list(work.glob("*.tmp.*")), "driver left temporary files after a completed command"
 
-        library_source, library_object = work / "library.crust", work / "library.o"
+        library_source, library_object = work / "library.crs", work / "library.o"
         library_source.write_text("fn answer()->i32{return 42i32;}")
         command([compiler, "--library", "--object", "-o", library_object, *c_options, library_source])
         library_main = work / "library-main.c"
@@ -518,8 +518,8 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         command([*cc, *STRICT, "-no-pie", library_object, library_main, *ldflags, "-o", work / "library-main"])
         command([work / "library-main"], expected=42)
 
-        stage_sources = ["api/crust0.crust", "api/crust0_host.crust", "api/crust0_stage.crust",
-                         *[f"stages/c/{name}.crust"
+        stage_sources = ["api/crust0.crs", "api/crust0_host.crs", "api/crust0_stage.crs",
+                         *[f"stages/c/{name}.crs"
                          for name in ("model", "base", "types", "emit", "driver", "program", "main")]]
         seed = build / "crust-c-seed"
         generations = [("seed", seed), ("current", compiler)]
@@ -547,7 +547,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
             names = command(["nm", stage_compiler]).stdout
             assert not re.search(rb"\bcrust_x64_", names), "C stage contains a native x64 backend dependency"
         next_object = work / "self-intrusive.o"
-        command([next_compiler, "--object", "-o", next_object, *c_options, "examples/intrusive/program.crust"])
+        command([next_compiler, "--object", "-o", next_object, *c_options, "examples/intrusive/program.crs"])
         next_program = work / "self-intrusive"
         command([*cc, "-no-pie", next_object, build / "libcrust0_host.a", *ldflags, "-o", next_program])
         assert command([next_program]).stdout == b"intrusive: ok\n"

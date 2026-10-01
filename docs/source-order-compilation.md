@@ -17,10 +17,10 @@ and required changes describe that earlier revision.
 Use this command as the intended user interface:
 
 ```sh
-crust main.crust
+crust main.crs
 ```
 
-`main.crust` is the host compilation program. Its code selects language readers,
+`main.crs` is the host compilation program. Its code selects language readers,
 checks, backends, input files, and outputs. These operations use ordinary
 libraries. The launcher does not select a backend or require a second build
 script. Arguments after the root path are data for that program.
@@ -56,8 +56,8 @@ c_backend = host.load("project/c_backend")
 
 app = compiler.new_target()
 compiler.use_backend(app, c_backend)
-compiler.include(app, "src/list.crust")
-compiler.include(app, "src/application.crust")
+compiler.include(app, "src/list.crs")
+compiler.include(app, "src/application.crs")
 compiler.build(app, "build/application")
 ```
 
@@ -524,7 +524,7 @@ required before replacing the current implementation with this source model.
 
 | Property | Current host block | Proposed source runner |
 |---|---|---|
-| User command | Root first, then stage arguments | `crust main.crust`, then root arguments |
+| User command | Root first, then stage arguments | `crust main.crs`, then root arguments |
 | Host selection | Leading `meta` block and named entry | Root execution starts with the first action |
 | Host dependency loading | Flat prefix input list | Ordinary executed library calls |
 | Target input | Remaining root range or explicit other files | Explicit target submission; other files are the simple case |

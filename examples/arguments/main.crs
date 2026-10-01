@@ -1,6 +1,6 @@
-host_source(run, "../../api/crust0_stage.crust");
-host_source(run, "../../stages/c/api.crust");
-host_source(run, "../../stages/c/build.crust");
+host_source(run, "../../api/crust0_stage.crs");
+host_source(run, "../../stages/c/api.crs");
+host_source(run, "../../stages/c/build.crs");
 host_link(run, "../../build/crust-c-library.so");
 
 // Pass the root arguments to the C backend, for example: -o build/arguments.

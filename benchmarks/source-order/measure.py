@@ -31,11 +31,11 @@ BASE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BASE)
 
 LIBRARY_SOURCES = [ROOT / path for path in (
-    "api/crust0.crust", "api/crust0_host.crust", "api/crust0_stage.crust",
-    "stages/c/model.crust", "stages/c/base.crust", "stages/c/types.crust",
-    "stages/c/emit.crust", "stages/c/driver.crust", "stages/c/program.crust")]
+    "api/crust0.crs", "api/crust0_host.crs", "api/crust0_stage.crs",
+    "stages/c/model.crs", "stages/c/base.crs", "stages/c/types.crs",
+    "stages/c/emit.crs", "stages/c/driver.crs", "stages/c/program.crs")]
 HOST_INTERFACES = [ROOT / path for path in (
-    "api/crust0_stage.crust", "stages/c/api.crust", "stages/c/build.crust")]
+    "api/crust0_stage.crs", "stages/c/api.crs", "stages/c/build.crs")]
 C_FLAGS = ["-std=c99", "-pedantic-errors", "-O2", "-g0",
            "-fstack-clash-protection", "-Wno-overlength-strings"]
 SYNTAX_FLAGS = ["-std=c99", "-pedantic-errors", "-O0", "-g0", "-fsyntax-only"]
@@ -69,7 +69,7 @@ def checked(command, stdout=subprocess.PIPE):
 def source_hashes():
     paths = [ROOT / "Makefile", ROOT / "tools/api.py", ROOT / "tools/prelude.py", BASE_PATH, Path(__file__).resolve()]
     for directory, pattern in (("src", "*.c"), ("src", "*.h"), ("include", "*.h"),
-                               ("runtime", "*.c"), ("api", "*.crust"), ("stages", "*.crust"), ("stages/c", "*.crust")):
+                               ("runtime", "*.c"), ("api", "*.crs"), ("stages", "*.crs"), ("stages/c", "*.crs")):
         paths.extend(sorted((ROOT / directory).glob(pattern)))
     return {str(path.relative_to(ROOT)): BASE.sha256(path) for path in paths}
 
@@ -105,12 +105,12 @@ def staged_source(target, output, native_library):
 
 def workloads_in(directory, native_library):
     workloads = [BASE.generate(directory, count) for count in (1000, 8000)]
-    intrusive = ROOT / "examples/intrusive/program.crust"
+    intrusive = ROOT / "examples/intrusive/program.crs"
     workloads.append({"name": "intrusive", "library": False,
                       "functions": len(re.findall(r"^fn ", intrusive.read_text(), re.M)),
                       "paths": {"crust": intrusive, "c": ROOT / "benchmarks/bootstrap/intrusive.c"}})
     for workload in workloads:
-        staged = directory / f"{workload['name']}-staged.crust"
+        staged = directory / f"{workload['name']}-staged.crs"
         workload["root_source_bytes"] = staged_source(workload["paths"]["crust"], staged, native_library)
         workload["paths"]["staged"] = staged
     return workloads

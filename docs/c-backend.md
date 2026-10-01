@@ -27,7 +27,7 @@ GCC and GNU `objcopy` must be available through `PATH`.
 
 ```sh
 make c-stage
-build/crust-c -o build/list examples/intrusive/program.crust --ldflag build/libcrust0_host.a
+build/crust-c -o build/list examples/intrusive/program.crs --ldflag build/libcrust0_host.a
 build/list
 ```
 
@@ -46,7 +46,7 @@ also permits the same inlining as the standalone backend.
 This is self-compilation of the backend and driver. The reader and checker
 remain C99. The default `make` target does not build this optional backend.
 
-Use `wc -l stages/c/*.crust` to count the stage, public interfaces, and root helper.
+Use `wc -l stages/c/*.crs` to count the stage, public interfaces, and root helper.
 Tests and generated seed API declarations are separate.
 
 | Option | Result |
@@ -89,20 +89,20 @@ The source files have these responsibilities:
 
 | File | Responsibility |
 |---|---|
-| `model.crust` | Stage records |
-| `base.crust` | Arena, text buffers, number conversion, and maps |
-| `types.crust` | C types, layout checks, native bindings, and symbol text |
-| `emit.crust` | Checked expressions and statements to C text |
-| `driver.crust` | Reusable backend call, output files, and native processes |
-| `program.crust` | Source input, frontend calls, names, options, and `c_program` |
-| `main.crust` | Standalone command-line entry |
-| `api.crust` | Consumer declarations for the two public calls and output options |
-| `extension.crust` | Complete body callbacks and public emission services |
-| `build.crust` | Optional root helper that owns one target context through the call |
+| `model.crs` | Stage records |
+| `base.crs` | Arena, text buffers, number conversion, and maps |
+| `types.crs` | C types, layout checks, native bindings, and symbol text |
+| `emit.crs` | Checked expressions and statements to C text |
+| `driver.crs` | Reusable backend call, output files, and native processes |
+| `program.crs` | Source input, frontend calls, names, options, and `c_program` |
+| `main.crs` | Standalone command-line entry |
+| `api.crs` | Consumer declarations for the two public calls and output options |
+| `extension.crs` | Complete body callbacks and public emission services |
+| `build.crs` | Optional root helper that owns one target context through the call |
 
-An external consumer includes `api/crust0.crust`, `api/crust0_stage.crust`, and
-`stages/c/api.crust`. It links the prepared stage library as an ordinary native
-input. Do not also include `stages/c/api.crust` when compiling the implementation;
+An external consumer includes `api/crust0.crs`, `api/crust0_stage.crs`, and
+`stages/c/api.crs`. It links the prepared stage library as an ordinary native
+input. Do not also include `stages/c/api.crs` when compiling the implementation;
 the implementation supplies those declarations itself.
 
 `c_program` receives an empty initialized context and a captured source range.
@@ -118,7 +118,7 @@ argument arrays. It releases its temporary arena before returning. The caller
 can retain the context and call the backend again. The call returns zero,
 a failed tool's exit status, or one for another failure.
 
-A custom driver can compile `model.crust`, `base.crust`, `types.crust`, and `emit.crust`
+A custom driver can compile `model.crs`, `base.crs`, `types.crs`, and `emit.crs`
 with the public API declarations and its own entry.
 Call `c_stage_init(stage, context)` on fresh storage. Keep that stage at one
 address until `c_stage_destroy(stage)`. Call `c_emit(stage, entry)` once per
@@ -145,7 +145,7 @@ command-line driver is sequential and adds no scheduler to the core.
 
 ### Custom function bodies
 
-Include `stages/c/model.crust` and `stages/c/extension.crust` to use
+Include `stages/c/model.crs` and `stages/c/extension.crs` to use
 `c_backend_build_with_body` or `c_emit_with_body`. Supply a callback with type
 `fn(*CStage, *CrustDecl, *u8) -> bool` and caller-owned data. The callback runs
 after each defined function's signature. It emits that function's complete
@@ -162,7 +162,7 @@ the first error and releases its temporary arena. A null callback selects the
 ordinary checked-seed-body emitter. The ordinary emitter has no per-expression
 callback cost.
 
-The [external body test](../tests/c_body.crust) uses null seed bodies, emits labels
+The [external body test](../tests/c_body.crs) uses null seed bodies, emits labels
 and branches, runs the output, and checks three callback failure paths. It links
 the public interfaces against a copied ordinary backend library. The
 [resource stage](../stages/resources/README.md) uses the same interface for its
@@ -222,7 +222,7 @@ before optimization.
 Use both artifacts when compiling dumped C by hand:
 
 ```sh
-build/crust-c --emit-c -o build/list.c --symbols build/list.rsp examples/intrusive/program.crust
+build/crust-c --emit-c -o build/list.c --symbols build/list.rsp examples/intrusive/program.crs
 gcc -std=c99 -pedantic-errors -O2 -fstack-clash-protection -Wno-overlength-strings -c build/list.c -o build/list.raw.o
 objcopy @build/list.rsp build/list.raw.o build/list.o
 gcc -no-pie build/list.o build/libcrust0_host.a -o build/list
@@ -273,9 +273,9 @@ build/crust-c -o build/crust-c-sanitize \
   --cflag -fno-sanitize-recover=all --cflag -fno-omit-frame-pointer \
   --ldflag -fsanitize=address,undefined \
   --ldflag build/libcrust0.a --ldflag build/libcrust0_host.a \
-  api/crust0.crust api/crust0_host.crust api/crust0_stage.crust \
-  stages/c/model.crust stages/c/base.crust stages/c/types.crust stages/c/emit.crust \
-  stages/c/driver.crust stages/c/program.crust stages/c/main.crust
+  api/crust0.crs api/crust0_host.crs api/crust0_stage.crs \
+  stages/c/model.crs stages/c/base.crs stages/c/types.crs stages/c/emit.crs \
+  stages/c/driver.crs stages/c/program.crs stages/c/main.crs
 ASAN_OPTIONS=detect_leaks=0 python3 tests/run.py --backend c \
   --compiler build/crust-c-sanitize --work-dir build/tests-c-sanitize \
   --cflags='-O3 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer' \

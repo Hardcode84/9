@@ -380,7 +380,7 @@ class Suite:
         return result
 
     def source(self, name, source):
-        path = self.work / (name + ".crust")
+        path = self.work / (name + ".crs")
         path.write_bytes(source if isinstance(source, bytes) else source.encode())
         return path
 
@@ -444,8 +444,8 @@ class Suite:
                     raise Failure(f"failed compilation changed {output}")
         elif name == "cli-source-root":
             package = self.work / "ordinary resource package"
-            for relative in ("api/crust0_stage.crust", "stages/resources/api.crust",
-                             "examples/resources/hello/main.crust"):
+            for relative in ("api/crust0_stage.crs", "stages/resources/api.crs",
+                             "examples/resources/hello/main.crs"):
                 destination = package / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / relative, destination)
@@ -453,7 +453,7 @@ class Suite:
             output.parent.mkdir()
             shutil.copyfile(self.build / "crust-resource-library.so",
                             output.parent / "crust-resource-library.so")
-            source = package / "examples/resources/hello/main.crust"
+            source = package / "examples/resources/hello/main.crs"
             runner = self.build / "crust"
             result = self.command([runner, source], cwd=self.work)
             if result.stdout or result.stderr:

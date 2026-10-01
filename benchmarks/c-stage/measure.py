@@ -26,9 +26,9 @@ BASE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BASE)
 
 STAGE_SOURCES = [Path(path) for path in (
-    "api/crust0.crust", "api/crust0_host.crust", "api/crust0_stage.crust", "stages/c/model.crust",
-    "stages/c/base.crust", "stages/c/types.crust", "stages/c/emit.crust",
-    "stages/c/driver.crust", "stages/c/program.crust", "stages/c/main.crust")]
+    "api/crust0.crs", "api/crust0_host.crs", "api/crust0_stage.crs", "stages/c/model.crs",
+    "stages/c/base.crs", "stages/c/types.crs", "stages/c/emit.crs",
+    "stages/c/driver.crs", "stages/c/program.crs", "stages/c/main.crs")]
 C_FLAGS = ["-std=c99", "-pedantic-errors", "-O2", "-g0",
            "-fstack-clash-protection", "-Wno-overlength-strings"]
 C_ENDPOINTS = ("gcc-syntax", "clang-syntax")
@@ -50,8 +50,8 @@ def sources():
              if Path(__file__).is_absolute() else Path(__file__), BASE_PATH,
              Path("tools/api.py")]
     for directory, pattern in (("src", "*.c"), ("include", "*.h"),
-                               ("runtime", "*.c"), ("api", "*.crust"),
-                               ("stages/c", "*.crust")):
+                               ("runtime", "*.c"), ("api", "*.crs"),
+                               ("stages/c", "*.crs")):
         paths.extend(sorted(Path(directory).glob(pattern)))
     return {str(path): BASE.sha256(path) for path in paths}
 
@@ -242,7 +242,7 @@ def main():
     if sources() != source_hashes:
         raise RuntimeError("Compiler or stage source changed during preparation")
     workloads = [BASE.generate(args.inputs, count) for count in (1000, 8000)]
-    intrusive = Path("examples/intrusive/program.crust")
+    intrusive = Path("examples/intrusive/program.crs")
     workloads.append({"name": "intrusive", "functions": len(re.findall(r"^fn ", intrusive.read_text(), re.M)),
                       "paths": {"c": Path("benchmarks/bootstrap/intrusive.c"), "crust": intrusive}, "library": False})
     commands = {workload["name"]: frontend_commands(workload, binaries) for workload in workloads}

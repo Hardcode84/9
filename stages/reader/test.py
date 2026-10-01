@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-READER = [ROOT / "stages/reader" / name for name in ("model.crust", "lex.crust", "parse.crust")]
+READER = [ROOT / "stages/reader" / name for name in ("model.crs", "lex.crs", "parse.crs")]
 
 
 def run(arguments, **kwargs):
@@ -28,8 +28,8 @@ def main():
     build = args.build.resolve()
     work = args.work.resolve()
     work.mkdir(parents=True, exist_ok=True)
-    sources = [ROOT / "api/crust0.crust", ROOT / "api/crust0_host.crust", ROOT / "api/crust0_eval.crust",
-               *READER, ROOT / "stages/reader/test.crust"]
+    sources = [ROOT / "api/crust0.crs", ROOT / "api/crust0_host.crs", ROOT / "api/crust0_eval.crs",
+               *READER, ROOT / "stages/reader/test.crs"]
     run([build / "crust0", "--check", *sources])
     if args.backend == "seed":
         run([build / "crust0", "-S", "-o", work / "reader-test.s", *sources])
@@ -48,7 +48,7 @@ def main():
     paths = []
     for index, (_, strings, _) in enumerate(cases):
         data = b"".join(ast.literal_eval("b" + part) for part in re.findall(literal, strings))
-        path = work / f"syntax-{index:03}.crust"
+        path = work / f"syntax-{index:03}.crs"
         path.write_bytes(data)
         paths.append(path)
     for depth in (1, 30, 120, 250, 256, 260, 500):
@@ -57,7 +57,7 @@ def main():
             ("groups", b"fn f()->unit{" + b"(" * depth + b"1u8" + b")" * depth + b";}"),
             ("blocks", b"fn f()->unit{" + b"{" * depth + b"}" * depth + b"}"),
         ):
-            path = work / f"depth-{name}-{depth}.crust"
+            path = work / f"depth-{name}-{depth}.crs"
             path.write_bytes(data)
             paths.append(path)
     symbol = "".join(f"\\x{byte:02x}" for byte in range(1, 128))
@@ -68,13 +68,13 @@ def main():
         "all-string-bytes": b'const value:*u8="' + b"".join(f"\\x{byte:02x}".encode() for byte in range(256)) + b'";',
     }
     for name, data in extra.items():
-        path = work / (name + ".crust")
+        path = work / (name + ".crs")
         path.write_bytes(data)
         paths.append(path)
-    production = [*sorted((ROOT / "api").glob("*.crust")),
-                  *sorted((ROOT / "stages/c").glob("*.crust")),
-                  *READER, ROOT / "stages/reader/test.crust", ROOT / "tests/runtime.crust",
-                  ROOT / "examples/intrusive/program.crust", ROOT / "examples/custom-stage/stage.crust"]
+    production = [*sorted((ROOT / "api").glob("*.crs")),
+                  *sorted((ROOT / "stages/c").glob("*.crs")),
+                  *READER, ROOT / "stages/reader/test.crs", ROOT / "tests/runtime.crs",
+                  ROOT / "examples/intrusive/program.crs", ROOT / "examples/custom-stage/stage.crs"]
     run([work / "reader-test", *paths, *production])
     print(f"CRUST reader: {len(cases)} seed cases, {len(paths)-len(cases)} boundary cases, "
           f"{len(production)} production files; exact AST/diagnostic comparisons passed")

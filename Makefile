@@ -9,18 +9,18 @@ BUILD ?= build
 CORE = $(BUILD)/core.o $(BUILD)/read.o $(BUILD)/check.o
 BACKEND = $(BUILD)/x64.o
 RUNNER = $(BUILD)/eval.o $(BUILD)/run.o
-PRELUDE = api/crust0.crust api/crust0_host.crust api/crust0_eval.crust api/crust0_run.crust stages/host.crust
-C_LIBRARY = api/crust0.crust api/crust0_host.crust api/crust0_stage.crust stages/c/model.crust stages/c/base.crust stages/c/types.crust stages/c/emit.crust stages/c/driver.crust stages/c/program.crust
-C_STAGE = $(C_LIBRARY) stages/c/main.crust
+PRELUDE = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/host.crs
+C_LIBRARY = api/crust0.crs api/crust0_host.crs api/crust0_stage.crs stages/c/model.crs stages/c/base.crs stages/c/types.crs stages/c/emit.crs stages/c/driver.crs stages/c/program.crs
+C_STAGE = $(C_LIBRARY) stages/c/main.crs
 C_EXPORTS = c_backend_build c_program c_backend_build_with_body c_stage_init c_stage_destroy c_emit c_emit_with_body c_error c_alloc c_map_get c_map_set c_text c_number c_quote c_expression c_place c_statement c_value c_symbol c_global c_type_name c_binding c_temp c_address_temp
-READER = stages/reader/model.crust stages/reader/lex.crust stages/reader/parse.crust
-RESOURCE = stages/resources/model.crust stages/resources/base.crust stages/resources/read.crust stages/resources/types.crust stages/resources/constants.crust stages/resources/state.crust stages/resources/cleanup.crust stages/resources/places.crust stages/resources/expr.crust stages/resources/control.crust stages/resources/emit.crust stages/resources/program.crust stages/resources/build.crust
+READER = stages/reader/model.crs stages/reader/lex.crs stages/reader/parse.crs
+RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources/read.crs stages/resources/types.crs stages/resources/constants.crs stages/resources/state.crs stages/resources/cleanup.crs stages/resources/places.crs stages/resources/expr.crs stages/resources/control.crs stages/resources/emit.crs stages/resources/program.crs stages/resources/build.crs
 RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(RESOURCE)
 RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_c_body rs_source_import
-OVERLOAD = stages/overload/model.crust stages/overload/base.crust stages/overload/types.crust stages/overload/collect.crust stages/overload/resolve.crust stages/overload/read.crust stages/overload/program.crust
+OVERLOAD = stages/overload/model.crs stages/overload/base.crs stages/overload/types.crs stages/overload/collect.crs stages/overload/resolve.crs stages/overload/read.crs stages/overload/program.crs
 OVERLOAD_LIBRARY = $(C_LIBRARY) $(READER) $(OVERLOAD)
 OVERLOAD_EXPORTS = overload_build overload_program ov_init ov_read ov_prepare ov_collect ov_resolve ov_mangle ov_alloc ov_error ov_put ov_type ov_intern ov_global ov_function_syntax ov_select ov_same ov_encode_type ov_text ov_bytes ov_number ov_part ov_expression ov_statement ov_standard_expression ov_standard_statement ov_scope ov_leave_scope ov_lookup ov_bind ov_block ov_field_type ov_driver_build ov_check
-OVERLOAD_RESOURCE_LIBRARY = $(RESOURCE_LIBRARY) $(OVERLOAD) stages/overload/resources.crust stages/overload/resource_program.crust
+OVERLOAD_RESOURCE_LIBRARY = $(RESOURCE_LIBRARY) $(OVERLOAD) stages/overload/resources.crs stages/overload/resource_program.crs
 OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_resource_build overload_resource_program ov_resources_init ov_resources_read ov_resources_prepare ov_resources_check
 
 .PHONY: all clean check witness api c-stage resource-stage overload-stage check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader
@@ -76,8 +76,8 @@ $(BUILD)/crust-c-library.so: $(BUILD)/crust-c-library.o
 
 c-stage: $(BUILD)/crust-c $(BUILD)/crust-c-library.so
 
-$(BUILD)/crust-resource: $(BUILD)/crust-c $(RESOURCE_LIBRARY) stages/resources/main.crust
-	$< -o $@ $(RESOURCE_LIBRARY) stages/resources/main.crust $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/crust-resource: $(BUILD)/crust-c $(RESOURCE_LIBRARY) stages/resources/main.crs
+	$< -o $@ $(RESOURCE_LIBRARY) stages/resources/main.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 $(BUILD)/crust-resource-library.o: $(BUILD)/crust-c $(RESOURCE_LIBRARY) Makefile
 	$< --library --object $(foreach name,$(RESOURCE_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(RESOURCE_LIBRARY)
@@ -87,8 +87,8 @@ $(BUILD)/crust-resource-library.so: $(BUILD)/crust-resource-library.o
 
 resource-stage: $(BUILD)/crust-resource $(BUILD)/crust-resource-library.so
 
-$(BUILD)/crust-overload: $(BUILD)/crust-c $(OVERLOAD_LIBRARY) stages/overload/main.crust
-	$< -o $@ $(OVERLOAD_LIBRARY) stages/overload/main.crust $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/crust-overload: $(BUILD)/crust-c $(OVERLOAD_LIBRARY) stages/overload/main.crs
+	$< -o $@ $(OVERLOAD_LIBRARY) stages/overload/main.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 $(BUILD)/crust-overload-library.o: $(BUILD)/crust-c $(OVERLOAD_LIBRARY) Makefile
 	$< --library --object $(foreach name,$(OVERLOAD_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(OVERLOAD_LIBRARY)
@@ -96,8 +96,8 @@ $(BUILD)/crust-overload-library.o: $(BUILD)/crust-c $(OVERLOAD_LIBRARY) Makefile
 $(BUILD)/crust-overload-library.so: $(BUILD)/crust-overload-library.o
 	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
 
-$(BUILD)/crust-overload-resource: $(BUILD)/crust-c $(OVERLOAD_RESOURCE_LIBRARY) stages/overload/resource_main.crust
-	$< -o $@ $(OVERLOAD_RESOURCE_LIBRARY) stages/overload/resource_main.crust $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/crust-overload-resource: $(BUILD)/crust-c $(OVERLOAD_RESOURCE_LIBRARY) stages/overload/resource_main.crs
+	$< -o $@ $(OVERLOAD_RESOURCE_LIBRARY) stages/overload/resource_main.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 $(BUILD)/crust-overload-resource-library.o: $(BUILD)/crust-c $(OVERLOAD_RESOURCE_LIBRARY) Makefile
 	$< --library --object $(foreach name,$(OVERLOAD_RESOURCE_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(OVERLOAD_RESOURCE_LIBRARY)
@@ -107,8 +107,8 @@ $(BUILD)/crust-overload-resource-library.so: $(BUILD)/crust-overload-resource-li
 
 overload-stage: $(BUILD)/crust-overload $(BUILD)/crust-overload-library.so $(BUILD)/crust-overload-resource $(BUILD)/crust-overload-resource-library.so
 
-$(BUILD)/intrusive.s: $(BUILD)/crust0 examples/intrusive/program.crust
-	$(BUILD)/crust0 -S -o $@ examples/intrusive/program.crust
+$(BUILD)/intrusive.s: $(BUILD)/crust0 examples/intrusive/program.crs
+	$(BUILD)/crust0 -S -o $@ examples/intrusive/program.crs
 
 $(BUILD)/intrusive.o: $(BUILD)/intrusive.s
 	$(AS) $(ASFLAGS) $< -o $@

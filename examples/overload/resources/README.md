@@ -2,7 +2,7 @@
 
 ```sh
 make all overload-stage
-build/crust examples/overload/resources/main.crust
+build/crust examples/overload/resources/main.crs
 build/overload-resources
 ```
 

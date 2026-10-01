@@ -187,9 +187,12 @@ fn c_emit_type_layout(stage: *CStage, info: *CTypeInfo) -> unit {
     c_text(stage, "[(sizeof(r_t"); c_number(stage, identity);
     c_text(stage, ")=="); c_number(stage, (*input).size);
     c_text(stage, "ULL)?1:-1];\n");
+    c_text(stage, "struct r_align_type_"); c_number(stage, identity);
+    c_text(stage, "{char r_byte;r_t"); c_number(stage, identity);
+    c_text(stage, " r_value;};\n");
     c_text(stage, "typedef char r_align_"); c_number(stage, identity);
-    c_text(stage, "[(offsetof(struct {char r_byte;r_t"); c_number(stage, identity);
-    c_text(stage, " r_value;},r_value)=="); c_number(stage, (*input).align as u64);
+    c_text(stage, "[(offsetof(struct r_align_type_"); c_number(stage, identity);
+    c_text(stage, ",r_value)=="); c_number(stage, (*input).align as u64);
     c_text(stage, "ULL)?1:-1];\n");
     if (*input).kind == RMD_T_RECORD {
         var field: *RmdField = (*(*input).record_decl).fields;

@@ -8,6 +8,8 @@ selected host and target profile is Linux x86-64 with the System V scalar ABI.
 This implementation is the raw bootstrap language. It does not add ownership,
 cleanup, imports, macros, or an evaluator. The direct-list example uses raw
 memory preconditions. It is not evidence of a checked lifetime rule.
+An optional [leading host block](source-stages.md) compiles and executes
+ordinary RMD0 code that controls the target compilation.
 
 ## Build and use
 
@@ -44,11 +46,18 @@ declaration order. This is a driver policy; the core does not discover files.
 | `-S` | Also lower operations and emit complete assembly; this is the default |
 | `--library` | Omit the native `main` entry wrapper |
 | `--entry NAME` | Select a defined `fn(i32, **u8) -> i32`; the default name is `main` |
+| `--export NAME` | Give a defined function or constant its source name as a native name; repeat for more declarations |
 | `-o FILE` | Select the assembly output; the default is standard output |
 
 `--check` does not require an entry point or a native definition for a foreign
 function. The linker resolves native references when it makes an executable.
 Use `--library` for preparation or emission of a library source.
+
+For source-defined compilation, put the root first: `rmd0 SOURCE ARGUMENT...`.
+A leading `meta` block gives all remaining arguments to its `build` entry.
+The launcher has no backend selector. It uses `as` and `ld` from `PATH` to
+prepare the entry and the system dynamic loader to call it. The plain-source
+path probes the prefix without allocation and reads the captured source once.
 
 The driver publishes a regular output file through a temporary file and rename.
 Source or emission failure leaves the old regular file in place. A symbolic
@@ -61,11 +70,11 @@ The C implementation uses `-std=c99 -pedantic-errors` and treats warnings as
 errors. Its host operations use the POSIX library; it does not use GNU C syntax.
 The build checks the selected host representation. It rejects other hosts.
 
-The implementation has 4,832 physical C and header lines, including comments
-and blank lines. The reader, checker, storage code, and core header use 2,981
-lines. The assembly backend and its header use 1,419 lines. The driver and host
-functions use 432 lines. Tests, examples, generated declarations, and scripts
-are separate. Use `wc -l src/*.c include/*.h runtime/*.c` to repeat the count.
+The implementation has 5,402 physical C and header lines, including comments
+and blank lines. The reader, checker, storage code, and core header use 3,102
+lines. The assembly backend and its header use 1,446 lines. The drivers and host
+interfaces use 854 lines. Tests, examples, generated declarations, and scripts
+are separate. Use `wc -l src/*.c src/*.h include/*.h runtime/*.c` to repeat the count.
 
 Each compiler context owns an arena. Arena blocks are normally 64 KiB. A larger
 request receives a separate larger block. Allocation sizes and alignment
@@ -93,7 +102,8 @@ per record in the cycle. Type size must fit the RMD0 `isize` limit.
 
 ## Public stages
 
-The public C declarations are in `include/rmd0.h` and `include/rmd0_x64.h`.
+The public C declarations are in `include/rmd0.h`, `include/rmd0_x64.h`,
+`include/rmd0_host.h`, and `include/rmd0_stage.h`.
 The corresponding RMD0 declarations are in `api/`. Run `make api` after an API
 change. The generator handles the selected header forms only and rejects a
 form it cannot translate. It is not a C frontend. The test suite compares all
@@ -108,6 +118,7 @@ version as its compiler libraries.
 |---|---|
 | `rmd_read` | Source bytes to an owned syntax unit |
 | `rmd_read_range` | A byte range to an owned unit, with locations in the original source |
+| `rmd_read_meta` | An optional leading host block to an owned host unit, explicit inputs, and the target byte offset |
 | `rmd_bind` | A selected name and complete external declaration facts to a borrowed binding |
 | `rmd_collect` | Owned syntax units to the top-level namespace |
 | `rmd_resolve` | Collected declarations and bindings to types, layouts, and signatures |
@@ -122,7 +133,9 @@ the source text. Keep the full descriptor and bytes live until context
 destruction. Declaration ordinals start at one in each returned unit.
 Callers that combine distinct ranges must assign distinct declaration
 identities, as for other independently constructed units. This API adds no
-stage syntax or automatic compile-time execution.
+stage syntax or automatic compile-time execution. The separate `rmd_read_meta`
+operation stops before target bytes. The launcher controls host preparation
+and execution; the reader does neither.
 
 The frame plan retains checked operations. Instruction selection, required
 trap sequences, and final assembly remain in the emitter. Thus `--prepare`
@@ -255,14 +268,18 @@ replacement-stage programs. The integer expectations use Python mathematical
 integers. Trap tests require abnormal process termination. Allocation tests
 fail every arena allocation point in a complete compilation and check release.
 
-The current strict GCC run passes 10,915 C API checks and 398 integration
-process checks. The range-reader suite also passes 259 checks with Clang and
+The current strict GCC run passes 10,996 C API checks and 398 integration
+process checks. The reader suite also passes 311 checks with Clang and
 AddressSanitizer/UndefinedBehaviorSanitizer. The integration cases include
-10,220 integer comparisons, 65 required traps, 224 public API layout comparisons,
+10,220 integer comparisons, 65 required traps, 243 public API layout comparisons,
 and 20 native file-status layout comparisons. The allocation sweep covers
 19 failure points. The parallel
 test checks six consumers in serial order and two concurrent orders, with
 shared provider facts unchanged. Both complete specification examples run.
+The source-stage suite adds 41 process checks. Its native entry, input snapshot,
+phase isolation, backend reuse, path, and failure cases also pass with the C
+core and C backend under AddressSanitizer and UndefinedBehaviorSanitizer.
+Inline host instructions use the assembly seed and have no sanitizer instrumentation.
 
 Use these commands for a second strict compiler and address/undefined-behavior
 instrumentation:

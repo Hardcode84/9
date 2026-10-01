@@ -523,7 +523,7 @@ static void test_constructors(void)
 
 static void *reject_allocation(void *user, size_t size)
 {
-    (void)user;
+    if (user != NULL) ++*(size_t *)user;
     (void)size;
     return NULL;
 }
@@ -535,12 +535,169 @@ static void reject_release(void *user, void *allocation)
     check(false, "failed allocator must not release absent allocation");
 }
 
+static void test_meta_absence(void)
+{
+    static const struct {
+        const char *text;
+        size_t begin;
+    } cases[] = {
+        {"", 0}, {" \t\r\n", 4}, {"// comment", 10},
+        {" \n// comment\nfn f() -> unit {}", 13},
+        {"metadata", 0}, {"meta_name", 0}, {"meta1", 0},
+        {"\"unterminated", 0}, {"@", 0}
+    };
+    RmdAllocator allocator;
+    RmdContext ctx;
+    size_t calls = 0;
+    size_t index;
+    allocator.user = &calls;
+    allocator.allocate = reject_allocation;
+    allocator.release = reject_release;
+    rmd_context_init(&ctx, &allocator);
+    for (index = 0; index < sizeof(cases) / sizeof(cases[0]); ++index) {
+        RmdSource source = source_text(cases[index].text, strlen(cases[index].text), index + 1);
+        RmdMeta meta;
+        memset(&meta, 0xff, sizeof(meta));
+        check(rmd_read_meta(&ctx, &source, &meta) && meta.host_unit == NULL &&
+              meta.inputs == NULL && meta.loc.source == NULL &&
+              meta.target_begin == cases[index].begin && calls == 0 &&
+              ctx.units == NULL && ctx.last_unit == NULL && ctx.failure == NULL &&
+              ctx.error_count == 0, "absent meta skips trivia without allocation or target lexing");
+    }
+    rmd_context_destroy(&ctx);
+}
+
+static void meta_case(const char *name, const char *text, bool expected)
+{
+    RmdContext ctx;
+    RmdSource source = source_text(text, strlen(text), 1);
+    RmdMeta meta;
+    bool accepted;
+    rmd_context_init(&ctx, NULL);
+    accepted = rmd_read_meta(&ctx, &source, &meta);
+    check(accepted == expected, name);
+    if (accepted != expected) fprintf(stderr, "diagnostic: %s\n", ctx.error);
+    if (!accepted) {
+        check(meta.host_unit == NULL && meta.inputs == NULL && meta.target_begin == 0 &&
+              meta.loc.source == NULL && ctx.units == NULL && ctx.last_unit == NULL &&
+              ctx.failure == NULL && ctx.error_count == 1,
+              "meta failure clears result and publishes no unit");
+    }
+    rmd_context_destroy(&ctx);
+}
+
+static void test_meta_grammar(void)
+{
+    meta_case("empty meta block", "meta {}", true);
+    meta_case("meta declarations only", "meta { fn source() -> unit {} fn link() -> unit {} }", true);
+    meta_case("meta inputs only", "meta { source \"api.rmd\"; link \"library.a\"; }", true);
+    meta_case("meta path byte strings", "meta { source \"\\xFF.rmd\"; }", true);
+    meta_case("meta missing open brace", "meta", false);
+    meta_case("meta missing close brace", "meta {", false);
+    meta_case("meta missing path", "meta { source; }", false);
+    meta_case("meta path must be literal", "meta { source path; }", false);
+    meta_case("meta empty source path", "meta { source \"\"; }", false);
+    meta_case("meta empty link path", "meta { link \"\"; }", false);
+    meta_case("meta zero in path", "meta { source \"a\\0b\"; }", false);
+    meta_case("meta missing input semicolon", "meta { link \"library.a\" }", false);
+    meta_case("meta input after declaration", "meta { const x: u8 = 1u8; source \"a\"; }", false);
+    meta_case("meta nested block", "meta { meta {} }", false);
+    meta_case("meta nested in function", "meta { fn f() -> unit { meta {} } }", false);
+    meta_case("meta statements are not declarations", "meta { trap; }", false);
+    SYNTAX("ordinary reader rejects leading meta", "meta {}", false);
+    SYNTAX("ordinary reader rejects misplaced meta", "fn f() -> unit {} meta {}", false);
+    SYNTAX("meta inputs are contextual names", "fn source(link: u8) -> u8 { return link; }", true);
+}
+
+static void test_meta_ownership(void)
+{
+    static const char text[] = "// original source\nmeta {\n"
+        "source \"api\\x2fcompiler.rmd\"; link \"backend.a\";\n"
+        "const shared: u8 = 1u8; fn main() -> unit {}\n}"
+        "\nconst shared: u8 = 2u8; fn main() -> unit {}";
+    RmdContext host;
+    RmdContext target;
+    RmdSource source = source_text(text, sizeof(text) - 1, 41);
+    RmdMeta meta;
+    RmdUnit *target_unit;
+    RmdMetaInput *input;
+    size_t target_begin = (size_t)(strstr(text, "\nconst shared: u8 = 2u8;") - text);
+    rmd_context_init(&host, NULL);
+    rmd_context_init(&target, NULL);
+    if (!rmd_read_meta(&host, &source, &meta) ||
+        !rmd_read_range(&target, &source, meta.target_begin, source.size, &target_unit)) {
+        check(false, "host and target fixture parses");
+        fprintf(stderr, "%s\n%s\n", host.error, target.error);
+        rmd_context_destroy(&host);
+        rmd_context_destroy(&target);
+        return;
+    }
+    check(meta.loc.source == &source && meta.loc.offset == sizeof("// original source\n") - 1 &&
+          meta.target_begin == target_begin && meta.host_unit->source == &source,
+          "meta and target offsets refer to the complete original source");
+    input = meta.inputs;
+    check(input != NULL && !input->native && strcmp(input->path, "api/compiler.rmd") == 0 &&
+          input->loc.source == &source &&
+          input->loc.offset == sizeof("// original source\nmeta {\n") - 1 &&
+          input->next != NULL && input->next->native &&
+          strcmp(input->next->path, "backend.a") == 0 && input->next->next == NULL,
+          "meta inputs preserve kind, order, decoded paths, and source location");
+    check(host.units == meta.host_unit && host.last_unit == meta.host_unit &&
+          meta.host_unit->next == NULL && target.units == target_unit && target_unit->next == NULL &&
+          meta.host_unit->declarations->identity == 1 &&
+          meta.host_unit->declarations->next->identity == 2 &&
+          meta.host_unit->declarations->unit_identity == 41 &&
+          target_unit->declarations->identity == 1 &&
+          meta.host_unit->declarations->name != target_unit->declarations->name &&
+          meta.host_unit->declarations->next->name != target_unit->declarations->next->name,
+          "host and target have separate units, ordinals, and interned names");
+    check(rmd_collect(&host) && rmd_resolve(&host) && rmd_check(&host) &&
+          rmd_collect(&target) && rmd_resolve(&target) && rmd_check(&target),
+          "host and target can define the same names independently");
+    rmd_context_destroy(&host);
+    check(strcmp(target_unit->declarations->next->name->text, "main") == 0 && rmd_check(&target),
+          "target syntax remains live after host context destruction");
+    rmd_context_destroy(&target);
+}
+
+static void test_meta_boundary(void)
+{
+    static const char text[] = "meta {}\0\xff\"invalid target";
+    static const char two[] = "meta {} meta {}";
+    static const char bad[] = "\nmeta { source \"ok.rmd\"; fn partial() -> unit {} @ }";
+    RmdContext ctx;
+    RmdSource source = source_text(text, sizeof(text) - 1, 1);
+    RmdSource second = source_text(two, sizeof(two) - 1, 2);
+    RmdSource broken = source_text(bad, sizeof(bad) - 1, 3);
+    RmdMeta meta;
+    RmdUnit *first;
+    RmdUnit *rejected;
+    rmd_context_init(&ctx, NULL);
+    check(rmd_read_meta(&ctx, &source, &meta) && meta.host_unit != NULL &&
+          meta.host_unit->declarations == NULL && meta.target_begin == sizeof("meta {}") - 1 &&
+          ctx.error_count == 0 && ctx.name_count == 0,
+          "meta closing brace does not lex invalid target bytes");
+    first = meta.host_unit;
+    check(!rmd_read_meta(&ctx, &broken, &meta) && meta.host_unit == NULL && meta.inputs == NULL &&
+          ctx.units == first && ctx.last_unit == first && first->next == NULL &&
+          ctx.error_loc.source == &broken && ctx.error_loc.offset == (size_t)(strchr(bad, '@') - bad),
+          "failed meta retains absolute diagnostic and does not publish partial declarations");
+    check(rmd_read_meta(&ctx, &second, &meta) && first->next == meta.host_unit,
+          "reader accepts a meta block after a failed block");
+    check(!rmd_read_range(&ctx, &second, meta.target_begin, second.size, &rejected) &&
+          rejected == NULL && ctx.error_loc.source == &second && ctx.error_loc.offset == 8,
+          "target reader rejects a second meta block");
+    rmd_context_destroy(&ctx);
+}
+
 static void test_limits(void)
 {
     RmdAllocator allocator;
     RmdContext ctx;
     RmdSource source = source_text("", 0, 1);
+    RmdSource meta_source = source_text("meta {}", 7, 2);
     RmdUnit *unit;
+    RmdMeta meta;
     char nested[512];
     size_t size = 0;
     unsigned index;
@@ -551,6 +708,10 @@ static void test_limits(void)
     check(!rmd_read(&ctx, &source, &unit) && unit == NULL && ctx.units == NULL &&
           ctx.failure == NULL && ctx.error_count == 1,
           "allocation failure is reported without a published unit");
+    check(!rmd_read_meta(&ctx, &meta_source, &meta) && meta.host_unit == NULL &&
+          meta.inputs == NULL && ctx.units == NULL && ctx.last_unit == NULL &&
+          ctx.failure == NULL && ctx.error_count == 2,
+          "meta allocation failure is reported without a published unit");
     rmd_context_destroy(&ctx);
     memcpy(nested, "const x: i8 = ", 14);
     size = 14;
@@ -569,6 +730,10 @@ int main(void)
     test_failure_boundary();
     test_read_range();
     test_invalid_ranges();
+    test_meta_absence();
+    test_meta_grammar();
+    test_meta_ownership();
+    test_meta_boundary();
     test_limits();
     printf("reader: %u/%u checks passed\n", checks - failures, checks);
     return failures == 0 ? 0 : 1;

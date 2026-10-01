@@ -26,9 +26,9 @@ BASE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BASE)
 
 STAGE_SOURCES = [Path(path) for path in (
-    "api/rmd0.rmd", "api/rmd0_host.rmd", "stages/c/model.rmd",
+    "api/rmd0.rmd", "api/rmd0_host.rmd", "api/rmd0_stage.rmd", "stages/c/model.rmd",
     "stages/c/base.rmd", "stages/c/types.rmd", "stages/c/emit.rmd",
-    "stages/c/driver.rmd")]
+    "stages/c/driver.rmd", "stages/c/program.rmd", "stages/c/main.rmd")]
 C_FLAGS = ["-std=c99", "-pedantic-errors", "-O2", "-g0",
            "-fstack-clash-protection", "-Wno-overlength-strings"]
 C_ENDPOINTS = ("gcc-syntax", "clang-syntax")

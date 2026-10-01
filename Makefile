@@ -8,9 +8,10 @@ STRICT = -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wm
 BUILD ?= build
 CORE = $(BUILD)/core.o $(BUILD)/read.o $(BUILD)/check.o
 BACKEND = $(BUILD)/x64.o
-C_STAGE = api/rmd0.rmd api/rmd0_host.rmd stages/c/model.rmd stages/c/base.rmd stages/c/types.rmd stages/c/emit.rmd stages/c/driver.rmd
+C_LIBRARY = api/rmd0.rmd api/rmd0_host.rmd api/rmd0_stage.rmd stages/c/model.rmd stages/c/base.rmd stages/c/types.rmd stages/c/emit.rmd stages/c/driver.rmd stages/c/program.rmd
+C_STAGE = $(C_LIBRARY) stages/c/main.rmd
 
-.PHONY: all clean check witness api c-stage check-c
+.PHONY: all clean check witness api c-stage check-c check-stage
 all: $(BUILD)/rmd0 $(BUILD)/librmd0.a $(BUILD)/librmd0_host.a
 
 $(BUILD):
@@ -22,8 +23,8 @@ $(BUILD)/%.o: src/%.c include/rmd0.h | $(BUILD)
 $(BUILD)/host.o: runtime/host.c include/rmd0_host.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@
 
-$(BUILD)/rmd0: $(CORE) $(BACKEND) $(BUILD)/driver.o $(BUILD)/host.o
-	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+$(BUILD)/rmd0: $(CORE) $(BACKEND) $(BUILD)/driver.o $(BUILD)/stage.o $(BUILD)/host.o
+	$(CC) $(CFLAGS) $^ -rdynamic $(LDFLAGS) -ldl -o $@
 
 $(BUILD)/librmd0.a: $(CORE) $(BACKEND)
 	$(AR) rcs $@ $^
@@ -43,7 +44,13 @@ $(BUILD)/rmd-c-seed: $(BUILD)/rmd-c-seed.o $(BUILD)/librmd0.a $(BUILD)/librmd0_h
 $(BUILD)/rmd-c: $(BUILD)/rmd-c-seed
 	$< -o $@ $(C_STAGE) --ldflag $(BUILD)/librmd0.a --ldflag $(BUILD)/librmd0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-c-stage: $(BUILD)/rmd-c
+$(BUILD)/rmd-c-library.o: $(BUILD)/rmd-c $(C_LIBRARY)
+	$< --library --object --export c_backend_build --export c_program --cflag=-fPIC -o $@ $(C_LIBRARY)
+
+$(BUILD)/rmd-c-library.so: $(BUILD)/rmd-c-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
+
+c-stage: $(BUILD)/rmd-c $(BUILD)/rmd-c-library.so
 
 $(BUILD)/intrusive.s: $(BUILD)/rmd0 examples/intrusive.rmd
 	$(BUILD)/rmd0 -S -o $@ examples/intrusive.rmd
@@ -79,6 +86,9 @@ check: all $(BUILD)/core_test $(BUILD)/read_test $(BUILD)/check_test $(BUILD)/ho
 
 check-c: c-stage
 	python3 tests/run.py --backend c --compiler $(BUILD)/rmd-c --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --ldflags='$(LDFLAGS)'
+
+check-stage: c-stage
+	python3 tests/stage.py --build $(BUILD)
 
 clean:
 	rm -rf $(BUILD)

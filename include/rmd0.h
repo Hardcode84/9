@@ -24,6 +24,8 @@ typedef struct RmdField RmdField;
 typedef struct RmdParam RmdParam;
 typedef struct RmdInit RmdInit;
 typedef struct RmdUnit RmdUnit;
+typedef struct RmdMetaInput RmdMetaInput;
+typedef struct RmdMeta RmdMeta;
 
 typedef struct {
     void *user;
@@ -225,6 +227,20 @@ struct RmdUnit {
     RmdUnit *next;
 };
 
+struct RmdMetaInput {
+    RmdMetaInput *next;
+    RmdLoc loc;
+    char *path;
+    bool native;
+};
+
+struct RmdMeta {
+    RmdUnit *host_unit;
+    RmdMetaInput *inputs;
+    size_t target_begin;
+    RmdLoc loc;
+};
+
 typedef struct RmdFailureFrame {
     jmp_buf jump;
     struct RmdFailureFrame *previous;
@@ -285,6 +301,11 @@ bool rmd_read(RmdContext *ctx, RmdSource *source, RmdUnit **result);
    Input bytes and source descriptors remain live until the context is destroyed. */
 bool rmd_read_range(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
                     RmdUnit **result);
+/* Read one leading meta block into this host context. Do not read its target bytes.
+   Without a block, allocate nothing and return a null unit and the first token offset.
+   Publish a host unit only after a complete block. Failure clears result.
+   Input bytes and source descriptors remain live until the context is destroyed. */
+bool rmd_read_meta(RmdContext *ctx, RmdSource *source, RmdMeta *result);
 /* A binding borrows complete resolved facts. The provider must outlive this context. */
 bool rmd_bind(RmdContext *ctx, RmdName *name, RmdDecl *declaration);
 /* Owned syntax has one expression or statement node per occurrence. */

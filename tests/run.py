@@ -306,8 +306,8 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         if not result.stderr or b"error" not in result.stderr and b"entry" not in result.stderr:
             raise AssertionError(f"missing diagnostic for {name}: {result.stderr!r}")
 
-    api_paths = [ROOT / "api" / f"{stem}.rmd" for stem in ("rmd0", "rmd0_host", "rmd0_x64")]
-    probe = ['#include "rmd0.h"', '#include "rmd0_x64.h"', '#include <stdio.h>', 'int main(void) {']
+    api_paths = [ROOT / "api" / f"{stem}.rmd" for stem in ("rmd0", "rmd0_host", "rmd0_x64", "rmd0_stage")]
+    probe = ['#include "rmd0.h"', '#include "rmd0_x64.h"', '#include "rmd0_stage.h"', '#include <stdio.h>', 'int main(void) {']
     for path in api_paths:
         for record, body in re.findall(r"record (\w+) \{(.*?)\}", path.read_text(), re.S):
             for query, expression in [(f"sizeof({record})", f"sizeof({record})"),
@@ -517,8 +517,9 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         command([*cc, *STRICT, "-no-pie", library_object, library_main, *ldflags, "-o", work / "library-main"])
         command([work / "library-main"], expected=42)
 
-        stage_sources = ["api/rmd0.rmd", "api/rmd0_host.rmd", *[f"stages/c/{name}.rmd"
-                         for name in ("model", "base", "types", "emit", "driver")]]
+        stage_sources = ["api/rmd0.rmd", "api/rmd0_host.rmd", "api/rmd0_stage.rmd",
+                         *[f"stages/c/{name}.rmd"
+                         for name in ("model", "base", "types", "emit", "driver", "program", "main")]]
         seed = build / "rmd-c-seed"
         generations = [("seed", seed), ("current", compiler)]
         generated = []
@@ -530,7 +531,8 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         stage_object = work / "self-backend.o"
         command([compiler, "--object", "-o", stage_object, *c_options, *stage_sources])
         references = command(["nm", "-u", stage_object]).stdout.decode()
-        allowed_frontend = {"rmd_context_init", "rmd_context_destroy", "rmd_read", "rmd_collect", "rmd_resolve", "rmd_check"}
+        allowed_frontend = {"rmd_context_init", "rmd_context_destroy", "rmd_read", "rmd_read_range",
+                            "rmd_collect", "rmd_resolve", "rmd_check", "rmd_try_alloc", "rmd_try_copy_string"}
         for name in re.findall(r"\bU\s+(\S+)", references):
             if name.startswith("rmd_") and name not in allowed_frontend:
                 raise AssertionError(f"C stage calls a forbidden native compiler helper: {name}")

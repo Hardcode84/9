@@ -2,6 +2,7 @@
 #include "rmd0.h"
 #include "rmd0_host.h"
 #include "rmd0_x64.h"
+#include "driver.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -14,10 +15,11 @@
 static void usage(FILE *stream)
 {
     fputs("usage: rmd0 [--check | --prepare | -S] [--library | --entry NAME]\n"
-          "            [-o OUTPUT] SOURCE...\n", stream);
+          "            [--export NAME] [-o OUTPUT] SOURCE...\n"
+          "       rmd0 SOURCE_WITH_META [STAGE_ARGUMENT...]\n", stream);
 }
 
-static void diagnostic(const RmdContext *ctx)
+void rmd_driver_diagnostic(const RmdContext *ctx)
 {
     const RmdSource *source = ctx->error_loc.source;
     size_t line = 1;
@@ -38,7 +40,7 @@ static void diagnostic(const RmdContext *ctx)
     fprintf(stderr, "%s:%zu:%zu: error: %s\n", source->path, line, column, ctx->error);
 }
 
-static bool link_names(RmdContext *ctx)
+bool rmd_driver_names(RmdContext *ctx)
 {
     RmdFailureFrame failure;
     RmdUnit *unit;
@@ -67,7 +69,7 @@ static bool link_names(RmdContext *ctx)
     return true;
 }
 
-static RmdDecl *find_entry(const RmdContext *ctx, const char *name)
+RmdDecl *rmd_driver_find(const RmdContext *ctx, const char *name)
 {
     RmdUnit *unit;
     for (unit = ctx->units; unit != NULL; unit = unit->next) {
@@ -188,6 +190,9 @@ int main(int argc, char **argv)
     const char *entry_name = "main";
     const char *output = NULL;
     bool library = false;
+    bool exports = false;
+    RmdSource first = {0};
+    size_t first_begin = 0;
     size_t source_count = 0;
     size_t index;
     int argument;
@@ -198,6 +203,29 @@ int main(int argc, char **argv)
         return 1;
     }
     rmd_context_init(&ctx, NULL);
+    if (argc > 1 && argv[1][0] != '-') {
+        RmdContext host;
+        RmdMeta meta;
+        unsigned char *bytes;
+        bool success;
+        bool staged;
+        first.path = argv[1];
+        first.identity = 1;
+        if (rmd0_host_read_file(first.path, &bytes, &first.size) != 0) {
+            fprintf(stderr, "rmd0: cannot read %s (input or allocation failure)\n", first.path);
+            goto done;
+        }
+        first.bytes = bytes;
+        rmd_context_init(&host, NULL);
+        success = rmd_read_meta(&host, &first, &meta);
+        staged = meta.host_unit != NULL;
+        if (!success) rmd_driver_diagnostic(&host);
+        else if (staged)
+            status = rmd_driver_stage(&host, &meta, &first, argc - 2, argv + 2);
+        first_begin = meta.target_begin;
+        rmd_context_destroy(&host);
+        if (!success || staged) goto done;
+    }
     for (argument = 1; argument < argc; ++argument) {
         const char *arg = argv[argument];
         if (strcmp(arg, "--help") == 0) {
@@ -216,13 +244,15 @@ int main(int argc, char **argv)
             mode = EMIT;
         } else if (strcmp(arg, "--library") == 0) {
             library = true;
-        } else if (strcmp(arg, "-o") == 0 || strcmp(arg, "--entry") == 0) {
+        } else if (strcmp(arg, "-o") == 0 || strcmp(arg, "--entry") == 0 ||
+                   strcmp(arg, "--export") == 0) {
             if (++argument == argc) {
                 fprintf(stderr, "rmd0: missing argument for %s\n", arg);
                 goto done;
             }
             if (strcmp(arg, "-o") == 0) output = argv[argument];
-            else entry_name = argv[argument];
+            else if (strcmp(arg, "--entry") == 0) entry_name = argv[argument];
+            else exports = true;
         } else if (arg[0] == '-') {
             fprintf(stderr, "rmd0: unknown option %s\n", arg);
             goto done;
@@ -242,22 +272,42 @@ int main(int argc, char **argv)
         unsigned char *bytes;
         RmdUnit *unit;
         sources[index].identity = index + 1;
-        if (rmd0_host_read_file(sources[index].path, &bytes, &sources[index].size) != 0) {
+        if (index == 0 && first.path != NULL) {
+            sources[index] = first;
+            first.bytes = NULL;
+        } else if (rmd0_host_read_file(sources[index].path, &bytes, &sources[index].size) != 0) {
             fprintf(stderr, "rmd0: cannot read %s (input or allocation failure)\n",
                     sources[index].path);
             goto done;
+        } else {
+            sources[index].bytes = bytes;
         }
-        sources[index].bytes = bytes;
-        if (!rmd_read(&ctx, &sources[index], &unit)) goto compile_error;
+        if (!rmd_read_range(&ctx, &sources[index], index == 0 ? first_begin : 0,
+                            sources[index].size, &unit)) goto compile_error;
     }
     if (!rmd_collect(&ctx) || !rmd_resolve(&ctx) || !rmd_check(&ctx)) goto compile_error;
+    if (exports) {
+        for (argument = 1; argument < argc; ++argument) {
+            if (strcmp(argv[argument], "-o") == 0 || strcmp(argv[argument], "--entry") == 0) {
+                ++argument;
+            } else if (strcmp(argv[argument], "--export") == 0) {
+                RmdDecl *decl = rmd_driver_find(&ctx, argv[++argument]);
+                if (decl == NULL || (decl->kind != RMD_D_FUNCTION && decl->kind != RMD_D_CONST)) {
+                    fprintf(stderr, "rmd0: export '%s' must name a defined function or constant\n",
+                            argv[argument]);
+                    goto done;
+                }
+                decl->link_name = argv[argument];
+            }
+        }
+    }
     if (mode == CHECK) {
         status = 0;
         goto done;
     }
-    if (!link_names(&ctx)) goto compile_error;
+    if (!rmd_driver_names(&ctx)) goto compile_error;
     if (!library) {
-        entry = find_entry(&ctx, entry_name);
+        entry = rmd_driver_find(&ctx, entry_name);
         if (!hosted_entry(entry)) {
             fprintf(stderr, "rmd0: entry '%s' must be a defined fn(i32, **u8) -> i32\n",
                     entry_name);
@@ -271,7 +321,7 @@ int main(int argc, char **argv)
     }
     if (ctx.error_count == 0) goto done;
 compile_error:
-    diagnostic(&ctx);
+    rmd_driver_diagnostic(&ctx);
 done:
     if (status == 0 && fflush(stdout) != 0) {
         fprintf(stderr, "rmd0: cannot flush standard output: %s\n", strerror(errno));
@@ -282,5 +332,6 @@ done:
         free((void *)sources[index].bytes);
     }
     free(sources);
+    free((void *)first.bytes);
     return status;
 }

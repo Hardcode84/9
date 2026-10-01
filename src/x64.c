@@ -1201,10 +1201,37 @@ void rmd_x64_emit_constant_value(RmdX64Emitter *emitter, RmdExpr *expression)
     output_format(emitter, "\t.%s 0x%016" PRIx64 "\n", directive, value);
 }
 
+static bool constant_has_address(RmdExpr *expression)
+{
+    RmdInit *init;
+    size_t index;
+    switch (expression->kind) {
+    case RMD_E_GROUP:
+        return constant_has_address(expression->left);
+    case RMD_E_RECORD:
+        for (init = expression->inits; init; init = init->next)
+            if (constant_has_address(init->value))
+                return true;
+        return false;
+    case RMD_E_ARRAY:
+        for (index = 0; index < expression->arg_count; ++index)
+            if (constant_has_address(expression->args[index]))
+                return true;
+        return false;
+    case RMD_E_STRING:
+    case RMD_E_NAME:
+        return true;
+    default:
+        return false;
+    }
+}
+
 void rmd_x64_emit_constant(RmdX64Emitter *emitter, RmdDecl *declaration)
 {
     uint64_t identity = emitter->next_label++;
-    output_format(emitter, "\t.section .rodata\n\t.balign %u\n\t.globl ", declaration->type->align);
+    const char *section = constant_has_address(declaration->init) ?
+        ".data.rel.ro,\"aw\",@progbits" : ".rodata";
+    output_format(emitter, "\t.section %s\n\t.balign %u\n\t.globl ", section, declaration->type->align);
     symbol_name(emitter, declaration->link_name);
     output_format(emitter, "\n\t.type %sdata_%" PRIu64 ", @object\n%sdata_%" PRIu64 ":\n",
                     emitter->program->label_prefix, identity, emitter->program->label_prefix, identity);

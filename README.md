@@ -13,6 +13,19 @@ An optional [C backend stage](docs/c-backend.md) is written entirely in RMD0.
 Run `make c-stage` to build it through the seed and then through its own C
 output. It uses GCC for native code and retains the C99 reader and checker.
 
+A leading [`meta` block](docs/source-stages.md) selects compiler code from the
+user source. The [example](examples/meta.rmd) calls the external C backend:
+
+```sh
+make c-stage
+build/rmd0 examples/meta.rmd -o build/meta-example
+build/meta-example
+make check-stage
+```
+
+The compiler entry controls reading, checking, and output through public APIs.
+Its code and declarations remain separate from the target program.
+
 Start with the [RMD0 language specification](docs/rmd0-spec.md). It defines the
 minimal bootstrap language, complete grammar, execution rules, and public stage
 contracts. Module management, ownership, richer syntax, and backend adapters
@@ -31,8 +44,7 @@ Read the [metacompilation study](docs/metacompilation.md) for Jai, Lisp, Scheme,
 Forth, staged language extensions, a public compiler pipeline, and caching.
 
 Read the [source metastage review](docs/source-metastages.md) for the Zig and
-Jai comparison, source-defined compiler control, and the phase contract that
-must precede new syntax.
+Jai comparison and the phase contract used by the source-stage design.
 
 Read the [compiler extension experiment](docs/compiler-extension-experiment.md)
 for a small seed, ownership and unsafe stages, complete syntax replacement,

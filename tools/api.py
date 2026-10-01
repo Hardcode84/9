@@ -27,7 +27,7 @@ def main():
     args = parser.parse_args()
     enums = {}
     headers = {}
-    for stem in ("rmd0", "rmd0_host", "rmd0_x64"):
+    for stem in ("rmd0", "rmd0_host", "rmd0_x64", "rmd0_stage"):
         source = (ROOT / "include" / f"{stem}.h").read_text()
         source = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
         source = re.sub(r"^#.*$", "", source, flags=re.M)
@@ -105,7 +105,7 @@ def main():
             params = [declaration(arg) for arg in arguments.split(",")] if arguments != "void" else []
             rendered = ", ".join(f"{param}: {kind}" for param, kind in params)
             lines.append(f'extern fn {name}({rendered}) -> {ctype(result)} = "{name}";')
-        output = "\n".join(lines) + "\n"
+        output = "\n".join(lines).rstrip() + "\n"
         path = ROOT / "api" / f"{stem}.rmd"
         if args.check:
             if not path.exists() or path.read_text() != output:

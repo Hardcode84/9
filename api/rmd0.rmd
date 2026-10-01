@@ -244,6 +244,20 @@ record RmdUnit {
     next: *RmdUnit;
 }
 
+record RmdMetaInput {
+    next: *RmdMetaInput;
+    loc: RmdLoc;
+    path: *u8;
+    native: bool;
+}
+
+record RmdMeta {
+    host_unit: *RmdUnit;
+    inputs: *RmdMetaInput;
+    target_begin: usize;
+    loc: RmdLoc;
+}
+
 record RmdContext {
     arena: RmdArena;
     names: **RmdName;
@@ -274,6 +288,7 @@ extern fn rmd_try_map_set(ctx: *RmdContext, map: *RmdMap, key: usize, value: *u8
 extern fn rmd_map_get(map: *RmdMap, key: usize) -> *u8 = "rmd_map_get";
 extern fn rmd_read(ctx: *RmdContext, source: *RmdSource, result: **RmdUnit) -> bool = "rmd_read";
 extern fn rmd_read_range(ctx: *RmdContext, source: *RmdSource, begin: usize, end: usize, result: **RmdUnit) -> bool = "rmd_read_range";
+extern fn rmd_read_meta(ctx: *RmdContext, source: *RmdSource, result: *RmdMeta) -> bool = "rmd_read_meta";
 extern fn rmd_bind(ctx: *RmdContext, name: *RmdName, declaration: *RmdDecl) -> bool = "rmd_bind";
 extern fn rmd_collect(ctx: *RmdContext) -> bool = "rmd_collect";
 extern fn rmd_resolve(ctx: *RmdContext) -> bool = "rmd_resolve";

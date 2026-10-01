@@ -9,7 +9,7 @@ enum {
     TOK_UNINIT, TOK_IF, TOK_ELSE, TOK_WHILE, TOK_BREAK, TOK_CONTINUE,
     TOK_RETURN, TOK_TRAP, TOK_AS, TOK_MAKE, TOK_NULL, TOK_SIZEOF,
     TOK_ALIGNOF, TOK_OFFSETOF, TOK_TRUE, TOK_FALSE, TOK_ARROW,
-    TOK_EQ, TOK_NE, TOK_LE, TOK_GE, TOK_SHL, TOK_SHR, TOK_AND, TOK_OR
+    TOK_EQ, TOK_NE, TOK_LE, TOK_GE, TOK_SHL, TOK_SHR, TOK_AND, TOK_OR, TOK_META
 };
 
 typedef struct {
@@ -60,7 +60,8 @@ static const Keyword keywords[] = {
     TYPEWORD("i32", RMD_T_I32), TYPEWORD("u32", RMD_T_U32),
     TYPEWORD("i64", RMD_T_I64), TYPEWORD("u64", RMD_T_U64),
     TYPEWORD("isize", RMD_T_ISIZE), TYPEWORD("usize", RMD_T_USIZE),
-    TYPEWORD("bool", RMD_T_BOOL), TYPEWORD("unit", RMD_T_UNIT)
+    TYPEWORD("bool", RMD_T_BOOL), TYPEWORD("unit", RMD_T_UNIT),
+    KEYWORD("meta", TOK_META)
 };
 
 static bool name_start(unsigned char c)
@@ -197,14 +198,11 @@ static void read_number(Reader *reader)
     reader->offset = end;
 }
 
-static void next_token(Reader *reader)
+static inline void skip_trivia(Reader *reader)
 {
     const unsigned char *source = reader->source->bytes;
     size_t size = reader->end;
-    size_t start;
     unsigned char c;
-    const Keyword *word;
-    memset(&reader->token, 0, sizeof(reader->token));
     for (;;) {
         while (reader->offset < size) {
             c = source[reader->offset];
@@ -224,6 +222,17 @@ static void next_token(Reader *reader)
             ++reader->offset;
         }
     }
+}
+
+static void next_token(Reader *reader)
+{
+    const unsigned char *source = reader->source->bytes;
+    size_t size = reader->end;
+    size_t start;
+    unsigned char c;
+    const Keyword *word;
+    memset(&reader->token, 0, sizeof(reader->token));
+    skip_trivia(reader);
     reader->token.loc.source = reader->source;
     reader->token.loc.offset = reader->offset;
     if (reader->offset == size) {
@@ -685,6 +694,8 @@ static RmdDecl *read_declaration(Reader *reader)
     Token token = reader->token;
     RmdDecl *decl = NEW(reader, RmdDecl);
     decl->loc = token.loc;
+    if (token.kind == TOK_META)
+        rmd_fail(reader->ctx, token.loc, "meta is permitted only in a leading host block");
     if (take(reader, TOK_RECORD)) {
         RmdField **tail = &decl->fields;
         decl->kind = RMD_D_RECORD;
@@ -781,6 +792,95 @@ static RmdUnit *read_unit(RmdContext *ctx, RmdSource *source, size_t begin, size
         tail = &decl->next;
     }
     return unit;
+}
+
+static void read_meta(RmdContext *ctx, RmdSource *source, RmdMeta *result)
+{
+    Reader reader;
+    RmdUnit *unit;
+    RmdDecl **tail;
+    RmdMetaInput **input_tail = &result->inputs;
+    uint64_t ordinal = 0;
+    memset(&reader, 0, sizeof(reader));
+    reader.ctx = ctx;
+    reader.source = source;
+    reader.end = source->size;
+    skip_trivia(&reader);
+    result->target_begin = reader.offset;
+    if (source->size - reader.offset < 4 ||
+        memcmp(source->bytes + reader.offset, "meta", 4) != 0 ||
+        (source->size - reader.offset > 4 && name_continue(source->bytes[reader.offset + 4])))
+        return;
+    next_token(&reader);
+    result->loc = reader.token.loc;
+    next_token(&reader);
+    expect(&reader, '{', "'{' after meta");
+    unit = NEW(&reader, RmdUnit);
+    unit->source = source;
+    tail = &unit->declarations;
+    while (reader.token.kind != '}') {
+        bool native = reader.token.kind == TOK_NAME &&
+            strcmp(reader.token.name->text, "link") == 0;
+        bool dependency = native || (reader.token.kind == TOK_NAME &&
+            strcmp(reader.token.name->text, "source") == 0);
+        if (reader.token.kind == TOK_EOF)
+            rmd_fail(ctx, reader.token.loc, "expected '}' to close meta block");
+        if (dependency) {
+            RmdLoc loc = reader.token.loc;
+            RmdMetaInput *input;
+            size_t index;
+            if (ordinal != 0)
+                rmd_fail(ctx, loc, "meta inputs must precede declarations");
+            next_token(&reader);
+            if (reader.token.kind != TOK_STRING)
+                rmd_fail(ctx, reader.token.loc, "expected a meta input path string");
+            if (reader.token.byte_count == 1)
+                rmd_fail(ctx, reader.token.loc, "meta input path must not be empty");
+            for (index = 0; index + 1 < reader.token.byte_count; ++index) {
+                if (reader.token.bytes[index] == 0)
+                    rmd_fail(ctx, reader.token.loc, "meta input path must not contain zero bytes");
+            }
+            input = NEW(&reader, RmdMetaInput);
+            input->loc = loc;
+            input->path = (char *)reader.token.bytes;
+            input->native = native;
+            *input_tail = input;
+            input_tail = &input->next;
+            next_token(&reader);
+            expect(&reader, ';', "';' after meta input");
+        } else {
+            RmdDecl *decl = read_declaration(&reader);
+            if (ordinal == UINT64_MAX)
+                rmd_fail(ctx, decl->loc, "too many declarations");
+            decl->unit_identity = source->identity;
+            decl->identity = ++ordinal;
+            *tail = decl;
+            tail = &decl->next;
+        }
+    }
+    result->target_begin = reader.offset;
+    result->host_unit = unit;
+}
+
+bool rmd_read_meta(RmdContext *ctx, RmdSource *source, RmdMeta *result)
+{
+    RmdFailureFrame failure;
+    memset(result, 0, sizeof(*result));
+    failure.previous = ctx->failure;
+    ctx->failure = &failure;
+    if (setjmp(failure.jump) != 0) {
+        memset(result, 0, sizeof(*result));
+        ctx->failure = failure.previous;
+        return false;
+    }
+    read_meta(ctx, source, result);
+    if (result->host_unit != NULL) {
+        if (ctx->last_unit == NULL) ctx->units = result->host_unit;
+        else ctx->last_unit->next = result->host_unit;
+        ctx->last_unit = result->host_unit;
+    }
+    ctx->failure = failure.previous;
+    return true;
 }
 
 bool rmd_read_range(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,

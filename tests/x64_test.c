@@ -397,6 +397,54 @@ static void test_failure_boundaries(void)
     rmd_context_destroy(&fixture.context);
 }
 
+static void test_constant_sections(void)
+{
+    static const bool relocations[] = {
+        false, false, false, false, true, true, true, true, false
+    };
+    Fixture fixture;
+    RmdX64Program *program;
+    RmdX64Emitter emitter;
+    RmdDecl *declaration;
+    size_t index = 0;
+    fixture_init(&fixture,
+        "record Item { number: u64; text: *u8; }"
+        "record Nested { items: [Item; 2]; }"
+        "const number: u64 = 7u64;"
+        "const numbers: [u64; 2] = make [u64; 2] { 1u64, 2u64 };"
+        "const no_pointer: *u8 = null(*u8);"
+        "const no_function: fn() -> u64 = null(fn() -> u64);"
+        "const text: *u8 = (\"string\");"
+        "const function: fn() -> u64 = (target);"
+        "const functions: [fn() -> u64; 2] = make [fn() -> u64; 2] { null(fn() -> u64), target };"
+        "const nested: Nested = make Nested { items: make [Item; 2] {"
+        "make Item { number: 1u64, text: null(*u8) }, make Item { number: 2u64, text: \"nested\" } } };"
+        "const no_address: Item = make Item { number: 3u64, text: null(*u8) };"
+        "fn target() -> u64 { return 42u64; }");
+    check(rmd_x64_prepare(&fixture.context, &program, NULL), "prepare constant relocation fixture");
+    memset(&emitter, 0, sizeof(emitter));
+    emitter.program = program;
+    for (declaration = fixture.context.units->declarations; declaration; declaration = declaration->next) {
+        char line[128];
+        const char *expected;
+        if (declaration->kind != RMD_D_CONST)
+            continue;
+        if (index >= sizeof(relocations) / sizeof(*relocations)) {
+            check(false, "constant relocation fixture has an expected result for every constant");
+            break;
+        }
+        expected = relocations[index++] ? "\t.section .data.rel.ro,\"aw\",@progbits\n" : "\t.section .rodata\n";
+        emitter.output = output_file();
+        check(rmd_x64_try_emit_constant(&emitter, declaration), "emit a checked constant independently");
+        rewind(emitter.output);
+        check(fgets(line, sizeof(line), emitter.output) != NULL && strcmp(line, expected) == 0,
+              "only constants with stored addresses require relocation before read-only protection");
+        check(fclose(emitter.output) == 0, "close constant relocation output");
+    }
+    check(index == sizeof(relocations) / sizeof(*relocations), "all constant relocation cases were checked");
+    rmd_context_destroy(&fixture.context);
+}
+
 int main(void)
 {
     test_native_contract();
@@ -405,6 +453,7 @@ int main(void)
     test_callback_failure();
     test_place_and_group_operations();
     test_failure_boundaries();
+    test_constant_sections();
     printf("x64: %u/%u checks passed\n", checks - failures, checks);
     return failures != 0;
 }

@@ -11,11 +11,11 @@ not select instructions or translate expressions. The assembly backend is
 needed for the first build only. The C-stage executable has no `rmd_x64_`
 symbols.
 
-The standalone driver proves backend construction and self-compilation. The
-required source-defined stage override is a separate integration step. It
-must call this backend as an ordinary external library, with no special
-compiler selector. See the [Zig and Jai review](source-metastages.md) for the
-phase contract and the decision to keep the source grammar unchanged here.
+The backend also runs as an ordinary external library selected by a
+[host block in the user source](source-stages.md). The launcher has no
+C-backend selector, path, or special native bridge. The source imports the
+consumer declarations, links the library, and calls `c_program` or
+`c_backend_build` through the normal RMD0 foreign interface.
 
 ## Build and use
 
@@ -34,11 +34,13 @@ then reuses storage while the list remains live.
 `make c-stage` first compiles the stage with the assembly seed. This produces
 `build/rmd-c-seed`. That program compiles the same RMD0 files through C and GCC
 to produce `build/rmd-c`. Both programs use the same C99 frontend library.
+It also builds `build/rmd-c-library.so` with the same compiler. That library
+exports `c_program` and `c_backend_build` and omits the standalone `main`.
 This is self-compilation of the backend and driver. The reader and checker
 remain C99. The default `make` target does not build this optional backend.
 
-The stage has 1,896 physical RMD0 lines, including comments and blank lines.
-The C99 seed has 4,832 C and header lines. Tests and generated API
+The stage has 2,108 physical RMD0 lines, including comments and blank lines.
+The C99 seed has 5,402 C and header lines. Tests and generated API
 declarations are separate. Use `wc -l stages/c/*.rmd` to repeat the stage count.
 
 | Option | Result |
@@ -51,6 +53,7 @@ declarations are separate. Use `wc -l stages/c/*.rmd` to repeat the stage count.
 | `-o PATH` | Compile, link, and write an executable |
 | `--library` | Omit the hosted entry wrapper |
 | `--entry NAME` | Select a defined `fn(i32, **u8) -> i32` entry |
+| `--export NAME` | Give a defined function or constant its source name as a native name |
 | `--cflag ARG` | Add one GCC compilation argument |
 | `--ldflag ARG` | Add one GCC link argument |
 | `--` | End option parsing |
@@ -84,7 +87,28 @@ The source files have these responsibilities:
 | `base.rmd` | Arena, text buffers, number conversion, and maps |
 | `types.rmd` | C types, layout checks, native bindings, and symbol text |
 | `emit.rmd` | Checked expressions and statements to C text |
-| `driver.rmd` | Input files, frontend calls, options, and native processes |
+| `driver.rmd` | Reusable backend call, output files, and native processes |
+| `program.rmd` | Source input, frontend calls, names, options, and `c_program` |
+| `main.rmd` | Standalone command-line entry |
+| `api.rmd` | Consumer declarations for the two public calls and output options |
+
+An external consumer includes `api/rmd0.rmd`, `api/rmd0_stage.rmd`, and
+`stages/c/api.rmd`. It links the prepared stage library as an ordinary native
+input. Do not also include `stages/c/api.rmd` when compiling the implementation;
+the implementation supplies those declarations itself.
+
+`c_program` receives an empty initialized context and a captured source range.
+It copies extra input descriptors, bytes, and native names into the context's
+arena. They remain valid after the call. It leaves diagnostics in the context
+for its owner to report. The root source remains borrowed through context
+destruction.
+
+`c_backend_build` receives checked input with caller-owned native names.
+It accepts mode 0 for an executable, 1 for an object, or 2 for C text. Its
+options record holds output and symbol paths and explicit compiler and linker
+argument arrays. It releases its temporary arena before returning. The caller
+can retain the context and call the backend again. The call returns zero,
+a failed tool's exit status, or one for another failure.
 
 A custom driver can compile `model.rmd`, `base.rmd`, `types.rmd`, and `emit.rmd`
 with the public API declarations and its own entry.
@@ -180,6 +204,7 @@ This path requires native object files. If a GCC option requests LTO output,
 ```sh
 make check
 make check-c
+make check-stage
 python3 tests/run.py --backend c --compiler build/rmd-c --work-dir build/tests-c-ubsan --cflags='-O3 -fsanitize=undefined -fno-sanitize-recover=all' --ldflags='-fsanitize=undefined'
 ```
 
@@ -195,14 +220,18 @@ output, and uses it to compile and run the intrusive-list program. It also
 checks native names, allocation-size failures, output failures, and the
 absence of C backend helper calls.
 
-The current seed run passes 10,915 C API checks and 398 integration process
+The current seed run passes 10,996 C API checks and 398 integration process
 checks. The C backend run passes 348 integration process checks. Each common
-suite includes 10,220 integer comparisons, 65 trap processes, 224 public API
+suite includes 10,220 integer comparisons, 65 trap processes, 243 public API
 layout comparisons, and 20 native file-status layout comparisons.
+The source-stage suite adds 41 process checks. They also pass with the C core
+and the loaded backend under AddressSanitizer and UndefinedBehaviorSanitizer.
+The exact generated backend C passes Clang 20 with strict C99 syntax checks;
+the layout probes use named structures in `offsetof`.
 
-The RMD stage and its generated programs also pass all 348 C-backend process
-checks at `-O3` with AddressSanitizer and UndefinedBehaviorSanitizer. The C99
-frontend library is unchanged. Repeat that instrumented stage build with:
+The earlier prepared-driver run passed all 348 C-backend process checks at
+`-O3` with AddressSanitizer and UndefinedBehaviorSanitizer. That run preceded
+the source-stage split. Repeat that instrumented stage build with:
 
 ```sh
 build/rmd-c -o build/rmd-c-sanitize \
@@ -210,8 +239,9 @@ build/rmd-c -o build/rmd-c-sanitize \
   --cflag -fno-sanitize-recover=all --cflag -fno-omit-frame-pointer \
   --ldflag -fsanitize=address,undefined \
   --ldflag build/librmd0.a --ldflag build/librmd0_host.a \
-  api/rmd0.rmd api/rmd0_host.rmd stages/c/model.rmd stages/c/base.rmd \
-  stages/c/types.rmd stages/c/emit.rmd stages/c/driver.rmd
+  api/rmd0.rmd api/rmd0_host.rmd api/rmd0_stage.rmd \
+  stages/c/model.rmd stages/c/base.rmd stages/c/types.rmd stages/c/emit.rmd \
+  stages/c/driver.rmd stages/c/program.rmd stages/c/main.rmd
 ASAN_OPTIONS=detect_leaks=0 python3 tests/run.py --backend c \
   --compiler build/rmd-c-sanitize --work-dir build/tests-c-sanitize \
   --cflags='-O3 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer' \
@@ -227,10 +257,13 @@ through the host allocator and checks the resulting stage error and cleanup.
 
 The [measurement script](../benchmarks/c-stage/measure.py) builds isolated
 compiler executables and records their source and binary hashes. The
-[final results](../benchmarks/c-stage/results.json) contain all raw samples,
+[prepared-driver results](../benchmarks/c-stage/results.json) contain all raw samples,
 commands, input hashes, tool versions, and confidence intervals. The
 [earlier run](../benchmarks/c-stage/results-pre-path-fix.json) precedes the
-driver path fixes and is separate evidence.
+driver path fixes and is separate evidence. These runs precede the source-stage
+integration and backend library split. Their hashes identify the measured
+implementation. The [source-stage measurements](source-stages.md#cost-gate)
+measure the current interface, including the cost of preparing its inline entry.
 
 Run a new measurement from the repository root. Select an available logical
 CPU and a new result path:

@@ -44,7 +44,9 @@ There are no generics, overloads, implicit conversions, methods, inheritance,
 closures, exceptions, tagged unions, floating-point types, variable arguments,
 implicit compile-time function execution, or built-in module management.
 There are no module, import, pub, owner, borrow, defer, unsafe, macro,
-quotation, or stage keywords.
+quotation, or general stage-definition keywords. The launcher accepts one
+optional leading `meta` block to prepare the source program's compiler entry.
+That entry calls ordinary functions through public interfaces.
 
 A compiler written in RMD0 can describe richer types as ordinary data and use
 another IR. For example, a C frontend can describe C floats and unions, then
@@ -115,6 +117,24 @@ are errors. The decoded bytes are followed by one additional zero byte.
 Embedded zero bytes from escapes are permitted.
 
 ## 4 Grammar
+
+The grammar below defines a plain RMD0 unit. A launcher root can instead have
+a leading host block, followed by bytes for its selected target reader:
+
+```text
+Root        = Unit | HostPrefix TargetBytes ;
+HostPrefix  = "meta" "{" { HostInput } { Declaration } "}" ;
+HostInput   = ( "source" | "link" ) String ";" ;
+```
+
+`TargetBytes` is a byte range, not a sequence of RMD0 tokens. The host reader
+stops at the closing brace. The selected compiler entry determines the target
+grammar. `meta` is reserved. `source` and `link` have their input meaning only
+at the start of a host block item. They remain ordinary names elsewhere.
+The [source-stage contract](source-stages.md) defines input paths, the entry
+signature, phase ownership, execution, and errors. `rmd_read` and
+`rmd_read_range` accept only the plain unit grammar below. `rmd_read_meta`
+reads the optional host prefix separately.
 
 The grammar uses EBNF. Brackets mean optional text. Braces mean repetition.
 Quoted text is a token. `Name`, `Integer`, `Count`, and `String` are lexical
@@ -683,7 +703,9 @@ The driver must establish this order where dependencies require it:
 
 A new driver can be an ordinary executable linked to compiler libraries.
 Dynamic plugins, a resident compiler server, a JIT, and persistent caches are
-not required. Self-compilation uses the previous compiler executable to build
+not required by the library construction contract. The source launcher uses
+a native shared object for an inline `meta` entry, as specified in the
+[source-stage contract](source-stages.md). Self-compilation uses the previous compiler executable to build
 the next one; it does not require the next executable before it exists.
 
 Host execution and target description are separate. `sizeof` in a running

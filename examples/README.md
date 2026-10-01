@@ -6,7 +6,26 @@ Run the commands below from the repository root. Build the tools once:
 make all c-stage
 ```
 
-Each example has its own directory. Start with [hello](hello/main.crs).
+## Tutorials
+
+Start with Hello World. Then follow the compiler stages from source input to
+native output. Each tutorial explains the motivation, design, implementation,
+and commands to inspect the result.
+
+| Order | Tutorial | What you will build or inspect |
+| --- | --- | --- |
+| 1 | [Hello World](hello/README.md) | A compilation program and target program in one file |
+| 2 | [C backend](../stages/c/README.md) | C text, explicit evaluation order, native symbols, and body callbacks |
+| 3 | [Function overloads](../stages/overload/README.md) | Exact type selection, symbol mangling, and separate objects |
+| 4 | [Ownership, RAII, and defer](../stages/resources/README.md) | Moves, loans, rejected programs, and emitted cleanup plans |
+
+The overload and ownership tutorials include deliberate compiler errors.
+They state the required diagnostic and then show the correction. The stage
+references retain the complete API and language contracts.
+
+## Runnable examples
+
+Each example has its own directory and README.
 
 | Directory | Example | Output |
 | --- | --- | --- |

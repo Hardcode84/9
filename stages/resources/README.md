@@ -1,178 +1,280 @@
-# Resource compiler stage
+# Tutorial: ownership, RAII, and defer as a source stage
 
-This ordinary Crust library implements ownership, local loans, RAII, and `defer`.
-The C99 seed has no resource policy or new keyword. The root program chooses
-the library with ordinary source calls.
+An owned descriptor must close exactly once on normal control flow. A move
+must transfer that obligation. A borrowed view must not outlive its owner.
+This stage checks those rules and emits explicit cleanup code.
+
+RAII associates resource lifetime with scope. `defer` adds a call to that
+scope's cleanup. Both are library policies here: the root selects a Crust
+stage that reads the syntax, checks ownership, and supplies C function
+bodies. The seed has no resource keyword or destructor policy.
+
+Start with [Hello World](../../examples/hello/README.md) and the
+[C backend tutorial](../c/README.md). This tutorial follows a descriptor
+owner, makes cleanup order visible, and inspects the compiler's retained
+plans. The [reference](reference.md) gives the complete source and API rules.
+
+## 1. Run a real descriptor owner
+
+Run from the repository root on Linux x86-64:
 
 ```sh
 make all resource-stage
 build/crust examples/resources/hello/main.crs
 build/resource-hello
-make check-reader check-resources
 ```
 
-The [hello source](../../examples/resources/hello/main.crs) contains the
-compilation program and target program. The [SQLite application](../../examples/resources/sqlite/README.md)
-uses separate target files and tests actual connection, statement, and byte-view
-lifetimes. Its root also contains all compiler and linker options.
+The target prints `Hello, resources!` and a newline, then returns zero.
+The [root](../../examples/resources/hello/main.crs) loads [api.crs](api.crs)
+and `build/crust-resource-library.so`. Its final `resource_build` call passes
+the unread target source, just as `c_build` does in Hello World.
 
-## Source rules
-
-The stage extends Crust0 with these forms:
+The target declares an owner:
 
 ```crust
-resource File { handle: *u8; } drop file_drop;
-
-fn file_drop(value: mut File) -> unit { /* audited release */ }
-fn use(value: read File) -> unit { /* shared access */ }
-fn update(value: mut File) -> unit { /* exclusive access */ }
-fn consume(value: File) -> unit { /* ownership transfers to this call */ }
-
-// Within a function:
-var second: File = move first;
-use(read second);
-defer update(mut second);
+resource Output { descriptor: i32; } drop output_drop;
 ```
 
-A resource is a nominal record with a declared drop function. Its raw fields
-and construction require `unsafe`. Ordinary records and fixed arrays own their
-resource fields and elements. Other values retain Crust0 copy semantics.
+`output_open` duplicates standard output with `dup`. Thus the owner has its
+own descriptor to close. `output_drop` takes `mut Output` and calls `close`.
+`hello` also takes `mut Output` and handles partial writes in a loop.
 
-- Initialization creates one cleanup obligation. A move transfers it and makes
-  the whole source binding unavailable. Resource copies and partial moves fail.
-- An owner passed by value requires `move` or a fresh owning result. Return of
-  a local owner requires `move`. The caller owns a returned resource.
-- Reassignment captures the new value, drops the old live value, and installs
-  the new value. Assignment after a move reactivates the binding's original
-  cleanup position. `value = move value` retains one obligation.
-- Normal scope exit drops live bindings in reverse declaration order. A record
-  runs its declared drop function before it drops fields in reverse order.
-  Arrays drop elements in reverse order.
-- A `read` loan permits shared access. A `mut` loan permits exclusive access.
-  All field and element loans reserve the whole root. Reborrowing reserves the
-  parent loan. Loan types cannot occur in stored fields or function results.
-  A borrow mode applies to a value type; modes cannot be stacked.
-- Named loans end at lexical scope exit. Temporary call loans end after the
-  complete call. Borrow modes are part of a source function type, including
-  function pointers and constants. Lowering them to pointers does not erase
-  their source contract.
-- `defer f(args);` captures the callee and arguments once, from left to right.
-  Its result type must be `unit`. Moved arguments transfer at registration;
-  borrowed arguments remain reserved until invocation. Defer runs in reverse
-  order with the same scope's automatic drops.
-- A return value is captured before cleanup. `break` and `continue` clean the
-  scopes that they leave. Each loop iteration has its own cleanup scope.
-- Continuing branches must agree on outer initialization and ownership states.
-  Loop conditions and loop edges must restore those entry states. The checker
-  rejects disagreement instead of adding runtime drop flags.
+The entry function establishes the lifetime:
 
-Only whole bindings have initialization facts. A partially initialized record
-or array cannot be read through a checked place. An unsafe raw address can name
-uninitialized whole storage without reading it. Raw stores do not change the
-checked initialization fact. The unsafe code must read only bytes that it has
-initialized. This contract supports foreign output buffers without forced
-zero initialization or partial-initialization tables.
+```crust
+var first: Output = output_open();
+var output: Output = move first;
+defer hello(mut output);
+return 0i32;
+```
 
-An unsafe region permits raw pointer access, address formation, pointer and
-function casts, foreign calls, resource construction, and resource fields.
-`unsafe fn` requires such a region at every source call. A designated drop
-function also requires unsafe permission for an explicit call. Neither kind
-can be stored as an ordinary safe function value. Generated automatic cleanup
-has the drop function's explicit contract.
+| Step | Ownership and cleanup state |
+| --- | --- |
+| `output_open()` | `first` owns one descriptor and owes one drop |
+| `move first` | `output` takes the obligation; `first` is unavailable |
+| `defer hello(mut output)` | The call captures an exclusive loan until cleanup |
+| `return 0i32` | Save the return value, call `hello`, then drop `output` |
 
-`unsafe { forget move value; }` discharges an obligation without calling drop.
-The caller must account for the raw resource. Unsafe code still obeys move and
-loan bookkeeping. It does not grant copying of owners or mutation through a
-shared loan.
+There is no second drop for `first`. The deferred loan prevents conflicting
+access to `output` before the call runs. The final drop closes the duplicate,
+so the process's original standard output remains open.
 
-Drop returns `unit` and must not publish the object or unwind. A library must
-handle a failed close explicitly before scope exit, or use an explicit fatal
-drop policy. Trap and process termination do not promise cleanup. Foreign
-unwinding or nonlocal jumps across resource scopes violate the library contract.
+Native calls and resource fields are inside `unsafe` regions. Those adapters
+must satisfy the native API contracts. `unsafe` does not disable the stage's
+move and loan checks. In this example, failed writes terminate with status
+one; a failed close terminates with status two. Process termination and
+`trap` do not run pending cleanup. Normal scope exits do.
 
-Fixed-array indexing checks bounds. Indirect calls check for null at invocation,
-including deferred calls. A statically named call has no null check. Arithmetic
-retains the seed's defined wrapping and trap rules.
+## 2. Make cleanup order visible
 
-## Compiler interfaces
+The descriptor example has a silent successful drop. Use this small target
+to print the order. `Trace` owns a cleanup obligation for this demonstration;
+its label points to a string literal and needs no allocation.
 
-[api.crs](api.crs) provides `resource_build` and `resource_program` for a root.
-Both take ordinary source and option data. There is no special runner path,
-package name, destructor name, or foreign API recognized by the seed.
+```sh
+mkdir -p build/tutorial-resources
+cat > build/tutorial-resources/trace.crs <<'EOF'
+extern fn puts(text: *u8) -> i32 = "puts";
 
-[extension.crs](extension.crs) exposes the lower-level sequence:
+resource Trace { label: *u8; } drop trace_drop;
 
-1. Initialize a context and `RsStage`.
-2. Call `rs_read` for each retained source range.
-3. Call `rs_prepare` after all source units have been read.
-4. Assign native link names and pass `rs_c_body` to the C backend's body callback.
-5. Destroy the context after output is complete.
+fn trace_open(label: *u8) -> Trace {
+    unsafe { return make Trace { label: label }; }
+}
 
-An earlier source stage can publish a source ABI import. It supplies an external
-declaration with the complete source signature and native link name, then calls
-`rs_source_import` before `rs_prepare`. This marker permits source aggregates and
-borrow modes. It does not apply to a native C declaration. Unmarked `extern fn`
-declarations still require scalar foreign signatures and unsafe calls.
+fn print_line(text: *u8) -> unit {
+    unsafe { if puts(text) < 0i32 { trap; } }
+}
 
-Caller and provider must use the same source ABI, record definitions, resource
-drop clauses, and unsafe function contracts. A source import is safe unless its
-declaration has the source stage's unsafe marker. A safe source import can supply
-a resource's drop function. It has the same exclusive-borrow signature and
-explicit-call restrictions as a local drop definition.
+fn trace_drop(value: mut Trace) -> unit {
+    unsafe { print_line(value.label); }
+}
 
-The optional [overload adapter](../overload/resources.crs) reads bare function
-prototypes, selects calls with source borrow modes, and assigns structural native
-names. Initialize `RsStage`, then call `ov_resources_init`, `ov_resources_read`
-for each source, and `ov_resources_prepare`. Call `rs_prepare` after that sequence.
-Retain the two stages and the adapter hooks through overload preparation, and
-retain the resource stage through body emission. The resource reader alone does
-not add bare prototypes or overload selection.
+fn main(argc: i32, argv: **u8) -> i32 {
+    var first: Trace = trace_open("drop");
+    var second: Trace = move first;
+    defer print_line("defer");
+    return 0i32;
+}
+EOF
+build/crust-resource -o build/tutorial-resources/trace \
+    build/tutorial-resources/trace.crs
+build/tutorial-resources/trace
+```
 
-The stage retains source signatures, storage identities, loans, and cleanup
-plans. It lowers a separate set of target declarations and bodies. Source
-locations retain offsets in the original complete file. The seed checker
-checks generated types and operations; it does not prove ownership.
+Expected output:
 
-The checked operation trees alone are not an equivalent seed program. Exit
-cleanup remains in the retained plans. Use `rs_c_body`, or an emitter that reads
-both representations. Ordinary seed evaluation or emission of those trees
-alone omits the planned cleanup. `resource_program` completes output before
-its local stage ends; a retained context from that call cannot be used alone
-to emit the resource program again.
+```text
+defer
+drop
+```
 
-The [Crust reader](../reader/README.md) is independent of resources. Its four hooks
-can add declarations, statements, prefix expressions, and type syntax. A stage
-can also replace the complete reader. The reader contains no resource keyword.
+`defer` captures its callee and arguments once when execution reaches the
+statement. It is not a block that reads variables later. At scope exit,
+cleanup runs in reverse registration order. Here the deferred call runs
+before the owner's drop. The moved-from binding adds no call.
 
-The [C backend extension](../c/extension.crs) accepts a callback for each complete
-function body. The callback can emit its own control flow and can use checked
-expression and statement services. It does not require a seed body. A separate
-test emits labels and branches from an external library with null seed bodies.
-This API contains no resource or cleanup operation.
+The standalone `build/crust-resource` command takes target declarations,
+not a root compilation program. It calls the same stage library as the
+source-controlled root.
 
-The compiler library uses context arenas and side tables. Separate compilations
-have separate contexts and stage records. This implementation executes its
-function checks serially; the public API does not provide a worker scheduler.
+## 3. Observe a rejected move
 
-## Output and cost
+Create a version that moves `first` twice:
 
-Cleanup plans share equal suffixes that have the same continuation. Output uses
-C labels and branches. It has no runtime cleanup table, dynamic registration,
-hidden owner header, reference count, or hidden drop flag. A deferred direct
-call stays direct. Arrays use reverse loops, not unrolled drop lists.
+```sh
+sed 's/defer print_line("defer");/var third: Trace = move first;/' \
+    build/tutorial-resources/trace.crs > build/tutorial-resources/moved.crs
+build/crust-resource --check build/tutorial-resources/moved.crs
+```
 
-Record and array parameters use pointers to caller snapshots. Aggregate results
-use caller-provided storage. The stage retains explicit left-to-right evaluation
-with local temporaries. This is an internal Crust ABI; foreign signatures must use
-explicit scalar ABI types. Target optimization can remove temporaries, but the
-ABI and its costs must be checked in actual output.
+The check must return one with this diagnostic:
 
-The [measurements](../../benchmarks/resources/README.md) separate frontend work
-from final target GCC compilation and linking. They also report emitted size
-and cleanup growth. Passing resource tests alone is not a speed result.
+```text
+value is uninitialized or has been moved
+```
 
-The stage proves local ownership and loan rules. Persistent intrusive-list links
-need an additional observer-validity contract across unlink, destruction, and
-storage reuse. The current source types do not express that contract. Add and
-check such an observer type in a stage before calling a direct intrusive list
-safe. Neither a resource drop nor a raw pointer establishes it.
+Changing the second move to `move second` transfers the remaining obligation
+and makes the program valid:
+
+```sh
+sed 's/var third: Trace = move first;/var third: Trace = move second;/' \
+    build/tutorial-resources/moved.crs > build/tutorial-resources/fixed.crs
+build/crust-resource -o build/tutorial-resources/fixed \
+    build/tutorial-resources/fixed.crs
+build/tutorial-resources/fixed
+```
+
+It prints `drop` once. The rejected operation was replaced, and the deferred
+print is absent from this version. Both earlier bindings have moved.
+
+Other useful checks in the descriptor example are:
+
+| Change | Reason for rejection |
+| --- | --- |
+| Replace `move first` with `first` | An owner cannot be copied |
+| Add `hello(mut output)` after its deferred call | The defer holds an exclusive loan |
+| Move an outer owner in only one continuing branch | The paths disagree on the live cleanup obligation |
+
+These rules keep cleanup statically determined. Named loans last until
+scope exit; temporary call loans last through the call. A field or element
+loan reserves its complete root binding. The checker does not infer shorter
+last-use lifetimes or independent loans for disjoint fields.
+
+## 4. Follow the compiler state
+
+Read the implementation in this order:
+
+| File | What to follow |
+| --- | --- |
+| [read.crs](read.crs) | Four reader hooks for declarations, statements, prefix expressions, and types |
+| [model.crs](model.crs) | Owners, loans, scopes, change records, cleanup actions, and exit plans |
+| [types.crs](types.crs) | Source contracts, owning types, and separate lowered ABI types |
+| [state.crs](state.crs) | Access checks, loan state, rollback, and cleanup chain construction |
+| [expr.crs](expr.crs) | Move and call checking, capture order, temporary lifetimes, and defer |
+| [control.crs](control.crs) | Branch joins, loop edges, return capture, and `rs_prepare` |
+| [cleanup.crs](cleanup.crs) | Drop operations for resources, record fields, and array elements |
+| [emit.crs](emit.crs) | `rs_c_body` emits function bodies with cleanup branches |
+
+The reader extends ordinary identifier tokens with library rules. For
+example, `rs_read_declaration` uses the record reader, then reads the
+`drop` clause. Other hooks recognize `move`, `read`, `mut`, `defer`, and
+`unsafe`. The shared reader does not contain these policies.
+
+### Keep source contracts until checking is complete
+
+Each `RsLocal` records initialization, ownership, borrow mode, active shared
+loans, and an exclusive-loan flag. These are compiler facts, not fields
+added to target objects. A whole-binding move marks its source unavailable.
+A read or write checks that state before producing lowered operations.
+
+`read T` and `mut T` retain distinct source types even though both lower to
+pointers. Owning records and arrays use pointers to captured caller values
+for parameters and caller-provided storage for results. This is a Crust
+stage ABI. Native foreign declarations use explicit scalar ABI types.
+
+### Branches must agree without runtime drop flags
+
+`rs_note` records state changes. At a branch, the checker saves a marker,
+checks one arm, snapshots the changed outer bindings, and rolls back to
+check the other arm. `rs_join` compares paths that continue. A returning
+arm has its own cleanup and does not contribute a continuing state.
+
+Loop conditions and edges must restore the entry state of outer bindings.
+Each iteration still has its own local cleanup scope. This bounded rule
+rejects conflicting states at compilation. The target needs no hidden flag
+to decide whether an owner has already moved.
+
+Temporary values also need scopes. A call consumes or borrows its arguments
+through the full call. A defer promotes its borrowed arguments to the
+enclosing cleanup scope. Releasing those loans at registration would permit
+the owner to die before the deferred call.
+
+## 5. Inspect cleanup output
+
+Emit the trace program as C:
+
+```sh
+build/crust-resource --emit-c -o build/tutorial-resources/trace.c \
+    --symbols build/tutorial-resources/trace.rsp \
+    build/tutorial-resources/trace.crs
+cat build/tutorial-resources/trace.c
+```
+
+Find the function containing `"drop"` and `"defer"`. Its return path goes
+through `rs_exit_` labels. Follow the branches to the deferred print and the
+drop call, then to the saved return value. Label numbers are emitter details.
+
+`RsAction` describes a drop or a captured deferred call. `RsChain` pairs an
+action with its next continuation. `rs_chain` shares a suffix only when
+both the action and continuation agree. Sharing a drop sequence across
+different destinations would send control to the wrong return or loop edge.
+
+`return`, `break`, `continue`, and normal block exits refer to these plans.
+A return captures its result before cleanup. Record drops run before the
+record's owned fields; fields and array elements then drop in reverse order.
+Array cleanup uses a loop, so a large array does not create one emitted
+statement per element.
+
+### Retain the plan through emission
+
+`rs_prepare` checks source ownership, builds lowered operations and cleanup
+plans, then calls the seed checker on generated operations. These checked
+trees alone are not a complete replacement program: exit cleanup remains
+in side tables.
+
+The driver passes `rs_c_body` and the live `RsStage` to the C backend's
+complete body callback. It emits ordinary statements plus branches through
+the retained plans. Passing only the checked tree to ordinary seed emission
+or evaluation would omit the planned cleanup.
+
+Keep source storage, the context, and resource stage alive through output.
+`resource_program` completes emission while its local stage is live. Keeping
+only its context after the call does not retain an API for emitting again.
+For custom composition, follow [extension.crs](extension.crs) and keep the
+stage yourself.
+
+## 6. Check the proof and cost boundaries
+
+The emitted program has no runtime cleanup table, dynamic registration,
+reference count, owner header, or hidden drop flag. It does execute the
+required drop calls. Captured values, aggregate ABI storage, bounds checks,
+and indirect-call null checks can also have a cost. Inspect optimized native
+output before calling a specific use free.
+
+The checker proves local ownership and loans. It does not prove the native
+adapter's pointer contracts. It also has no observer type that proves a
+persistent intrusive link remains valid across unlink, destruction, and
+storage reuse. Such a stage must define and check that relation before a
+raw intrusive list can claim that guarantee.
+
+Run `make check-resources check-resource-alloc` for language, cleanup, and
+allocation failure checks. `--check` stops after semantic checks;
+`--prepare` also emits C into memory. Both exclude target GCC compilation
+and linking. See the [measurement record](../../benchmarks/resources/README.md)
+for measured costs and input contracts.
+
+Continue with the [SQLite example](../../examples/resources/sqlite/README.md)
+for connections, statements, borrowed column bytes, and error paths. The
+[overload composition example](../../examples/overload/resources/README.md)
+shows why source overload selection runs before borrow types are lowered.

@@ -1,185 +1,274 @@
-# Function overload stage
+# Tutorial: function overloads as a source stage
 
-This optional stage is a Crust program. The seed has one function per name.
-The stage selects a function and replaces its source name before the next
-checker runs. Generated calls have no runtime dispatch.
-The standalone package retains the Crust0 scalar function ABI. The resource
-package also supports aggregate value calls under that stage's rules.
+The seed language gives each function one name. This stage lets several
+functions share a source name when their parameter types differ. It selects
+one function during compilation and gives each definition a distinct native
+symbol. The target does not need a runtime dispatcher.
 
-## Selection rules
+This tutorial follows that transformation from a greeting to separate object
+files. It also explains why overload selection must precede ownership
+lowering. Start with [Hello World](../../examples/hello/README.md) and the
+[C backend tutorial](../c/README.md). The [reference](reference.md) defines
+all selection rules, hook contracts, and native name encodings.
 
-- Functions can share a name when their parameter type lists differ.
-- Calls require exact argument types and arity. Use a cast for a conversion.
-- The result type does not select a call. Declarations with equal parameter
-  types and different result types are errors.
-- A typed variable, assignment, return, or known function parameter can select
-  a function value by its complete function type.
-- Arguments to an overloaded call must have types without candidate search.
-  Bind an overloaded function value to a typed local before such a call.
-- Source names retain the scope rules of the next checker. Mangling does not
-  permit a local to hide a global name.
+## 1. Run the overloaded greeting
 
-## Separate compilation
-
-`fn name(parameters) -> Result;` declares a source ABI import. A definition
-uses the same header and a body. A matching import and definition can occur
-in one compilation. Two definitions are an error.
-
-`extern fn name(parameters) -> Result = "native_name";` retains the explicit
-native name. This declaration uses the native ABI rules of the next stage.
-
-Source functions get a structural native name. The name contains a version,
-an ABI domain, the source name, the parameter types, the result type, and the
-declaration contract. Input order, paths, and allocation addresses have no
-effect on this name. Function types include their result type. Record types
-use their declared names in the current flat source namespace.
-
-Caller and provider must use the same record definitions and ABI domain.
-Use a shared interface source for this contract. A mangled name does not
-check record layout drift. Separate libraries that use different types with
-the same source names must use different ABI domains.
-
-## Stage boundary
-
-The resolver publishes all signatures before it visits function bodies.
-It looks up exact parameter keys in a table. It does not run the checker
-once per candidate. The next checker validates expressions, effects, and
-ownership after selection.
-
-Optional callbacks supply type encodings, binding value types, expression
-and statement traversal, and declaration contracts. The standalone resolver
-has no ownership-specific type or syntax cases. The resource adapter uses
-these callbacks and preserves source import, unsafe, and drop contracts.
-
-The implementation passes a separate caller and provider test that formats
-typed values, links by generated symbols, and produces the required output.
-Resource tests check cleanup and reject invalid ownership across that boundary.
-The [baseline](../../benchmarks/overload/BASELINE.md) fixes the experiment and
-the measurement rules. Frontend measurements stop before target C compilation
-and linking. The seed and the default compilation path have no overload pass.
-
-## Use from a compilation program
+Run from the repository root on Linux x86-64:
 
 ```sh
 make all overload-stage
 build/crust examples/overload/hello/main.crs
 build/overload-hello
-build/crust examples/overload/separate/main.crs
-build/overload-separate
-build/crust examples/overload/resources/main.crs
-build/overload-resources
-make check-overload
-make check-overload-alloc
 ```
 
-The [hello root](../../examples/overload/hello/main.crs) loads `api.crs` and an
-ordinary compiled Crust library. It calls `overload_build` with the unread range
-of its own source. The seed has no package-name check or overload syntax.
-The [separate-object root](../../examples/overload/separate/main.crs) controls
-both compiler calls and the link input. The
-[resource root](../../examples/overload/resources/main.crs) selects the composed
-package through `resource_api.crs`.
-
-`build/crust-overload` and `build/crust-overload-resource` are command wrappers for
-these same libraries. They accept the C stage's input and output options.
-`--check` stops after semantic checking. `--prepare` also constructs C text in
-memory. `--library --object` emits a native object without a hosted entry.
-Source definitions are visible under their mangled names in that object.
-`--entry name` selects a defined `fn(i32, **u8) -> i32` from the named family.
-
-`--export name` replaces the native name of one defined function or constant
-with its plain source name. An overloaded family is ambiguous for this option.
-Use a separately named wrapper when a native caller needs one family member.
-A plain export changes that declaration's linkage contract; source imports
-must use the normal mangled definition or an explicit native interface.
-Explicit native names with the `crust_ov1_` prefix are rejected. That prefix
-belongs to source ABI imports and definitions.
-
-## Native name format
-
-`N(value)` is decimal `value` followed by `_`. `S(bytes)` is `N(length)` followed
-by the bytes. The supplied ABI domain and contract encodings must use ASCII.
-Use letters, digits, and underscores for portable domain names.
-
-| Source type | Encoding |
-| --- | --- |
-| Builtin | `b N(kind)` with the Crust0 builtin kind number |
-| Named record | `n S(name)` |
-| Pointer | `p Type` |
-| Array | `a N(count) Type` |
-| Function value | `f N(arity) Parameters r Result` |
-| Extension type | `x N(kind) Payload` from the type callback |
-
-`Parameters` is the concatenation of the encoded parameter types.
-The selection key is `a N(arity) Parameters`.
-The native name is:
+Expected output:
 
 ```text
-crust_ov1_d S(domain) n S(source_name) SelectionKey r Result c S(contract)
+A typed function value.
+Hello, overloads!
 ```
 
-Spaces in this notation are separators; they are not emitted.
-The standalone package uses domain `crust0_x64_v1` and contract `s`.
-The resource package uses domain `resources_x64_v1` and contract `safe` or
-`unsafe`. Its extension type payload is the encoded base type. Thus `read T`
-and `mut T` keep distinct names even when both lower to machine pointers.
-The encoding contains complete keys. Native names do not use a truncated hash.
-Interning compares all key bytes when hashes collide.
+Open [main.crs](../../examples/overload/hello/main.crs). Its compilation
+program loads [api.crs](api.crs) and `build/crust-overload-library.so`.
+The final `overload_build` call passes the unread range of the same file.
+The runner treats this as an ordinary library call.
 
-For example, `fn twice(value:i32)->i32` has this native name in the standalone
-package:
+The target has two definitions:
+
+```crust
+fn hello(text: *u8) -> i32 { /* print text */ }
+fn hello(count: u32) -> i32 { /* print count greetings */ }
+```
+
+These headers summarize the definitions; see the linked source for their
+bodies. The string overload wraps the native `puts` call. The integer
+overload loops and calls the string overload.
+
+There are two distinct selection operations in `main`:
+
+```crust
+var say: fn(*u8) -> i32 = hello;
+if say("A typed function value.") != 0i32 { return 1i32; }
+return hello(1u32);
+```
+
+The declared type of `say` selects a function value by its complete type.
+The last call selects an overload by its argument types and count. Its
+expected result type does not choose the overload.
+
+## 2. Observe an exact-type rejection
+
+Create a target-only file. The standalone wrapper reads target declarations,
+so this file does not contain root setup calls.
+
+```sh
+mkdir -p build/tutorial-overload
+cat > build/tutorial-overload/types.crs <<'EOF'
+fn twice(value: i32) -> i32 { return value + value; }
+fn twice(value: u32) -> u32 { return value + value; }
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    twice(1u64);
+    return 0i32;
+}
+EOF
+build/crust-overload --check build/tutorial-overload/types.crs
+```
+
+The last command must return one with this diagnostic:
+
+```text
+no overload matches the exact parameter types
+```
+
+There is no `u64` parameter in this family. The resolver does not rank
+conversions. Make the choice explicit by changing the argument type:
+
+```sh
+sed 's/1u64/1u32/' build/tutorial-overload/types.crs \
+    > build/tutorial-overload/exact.crs
+build/crust-overload --check build/tutorial-overload/exact.crs
+```
+
+This command must succeed. A cast to `u32` would also give the call an exact
+argument type. Adding another `twice(u32)` with a different result type
+would fail at declaration collection: equal parameter lists define the same
+overload slot.
+
+Arguments to an overloaded call must have types before selection. If an
+argument is itself an overloaded function name, first bind it to an explicit
+function type, as `say` does above. This rule avoids recursive candidate
+search through the argument expressions.
+
+## 3. Follow collection, selection, and rewriting
+
+The transformation has three operations:
+
+```mermaid
+flowchart TD
+    A[Read source] --> B[Collect all signatures]
+    B --> C[Resolve each use]
+    C --> D[Mangle names]
+    D --> E[Next checker]
+    E --> F[C backend]
+```
+
+Read the implementation in this order:
+
+| File | What to follow |
+| --- | --- |
+| [read.crs](read.crs) | A reader hook accepts function definitions and bodyless source declarations |
+| [model.crs](model.crs) | `OvGlobal` groups a source name; `OvFunction` holds one signature |
+| [collect.crs](collect.crs) | `ov_collect`, duplicate checks, `ov_names`, and `ov_mangle` |
+| [types.crs](types.crs) | Structural type keys and exact lookup in `ov_select` |
+| [resolve.crs](resolve.crs) | `ov_call` and `ov_function_value` select and rewrite references |
+| [program.crs](program.crs) | `ov_check` and the driver connect the transformation to the next checker |
+
+### Collect interfaces before bodies
+
+`ov_collect` groups functions by their original source name. Each group has
+a table keyed by the parameter type list. The resolver can therefore call
+a function declared later in the file. A matching prototype and definition
+share one canonical entry; two definitions produce an error.
+
+Type keys encode structure. A function type includes its parameter and
+result types. A named record uses its declared name. Complete key bytes
+are interned, and hash collisions are checked against those bytes.
+Selection uses the table; it does not run the full checker for each candidate.
+
+The stage caches type keys by source syntax node. Keep source signatures
+and record fields unchanged between collection and mangling. A later
+stage can lower them after selection.
+
+### Preserve source scope during rewriting
+
+`ov_call` determines argument types, constructs the parameter key, and
+selects a family member. `ov_function_value` can use an expected complete
+function type. The visitor replaces the reference with an internal name.
+`ov_mangle` then changes declarations and removes duplicate prototypes.
+
+Internal names have a reserved form that source identifiers cannot spell.
+They are distinct from native link names. Scope checks still use original
+source names. Otherwise, renaming a global could accidentally allow a local
+to hide it and change source scope rules.
+
+This pass provides enough source typing to select functions. The next
+checker still validates the resulting operations. In the standalone
+package, that is the seed checker. In the resource package, ownership
+checking and lowering run before the seed checks generated operations.
+
+## 4. Test the separate compilation boundary
+
+Run the separate-object example:
+
+```sh
+build/crust examples/overload/separate/main.crs
+build/overload-separate
+nm -g build/overload-format.o
+```
+
+The program prints `types: 42` and a newline. In `nm` output, find the two
+defined symbols that contain `n6_format`. They have distinct parameter
+encodings. Other symbols, including the native `write` import, can also
+appear.
+
+The [root](../../examples/overload/separate/main.crs) performs two builds.
+First it compiles [provider.crs](../../examples/overload/separate/provider.crs)
+and [interface.crs](../../examples/overload/separate/interface.crs) into an
+object. Then it compiles its inline caller with that same interface and
+links the object. A source import uses a bodyless declaration:
+
+```crust
+fn format(output: *Output, value: u64) -> i32;
+fn format(output: *Output, text: *u8) -> i32;
+```
+
+An explicit `extern fn ... = "symbol";` declares a native ABI binding.
+It has a different contract from these source imports.
+
+### Names must agree without shared compiler state
+
+Each source function's native name includes a format version, ABI domain,
+source name, parameter types, result type, and declaration contract. It
+contains no path, declaration position, or allocation address. The caller
+and provider can therefore calculate the same name independently.
+
+For example, the `i32` definition of `twice` above gets this symbol in the
+standalone package:
 
 ```text
 crust_ov1_d13_crust0_x64_v1n5_twicea1_b4_rb4_c1_s
 ```
 
-## Public composition API
+The [reference](reference.md#native-name-format) explains each part. The
+native name contains the result type even though call selection does not
+use it. Matching calls and matching native ABI contracts are separate tasks.
 
-`model.crs` and `extension.crs` expose the stage state and operations.
-`ov_init` takes a context, an ABI domain, and optional hooks. Call `ov_read`
-for each source range, then `ov_prepare`. That last call runs `ov_collect`,
-`ov_resolve`, and `ov_mangle` in order. The individual operations are also
-public. After successful preparation, run the next checker and backend.
-Keep the context, source bytes, stage, and hooks live through their use.
-Operations on one context are serial; they share its arena and key buffer.
-Keep source signatures and record fields unchanged between collection and
-mangling. Lower their type representations after overload preparation.
-Record field lookups use a name index built during collection. A constructor
-does not scan the complete record once per initializer.
+Record names are nominal. Mangling does not detect a changed record layout
+under the same name. Caller and provider must share record definitions and
+the ABI domain. Use a shared interface file. Distinct libraries with
+different meanings for the same type name need distinct ABI domains.
 
-| Hook | Contract |
-| --- | --- |
-| `type_key` | Append a self-delimiting ASCII type payload without NUL after the extension kind tag; return false for an unknown type |
-| `binding_type` | Return the value type produced by reading a binding; return the input type when no change is needed |
-| `expression` | Visit a complete expression and return its source type; return null without changing an unhandled expression |
-| `statement` | Visit a complete statement; return false without changing an unhandled statement |
-| `contract` | Return a declaration contract interned in this context; equal parameter lists must have equal contracts |
+The C backend first emits private C identifiers, then applies these native
+names with its symbol response file. Neither the overload stage nor the
+backend needs a runtime lookup table in the target.
 
-Expression and statement hooks run before the standard visitor. Standard
-visitor helpers bypass the current hook and retain hooks on child nodes.
-Distinct extension types must have distinct payloads. Use `ov_part` for a
-variable-length payload, or encode a fixed number of complete child types.
-Unknown syntax fails with a source diagnostic. `ov_error` records the first
-failure. Allocation failures and new context diagnostics from a hook also stop
-the operation. Type, expression, and statement traversal have bounded depth.
+## 5. Compose with ownership before types are lowered
 
-The resource adapter supplies these callbacks. It selects each drop function
-by `fn(mut Resource)->unit`, then publishes source ABI imports through
-`rs_source_import`. The resource checker retains all move, borrow, cleanup,
-unsafe-call, and function-cast rules. A cast does not bypass those rules.
-Source signatures and their imported safety contracts remain distinct from
-the lowered pointer signatures used by the C backend.
+Run the composed example:
 
-## Validation and cost
+```sh
+build/crust examples/overload/resources/main.crs
+build/overload-resources
+```
 
-`make check-overload` checks exact type selection, function values, diagnostics,
-native symbols, separate objects, source roots, and resource composition.
-It also loads an ordinary copied library with a custom non-resource type and
-checks all five hook diagnostic paths. `make check-overload-alloc` injects
-arena backing allocation failures with AddressSanitizer and UndefinedBehaviorSanitizer.
+Expected output:
 
-The [measurement report](../../benchmarks/overload/RESULTS.md) separates the
-explicit-name baseline, the enabled stage with explicit names, and overload
-selection. The [field lookup experiment](../../benchmarks/overload/FIELDS.md)
-checks large record constructors. These reports state the tested boundaries;
-they do not establish the project's general C-speed requirement.
+```text
+Owned overloads.
+Deferred overload.
+```
+
+The [source](../../examples/overload/resources/main.crs) overloads `write`
+and the resource drop function `release`. The adapter in
+[resources.crs](resources.crs) selects each drop by `fn(mut Resource)->unit`.
+It preserves `read`, `mut`, and unsafe function contracts during selection.
+
+Both borrow modes eventually lower to pointers. Selecting overloads after
+that lowering would lose the distinction. The correct sequence is:
+
+1. Initialize `RsStage`, then `ov_resources_init` with caller-owned hooks.
+2. Read all inputs with `ov_resources_read`.
+3. Call `ov_resources_prepare` to select calls and drops and assign names.
+4. Call `rs_prepare` to check ownership and construct cleanup plans.
+5. Emit with the resource stage's body callback.
+
+The adapter marks bodyless declarations as source ABI imports before
+resource preparation. Without that marker, the resource checker would
+treat them as native foreign calls and apply the wrong signature contract.
+
+`OvHooks` supplies type encoding, binding value types, expression traversal,
+statement traversal, and declaration contracts. The resolver itself has no
+resource-specific syntax cases. An unhandled expression or statement hook
+must leave the node unchanged. Unknown syntax must reach a diagnostic,
+not disappear from the walk. See [extension.crs](extension.crs) and the
+[hook reference](reference.md#public-composition-api) before writing a hook.
+
+## 6. Check costs and lifetimes
+
+Keep the context, source bytes, stage, and hooks live through their uses.
+One context shares an arena and a key buffer, so its operations are serial.
+Independent builds use independent contexts. The pass collects signatures
+once and looks up exact keys; this is a design property, not a measured
+claim that every program compiles as fast as C.
+
+`--check` stops after semantic checks. `--prepare` also builds C text in
+memory. Both exclude target GCC compilation and linking. The
+[measurement report](../../benchmarks/overload/RESULTS.md) compares explicit
+names with overload selection under those boundaries.
+
+Run `make check-overload` for selection, diagnostics, native symbols,
+separate objects, generic hooks, and resource composition. Run
+`make check-overload-alloc` for allocation failure checks. Continue with the
+[resource tutorial](../resources/README.md) to follow moves, loans, and
+cleanup emission in detail.

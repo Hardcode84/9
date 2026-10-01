@@ -1,5 +1,9 @@
 # Overloads with ownership and cleanup
 
+Read the [overload tutorial](../../../stages/overload/README.md) and
+[resource tutorial](../../../stages/resources/README.md) first. This example
+shows where their source contracts meet. Run from the repository root:
+
 ```sh
 make all overload-stage
 build/crust examples/overload/resources/main.crs
@@ -24,3 +28,23 @@ schedules the final write before the output descriptor is closed.
 
 The native calls and raw pointer operations remain inside `unsafe` regions.
 Overload selection does not change their safety rules.
+
+Read [main.crs](main.crs) from its root setup to its target entry. The root
+loads `resource_api.crs` and the composed library, then calls
+`overload_resource_build`. The composed driver performs these operations:
+
+1. Read the complete overload and resource syntax.
+2. Select calls and each declared drop using source types.
+3. Assign distinct internal names and stable native link names.
+4. Check moves and loans, then build cleanup plans.
+5. Emit C with the resource body callback.
+
+The order matters. `read Text` and `mut Text` lower to pointers, but grant
+different permissions. Resolving overloads after lowering would lose that
+source distinction. Drop selection also needs the exact `mut Output` or
+`mut Text` type before the resource checker can validate it.
+
+The [adapter source](../../../stages/overload/resources.crs) supplies the
+resolver's generic hooks. It also marks source ABI imports for the resource
+checker. The seed and C backend do not need a combined overload-and-resource
+feature. `make check-overload` checks this composition and its rejection paths.

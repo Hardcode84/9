@@ -64,6 +64,12 @@ Tests and generated seed API declarations are separate.
 | `--ldflag ARG` | Add one GCC link argument |
 | `--` | End option parsing |
 
+Definitions have private linkage unless the caller supplies a native name.
+Use `--export` to make a function or constant available to another object.
+Private helpers and constants from separate builds do not share native names.
+An earlier stage can also assign explicit names, such as overload ABI names;
+the driver preserves them.
+
 Supply source files in a fixed order. The driver assigns unit identities from
 that order. Link arguments are explicit; the driver does not select runtime
 libraries. Repeat `--cflag` and `--ldflag` for separate arguments. Each argument

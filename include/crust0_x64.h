@@ -90,6 +90,9 @@ struct CrustX64Emitter {
 extern const CrustX64Ops crust_x64_default_ops;
 
 /* Preparation requires checked declarations with assigned link names.
+   An empty name selects an owned private definition; a null name is invalid.
+   External references require a nonempty native name. Keep these names stable
+   through emission.
    Expression and statement nodes must form trees of distinct occurrences. */
 bool crust_x64_prepare(CrustContext *context, CrustX64Program **result, CrustDecl *entry);
 bool crust_x64_emit_program(CrustX64Program *program, FILE *output);

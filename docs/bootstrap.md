@@ -59,6 +59,13 @@ declaration order. This is a driver policy; the core does not discover files.
 function. The linker resolves native references when it makes an executable.
 Use `--library` for preparation or emission of a library source.
 
+Definitions are private unless `--export NAME` selects a native name. Separate
+object files can use the same private function or constant names. The hosted
+entry wrapper exports `main`; it can call a private entry function. The backend
+API uses an empty `link_name` for an owned private definition. A null name is
+an error. External references need a nonempty native name. A driver must keep
+the selected names unchanged through emission.
+
 For source-defined compilation, use `crust ROOT ARGUMENT...`. The root receives
 the trailing arguments through `run`. Its actions select input files, stages,
 and output. The launcher has no backend selector. It reads and executes one

@@ -745,7 +745,7 @@ fn build(request:*CrustBuild)->i32 {
     output = suite.work / "retained-context"
     suite.root("retained-context", program, ["-o", output])
     assert b"int main(" in generated.read_bytes()
-    assert b"_crust0_u" in symbols.read_bytes()
+    assert symbols.read_bytes() == b""
     suite.command([output], expected=42)
 
 

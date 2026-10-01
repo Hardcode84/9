@@ -4,7 +4,6 @@ import argparse
 import hashlib
 import json
 import os
-import re
 import subprocess
 from pathlib import Path
 
@@ -81,6 +80,8 @@ def main():
         [
             args.compiler,
             "--cflag=-O2",
+            "--export",
+            "write_number",
             "-o",
             compiler_target,
             library,
@@ -287,12 +288,7 @@ int main(void) {
         symbols = command(["nm", "-g", executable]).stdout.decode().splitlines()
         found = {line.split()[-1] for line in symbols if line.split()} & forbidden
         assert not found, (executable, sorted(found))
-    declaration_names = re.findall(
-        r"^(?:(?:unsafe |extern )?fn|record|resource|const)\s+([A-Za-z_]\w*)",
-        library.read_text(),
-        re.M,
-    )
-    native_name = "_crust0_u1_d" + str(declaration_names.index("write_number") + 1)
+    native_name = "write_number"
     disassembly = command(["objdump", "-d", "--disassemble=" + native_name, compiler_target]).stdout
     assert (
         "<" + native_name + ">:"

@@ -3,7 +3,6 @@
 #include "driver_platform.h"
 
 #include <errno.h>
-#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,24 +39,19 @@ static bool crust_driver_names(CrustContext *ctx)
 {
     CrustFailureFrame failure;
     CrustUnit *unit;
+    const char *private_name;
     failure.previous = ctx->failure;
     ctx->failure = &failure;
     if (setjmp(failure.jump) != 0) {
         ctx->failure = failure.previous;
         return false;
     }
+    private_name = crust_copy_string(ctx, NULL, 0);
     for (unit = ctx->units; unit != NULL; unit = unit->next) {
         CrustDecl *decl;
         for (decl = unit->declarations; decl != NULL; decl = decl->next) {
             if (decl->kind != CRUST_D_RECORD && decl->link_name == NULL) {
-                char buffer[96];
-                int length = snprintf(buffer, sizeof(buffer), "_crust0_u%" PRIu64 "_d%" PRIu64,
-                                      decl->unit_identity, decl->identity);
-                if (length < 0 || (size_t)length >= sizeof(buffer)) {
-                    crust_fail(ctx, decl->loc, "cannot format native link identity");
-                }
-                decl->link_name =
-                    crust_copy_string(ctx, (const unsigned char *)buffer, (size_t)length);
+                decl->link_name = private_name;
             }
         }
     }

@@ -315,12 +315,18 @@ static bool function_symbol(CrustDecl *declaration)
     return declaration->kind == CRUST_D_FUNCTION || declaration->kind == CRUST_D_EXTERN;
 }
 
-static CrustName *prepare_link_name(CrustX64Program *program, CrustDecl *declaration)
+static CrustName *prepare_link_name(CrustX64Program *program, CrustDecl *declaration,
+                                    bool definition)
 {
     const unsigned char *cursor;
-    if (!declaration->link_name || !declaration->link_name[0])
-        crust_fail(program->context, declaration->loc,
-                   "backend declaration has no nonempty link name");
+    if (!declaration->link_name)
+        crust_fail(program->context, declaration->loc, "backend declaration has no link name");
+    if (!declaration->link_name[0]) {
+        if (!definition || declaration->kind == CRUST_D_EXTERN)
+            crust_fail(program->context, declaration->loc,
+                       "a private declaration must be an owned definition");
+        return NULL;
+    }
     for (cursor = (const unsigned char *)declaration->link_name; *cursor; ++cursor)
         if (*cursor > 127)
             crust_fail(program->context, declaration->loc, "native link name is not ASCII");
@@ -331,6 +337,20 @@ static CrustName *prepare_link_name(CrustX64Program *program, CrustDecl *declara
                         (size_t)(cursor - (const unsigned char *)declaration->link_name));
 }
 
+static void check_native_alias(CrustX64Program *program, CrustDecl *declaration,
+                               CrustX64Alias *alias, CrustX64Alias *previous, bool definition)
+{
+    if (function_symbol(previous->declaration) != function_symbol(declaration) ||
+        (function_symbol(declaration)
+             ? !native_type_equal(program->context, previous->declaration->type, declaration->type)
+             : !crust_type_equal(program->context, previous->declaration->type, declaration->type)))
+        crust_fail(program->context, declaration->loc, "conflicting native ABI for symbol %s",
+                   declaration->link_name);
+    if (previous != alias && previous->definition && definition)
+        crust_fail(program->context, declaration->loc, "duplicate native definition for symbol %s",
+                   declaration->link_name);
+}
+
 static void prepare_alias(CrustX64Program *program, CrustDecl *declaration, bool definition)
 {
     CrustX64Alias *alias;
@@ -339,21 +359,10 @@ static void prepare_alias(CrustX64Program *program, CrustDecl *declaration, bool
     alias = crust_map_get(&program->alias_map, (uintptr_t)declaration);
     if (alias && (!definition || alias->definition))
         return;
-    name = prepare_link_name(program, declaration);
-    previous = crust_map_get(&program->native_symbols, (uintptr_t)name);
-    if (previous) {
-        if (function_symbol(previous->declaration) != function_symbol(declaration) ||
-            (function_symbol(declaration)
-                 ? !native_type_equal(program->context, previous->declaration->type,
-                                      declaration->type)
-                 : !crust_type_equal(program->context, previous->declaration->type,
-                                     declaration->type)))
-            crust_fail(program->context, declaration->loc, "conflicting native ABI for symbol %s",
-                       declaration->link_name);
-        if (previous != alias && previous->definition && definition)
-            crust_fail(program->context, declaration->loc,
-                       "duplicate native definition for symbol %s", declaration->link_name);
-    }
+    name = prepare_link_name(program, declaration, definition);
+    previous = name ? crust_map_get(&program->native_symbols, (uintptr_t)name) : NULL;
+    if (previous)
+        check_native_alias(program, declaration, alias, previous, definition);
     if (!alias) {
         alias = crust_alloc(program->context, sizeof(*alias), CRUST_ALIGNOF(CrustX64Alias));
         alias->declaration = declaration;
@@ -364,7 +373,7 @@ static void prepare_alias(CrustX64Program *program, CrustDecl *declaration, bool
         crust_map_set(program->context, &program->alias_map, (uintptr_t)declaration, alias);
     }
     alias->definition = definition;
-    if (!previous || definition)
+    if (name && (!previous || definition))
         crust_map_set(program->context, &program->native_symbols, (uintptr_t)name, alias);
 }
 
@@ -596,6 +605,29 @@ static void symbol_name(CrustX64Emitter *emitter, const char *name)
         }
     }
     output_text(emitter, "\"");
+}
+
+static void definition_visibility(CrustX64Emitter *emitter, CrustDecl *declaration)
+{
+    if (declaration->link_name[0]) {
+        output_text(emitter, "\t.globl ");
+        symbol_name(emitter, declaration->link_name);
+        output_text(emitter, "\n");
+    } else {
+        CrustX64Alias *alias = crust_map_get(&emitter->program->alias_map, (uintptr_t)declaration);
+        output_format(emitter, "%salias_%" PRIu64 ":\n", emitter->program->label_prefix,
+                      alias->identity);
+    }
+}
+
+static void definition_binding(CrustX64Emitter *emitter, CrustDecl *declaration, const char *kind,
+                               uint64_t identity)
+{
+    if (!declaration->link_name[0])
+        return;
+    output_text(emitter, "\t.set ");
+    symbol_name(emitter, declaration->link_name);
+    output_format(emitter, ", %s%s_%" PRIu64 "\n", emitter->program->label_prefix, kind, identity);
 }
 
 static void address_slot(CrustX64Emitter *emitter, uint64_t offset, const char *reg)
@@ -1217,10 +1249,10 @@ void crust_x64_emit_function(CrustX64Emitter *emitter, CrustX64Function *functio
     size_t index;
     emitter->function = function;
     emitter->return_label = emitter->next_label++;
-    output_text(emitter, "\t.text\n\t.globl ");
-    symbol_name(emitter, function->declaration->link_name);
+    output_text(emitter, "\t.text\n");
+    definition_visibility(emitter, function->declaration);
     output_format(emitter,
-                  "\n\t.type %sfunction_%" PRIu64 ", @function\n%sfunction_%" PRIu64
+                  "\t.type %sfunction_%" PRIu64 ", @function\n%sfunction_%" PRIu64
                   ":\n\tpushq %%rbp\n\tmovq %%rsp, %%rbp\n",
                   emitter->program->label_prefix, function->identity,
                   emitter->program->label_prefix, function->identity);
@@ -1260,13 +1292,10 @@ void crust_x64_emit_function(CrustX64Emitter *emitter, CrustX64Function *functio
     emit_statement(emitter, function->declaration->body);
     emit_label(emitter, emitter->return_label);
     output_format(emitter,
-                  "\tleave\n\tret\n\t.size %sfunction_%" PRIu64 ", .-%sfunction_%" PRIu64
-                  "\n\t.set ",
+                  "\tleave\n\tret\n\t.size %sfunction_%" PRIu64 ", .-%sfunction_%" PRIu64 "\n",
                   emitter->program->label_prefix, function->identity,
                   emitter->program->label_prefix, function->identity);
-    symbol_name(emitter, function->declaration->link_name);
-    output_format(emitter, ", %sfunction_%" PRIu64 "\n", emitter->program->label_prefix,
-                  function->identity);
+    definition_binding(emitter, function->declaration, "function", function->identity);
 }
 
 static void emit_scalar_constant(CrustX64Emitter *emitter, CrustExpr *expression)
@@ -1382,17 +1411,15 @@ void crust_x64_emit_constant(CrustX64Emitter *emitter, CrustDecl *declaration)
     uint64_t identity = emitter->next_label++;
     const char *section =
         constant_has_address(declaration->init) ? ".data.rel.ro,\"aw\",@progbits" : ".rodata";
-    output_format(emitter, "\t.section %s\n\t.balign %u\n\t.globl ", section,
-                  declaration->type->align);
-    symbol_name(emitter, declaration->link_name);
-    output_format(emitter, "\n\t.type %sdata_%" PRIu64 ", @object\n%sdata_%" PRIu64 ":\n",
+    output_format(emitter, "\t.section %s\n\t.balign %u\n", section, declaration->type->align);
+    definition_visibility(emitter, declaration);
+    output_format(emitter, "\t.type %sdata_%" PRIu64 ", @object\n%sdata_%" PRIu64 ":\n",
                   emitter->program->label_prefix, identity, emitter->program->label_prefix,
                   identity);
     crust_x64_emit_constant_value(emitter, declaration->init);
-    output_format(emitter, "\t.size %sdata_%" PRIu64 ", %" PRIu64 "\n\t.set ",
+    output_format(emitter, "\t.size %sdata_%" PRIu64 ", %" PRIu64 "\n",
                   emitter->program->label_prefix, identity, declaration->type->size);
-    symbol_name(emitter, declaration->link_name);
-    output_format(emitter, ", %sdata_%" PRIu64 "\n", emitter->program->label_prefix, identity);
+    definition_binding(emitter, declaration, "data", identity);
 }
 
 bool crust_x64_emit_program_with_ops(CrustX64Program *program, FILE *output,
@@ -1417,6 +1444,8 @@ bool crust_x64_emit_program_with_ops(CrustX64Program *program, FILE *output,
         return false;
     }
     for (alias = program->aliases; alias; alias = alias->next) {
+        if (!alias->declaration->link_name[0])
+            continue;
         output_text(&emitter, "\t.globl ");
         symbol_name(&emitter, alias->declaration->link_name);
         output_format(&emitter, "\n\t.weakref %salias_%" PRIu64 ", ", program->label_prefix,

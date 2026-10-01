@@ -186,6 +186,65 @@ static void test_imported_definitions(void)
     crust_context_destroy(&first.context);
 }
 
+static void test_private_definitions(void)
+{
+    Fixture fixture;
+    CrustDecl *declaration;
+    CrustX64Program *program = NULL;
+    FILE *output;
+    char text[16384];
+    size_t count;
+    fixture_init(&fixture, "const number: u64 = 42u64;"
+                           "fn callback() -> u64 { return number; }"
+                           "const saved: fn() -> u64 = callback;"
+                           "fn entry() -> u64 { return saved(); }");
+    for (declaration = fixture.context.units->declarations; declaration->next;
+         declaration = declaration->next)
+        declaration->link_name = "";
+    declaration->link_name = "public_entry";
+    check(crust_x64_prepare(&fixture.context, &program, NULL),
+          "owned private functions and constants prepare");
+    check(program && program->native_symbols.count == 1 && program->alias_count == 4,
+          "private identities do not enter the native symbol namespace");
+    output = output_file();
+    check(crust_x64_emit_program(program, output), "private callable constants emit");
+    rewind(output);
+    count = fread(text, 1, sizeof(text) - 1, output);
+    text[count] = '\0';
+    check(!ferror(output) && strstr(text, ".globl \"public_entry\"") != NULL &&
+              strstr(text, ".globl \"\"") == NULL && strstr(text, ".set \"\"") == NULL,
+          "only explicit public names become assembler globals");
+    check(strstr(text, "\t.quad .Lcrust_0_alias_") != NULL,
+          "private callable constants refer to local declaration labels");
+    check(fclose(output) == 0, "close private output");
+    crust_context_destroy(&fixture.context);
+
+    fixture_init(&fixture, "extern fn provided() -> unit = \"provided\";");
+    fixture.context.units->declarations->link_name = "";
+    check(!crust_x64_prepare(&fixture.context, &program, NULL) &&
+              strstr(fixture.context.error, "private declaration must be an owned definition") !=
+                  NULL,
+          "an external declaration cannot select private linkage");
+    crust_context_destroy(&fixture.context);
+
+    fixture_init(&fixture, "fn provided() -> unit {} fn use() -> unit { provided(); }");
+    declaration = fixture.context.units->declarations;
+    declaration->link_name = "";
+    fixture.context.units->declarations = declaration->next;
+    check(!crust_x64_prepare(&fixture.context, &program, NULL) &&
+              strstr(fixture.context.error, "private declaration must be an owned definition") !=
+                  NULL,
+          "a provider-only declaration needs a public native name");
+    crust_context_destroy(&fixture.context);
+
+    fixture_init(&fixture, "fn missing() -> unit {}");
+    fixture.context.units->declarations->link_name = NULL;
+    check(!crust_x64_prepare(&fixture.context, &program, NULL) &&
+              strstr(fixture.context.error, "no link name") != NULL,
+          "a missing linkage choice is not implicit private linkage");
+    crust_context_destroy(&fixture.context);
+}
+
 static void test_plan_and_symbols(void)
 {
     Fixture fixture;
@@ -471,6 +530,7 @@ int main(void)
 {
     test_native_contract();
     test_imported_definitions();
+    test_private_definitions();
     test_plan_and_symbols();
     test_callback_failure();
     test_place_and_group_operations();

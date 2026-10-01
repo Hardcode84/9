@@ -129,13 +129,14 @@ def main():
         command([*assembler, source, "-o", output])
         return output
 
-    def executable(name, source=None, inputs=None, libraries=(), entry=None):
+    def executable(name, source=None, inputs=None, libraries=(), entry=None, exports=()):
         if source is not None:
             path = work / f"{name}.crs"
             path.write_text(source)
             inputs = [path]
         output = work / name
         entry_options = ["--entry", entry] if entry is not None else []
+        entry_options += [item for name in exports for item in ("--export", name)]
         if args.backend == "c":
             obj = work / f"{name}.crs.o"
             command([compiler, "--object", "-o", obj, *c_options, *entry_options, *inputs])
@@ -198,10 +199,9 @@ fn main(argc:i32,argv:**u8)->i32 {
 }
 """
     command([executable("dynamic-values", dynamic, libraries=[native])])
-    # Both drivers assign this native name to the first declaration in unit 1.
     owned_alias = """
 fn target()->u64{return 42u64;}
-extern fn alias()->u64="_crust0_u1_d1";
+extern fn alias()->u64="target";
 const captured:fn()->u64=target;
 fn main(argc:i32,argv:**u8)->i32 {
     if target!=alias || captured!=alias {return 1i32;}
@@ -209,7 +209,41 @@ fn main(argc:i32,argv:**u8)->i32 {
     return 0i32;
 }
 """
-    command([executable("owned-native-alias", owned_alias)])
+    command([executable("owned-native-alias", owned_alias, exports=["target"])])
+
+    private_objects = []
+    for name, value in (("first", 19), ("second", 23)):
+        source = work / f"private-{name}.crs"
+        source.write_text(
+            f"const value:i32={value}i32; fn helper()->i32{{return value;}}\n"
+            f"const {name}_callback:fn()->i32=helper;\n"
+            f"fn {name}()->i32{{return helper();}}\n"
+        )
+        exports = ["--export", name, "--export", name + "_callback"]
+        if args.backend == "c":
+            obj = work / f"private-{name}.o"
+            command([compiler, "--library", "--object", *exports, "--cflag=-O0", "-o", obj, source])
+        else:
+            assembly = work / f"private-{name}.s"
+            command([compiler, "--library", *exports, "-o", assembly, source])
+            obj = assemble(assembly)
+        defined = command(["nm", "-g", "--defined-only", obj]).stdout
+        assert set(re.findall(rb"\b[TDRB]\s+(\S+)", defined)) == {
+            name.encode(),
+            (name + "_callback").encode(),
+        }, defined
+        private_objects.append(obj)
+    caller = work / "private-caller.c"
+    caller.write_text(
+        "#include <stdint.h>\nint32_t first(void); int32_t second(void);\n"
+        "extern int32_t (*const first_callback)(void);\n"
+        "extern int32_t (*const second_callback)(void);\n"
+        "int main(void){return first()+second()!=42 || first_callback()!=19 || "
+        "second_callback()!=23 || first_callback==second_callback;}\n"
+    )
+    private_program = work / "private-program"
+    command([*cc, *STRICT, "-no-pie", caller, *private_objects, *ldflags, "-o", private_program])
+    command([private_program])
     command(
         [
             executable(
@@ -620,7 +654,9 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     invalid = work / "invalid.crs"
     output = work / ("atomic.c" if args.backend == "c" else "atomic.s")
     dump_options = ["--emit-c"] if args.backend == "c" else []
-    valid.write_text("fn main(argc:i32,argv:**u8)->i32{return 0i32;}")
+    valid.write_text(
+        'extern fn native()->unit="validation_native"; fn main(argc:i32,argv:**u8)->i32{return 0i32;}'
+    )
     invalid.write_bytes(b"fn\x00")
     output.write_text("retained output\n")
     command([compiler, *dump_options, "-o", output, invalid], expected=1)
@@ -670,7 +706,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         assert command([compiler, "--prepare", valid]).stdout == b""
         symbols = work / "atomic.rsp"
         command([compiler, "--emit-c", "-o", output, "--symbols", symbols, valid])
-        assert symbols.read_bytes()
+        assert b"validation_native" in symbols.read_bytes()
         expected_c, expected_symbols = output.read_bytes(), symbols.read_bytes()
         command([compiler, "--emit-c", "-o", output, "--symbols", symbols, invalid], expected=1)
         assert output.read_bytes() == expected_c and symbols.read_bytes() == expected_symbols
@@ -787,12 +823,22 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         library_source, library_object = work / "library.crs", work / "library.o"
         library_source.write_text("fn answer()->i32{return 42i32;}")
         command(
-            [compiler, "--library", "--object", "-o", library_object, *c_options, library_source]
+            [
+                compiler,
+                "--library",
+                "--object",
+                "--export",
+                "answer",
+                "-o",
+                library_object,
+                *c_options,
+                library_source,
+            ]
         )
         library_main = work / "library-main.c"
         library_main.write_text(
-            "#include <stdint.h>\nextern int32_t _crust0_u1_d1(void);\n"
-            "int main(void){return _crust0_u1_d1();}\n"
+            "#include <stdint.h>\nextern int32_t answer(void);\n"
+            "int main(void){return answer();}\n"
         )
         command(
             [

@@ -131,25 +131,17 @@ fn c_driver_parse(cli: *CCli, argc: i32, argv: **u8, begin: i32) -> bool {
 
 fn c_driver_names(driver: *CDriver) -> bool {
     var stage: *CStage = (*driver).stage;
+    var private: *u8 = null(*u8);
     var parsed: *CrustUnit = (*(*stage).status.context).units;
     while parsed != null(*CrustUnit) {
         var declaration: *CrustDecl = (*parsed).declarations;
         while declaration != null(*CrustDecl) {
             if (*declaration).kind != CRUST_D_RECORD && (*declaration).link_name == null(*u8) {
-                var name_bytes: [u8; 64] = uninit;
-                var buffer: CBuffer = uninit;
-                c_driver_buffer(&(*stage).status, &buffer);
-                buffer.data = &name_bytes[0usize];
-                buffer.capacity = 64usize;
-                c_buffer_text(&buffer, "_crust0_u");
-                c_buffer_number(&buffer, (*declaration).unit_identity);
-                c_buffer_text(&buffer, "_d");
-                c_buffer_number(&buffer, (*declaration).identity);
-                var name: *u8 = c_buffer_end(&buffer);
-                if (*stage).status.failed { return false; }
-                name = crust_try_copy_string((*stage).status.context, name, buffer.size);
-                if name == null(*u8) { return false; }
-                (*declaration).link_name = name;
+                if private == null(*u8) {
+                    private = crust_try_copy_string((*stage).status.context, "", 0usize);
+                    if private == null(*u8) { return false; }
+                }
+                (*declaration).link_name = private;
             }
             declaration = (*declaration).next;
         }

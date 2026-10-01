@@ -159,35 +159,81 @@ def c_inputs(command):
     }
 
 
-def cleanup_sites(source, generated, response):
-    declarations = re.findall(
-        r"^(?:(?:unsafe |extern )?fn|record|resource|const)\s+([A-Za-z_]\w*)", source, re.M
+def generated_functions(generated):
+    code = re.sub(
+        r'/\*[\s\S]*?\*/|//[^\n]*|"(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'',
+        lambda match: re.sub(r"[^\n]", " ", match.group()),
+        generated,
     )
+    if '"' in code or "'" in code or "/*" in code:
+        raise AssertionError("unterminated generated C literal or comment")
+    bodies = {}
+    end = 0
+    for match in re.finditer(r"^[^\n;{}]*\b(r_g\d+)\([^\n;{}]*\)\n\{\n", code, re.M):
+        name = match[1]
+        if match.start() < end or name in bodies:
+            raise AssertionError(f"duplicate or nested generated function: {name}")
+        begin = end = match.end()
+        depth = 1
+        while end < len(code) and depth:
+            depth += (code[end] == "{") - (code[end] == "}")
+            end += 1
+        if depth:
+            raise AssertionError(f"unterminated generated function: {name}")
+        bodies[name] = code[begin : end - 1]
+    return bodies
+
+
+def generated_calls(body, function):
+    captures = {}
+    for name, target in re.findall(r"\b(r_v\d+)\s*=\s*(r_g\d+)\s*;", body):
+        if name in captures:
+            raise AssertionError(f"duplicate callee capture in {function}: {name}")
+        captures[name] = target
+    calls = []
+    for name in re.findall(r"\b(r_[gv]\d+)\s*\(", body):
+        target = captures.get(name, name if name.startswith("r_g") else None)
+        if target is None:
+            raise AssertionError(f"unresolved callee in {function}: {name}")
+        calls.append((name, target))
+    return calls
+
+
+def cleanup_sites(generated, response):
     symbols = dict(token.split("=", 1)[::-1] for token in shlex.split(response) if "=" in token)
-    drop = symbols["_crust0_u1_d" + str(declarations.index("token_drop") + 1)]
-    work = symbols["_crust0_u1_d" + str(declarations.index("workload") + 1)]
-    match = re.search(r"^.*\b" + re.escape(work) + r"\([^;\n]*\)\n\{\n", generated, re.M)
-    if not match:
-        raise AssertionError("generated workload definition not found")
-    begin = match.end()
-    depth = 1
-    end = begin
-    while depth:
-        if generated[end] == "{":
-            depth += 1
-        if generated[end] == "}":
-            depth -= 1
-        end += 1
-    body = generated[begin:end]
-    callees = re.findall(r"\b(r_v\d+)\s*=\s*" + re.escape(drop) + ";", body)
-    calls = sum(len(re.findall(r"\b" + name + r"\s*\(", body)) for name in callees)
+    drop = symbols["token_drop"]
+    work = symbols["workload"]
+    bodies = generated_functions(generated)
+    for name in (drop, work):
+        if name not in bodies:
+            raise AssertionError(f"generated function definition not found: {name}")
+    calls = {name: generated_calls(body, name) for name, body in bodies.items()}
+    declared = set(bodies) | set(symbols.values())
+    callers = {}
+    for name, sites in calls.items():
+        for _, target in sites:
+            if target not in declared:
+                raise AssertionError(f"generated callee definition not found: {target}")
+            callers.setdefault(target, set()).add(name)
+    reaches_drop = {drop}
+    pending = [drop]
+    while pending:
+        for name in callers.get(pending.pop(), ()):
+            if name not in reaches_drop:
+                reaches_drop.add(name)
+                pending.append(name)
+    cleanup_calls = [name for name, target in calls[work] if target in reaches_drop]
+    if not cleanup_calls:
+        raise AssertionError("generated workload has no recognized calls to token_drop")
     return {
         "drop_source_name": "token_drop",
         "drop_c_name": drop,
         "workload_c_name": work,
-        "callee_capture_names": callees,
-        "cleanup_call_sites": calls,
-        "cleanup_labels": len(re.findall(r"^rs_exit_\d+:;", body, re.M)),
+        "callee_capture_names": list(
+            dict.fromkeys(name for name in cleanup_calls if name.startswith("r_v"))
+        ),
+        "cleanup_call_sites": len(cleanup_calls),
+        "cleanup_labels": len(re.findall(r"^rs_exit_\d+:;", bodies[work], re.M)),
     }
 
 
@@ -311,6 +357,10 @@ def main():
         emit_command = [
             str(compiler),
             "--emit-c",
+            "--export",
+            "token_drop",
+            "--export",
+            "workload",
             "-o",
             str(generated),
             "--symbols",
@@ -318,7 +368,7 @@ def main():
             str(crust_path),
         ]
         run(emit_command)
-        sites = cleanup_sites(crust, generated.read_text(), response.read_text())
+        sites = cleanup_sites(generated.read_text(), response.read_text())
         c_binary = args.work / f"owners-{count}-c"
         crust_binary = args.work / f"owners-{count}-resource"
         runtime_commands = [

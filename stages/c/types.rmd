@@ -1,0 +1,404 @@
+fn c_native_kind(input: *RmdType) -> u32 {
+    if (*input).kind == RMD_T_ISIZE { return RMD_T_I64; }
+    if (*input).kind == RMD_T_USIZE { return RMD_T_U64; }
+    return (*input).kind;
+}
+
+fn c_native_equal(left: *RmdType, right: *RmdType) -> bool {
+    if left == right { return true; }
+    var kind: u32 = c_native_kind(left);
+    if kind != c_native_kind(right) { return false; }
+    if kind != RMD_T_FUNCTION {
+        return kind != RMD_T_ARRAY && kind != RMD_T_RECORD;
+    }
+    if (*left).param_count != (*right).param_count ||
+       !c_native_equal((*left).base, (*right).base) { return false; }
+    var index: usize = 0usize;
+    while index < (*left).param_count {
+        if !c_native_equal((*left).params[index], (*right).params[index]) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn c_exact_type_equal(left: *RmdType, right: *RmdType) -> bool {
+    if left == right { return true; }
+    var kind: u32 = (*left).kind;
+    if kind != (*right).kind { return false; }
+    if kind == RMD_T_RECORD {
+        var a: *RmdDecl = (*left).record_decl;
+        var b: *RmdDecl = (*right).record_decl;
+        return (*a).unit_identity == (*b).unit_identity && (*a).identity == (*b).identity;
+    }
+    if kind == RMD_T_POINTER { return c_exact_type_equal((*left).base, (*right).base); }
+    if kind == RMD_T_ARRAY {
+        return (*left).count == (*right).count && c_exact_type_equal((*left).base, (*right).base);
+    }
+    if kind == RMD_T_FUNCTION {
+        if (*left).param_count != (*right).param_count ||
+           !c_exact_type_equal((*left).base, (*right).base) { return false; }
+        var index: usize = 0usize;
+        while index < (*left).param_count {
+            if !c_exact_type_equal((*left).params[index], (*right).params[index]) { return false; }
+            index = index + 1usize;
+        }
+    }
+    return true;
+}
+
+fn c_type_mix(hash: usize, value: usize) -> usize {
+    var result: usize = hash ^ (value + 11400714819323198485usize +
+                               (hash << 6usize) + (hash >> 2usize));
+    if result == 0usize { return 1usize; }
+    return result;
+}
+
+fn c_type_composite(input: *RmdType) -> bool {
+    return (*input).kind == RMD_T_ARRAY || (*input).kind == RMD_T_FUNCTION ||
+           (*input).kind == RMD_T_RECORD;
+}
+
+fn c_type_key(stage: *CStage, input: *RmdType) -> usize {
+    if c_type_composite(input) { return c_type(stage, input) + 32usize; }
+    return c_native_kind(input) as usize + 1usize;
+}
+
+fn c_type_child_equal(stage: *CStage, left: *RmdType, right: *RmdType) -> bool {
+    return c_type_key(stage, left) == c_type_key(stage, right);
+}
+
+fn c_type_shape_equal(stage: *CStage, left: *RmdType, right: *RmdType) -> bool {
+    if (*left).kind != (*right).kind { return false; }
+    if (*left).kind == RMD_T_RECORD {
+        var a: *RmdDecl = (*left).record_decl;
+        var b: *RmdDecl = (*right).record_decl;
+        return (*a).unit_identity == (*b).unit_identity && (*a).identity == (*b).identity;
+    }
+    if (*left).kind == RMD_T_ARRAY {
+        return (*left).count == (*right).count &&
+               c_type_child_equal(stage, (*left).base, (*right).base);
+    }
+    if (*left).param_count != (*right).param_count ||
+       !c_type_child_equal(stage, (*left).base, (*right).base) { return false; }
+    var index: usize = 0usize;
+    while index < (*left).param_count {
+        if !c_type_child_equal(stage, (*left).params[index], (*right).params[index]) {
+            return false;
+        }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn c_type(stage: *CStage, input: *RmdType) -> usize {
+    if (*stage).status.failed || !c_type_composite(input) { return 0usize; }
+    var info: *CTypeInfo = c_map_get(&(*stage).types, input as usize) as *CTypeInfo;
+    if info != null(*CTypeInfo) { return (*info).identity; }
+    var hash: usize = (*input).kind as usize + 1usize;
+    if (*input).kind == RMD_T_RECORD {
+        hash = c_type_mix(hash, (*(*input).record_decl).unit_identity as usize);
+        hash = c_type_mix(hash, (*(*input).record_decl).identity as usize);
+    } else {
+        hash = c_type_mix(hash, c_type_key(stage, (*input).base));
+        if (*input).kind == RMD_T_ARRAY {
+            hash = c_type_mix(hash, (*input).count as usize);
+        } else {
+            hash = c_type_mix(hash, (*input).param_count);
+            var index: usize = 0usize;
+            while index < (*input).param_count {
+                hash = c_type_mix(hash, c_type_key(stage, (*input).params[index]));
+                index = index + 1usize;
+            }
+        }
+    }
+    if (*stage).status.failed { return 0usize; }
+    var head: *CTypeInfo = c_map_get(&(*stage).type_shapes, hash) as *CTypeInfo;
+    info = head;
+    while info != null(*CTypeInfo) {
+        if c_type_shape_equal(stage, (*info).source, input) {
+            c_map_set(&(*stage).status, &(*stage).types, input as usize, info as usize);
+            return (*info).identity;
+        }
+        info = (*info).hash_next;
+    }
+    info = c_alloc(&(*stage).status, sizeof(CTypeInfo), alignof(CTypeInfo)) as *CTypeInfo;
+    if info == null(*CTypeInfo) { return 0usize; }
+    if (*stage).next_type > 18446744073709551583usize || (*stage).next_type == 0usize {
+        c_error(&(*stage).status, null(*RmdSource), 0usize, "too many C types");
+        return 0usize;
+    }
+    (*info).source = input;
+    (*info).identity = (*stage).next_type;
+    (*stage).next_type = (*stage).next_type + 1usize;
+    (*info).state = 0u32;
+    (*info).next = null(*CTypeInfo);
+    (*info).hash_next = head;
+    if (*stage).last_type == null(*CTypeInfo) { (*stage).first_type = info; }
+    else { (*(*stage).last_type).next = info; }
+    (*stage).last_type = info;
+    c_map_set(&(*stage).status, &(*stage).types, input as usize, info as usize);
+    c_map_set(&(*stage).status, &(*stage).type_shapes, hash, info as usize);
+    if (*input).kind == RMD_T_RECORD {
+        var field: *RmdField = (*(*input).record_decl).fields;
+        while field != null(*RmdField) {
+            c_type(stage, (*field).type);
+            field = (*field).next;
+        }
+    }
+    return (*info).identity;
+}
+
+fn c_type_name(stage: *CStage, input: *RmdType) -> unit {
+    if (*stage).status.failed { return; }
+    var kind: u32 = (*input).kind;
+    if kind == RMD_T_I8 { c_text(stage, "int8_t"); return; }
+    if kind == RMD_T_U8 { c_text(stage, "uint8_t"); return; }
+    if kind == RMD_T_I16 { c_text(stage, "int16_t"); return; }
+    if kind == RMD_T_U16 { c_text(stage, "uint16_t"); return; }
+    if kind == RMD_T_I32 { c_text(stage, "int32_t"); return; }
+    if kind == RMD_T_U32 { c_text(stage, "uint32_t"); return; }
+    if kind == RMD_T_I64 { c_text(stage, "int64_t"); return; }
+    if kind == RMD_T_U64 { c_text(stage, "uint64_t"); return; }
+    if kind == RMD_T_ISIZE { c_text(stage, "intptr_t"); return; }
+    if kind == RMD_T_USIZE { c_text(stage, "uintptr_t"); return; }
+    if kind == RMD_T_BOOL { c_text(stage, "bool"); return; }
+    if kind == RMD_T_UNIT { c_text(stage, "void"); return; }
+    if kind == RMD_T_POINTER { c_text(stage, "void *"); return; }
+    if !c_type_composite(input) { trap; }
+    var identity: usize = c_type(stage, input);
+    c_text(stage, "r_t");
+    c_number(stage, identity as u64);
+}
+
+fn c_type_arguments(stage: *CStage, input: *RmdType) -> unit {
+    if (*input).param_count == 0usize { c_text(stage, "void"); return; }
+    var index: usize = 0usize;
+    while index < (*input).param_count {
+        if index != 0usize { c_text(stage, ","); }
+        c_type_name(stage, (*input).params[index]);
+        index = index + 1usize;
+    }
+}
+
+fn c_emit_type_layout(stage: *CStage, info: *CTypeInfo) -> unit {
+    var identity: u64 = (*info).identity as u64;
+    var input: *RmdType = (*info).source;
+    c_text(stage, "typedef char r_size_"); c_number(stage, identity);
+    c_text(stage, "[(sizeof(r_t"); c_number(stage, identity);
+    c_text(stage, ")=="); c_number(stage, (*input).size);
+    c_text(stage, "ULL)?1:-1];\n");
+    c_text(stage, "typedef char r_align_"); c_number(stage, identity);
+    c_text(stage, "[(offsetof(struct {char r_byte;r_t"); c_number(stage, identity);
+    c_text(stage, " r_value;},r_value)=="); c_number(stage, (*input).align as u64);
+    c_text(stage, "ULL)?1:-1];\n");
+    if (*input).kind == RMD_T_RECORD {
+        var field: *RmdField = (*(*input).record_decl).fields;
+        while field != null(*RmdField) {
+            c_text(stage, "typedef char r_offset_"); c_number(stage, identity);
+            c_text(stage, "_"); c_number(stage, (*field).index as u64);
+            c_text(stage, "[(offsetof(r_t"); c_number(stage, identity);
+            c_text(stage, ",r_f"); c_number(stage, (*field).index as u64);
+            c_text(stage, ")=="); c_number(stage, (*field).offset);
+            c_text(stage, "ULL)?1:-1];\n");
+            field = (*field).next;
+        }
+    }
+}
+
+fn c_emit_type_dependency(stage: *CStage, input: *RmdType) -> unit {
+    if !c_type_composite(input) || (*stage).status.failed { return; }
+    var info: *CTypeInfo = c_map_get(&(*stage).types, input as usize) as *CTypeInfo;
+    c_emit_type(stage, info);
+}
+
+fn c_emit_type(stage: *CStage, info: *CTypeInfo) -> unit {
+    if (*stage).status.failed || (*info).state == 2u32 { return; }
+    if (*info).state != 0u32 { trap; }
+    (*info).state = 1u32;
+    var input: *RmdType = (*info).source;
+    var identity: u64 = (*info).identity as u64;
+    if (*input).kind == RMD_T_RECORD {
+        var field: *RmdField = (*(*input).record_decl).fields;
+        while field != null(*RmdField) {
+            c_emit_type_dependency(stage, (*field).type);
+            field = (*field).next;
+        }
+        c_text(stage, "struct r_tag"); c_number(stage, identity); c_text(stage, "{\n");
+        field = (*(*input).record_decl).fields;
+        while field != null(*RmdField) {
+            c_type_name(stage, (*field).type); c_text(stage, " r_f");
+            c_number(stage, (*field).index as u64); c_text(stage, ";\n");
+            field = (*field).next;
+        }
+        c_text(stage, "};\n");
+    } else {
+        c_emit_type_dependency(stage, (*input).base);
+        if (*input).kind == RMD_T_ARRAY {
+            c_text(stage, "struct r_tag"); c_number(stage, identity); c_text(stage, "{");
+            c_type_name(stage, (*input).base); c_text(stage, " r_elements[");
+            c_number(stage, (*input).count); c_text(stage, "];};\n");
+        } else {
+            var index: usize = 0usize;
+            while index < (*input).param_count {
+                c_emit_type_dependency(stage, (*input).params[index]);
+                index = index + 1usize;
+            }
+            c_text(stage, "typedef "); c_type_name(stage, (*input).base);
+            c_text(stage, " (*r_t"); c_number(stage, identity); c_text(stage, ")(");
+            c_type_arguments(stage, input); c_text(stage, ");\n");
+        }
+    }
+    c_emit_type_layout(stage, info);
+    (*info).state = 2u32;
+}
+
+fn c_emit_types(stage: *CStage) -> unit {
+    var info: *CTypeInfo = (*stage).first_type;
+    while info != null(*CTypeInfo) {
+        (*info).state = 0u32;
+        if (*(*info).source).kind != RMD_T_FUNCTION {
+            c_text(stage, "typedef struct r_tag"); c_number(stage, (*info).identity as u64);
+            c_text(stage, " r_t"); c_number(stage, (*info).identity as u64);
+            c_text(stage, ";\n");
+        }
+        info = (*info).next;
+    }
+    info = (*stage).first_type;
+    while info != null(*CTypeInfo) {
+        c_emit_type(stage, info);
+        info = (*info).next;
+    }
+}
+
+fn c_function_decl(declaration: *RmdDecl) -> bool {
+    return (*declaration).kind == RMD_D_FUNCTION || (*declaration).kind == RMD_D_EXTERN;
+}
+
+fn c_bind(stage: *CStage, declaration: *RmdDecl, owned: bool) -> *CBinding {
+    if (*stage).status.failed { return null(*CBinding); }
+    var binding: *CBinding = c_map_get(&(*stage).declarations, declaration as usize) as *CBinding;
+    if binding == null(*CBinding) {
+        var name: *u8 = (*declaration).link_name;
+        if name == null(*u8) || *name == 0u8 {
+            c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
+                    "C backend declaration has no native link name");
+            return null(*CBinding);
+        }
+        var index: usize = 0usize;
+        while name[index] != 0u8 {
+            if name[index] > 127u8 {
+                c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
+                        "native link name is not ASCII");
+                return null(*CBinding);
+            }
+            index = index + 1usize;
+        }
+        if (*stage).entry != null(*RmdDecl) && c_equal(name, "main") {
+            c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
+                    "native symbol main conflicts with the hosted entry adapter");
+            return null(*CBinding);
+        }
+        var hash: usize = c_hash(name);
+        var head: *CBinding = c_map_get(&(*stage).native_names, hash) as *CBinding;
+        binding = head;
+        while binding != null(*CBinding) {
+            if c_equal((*(*binding).source).link_name, name) { break; }
+            binding = (*binding).hash_next;
+        }
+        if binding != null(*CBinding) {
+            var previous: *RmdDecl = (*binding).source;
+            var equal: bool = c_function_decl(previous) == c_function_decl(declaration);
+            if equal {
+                if c_function_decl(declaration) {
+                    equal = c_native_equal((*previous).type, (*declaration).type);
+                } else {
+                    equal = c_exact_type_equal((*previous).type, (*declaration).type);
+                }
+            }
+            if !equal {
+                c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
+                        "conflicting native ABI for symbol");
+                return null(*CBinding);
+            }
+        } else {
+            if !c_function_decl(declaration) && (*declaration).kind != RMD_D_CONST { trap; }
+            binding = c_alloc(&(*stage).status, sizeof(CBinding), alignof(CBinding)) as *CBinding;
+            if binding == null(*CBinding) { return null(*CBinding); }
+            if (*stage).next_binding == 0usize {
+                c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
+                        "too many C native symbols");
+                return null(*CBinding);
+            }
+            (*binding).source = declaration;
+            (*binding).definition = null(*RmdDecl);
+            (*binding).identity = (*stage).next_binding;
+            (*stage).next_binding = (*stage).next_binding + 1usize;
+            (*binding).next = null(*CBinding);
+            (*binding).hash_next = head;
+            if (*stage).last_binding == null(*CBinding) { (*stage).first_binding = binding; }
+            else { (*(*stage).last_binding).next = binding; }
+            (*stage).last_binding = binding;
+            c_map_set(&(*stage).status, &(*stage).native_names, hash, binding as usize);
+        }
+        c_type(stage, (*declaration).type);
+        c_map_set(&(*stage).status, &(*stage).declarations, declaration as usize, binding as usize);
+    }
+    if owned {
+        if (*declaration).kind != RMD_D_FUNCTION && (*declaration).kind != RMD_D_CONST { trap; }
+        if (*binding).definition != null(*RmdDecl) && (*binding).definition != declaration {
+            c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
+                    "duplicate native definition for symbol");
+            return null(*CBinding);
+        }
+        (*binding).definition = declaration;
+    }
+    if (*stage).status.failed { return null(*CBinding); }
+    return binding;
+}
+
+fn c_binding(stage: *CStage, declaration: *RmdDecl) -> *CBinding {
+    return c_bind(stage, declaration, false);
+}
+
+fn c_global(stage: *CStage, declaration: *RmdDecl) -> unit {
+    var binding: *CBinding = c_binding(stage, declaration);
+    if binding == null(*CBinding) { return; }
+    c_text(stage, "r_g"); c_number(stage, (*binding).identity as u64);
+}
+
+fn c_emit_prototypes(stage: *CStage) -> unit {
+    var binding: *CBinding = (*stage).first_binding;
+    while binding != null(*CBinding) {
+        var declaration: *RmdDecl = (*binding).definition;
+        if declaration == null(*RmdDecl) { declaration = (*binding).source; }
+        var input: *RmdType = (*declaration).type;
+        c_text(stage, "extern ");
+        if c_function_decl(declaration) { c_type_name(stage, (*input).base); }
+        else { c_type_name(stage, input); c_text(stage, " const"); }
+        c_text(stage, " r_g"); c_number(stage, (*binding).identity as u64);
+        if c_function_decl(declaration) {
+            c_text(stage, "("); c_type_arguments(stage, input); c_text(stage, ")");
+        }
+        c_text(stage, ";\n");
+        binding = (*binding).next;
+    }
+}
+
+fn c_emit_renames(stage: *CStage) -> unit {
+    var buffer: *CBuffer = &(*stage).renames;
+    var binding: *CBinding = (*stage).first_binding;
+    while binding != null(*CBinding) {
+        c_buffer_text(buffer, "\"--redefine-sym\"\n\"r_g");
+        c_buffer_number(buffer, (*binding).identity as u64);
+        c_buffer_text(buffer, "=");
+        var name: *u8 = (*(*binding).source).link_name;
+        var index: usize = 0usize;
+        while name[index] != 0u8 {
+            if name[index] == 34u8 || name[index] == 92u8 { c_buffer_text(buffer, "\\"); }
+            c_buffer_bytes(buffer, &name[index], 1usize);
+            index = index + 1usize;
+        }
+        c_buffer_text(buffer, "\"\n");
+        binding = (*binding).next;
+    }
+}

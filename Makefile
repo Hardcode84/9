@@ -8,8 +8,9 @@ STRICT = -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wm
 BUILD ?= build
 CORE = $(BUILD)/core.o $(BUILD)/read.o $(BUILD)/check.o
 BACKEND = $(BUILD)/x64.o
+C_STAGE = api/rmd0.rmd api/rmd0_host.rmd stages/c/model.rmd stages/c/base.rmd stages/c/types.rmd stages/c/emit.rmd stages/c/driver.rmd
 
-.PHONY: all clean check witness api
+.PHONY: all clean check witness api c-stage check-c
 all: $(BUILD)/rmd0 $(BUILD)/librmd0.a $(BUILD)/librmd0_host.a
 
 $(BUILD):
@@ -29,6 +30,20 @@ $(BUILD)/librmd0.a: $(CORE) $(BACKEND)
 
 $(BUILD)/librmd0_host.a: $(BUILD)/host.o
 	$(AR) rcs $@ $^
+
+$(BUILD)/rmd-c-seed.s: $(BUILD)/rmd0 $(C_STAGE)
+	$(BUILD)/rmd0 -S -o $@ $(C_STAGE)
+
+$(BUILD)/rmd-c-seed.o: $(BUILD)/rmd-c-seed.s
+	$(AS) $(ASFLAGS) $< -o $@
+
+$(BUILD)/rmd-c-seed: $(BUILD)/rmd-c-seed.o $(BUILD)/librmd0.a $(BUILD)/librmd0_host.a
+	$(CC) -no-pie $^ $(LDFLAGS) -o $@
+
+$(BUILD)/rmd-c: $(BUILD)/rmd-c-seed
+	$< -o $@ $(C_STAGE) --ldflag $(BUILD)/librmd0.a --ldflag $(BUILD)/librmd0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+c-stage: $(BUILD)/rmd-c
 
 $(BUILD)/intrusive.s: $(BUILD)/rmd0 examples/intrusive.rmd
 	$(BUILD)/rmd0 -S -o $@ examples/intrusive.rmd
@@ -61,6 +76,9 @@ check: all $(BUILD)/core_test $(BUILD)/read_test $(BUILD)/check_test $(BUILD)/ho
 	$(BUILD)/x64_test
 	python3 tools/api.py --check
 	python3 tests/run.py --compiler $(BUILD)/rmd0 --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --ldflags='$(LDFLAGS)'
+
+check-c: c-stage
+	python3 tests/run.py --backend c --compiler $(BUILD)/rmd-c --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --ldflags='$(LDFLAGS)'
 
 clean:
 	rm -rf $(BUILD)

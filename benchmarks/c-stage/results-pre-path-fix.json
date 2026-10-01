@@ -1,0 +1,6864 @@
+{
+  "schema": 1,
+  "status": "complete",
+  "environment": {
+    "utc": "2026-10-01T01:38:27Z",
+    "cpu_model": "AMD Ryzen Threadripper PRO 7995WX 96-Cores",
+    "logical_cpus": 192,
+    "pinned_cpu": 4,
+    "smt_siblings": {
+      "value": "4,100"
+    },
+    "governor": {
+      "value": "performance"
+    },
+    "kernel": "7.0.0-28-generic",
+    "machine": "x86_64",
+    "os_release": "PRETTY_NAME=\"Ubuntu 24.04.2 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.2 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+    "memory_kib": 527581144,
+    "load_start": [
+      "0.39",
+      "0.23",
+      "0.27"
+    ],
+    "cpu_reserved": false,
+    "frequency_control": "governor recorded; frequency and turbo are not fixed",
+    "python": "3.12.11",
+    "child_environment": {
+      "LC_ALL": "C",
+      "LANG": "C",
+      "TZ": "UTC",
+      "PATH": "inherited for executable lookup; all other variables omitted"
+    },
+    "load_end": [
+      "1.17",
+      "0.57",
+      "0.39"
+    ]
+  },
+  "measurement_command": [
+    "python3",
+    "benchmarks/c-stage/measure.py",
+    "--output",
+    "benchmarks/c-stage/results.json",
+    "--build-dir",
+    "build/c-stage-perf",
+    "--inputs",
+    ".profile-cache/c-stage-inputs",
+    "--samples",
+    "25",
+    "--backend-samples",
+    "5",
+    "--bootstrap-draws",
+    "10000",
+    "--cpu",
+    "4",
+    "--seed",
+    "20261001"
+  ],
+  "method": {
+    "frontend_samples_per_endpoint": 25,
+    "backend_samples_per_endpoint": 5,
+    "bootstrap_draws": 10000,
+    "seed": 20261001,
+    "confidence": 0.95,
+    "randomization": "shuffle workloads each round, and frontend endpoints within each workload",
+    "bootstrap": "resample complete paired frontend rounds; ratio of medians; reselect fastest C in each draw",
+    "intervals": "per comparison; no simultaneous coverage claim; backend reports median and range only",
+    "timing": "perf_counter_ns around fresh process launch and completion, including startup and wait",
+    "output": "frontend stdout and rename output go to DEVNULL; backend object files use the warm local filesystem",
+    "warmup": "one discarded run per frontend command; backend preflight is its discarded warmup",
+    "os_file_cache": "warm; no cache eviction",
+    "compiler_cache": "none",
+    "cpu_affinity": "controller and descendants pinned to one logical CPU; CPU is not reserved",
+    "stage_preparation": "recorded separately; excluded from installed-stage samples; cold custom stages must add preparation",
+    "backend_boundary": "prepare includes all C and rename text in separate memory buffers; emit also concatenates and writes them; GCC starts from saved exact C",
+    "backend_scope": "GCC parsing generated C, optimization, machine lowering, assembly and object write; objcopy is measured separately; link excluded",
+    "comparison_scope": "equivalent ordinary source functions and direct intrusive witness; no checked-language speed claim",
+    "required_speed_gate": "optimized-emit upper 95% ratio bound <= 1 against fastest C syntax check for each workload"
+  },
+  "source_sha256": {
+    "benchmarks/c-stage/measure.py": "9b03226674893de9445e1bd0de3606a822f447912b81bf402c86d0d3c5aafc4a",
+    "benchmarks/bootstrap/measure.py": "224c7a7b5fd8844137bbc813a48ca8df4939a4fd3e0770c278b0264ccfc24a22",
+    "tools/api.py": "399d116acdf428b72e7a0565ed00c394652784635a28182a8d80eb7ece8ba227",
+    "src/check.c": "b7340cbd0e925b9f263ae150ad9be5796a3114fe3906199b2644cc8afc00fc9a",
+    "src/core.c": "791e173b7ae415b09c648e969fcc89310bde217d6514ed3b42a50757f84d385b",
+    "src/driver.c": "bacc05e22b564a4a5482b20e02f7290d5959cfeddfa39efbfd5fc77e0e812d69",
+    "src/read.c": "82c69d096dcb86369ad01cdc6153421c7de5351f417880ff6d67dcb2b8614757",
+    "src/x64.c": "3ea9d07a3b12b061ea04c67ff437c80b7e50dd3ee25891f6902217de2d0041ef",
+    "include/rmd0.h": "8c4d8e0a1599959e7156cb3347d90a4f6d7b67cd813228b4f1312f3e95e8ad9e",
+    "include/rmd0_host.h": "ed7d76ac9cbeaa59874e44ce0ba834b1431b5960e9112a4cffe063c0d15413b2",
+    "include/rmd0_x64.h": "5b6e2cc828e09932461b79993bf971a3ac0511d4c5f43f3c4e5d997536535eea",
+    "runtime/host.c": "152820a4bf903850c8defd28dc73eec3da66292b06465d42f9e638c6d96ce251",
+    "api/rmd0.rmd": "35af5469d2a66235abc64db84c45cb8aab331f9b872976f90c9de6c9cea1b0fb",
+    "api/rmd0_host.rmd": "2cce512ac1ebf0a1270e3f0a49904681cd360c61aeff74f6c39b0efa3b8d2c69",
+    "api/rmd0_x64.rmd": "1c148e6d05e9f737731a72d5ef3891fd511b87eac867c28df6175579cdf251ed",
+    "stages/c/base.rmd": "7c43a2af5abfd0355f3f59afbc3cfd9a2717655e22150d52d12ea775c1c59773",
+    "stages/c/driver.rmd": "ce786710f40f78b68e83bb21620cdaafbae683f3e262abfd58632f889e0ae0eb",
+    "stages/c/emit.rmd": "75456fdd7f737db64b527a7aca97e975d90b0d835951fb1c27fc4b45d1499bbd",
+    "stages/c/model.rmd": "ee8d8f9106e61455223129988233c0a8414af00e37b5274243de649e9ce94a37",
+    "stages/c/types.rmd": "68ad2331c05a371e5c801d42286001641e36e45f5478d755a5aa3ab24dce5f68"
+  },
+  "preparation": {
+    "commands": [
+      {
+        "phase": "bootstrap-compiler-and-libraries",
+        "command": [
+          "make",
+          "-f",
+          "build/c-stage-perf/Makefile.frozen",
+          "-B",
+          "-j1",
+          "BUILD=build/c-stage-perf",
+          "CC=gcc",
+          "CFLAGS=-O2 -g0",
+          "all"
+        ],
+        "wall_ns": 702059688,
+        "stdout_sha256": "fbd5bdc397fb708e2de84c38895ea3df75e28e06dafe53fe6eb97fc36ac14521"
+      },
+      {
+        "phase": "stage-x64-generation",
+        "command": [
+          "build/c-stage-perf/rmd0",
+          "-S",
+          "-o",
+          "build/c-stage-perf/rmd-c-seed.s",
+          "api/rmd0.rmd",
+          "api/rmd0_host.rmd",
+          "stages/c/model.rmd",
+          "stages/c/base.rmd",
+          "stages/c/types.rmd",
+          "stages/c/emit.rmd",
+          "stages/c/driver.rmd"
+        ],
+        "wall_ns": 5096347,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "phase": "stage-x64-assembly",
+        "command": [
+          "as",
+          "--64",
+          "build/c-stage-perf/rmd-c-seed.s",
+          "-o",
+          "build/c-stage-perf/rmd-c-seed.o"
+        ],
+        "wall_ns": 14304274,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "phase": "stage-x64-link",
+        "command": [
+          "gcc",
+          "-no-pie",
+          "build/c-stage-perf/rmd-c-seed.o",
+          "build/c-stage-perf/librmd0.a",
+          "build/c-stage-perf/librmd0_host.a",
+          "-o",
+          "build/c-stage-perf/rmd-c-seed"
+        ],
+        "wall_ns": 13147047,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "phase": "stage-self-C-generation-GCC-objcopy-link",
+        "command": [
+          "build/c-stage-perf/rmd-c-seed",
+          "-o",
+          "build/c-stage-perf/rmd-c",
+          "api/rmd0.rmd",
+          "api/rmd0_host.rmd",
+          "stages/c/model.rmd",
+          "stages/c/base.rmd",
+          "stages/c/types.rmd",
+          "stages/c/emit.rmd",
+          "stages/c/driver.rmd",
+          "--ldflag",
+          "build/c-stage-perf/librmd0.a",
+          "--ldflag",
+          "build/c-stage-perf/librmd0_host.a"
+        ],
+        "wall_ns": 436454275,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "flags": [
+      "-std=c99",
+      "-pedantic-errors",
+      "-O2",
+      "-g0",
+      "-fstack-clash-protection",
+      "-Wno-overlength-strings"
+    ],
+    "frozen_makefile": {
+      "path": "build/c-stage-perf/Makefile.frozen",
+      "bytes": 2772,
+      "lines": 86,
+      "sha256": "c93338da9bbffc00c75b74332f9df1b2ff7522fab1d2269778aca5a8b6d0770d",
+      "text": "CC ?= cc\nAR ?= ar\nAS ?= as\nASFLAGS ?= --64\nCFLAGS ?= -O2 -g\nCPPFLAGS += -Iinclude\nSTRICT = -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla\nBUILD ?= build\nCORE = $(BUILD)/core.o $(BUILD)/read.o $(BUILD)/check.o\nBACKEND = $(BUILD)/x64.o\nC_STAGE = api/rmd0.rmd api/rmd0_host.rmd stages/c/model.rmd stages/c/base.rmd stages/c/types.rmd stages/c/emit.rmd stages/c/driver.rmd\n\n.PHONY: all clean check witness api c-stage check-c\nall: $(BUILD)/rmd0 $(BUILD)/librmd0.a $(BUILD)/librmd0_host.a\n\n$(BUILD):\n\tmkdir -p $@\n\n$(BUILD)/%.o: src/%.c include/rmd0.h | $(BUILD)\n\t$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@\n\n$(BUILD)/host.o: runtime/host.c include/rmd0_host.h | $(BUILD)\n\t$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@\n\n$(BUILD)/rmd0: $(CORE) $(BACKEND) $(BUILD)/driver.o $(BUILD)/host.o\n\t$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@\n\n$(BUILD)/librmd0.a: $(CORE) $(BACKEND)\n\t$(AR) rcs $@ $^\n\n$(BUILD)/librmd0_host.a: $(BUILD)/host.o\n\t$(AR) rcs $@ $^\n\n$(BUILD)/rmd-c-seed.s: $(BUILD)/rmd0 $(C_STAGE)\n\t$(BUILD)/rmd0 -S -o $@ $(C_STAGE)\n\n$(BUILD)/rmd-c-seed.o: $(BUILD)/rmd-c-seed.s\n\t$(AS) $(ASFLAGS) $< -o $@\n\n$(BUILD)/rmd-c-seed: $(BUILD)/rmd-c-seed.o $(BUILD)/librmd0.a $(BUILD)/librmd0_host.a\n\t$(CC) -no-pie $^ $(LDFLAGS) -o $@\n\n$(BUILD)/rmd-c: $(BUILD)/rmd-c-seed\n\t$< -o $@ $(C_STAGE) --ldflag $(BUILD)/librmd0.a --ldflag $(BUILD)/librmd0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))\n\nc-stage: $(BUILD)/rmd-c\n\n$(BUILD)/intrusive.s: $(BUILD)/rmd0 examples/intrusive.rmd\n\t$(BUILD)/rmd0 -S -o $@ examples/intrusive.rmd\n\n$(BUILD)/intrusive.o: $(BUILD)/intrusive.s\n\t$(AS) $(ASFLAGS) $< -o $@\n\n$(BUILD)/intrusive: $(BUILD)/intrusive.o $(BUILD)/librmd0_host.a\n\t$(CC) -no-pie $^ $(LDFLAGS) -o $@\n\n$(BUILD)/intrusive-c: benchmarks/bootstrap/intrusive.c $(BUILD)/librmd0_host.a\n\t$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -o $@\n\nwitness: $(BUILD)/intrusive $(BUILD)/intrusive-c\n\t$(BUILD)/intrusive\n\t$(BUILD)/intrusive-c\n\n$(BUILD)/%_test: tests/%_test.c $(BUILD)/librmd0.a $(BUILD)/librmd0_host.a\n\t$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -pthread -o $@\n\napi:\n\tpython3 tools/api.py\n\ncheck: all $(BUILD)/core_test $(BUILD)/read_test $(BUILD)/check_test $(BUILD)/host_test $(BUILD)/parallel_test $(BUILD)/x64_test\n\t$(BUILD)/core_test\n\t$(BUILD)/read_test\n\t$(BUILD)/check_test\n\t$(BUILD)/host_test\n\t$(BUILD)/parallel_test\n\t$(BUILD)/x64_test\n\tpython3 tools/api.py --check\n\tpython3 tests/run.py --compiler $(BUILD)/rmd0 --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --ldflags='$(LDFLAGS)'\n\ncheck-c: c-stage\n\tpython3 tests/run.py --backend c --compiler $(BUILD)/rmd-c --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --ldflags='$(LDFLAGS)'\n\nclean:\n\trm -rf $(BUILD)\n\n-include $(wildcard $(BUILD)/*.d)\n"
+    },
+    "bootstrap_compiler_and_libraries_ns": 702059688,
+    "seed_stage_construction_ns": 32547668,
+    "optimized_stage_construction_ns": 436454275,
+    "included_in_frontend_samples": false,
+    "construction_scope": "All native preparation for each stage route is included above; existing OS tools are excluded",
+    "bootstrap_compiler": {
+      "file_name": "rmd0",
+      "bytes": 96856,
+      "sha256": "3f03a786a3f6432e646773dbd1cc24e333fcb11303b8bd390fa6783c9d103c61"
+    },
+    "seed_stage_assembly": {
+      "path": "build/c-stage-perf/rmd-c-seed.s",
+      "bytes": 510354,
+      "lines": 25082,
+      "sha256": "c8d6b7df19fd374beb8bd403fdcdf5f28c936dff53ab45dede597789e9ce19d3"
+    },
+    "seed_stage_object": {
+      "file_name": "rmd-c-seed.o",
+      "bytes": 133032,
+      "sha256": "1ac7804da879c3a56a7cffe6ebc62727b9ba3119d50dd0baa0408d949325ba0b"
+    },
+    "linked_libraries": {
+      "build/c-stage-perf/librmd0.a": {
+        "file_name": "librmd0.a",
+        "bytes": 125324,
+        "sha256": "4c127263be1224b934d4209e5c74faa587fdb2419886552adf078606adc6322f"
+      },
+      "build/c-stage-perf/librmd0_host.a": {
+        "file_name": "librmd0_host.a",
+        "bytes": 4064,
+        "sha256": "94fd69692b1c2fddd88fb7335a045bba69ee5ce9778e6c92ddb8c136d9354901"
+      }
+    }
+  },
+  "toolchains": {
+    "gcc": {
+      "file_name": "x86_64-linux-gnu-gcc-13",
+      "bytes": 1023032,
+      "sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
+      "command": "gcc",
+      "version": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ],
+      "cc1": {
+        "file_name": "cc1",
+        "bytes": 30487984,
+        "sha256": "5d1679131184e2de4435b426eb264bf13472fe026db8e5c6bc97445814e8e2f4",
+        "shared_libraries": [
+          {
+            "file_name": "ld-linux-x86-64.so.2",
+            "bytes": 236616,
+            "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+          },
+          {
+            "file_name": "libc.so.6",
+            "bytes": 2129424,
+            "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+          },
+          {
+            "file_name": "libgmp.so.10.5.0",
+            "bytes": 534896,
+            "sha256": "0ccdfb6d6f5c039465f6d002cf7e4c072d48ac6a2cffc8dd6c748dec31592804"
+          },
+          {
+            "file_name": "libisl.so.23.3.0",
+            "bytes": 1863352,
+            "sha256": "db4f717fd1678b48e5dddea1cbdd2d239594a70b57e96d0923bfd9533351efa8"
+          },
+          {
+            "file_name": "libm.so.6",
+            "bytes": 952616,
+            "sha256": "fce00b6f25f459cf4ae0b7fae4257909a1a8a86f9149e7c029a5d617baf1ccd0"
+          },
+          {
+            "file_name": "libmpc.so.3.3.1",
+            "bytes": 134440,
+            "sha256": "91d2b2b0b794028c733431e01acc227ff39ee289384fdf22869c8b42ad3aaa3b"
+          },
+          {
+            "file_name": "libmpfr.so.6.2.1",
+            "bytes": 760464,
+            "sha256": "2156351fa3dedd04a7381c6ac7a8a26efa2d6fb08b80f8a2d644ccdd653710ae"
+          },
+          {
+            "file_name": "libz.so.1.3",
+            "bytes": 113000,
+            "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+          },
+          {
+            "file_name": "libzstd.so.1.5.5",
+            "bytes": 755864,
+            "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+          }
+        ]
+      }
+    },
+    "clang": {
+      "file_name": "clang",
+      "bytes": 132448,
+      "sha256": "b1ca2b35b07cb5cb7db47247f329151ed22692a19de2763859b0867e6323e2fe",
+      "command": "clang-20",
+      "version": "Ubuntu clang version 20.1.8 (++20250804090239+87f0227cb601-1~exp1~20250804210352.139)",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libLLVM.so.20.1",
+          "bytes": 143566264,
+          "sha256": "0a79c1caae602e365f736f7badd5a953cc2879f8a9dfe6970b0e82f32d1f6a66"
+        },
+        {
+          "file_name": "libbsd.so.0.12.1",
+          "bytes": 80888,
+          "sha256": "e86cd4f0019f42c2ba5e60602e0edc8694d2948377d98c3654d0f6bddb5254bb"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libclang-cpp.so.20.1",
+          "bytes": 66949408,
+          "sha256": "1da69798fed3e72b445a10580287dc588b1a7bfcd410e27238a818401e0be007"
+        },
+        {
+          "file_name": "libedit.so.2.0.72",
+          "bytes": 220472,
+          "sha256": "195c607216f8581dbf516346ed38f4c73500cac4b84e18eb0a4fd49931e4cd56"
+        },
+        {
+          "file_name": "libffi.so.8.1.4",
+          "bytes": 47672,
+          "sha256": "00f593fe192f2851b8ce23b25cec2488d769beb5a8f63e8c9e563071e1075153"
+        },
+        {
+          "file_name": "libgcc_s.so.1",
+          "bytes": 183024,
+          "sha256": "d93224d2b0dab4247598be683adca02f5cf00586f99c187579cd7e92058fb7cb"
+        },
+        {
+          "file_name": "libicudata.so.74.2",
+          "bytes": 30795392,
+          "sha256": "ddbb3718b8bd9cbd780e5ab08b4503c30a6c4fa0706ebe5d074ed6b596c1714e"
+        },
+        {
+          "file_name": "libicuuc.so.74.2",
+          "bytes": 2140336,
+          "sha256": "7560aadde38e5f4237a47a1ddd5891f9b36768a77a60faae30beee003ac01901"
+        },
+        {
+          "file_name": "liblzma.so.5.4.5",
+          "bytes": 202904,
+          "sha256": "696e868dd0700a19a6d65fc01608ec2d70d3cb91f65710e89180cd2e688f30cb"
+        },
+        {
+          "file_name": "libm.so.6",
+          "bytes": 952616,
+          "sha256": "fce00b6f25f459cf4ae0b7fae4257909a1a8a86f9149e7c029a5d617baf1ccd0"
+        },
+        {
+          "file_name": "libmd.so.0.1.0",
+          "bytes": 55536,
+          "sha256": "423e18586b6ea740f4465afd64f7a9a4cb7264ed979c8e7256f9085af5345fef"
+        },
+        {
+          "file_name": "libstdc++.so.6.0.33",
+          "bytes": 2592224,
+          "sha256": "1fd75fe70354a416d75aef22bcae68c47bd25d20e2d0568c30b1a9838cf62f11"
+        },
+        {
+          "file_name": "libtinfo.so.6.4",
+          "bytes": 208328,
+          "sha256": "e6089d7bb95eee5b545f3770dd69095b0bca47d26701cad145af429561d16306"
+        },
+        {
+          "file_name": "libxml2.so.2.9.14",
+          "bytes": 1967424,
+          "sha256": "ddd3af3f491a9686c82fe1232f1250cec368eb2fbcb1d2725c6ce9401a6dbd3b"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "assembler": {
+      "file_name": "x86_64-linux-gnu-as",
+      "bytes": 745768,
+      "sha256": "7a2ef948033b05ad0c5dcb0d5be059bc68562b5d45713d91aee21df2b4bf4e92",
+      "command": "as",
+      "version": "GNU assembler (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "objcopy": {
+      "file_name": "x86_64-linux-gnu-objcopy",
+      "bytes": 166536,
+      "sha256": "b22f4f909bff115ee2a37cd21ff76f5e0b8c65cd58f98edbce7b59f129980d67",
+      "command": "objcopy",
+      "version": "GNU objcopy (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "linker": {
+      "file_name": "x86_64-linux-gnu-ld.bfd",
+      "bytes": 1359128,
+      "sha256": "e46a122cc3a29feba3b1d0fc2a274b6e46538be016ebe381370c0801bb98b0b8",
+      "command": "ld",
+      "version": "GNU ld (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libctf.so.0.0.0",
+          "bytes": 220384,
+          "sha256": "5708839db0b080ef4dafc44c4adaa6976b55de5078aeed35c81d55ab4d0c7841"
+        },
+        {
+          "file_name": "libjansson.so.4.14.0",
+          "bytes": 64008,
+          "sha256": "c49935a4b3ac599064281b1f257576087806d0dad7ec46f353bd983b052c5e26"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    }
+  },
+  "stage_binaries": {
+    "seed": {
+      "file_name": "rmd-c-seed",
+      "bytes": 165488,
+      "sha256": "b73a4bb82870cbca56057035e123649a873a9ede1fa4d3caf7e56ada035794ee",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ]
+    },
+    "optimized": {
+      "file_name": "rmd-c",
+      "bytes": 108728,
+      "sha256": "bf0d971767154ff63303946ec660a81aa81194ed671e5795d8c0ccb4802f9fe4",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ]
+    }
+  },
+  "endpoints": {
+    "gcc-syntax": "GCC C99 source parsing and semantic checks; -fsyntax-only",
+    "clang-syntax": "Clang C99 source parsing and semantic checks; -fsyntax-only",
+    "seed-check": "x64-compiled RMD stage; source reading, collection, resolution, and body checks",
+    "seed-prepare": "x64-compiled RMD stage; check plus complete C and rename text in memory; excludes final buffer concatenation and output",
+    "seed-emit": "x64-compiled RMD stage; check plus complete C and rename text emitted to DEVNULL; no GCC process",
+    "optimized-check": "self-C-compiled RMD stage; source reading, collection, resolution, and body checks",
+    "optimized-prepare": "self-C-compiled RMD stage; check plus complete C and rename text in memory; excludes final buffer concatenation and output",
+    "optimized-emit": "self-C-compiled RMD stage; check plus complete C and rename text emitted to DEVNULL; no GCC process"
+  },
+  "commands": {
+    "ordinary-1000": {
+      "gcc-syntax": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        ".profile-cache/c-stage-inputs/ordinary-1000.c"
+      ],
+      "clang-syntax": [
+        "clang-20",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        ".profile-cache/c-stage-inputs/ordinary-1000.c"
+      ],
+      "seed-check": [
+        "build/c-stage-perf/rmd-c-seed",
+        "--library",
+        "--check",
+        ".profile-cache/c-stage-inputs/ordinary-1000.rmd"
+      ],
+      "seed-prepare": [
+        "build/c-stage-perf/rmd-c-seed",
+        "--library",
+        "--prepare",
+        ".profile-cache/c-stage-inputs/ordinary-1000.rmd"
+      ],
+      "seed-emit": [
+        "build/c-stage-perf/rmd-c-seed",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null",
+        ".profile-cache/c-stage-inputs/ordinary-1000.rmd"
+      ],
+      "optimized-check": [
+        "build/c-stage-perf/rmd-c",
+        "--library",
+        "--check",
+        ".profile-cache/c-stage-inputs/ordinary-1000.rmd"
+      ],
+      "optimized-prepare": [
+        "build/c-stage-perf/rmd-c",
+        "--library",
+        "--prepare",
+        ".profile-cache/c-stage-inputs/ordinary-1000.rmd"
+      ],
+      "optimized-emit": [
+        "build/c-stage-perf/rmd-c",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null",
+        ".profile-cache/c-stage-inputs/ordinary-1000.rmd"
+      ]
+    },
+    "ordinary-8000": {
+      "gcc-syntax": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        ".profile-cache/c-stage-inputs/ordinary-8000.c"
+      ],
+      "clang-syntax": [
+        "clang-20",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        ".profile-cache/c-stage-inputs/ordinary-8000.c"
+      ],
+      "seed-check": [
+        "build/c-stage-perf/rmd-c-seed",
+        "--library",
+        "--check",
+        ".profile-cache/c-stage-inputs/ordinary-8000.rmd"
+      ],
+      "seed-prepare": [
+        "build/c-stage-perf/rmd-c-seed",
+        "--library",
+        "--prepare",
+        ".profile-cache/c-stage-inputs/ordinary-8000.rmd"
+      ],
+      "seed-emit": [
+        "build/c-stage-perf/rmd-c-seed",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null",
+        ".profile-cache/c-stage-inputs/ordinary-8000.rmd"
+      ],
+      "optimized-check": [
+        "build/c-stage-perf/rmd-c",
+        "--library",
+        "--check",
+        ".profile-cache/c-stage-inputs/ordinary-8000.rmd"
+      ],
+      "optimized-prepare": [
+        "build/c-stage-perf/rmd-c",
+        "--library",
+        "--prepare",
+        ".profile-cache/c-stage-inputs/ordinary-8000.rmd"
+      ],
+      "optimized-emit": [
+        "build/c-stage-perf/rmd-c",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null",
+        ".profile-cache/c-stage-inputs/ordinary-8000.rmd"
+      ]
+    },
+    "intrusive": {
+      "gcc-syntax": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Iinclude",
+        "benchmarks/bootstrap/intrusive.c"
+      ],
+      "clang-syntax": [
+        "clang-20",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Iinclude",
+        "benchmarks/bootstrap/intrusive.c"
+      ],
+      "seed-check": [
+        "build/c-stage-perf/rmd-c-seed",
+        "--check",
+        "examples/intrusive.rmd"
+      ],
+      "seed-prepare": [
+        "build/c-stage-perf/rmd-c-seed",
+        "--prepare",
+        "examples/intrusive.rmd"
+      ],
+      "seed-emit": [
+        "build/c-stage-perf/rmd-c-seed",
+        "--emit-c",
+        "--symbols",
+        "/dev/null",
+        "examples/intrusive.rmd"
+      ],
+      "optimized-check": [
+        "build/c-stage-perf/rmd-c",
+        "--check",
+        "examples/intrusive.rmd"
+      ],
+      "optimized-prepare": [
+        "build/c-stage-perf/rmd-c",
+        "--prepare",
+        "examples/intrusive.rmd"
+      ],
+      "optimized-emit": [
+        "build/c-stage-perf/rmd-c",
+        "--emit-c",
+        "--symbols",
+        "/dev/null",
+        "examples/intrusive.rmd"
+      ]
+    }
+  },
+  "backend_commands": {
+    "ordinary-1000": {
+      "gcc-object": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O2",
+        "-g0",
+        "-fstack-clash-protection",
+        "-Wno-overlength-strings",
+        "-c",
+        "-x",
+        "c",
+        ".profile-cache/c-stage-inputs/ordinary-1000-optimized.c",
+        "-o",
+        ".profile-cache/c-stage-inputs/ordinary-1000-raw.o"
+      ],
+      "objcopy-rename": [
+        "objcopy",
+        "@.profile-cache/c-stage-inputs/ordinary-1000-optimized.rsp",
+        ".profile-cache/c-stage-inputs/ordinary-1000-raw.o",
+        ".profile-cache/c-stage-inputs/ordinary-1000.o"
+      ]
+    },
+    "ordinary-8000": {
+      "gcc-object": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O2",
+        "-g0",
+        "-fstack-clash-protection",
+        "-Wno-overlength-strings",
+        "-c",
+        "-x",
+        "c",
+        ".profile-cache/c-stage-inputs/ordinary-8000-optimized.c",
+        "-o",
+        ".profile-cache/c-stage-inputs/ordinary-8000-raw.o"
+      ],
+      "objcopy-rename": [
+        "objcopy",
+        "@.profile-cache/c-stage-inputs/ordinary-8000-optimized.rsp",
+        ".profile-cache/c-stage-inputs/ordinary-8000-raw.o",
+        ".profile-cache/c-stage-inputs/ordinary-8000.o"
+      ]
+    },
+    "intrusive": {
+      "gcc-object": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O2",
+        "-g0",
+        "-fstack-clash-protection",
+        "-Wno-overlength-strings",
+        "-c",
+        "-x",
+        "c",
+        ".profile-cache/c-stage-inputs/intrusive-optimized.c",
+        "-o",
+        ".profile-cache/c-stage-inputs/intrusive-raw.o"
+      ],
+      "objcopy-rename": [
+        "objcopy",
+        "@.profile-cache/c-stage-inputs/intrusive-optimized.rsp",
+        ".profile-cache/c-stage-inputs/intrusive-raw.o",
+        ".profile-cache/c-stage-inputs/intrusive.o"
+      ]
+    }
+  },
+  "inputs": {
+    "ordinary-1000": {
+      "functions": 1000,
+      "library": true,
+      "sources": {
+        "c": {
+          "path": ".profile-cache/c-stage-inputs/ordinary-1000.c",
+          "bytes": 224832,
+          "lines": 10003,
+          "sha256": "6f973234857b78a793c20a4900bd84b799e047bcf24a8ec4d64bc9e21a87a1f9"
+        },
+        "rmd": {
+          "path": ".profile-cache/c-stage-inputs/ordinary-1000.rmd",
+          "bytes": 247781,
+          "lines": 10001,
+          "sha256": "f890ae3d578d951c43fbb77cff3c333aad1dcb80d4e502364485111e6e83c12f"
+        }
+      },
+      "c_header_dependencies": {
+        "gcc-syntax": [
+          {
+            "name": ".profile-cache/c-stage-inputs/ordinary-1000.c",
+            "kind": "repository",
+            "bytes": 224832,
+            "sha256": "6f973234857b78a793c20a4900bd84b799e047bcf24a8ec4d64bc9e21a87a1f9"
+          },
+          {
+            "name": "stdc-predef.h",
+            "kind": "system_header",
+            "bytes": 2462,
+            "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+          }
+        ],
+        "clang-syntax": [
+          {
+            "name": ".profile-cache/c-stage-inputs/ordinary-1000.c",
+            "kind": "repository",
+            "bytes": 224832,
+            "sha256": "6f973234857b78a793c20a4900bd84b799e047bcf24a8ec4d64bc9e21a87a1f9"
+          }
+        ]
+      }
+    },
+    "ordinary-8000": {
+      "functions": 8000,
+      "library": true,
+      "sources": {
+        "c": {
+          "path": ".profile-cache/c-stage-inputs/ordinary-8000.c",
+          "bytes": 1797931,
+          "lines": 80003,
+          "sha256": "22785d8d486ff42c97a6f8e27913136001d0e07d42c8cc7d6f2c5ccc50231726"
+        },
+        "rmd": {
+          "path": ".profile-cache/c-stage-inputs/ordinary-8000.rmd",
+          "bytes": 1981880,
+          "lines": 80001,
+          "sha256": "3484923d9b0048f4d3053d2987371d18417794d2e8bc506c69cb18893803dec2"
+        }
+      },
+      "c_header_dependencies": {
+        "gcc-syntax": [
+          {
+            "name": ".profile-cache/c-stage-inputs/ordinary-8000.c",
+            "kind": "repository",
+            "bytes": 1797931,
+            "sha256": "22785d8d486ff42c97a6f8e27913136001d0e07d42c8cc7d6f2c5ccc50231726"
+          },
+          {
+            "name": "stdc-predef.h",
+            "kind": "system_header",
+            "bytes": 2462,
+            "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+          }
+        ],
+        "clang-syntax": [
+          {
+            "name": ".profile-cache/c-stage-inputs/ordinary-8000.c",
+            "kind": "repository",
+            "bytes": 1797931,
+            "sha256": "22785d8d486ff42c97a6f8e27913136001d0e07d42c8cc7d6f2c5ccc50231726"
+          }
+        ]
+      }
+    },
+    "intrusive": {
+      "functions": 5,
+      "library": false,
+      "sources": {
+        "c": {
+          "path": "benchmarks/bootstrap/intrusive.c",
+          "bytes": 2339,
+          "lines": 108,
+          "sha256": "5dac6c5036f4a343f3cacc3e9fdb353960ec870fff50511bcc15ac841a5fa9ab"
+        },
+        "rmd": {
+          "path": "examples/intrusive.rmd",
+          "bytes": 2364,
+          "lines": 91,
+          "sha256": "a514eca3c4339c44e112fc53c4ce43f8562f830305e688a6cc23725a70fe9614"
+        }
+      },
+      "c_header_dependencies": {
+        "gcc-syntax": [
+          {
+            "name": "benchmarks/bootstrap/intrusive.c",
+            "kind": "repository",
+            "bytes": 2339,
+            "sha256": "5dac6c5036f4a343f3cacc3e9fdb353960ec870fff50511bcc15ac841a5fa9ab"
+          },
+          {
+            "name": "stdc-predef.h",
+            "kind": "system_header",
+            "bytes": 2462,
+            "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+          },
+          {
+            "name": "include/rmd0_host.h",
+            "kind": "repository",
+            "bytes": 505,
+            "sha256": "ed7d76ac9cbeaa59874e44ce0ba834b1431b5960e9112a4cffe063c0d15413b2"
+          },
+          {
+            "name": "stddef.h",
+            "kind": "system_header",
+            "bytes": 13735,
+            "sha256": "9efc696d6c7eb8bb1831b149c6a92f88a775809cd63e4007312b617915f81188"
+          },
+          {
+            "name": "stdint.h",
+            "kind": "system_header",
+            "bytes": 328,
+            "sha256": "86a7914ab7d6a18465a6fb9a7b54f945cad604fdbf3ca0d10e4e0254e0037911"
+          },
+          {
+            "name": "stdint.h",
+            "kind": "system_header",
+            "bytes": 8155,
+            "sha256": "c26c51b07feadd45ca25e9c95e393b6783d580ab318a567c119828191a80bbed"
+          },
+          {
+            "name": "libc-header-start.h",
+            "kind": "system_header",
+            "bytes": 4286,
+            "sha256": "e86638082f9ce98c82e3022018fa5be175473445c824fe17bd32bf9668582368"
+          },
+          {
+            "name": "features.h",
+            "kind": "system_header",
+            "bytes": 18527,
+            "sha256": "940d486d050fc87420d8ffc008e17f31ffb04467534ad1b039ed25abc52382f9"
+          },
+          {
+            "name": "features-time64.h",
+            "kind": "system_header",
+            "bytes": 1409,
+            "sha256": "345acb98767d04277e413c4951fbb199b0500be23d43cddf17c6cd9fb319a8da"
+          },
+          {
+            "name": "wordsize.h",
+            "kind": "system_header",
+            "bytes": 442,
+            "sha256": "716d8459074e2a082d65a28192b32eddbfd7587348372395b1c283a723ae4c18"
+          },
+          {
+            "name": "timesize.h",
+            "kind": "system_header",
+            "bytes": 1109,
+            "sha256": "8b686ad5fec2c4d6f759a6594d7c216337774d059623677547b7e182cc5269ae"
+          },
+          {
+            "name": "cdefs.h",
+            "kind": "system_header",
+            "bytes": 27011,
+            "sha256": "173afb522c6877dda3be1c93742c2061cd6e748ce395d2b3ae833fb49bfbfc4f"
+          },
+          {
+            "name": "long-double.h",
+            "kind": "system_header",
+            "bytes": 970,
+            "sha256": "40367287cd437d78a05313f6ec52cb0f0a711e1b6711fdcc3699bf2bf28e810f"
+          },
+          {
+            "name": "stubs.h",
+            "kind": "system_header",
+            "bytes": 384,
+            "sha256": "ef444295a0a9e8f5c40918399a00cc91ba0bd79774110cdf6e652baa6cfadb2e"
+          },
+          {
+            "name": "stubs-64.h",
+            "kind": "system_header",
+            "bytes": 481,
+            "sha256": "0b6ab3e2ed3ba79b30fe6ba81a68fc41f57965b8d56662763633431b703c9289"
+          },
+          {
+            "name": "types.h",
+            "kind": "system_header",
+            "bytes": 8806,
+            "sha256": "371847ed3adab1c19db392034f6a22407d321b1dc5f2440563f4b0b8b6c5386b"
+          },
+          {
+            "name": "typesizes.h",
+            "kind": "system_header",
+            "bytes": 3737,
+            "sha256": "047ee5ab17a95364c4b0f14c3eb0750e84e457c408f9a65a6c225ece585e0c14"
+          },
+          {
+            "name": "time64.h",
+            "kind": "system_header",
+            "bytes": 1340,
+            "sha256": "2be9170ce3621ea6062f10edef68bbc2db09bb454ec4397534263dd37b8f1f6a"
+          },
+          {
+            "name": "wchar.h",
+            "kind": "system_header",
+            "bytes": 1906,
+            "sha256": "893fa450527ce645f17922788097d5fe331e2a53012bab4e724d8a1f63e21aa2"
+          },
+          {
+            "name": "stdint-intn.h",
+            "kind": "system_header",
+            "bytes": 1037,
+            "sha256": "94286e42e4970304da5cbef69de6695c84132ff8fbd4b6d72d29aeb7406dc5ff"
+          },
+          {
+            "name": "stdint-uintn.h",
+            "kind": "system_header",
+            "bytes": 1049,
+            "sha256": "aeee224a19434556ef4a9a4afad553736789274656ca12463122300b557ce78c"
+          },
+          {
+            "name": "stdint-least.h",
+            "kind": "system_header",
+            "bytes": 1300,
+            "sha256": "5bf66871bfc18ae6d22c91d03e392c1a4cc5969ca74c5fa31b7510703a496844"
+          }
+        ],
+        "clang-syntax": [
+          {
+            "name": "benchmarks/bootstrap/intrusive.c",
+            "kind": "repository",
+            "bytes": 2339,
+            "sha256": "5dac6c5036f4a343f3cacc3e9fdb353960ec870fff50511bcc15ac841a5fa9ab"
+          },
+          {
+            "name": "include/rmd0_host.h",
+            "kind": "repository",
+            "bytes": 505,
+            "sha256": "ed7d76ac9cbeaa59874e44ce0ba834b1431b5960e9112a4cffe063c0d15413b2"
+          },
+          {
+            "name": "stddef.h",
+            "kind": "system_header",
+            "bytes": 5053,
+            "sha256": "b3e62a046ddf28d09eedebe6eb9461cb7060e47cad2c69964b222c4eea10347e"
+          },
+          {
+            "name": "__stddef_header_macro.h",
+            "kind": "system_header",
+            "bytes": 417,
+            "sha256": "4cf46e8fbb809df048eecbbd63686fa741da27afa8db4245bd1f61c1fb1611dc"
+          },
+          {
+            "name": "__stddef_ptrdiff_t.h",
+            "kind": "system_header",
+            "bytes": 717,
+            "sha256": "b4178a57f3711b7013cba747a72a2f178c29fa9364e77d75b2159754072ced43"
+          },
+          {
+            "name": "__stddef_size_t.h",
+            "kind": "system_header",
+            "bytes": 708,
+            "sha256": "d86ddc0238da09b385846ebef814ffc50a44e40cf85d4e3793f485952b7e73ad"
+          },
+          {
+            "name": "__stddef_wchar_t.h",
+            "kind": "system_header",
+            "bytes": 853,
+            "sha256": "1900d4998aef3698b06399ed686db0c21e26509b08638a25734fb97ae89b1001"
+          },
+          {
+            "name": "__stddef_null.h",
+            "kind": "system_header",
+            "bytes": 875,
+            "sha256": "b1d71b08563ab3d2c22a1e4f8ddf4d9a1111c89e9404b859a45c307e8ebc6c69"
+          },
+          {
+            "name": "__stddef_offsetof.h",
+            "kind": "system_header",
+            "bytes": 708,
+            "sha256": "e5f0f4ff8ff5fc6a1cc8b535f5065f1728eadd2bf1e1401f021f803ec7b4222f"
+          },
+          {
+            "name": "stdint.h",
+            "kind": "system_header",
+            "bytes": 31054,
+            "sha256": "655616d8fcb2c92b38c039019685c658c2346b3dd0021aed4ea057b43f621247"
+          },
+          {
+            "name": "stdint.h",
+            "kind": "system_header",
+            "bytes": 8155,
+            "sha256": "c26c51b07feadd45ca25e9c95e393b6783d580ab318a567c119828191a80bbed"
+          },
+          {
+            "name": "libc-header-start.h",
+            "kind": "system_header",
+            "bytes": 4286,
+            "sha256": "e86638082f9ce98c82e3022018fa5be175473445c824fe17bd32bf9668582368"
+          },
+          {
+            "name": "features.h",
+            "kind": "system_header",
+            "bytes": 18527,
+            "sha256": "940d486d050fc87420d8ffc008e17f31ffb04467534ad1b039ed25abc52382f9"
+          },
+          {
+            "name": "features-time64.h",
+            "kind": "system_header",
+            "bytes": 1409,
+            "sha256": "345acb98767d04277e413c4951fbb199b0500be23d43cddf17c6cd9fb319a8da"
+          },
+          {
+            "name": "wordsize.h",
+            "kind": "system_header",
+            "bytes": 442,
+            "sha256": "716d8459074e2a082d65a28192b32eddbfd7587348372395b1c283a723ae4c18"
+          },
+          {
+            "name": "timesize.h",
+            "kind": "system_header",
+            "bytes": 1109,
+            "sha256": "8b686ad5fec2c4d6f759a6594d7c216337774d059623677547b7e182cc5269ae"
+          },
+          {
+            "name": "stdc-predef.h",
+            "kind": "system_header",
+            "bytes": 2462,
+            "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+          },
+          {
+            "name": "cdefs.h",
+            "kind": "system_header",
+            "bytes": 27011,
+            "sha256": "173afb522c6877dda3be1c93742c2061cd6e748ce395d2b3ae833fb49bfbfc4f"
+          },
+          {
+            "name": "long-double.h",
+            "kind": "system_header",
+            "bytes": 970,
+            "sha256": "40367287cd437d78a05313f6ec52cb0f0a711e1b6711fdcc3699bf2bf28e810f"
+          },
+          {
+            "name": "stubs.h",
+            "kind": "system_header",
+            "bytes": 384,
+            "sha256": "ef444295a0a9e8f5c40918399a00cc91ba0bd79774110cdf6e652baa6cfadb2e"
+          },
+          {
+            "name": "stubs-64.h",
+            "kind": "system_header",
+            "bytes": 481,
+            "sha256": "0b6ab3e2ed3ba79b30fe6ba81a68fc41f57965b8d56662763633431b703c9289"
+          },
+          {
+            "name": "types.h",
+            "kind": "system_header",
+            "bytes": 8806,
+            "sha256": "371847ed3adab1c19db392034f6a22407d321b1dc5f2440563f4b0b8b6c5386b"
+          },
+          {
+            "name": "typesizes.h",
+            "kind": "system_header",
+            "bytes": 3737,
+            "sha256": "047ee5ab17a95364c4b0f14c3eb0750e84e457c408f9a65a6c225ece585e0c14"
+          },
+          {
+            "name": "time64.h",
+            "kind": "system_header",
+            "bytes": 1340,
+            "sha256": "2be9170ce3621ea6062f10edef68bbc2db09bb454ec4397534263dd37b8f1f6a"
+          },
+          {
+            "name": "wchar.h",
+            "kind": "system_header",
+            "bytes": 1906,
+            "sha256": "893fa450527ce645f17922788097d5fe331e2a53012bab4e724d8a1f63e21aa2"
+          },
+          {
+            "name": "stdint-intn.h",
+            "kind": "system_header",
+            "bytes": 1037,
+            "sha256": "94286e42e4970304da5cbef69de6695c84132ff8fbd4b6d72d29aeb7406dc5ff"
+          },
+          {
+            "name": "stdint-uintn.h",
+            "kind": "system_header",
+            "bytes": 1049,
+            "sha256": "aeee224a19434556ef4a9a4afad553736789274656ca12463122300b557ce78c"
+          },
+          {
+            "name": "stdint-least.h",
+            "kind": "system_header",
+            "bytes": 1300,
+            "sha256": "5bf66871bfc18ae6d22c91d03e392c1a4cc5969ca74c5fa31b7510703a496844"
+          }
+        ]
+      }
+    }
+  },
+  "artifacts": {
+    "ordinary-1000": {
+      "identical_seed_and_optimized_bytes": true,
+      "commands": {
+        "seed": [
+          "build/c-stage-perf/rmd-c-seed",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          ".profile-cache/c-stage-inputs/ordinary-1000-seed.rsp",
+          ".profile-cache/c-stage-inputs/ordinary-1000.rmd"
+        ],
+        "optimized": [
+          "build/c-stage-perf/rmd-c",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          ".profile-cache/c-stage-inputs/ordinary-1000-optimized.rsp",
+          ".profile-cache/c-stage-inputs/ordinary-1000.rmd"
+        ]
+      },
+      "c": {
+        "path": ".profile-cache/c-stage-inputs/ordinary-1000-optimized.c",
+        "bytes": 1489922,
+        "lines": 50017,
+        "sha256": "f327b2c3851907e6292756e59735fad7928ed03a82cfaa7d66552807fe39d8c1"
+      },
+      "rename_response": {
+        "path": ".profile-cache/c-stage-inputs/ordinary-1000-optimized.rsp",
+        "bytes": 39789,
+        "lines": 2000,
+        "sha256": "1f88ad89c7f3a609a1e19599b7d1b7f955fafb71997eb060242697b251e371d2"
+      },
+      "function_definitions": 1000,
+      "preflight_backend_wall_ns": {
+        "gcc-object": 1472730645,
+        "objcopy-rename": 3551409
+      },
+      "executable_witness": null,
+      "c_header_dependencies": [
+        {
+          "name": ".profile-cache/c-stage-inputs/ordinary-1000-optimized.c",
+          "kind": "repository",
+          "bytes": 1489922,
+          "sha256": "f327b2c3851907e6292756e59735fad7928ed03a82cfaa7d66552807fe39d8c1"
+        },
+        {
+          "name": "stdc-predef.h",
+          "kind": "system_header",
+          "bytes": 2462,
+          "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+        },
+        {
+          "name": "stdint.h",
+          "kind": "system_header",
+          "bytes": 328,
+          "sha256": "86a7914ab7d6a18465a6fb9a7b54f945cad604fdbf3ca0d10e4e0254e0037911"
+        },
+        {
+          "name": "stdint.h",
+          "kind": "system_header",
+          "bytes": 8155,
+          "sha256": "c26c51b07feadd45ca25e9c95e393b6783d580ab318a567c119828191a80bbed"
+        },
+        {
+          "name": "libc-header-start.h",
+          "kind": "system_header",
+          "bytes": 4286,
+          "sha256": "e86638082f9ce98c82e3022018fa5be175473445c824fe17bd32bf9668582368"
+        },
+        {
+          "name": "features.h",
+          "kind": "system_header",
+          "bytes": 18527,
+          "sha256": "940d486d050fc87420d8ffc008e17f31ffb04467534ad1b039ed25abc52382f9"
+        },
+        {
+          "name": "features-time64.h",
+          "kind": "system_header",
+          "bytes": 1409,
+          "sha256": "345acb98767d04277e413c4951fbb199b0500be23d43cddf17c6cd9fb319a8da"
+        },
+        {
+          "name": "wordsize.h",
+          "kind": "system_header",
+          "bytes": 442,
+          "sha256": "716d8459074e2a082d65a28192b32eddbfd7587348372395b1c283a723ae4c18"
+        },
+        {
+          "name": "timesize.h",
+          "kind": "system_header",
+          "bytes": 1109,
+          "sha256": "8b686ad5fec2c4d6f759a6594d7c216337774d059623677547b7e182cc5269ae"
+        },
+        {
+          "name": "cdefs.h",
+          "kind": "system_header",
+          "bytes": 27011,
+          "sha256": "173afb522c6877dda3be1c93742c2061cd6e748ce395d2b3ae833fb49bfbfc4f"
+        },
+        {
+          "name": "long-double.h",
+          "kind": "system_header",
+          "bytes": 970,
+          "sha256": "40367287cd437d78a05313f6ec52cb0f0a711e1b6711fdcc3699bf2bf28e810f"
+        },
+        {
+          "name": "stubs.h",
+          "kind": "system_header",
+          "bytes": 384,
+          "sha256": "ef444295a0a9e8f5c40918399a00cc91ba0bd79774110cdf6e652baa6cfadb2e"
+        },
+        {
+          "name": "stubs-64.h",
+          "kind": "system_header",
+          "bytes": 481,
+          "sha256": "0b6ab3e2ed3ba79b30fe6ba81a68fc41f57965b8d56662763633431b703c9289"
+        },
+        {
+          "name": "types.h",
+          "kind": "system_header",
+          "bytes": 8806,
+          "sha256": "371847ed3adab1c19db392034f6a22407d321b1dc5f2440563f4b0b8b6c5386b"
+        },
+        {
+          "name": "typesizes.h",
+          "kind": "system_header",
+          "bytes": 3737,
+          "sha256": "047ee5ab17a95364c4b0f14c3eb0750e84e457c408f9a65a6c225ece585e0c14"
+        },
+        {
+          "name": "time64.h",
+          "kind": "system_header",
+          "bytes": 1340,
+          "sha256": "2be9170ce3621ea6062f10edef68bbc2db09bb454ec4397534263dd37b8f1f6a"
+        },
+        {
+          "name": "wchar.h",
+          "kind": "system_header",
+          "bytes": 1906,
+          "sha256": "893fa450527ce645f17922788097d5fe331e2a53012bab4e724d8a1f63e21aa2"
+        },
+        {
+          "name": "stdint-intn.h",
+          "kind": "system_header",
+          "bytes": 1037,
+          "sha256": "94286e42e4970304da5cbef69de6695c84132ff8fbd4b6d72d29aeb7406dc5ff"
+        },
+        {
+          "name": "stdint-uintn.h",
+          "kind": "system_header",
+          "bytes": 1049,
+          "sha256": "aeee224a19434556ef4a9a4afad553736789274656ca12463122300b557ce78c"
+        },
+        {
+          "name": "stdint-least.h",
+          "kind": "system_header",
+          "bytes": 1300,
+          "sha256": "5bf66871bfc18ae6d22c91d03e392c1a4cc5969ca74c5fa31b7510703a496844"
+        },
+        {
+          "name": "stddef.h",
+          "kind": "system_header",
+          "bytes": 13735,
+          "sha256": "9efc696d6c7eb8bb1831b149c6a92f88a775809cd63e4007312b617915f81188"
+        },
+        {
+          "name": "stdbool.h",
+          "kind": "system_header",
+          "bytes": 1490,
+          "sha256": "68b898fc39d5d2a450df9b7263d984e7d2ad4c02675f4043a62e762f169e4b85"
+        },
+        {
+          "name": "limits.h",
+          "kind": "system_header",
+          "bytes": 6399,
+          "sha256": "1c6beac959e966424f81278b354d035bf354c735bb6cffa35ef2c42f6c899ff8"
+        },
+        {
+          "name": "syslimits.h",
+          "kind": "system_header",
+          "bytes": 330,
+          "sha256": "22dd0ab81baadd5a8d455b445855f341d419c7b0267beca235de00b7ec78e529"
+        },
+        {
+          "name": "limits.h",
+          "kind": "system_header",
+          "bytes": 5706,
+          "sha256": "1d445b989a1c583a9c55264776bb5c425fa03658de004275fbfdc720383bb085"
+        }
+      ]
+    },
+    "ordinary-8000": {
+      "identical_seed_and_optimized_bytes": true,
+      "commands": {
+        "seed": [
+          "build/c-stage-perf/rmd-c-seed",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          ".profile-cache/c-stage-inputs/ordinary-8000-seed.rsp",
+          ".profile-cache/c-stage-inputs/ordinary-8000.rmd"
+        ],
+        "optimized": [
+          "build/c-stage-perf/rmd-c",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          ".profile-cache/c-stage-inputs/ordinary-8000-optimized.rsp",
+          ".profile-cache/c-stage-inputs/ordinary-8000.rmd"
+        ]
+      },
+      "c": {
+        "path": ".profile-cache/c-stage-inputs/ordinary-8000-optimized.c",
+        "bytes": 12058027,
+        "lines": 400017,
+        "sha256": "981bbba1454e2877b42841f5360c04a26d11ed59c0fdf635a7938eb6e3e430f3"
+      },
+      "rename_response": {
+        "path": ".profile-cache/c-stage-inputs/ordinary-8000-optimized.rsp",
+        "bytes": 333789,
+        "lines": 16000,
+        "sha256": "4f76d0b0e896be2387b243e9e3a783c70bfd04d1cfd774e040fbdbc9f6eff27d"
+      },
+      "function_definitions": 8000,
+      "preflight_backend_wall_ns": {
+        "gcc-object": 11973880151,
+        "objcopy-rename": 9675978
+      },
+      "executable_witness": null,
+      "c_header_dependencies": [
+        {
+          "name": ".profile-cache/c-stage-inputs/ordinary-8000-optimized.c",
+          "kind": "repository",
+          "bytes": 12058027,
+          "sha256": "981bbba1454e2877b42841f5360c04a26d11ed59c0fdf635a7938eb6e3e430f3"
+        },
+        {
+          "name": "stdc-predef.h",
+          "kind": "system_header",
+          "bytes": 2462,
+          "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+        },
+        {
+          "name": "stdint.h",
+          "kind": "system_header",
+          "bytes": 328,
+          "sha256": "86a7914ab7d6a18465a6fb9a7b54f945cad604fdbf3ca0d10e4e0254e0037911"
+        },
+        {
+          "name": "stdint.h",
+          "kind": "system_header",
+          "bytes": 8155,
+          "sha256": "c26c51b07feadd45ca25e9c95e393b6783d580ab318a567c119828191a80bbed"
+        },
+        {
+          "name": "libc-header-start.h",
+          "kind": "system_header",
+          "bytes": 4286,
+          "sha256": "e86638082f9ce98c82e3022018fa5be175473445c824fe17bd32bf9668582368"
+        },
+        {
+          "name": "features.h",
+          "kind": "system_header",
+          "bytes": 18527,
+          "sha256": "940d486d050fc87420d8ffc008e17f31ffb04467534ad1b039ed25abc52382f9"
+        },
+        {
+          "name": "features-time64.h",
+          "kind": "system_header",
+          "bytes": 1409,
+          "sha256": "345acb98767d04277e413c4951fbb199b0500be23d43cddf17c6cd9fb319a8da"
+        },
+        {
+          "name": "wordsize.h",
+          "kind": "system_header",
+          "bytes": 442,
+          "sha256": "716d8459074e2a082d65a28192b32eddbfd7587348372395b1c283a723ae4c18"
+        },
+        {
+          "name": "timesize.h",
+          "kind": "system_header",
+          "bytes": 1109,
+          "sha256": "8b686ad5fec2c4d6f759a6594d7c216337774d059623677547b7e182cc5269ae"
+        },
+        {
+          "name": "cdefs.h",
+          "kind": "system_header",
+          "bytes": 27011,
+          "sha256": "173afb522c6877dda3be1c93742c2061cd6e748ce395d2b3ae833fb49bfbfc4f"
+        },
+        {
+          "name": "long-double.h",
+          "kind": "system_header",
+          "bytes": 970,
+          "sha256": "40367287cd437d78a05313f6ec52cb0f0a711e1b6711fdcc3699bf2bf28e810f"
+        },
+        {
+          "name": "stubs.h",
+          "kind": "system_header",
+          "bytes": 384,
+          "sha256": "ef444295a0a9e8f5c40918399a00cc91ba0bd79774110cdf6e652baa6cfadb2e"
+        },
+        {
+          "name": "stubs-64.h",
+          "kind": "system_header",
+          "bytes": 481,
+          "sha256": "0b6ab3e2ed3ba79b30fe6ba81a68fc41f57965b8d56662763633431b703c9289"
+        },
+        {
+          "name": "types.h",
+          "kind": "system_header",
+          "bytes": 8806,
+          "sha256": "371847ed3adab1c19db392034f6a22407d321b1dc5f2440563f4b0b8b6c5386b"
+        },
+        {
+          "name": "typesizes.h",
+          "kind": "system_header",
+          "bytes": 3737,
+          "sha256": "047ee5ab17a95364c4b0f14c3eb0750e84e457c408f9a65a6c225ece585e0c14"
+        },
+        {
+          "name": "time64.h",
+          "kind": "system_header",
+          "bytes": 1340,
+          "sha256": "2be9170ce3621ea6062f10edef68bbc2db09bb454ec4397534263dd37b8f1f6a"
+        },
+        {
+          "name": "wchar.h",
+          "kind": "system_header",
+          "bytes": 1906,
+          "sha256": "893fa450527ce645f17922788097d5fe331e2a53012bab4e724d8a1f63e21aa2"
+        },
+        {
+          "name": "stdint-intn.h",
+          "kind": "system_header",
+          "bytes": 1037,
+          "sha256": "94286e42e4970304da5cbef69de6695c84132ff8fbd4b6d72d29aeb7406dc5ff"
+        },
+        {
+          "name": "stdint-uintn.h",
+          "kind": "system_header",
+          "bytes": 1049,
+          "sha256": "aeee224a19434556ef4a9a4afad553736789274656ca12463122300b557ce78c"
+        },
+        {
+          "name": "stdint-least.h",
+          "kind": "system_header",
+          "bytes": 1300,
+          "sha256": "5bf66871bfc18ae6d22c91d03e392c1a4cc5969ca74c5fa31b7510703a496844"
+        },
+        {
+          "name": "stddef.h",
+          "kind": "system_header",
+          "bytes": 13735,
+          "sha256": "9efc696d6c7eb8bb1831b149c6a92f88a775809cd63e4007312b617915f81188"
+        },
+        {
+          "name": "stdbool.h",
+          "kind": "system_header",
+          "bytes": 1490,
+          "sha256": "68b898fc39d5d2a450df9b7263d984e7d2ad4c02675f4043a62e762f169e4b85"
+        },
+        {
+          "name": "limits.h",
+          "kind": "system_header",
+          "bytes": 6399,
+          "sha256": "1c6beac959e966424f81278b354d035bf354c735bb6cffa35ef2c42f6c899ff8"
+        },
+        {
+          "name": "syslimits.h",
+          "kind": "system_header",
+          "bytes": 330,
+          "sha256": "22dd0ab81baadd5a8d455b445855f341d419c7b0267beca235de00b7ec78e529"
+        },
+        {
+          "name": "limits.h",
+          "kind": "system_header",
+          "bytes": 5706,
+          "sha256": "1d445b989a1c583a9c55264776bb5c425fa03658de004275fbfdc720383bb085"
+        }
+      ]
+    },
+    "intrusive": {
+      "identical_seed_and_optimized_bytes": true,
+      "commands": {
+        "seed": [
+          "build/c-stage-perf/rmd-c-seed",
+          "--emit-c",
+          "--symbols",
+          ".profile-cache/c-stage-inputs/intrusive-seed.rsp",
+          "examples/intrusive.rmd"
+        ],
+        "optimized": [
+          "build/c-stage-perf/rmd-c",
+          "--emit-c",
+          "--symbols",
+          ".profile-cache/c-stage-inputs/intrusive-optimized.rsp",
+          "examples/intrusive.rmd"
+        ]
+      },
+      "c": {
+        "path": ".profile-cache/c-stage-inputs/intrusive-optimized.c",
+        "bytes": 10276,
+        "lines": 363,
+        "sha256": "806c97c1593a45fab9e9549238729c035e6d3508f16ae298f05c56714d169e4d"
+      },
+      "rename_response": {
+        "path": ".profile-cache/c-stage-inputs/intrusive-optimized.rsp",
+        "bytes": 307,
+        "lines": 16,
+        "sha256": "98432755cfb15bd0fd6113dcf72cf22d51046f9347172e8a5f6d8bf68c1d142e"
+      },
+      "function_definitions": 5,
+      "preflight_backend_wall_ns": {
+        "gcc-object": 25703578,
+        "objcopy-rename": 2243507
+      },
+      "executable_witness": "intrusive: ok",
+      "c_header_dependencies": [
+        {
+          "name": ".profile-cache/c-stage-inputs/intrusive-optimized.c",
+          "kind": "repository",
+          "bytes": 10276,
+          "sha256": "806c97c1593a45fab9e9549238729c035e6d3508f16ae298f05c56714d169e4d"
+        },
+        {
+          "name": "stdc-predef.h",
+          "kind": "system_header",
+          "bytes": 2462,
+          "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+        },
+        {
+          "name": "stdint.h",
+          "kind": "system_header",
+          "bytes": 328,
+          "sha256": "86a7914ab7d6a18465a6fb9a7b54f945cad604fdbf3ca0d10e4e0254e0037911"
+        },
+        {
+          "name": "stdint.h",
+          "kind": "system_header",
+          "bytes": 8155,
+          "sha256": "c26c51b07feadd45ca25e9c95e393b6783d580ab318a567c119828191a80bbed"
+        },
+        {
+          "name": "libc-header-start.h",
+          "kind": "system_header",
+          "bytes": 4286,
+          "sha256": "e86638082f9ce98c82e3022018fa5be175473445c824fe17bd32bf9668582368"
+        },
+        {
+          "name": "features.h",
+          "kind": "system_header",
+          "bytes": 18527,
+          "sha256": "940d486d050fc87420d8ffc008e17f31ffb04467534ad1b039ed25abc52382f9"
+        },
+        {
+          "name": "features-time64.h",
+          "kind": "system_header",
+          "bytes": 1409,
+          "sha256": "345acb98767d04277e413c4951fbb199b0500be23d43cddf17c6cd9fb319a8da"
+        },
+        {
+          "name": "wordsize.h",
+          "kind": "system_header",
+          "bytes": 442,
+          "sha256": "716d8459074e2a082d65a28192b32eddbfd7587348372395b1c283a723ae4c18"
+        },
+        {
+          "name": "timesize.h",
+          "kind": "system_header",
+          "bytes": 1109,
+          "sha256": "8b686ad5fec2c4d6f759a6594d7c216337774d059623677547b7e182cc5269ae"
+        },
+        {
+          "name": "cdefs.h",
+          "kind": "system_header",
+          "bytes": 27011,
+          "sha256": "173afb522c6877dda3be1c93742c2061cd6e748ce395d2b3ae833fb49bfbfc4f"
+        },
+        {
+          "name": "long-double.h",
+          "kind": "system_header",
+          "bytes": 970,
+          "sha256": "40367287cd437d78a05313f6ec52cb0f0a711e1b6711fdcc3699bf2bf28e810f"
+        },
+        {
+          "name": "stubs.h",
+          "kind": "system_header",
+          "bytes": 384,
+          "sha256": "ef444295a0a9e8f5c40918399a00cc91ba0bd79774110cdf6e652baa6cfadb2e"
+        },
+        {
+          "name": "stubs-64.h",
+          "kind": "system_header",
+          "bytes": 481,
+          "sha256": "0b6ab3e2ed3ba79b30fe6ba81a68fc41f57965b8d56662763633431b703c9289"
+        },
+        {
+          "name": "types.h",
+          "kind": "system_header",
+          "bytes": 8806,
+          "sha256": "371847ed3adab1c19db392034f6a22407d321b1dc5f2440563f4b0b8b6c5386b"
+        },
+        {
+          "name": "typesizes.h",
+          "kind": "system_header",
+          "bytes": 3737,
+          "sha256": "047ee5ab17a95364c4b0f14c3eb0750e84e457c408f9a65a6c225ece585e0c14"
+        },
+        {
+          "name": "time64.h",
+          "kind": "system_header",
+          "bytes": 1340,
+          "sha256": "2be9170ce3621ea6062f10edef68bbc2db09bb454ec4397534263dd37b8f1f6a"
+        },
+        {
+          "name": "wchar.h",
+          "kind": "system_header",
+          "bytes": 1906,
+          "sha256": "893fa450527ce645f17922788097d5fe331e2a53012bab4e724d8a1f63e21aa2"
+        },
+        {
+          "name": "stdint-intn.h",
+          "kind": "system_header",
+          "bytes": 1037,
+          "sha256": "94286e42e4970304da5cbef69de6695c84132ff8fbd4b6d72d29aeb7406dc5ff"
+        },
+        {
+          "name": "stdint-uintn.h",
+          "kind": "system_header",
+          "bytes": 1049,
+          "sha256": "aeee224a19434556ef4a9a4afad553736789274656ca12463122300b557ce78c"
+        },
+        {
+          "name": "stdint-least.h",
+          "kind": "system_header",
+          "bytes": 1300,
+          "sha256": "5bf66871bfc18ae6d22c91d03e392c1a4cc5969ca74c5fa31b7510703a496844"
+        },
+        {
+          "name": "stddef.h",
+          "kind": "system_header",
+          "bytes": 13735,
+          "sha256": "9efc696d6c7eb8bb1831b149c6a92f88a775809cd63e4007312b617915f81188"
+        },
+        {
+          "name": "stdbool.h",
+          "kind": "system_header",
+          "bytes": 1490,
+          "sha256": "68b898fc39d5d2a450df9b7263d984e7d2ad4c02675f4043a62e762f169e4b85"
+        },
+        {
+          "name": "limits.h",
+          "kind": "system_header",
+          "bytes": 6399,
+          "sha256": "1c6beac959e966424f81278b354d035bf354c735bb6cffa35ef2c42f6c899ff8"
+        },
+        {
+          "name": "syslimits.h",
+          "kind": "system_header",
+          "bytes": 330,
+          "sha256": "22dd0ab81baadd5a8d455b445855f341d419c7b0267beca235de00b7ec78e529"
+        },
+        {
+          "name": "limits.h",
+          "kind": "system_header",
+          "bytes": 5706,
+          "sha256": "1d445b989a1c583a9c55264776bb5c425fa03658de004275fbfdc720383bb085"
+        }
+      ]
+    }
+  },
+  "warmups": [
+    {
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18090775
+    },
+    {
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46339300
+    },
+    {
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8791762
+    },
+    {
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19116384
+    },
+    {
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19882133
+    },
+    {
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8259493
+    },
+    {
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12180366
+    },
+    {
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 12863261
+    },
+    {
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 110701655
+    },
+    {
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 236069965
+    },
+    {
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 60452257
+    },
+    {
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161726305
+    },
+    {
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 167418476
+    },
+    {
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60850604
+    },
+    {
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 102617044
+    },
+    {
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 108973101
+    },
+    {
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7785442
+    },
+    {
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20898007
+    },
+    {
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1888323
+    },
+    {
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1861903
+    },
+    {
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1832640
+    },
+    {
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1713471
+    },
+    {
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1744207
+    },
+    {
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1735254
+    }
+  ],
+  "samples": [
+    {
+      "round": 0,
+      "sequence": 0,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20362814
+    },
+    {
+      "round": 0,
+      "sequence": 1,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1799550
+    },
+    {
+      "round": 0,
+      "sequence": 2,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7060004
+    },
+    {
+      "round": 0,
+      "sequence": 3,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1842795
+    },
+    {
+      "round": 0,
+      "sequence": 4,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1753190
+    },
+    {
+      "round": 0,
+      "sequence": 5,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1886311
+    },
+    {
+      "round": 0,
+      "sequence": 6,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1691548
+    },
+    {
+      "round": 0,
+      "sequence": 7,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1658949
+    },
+    {
+      "round": 0,
+      "sequence": 8,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 106876845
+    },
+    {
+      "round": 0,
+      "sequence": 9,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 59884375
+    },
+    {
+      "round": 0,
+      "sequence": 10,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 166944084
+    },
+    {
+      "round": 0,
+      "sequence": 11,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 232903965
+    },
+    {
+      "round": 0,
+      "sequence": 12,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 111224779
+    },
+    {
+      "round": 0,
+      "sequence": 13,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60031836
+    },
+    {
+      "round": 0,
+      "sequence": 14,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 102302762
+    },
+    {
+      "round": 0,
+      "sequence": 15,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161314828
+    },
+    {
+      "round": 0,
+      "sequence": 16,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 19717655
+    },
+    {
+      "round": 0,
+      "sequence": 17,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12718313
+    },
+    {
+      "round": 0,
+      "sequence": 18,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19771437
+    },
+    {
+      "round": 0,
+      "sequence": 19,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8089718
+    },
+    {
+      "round": 0,
+      "sequence": 20,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8049889
+    },
+    {
+      "round": 0,
+      "sequence": 21,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46517427
+    },
+    {
+      "round": 0,
+      "sequence": 22,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19793059
+    },
+    {
+      "round": 0,
+      "sequence": 23,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 12817592
+    },
+    {
+      "round": 1,
+      "sequence": 24,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8304822
+    },
+    {
+      "round": 1,
+      "sequence": 25,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 12682099
+    },
+    {
+      "round": 1,
+      "sequence": 26,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12174788
+    },
+    {
+      "round": 1,
+      "sequence": 27,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19719749
+    },
+    {
+      "round": 1,
+      "sequence": 28,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46452932
+    },
+    {
+      "round": 1,
+      "sequence": 29,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 19035482
+    },
+    {
+      "round": 1,
+      "sequence": 30,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8401667
+    },
+    {
+      "round": 1,
+      "sequence": 31,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19124806
+    },
+    {
+      "round": 1,
+      "sequence": 32,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1682184
+    },
+    {
+      "round": 1,
+      "sequence": 33,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 6889717
+    },
+    {
+      "round": 1,
+      "sequence": 34,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1886040
+    },
+    {
+      "round": 1,
+      "sequence": 35,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1688784
+    },
+    {
+      "round": 1,
+      "sequence": 36,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1702244
+    },
+    {
+      "round": 1,
+      "sequence": 37,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20855093
+    },
+    {
+      "round": 1,
+      "sequence": 38,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1962635
+    },
+    {
+      "round": 1,
+      "sequence": 39,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1784377
+    },
+    {
+      "round": 1,
+      "sequence": 40,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 60442111
+    },
+    {
+      "round": 1,
+      "sequence": 41,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 236310717
+    },
+    {
+      "round": 1,
+      "sequence": 42,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60679317
+    },
+    {
+      "round": 1,
+      "sequence": 43,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 114787124
+    },
+    {
+      "round": 1,
+      "sequence": 44,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 103473859
+    },
+    {
+      "round": 1,
+      "sequence": 45,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 167249423
+    },
+    {
+      "round": 1,
+      "sequence": 46,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161806305
+    },
+    {
+      "round": 1,
+      "sequence": 47,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 107088623
+    },
+    {
+      "round": 2,
+      "sequence": 48,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 2087111
+    },
+    {
+      "round": 2,
+      "sequence": 49,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1763527
+    },
+    {
+      "round": 2,
+      "sequence": 50,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7103649
+    },
+    {
+      "round": 2,
+      "sequence": 51,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1696496
+    },
+    {
+      "round": 2,
+      "sequence": 52,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1855203
+    },
+    {
+      "round": 2,
+      "sequence": 53,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21431297
+    },
+    {
+      "round": 2,
+      "sequence": 54,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1898559
+    },
+    {
+      "round": 2,
+      "sequence": 55,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1782174
+    },
+    {
+      "round": 2,
+      "sequence": 56,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12928779
+    },
+    {
+      "round": 2,
+      "sequence": 57,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8354226
+    },
+    {
+      "round": 2,
+      "sequence": 58,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19039539
+    },
+    {
+      "round": 2,
+      "sequence": 59,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 45938970
+    },
+    {
+      "round": 2,
+      "sequence": 60,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 20456825
+    },
+    {
+      "round": 2,
+      "sequence": 61,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8373905
+    },
+    {
+      "round": 2,
+      "sequence": 62,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18285117
+    },
+    {
+      "round": 2,
+      "sequence": 63,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 12832855
+    },
+    {
+      "round": 2,
+      "sequence": 64,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 101090313
+    },
+    {
+      "round": 2,
+      "sequence": 65,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 167872077
+    },
+    {
+      "round": 2,
+      "sequence": 66,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 110705070
+    },
+    {
+      "round": 2,
+      "sequence": 67,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 233456464
+    },
+    {
+      "round": 2,
+      "sequence": 68,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 106391477
+    },
+    {
+      "round": 2,
+      "sequence": 69,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60396103
+    },
+    {
+      "round": 2,
+      "sequence": 70,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161956371
+    },
+    {
+      "round": 2,
+      "sequence": 71,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 60694821
+    },
+    {
+      "round": 3,
+      "sequence": 72,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60391285
+    },
+    {
+      "round": 3,
+      "sequence": 73,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 103094310
+    },
+    {
+      "round": 3,
+      "sequence": 74,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 108595724
+    },
+    {
+      "round": 3,
+      "sequence": 75,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 233160560
+    },
+    {
+      "round": 3,
+      "sequence": 76,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 60289543
+    },
+    {
+      "round": 3,
+      "sequence": 77,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 167239287
+    },
+    {
+      "round": 3,
+      "sequence": 78,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 112749096
+    },
+    {
+      "round": 3,
+      "sequence": 79,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161793917
+    },
+    {
+      "round": 3,
+      "sequence": 80,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 2048954
+    },
+    {
+      "round": 3,
+      "sequence": 81,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1845379
+    },
+    {
+      "round": 3,
+      "sequence": 82,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1871849
+    },
+    {
+      "round": 3,
+      "sequence": 83,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21829875
+    },
+    {
+      "round": 3,
+      "sequence": 84,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7269218
+    },
+    {
+      "round": 3,
+      "sequence": 85,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1894943
+    },
+    {
+      "round": 3,
+      "sequence": 86,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1717477
+    },
+    {
+      "round": 3,
+      "sequence": 87,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1792810
+    },
+    {
+      "round": 3,
+      "sequence": 88,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46389445
+    },
+    {
+      "round": 3,
+      "sequence": 89,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18995672
+    },
+    {
+      "round": 3,
+      "sequence": 90,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12673025
+    },
+    {
+      "round": 3,
+      "sequence": 91,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8150269
+    },
+    {
+      "round": 3,
+      "sequence": 92,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19175212
+    },
+    {
+      "round": 3,
+      "sequence": 93,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8214526
+    },
+    {
+      "round": 3,
+      "sequence": 94,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19793960
+    },
+    {
+      "round": 3,
+      "sequence": 95,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 12836200
+    },
+    {
+      "round": 4,
+      "sequence": 96,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1746079
+    },
+    {
+      "round": 4,
+      "sequence": 97,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1733141
+    },
+    {
+      "round": 4,
+      "sequence": 98,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1704167
+    },
+    {
+      "round": 4,
+      "sequence": 99,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1839620
+    },
+    {
+      "round": 4,
+      "sequence": 100,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20871647
+    },
+    {
+      "round": 4,
+      "sequence": 101,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 2043476
+    },
+    {
+      "round": 4,
+      "sequence": 102,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7091060
+    },
+    {
+      "round": 4,
+      "sequence": 103,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1751878
+    },
+    {
+      "round": 4,
+      "sequence": 104,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 60465317
+    },
+    {
+      "round": 4,
+      "sequence": 105,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 108956686
+    },
+    {
+      "round": 4,
+      "sequence": 106,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 167004796
+    },
+    {
+      "round": 4,
+      "sequence": 107,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60192417
+    },
+    {
+      "round": 4,
+      "sequence": 108,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 114447245
+    },
+    {
+      "round": 4,
+      "sequence": 109,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 236523285
+    },
+    {
+      "round": 4,
+      "sequence": 110,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161459915
+    },
+    {
+      "round": 4,
+      "sequence": 111,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 102073267
+    },
+    {
+      "round": 4,
+      "sequence": 112,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 20875453
+    },
+    {
+      "round": 4,
+      "sequence": 113,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18618817
+    },
+    {
+      "round": 4,
+      "sequence": 114,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 12970752
+    },
+    {
+      "round": 4,
+      "sequence": 115,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8195518
+    },
+    {
+      "round": 4,
+      "sequence": 116,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8035297
+    },
+    {
+      "round": 4,
+      "sequence": 117,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12260857
+    },
+    {
+      "round": 4,
+      "sequence": 118,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46108304
+    },
+    {
+      "round": 4,
+      "sequence": 119,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 20886439
+    },
+    {
+      "round": 5,
+      "sequence": 120,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 102907309
+    },
+    {
+      "round": 5,
+      "sequence": 121,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 60803493
+    },
+    {
+      "round": 5,
+      "sequence": 122,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 59543383
+    },
+    {
+      "round": 5,
+      "sequence": 123,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 109026221
+    },
+    {
+      "round": 5,
+      "sequence": 124,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 162233285
+    },
+    {
+      "round": 5,
+      "sequence": 125,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 112254414
+    },
+    {
+      "round": 5,
+      "sequence": 126,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 235271257
+    },
+    {
+      "round": 5,
+      "sequence": 127,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 165937113
+    },
+    {
+      "round": 5,
+      "sequence": 128,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 19080990
+    },
+    {
+      "round": 5,
+      "sequence": 129,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19314450
+    },
+    {
+      "round": 5,
+      "sequence": 130,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 12943061
+    },
+    {
+      "round": 5,
+      "sequence": 131,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 45963226
+    },
+    {
+      "round": 5,
+      "sequence": 132,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 20890996
+    },
+    {
+      "round": 5,
+      "sequence": 133,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12666115
+    },
+    {
+      "round": 5,
+      "sequence": 134,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8305733
+    },
+    {
+      "round": 5,
+      "sequence": 135,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8371251
+    },
+    {
+      "round": 5,
+      "sequence": 136,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1820892
+    },
+    {
+      "round": 5,
+      "sequence": 137,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1858048
+    },
+    {
+      "round": 5,
+      "sequence": 138,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1720883
+    },
+    {
+      "round": 5,
+      "sequence": 139,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20453279
+    },
+    {
+      "round": 5,
+      "sequence": 140,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 2040332
+    },
+    {
+      "round": 5,
+      "sequence": 141,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7299993
+    },
+    {
+      "round": 5,
+      "sequence": 142,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1704007
+    },
+    {
+      "round": 5,
+      "sequence": 143,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1771888
+    },
+    {
+      "round": 6,
+      "sequence": 144,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13743762
+    },
+    {
+      "round": 6,
+      "sequence": 145,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19683985
+    },
+    {
+      "round": 6,
+      "sequence": 146,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8220314
+    },
+    {
+      "round": 6,
+      "sequence": 147,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12221618
+    },
+    {
+      "round": 6,
+      "sequence": 148,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19905086
+    },
+    {
+      "round": 6,
+      "sequence": 149,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46379511
+    },
+    {
+      "round": 6,
+      "sequence": 150,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8870099
+    },
+    {
+      "round": 6,
+      "sequence": 151,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18543003
+    },
+    {
+      "round": 6,
+      "sequence": 152,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 59758556
+    },
+    {
+      "round": 6,
+      "sequence": 153,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 236688684
+    },
+    {
+      "round": 6,
+      "sequence": 154,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 106939449
+    },
+    {
+      "round": 6,
+      "sequence": 155,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 110818479
+    },
+    {
+      "round": 6,
+      "sequence": 156,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161090511
+    },
+    {
+      "round": 6,
+      "sequence": 157,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 167012917
+    },
+    {
+      "round": 6,
+      "sequence": 158,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 102109812
+    },
+    {
+      "round": 6,
+      "sequence": 159,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 60766428
+    },
+    {
+      "round": 6,
+      "sequence": 160,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 2168143
+    },
+    {
+      "round": 6,
+      "sequence": 161,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 22380131
+    },
+    {
+      "round": 6,
+      "sequence": 162,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7526934
+    },
+    {
+      "round": 6,
+      "sequence": 163,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1799550
+    },
+    {
+      "round": 6,
+      "sequence": 164,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1795294
+    },
+    {
+      "round": 6,
+      "sequence": 165,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1814012
+    },
+    {
+      "round": 6,
+      "sequence": 166,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1793922
+    },
+    {
+      "round": 6,
+      "sequence": 167,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 2085168
+    },
+    {
+      "round": 7,
+      "sequence": 168,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 165337484
+    },
+    {
+      "round": 7,
+      "sequence": 169,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 101252947
+    },
+    {
+      "round": 7,
+      "sequence": 170,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161630431
+    },
+    {
+      "round": 7,
+      "sequence": 171,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 233303725
+    },
+    {
+      "round": 7,
+      "sequence": 172,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 59864465
+    },
+    {
+      "round": 7,
+      "sequence": 173,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 108477507
+    },
+    {
+      "round": 7,
+      "sequence": 174,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 110608755
+    },
+    {
+      "round": 7,
+      "sequence": 175,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60220359
+    },
+    {
+      "round": 7,
+      "sequence": 176,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 9354666
+    },
+    {
+      "round": 7,
+      "sequence": 177,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 19159258
+    },
+    {
+      "round": 7,
+      "sequence": 178,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13119035
+    },
+    {
+      "round": 7,
+      "sequence": 179,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8252823
+    },
+    {
+      "round": 7,
+      "sequence": 180,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46003767
+    },
+    {
+      "round": 7,
+      "sequence": 181,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19663925
+    },
+    {
+      "round": 7,
+      "sequence": 182,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 21463515
+    },
+    {
+      "round": 7,
+      "sequence": 183,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 13582029
+    },
+    {
+      "round": 7,
+      "sequence": 184,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1910146
+    },
+    {
+      "round": 7,
+      "sequence": 185,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 2004447
+    },
+    {
+      "round": 7,
+      "sequence": 186,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7649188
+    },
+    {
+      "round": 7,
+      "sequence": 187,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 22340681
+    },
+    {
+      "round": 7,
+      "sequence": 188,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 2356005
+    },
+    {
+      "round": 7,
+      "sequence": 189,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1919450
+    },
+    {
+      "round": 7,
+      "sequence": 190,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1807012
+    },
+    {
+      "round": 7,
+      "sequence": 191,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1751648
+    },
+    {
+      "round": 8,
+      "sequence": 192,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 172844397
+    },
+    {
+      "round": 8,
+      "sequence": 193,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 117110290
+    },
+    {
+      "round": 8,
+      "sequence": 194,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 61251736
+    },
+    {
+      "round": 8,
+      "sequence": 195,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 108943467
+    },
+    {
+      "round": 8,
+      "sequence": 196,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 63451948
+    },
+    {
+      "round": 8,
+      "sequence": 197,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 112303648
+    },
+    {
+      "round": 8,
+      "sequence": 198,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 173000361
+    },
+    {
+      "round": 8,
+      "sequence": 199,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 245384702
+    },
+    {
+      "round": 8,
+      "sequence": 200,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 49741105
+    },
+    {
+      "round": 8,
+      "sequence": 201,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8944130
+    },
+    {
+      "round": 8,
+      "sequence": 202,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13769030
+    },
+    {
+      "round": 8,
+      "sequence": 203,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 13038213
+    },
+    {
+      "round": 8,
+      "sequence": 204,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 21795333
+    },
+    {
+      "round": 8,
+      "sequence": 205,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 21919129
+    },
+    {
+      "round": 8,
+      "sequence": 206,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18525567
+    },
+    {
+      "round": 8,
+      "sequence": 207,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8776629
+    },
+    {
+      "round": 8,
+      "sequence": 208,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1955665
+    },
+    {
+      "round": 8,
+      "sequence": 209,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21662404
+    },
+    {
+      "round": 8,
+      "sequence": 210,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7385262
+    },
+    {
+      "round": 8,
+      "sequence": 211,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1922865
+    },
+    {
+      "round": 8,
+      "sequence": 212,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1763115
+    },
+    {
+      "round": 8,
+      "sequence": 213,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1799250
+    },
+    {
+      "round": 8,
+      "sequence": 214,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1717237
+    },
+    {
+      "round": 8,
+      "sequence": 215,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1738829
+    },
+    {
+      "round": 9,
+      "sequence": 216,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1760752
+    },
+    {
+      "round": 9,
+      "sequence": 217,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1662665
+    },
+    {
+      "round": 9,
+      "sequence": 218,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1832599
+    },
+    {
+      "round": 9,
+      "sequence": 219,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21931758
+    },
+    {
+      "round": 9,
+      "sequence": 220,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7348205
+    },
+    {
+      "round": 9,
+      "sequence": 221,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1735173
+    },
+    {
+      "round": 9,
+      "sequence": 222,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1866931
+    },
+    {
+      "round": 9,
+      "sequence": 223,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1746010
+    },
+    {
+      "round": 9,
+      "sequence": 224,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 63874212
+    },
+    {
+      "round": 9,
+      "sequence": 225,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 111557017
+    },
+    {
+      "round": 9,
+      "sequence": 226,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 116803219
+    },
+    {
+      "round": 9,
+      "sequence": 227,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 247490622
+    },
+    {
+      "round": 9,
+      "sequence": 228,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 166982511
+    },
+    {
+      "round": 9,
+      "sequence": 229,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 62474040
+    },
+    {
+      "round": 9,
+      "sequence": 230,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 107838528
+    },
+    {
+      "round": 9,
+      "sequence": 231,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 173112370
+    },
+    {
+      "round": 9,
+      "sequence": 232,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 9558442
+    },
+    {
+      "round": 9,
+      "sequence": 233,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19395652
+    },
+    {
+      "round": 9,
+      "sequence": 234,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13868920
+    },
+    {
+      "round": 9,
+      "sequence": 235,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 13265254
+    },
+    {
+      "round": 9,
+      "sequence": 236,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 48031039
+    },
+    {
+      "round": 9,
+      "sequence": 237,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 20827050
+    },
+    {
+      "round": 9,
+      "sequence": 238,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 19826499
+    },
+    {
+      "round": 9,
+      "sequence": 239,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8808076
+    },
+    {
+      "round": 10,
+      "sequence": 240,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 61991897
+    },
+    {
+      "round": 10,
+      "sequence": 241,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 119981078
+    },
+    {
+      "round": 10,
+      "sequence": 242,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 106280190
+    },
+    {
+      "round": 10,
+      "sequence": 243,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 62381752
+    },
+    {
+      "round": 10,
+      "sequence": 244,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 250878596
+    },
+    {
+      "round": 10,
+      "sequence": 245,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 173717428
+    },
+    {
+      "round": 10,
+      "sequence": 246,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 165290272
+    },
+    {
+      "round": 10,
+      "sequence": 247,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 110759080
+    },
+    {
+      "round": 10,
+      "sequence": 248,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1981112
+    },
+    {
+      "round": 10,
+      "sequence": 249,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1752600
+    },
+    {
+      "round": 10,
+      "sequence": 250,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21581302
+    },
+    {
+      "round": 10,
+      "sequence": 251,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1884267
+    },
+    {
+      "round": 10,
+      "sequence": 252,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1747151
+    },
+    {
+      "round": 10,
+      "sequence": 253,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7374335
+    },
+    {
+      "round": 10,
+      "sequence": 254,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1790417
+    },
+    {
+      "round": 10,
+      "sequence": 255,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1858708
+    },
+    {
+      "round": 10,
+      "sequence": 256,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8950340
+    },
+    {
+      "round": 10,
+      "sequence": 257,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19537565
+    },
+    {
+      "round": 10,
+      "sequence": 258,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12897612
+    },
+    {
+      "round": 10,
+      "sequence": 259,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 48809167
+    },
+    {
+      "round": 10,
+      "sequence": 260,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 14454178
+    },
+    {
+      "round": 10,
+      "sequence": 261,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 19532178
+    },
+    {
+      "round": 10,
+      "sequence": 262,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 21894282
+    },
+    {
+      "round": 10,
+      "sequence": 263,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8962338
+    },
+    {
+      "round": 11,
+      "sequence": 264,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18866158
+    },
+    {
+      "round": 11,
+      "sequence": 265,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 20862303
+    },
+    {
+      "round": 11,
+      "sequence": 266,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 48081144
+    },
+    {
+      "round": 11,
+      "sequence": 267,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 14380527
+    },
+    {
+      "round": 11,
+      "sequence": 268,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8609468
+    },
+    {
+      "round": 11,
+      "sequence": 269,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8139903
+    },
+    {
+      "round": 11,
+      "sequence": 270,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 14037002
+    },
+    {
+      "round": 11,
+      "sequence": 271,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 40570845
+    },
+    {
+      "round": 11,
+      "sequence": 272,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1875995
+    },
+    {
+      "round": 11,
+      "sequence": 273,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1809935
+    },
+    {
+      "round": 11,
+      "sequence": 274,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1714323
+    },
+    {
+      "round": 11,
+      "sequence": 275,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1848493
+    },
+    {
+      "round": 11,
+      "sequence": 276,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1714142
+    },
+    {
+      "round": 11,
+      "sequence": 277,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1823656
+    },
+    {
+      "round": 11,
+      "sequence": 278,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7347054
+    },
+    {
+      "round": 11,
+      "sequence": 279,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21739880
+    },
+    {
+      "round": 11,
+      "sequence": 280,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 171859851
+    },
+    {
+      "round": 11,
+      "sequence": 281,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 111808726
+    },
+    {
+      "round": 11,
+      "sequence": 282,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 166092367
+    },
+    {
+      "round": 11,
+      "sequence": 283,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 62886579
+    },
+    {
+      "round": 11,
+      "sequence": 284,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 116769499
+    },
+    {
+      "round": 11,
+      "sequence": 285,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 243054405
+    },
+    {
+      "round": 11,
+      "sequence": 286,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 62225607
+    },
+    {
+      "round": 11,
+      "sequence": 287,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 105657195
+    },
+    {
+      "round": 12,
+      "sequence": 288,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1889645
+    },
+    {
+      "round": 12,
+      "sequence": 289,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1724027
+    },
+    {
+      "round": 12,
+      "sequence": 290,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1732569
+    },
+    {
+      "round": 12,
+      "sequence": 291,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1849856
+    },
+    {
+      "round": 12,
+      "sequence": 292,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1828824
+    },
+    {
+      "round": 12,
+      "sequence": 293,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1870697
+    },
+    {
+      "round": 12,
+      "sequence": 294,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7082297
+    },
+    {
+      "round": 12,
+      "sequence": 295,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21160921
+    },
+    {
+      "round": 12,
+      "sequence": 296,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 168183174
+    },
+    {
+      "round": 12,
+      "sequence": 297,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 62035793
+    },
+    {
+      "round": 12,
+      "sequence": 298,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 240250628
+    },
+    {
+      "round": 12,
+      "sequence": 299,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 112891440
+    },
+    {
+      "round": 12,
+      "sequence": 300,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 106103354
+    },
+    {
+      "round": 12,
+      "sequence": 301,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 115709899
+    },
+    {
+      "round": 12,
+      "sequence": 302,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 172603196
+    },
+    {
+      "round": 12,
+      "sequence": 303,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 63394481
+    },
+    {
+      "round": 12,
+      "sequence": 304,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 21048793
+    },
+    {
+      "round": 12,
+      "sequence": 305,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19863244
+    },
+    {
+      "round": 12,
+      "sequence": 306,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 49754305
+    },
+    {
+      "round": 12,
+      "sequence": 307,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8866705
+    },
+    {
+      "round": 12,
+      "sequence": 308,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8340645
+    },
+    {
+      "round": 12,
+      "sequence": 309,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12875138
+    },
+    {
+      "round": 12,
+      "sequence": 310,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18739538
+    },
+    {
+      "round": 12,
+      "sequence": 311,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13655470
+    },
+    {
+      "round": 13,
+      "sequence": 312,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21877206
+    },
+    {
+      "round": 13,
+      "sequence": 313,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1895774
+    },
+    {
+      "round": 13,
+      "sequence": 314,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1852590
+    },
+    {
+      "round": 13,
+      "sequence": 315,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1796145
+    },
+    {
+      "round": 13,
+      "sequence": 316,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1725079
+    },
+    {
+      "round": 13,
+      "sequence": 317,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1718238
+    },
+    {
+      "round": 13,
+      "sequence": 318,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7378571
+    },
+    {
+      "round": 13,
+      "sequence": 319,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1753812
+    },
+    {
+      "round": 13,
+      "sequence": 320,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 113324720
+    },
+    {
+      "round": 13,
+      "sequence": 321,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 106162874
+    },
+    {
+      "round": 13,
+      "sequence": 322,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 64157577
+    },
+    {
+      "round": 13,
+      "sequence": 323,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 64225969
+    },
+    {
+      "round": 13,
+      "sequence": 324,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 167221951
+    },
+    {
+      "round": 13,
+      "sequence": 325,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 116997170
+    },
+    {
+      "round": 13,
+      "sequence": 326,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 242092833
+    },
+    {
+      "round": 13,
+      "sequence": 327,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 172940231
+    },
+    {
+      "round": 13,
+      "sequence": 328,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 9201787
+    },
+    {
+      "round": 13,
+      "sequence": 329,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 20601512
+    },
+    {
+      "round": 13,
+      "sequence": 330,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 20370926
+    },
+    {
+      "round": 13,
+      "sequence": 331,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 14000227
+    },
+    {
+      "round": 13,
+      "sequence": 332,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 14141289
+    },
+    {
+      "round": 13,
+      "sequence": 333,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 19377996
+    },
+    {
+      "round": 13,
+      "sequence": 334,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 48008826
+    },
+    {
+      "round": 13,
+      "sequence": 335,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 9095087
+    },
+    {
+      "round": 14,
+      "sequence": 336,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 21628062
+    },
+    {
+      "round": 14,
+      "sequence": 337,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 47798901
+    },
+    {
+      "round": 14,
+      "sequence": 338,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 13193356
+    },
+    {
+      "round": 14,
+      "sequence": 339,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 14544774
+    },
+    {
+      "round": 14,
+      "sequence": 340,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 21212278
+    },
+    {
+      "round": 14,
+      "sequence": 341,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8973244
+    },
+    {
+      "round": 14,
+      "sequence": 342,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8696970
+    },
+    {
+      "round": 14,
+      "sequence": 343,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 19827321
+    },
+    {
+      "round": 14,
+      "sequence": 344,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 61914180
+    },
+    {
+      "round": 14,
+      "sequence": 345,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 114801777
+    },
+    {
+      "round": 14,
+      "sequence": 346,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 244862528
+    },
+    {
+      "round": 14,
+      "sequence": 347,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 112395005
+    },
+    {
+      "round": 14,
+      "sequence": 348,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 104682703
+    },
+    {
+      "round": 14,
+      "sequence": 349,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 167071325
+    },
+    {
+      "round": 14,
+      "sequence": 350,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 62652558
+    },
+    {
+      "round": 14,
+      "sequence": 351,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 168022272
+    },
+    {
+      "round": 14,
+      "sequence": 352,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21121712
+    },
+    {
+      "round": 14,
+      "sequence": 353,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7271010
+    },
+    {
+      "round": 14,
+      "sequence": 354,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1869585
+    },
+    {
+      "round": 14,
+      "sequence": 355,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1823025
+    },
+    {
+      "round": 14,
+      "sequence": 356,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1780671
+    },
+    {
+      "round": 14,
+      "sequence": 357,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1812130
+    },
+    {
+      "round": 14,
+      "sequence": 358,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1826751
+    },
+    {
+      "round": 14,
+      "sequence": 359,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1689165
+    },
+    {
+      "round": 15,
+      "sequence": 360,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1721664
+    },
+    {
+      "round": 15,
+      "sequence": 361,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20422042
+    },
+    {
+      "round": 15,
+      "sequence": 362,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 2017567
+    },
+    {
+      "round": 15,
+      "sequence": 363,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1734422
+    },
+    {
+      "round": 15,
+      "sequence": 364,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1798919
+    },
+    {
+      "round": 15,
+      "sequence": 365,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7183769
+    },
+    {
+      "round": 15,
+      "sequence": 366,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1812981
+    },
+    {
+      "round": 15,
+      "sequence": 367,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1728023
+    },
+    {
+      "round": 15,
+      "sequence": 368,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 107496705
+    },
+    {
+      "round": 15,
+      "sequence": 369,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 165432105
+    },
+    {
+      "round": 15,
+      "sequence": 370,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 103297715
+    },
+    {
+      "round": 15,
+      "sequence": 371,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161934207
+    },
+    {
+      "round": 15,
+      "sequence": 372,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 111901455
+    },
+    {
+      "round": 15,
+      "sequence": 373,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 60225286
+    },
+    {
+      "round": 15,
+      "sequence": 374,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 239335496
+    },
+    {
+      "round": 15,
+      "sequence": 375,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60196153
+    },
+    {
+      "round": 15,
+      "sequence": 376,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 9931312
+    },
+    {
+      "round": 15,
+      "sequence": 377,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12965023
+    },
+    {
+      "round": 15,
+      "sequence": 378,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8365773
+    },
+    {
+      "round": 15,
+      "sequence": 379,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46311278
+    },
+    {
+      "round": 15,
+      "sequence": 380,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19871927
+    },
+    {
+      "round": 15,
+      "sequence": 381,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13074929
+    },
+    {
+      "round": 15,
+      "sequence": 382,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19717576
+    },
+    {
+      "round": 15,
+      "sequence": 383,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18621170
+    },
+    {
+      "round": 16,
+      "sequence": 384,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 59647909
+    },
+    {
+      "round": 16,
+      "sequence": 385,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 103866849
+    },
+    {
+      "round": 16,
+      "sequence": 386,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 167904325
+    },
+    {
+      "round": 16,
+      "sequence": 387,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 60662361
+    },
+    {
+      "round": 16,
+      "sequence": 388,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 108867913
+    },
+    {
+      "round": 16,
+      "sequence": 389,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 162336711
+    },
+    {
+      "round": 16,
+      "sequence": 390,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 110989076
+    },
+    {
+      "round": 16,
+      "sequence": 391,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 234639148
+    },
+    {
+      "round": 16,
+      "sequence": 392,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1949575
+    },
+    {
+      "round": 16,
+      "sequence": 393,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 2067302
+    },
+    {
+      "round": 16,
+      "sequence": 394,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1815053
+    },
+    {
+      "round": 16,
+      "sequence": 395,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1847673
+    },
+    {
+      "round": 16,
+      "sequence": 396,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20692338
+    },
+    {
+      "round": 16,
+      "sequence": 397,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1884768
+    },
+    {
+      "round": 16,
+      "sequence": 398,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7365312
+    },
+    {
+      "round": 16,
+      "sequence": 399,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1759059
+    },
+    {
+      "round": 16,
+      "sequence": 400,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13529110
+    },
+    {
+      "round": 16,
+      "sequence": 401,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8328347
+    },
+    {
+      "round": 16,
+      "sequence": 402,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46007483
+    },
+    {
+      "round": 16,
+      "sequence": 403,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18936334
+    },
+    {
+      "round": 16,
+      "sequence": 404,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8853624
+    },
+    {
+      "round": 16,
+      "sequence": 405,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19766239
+    },
+    {
+      "round": 16,
+      "sequence": 406,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19765006
+    },
+    {
+      "round": 16,
+      "sequence": 407,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12172835
+    },
+    {
+      "round": 17,
+      "sequence": 408,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12334538
+    },
+    {
+      "round": 17,
+      "sequence": 409,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8225833
+    },
+    {
+      "round": 17,
+      "sequence": 410,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19725057
+    },
+    {
+      "round": 17,
+      "sequence": 411,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46521634
+    },
+    {
+      "round": 17,
+      "sequence": 412,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18830935
+    },
+    {
+      "round": 17,
+      "sequence": 413,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13310421
+    },
+    {
+      "round": 17,
+      "sequence": 414,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19227661
+    },
+    {
+      "round": 17,
+      "sequence": 415,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8411401
+    },
+    {
+      "round": 17,
+      "sequence": 416,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1786440
+    },
+    {
+      "round": 17,
+      "sequence": 417,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7098331
+    },
+    {
+      "round": 17,
+      "sequence": 418,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1775925
+    },
+    {
+      "round": 17,
+      "sequence": 419,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1701293
+    },
+    {
+      "round": 17,
+      "sequence": 420,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1778098
+    },
+    {
+      "round": 17,
+      "sequence": 421,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20748853
+    },
+    {
+      "round": 17,
+      "sequence": 422,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1807682
+    },
+    {
+      "round": 17,
+      "sequence": 423,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1862295
+    },
+    {
+      "round": 17,
+      "sequence": 424,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 102560559
+    },
+    {
+      "round": 17,
+      "sequence": 425,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 234189243
+    },
+    {
+      "round": 17,
+      "sequence": 426,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 106537536
+    },
+    {
+      "round": 17,
+      "sequence": 427,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 110714454
+    },
+    {
+      "round": 17,
+      "sequence": 428,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 167324455
+    },
+    {
+      "round": 17,
+      "sequence": 429,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161998583
+    },
+    {
+      "round": 17,
+      "sequence": 430,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 59547720
+    },
+    {
+      "round": 17,
+      "sequence": 431,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 59582011
+    },
+    {
+      "round": 18,
+      "sequence": 432,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 21605608
+    },
+    {
+      "round": 18,
+      "sequence": 433,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12849710
+    },
+    {
+      "round": 18,
+      "sequence": 434,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18414260
+    },
+    {
+      "round": 18,
+      "sequence": 435,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8137460
+    },
+    {
+      "round": 18,
+      "sequence": 436,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19311196
+    },
+    {
+      "round": 18,
+      "sequence": 437,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46015435
+    },
+    {
+      "round": 18,
+      "sequence": 438,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13392736
+    },
+    {
+      "round": 18,
+      "sequence": 439,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8264180
+    },
+    {
+      "round": 18,
+      "sequence": 440,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 110308554
+    },
+    {
+      "round": 18,
+      "sequence": 441,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 167484185
+    },
+    {
+      "round": 18,
+      "sequence": 442,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161466956
+    },
+    {
+      "round": 18,
+      "sequence": 443,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 233127590
+    },
+    {
+      "round": 18,
+      "sequence": 444,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60778336
+    },
+    {
+      "round": 18,
+      "sequence": 445,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 108170036
+    },
+    {
+      "round": 18,
+      "sequence": 446,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 102774941
+    },
+    {
+      "round": 18,
+      "sequence": 447,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 61324927
+    },
+    {
+      "round": 18,
+      "sequence": 448,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1982494
+    },
+    {
+      "round": 18,
+      "sequence": 449,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1773141
+    },
+    {
+      "round": 18,
+      "sequence": 450,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21941352
+    },
+    {
+      "round": 18,
+      "sequence": 451,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1907512
+    },
+    {
+      "round": 18,
+      "sequence": 452,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1746390
+    },
+    {
+      "round": 18,
+      "sequence": 453,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 8467295
+    },
+    {
+      "round": 18,
+      "sequence": 454,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1821142
+    },
+    {
+      "round": 18,
+      "sequence": 455,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1944838
+    },
+    {
+      "round": 19,
+      "sequence": 456,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8893986
+    },
+    {
+      "round": 19,
+      "sequence": 457,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 48293743
+    },
+    {
+      "round": 19,
+      "sequence": 458,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13559015
+    },
+    {
+      "round": 19,
+      "sequence": 459,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 19992148
+    },
+    {
+      "round": 19,
+      "sequence": 460,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 14005775
+    },
+    {
+      "round": 19,
+      "sequence": 461,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 9976940
+    },
+    {
+      "round": 19,
+      "sequence": 462,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 21662674
+    },
+    {
+      "round": 19,
+      "sequence": 463,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19496273
+    },
+    {
+      "round": 19,
+      "sequence": 464,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1729054
+    },
+    {
+      "round": 19,
+      "sequence": 465,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1802675
+    },
+    {
+      "round": 19,
+      "sequence": 466,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7034705
+    },
+    {
+      "round": 19,
+      "sequence": 467,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1722295
+    },
+    {
+      "round": 19,
+      "sequence": 468,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1796886
+    },
+    {
+      "round": 19,
+      "sequence": 469,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20611517
+    },
+    {
+      "round": 19,
+      "sequence": 470,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1938499
+    },
+    {
+      "round": 19,
+      "sequence": 471,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1822144
+    },
+    {
+      "round": 19,
+      "sequence": 472,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 233057114
+    },
+    {
+      "round": 19,
+      "sequence": 473,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 101543673
+    },
+    {
+      "round": 19,
+      "sequence": 474,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 165813117
+    },
+    {
+      "round": 19,
+      "sequence": 475,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 108723857
+    },
+    {
+      "round": 19,
+      "sequence": 476,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161434618
+    },
+    {
+      "round": 19,
+      "sequence": 477,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 59702181
+    },
+    {
+      "round": 19,
+      "sequence": 478,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 114206413
+    },
+    {
+      "round": 19,
+      "sequence": 479,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 59585636
+    },
+    {
+      "round": 20,
+      "sequence": 480,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 22177086
+    },
+    {
+      "round": 20,
+      "sequence": 481,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1919340
+    },
+    {
+      "round": 20,
+      "sequence": 482,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1909666
+    },
+    {
+      "round": 20,
+      "sequence": 483,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 2234302
+    },
+    {
+      "round": 20,
+      "sequence": 484,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7346964
+    },
+    {
+      "round": 20,
+      "sequence": 485,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1799159
+    },
+    {
+      "round": 20,
+      "sequence": 486,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1798558
+    },
+    {
+      "round": 20,
+      "sequence": 487,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1825229
+    },
+    {
+      "round": 20,
+      "sequence": 488,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 20586680
+    },
+    {
+      "round": 20,
+      "sequence": 489,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8516589
+    },
+    {
+      "round": 20,
+      "sequence": 490,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8116629
+    },
+    {
+      "round": 20,
+      "sequence": 491,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19753719
+    },
+    {
+      "round": 20,
+      "sequence": 492,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 45544759
+    },
+    {
+      "round": 20,
+      "sequence": 493,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13514709
+    },
+    {
+      "round": 20,
+      "sequence": 494,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12164723
+    },
+    {
+      "round": 20,
+      "sequence": 495,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18241521
+    },
+    {
+      "round": 20,
+      "sequence": 496,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 105740861
+    },
+    {
+      "round": 20,
+      "sequence": 497,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 111058790
+    },
+    {
+      "round": 20,
+      "sequence": 498,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161122078
+    },
+    {
+      "round": 20,
+      "sequence": 499,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 102096853
+    },
+    {
+      "round": 20,
+      "sequence": 500,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 166752988
+    },
+    {
+      "round": 20,
+      "sequence": 501,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 236468563
+    },
+    {
+      "round": 20,
+      "sequence": 502,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 60504515
+    },
+    {
+      "round": 20,
+      "sequence": 503,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60907069
+    },
+    {
+      "round": 21,
+      "sequence": 504,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 9572132
+    },
+    {
+      "round": 21,
+      "sequence": 505,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46243337
+    },
+    {
+      "round": 21,
+      "sequence": 506,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13713046
+    },
+    {
+      "round": 21,
+      "sequence": 507,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19356033
+    },
+    {
+      "round": 21,
+      "sequence": 508,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12252505
+    },
+    {
+      "round": 21,
+      "sequence": 509,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19692368
+    },
+    {
+      "round": 21,
+      "sequence": 510,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18404035
+    },
+    {
+      "round": 21,
+      "sequence": 511,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8223910
+    },
+    {
+      "round": 21,
+      "sequence": 512,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 59884254
+    },
+    {
+      "round": 21,
+      "sequence": 513,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 162847707
+    },
+    {
+      "round": 21,
+      "sequence": 514,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 59915331
+    },
+    {
+      "round": 21,
+      "sequence": 515,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 114820154
+    },
+    {
+      "round": 21,
+      "sequence": 516,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 231770024
+    },
+    {
+      "round": 21,
+      "sequence": 517,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 108181073
+    },
+    {
+      "round": 21,
+      "sequence": 518,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 101182641
+    },
+    {
+      "round": 21,
+      "sequence": 519,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 164955170
+    },
+    {
+      "round": 21,
+      "sequence": 520,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1992800
+    },
+    {
+      "round": 21,
+      "sequence": 521,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1788713
+    },
+    {
+      "round": 21,
+      "sequence": 522,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1742785
+    },
+    {
+      "round": 21,
+      "sequence": 523,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1831838
+    },
+    {
+      "round": 21,
+      "sequence": 524,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1821654
+    },
+    {
+      "round": 21,
+      "sequence": 525,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21067301
+    },
+    {
+      "round": 21,
+      "sequence": 526,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1838047
+    },
+    {
+      "round": 21,
+      "sequence": 527,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7167365
+    },
+    {
+      "round": 22,
+      "sequence": 528,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13590031
+    },
+    {
+      "round": 22,
+      "sequence": 529,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18385557
+    },
+    {
+      "round": 22,
+      "sequence": 530,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19740109
+    },
+    {
+      "round": 22,
+      "sequence": 531,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8240354
+    },
+    {
+      "round": 22,
+      "sequence": 532,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8089468
+    },
+    {
+      "round": 22,
+      "sequence": 533,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46443297
+    },
+    {
+      "round": 22,
+      "sequence": 534,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12933256
+    },
+    {
+      "round": 22,
+      "sequence": 535,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19155703
+    },
+    {
+      "round": 22,
+      "sequence": 536,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 109988054
+    },
+    {
+      "round": 22,
+      "sequence": 537,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 108903927
+    },
+    {
+      "round": 22,
+      "sequence": 538,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 102860499
+    },
+    {
+      "round": 22,
+      "sequence": 539,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60034389
+    },
+    {
+      "round": 22,
+      "sequence": 540,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 59700188
+    },
+    {
+      "round": 22,
+      "sequence": 541,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 161270862
+    },
+    {
+      "round": 22,
+      "sequence": 542,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 235486910
+    },
+    {
+      "round": 22,
+      "sequence": 543,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 166196022
+    },
+    {
+      "round": 22,
+      "sequence": 544,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1914453
+    },
+    {
+      "round": 22,
+      "sequence": 545,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1681072
+    },
+    {
+      "round": 22,
+      "sequence": 546,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20624937
+    },
+    {
+      "round": 22,
+      "sequence": 547,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 6949548
+    },
+    {
+      "round": 22,
+      "sequence": 548,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1899561
+    },
+    {
+      "round": 22,
+      "sequence": 549,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1843045
+    },
+    {
+      "round": 22,
+      "sequence": 550,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1798038
+    },
+    {
+      "round": 22,
+      "sequence": 551,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1703967
+    },
+    {
+      "round": 23,
+      "sequence": 552,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 101807990
+    },
+    {
+      "round": 23,
+      "sequence": 553,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 160944753
+    },
+    {
+      "round": 23,
+      "sequence": 554,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 167185477
+    },
+    {
+      "round": 23,
+      "sequence": 555,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 59423703
+    },
+    {
+      "round": 23,
+      "sequence": 556,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 235157196
+    },
+    {
+      "round": 23,
+      "sequence": 557,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 111117768
+    },
+    {
+      "round": 23,
+      "sequence": 558,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 107722765
+    },
+    {
+      "round": 23,
+      "sequence": 559,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 59936372
+    },
+    {
+      "round": 23,
+      "sequence": 560,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 2065559
+    },
+    {
+      "round": 23,
+      "sequence": 561,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1832048
+    },
+    {
+      "round": 23,
+      "sequence": 562,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1931388
+    },
+    {
+      "round": 23,
+      "sequence": 563,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1821503
+    },
+    {
+      "round": 23,
+      "sequence": 564,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1769805
+    },
+    {
+      "round": 23,
+      "sequence": 565,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1808243
+    },
+    {
+      "round": 23,
+      "sequence": 566,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7531991
+    },
+    {
+      "round": 23,
+      "sequence": 567,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 21698828
+    },
+    {
+      "round": 23,
+      "sequence": 568,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8723470
+    },
+    {
+      "round": 23,
+      "sequence": 569,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46331779
+    },
+    {
+      "round": 23,
+      "sequence": 570,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19999128
+    },
+    {
+      "round": 23,
+      "sequence": 571,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8503950
+    },
+    {
+      "round": 23,
+      "sequence": 572,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18439958
+    },
+    {
+      "round": 23,
+      "sequence": 573,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12338343
+    },
+    {
+      "round": 23,
+      "sequence": 574,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 12825424
+    },
+    {
+      "round": 23,
+      "sequence": 575,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 19882713
+    },
+    {
+      "round": 24,
+      "sequence": 576,
+      "workload": "intrusive",
+      "endpoint": "optimized-check",
+      "wall_ns": 1836806
+    },
+    {
+      "round": 24,
+      "sequence": 577,
+      "workload": "intrusive",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 1753811
+    },
+    {
+      "round": 24,
+      "sequence": 578,
+      "workload": "intrusive",
+      "endpoint": "optimized-emit",
+      "wall_ns": 1814353
+    },
+    {
+      "round": 24,
+      "sequence": 579,
+      "workload": "intrusive",
+      "endpoint": "seed-prepare",
+      "wall_ns": 1995404
+    },
+    {
+      "round": 24,
+      "sequence": 580,
+      "workload": "intrusive",
+      "endpoint": "clang-syntax",
+      "wall_ns": 20867141
+    },
+    {
+      "round": 24,
+      "sequence": 581,
+      "workload": "intrusive",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 7222327
+    },
+    {
+      "round": 24,
+      "sequence": 582,
+      "workload": "intrusive",
+      "endpoint": "seed-check",
+      "wall_ns": 1761112
+    },
+    {
+      "round": 24,
+      "sequence": 583,
+      "workload": "intrusive",
+      "endpoint": "seed-emit",
+      "wall_ns": 1836996
+    },
+    {
+      "round": 24,
+      "sequence": 584,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-check",
+      "wall_ns": 60398035
+    },
+    {
+      "round": 24,
+      "sequence": 585,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 103235041
+    },
+    {
+      "round": 24,
+      "sequence": 586,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 163145435
+    },
+    {
+      "round": 24,
+      "sequence": 587,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-emit",
+      "wall_ns": 166242972
+    },
+    {
+      "round": 24,
+      "sequence": 588,
+      "workload": "ordinary-8000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 108242575
+    },
+    {
+      "round": 24,
+      "sequence": 589,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 110971820
+    },
+    {
+      "round": 24,
+      "sequence": 590,
+      "workload": "ordinary-8000",
+      "endpoint": "seed-check",
+      "wall_ns": 61299327
+    },
+    {
+      "round": 24,
+      "sequence": 591,
+      "workload": "ordinary-8000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 238529987
+    },
+    {
+      "round": 24,
+      "sequence": 592,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-emit",
+      "wall_ns": 20653079
+    },
+    {
+      "round": 24,
+      "sequence": 593,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-emit",
+      "wall_ns": 13170342
+    },
+    {
+      "round": 24,
+      "sequence": 594,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-check",
+      "wall_ns": 8284651
+    },
+    {
+      "round": 24,
+      "sequence": 595,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-prepare",
+      "wall_ns": 12197582
+    },
+    {
+      "round": 24,
+      "sequence": 596,
+      "workload": "ordinary-1000",
+      "endpoint": "seed-prepare",
+      "wall_ns": 19035943
+    },
+    {
+      "round": 24,
+      "sequence": 597,
+      "workload": "ordinary-1000",
+      "endpoint": "optimized-check",
+      "wall_ns": 8252523
+    },
+    {
+      "round": 24,
+      "sequence": 598,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-syntax",
+      "wall_ns": 18726248
+    },
+    {
+      "round": 24,
+      "sequence": 599,
+      "workload": "ordinary-1000",
+      "endpoint": "clang-syntax",
+      "wall_ns": 46827072
+    }
+  ],
+  "backend_samples": [
+    {
+      "round": 0,
+      "sequence": 0,
+      "workload": "intrusive",
+      "endpoint": "gcc-object",
+      "wall_ns": 25755445
+    },
+    {
+      "round": 0,
+      "sequence": 1,
+      "workload": "intrusive",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 2314944
+    },
+    {
+      "round": 0,
+      "sequence": 2,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-object",
+      "wall_ns": 12202114760
+    },
+    {
+      "round": 0,
+      "sequence": 3,
+      "workload": "ordinary-8000",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 9793725
+    },
+    {
+      "round": 0,
+      "sequence": 4,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-object",
+      "wall_ns": 1468881379
+    },
+    {
+      "round": 0,
+      "sequence": 5,
+      "workload": "ordinary-1000",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 3599922
+    },
+    {
+      "round": 1,
+      "sequence": 6,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-object",
+      "wall_ns": 1468899396
+    },
+    {
+      "round": 1,
+      "sequence": 7,
+      "workload": "ordinary-1000",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 3449887
+    },
+    {
+      "round": 1,
+      "sequence": 8,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-object",
+      "wall_ns": 11965757152
+    },
+    {
+      "round": 1,
+      "sequence": 9,
+      "workload": "ordinary-8000",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 9864201
+    },
+    {
+      "round": 1,
+      "sequence": 10,
+      "workload": "intrusive",
+      "endpoint": "gcc-object",
+      "wall_ns": 25321034
+    },
+    {
+      "round": 1,
+      "sequence": 11,
+      "workload": "intrusive",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 2244768
+    },
+    {
+      "round": 2,
+      "sequence": 12,
+      "workload": "intrusive",
+      "endpoint": "gcc-object",
+      "wall_ns": 25238329
+    },
+    {
+      "round": 2,
+      "sequence": 13,
+      "workload": "intrusive",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 2280862
+    },
+    {
+      "round": 2,
+      "sequence": 14,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-object",
+      "wall_ns": 1492549252
+    },
+    {
+      "round": 2,
+      "sequence": 15,
+      "workload": "ordinary-1000",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 3659931
+    },
+    {
+      "round": 2,
+      "sequence": 16,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-object",
+      "wall_ns": 12308599666
+    },
+    {
+      "round": 2,
+      "sequence": 17,
+      "workload": "ordinary-8000",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 9938833
+    },
+    {
+      "round": 3,
+      "sequence": 18,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-object",
+      "wall_ns": 1465122760
+    },
+    {
+      "round": 3,
+      "sequence": 19,
+      "workload": "ordinary-1000",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 3514633
+    },
+    {
+      "round": 3,
+      "sequence": 20,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-object",
+      "wall_ns": 11928873390
+    },
+    {
+      "round": 3,
+      "sequence": 21,
+      "workload": "ordinary-8000",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 9804792
+    },
+    {
+      "round": 3,
+      "sequence": 22,
+      "workload": "intrusive",
+      "endpoint": "gcc-object",
+      "wall_ns": 25368074
+    },
+    {
+      "round": 3,
+      "sequence": 23,
+      "workload": "intrusive",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 2245369
+    },
+    {
+      "round": 4,
+      "sequence": 24,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-object",
+      "wall_ns": 11952829745
+    },
+    {
+      "round": 4,
+      "sequence": 25,
+      "workload": "ordinary-8000",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 10238722
+    },
+    {
+      "round": 4,
+      "sequence": 26,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-object",
+      "wall_ns": 1465147377
+    },
+    {
+      "round": 4,
+      "sequence": 27,
+      "workload": "ordinary-1000",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 3629336
+    },
+    {
+      "round": 4,
+      "sequence": 28,
+      "workload": "intrusive",
+      "endpoint": "gcc-object",
+      "wall_ns": 25080042
+    },
+    {
+      "round": 4,
+      "sequence": 29,
+      "workload": "intrusive",
+      "endpoint": "objcopy-rename",
+      "wall_ns": 2276105
+    }
+  ],
+  "summary": {
+    "ordinary-1000": {
+      "samples_per_endpoint": 25,
+      "median_wall_ms": {
+        "gcc-syntax": 18.830935,
+        "clang-syntax": 46.443297,
+        "seed-check": 8.340645,
+        "seed-prepare": 19.663925,
+        "seed-emit": 20.601512,
+        "optimized-check": 8.516589,
+        "optimized-prepare": 12.84971,
+        "optimized-emit": 13.514709
+      },
+      "min_wall_ms": {
+        "gcc-syntax": 18.241521,
+        "clang-syntax": 45.544759,
+        "seed-check": 8.049889,
+        "seed-prepare": 19.035943,
+        "seed-emit": 19.692368,
+        "optimized-check": 8.035297,
+        "optimized-prepare": 12.164723,
+        "optimized-emit": 12.682099
+      },
+      "max_wall_ms": {
+        "gcc-syntax": 19.992148,
+        "clang-syntax": 49.754305,
+        "seed-check": 9.931312,
+        "seed-prepare": 40.570845,
+        "seed-emit": 21.919129,
+        "optimized-check": 9.97694,
+        "optimized-prepare": 14.037002,
+        "optimized-emit": 14.544774
+      },
+      "throughput": {
+        "gcc-syntax": {
+          "source_bytes_per_second": 11939502.738446074,
+          "source_MiB_per_second": 11.38639711231811,
+          "functions_per_second": 53104.107682385395
+        },
+        "clang-syntax": {
+          "source_bytes_per_second": 4840999.9832699215,
+          "source_MiB_per_second": 4.61673734976761,
+          "functions_per_second": 21531.632433416602
+        },
+        "seed-check": {
+          "source_bytes_per_second": 29707654.503938243,
+          "source_MiB_per_second": 28.331427101076358,
+          "functions_per_second": 119894.80429870832
+        },
+        "seed-prepare": {
+          "source_bytes_per_second": 12600790.533934604,
+          "source_MiB_per_second": 12.01705029862843,
+          "functions_per_second": 50854.54709576038
+        },
+        "seed-emit": {
+          "source_bytes_per_second": 12027321.101480318,
+          "source_MiB_per_second": 11.470147229652708,
+          "functions_per_second": 48540.12656935083
+        },
+        "optimized-check": {
+          "source_bytes_per_second": 29093924.809568714,
+          "source_MiB_per_second": 27.74612885434028,
+          "functions_per_second": 117417.90052331984
+        },
+        "optimized-prepare": {
+          "source_bytes_per_second": 19283003.27400385,
+          "source_MiB_per_second": 18.3897049655951,
+          "functions_per_second": 77822.76798464713
+        },
+        "optimized-emit": {
+          "source_bytes_per_second": 18334172.049135502,
+          "source_MiB_per_second": 17.484828995833876,
+          "functions_per_second": 73993.45409509003
+        }
+      },
+      "comparisons": {
+        "seed-check": {
+          "over_fastest_c_median_ratio": 0.44292251022054935,
+          "paired_bootstrap_percentile_95_ci": [
+            0.43505594326960373,
+            0.46106681196725147
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "seed-prepare": {
+          "over_fastest_c_median_ratio": 1.0442351906583502,
+          "paired_bootstrap_percentile_95_ci": [
+            1.0210563753680313,
+            1.0667022534029817
+          ],
+          "upper_ci_at_most_one": false,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "seed-emit": {
+          "over_fastest_c_median_ratio": 1.0940249116679548,
+          "paired_bootstrap_percentile_95_ci": [
+            1.0456833191825665,
+            1.1184644037821199
+          ],
+          "upper_ci_at_most_one": false,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "optimized-check": {
+          "over_fastest_c_median_ratio": 0.4522658593426189,
+          "paired_bootstrap_percentile_95_ci": [
+            0.4398077790558616,
+            0.4731549411730428
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "optimized-prepare": {
+          "over_fastest_c_median_ratio": 0.6823723835274245,
+          "paired_bootstrap_percentile_95_ci": [
+            0.655216695294206,
+            0.6943054061586893
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "optimized-emit": {
+          "over_fastest_c_median_ratio": 0.717686562032103,
+          "paired_bootstrap_percentile_95_ci": [
+            0.6906328452081084,
+            0.7299084039549881
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        }
+      }
+    },
+    "ordinary-8000": {
+      "samples_per_endpoint": 25,
+      "median_wall_ms": {
+        "gcc-syntax": 112.254414,
+        "clang-syntax": 236.310717,
+        "seed-check": 60.662361,
+        "seed-prepare": 161.956371,
+        "seed-emit": 167.239287,
+        "optimized-check": 60.391285,
+        "optimized-prepare": 102.907309,
+        "optimized-emit": 108.595724
+      },
+      "min_wall_ms": {
+        "gcc-syntax": 109.988054,
+        "clang-syntax": 231.770024,
+        "seed-check": 59.423703,
+        "seed-prepare": 160.944753,
+        "seed-emit": 164.95517,
+        "optimized-check": 59.543383,
+        "optimized-prepare": 101.090313,
+        "optimized-emit": 105.740861
+      },
+      "max_wall_ms": {
+        "gcc-syntax": 119.981078,
+        "clang-syntax": 250.878596,
+        "seed-check": 64.225969,
+        "seed-prepare": 172.844397,
+        "seed-emit": 173.717428,
+        "optimized-check": 64.157577,
+        "optimized-prepare": 108.943467,
+        "optimized-emit": 113.32472
+      },
+      "throughput": {
+        "gcc-syntax": {
+          "source_bytes_per_second": 16016572.853874592,
+          "source_MiB_per_second": 15.274594167589752,
+          "functions_per_second": 71266.68533497489
+        },
+        "clang-syntax": {
+          "source_bytes_per_second": 7608334.5809492,
+          "source_MiB_per_second": 7.255873280476761,
+          "functions_per_second": 33853.7333454919
+        },
+        "seed-check": {
+          "source_bytes_per_second": 32670670.368401915,
+          "source_MiB_per_second": 31.157179230119624,
+          "functions_per_second": 131877.4915470237
+        },
+        "seed-prepare": {
+          "source_bytes_per_second": 12237122.798954293,
+          "source_MiB_per_second": 11.670229720072072,
+          "functions_per_second": 49396.01912912707
+        },
+        "seed-emit": {
+          "source_bytes_per_second": 11850564.753962386,
+          "source_MiB_per_second": 11.301579240763079,
+          "functions_per_second": 47835.65000489388
+        },
+        "optimized-check": {
+          "source_bytes_per_second": 32817317.929234326,
+          "source_MiB_per_second": 31.297033242449118,
+          "functions_per_second": 132469.44488761915
+        },
+        "optimized-prepare": {
+          "source_bytes_per_second": 19258884.71148342,
+          "source_MiB_per_second": 18.36670371197073,
+          "functions_per_second": 77739.86199561393
+        },
+        "optimized-emit": {
+          "source_bytes_per_second": 18250074.00843886,
+          "source_MiB_per_second": 17.4046268543614,
+          "functions_per_second": 73667.72562794462
+        }
+      },
+      "comparisons": {
+        "seed-check": {
+          "over_fastest_c_median_ratio": 0.5404006741329566,
+          "paired_bootstrap_percentile_95_ci": [
+            0.5283247927899007,
+            0.5469390427227381
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "seed-prepare": {
+          "over_fastest_c_median_ratio": 1.4427617162564317,
+          "paired_bootstrap_percentile_95_ci": [
+            1.4138069029097204,
+            1.4595372763114234
+          ],
+          "upper_ci_at_most_one": false,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "seed-emit": {
+          "over_fastest_c_median_ratio": 1.4898237052843195,
+          "paired_bootstrap_percentile_95_ci": [
+            1.4572742604055382,
+            1.5070854473647848
+          ],
+          "upper_ci_at_most_one": false,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "optimized-check": {
+          "over_fastest_c_median_ratio": 0.5379858381337236,
+          "paired_bootstrap_percentile_95_ci": [
+            0.5260903147866779,
+            0.5438384030656196
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "optimized-prepare": {
+          "over_fastest_c_median_ratio": 0.9167328511465037,
+          "paired_bootstrap_percentile_95_ci": [
+            0.8980114899227151,
+            0.9281658451306071
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "optimized-emit": {
+          "over_fastest_c_median_ratio": 0.9674071613789725,
+          "paired_bootstrap_percentile_95_ci": [
+            0.947145025910235,
+            0.9784560917386318
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        }
+      }
+    },
+    "intrusive": {
+      "samples_per_endpoint": 25,
+      "median_wall_ms": {
+        "gcc-syntax": 7.27101,
+        "clang-syntax": 21.160921,
+        "seed-check": 1.729054,
+        "seed-prepare": 1.848493,
+        "seed-emit": 1.870697,
+        "optimized-check": 1.773141,
+        "optimized-prepare": 1.790417,
+        "optimized-emit": 1.807012
+      },
+      "min_wall_ms": {
+        "gcc-syntax": 6.889717,
+        "clang-syntax": 20.362814,
+        "seed-check": 1.662665,
+        "seed-prepare": 1.760752,
+        "seed-emit": 1.823656,
+        "optimized-check": 1.658949,
+        "optimized-prepare": 1.688784,
+        "optimized-emit": 1.703967
+      },
+      "max_wall_ms": {
+        "gcc-syntax": 8.467295,
+        "clang-syntax": 22.380131,
+        "seed-check": 2.234302,
+        "seed-prepare": 2.087111,
+        "seed-emit": 2.356005,
+        "optimized-check": 2.085168,
+        "optimized-prepare": 1.9928,
+        "optimized-emit": 2.048954
+      },
+      "throughput": {
+        "gcc-syntax": {
+          "source_bytes_per_second": 321688.45868730755,
+          "source_MiB_per_second": 0.3067860209343982,
+          "functions_per_second": 687.6623742781264
+        },
+        "clang-syntax": {
+          "source_bytes_per_second": 110533.94131569227,
+          "source_MiB_per_second": 0.10541338092393138,
+          "functions_per_second": 236.28461161969273
+        },
+        "seed-check": {
+          "source_bytes_per_second": 1367221.6136685146,
+          "source_MiB_per_second": 1.3038841377911707,
+          "functions_per_second": 2891.7546820400057
+        },
+        "seed-prepare": {
+          "source_bytes_per_second": 1278879.6062522281,
+          "source_MiB_per_second": 1.2196346342584878,
+          "functions_per_second": 2704.9061045943913
+        },
+        "seed-emit": {
+          "source_bytes_per_second": 1263700.1075000388,
+          "source_MiB_per_second": 1.2051583361626041,
+          "functions_per_second": 2672.800565778424
+        },
+        "optimized-check": {
+          "source_bytes_per_second": 1333227.3067962446,
+          "source_MiB_per_second": 1.2714646404230543,
+          "functions_per_second": 2819.854709805932
+        },
+        "optimized-prepare": {
+          "source_bytes_per_second": 1320362.7981637798,
+          "source_MiB_per_second": 1.2591960889470861,
+          "functions_per_second": 2792.6455121907356
+        },
+        "optimized-emit": {
+          "source_bytes_per_second": 1308237.0233291201,
+          "source_MiB_per_second": 1.247632048920746,
+          "functions_per_second": 2766.9987803069375
+        }
+      },
+      "comparisons": {
+        "seed-check": {
+          "over_fastest_c_median_ratio": 0.23780107577901832,
+          "paired_bootstrap_percentile_95_ci": [
+            0.23386761550956342,
+            0.2431021932915716
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "seed-prepare": {
+          "over_fastest_c_median_ratio": 0.25422781704329933,
+          "paired_bootstrap_percentile_95_ci": [
+            0.24787377362409477,
+            0.26350527735815776
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "seed-emit": {
+          "over_fastest_c_median_ratio": 0.25728158811499363,
+          "paired_bootstrap_percentile_95_ci": [
+            0.2521572175935529,
+            0.2655480628543068
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "optimized-check": {
+          "over_fastest_c_median_ratio": 0.24386446999797828,
+          "paired_bootstrap_percentile_95_ci": [
+            0.23721158835132444,
+            0.2516342048303613
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "optimized-prepare": {
+          "over_fastest_c_median_ratio": 0.24624048103358406,
+          "paired_bootstrap_percentile_95_ci": [
+            0.2405720219319969,
+            0.25148202001534703
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        },
+        "optimized-emit": {
+          "over_fastest_c_median_ratio": 0.24852283245381315,
+          "paired_bootstrap_percentile_95_ci": [
+            0.24484902384003165,
+            0.2529525318607381
+          ],
+          "upper_ci_at_most_one": true,
+          "fastest_c_observed": "gcc-syntax",
+          "fastest_c_bootstrap_selections": {
+            "gcc-syntax": 10000,
+            "clang-syntax": 0
+          }
+        }
+      }
+    }
+  },
+  "speed_gate": {
+    "endpoint": "optimized-emit",
+    "passed": true,
+    "failed_workloads": []
+  },
+  "backend_summary": {
+    "ordinary-1000": {
+      "gcc-object": {
+        "samples": 5,
+        "median_wall_ms": 1468.881379,
+        "min_wall_ms": 1465.12276,
+        "max_wall_ms": 1492.549252
+      },
+      "objcopy-rename": {
+        "samples": 5,
+        "median_wall_ms": 3.599922,
+        "min_wall_ms": 3.449887,
+        "max_wall_ms": 3.659931
+      }
+    },
+    "ordinary-8000": {
+      "gcc-object": {
+        "samples": 5,
+        "median_wall_ms": 11965.757152,
+        "min_wall_ms": 11928.87339,
+        "max_wall_ms": 12308.599666
+      },
+      "objcopy-rename": {
+        "samples": 5,
+        "median_wall_ms": 9.864201,
+        "min_wall_ms": 9.793725,
+        "max_wall_ms": 10.238722
+      }
+    },
+    "intrusive": {
+      "gcc-object": {
+        "samples": 5,
+        "median_wall_ms": 25.321034,
+        "min_wall_ms": 25.080042,
+        "max_wall_ms": 25.755445
+      },
+      "objcopy-rename": {
+        "samples": 5,
+        "median_wall_ms": 2.276105,
+        "min_wall_ms": 2.244768,
+        "max_wall_ms": 2.314944
+      }
+    }
+  }
+}

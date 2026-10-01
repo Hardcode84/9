@@ -9,6 +9,10 @@ linker. Run `make` to build it and `make check` to run the tests.
 Read the [bootstrap guide](docs/bootstrap.md) for commands, public stage APIs,
 the compiled replacement-stage example, and measurement boundaries.
 
+An optional [C backend stage](docs/c-backend.md) is written entirely in RMD0.
+Run `make c-stage` to build it through the seed and then through its own C
+output. It uses GCC for native code and retains the C99 reader and checker.
+
 Start with the [RMD0 language specification](docs/rmd0-spec.md). It defines the
 minimal bootstrap language, complete grammar, execution rules, and public stage
 contracts. Module management, ownership, richer syntax, and backend adapters

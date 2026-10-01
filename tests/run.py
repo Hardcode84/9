@@ -11,6 +11,7 @@ import shlex
 import signal
 import stat
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 TYPES = {f"{sign}{bits}": (bits, sign == "i") for bits in (8, 16, 32, 64) for sign in "iu"}
@@ -57,23 +58,31 @@ def integer_cases(kind, bits, signed):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", required=True, type=Path)
+    parser.add_argument("--backend", choices=("x64", "c"), default="x64")
+    parser.add_argument("--library-dir", type=Path)
+    parser.add_argument("--work-dir", type=Path)
+    parser.add_argument("--cflags", default="-O2")
     parser.add_argument("--cc", default="cc")
     parser.add_argument("--assembler", default="as --64")
     parser.add_argument("--ldflags", default="")
     args = parser.parse_args()
     compiler = args.compiler.resolve()
-    build = compiler.parent
-    work = build / "tests"
-    work.mkdir(exist_ok=True)
+    build = (args.library_dir or compiler.parent).resolve()
+    work = (args.work_dir or build / ("tests-c" if args.backend == "c" else "tests")).resolve()
+    work.mkdir(parents=True, exist_ok=True)
     cc = shlex.split(args.cc)
     assembler = shlex.split(args.assembler)
     ldflags = shlex.split(args.ldflags)
+    cflags = shlex.split(args.cflags)
+    c_options = [item for flag in cflags for item in ("--cflag", flag)]
+    c_link_options = [item for flag in ldflags for item in ("--ldflag", flag)]
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     checks = 0
 
     def command(argv, expected=0, **options):
         nonlocal checks
-        result = subprocess.run([str(arg) for arg in argv], cwd=ROOT, capture_output=True, timeout=30, **options)
+        result = subprocess.run([str(arg) for arg in argv], cwd=options.pop("cwd", ROOT),
+                                capture_output=True, timeout=30, **options)
         checks += 1
         if result.returncode != expected:
             raise AssertionError(f"{shlex.join(map(str, argv))}: status {result.returncode}, expected {expected}\n"
@@ -85,15 +94,21 @@ def main():
         command([*assembler, source, "-o", output])
         return output
 
-    def executable(name, source=None, inputs=None, libraries=()):
+    def executable(name, source=None, inputs=None, libraries=(), entry=None):
         if source is not None:
             path = work / f"{name}.rmd"
             path.write_text(source)
             inputs = [path]
-        assembly = work / f"{name}.s"
         output = work / name
-        command([compiler, "-S", "-o", assembly, *inputs])
-        command([*cc, "-no-pie", assemble(assembly), *libraries, build / "librmd0_host.a", *ldflags, "-o", output])
+        entry_options = ["--entry", entry] if entry is not None else []
+        if args.backend == "c":
+            obj = work / f"{name}.rmd.o"
+            command([compiler, "--object", "-o", obj, *c_options, *entry_options, *inputs])
+        else:
+            assembly = work / f"{name}.s"
+            command([compiler, "-S", "-o", assembly, *entry_options, *inputs])
+            obj = assemble(assembly)
+        command([*cc, "-no-pie", obj, *libraries, build / "librmd0_host.a", *ldflags, "-o", output])
         return output
 
     native = work / "native.o"
@@ -102,8 +117,81 @@ def main():
     intrusive = executable("intrusive", inputs=["examples/intrusive.rmd"])
     assert command([intrusive]).stdout == b"intrusive: ok\n"
 
+    dynamic = """
+extern fn native_i32(value:i32)->i32="native_i32";
+extern fn native_i64(value:i64)->i64="native_i64";
+extern fn native_u16(value:u16)->u16="native_u16";
+extern fn native_i8(value:i8)->i8="native_i8";
+extern fn native_pointer(value:*u8)->*u8="native_pointer";
+record union { volatile:u32; restrict:u8; }
+fn switch(inline:u32)->u32 {return inline+1u32;}
+fn first()->i32{return 1i32;}
+fn second()->i32{return 2i32;}
+fn changed(a:*u64,b:*u32)->u64 {*a=0u64;*b=1u32;return *a;}
+fn main(argc:i32,argv:**u8)->i32 {
+    var high:i32=native_i32(2147483647i32);
+    if !(high+1i32<high) {return 1i32;}
+    var minimum:i64=native_i64(-9223372036854775808i64);
+    if -minimum!=minimum {return 2i32;}
+    var narrow:u16=native_u16(65535u16);
+    if narrow*narrow!=1u16 || (narrow<<15u16)!=32768u16 {return 3i32;}
+    var negative:i64=native_i64(-1i64);
+    if (negative<<1i64)!=-2i64 || (negative>>63i64)!=-1i64 {return 4i32;}
+    if (native_i8(-1i8) as u64)!=18446744073709551615u64 {return 5i32;}
+    var wide:u64=99u64;
+    var alias:*u32=native_pointer(&wide as *u8) as *u32;
+    if changed(&wide,alias)!=1u64 {return 6i32;}
+    *alias=2u32;
+    if wide!=2u64 {return 8i32;}
+    var byte:u8=42u8;
+    var pointer:*u8=null(*u8);
+    var pointer_slot:**u8=native_pointer(&pointer as *u8) as **u8;
+    *pointer_slot=&byte;
+    if pointer!=&byte {return 9i32;}
+    var function:fn()->i32=first;
+    var function_slot:*fn()->i32=native_pointer(&function as *u8) as *fn()->i32;
+    *function_slot=second;
+    if function!=second || function()!=2i32 {return 10i32;}
+    var truth:bool=false;
+    *native_pointer(&truth as *u8)=1u8;
+    if !truth {return 11i32;}
+    var register:union=make union{volatile:41u32,restrict:1u8};
+    if switch(register.volatile)!=42u32 || register.restrict!=1u8 {return 7i32;}
+    return 0i32;
+}
+"""
+    command([executable("dynamic-values", dynamic, libraries=[native])])
+    # Both drivers assign this native name to the first declaration in unit 1.
+    owned_alias = '''
+fn target()->u64{return 42u64;}
+extern fn alias()->u64="_rmd0_u1_d1";
+const captured:fn()->u64=target;
+fn main(argc:i32,argv:**u8)->i32 {
+    if target!=alias || captured!=alias {return 1i32;}
+    if alias()!=42u64 || captured()!=42u64 {return 2i32;}
+    return 0i32;
+}
+'''
+    command([executable("owned-native-alias", owned_alias)])
+    command([executable("selected-entry", "fn start(argc:i32,argv:**u8)->i32{return 17i32;}", entry="start")], expected=17)
+    long_string = 'fn main(argc:i32,argv:**u8)->i32{var text:*u8="' + "x" * 5000 + '";'
+    long_string += 'if text[0usize]!=120u8 || text[4999usize]!=120u8 || text[5000usize]!=0u8{return 1i32;}return 0i32;}'
+    command([executable("long-string", long_string)])
+
+    foundation = executable("c-stage-foundation", inputs=["api/rmd0.rmd", "api/rmd0_host.rmd",
+                             "stages/c/model.rmd", "stages/c/base.rmd", "tests/c_stage.rmd"])
+    quoted_source = work / "c-stage-quoted.c"
+    quoted_source.write_bytes(command([foundation]).stdout)
+    command([*cc, *STRICT, "-O3", quoted_source, "-o", work / "c-stage-quoted"])
+    command([work / "c-stage-quoted"])
+    allocation_environment = os.environ.copy()
+    allocation_environment["ASAN_OPTIONS"] = ":".join(filter(None, [allocation_environment.get("ASAN_OPTIONS"),
+                                                                    "allocator_may_return_null=1"]))
+    command([foundation, "oom"], env=allocation_environment)
+
     native_names = [".Lrmd_0_string_1", ".Lrmd_1_label_1", "line\nbreak", 'quote"back\\name',
-                    "1", ".", "\x7fend"]
+                    "1", ".", "\x7fend", ".LFE0", ".LC0", ".LFB0", ".Ltext0",
+                    "".join(chr(value) for value in range(1, 128))]
     native_source = work / "native-names.c"
     native_source.write_text("#include <stdint.h>\n" + "\n".join(
         f"int32_t native_{index}(void);\nint32_t native_{index}(void) {{return {index + 10};}}"
@@ -156,17 +244,18 @@ fn main(argc:i32,argv:**u8)->i32 {
                       f"fn main(argc:i32,argv:**u8)->i32{{if sum({arguments})!={expected_total}i64"
                       "{return 1i32;}return 0i32;}\n")
     command([executable("stack-outgoing", stack_outgoing)])
-    stack_limit = executable("stack-limit", """
+    if args.backend == "x64":
+        stack_limit = executable("stack-limit", """
 fn exhaust()->unit {var large:[u8;1048576]=uninit;}
 fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
 """)
-    stack_environment = os.environ.copy()
-    # This child must expose the native guard-page signal, including in sanitizer runs.
-    stack_environment["ASAN_OPTIONS"] = ":".join(filter(None, [stack_environment.get("ASAN_OPTIONS"), "handle_segv=0"]))
-    for program, expected_status in ((stack_arguments_executable, 0), (stack_limit, -signal.SIGSEGV)):
-        command([program], expected=expected_status,
-                preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_STACK, (131072, 131072)),
-                env=stack_environment)
+        stack_environment = os.environ.copy()
+        # This child must expose the native guard-page signal, including in sanitizer runs.
+        stack_environment["ASAN_OPTIONS"] = ":".join(filter(None, [stack_environment.get("ASAN_OPTIONS"), "handle_segv=0"]))
+        for program, expected_status in ((stack_arguments_executable, 0), (stack_limit, -signal.SIGSEGV)):
+            command([program], expected=expected_status,
+                    preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_STACK, (131072, 131072)),
+                    env=stack_environment)
 
     arithmetic_checks = 0
     for kind, (bits, signed) in TYPES.items():
@@ -196,7 +285,13 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     for index, statement in enumerate(traps):
         source = f"fn main(argc:i32,argv:**u8)->i32{{{statement} return 0i32;}}"
         command([executable(f"trap-{index}", source)], expected=-signal.SIGILL)
-    print(f"required traps: {len(traps)} processes passed")
+    dynamic_traps = ["1i32 / native_i32(0i32);", "-2147483648i32 / native_i32(-1i32);",
+                     "1i32 << native_i32(-1i32);", "1i32 >> native_i32(32i32);"]
+    for index, statement in enumerate(dynamic_traps):
+        source = ('extern fn native_i32(value:i32)->i32="native_i32";'
+                  f"fn main(argc:i32,argv:**u8)->i32{{{statement} return 0i32;}}")
+        command([executable(f"dynamic-trap-{index}", source, libraries=[native])], expected=-signal.SIGILL)
+    print(f"required traps: {len(traps) + len(dynamic_traps)} processes passed")
 
     for name, source in {
         "flat-depth": "fn f()->u32{return " + "+".join(["1u32"] * 10000) + ";}",
@@ -229,6 +324,31 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     layout_path.write_text("fn main(argc:i32,argv:**u8)->i32{\n" + layout_checks + "return 0i32;}\n")
     command([executable("api-layout", inputs=[*api_paths, layout_path], libraries=[build / "librmd0.a"])])
     print(f"public layouts: {len(layout_checks.splitlines())} C/RMD0 comparisons passed")
+
+    stat_fields = {"device": "st_dev", "inode": "st_ino", "links": "st_nlink", "mode": "st_mode",
+                   "uid": "st_uid", "gid": "st_gid", "padding": "__pad0", "special_device": "st_rdev",
+                   "size": "st_size", "block_size": "st_blksize", "blocks": "st_blocks",
+                   "access_seconds": "st_atim.tv_sec", "access_nanoseconds": "st_atim.tv_nsec",
+                   "modify_seconds": "st_mtim.tv_sec", "modify_nanoseconds": "st_mtim.tv_nsec",
+                   "change_seconds": "st_ctim.tv_sec", "change_nanoseconds": "st_ctim.tv_nsec",
+                   "reserved": "__glibc_reserved"}
+    stat_record = re.search(r"^record CDriverStat \{.*?^\}",
+                            (ROOT / "stages/c/driver.rmd").read_text(), re.M | re.S).group()
+    probe = ["#define _POSIX_C_SOURCE 200809L", "#include <sys/stat.h>", "#include <stddef.h>",
+             "#include <stdio.h>", "struct Alignment {char byte; struct stat value;};", "int main(void) {"]
+    for expression, native_expression in [("sizeof(CDriverStat)", "sizeof(struct stat)"),
+                                          ("alignof(CDriverStat)", "offsetof(struct Alignment,value)")]:
+        probe.append(f'printf("if {expression}!=%zuusize{{return 1i32;}}\\n",{native_expression});')
+    for field, native_field in stat_fields.items():
+        probe.append(f'printf("if offsetof(CDriverStat,{field})!=%zuusize{{return 2i32;}}\\n",'
+                     f'offsetof(struct stat,{native_field}));')
+    probe.append("return 0;}")
+    stat_source = work / "stat-layout.c"
+    stat_source.write_text("\n".join(probe) + "\n")
+    command([*cc, *STRICT, stat_source, "-o", work / "stat-layout-probe"])
+    stat_checks = command([work / "stat-layout-probe"]).stdout.decode()
+    command([executable("stat-layout", stat_record + "\nfn main(argc:i32,argv:**u8)->i32{" + stat_checks + "return 0i32;}")])
+    print(f"driver stat layout: {len(stat_checks.splitlines())} C/RMD0 comparisons passed")
 
     if (ROOT / "examples" / "stage.rmd").exists():
         stage = executable("stage", inputs=[*api_paths, "examples/stage.rmd"], libraries=[build / "librmd0.a"])
@@ -272,15 +392,16 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
 
     valid = work / "valid.rmd"
     invalid = work / "invalid.rmd"
-    output = work / "atomic.s"
+    output = work / ("atomic.c" if args.backend == "c" else "atomic.s")
+    dump_options = ["--emit-c"] if args.backend == "c" else []
     valid.write_text("fn main(argc:i32,argv:**u8)->i32{return 0i32;}")
     invalid.write_bytes(b"fn\x00")
     output.write_text("retained output\n")
-    command([compiler, "-o", output, invalid], expected=1)
+    command([compiler, *dump_options, "-o", output, invalid], expected=1)
     assert output.read_text() == "retained output\n"
-    command([compiler, "-o", work / "absent-directory" / "output.s", valid], expected=1)
+    command([compiler, *dump_options, "-o", work / "absent-directory" / "output", valid], expected=1)
     command([compiler, "--check", work / "absent.rmd"], expected=1)
-    for arguments in ([valid], ["--help"], ["--version"]):
+    for arguments in ([*dump_options, valid], ["--help"], ["--version"]):
         with open("/dev/full", "wb") as failed_output:
             result = subprocess.run([str(compiler), *map(str, arguments)], stdout=failed_output,
                                     stderr=subprocess.PIPE, timeout=30)
@@ -289,22 +410,146 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     for device, expected_status in (("/dev/null", 0), ("/dev/full", 1)):
         before = Path(device).stat()
         assert stat.S_ISCHR(before.st_mode)
-        result = command([compiler, "-o", device, valid], expected=expected_status)
+        result = command([compiler, *dump_options, "-o", device, valid], expected=expected_status)
         after = Path(device).stat()
         assert stat.S_ISCHR(after.st_mode)
         assert (after.st_dev, after.st_ino, after.st_rdev) == (before.st_dev, before.st_ino, before.st_rdev)
         if expected_status != 0:
             assert result.stderr
-    target = work / "symlink-target.s"
-    link = work / "symlink-output.s"
+    target = work / "symlink-target"
+    link = work / "symlink-output"
     target.write_text("replace this output\n")
     link.unlink(missing_ok=True)
     link.symlink_to(target.name)
-    command([compiler, "-o", output, valid])
-    command([compiler, "-o", link, valid])
+    command([compiler, *dump_options, "-o", output, valid])
+    command([compiler, *dump_options, "-o", link, valid])
     assert link.is_symlink() and link.readlink() == Path(target.name)
     assert target.read_bytes() == output.read_bytes()
-    print(f"integration: {checks} process checks passed")
+    if args.backend == "c":
+        assert command([compiler, "--emit-c", valid]).stdout == output.read_bytes()
+        assert command([compiler, "--prepare", valid]).stdout == b""
+        symbols = work / "atomic.rsp"
+        command([compiler, "--emit-c", "-o", output, "--symbols", symbols, valid])
+        assert symbols.read_bytes()
+        expected_c, expected_symbols = output.read_bytes(), symbols.read_bytes()
+        command([compiler, "--emit-c", "-o", output, "--symbols", symbols, invalid], expected=1)
+        assert output.read_bytes() == expected_c and symbols.read_bytes() == expected_symbols
+        command([compiler, "--emit-c", "-o", output, "--symbols", output, valid], expected=1)
+        assert output.read_bytes() == expected_c
+        command([compiler, "--emit-c", "-o", output, "--symbols",
+                 str(output.parent) + "/./" + output.name, valid], expected=1)
+        assert output.read_bytes() == expected_c
+        directory_link = work / "artifact-directory"
+        directory_link.unlink(missing_ok=True)
+        directory_link.symlink_to(".", target_is_directory=True)
+        unpublished = work / "same-new-artifact"
+        unpublished.unlink(missing_ok=True)
+        command([compiler, "--emit-c", "-o", unpublished, "--symbols",
+                 directory_link / unpublished.name, valid], expected=1)
+        assert not unpublished.exists()
+        command([compiler, "--emit-c", "-o", target, "--symbols", link, valid], expected=1)
+        assert link.is_symlink() and target.read_bytes() == expected_c
+        hardlink = work / "hardlink-target"
+        hardlink.unlink(missing_ok=True)
+        hardlink.hardlink_to(target)
+        hardlink_alias = work / "hardlink-output"
+        hardlink_alias.unlink(missing_ok=True)
+        hardlink_alias.symlink_to(hardlink.name)
+        command([compiler, "--emit-c", "-o", link, "--symbols", hardlink_alias, valid], expected=1)
+        assert target.read_bytes() == expected_c and hardlink.read_bytes() == expected_c
+        assert link.is_symlink() and hardlink_alias.is_symlink()
+        dangling = work / "dangling-artifact"
+        dangling.unlink(missing_ok=True)
+        dangling.symlink_to("absent-artifact-target")
+        command([compiler, "--emit-c", "-o", unpublished, "--symbols", dangling, valid], expected=1)
+        assert dangling.is_symlink() and not unpublished.exists() and not dangling.exists()
+        command([compiler, "--emit-c", "--symbols", "/dev/null", valid])
+        command([compiler, "--emit-c", "-o", output, "--symbols", "/dev/full", valid], expected=1)
+        assert output.read_bytes() == expected_c
+
+        for arguments in ([valid], ["--object", valid], ["--symbols", symbols, "-o", output, valid],
+                          ["--unknown", valid], ["--object", "-o", output, invalid]):
+            result = command([compiler, *arguments], expected=1)
+            assert result.stderr
+        native_output = work / "atomic-object.o"
+        retained = b"retain native output\n"
+        native_output.write_bytes(retained)
+        command([compiler, "--object", "-o", native_output, "--cflag", "-not-a-gcc-flag", valid], expected=1)
+        assert native_output.read_bytes() == retained
+        command([compiler, "-o", native_output, "--ldflag", "-not-a-gcc-flag", valid], expected=1)
+        assert native_output.read_bytes() == retained
+        missing_tools = os.environ.copy()
+        missing_tools["PATH"] = str(work / "missing-tools")
+        command([compiler, "--object", "-o", native_output, valid], expected=127, env=missing_tools)
+        assert native_output.read_bytes() == retained
+        fake_tools = work / "failed-tools"
+        fake_tools.mkdir(exist_ok=True)
+        failed_objcopy = fake_tools / "objcopy"
+        failed_objcopy.write_text(f"#!{sys.executable}\nraise SystemExit(23)\n")
+        failed_objcopy.chmod(0o755)
+        failed_environment = os.environ.copy()
+        failed_environment["PATH"] = str(fake_tools) + os.pathsep + os.environ["PATH"]
+        command([compiler, "--object", "-o", native_output, valid], expected=23, env=failed_environment)
+        assert native_output.read_bytes() == retained
+        for destination in ("/dev/null", "/dev/full", link):
+            before = Path(destination).lstat()
+            command([compiler, "--object", "-o", destination, valid], expected=1)
+            after = Path(destination).lstat()
+            assert (before.st_mode, before.st_dev, before.st_ino) == (after.st_mode, after.st_dev, after.st_ino)
+        assert link.is_symlink() and target.read_bytes() == expected_c
+        spaced_source = work / "source with spaces.rmd"
+        spaced_source.write_bytes(valid.read_bytes())
+        spaced_executable = work / "output with spaces"
+        command([compiler, "-o", spaced_executable, *c_options, *c_link_options, spaced_source])
+        command([spaced_executable])
+        for prefix in ("-", "@"):
+            name = prefix + "relative-output"
+            command([compiler, "-o", name, *c_options, *c_link_options, valid], cwd=work)
+            command([work / name])
+        assert not list(work.glob("*.tmp.*")), "driver left temporary files after a completed command"
+
+        library_source, library_object = work / "library.rmd", work / "library.o"
+        library_source.write_text("fn answer()->i32{return 42i32;}")
+        command([compiler, "--library", "--object", "-o", library_object, *c_options, library_source])
+        library_main = work / "library-main.c"
+        library_main.write_text("#include <stdint.h>\nextern int32_t _rmd0_u1_d1(void);\n"
+                                "int main(void){return _rmd0_u1_d1();}\n")
+        command([*cc, *STRICT, "-no-pie", library_object, library_main, *ldflags, "-o", work / "library-main"])
+        command([work / "library-main"], expected=42)
+
+        stage_sources = ["api/rmd0.rmd", "api/rmd0_host.rmd", *[f"stages/c/{name}.rmd"
+                         for name in ("model", "base", "types", "emit", "driver")]]
+        seed = build / "rmd-c-seed"
+        generations = [("seed", seed), ("current", compiler)]
+        generated = []
+        for name, stage_compiler in generations:
+            c_path, response = work / f"self-{name}.c", work / f"self-{name}.rsp"
+            command([stage_compiler, "--emit-c", "-o", c_path, "--symbols", response, *stage_sources])
+            generated.append((c_path.read_bytes(), response.read_bytes()))
+        assert generated[0] == generated[1], "seed and self-compiled C stages emit different artifacts"
+        stage_object = work / "self-backend.o"
+        command([compiler, "--object", "-o", stage_object, *c_options, *stage_sources])
+        references = command(["nm", "-u", stage_object]).stdout.decode()
+        allowed_frontend = {"rmd_context_init", "rmd_context_destroy", "rmd_read", "rmd_collect", "rmd_resolve", "rmd_check"}
+        for name in re.findall(r"\bU\s+(\S+)", references):
+            if name.startswith("rmd_") and name not in allowed_frontend:
+                raise AssertionError(f"C stage calls a forbidden native compiler helper: {name}")
+        next_compiler = work / "rmd-c-next"
+        command([*cc, "-no-pie", stage_object, build / "librmd0.a", build / "librmd0_host.a",
+                 *ldflags, "-o", next_compiler])
+        next_c, next_response = work / "self-next.c", work / "self-next.rsp"
+        command([next_compiler, "--emit-c", "-o", next_c, "--symbols", next_response, *stage_sources])
+        assert generated[1] == (next_c.read_bytes(), next_response.read_bytes()), "self-translation changed emitted artifacts"
+        for stage_compiler in (seed, compiler, next_compiler):
+            names = command(["nm", stage_compiler]).stdout
+            assert not re.search(rb"\brmd_x64_", names), "C stage contains a native x64 backend dependency"
+        next_object = work / "self-intrusive.o"
+        command([next_compiler, "--object", "-o", next_object, *c_options, "examples/intrusive.rmd"])
+        next_program = work / "self-intrusive"
+        command([*cc, "-no-pie", next_object, build / "librmd0_host.a", *ldflags, "-o", next_program])
+        assert command([next_program]).stdout == b"intrusive: ok\n"
+        print("C stage: seed, self, and next generations emit identical C and exact-symbol response files")
+    print(f"integration ({args.backend}): {checks} process checks passed")
 
 
 if __name__ == "__main__":

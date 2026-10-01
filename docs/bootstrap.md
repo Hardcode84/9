@@ -198,9 +198,11 @@ reader. The example needs no plugin loader, evaluator, JIT, or compiler server.
 The test also uses a native caller that checks the result and all callee-saved
 registers. This checks the replacement stage's native calling contract.
 
-This is stage execution through RMD0. The compiler implementation remains C99.
-Self-compilation requires an RMD0 translation of the compiler libraries, a build
-with the preceding compiler, and a second build with the resulting executable.
+This is stage execution through RMD0. The seed compiler remains C99. The
+[C backend stage](c-backend.md) separately implements a complete backend and
+driver in RMD0 and compiles itself through its own output. The reader and
+checker remain C99. Full compiler self-compilation requires their translation
+to RMD0 and a second complete build with the resulting executable.
 The C frontend experiment requires a separate C reader, C semantic rules, and
 an ABI adapter for C operations absent from RMD0. Neither case is established
 by this small replacement-stage witness.
@@ -226,8 +228,9 @@ it does not impose a scheduler or a module resolver on other drivers.
 The backend emits unoptimized assembly. It uses stack slots where operand
 evaluation and aggregate value copies require storage. GNU assembler produces
 object code, and GCC links it. This path has no C optimization step. Runtime
-parity with optimized C has not been measured. An optimizing adapter must construct another backend's
-input or add native optimization before that comparison can be established.
+parity with optimized C has not been measured. The optional C backend stage
+constructs GCC input and uses GCC optimization. Its measurements are separate
+from this assembly seed.
 
 There is no runtime pointer metadata, allocation registry, garbage collector,
 reference count, or implicit cleanup. Required division and shift traps remain

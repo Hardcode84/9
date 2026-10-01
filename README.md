@@ -1,12 +1,11 @@
 # Crust
 
-Crust is an experimental systems programming language with a small core,
-explicit memory control, and compiler stages written in Crust.
+Crust is a systems programming language built around three priorities:
+**small, fast, and extensible**.
 
-The core has explicit types, integers, records, arrays, pointers, and native
-function calls. Optional compiler libraries provide ownership, RAII, `defer`,
-function overloads, and a C backend. The raw core has no lifetime checks;
-the selected stage defines and enforces its ownership rules.
+Keep the core small enough to understand and implement. Make compilation
+fast enough to keep development interactive. Let programs define the
+language they need through ordinary libraries, and pay only for what they use.
 
 ## Design principles
 
@@ -25,7 +24,7 @@ the selected stage defines and enforces its ownership rules.
 
 ## Quick start
 
-The current prototype targets Linux x86-64. It uses a pedantic C99 bootstrap
+The current implementation targets Linux x86-64. It uses a pedantic C99 bootstrap
 compiler. Install GCC, GNU Make, GNU binutils, Python 3, and the libffi
 development headers and library.
 

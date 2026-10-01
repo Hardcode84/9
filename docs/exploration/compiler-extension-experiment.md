@@ -6,7 +6,7 @@ This document extends the [metacompilation study](metacompilation.md).
 It defines how much of the compiler a user can replace. It adds no compiler
 implementation or timing result.
 
-The [Crust0 specification](crust0-spec.md) defines the concrete bootstrap language
+The [Crust0 specification](../crust0-spec.md) defines the concrete bootstrap language
 and takes precedence over seed proposals in this study. Its core has explicit
 declaration bindings; module management belongs to a metastage.
 
@@ -296,7 +296,7 @@ the frozen inputs and tests; it does not establish all-C or kernel support.
 | C compiler | chibicc commit `90d1f7f199cc55b13c7fdb5839d1409806633fdb`; multiple translation units, compiler construction, and its tests |
 | Small nonempty C units | Typedef shadowing, macro state, calls, and layout; prevent large-source savings from hiding startup and interface costs |
 
-The [existing profile harness](../benchmarks/frontend/profile.py) records the
+The [existing profile harness](../../benchmarks/frontend/profile.py) records the
 SQLite archive URL and SHA-256. Retain its default SQLite feature macros.
 Archive the pinned chibicc source as well. Its author rewrites repository
 history, so a branch name is not a sufficient source identity.

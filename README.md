@@ -43,7 +43,9 @@ the third runs it.
 
 ## Documentation
 
+- [Core design and compilation flow](docs/design.md)
 - [Language specification](docs/crust0-spec.md)
-- [Examples](examples/README.md)
+- [Tutorials and examples](examples/README.md)
 - [Compilation programs and stage APIs](docs/source-runner.md)
 - [Build, tests, and contributor setup](docs/bootstrap.md)
+- [Research and design exploration](docs/exploration/README.md)

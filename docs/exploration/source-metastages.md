@@ -1,7 +1,7 @@
 # Source-defined metastages: Zig and Jai review
 
 Date: 2026-10-01. Status: design review before implementation. The
-[source runner](source-runner.md) records the implemented syntax and ownership
+[source runner](../source-runner.md) records the implemented syntax and ownership
 rules. The [earlier native-stage experiment](source-stages.md) records its cold
 execution cost. This review remains the research record; descriptions of
 unimplemented code refer to that earlier state.
@@ -236,7 +236,7 @@ execution, any repeated parsing, and all selected language checks and lowering.
 Measure the plain-source path separately. Compare both with the paired GCC
 baseline. Use the one-worker case as well as any parallel configuration.
 
-The existing [C backend measurements](c-backend.md#compilation-measurements)
+The existing [C backend measurements](../c-backend.md#compilation-measurements)
 use a prepared backend. They do not establish the cost of a new source-defined entry. Reusing
 a prepared external library is valid, but label that configuration. Include
 rebuilding a changed project stage in the cold configuration.

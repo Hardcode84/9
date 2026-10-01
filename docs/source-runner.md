@@ -5,7 +5,7 @@ runs.
 
 Date: 2026-10-01. This document defines the implemented root runner. The
 [language specification](crust0-spec.md) defines the Crust0 value and execution
-rules. The [design study](source-order-compilation.md) records the decision
+rules. The [design study](exploration/source-order-compilation.md) records the decision
 and the required experiments.
 
 Run a compilation program with:
@@ -294,7 +294,7 @@ before releasing their inputs. The seed adds no task scheduler.
 No persistent execution-result cache or prepared-root cache is implemented.
 Root effects execute on every invocation. Reusing results requires a complete
 dependency and effect contract, as described in the
-[metacompilation study](metacompilation.md#7-caching-without-changing-program-meaning).
+[metacompilation study](exploration/metacompilation.md#7-caching-without-changing-program-meaning).
 
 The [reader-transfer proof](../benchmarks/source-order/proof.md) established
 the first ownership and output boundary before this implementation. The

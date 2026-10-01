@@ -2,7 +2,7 @@
 
 Date: 2026-10-01. This document preserves the interface and measurements at
 revision `9cff8f4`. That native host launcher has been removed. Use the
-[source runner](source-runner.md) for the current command and contract.
+[source runner](../source-runner.md) for the current command and contract.
 The examples and commands below require the recorded revision. The
 [Zig and Jai review](source-metastages.md) records the earlier design evidence.
 
@@ -227,7 +227,7 @@ executes the inline entry on each request.
 
 The repeatable measurement is `benchmarks/source-stages/measure.py`. It gives
 separate results for the prepared target frontend and the complete source-stage
-request. The [one-worker speed gate](crust0-spec.md#14-conformance-and-performance-gates)
+request. The [one-worker speed gate](../crust0-spec.md#14-conformance-and-performance-gates)
 must identify which of these configurations it covers. Successful output
 alone proves the phase and ownership boundary.
 
@@ -238,7 +238,7 @@ python3 benchmarks/source-stages/measure.py --cpu 4 --output build/source-stage-
 ```
 
 The command saves results and returns failure if the complete cold request
-misses its gate. The [recorded run](../benchmarks/source-stages/results.json)
+misses its gate. The [recorded run](../../benchmarks/source-stages/results.json)
 uses GCC 13.3, one logical CPU, 25 randomized paired rounds, fresh processes,
 and a warm OS file cache. It performs no timed target GCC work. All stage
 inputs and emitted C and symbol files have recorded hashes. The intrusive
@@ -258,7 +258,7 @@ to 0.992. The complete cold request fails on all three inputs. These are
 different claims. The installed native backend library is an explicit input,
 and the complete request prepares a new inline host entry each time.
 
-The [first prepared-frontend run](../benchmarks/source-stages/results-before-name-buffer.json)
+The [first prepared-frontend run](../../benchmarks/source-stages/results-before-name-buffer.json)
 had an inconclusive upper bound of 1.003 on 8,000 functions. Name generation
 allocated a temporary 256-byte arena buffer per declaration before copying
 the retained name into the context. A 64-byte local buffer holds the fixed
@@ -267,7 +267,7 @@ removes about 2 MiB of temporary arena requests for 8,000 names. The retained
 names still belong to the context. Reuse tests with stack-use-after-return
 detection pass.
 
-The [plain-source comparison](../benchmarks/source-stages/plain-baseline.json)
+The [plain-source comparison](../../benchmarks/source-stages/plain-baseline.json)
 uses the compiler before this change and the current compiler on the same
 three RMD0 inputs. Their complete assembly bytes match. All final paired
 confidence intervals include one, so the run does not establish a timing
@@ -276,7 +276,7 @@ token. The final reader inlines that helper and keeps primitive keywords
 before the new keyword in its lookup table. The comparison is repeatable with
 `benchmarks/source-stages/plain.py` and two prepared compiler executables.
 
-The [native preparation profile](../benchmarks/source-stages/native-preparation.json)
+The [native preparation profile](../../benchmarks/source-stages/native-preparation.json)
 uses 25 randomized paired rounds per configuration. The default GNU BFD route
 spends a median 7.330 ms in the host linker and 1.535 ms in the assembler.
 Host input, checks, planning, and assembly text take about 0.309 ms.
@@ -289,7 +289,7 @@ median paired ratio is 1.143, with a 95% interval from 1.130 to 1.168.
 Changing the installed linker alone does not meet that gate. These probes
 precede the final buffer and lexer changes. Their hashes identify their code.
 
-A [bounded libffi probe](../benchmarks/source-stages/ffi-one-call.json) reads
+A [bounded libffi probe](../../benchmarks/source-stages/ffi-one-call.json) reads
 and checks an entry of the form `return foreign(parameter);`, then executes
 that call without native host compilation. It emits the same C and symbol
 bytes and produces the intrusive-list output. Its complete process takes

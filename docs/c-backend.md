@@ -296,7 +296,7 @@ commands, input hashes, tool versions, and confidence intervals. The
 [earlier run](../benchmarks/c-stage/results-pre-path-fix.json) precedes the
 driver path fixes and is separate evidence. These runs precede the source-stage
 integration and backend library split. Their hashes identify the measured
-implementation. The [native host experiment](source-stages.md#cost-gate)
+implementation. The [native host experiment](exploration/source-stages.md#cost-gate)
 measured preparation of the earlier inline entry. The
 [source runner](source-runner.md#parallel-work-reuse-and-measurements) defines
 the current complete request boundary and records its three passing speed

@@ -9,22 +9,22 @@ Implement ownership, RAII, and `defer` in an ordinary Crust compiler library.
 The root program selects that library. Keep these rules out of the C99 seed.
 RAII means that an initialized resource gets automatic scope cleanup.
 
-The [resource library](../stages/resources/README.md) now implements the bounded
+The [resource library](../../stages/resources/README.md) now implements the bounded
 component described here. Its reader, ownership checker, cleanup lowering, and
 body emitter are Crust code. The C99 seed has no resource-specific change.
-The [SQLite witness](../examples/resources/sqlite/README.md) and
-[measurement record](../benchmarks/resources/README.md) give executable evidence.
+The [SQLite witness](../../examples/resources/sqlite/README.md) and
+[measurement record](../../benchmarks/resources/README.md) give executable evidence.
 This does not establish the persistent intrusive-list observer contract below.
 
 This document makes the [resource rules](language-exploration.md#62-ownership-and-cleanup)
 and [language-stage boundary](compiler-extension-experiment.md#ownership-and-unsafe-are-language-stages)
 concrete for the current compiler. Those notes contain the wider research.
-The [Crust0 specification](crust0-spec.md) remains the seed contract.
+The [Crust0 specification](../crust0-spec.md) remains the seed contract.
 
 ## 1. Select the stage in the source program
 
 Keep the invocation `crust main.crs`. Use the same transfer as the
-[hello example](../examples/hello/main.crs): the root loads an ordinary Crust
+[hello example](../../examples/hello/main.crs): the root loads an ordinary Crust
 library, then calls its build function with the source and current cursor.
 The resource compiler reads the remaining bytes in its own grammar.
 It can also read separate target files. No launcher option or special package
@@ -36,7 +36,7 @@ The implemented syntax and API are specified in the resource library README.
 Do not add new seed keywords to select it.
 
 A stage can instead replace `CrustRun.read` and `CrustRun.execute` for later root
-actions. The [reader example](../examples/reader-switch/main.crs) shows this
+actions. The [reader example](../../examples/reader-switch/main.crs) shows this
 route. Install both callbacks in one root action. The runner captures the
 callback pair before it executes that action.
 
@@ -207,17 +207,17 @@ the corresponding extension barriers. The seed scalar ABI remains unchanged.
 
 | Current component | Consequence for the resource stage |
 |---|---|
-| [Runner](source-runner.md) with source, cursor, and ordinary callbacks | Select a new language in the root without a launcher change. |
-| [Public syntax, type, and declaration records](../include/crust0.h) | Construct lowered seed input and preserve source locations. |
-| [Seed reader](../src/read.c) with private lexer and parser | Write the resource reader in Crust. There is no public keyword registration callback. |
-| [Seed checker](../src/check.c) with scalar parameters and scalar or unit results | Define a library ABI lowering for source resource records passed or returned by value. |
+| [Runner](../source-runner.md) with source, cursor, and ordinary callbacks | Select a new language in the root without a launcher change. |
+| [Public syntax, type, and declaration records](../../include/crust0.h) | Construct lowered seed input and preserve source locations. |
+| [Seed reader](../../src/read.c) with private lexer and parser | Write the resource reader in Crust. There is no public keyword registration callback. |
+| [Seed checker](../../src/check.c) with scalar parameters and scalar or unit results | Define a library ABI lowering for source resource records passed or returned by value. |
 | Seed records with ordinary copying and raw field access | Enforce nominal resource modes, private representation, and unsafe adoption in the Crust checker. |
 | Structured `CrustStmtKind` without labels or basic blocks | Account for the cost of copying cleanup into several exits. |
-| [C backend API](../stages/c/api.crs) accepting checked seed input | Call `c_backend_build` after lowering and checking that input. |
+| [C backend API](../../stages/c/api.crs) accepting checked seed input | Call `c_backend_build` after lowering and checking that input. |
 | `c_program` owning its read/check/build sequence | Use a resource driver. This function has no resource-pass insertion point. |
 
-The implementation adds a [generic reader library](../stages/reader/README.md)
-with four syntax hooks and a [generic complete-body callback](c-backend.md#custom-function-bodies).
+The implementation adds a [generic reader library](../../stages/reader/README.md)
+with four syntax hooks and a [generic complete-body callback](../c-backend.md#custom-function-bodies).
 Both are ordinary Crust libraries. The resource driver uses those interfaces.
 The C backend's public callback does not require a seed function body and has
 no resource-specific operation.
@@ -296,7 +296,7 @@ can call back into a list or expose partially destroyed payload. A non-owning
 head detaches its nodes; it does not destroy them. These requirements cannot
 be discharged by placing a hidden unchecked list in the compiler library.
 
-The existing [intrusive example](../examples/intrusive/program.crs) is a Crust0
+The existing [intrusive example](../../examples/intrusive/program.crs) is a Crust0
 raw-pointer example. It supplies a representation and behavior reference.
 It does not establish this checked observer contract.
 

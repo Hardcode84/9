@@ -565,7 +565,7 @@ def main():
         "workloads": workloads,
         "native_stage_preparation": native_preparation,
         "speed_pass_rule": {
-            "source": "docs/language-exploration.md sections 10.3 and 10.4",
+            "source": "docs/exploration/language-exploration.md sections 10.3 and 10.4",
             "samples": "at least 20 paired fresh processes",
             "criterion": "candidate/fastest eligible C median <=1.00 and upper95% confidence bound <=1.00 for each comparable workload and boundary",
             "handoff": "complete generated C is measured, but no matching C frontend-only handoff baseline is measured; its formal handoff gate is not established",

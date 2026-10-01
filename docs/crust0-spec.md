@@ -15,7 +15,7 @@ Crust0 is a low-level language with raw memory preconditions. It does not claim
 memory safety. Ownership, borrowing, cleanup, and unsafe policy belong to
 separate compiled language stages. Their removal from the seed is deliberate.
 The complete checked Crust language requires the direct-list lifetime contract
-identified in the [research](language-exploration.md#69-intrusive-lists-with-individual-destruction-and-reuse).
+identified in the [research](exploration/language-exploration.md#69-intrusive-lists-with-individual-destruction-and-reuse).
 This specification does not replace that requirement with unchecked list code.
 
 This document controls Crust0 version 0.1. The earlier documents remain research
@@ -616,7 +616,7 @@ by an external library. The compiler must not recognize a particular backend's
 name, path, or implementation. A standalone
 driver can prepare and execute those calls, but it does not replace the
 requirement that the override be in the user source. The
-[source metastage review](source-metastages.md) defines the phase requirements.
+[source metastage review](exploration/source-metastages.md) defines the phase requirements.
 It introduces no additional Crust0 grammar.
 
 ### Source-order root execution
@@ -801,7 +801,7 @@ No cache is needed for correctness or the first speed result. A persistent
 cache must account for stage and helper code, representations, source and binding
 facts, target settings, options, and every external input that can affect output.
 It must handle absent files and side effects as specified in the
-[cache contract](metacompilation.md#7-caching-without-changing-program-meaning).
+[cache contract](exploration/metacompilation.md#7-caching-without-changing-program-meaning).
 A cache cannot hide stage preparation in the cold-build result.
 
 ## 13 Complete seed examples
@@ -854,7 +854,7 @@ The example has no heap allocation and keeps both nodes live through every
 access. It does not establish the required safe language rules for arbitrary
 stored pointers, individual destruction, and storage reuse. Auto-unlink alone
 cannot establish those rules. That separate requirement remains in the
-[direct-list witness](language-exploration.md#102-intrusive-list-witness).
+[direct-list witness](exploration/language-exploration.md#102-intrusive-list-witness).
 
 This second source uses constant tables, record values, and a function value.
 The result of `apply()` is `18u32`.
@@ -905,11 +905,11 @@ facilities:
 
 The C extension case tests compiler construction, including C rules absent
 from the seed. It does not add those rules to Crust0. Follow the bounded sequence
-in the [compiler extension experiment](compiler-extension-experiment.md#6-decision-gates).
+in the [compiler extension experiment](exploration/compiler-extension-experiment.md#6-decision-gates).
 The checked Crust language must additionally pass the SQLite ownership and direct
 intrusive-list witnesses. A raw seed or C frontend result cannot replace them.
 
-Use the established [check and handoff boundaries](language-exploration.md#103-define-the-timing-boundary).
+Use the established [check and handoff boundaries](exploration/language-exploration.md#103-define-the-timing-boundary).
 Count source input, lookup, interface construction, all selected language checks,
 stage preparation, generated-input processing, target ABI lowering, and complete
 backend IR construction when they are needed to reach the measured endpoint.
@@ -923,7 +923,7 @@ at most 1.00 and a 95% bootstrap confidence upper bound at most 1.00. Apply this
 rule to one-worker builds as well as matched parallel builds. A warm-cache or
 many-worker result cannot excuse failure in the one-worker cold case. Retain
 the exact configurations and intervals required by the
-[measurement rule](language-exploration.md#104-test-matrix-and-pass-rule).
+[measurement rule](exploration/language-exploration.md#104-test-matrix-and-pass-rule).
 
 A failed case blocks expansion. Identify the operation responsible, change it,
 and repeat that witness before adding another dependent layer. If measurement
@@ -943,7 +943,7 @@ policy, richer syntax, and backend adaptation into ordinary compiled libraries.
 It does not add generics, a macro evaluator, a package manager, a query engine,
 or a permanent plugin ABI to make those libraries possible.
 
-The [systems source study](systems-capabilities.md) remains the capability
+The [systems source study](exploration/systems-capabilities.md) remains the capability
 target. Linux, GCC, and LLVM cases require explicit storage, layout, callbacks,
 relocation, and synchronization. The seed provides basic mechanisms to implement
 compiler libraries; it does not yet claim to compile those source trees.

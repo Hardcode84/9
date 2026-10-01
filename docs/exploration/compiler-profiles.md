@@ -69,8 +69,8 @@ The source inputs are pinned and checked with SHA-256 before use.
 The C++ client parses JSON, converts an array to `vector<int>`, computes a sum,
 adds two fields, and serializes the result. A second file only includes the
 same header. Both files are in the repository.
-[C++ client](../benchmarks/frontend/json_client.cpp),
-[include-only file](../benchmarks/frontend/json_include.cpp)
+[C++ client](../../benchmarks/frontend/json_client.cpp),
+[include-only file](../../benchmarks/frontend/json_include.cpp)
 
 The Rust crate has no enabled external crate dependencies. Its Unicode features
 select generated data tables and related code. Disabling them changes supported
@@ -406,7 +406,7 @@ The Clang trace reader subtracts nested complete events and computes unions
 for overlapping intervals. It excludes synthetic `Total` events. LLVM 20
 stores header `Source` spans as adjacent asynchronous begin/end records.
 The reader verifies that format and rejects unsupported event layouts.
-[Trace reader](../benchmarks/frontend/clang_trace.py),
+[Trace reader](../../benchmarks/frontend/clang_trace.py),
 [LLVM trace format](https://github.com/llvm/llvm-project/blob/llvmorg-20.1.8/llvm/lib/Support/TimeProfiler.cpp#L228)
 
 Measureme's label “Total cpu time” is not OS user-plus-system time when the
@@ -418,7 +418,7 @@ The committed evidence includes all 160 timing samples, all 24 phase summaries,
 Rust and GCC timer logs, sampling rows, source hashes, versions, and commands.
 Large raw traces and perf data remain in the ignored cache. Their hashes are
 recorded, and the scripts reproduce the collection procedure.
-[Evidence directory](../benchmarks/frontend/results/2026-09-30),
-[timing summary](../benchmarks/frontend/results/2026-09-30/timing-summary.json),
-[phase profiles](../benchmarks/frontend/results/2026-09-30/phase-profiles.json),
-[sampling profiles](../benchmarks/frontend/results/2026-09-30/sampling-profiles.json)
+[Evidence directory](../../benchmarks/frontend/results/2026-09-30),
+[timing summary](../../benchmarks/frontend/results/2026-09-30/timing-summary.json),
+[phase profiles](../../benchmarks/frontend/results/2026-09-30/phase-profiles.json),
+[sampling profiles](../../benchmarks/frontend/results/2026-09-30/sampling-profiles.json)

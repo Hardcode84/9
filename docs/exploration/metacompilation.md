@@ -7,7 +7,7 @@ It keeps C-level compilation speed as the first requirement. This study adds
 source evidence, not new compiler timings. The earlier
 [C, C++, and Rust profiles](compiler-profiles.md) remain separate measurements.
 
-The [Crust0 specification](crust0-spec.md) now defines the bootstrap language and
+The [Crust0 specification](../crust0-spec.md) now defines the bootstrap language and
 its public construction contract. Module management is a library stage, along
 with richer syntax, ownership policy, and backend adaptation. The candidate
 features in this study are not additional seed requirements.

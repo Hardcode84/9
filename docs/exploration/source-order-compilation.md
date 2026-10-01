@@ -5,10 +5,10 @@ runs.
 
 Date: 2026-10-01. Status: design study retained as the experiment record.
 This study examined the [native host block](source-stages.md) at revision
-`9cff8f4`. The [source runner](source-runner.md) now implements its selected
+`9cff8f4`. The [source runner](../source-runner.md) now implements its selected
 contract: exact action boundaries, semicolon-ended root compounds, incremental
 host checking, and checked-tree execution. The
-[reader-transfer proof](../benchmarks/source-order/proof.md) passed before
+[reader-transfer proof](../../benchmarks/source-order/proof.md) passed before
 the complete evaluator was added. Statements below about the current compiler
 and required changes describe that earlier revision.
 
@@ -107,9 +107,9 @@ provides a useful model for the external-file case, but normal Python file
 execution does not supply the requested root-reader behavior.
 [Python import protocol](https://peps.python.org/pep-0451/)
 
-The [repeatable witness](../benchmarks/source-order/python_boundaries.py)
+The [repeatable witness](../../benchmarks/source-order/python_boundaries.py)
 passes nine checks on CPython 3.12.11. The
-[recorded results](../benchmarks/source-order/python-results.json) show:
+[recorded results](../../benchmarks/source-order/python-results.json) show:
 
 | Input | Observed effect |
 |---|---|
@@ -427,8 +427,8 @@ inputs. Target GCC compilation and linking were excluded.
 The prepared path passes the recorded paired speed gate for these workloads.
 The complete native host path fails it for all three. Assembly and shared
 library linking dominate the small request. Removing a source envelope cannot
-remove those operations. See the [raw measurements](../benchmarks/source-stages/results.json)
-and [native preparation breakdown](../benchmarks/source-stages/native-preparation.json).
+remove those operations. See the [raw measurements](../../benchmarks/source-stages/results.json)
+and [native preparation breakdown](../../benchmarks/source-stages/native-preparation.json).
 
 | Execution choice | Cost and consequence |
 |---|---|
@@ -443,7 +443,7 @@ large compiler stages as ordinary prepared native libraries when measuring
 that configuration. Do not move target tokenization, checking, or per-node
 emission into an interpreter merely to execute a short root program.
 
-The [earlier foreign-call experiment](../benchmarks/source-stages/ffi-one-call.json)
+The [earlier foreign-call experiment](../../benchmarks/source-stages/ffi-one-call.json)
 measured 2.046 ms for the intrusive workload against 6.700 ms for paired GCC
 syntax. It executes only one checked foreign call. It does not implement root
 statements, user function bodies, reader replacement, or general callbacks.

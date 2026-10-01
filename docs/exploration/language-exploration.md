@@ -2,7 +2,7 @@
 
 Date: 2026-09-30. Updated: 2026-10-01. Status: research and a proposed experiment.
 
-The [Crust0 specification](crust0-spec.md) now defines the bootstrap language.
+The [Crust0 specification](../crust0-spec.md) now defines the bootstrap language.
 The richer syntax and checked rules below remain research candidates, not seed
 features. Module management is a library stage under that specification.
 
@@ -30,7 +30,7 @@ cleanup position of a local that is initialized again.
 
 ## 1. Recommendation
 
-Start with the [minimal seed](crust0-spec.md) and public compiler libraries.
+Start with the [minimal seed](../crust0-spec.md) and public compiler libraries.
 For the separate checked-language experiment, evaluate tagged unions,
 move-only resources, automatic scope cleanup, and local borrows. Use explicit
 interfaces and function types. Keep module policy in a library. Make the default

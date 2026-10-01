@@ -110,7 +110,7 @@ C-level compilation speed. These inputs take only a few milliseconds, and
 there is no matched C baseline here. The project-wide C-speed rule still
 requires the candidate/C median ratio and the upper 95% confidence bound to
 be at most 1.00 at each comparable boundary. See
-[the timing contract](../../docs/language-exploration.md#103-define-the-timing-boundary).
+[the timing contract](../../docs/exploration/language-exploration.md#103-define-the-timing-boundary).
 
 Nominal record names form part of the proposed source ABI key. Separate
 objects must use the same record definitions and ABI domain, preferably from

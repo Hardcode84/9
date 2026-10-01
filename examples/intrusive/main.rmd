@@ -1,0 +1,15 @@
+host_source(run, "../../api/rmd0_stage.rmd");
+host_source(run, "../../stages/c/api.rmd");
+host_source(run, "../../stages/c/build.rmd");
+host_link(run, "../../build/rmd-c-library.so");
+
+var target: *RmdSource = host_input(run, "program.rmd", 1u64);
+if (*run).argc != 0i32 {
+    return c_build(target, 0usize, (*run).argc, (*run).argv);
+};
+var arguments: [*u8; 4] = uninit;
+arguments[0usize] = "-o";
+arguments[1usize] = host_path(run, "../../build/intrusive-from-root");
+arguments[2usize] = "--ldflag";
+arguments[3usize] = host_path(run, "../../build/librmd0_host.a");
+return c_build(target, 0usize, 4i32, &arguments[0usize]);

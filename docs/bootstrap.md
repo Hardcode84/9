@@ -27,7 +27,7 @@ this target profile accepts.
 
 ```sh
 make
-build/rmd0 -S -o build/intrusive.s examples/intrusive.rmd
+build/rmd0 -S -o build/intrusive.s examples/intrusive/program.rmd
 gcc -no-pie build/intrusive.s build/librmd0_host.a -o build/intrusive
 build/intrusive
 make check
@@ -222,18 +222,17 @@ each reported failure. Failed work is not a published interface.
 
 ## A compiled replacement stage
 
-`examples/stage.rmd` is an ordinary RMD0 program. Its reader accepts a decimal
+`examples/custom-stage/stage.rmd` is an ordinary RMD0 program. Its reader accepts a decimal
 exit status, such as `42`, instead of RMD0 syntax. It creates a function through
 the public syntax records, invokes the checker, and emits a library. It also
 replaces integer addition by zero with a direct value transfer through the
 public backend API. The remaining operations use the standard emitter.
 
 ```sh
-build/rmd0 -o build/stage.s api/rmd0.rmd api/rmd0_host.rmd api/rmd0_x64.rmd examples/stage.rmd
+build/rmd0 -o build/stage.s api/rmd0.rmd api/rmd0_host.rmd api/rmd0_x64.rmd examples/custom-stage/stage.rmd
 gcc -no-pie build/stage.s build/librmd0.a build/librmd0_host.a -o build/stage
-printf '42\n' > build/answer.txt
-build/stage build/answer.txt build/answer.s
-gcc -no-pie build/answer.s examples/answer_main.c -o build/answer
+build/stage examples/custom-stage/answer.txt build/answer.s
+gcc -no-pie build/answer.s examples/custom-stage/answer_main.c -o build/answer
 build/answer
 ```
 
@@ -298,16 +297,21 @@ and 20 native file-status layout comparisons. The allocation sweep covers
 19 failure points. The parallel
 test checks six consumers in serial order and two concurrent orders, with
 shared provider facts unchanged. Both complete specification examples run.
-The source-order suite adds 141 process checks. Its root evaluator, source
+The source-order suite adds 154 process checks. Its root evaluator, source
 snapshots, native callbacks, reader replacement, phase isolation, backend
 reuse, paths, and failure cases pass with the C core and RMD C backend under
 GCC AddressSanitizer and UndefinedBehaviorSanitizer. Stack-use-after-return
 detection is enabled. The evaluator suite also passes 10,829 checks under
 Clang 20 AddressSanitizer and UndefinedBehaviorSanitizer.
-The [final validation record](../benchmarks/source-order/validation.json)
-contains the GCC commands, source hashes, and complete sanitizer logs. That
-run also passes all 348 C-backend process checks, including buffer overlap
-and growth with a one-byte append.
+The [runner validation record](../benchmarks/source-order/validation.json)
+contains the GCC commands, source hashes, and complete sanitizer logs from
+revision `b1a6196`, before the example directories were added. That run passes
+141 root and 348 C-backend process checks, including buffer overlap and growth
+with a one-byte append. The 13 added example checks run unchanged source files
+from a copied layout. They cover inline targets, arguments, multiple files,
+reader replacement, original error locations, and output failure.
+The updated target and example groups also pass 13 process checks each with
+the instrumented GCC build and stack-use-after-return detection enabled.
 
 Use these commands for a second strict compiler and address/undefined-behavior
 instrumentation:

@@ -37,7 +37,7 @@ def main():
     directory = Path(tempfile.mkdtemp(prefix="plain-source-", dir=cache))
     workloads = [BASE.generate(directory, count) for count in (1000, 8000)]
     workloads.append({"name": "intrusive", "library": False,
-                      "paths": {"rmd": ROOT / "examples/intrusive.rmd"}})
+                      "paths": {"rmd": ROOT / "examples/intrusive/program.rmd"}})
     binaries = {"before": args.before.resolve(), "after": args.after.resolve()}
     hashes = {name: BASE.binary_info(path) for name, path in binaries.items()}
     commands = {workload["name"]: {

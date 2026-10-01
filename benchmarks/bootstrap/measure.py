@@ -288,7 +288,7 @@ def main():
         parser.error("This experiment requires the Linux x86-64 execution profile")
     os.sched_setaffinity(0, {args.cpu})
     workloads = [generate(args.inputs, count) for count in (1000, 8000)]
-    witness_source = Path("examples/intrusive.rmd")
+    witness_source = Path("examples/intrusive/program.rmd")
     workloads.append({"name": "intrusive", "functions": len(re.findall(r"^fn ", witness_source.read_text(), re.M)),
                       "paths": {"c": Path("benchmarks/bootstrap/intrusive.c"), "rmd": witness_source},
                       "library": False,

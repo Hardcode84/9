@@ -1,0 +1,36 @@
+# Examples
+
+Run the commands below from the repository root. Build the tools once:
+
+```sh
+make all c-stage
+```
+
+Each example has its own directory. Start with [hello](hello/main.rmd).
+
+| Directory | Example | Output |
+| --- | --- | --- |
+| [hello](hello/README.md) | Compilation code and target code in one file | `Hello, world!` |
+| [arguments](arguments/README.md) | Separate compiler arguments from target arguments | Each target argument on its own line |
+| [multiple-files](multiple-files/README.md) | Select and compile two target files | `Hello from another source file!` |
+| [intrusive](intrusive/README.md) | Build a direct intrusive list | `intrusive: ok` |
+| [reader-switch](reader-switch/README.md) | Replace the reader and executor from the root | Two lines read with a new grammar |
+| [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
+
+The root files select the repository's `build/rmd-c-library.so` explicitly.
+Paths passed to `host_source`, `host_input`, and `host_path` are relative to the
+root file. A raw `-o` argument passed to the C backend is relative to the working
+directory. Each example states its output path. A root builds an executable;
+run that executable as a separate command.
+
+`reader-switch` executes text actions directly and does not build an executable.
+`custom-stage` uses the seed compiler to build a separate compiler executable.
+
+Run `make check-examples` to check the root examples. The test copies their
+unchanged source files and selected libraries into a path with spaces. It runs
+them from a separate working directory, executes their outputs, and checks
+reader and inline-target errors. `make check` and `make check-c` also check the
+custom assembly stage.
+
+Recorded benchmark JSON files retain the source paths and hashes from their
+original revisions. The live measurement scripts use the current example paths.

@@ -17,17 +17,20 @@ output. It uses GCC for native code and retains the C99 reader and checker.
 Run a [compilation program](docs/source-runner.md) with `rmd main.rmd`.
 The root selects its sources, stages, and outputs through ordinary calls.
 It can change the reader for its remaining bytes. The
-[example](examples/main.rmd) calls the external C backend:
+[hello-world example](examples/hello/main.rmd) keeps the compilation program
+and target program in the same file:
 
 ```sh
 make all c-stage
-build/rmd examples/main.rmd
-build/intrusive-from-root
-make check-stage
+build/rmd examples/hello/main.rmd
+build/hello
+make check-examples
 ```
 
 The root controls reading, checking, and output through public APIs.
-Its code and declarations remain separate from the target program.
+Root and target code use separate namespaces, even when they share a file.
+The [example index](examples/README.md) also covers arguments, multiple target
+files, intrusive lists, a new root grammar, and a custom assembly stage.
 
 Start with the [RMD0 language specification](docs/rmd0-spec.md). It defines the
 minimal bootstrap language, complete grammar, execution rules, and public stage

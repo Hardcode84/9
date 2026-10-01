@@ -381,7 +381,7 @@ def check_foreign_errors(suite):
 
 
 def check_target(suite):
-    target = ROOT / "examples/intrusive.rmd"
+    target = ROOT / "examples/intrusive/program.rmd"
     response = suite.work / "intrusive.rsp"
     code = compilation_root(target, suite.backend, allocator_checks=True)
     result = suite.root("intrusive-stage", code, ["--emit-c", "--symbols", response])
@@ -398,7 +398,7 @@ def check_target(suite):
                                   "boundary:usize; target:*RmdSource; argc:i32; argv:**u8; }")
     reader = reader.replace("boundary:0usize};", "boundary:0usize,target:captured,argc:(*run).argc,argv:(*run).argv};")
     reader = reader.replace("return rmd0_host_write_stream(1u32,&(*payload).byte,1usize) == 0i32;",
-                            "return c_build((*state).target,(*state).argc,(*state).argv) == 0i32;")
+                            "return c_build((*state).target,0usize,(*state).argc,(*state).argv) == 0i32;")
     transferred = suite.root("reader-selected-intrusive", (prefix + reader).encode() + b"\0A",
                              ["--emit-c", "--symbols", response])
     assert transferred.stdout == prepared.stdout and response.read_bytes() == reference.read_bytes()
@@ -530,18 +530,76 @@ fn main(argc:i32,argv:**u8) -> i32 {
     suite.host_unit("pointer-constants", body)
 
 
+def check_examples(suite):
+    package = suite.work / "example package"
+    if package.exists():
+        shutil.rmtree(package)
+    for directory in ("examples", "api", "stages"):
+        shutil.copytree(ROOT / directory, package / directory)
+    output = package / "build"
+    output.mkdir()
+    for name in ("rmd-c-library.so", "librmd0_host.a"):
+        shutil.copyfile(suite.build / name, output / name)
+    elsewhere = package / "working directory"
+    elsewhere.mkdir()
+
+    def compile_example(name, arguments=()):
+        path = package / "examples" / name / "main.rmd"
+        result = suite.command([suite.runner, path, *arguments], cwd=elsewhere)
+        assert not result.stdout and not result.stderr, (name, result)
+        return path
+
+    hello = compile_example("hello")
+    assert suite.command([output / "hello"]).stdout == b"Hello, world!\n"
+    compile_example("multiple-files")
+    assert suite.command([output / "multiple-files"]).stdout == b"Hello from another source file!\n"
+
+    compile_example("arguments", ["--check"])
+    compile_example("arguments", ["-o", "argument output"])
+    assert suite.command([elsewhere / "argument output", "first", "two words"]).stdout == (
+        b"Program arguments:\nfirst\ntwo words\n")
+
+    flags = [item for flag in suite.cflags for item in ("--cflag", flag)]
+    flags += [item for flag in suite.ldflags for item in ("--ldflag", flag)]
+    compile_example("intrusive", ["-o", output / "intrusive", "--ldflag", output / "librmd0_host.a", *flags])
+    assert suite.command([output / "intrusive"]).stdout == b"intrusive: ok\n"
+
+    reader = package / "examples/reader-switch/main.rmd"
+    expected = b"Hello from a reader written in RMD!\nThese lines use the new grammar.\n"
+    result = suite.command([suite.runner, reader], cwd=elsewhere)
+    assert result.stdout == expected and not result.stderr, result
+    with open("/dev/full", "wb") as full:
+        result = suite.command([suite.runner, reader], expected=1, stdout=full, cwd=elsewhere)
+    assert b"cannot write text" in result.stderr, result.stderr
+    original = reader.read_text()
+    bad_line = original[:original.index("> Hello")].count("\n") + 1
+    reader.write_text(original.replace("> Hello", "! Hello"))
+    result = suite.command([suite.runner, reader], expected=1, cwd=elsewhere)
+    assert f"{reader}:{bad_line}:1:".encode() in result.stderr, result.stderr
+    assert b"expected '> ' before text" in result.stderr, result.stderr
+
+    original = hello.read_text()
+    broken = hello.with_name("bad-target.rmd")
+    broken.write_text(original + "fn bad()->i32{return missing_value;}\n")
+    retained = (output / "hello").read_bytes()
+    result = suite.command([suite.runner, broken], expected=1, cwd=elsewhere)
+    assert f"{broken}:{original.count(chr(10)) + 1}:".encode() in result.stderr, result.stderr
+    assert b"unknown name 'missing_value'" in result.stderr, result.stderr
+    assert (output / "hello").read_bytes() == retained
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=ROOT / "build")
     parser.add_argument("--cc", default="gcc")
     parser.add_argument("--cflags", default="-O2")
     parser.add_argument("--ldflags", default="")
-    parser.add_argument("--group", choices=("all", "root", "runtime", "readers", "foreign", "target"), default="all")
+    parser.add_argument("--group", choices=("all", "root", "runtime", "readers", "foreign", "target", "examples"), default="all")
     arguments = parser.parse_args()
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     suite = Suite(arguments)
     for name, function in (("root", check_root), ("runtime", check_runtime), ("readers", check_readers),
-                           ("foreign", check_foreign_errors), ("target", check_target)):
+                           ("foreign", check_foreign_errors), ("target", check_target), ("examples", check_examples)):
         if arguments.group in ("all", name):
             function(suite)
             print(f"source order: {name} passed", flush=True)

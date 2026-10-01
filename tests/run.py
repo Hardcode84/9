@@ -114,7 +114,7 @@ def main():
     native = work / "native.o"
     command([*cc, *STRICT, "-O2", "-c", "tests/native.c", "-o", native])
     command([executable("runtime", inputs=["tests/runtime.rmd"], libraries=[native])])
-    intrusive = executable("intrusive", inputs=["examples/intrusive.rmd"])
+    intrusive = executable("intrusive", inputs=["examples/intrusive/program.rmd"])
     assert command([intrusive]).stdout == b"intrusive: ok\n"
 
     dynamic = """
@@ -351,8 +351,8 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     command([executable("stat-layout", stat_record + "\nfn main(argc:i32,argv:**u8)->i32{" + stat_checks + "return 0i32;}")])
     print(f"driver stat layout: {len(stat_checks.splitlines())} C/RMD0 comparisons passed")
 
-    if (ROOT / "examples" / "stage.rmd").exists():
-        stage = executable("stage", inputs=[*api_paths, "examples/stage.rmd"], libraries=[build / "librmd0.a"])
+    if (ROOT / "examples" / "custom-stage" / "stage.rmd").exists():
+        stage = executable("stage", inputs=[*api_paths, "examples/custom-stage/stage.rmd"], libraries=[build / "librmd0.a"])
         custom_input = work / "answer.txt"
         custom_input.write_text("42\n")
         custom_assembly = work / "answer.s"
@@ -360,7 +360,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         if "stage: add zero" not in custom_assembly.read_text():
             raise AssertionError("custom backend lowering did not run")
         custom_object = assemble(custom_assembly)
-        command([*cc, *STRICT, "-no-pie", custom_object, "examples/answer_main.c",
+        command([*cc, *STRICT, "-no-pie", custom_object, "examples/custom-stage/answer_main.c",
                  *ldflags, "-o", work / "answer"])
         command([work / "answer"], expected=42)
         saved_registers = [("rbp", 0x3141592653589793), ("rbx", 0x2718281828459045),
@@ -547,7 +547,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
             names = command(["nm", stage_compiler]).stdout
             assert not re.search(rb"\brmd_x64_", names), "C stage contains a native x64 backend dependency"
         next_object = work / "self-intrusive.o"
-        command([next_compiler, "--object", "-o", next_object, *c_options, "examples/intrusive.rmd"])
+        command([next_compiler, "--object", "-o", next_object, *c_options, "examples/intrusive/program.rmd"])
         next_program = work / "self-intrusive"
         command([*cc, "-no-pie", next_object, build / "librmd0_host.a", *ldflags, "-o", next_program])
         assert command([next_program]).stdout == b"intrusive: ok\n"

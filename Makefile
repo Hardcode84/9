@@ -13,7 +13,7 @@ PRELUDE = api/rmd0.rmd api/rmd0_host.rmd api/rmd0_eval.rmd api/rmd0_run.rmd stag
 C_LIBRARY = api/rmd0.rmd api/rmd0_host.rmd api/rmd0_stage.rmd stages/c/model.rmd stages/c/base.rmd stages/c/types.rmd stages/c/emit.rmd stages/c/driver.rmd stages/c/program.rmd
 C_STAGE = $(C_LIBRARY) stages/c/main.rmd
 
-.PHONY: all clean check witness api c-stage check-c check-stage
+.PHONY: all clean check witness api c-stage check-c check-stage check-examples
 all: $(BUILD)/rmd $(BUILD)/rmd0 $(BUILD)/librmd0.a $(BUILD)/librmd0_host.a $(BUILD)/librmd0_run.a
 
 $(BUILD):
@@ -66,8 +66,8 @@ $(BUILD)/rmd-c-library.so: $(BUILD)/rmd-c-library.o
 
 c-stage: $(BUILD)/rmd-c $(BUILD)/rmd-c-library.so
 
-$(BUILD)/intrusive.s: $(BUILD)/rmd0 examples/intrusive.rmd
-	$(BUILD)/rmd0 -S -o $@ examples/intrusive.rmd
+$(BUILD)/intrusive.s: $(BUILD)/rmd0 examples/intrusive/program.rmd
+	$(BUILD)/rmd0 -S -o $@ examples/intrusive/program.rmd
 
 $(BUILD)/intrusive.o: $(BUILD)/intrusive.s
 	$(AS) $(ASFLAGS) $< -o $@
@@ -107,6 +107,9 @@ check-c: c-stage
 
 check-stage: all c-stage
 	python3 tests/source_order.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+
+check-examples: all c-stage
+	python3 tests/source_order.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)' --group examples
 
 clean:
 	rm -rf $(BUILD)

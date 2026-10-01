@@ -1,0 +1,54 @@
+record Line {
+    bytes: *u8;
+    size: usize;
+}
+
+// Read a line that starts with '> '. Empty lines are separators.
+fn read_line(current: *RmdRun, action: **u8) -> bool {
+    var input: *RmdSource = (*current).source;
+    var position: usize = (*current).cursor;
+    while position < (*input).size && (*input).bytes[position] == 10u8 {
+        position = position + 1usize;
+    }
+    if position == (*input).size {
+        (*current).cursor = position;
+        *action = null(*u8);
+        return true;
+    }
+    if (*input).size - position < 2usize || (*input).bytes[position] != 62u8 ||
+       (*input).bytes[position + 1usize] != 32u8 {
+        rmd_set_error((*current).context, input, position, "expected '> ' before text");
+        return false;
+    }
+    var begin: usize = position + 2usize;
+    position = begin;
+    while position < (*input).size && (*input).bytes[position] != 10u8 {
+        position = position + 1usize;
+    }
+    if position < (*input).size { position = position + 1usize; }
+    var line: *Line = (*current).user as *Line;
+    (*line).bytes = (*input).bytes + begin as isize;
+    (*line).size = position - begin;
+    (*current).cursor = position;
+    *action = line as *u8;
+    return true;
+}
+
+// Write this line before the next read. The source and Line must remain live.
+fn write_line(current: *RmdRun, action: *u8) -> bool {
+    var line: *Line = action as *Line;
+    if rmd0_host_write_stream(1u32, (*line).bytes, (*line).size) != 0i32 {
+        rmd_set_error((*current).context, (*current).source, (*current).cursor, "cannot write text");
+        return false;
+    }
+    return true;
+}
+
+var line: Line = uninit;
+{
+    (*run).user = &line as *u8;
+    (*run).read = read_line;
+    (*run).execute = write_line;
+};
+> Hello from a reader written in RMD!
+> These lines use the new grammar.

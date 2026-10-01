@@ -80,9 +80,9 @@ def main():
          "src/check.c", "runtime/host.c", "-rdynamic", "-ldl", "-lffi", "-no-pie", "-o", work / "san/runner"])
     library("plugin", "reader.plugin", sanitized, work / "san")
     library("backend", "output.plugin", sanitized, work / "san")
-    run([build / "rmd-c", "--emit-c", "--symbols", work / "reference.rsp", "examples/intrusive.rmd"], work / "reference.c")
+    run([build / "rmd-c", "--emit-c", "--symbols", work / "reference.rsp", "examples/intrusive/program.rmd"], work / "reference.c")
     prefix = b"set_backend(session, c_backend_build);\nset_reader(session, alternate);"
-    (work / "main.rmd").write_bytes(prefix + b"\0@include |" + str(root / "examples/intrusive.rmd").encode() + b"|\n@emit\n")
+    (work / "main.rmd").write_bytes(prefix + b"\0@include |" + str(root / "examples/intrusive/program.rmd").encode() + b"|\n@emit\n")
     command = [work / "runner", work / "main.rmd"]
     for path in (root / "api/rmd0.rmd", root / "api/rmd0_stage.rmd", root / "stages/c/api.rmd", work / "model.rmd", work / "interface.rmd"):
         command += ["--api", path]

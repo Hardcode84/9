@@ -1,10 +1,10 @@
-// Require a captured target and the C backend interface. Arguments belong to
+// Compile a captured target from begin through EOF. Arguments belong to
 // c_program. Complete all target work before returning its process status.
-fn c_build(target: *RmdSource, argument_count: i32, arguments: **u8) -> i32 {
+fn c_build(target: *RmdSource, begin: usize, argument_count: i32, arguments: **u8) -> i32 {
     var context_value: RmdContext = uninit;
     rmd_context_init(&context_value, null(*RmdAllocator));
     var request: RmdBuild = make RmdBuild {
-        context: &context_value, source: target, target_begin: 0usize,
+        context: &context_value, source: target, target_begin: begin,
         argc: argument_count, argv: arguments
     };
     var status_value: i32 = c_program(&request);

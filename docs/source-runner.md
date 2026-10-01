@@ -24,40 +24,54 @@ The optional C backend also requires GCC, GNU assembler, and GNU `objcopy`.
 
 ```sh
 make all c-stage
-build/rmd examples/main.rmd
-build/intrusive-from-root
+build/rmd examples/hello/main.rmd
+build/hello
 make check check-c check-stage
 ```
 
-The target prints `intrusive: ok`. It inserts, unlinks, destroys, and reuses
-individual nodes while the list remains live. This is a raw-memory bootstrap
-test. It does not establish the checked language's lifetime rules.
+The target prints `Hello, world!`. The
+[example index](../examples/README.md) also covers compiler and target arguments,
+multiple files, intrusive lists, reader replacement, and a custom assembly stage.
 
-The [root example](../examples/main.rmd) is the complete build description:
+The [hello example](../examples/hello/main.rmd) contains the complete build
+description and target program in one file:
 
 ```rmd
-host_source(run, "../api/rmd0_stage.rmd");
-host_source(run, "../stages/c/api.rmd");
-host_source(run, "../stages/c/build.rmd");
-host_link(run, "../build/rmd-c-library.so");
+host_source(run, "../../api/rmd0_stage.rmd");
+host_source(run, "../../stages/c/api.rmd");
+host_source(run, "../../stages/c/build.rmd");
+host_link(run, "../../build/rmd-c-library.so");
 
-var target: *RmdSource = host_input(run, "intrusive.rmd", 1u64);
-var arguments: [*u8; 4] = uninit;
-arguments[0usize] = "-o";
-arguments[1usize] = host_path(run, "../build/intrusive-from-root");
-arguments[2usize] = "--ldflag";
-arguments[3usize] = host_path(run, "../build/librmd0_host.a");
-return c_build(target, 4i32, &arguments[0usize]);
+var arguments: [*u8; 2] = make [*u8; 2] {
+    "-o", host_path(run, "../../build/hello")
+};
+return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize]);
+
+// The target program starts here.
+extern fn puts(text: *u8) -> i32 = "puts";
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if puts("Hello, world!") < 0i32 { return 1i32; }
+    return 0i32;
+}
 ```
 
 The source selects an ordinary shared library. A copy with another filename
 works through the same interface. The [C backend](c-backend.md) is all RMD0.
 Its output does not depend on the root evaluator or compiler libraries.
 
-`c_build` is an ordinary RMD helper. It creates a target context, calls
+`c_build(source, begin, argc, argv)` is an ordinary RMD helper. It compiles the
+range from `begin` through source EOF. The cursor already points past the root
+return's semicolon, so the target starts there. A separate target file uses
+`begin = 0`. The helper creates a target context, calls
 `c_program`, reports its diagnostic, destroys the context, and returns its
 status. The root can call individual reader, checker, and backend operations
 instead. A different language can use its own tree and target representation.
+
+Use the cursor in the final root action that transfers control to the target
+compiler. An earlier saved cursor would include later root setup as target
+input. The source descriptor retains the complete file, so diagnostics use
+the original line numbers.
 
 ## Initial bindings and arguments
 

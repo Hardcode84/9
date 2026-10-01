@@ -242,7 +242,7 @@ def main():
     if sources() != source_hashes:
         raise RuntimeError("Compiler or stage source changed during preparation")
     workloads = [BASE.generate(args.inputs, count) for count in (1000, 8000)]
-    intrusive = Path("examples/intrusive.rmd")
+    intrusive = Path("examples/intrusive/program.rmd")
     workloads.append({"name": "intrusive", "functions": len(re.findall(r"^fn ", intrusive.read_text(), re.M)),
                       "paths": {"c": Path("benchmarks/bootstrap/intrusive.c"), "rmd": intrusive}, "library": False})
     commands = {workload["name"]: frontend_commands(workload, binaries) for workload in workloads}

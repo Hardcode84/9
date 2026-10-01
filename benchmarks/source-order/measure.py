@@ -97,7 +97,7 @@ def staged_source(target, output, native_library):
     lines = [f"host_source(run, {rmd_string(os.path.relpath(path, output.parent))});" for path in HOST_INTERFACES]
     lines.extend((f"host_link(run, {rmd_string(os.path.relpath(native_library, output.parent))});",
                   f"var target: *RmdSource = host_input(run, {rmd_string(os.path.relpath(target, output.parent))}, 1u64);",
-                  "return c_build(target, (*run).argc, (*run).argv);", ""))
+                  "return c_build(target, 0usize, (*run).argc, (*run).argv);", ""))
     program = "\n".join(lines).encode("ascii")
     output.write_bytes(program)
     return len(program)
@@ -105,7 +105,7 @@ def staged_source(target, output, native_library):
 
 def workloads_in(directory, native_library):
     workloads = [BASE.generate(directory, count) for count in (1000, 8000)]
-    intrusive = ROOT / "examples/intrusive.rmd"
+    intrusive = ROOT / "examples/intrusive/program.rmd"
     workloads.append({"name": "intrusive", "library": False,
                       "functions": len(re.findall(r"^fn ", intrusive.read_text(), re.M)),
                       "paths": {"rmd": intrusive, "c": ROOT / "benchmarks/bootstrap/intrusive.c"}})

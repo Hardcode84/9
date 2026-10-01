@@ -41,13 +41,13 @@ def proof_command(source):
 commands = {
     'source-order-output': proof_command(HERE / 'main.rmd'),
     'fixed-reader-output': proof_command(HERE / 'native-no-reader-change.rmd'),
-    'prepared-output': [str(BUILD / 'rmd-c'), '--emit-c', '--symbols', '/dev/null', str(ROOT / 'examples/intrusive.rmd')],
+    'prepared-output': [str(BUILD / 'rmd-c'), '--emit-c', '--symbols', '/dev/null', str(ROOT / 'examples/intrusive/program.rmd')],
     'gcc-original-syntax': ['gcc', '-std=c99', '-pedantic-errors', '-O0', '-g0', '-fsyntax-only', '-Iinclude', 'benchmarks/bootstrap/intrusive.c'],
 }
 paths = [HERE / p for p in ('runner', 'reader.plugin', 'output.plugin', 'runner.c', 'proof.h', 'model.rmd', 'interface.rmd', 'plugin.rmd', 'main.rmd', 'native-no-reader-change.rmd', 'verify.py', 'verification.json', 'measure.py')]
 paths += [BUILD / p for p in ('rmd-c','rmd-c-library.so','librmd0_host.a')]
 paths += [HERE / 'replay-build.json']
-paths += interfaces + [ROOT / p for p in ( 'examples/intrusive.rmd', 'benchmarks/bootstrap/intrusive.c', 'benchmarks/bootstrap/measure.py')]
+paths += interfaces + [ROOT / p for p in ( 'examples/intrusive/program.rmd', 'benchmarks/bootstrap/intrusive.c', 'benchmarks/bootstrap/measure.py')]
 paths += [BUILD / p for p in ('core.o', 'read.o', 'check.o', 'host.o')]
 paths += sorted((ROOT / 'src').glob('*.c')) + sorted((ROOT / 'include').glob('*.h')) + sorted((ROOT / 'stages/c').glob('*.rmd'))
 hashes = {str(path): info(path) for path in paths}

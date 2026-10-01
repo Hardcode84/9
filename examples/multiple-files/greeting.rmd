@@ -1,0 +1,3 @@
+fn greeting() -> *u8 {
+    return "Hello from another source file!";
+}

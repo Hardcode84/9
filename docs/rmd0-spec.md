@@ -8,7 +8,8 @@ contract. A conforming implementation must implement these requirements.
 Examples do not add rules.
 
 The first requirement is C-level compilation speed through backend handoff.
-The design has no implementation or measured RMD speed result yet.
+The [C99 bootstrap implementation](bootstrap.md) implements the seed and has
+bounded measurements. Those results do not establish checked-RMD performance.
 
 RMD0 is a low-level language with raw memory preconditions. It does not claim
 memory safety. Ownership, borrowing, cleanup, and unsafe policy belong to
@@ -808,7 +809,7 @@ fn apply() -> u32 {
 }
 ~~~
 
-These are specified programs, not results from an implemented RMD0 compiler.
+These programs are part of the bootstrap reader and execution tests.
 
 ## 14 Conformance and performance gates
 
@@ -889,4 +890,5 @@ The experiment tests one claim: ordinary compiled libraries can define language
 rules and backend interfaces while retaining C-level frontend speed. A small
 grammar alone does not prove that claim. Public replacement, executable output,
 and the measured gates are the required evidence. This document makes no claim
-of novelty, proven safety, or measured RMD performance.
+of novelty or proven safety. Bootstrap timing results apply only to their
+stated workloads and endpoints.

@@ -1,7 +1,13 @@
 # RMD
 
-RMD is a design study for a small systems programming language.
+RMD is a small systems programming language project.
 The main requirement is C-level compilation speed before backend processing.
+
+The RMD0 bootstrap compiler is implemented in pedantic C99 with arena
+allocation. It emits textual x86-64 assembly for the system assembler and
+linker. Run `make` to build it and `make check` to run the tests.
+Read the [bootstrap guide](docs/bootstrap.md) for commands, public stage APIs,
+the compiled replacement-stage example, and measurement boundaries.
 
 Start with the [RMD0 language specification](docs/rmd0-spec.md). It defines the
 minimal bootstrap language, complete grammar, execution rules, and public stage
@@ -24,6 +30,6 @@ Read the [compiler extension experiment](docs/compiler-extension-experiment.md)
 for a small seed, ownership and unsafe stages, complete syntax replacement,
 backend metastages, and a C compiler benchmark.
 
-The repository does not contain an RMD compiler. RMD0 has raw memory
-preconditions; the checked language's direct-list lifetime rule still needs
-to be established. Neither language has a measured speed result.
+RMD0 has raw memory preconditions. The checked language's direct-list lifetime
+rule still requires a specified rule and a checked implementation. The C99
+bootstrap and its measurements do not establish that safety claim.

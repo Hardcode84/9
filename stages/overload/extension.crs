@@ -27,6 +27,7 @@ extern fn ov_same(stage:*OvStage, a:*CrustTypeSyntax, b:*CrustTypeSyntax)->bool 
 // Type hooks append a self-delimiting ASCII payload without NUL after the kind tag.
 // Distinct types need distinct payloads. Use ov_part or a fixed count of child encodings.
 // Use depth + 1 for child types. This operation enforces the type nesting bound.
+// A type hook can call ov_same and ov_select. These queries preserve its output prefix.
 extern fn ov_encode_type(stage:*OvStage, syntax:*CrustTypeSyntax, buffer:*OvText, depth:usize)->unit = "ov_encode_type";
 extern fn ov_text(stage:*OvStage, buffer:*OvText, text:*u8)->unit = "ov_text";
 extern fn ov_bytes(stage:*OvStage, buffer:*OvText, bytes:*u8, size:usize)->unit = "ov_bytes";

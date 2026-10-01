@@ -16,7 +16,7 @@ fn ov_names(stage:*OvStage, function:*OvFunction)->unit {
     var result_key:*CrustName = ov_type_key(stage, (*(*function).syntax).base);
     if (*stage).failed { return; }
     var buffer:*OvText = &(*stage).scratch;
-    (*buffer).size = 0usize;
+    var begin:usize = (*buffer).size;
     ov_text(stage, buffer, "crust_ov1_d");
     ov_part(stage, buffer, (*stage).abi, c_length((*stage).abi));
     ov_text(stage, buffer, "n");
@@ -29,13 +29,12 @@ fn ov_names(stage:*OvStage, function:*OvFunction)->unit {
     ov_text(stage, buffer, "c");
     var contract:*CrustName = (*function).contract;
     ov_part(stage, buffer, (*contract).text, (*contract).size);
-    var native:*CrustName = ov_intern(stage, (*buffer).data, (*buffer).size);
+    var native:*CrustName = ov_finish_key(stage, begin);
     if native == null(*CrustName) { return; }
     (*function).native_name = (*native).text;
-    (*buffer).size = 0usize;
     ov_text(stage, buffer, "$");
     ov_bytes(stage, buffer, (*native).text, (*native).size);
-    (*function).internal_name = ov_intern(stage, (*buffer).data, (*buffer).size);
+    (*function).internal_name = ov_finish_key(stage, begin);
 }
 
 fn ov_add_function(stage:*OvStage, group:*OvGlobal, declaration:*CrustDecl)->unit {

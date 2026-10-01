@@ -83,6 +83,14 @@ fn ov_part(stage:*OvStage, buffer:*OvText, bytes:*u8, size:usize)->unit {
     ov_bytes(stage, buffer, bytes, size);
 }
 
+fn ov_finish_key(stage:*OvStage, begin:usize)->*CrustName {
+    var buffer:*OvText = &(*stage).scratch;
+    var result:*CrustName = ov_intern(stage, (*buffer).data + begin as isize,
+                                     (*buffer).size - begin);
+    (*buffer).size = begin;
+    return result;
+}
+
 fn ov_type(stage:*OvStage, kind:u32, loc:*CrustLoc)->*CrustTypeSyntax {
     var syntax:*CrustTypeSyntax = ov_alloc(stage, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
     if syntax != null(*CrustTypeSyntax) { (*syntax).kind = kind; (*syntax).loc = *loc; }

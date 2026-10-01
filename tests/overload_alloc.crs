@@ -99,7 +99,7 @@ fn oa_check(sources:*CrustSource, count:usize, composed:bool)->i32 {
             if composed { success = rs_prepare(&resources); }
             else { success = crust_collect(&context) && crust_resolve(&context) && crust_check(&context); }
         }
-        var valid:bool = !state.host_failed && context.failure == null(*u8);
+        var valid:bool = !state.host_failed && context.failure == null(*u8) && stage.scratch.size == 0usize;
         if success {
             valid = valid && !state.rejected && !stage.failed && !resources.failed && context.error_count == 0usize;
         } else {

@@ -49,9 +49,9 @@ fn ov_type_key(stage:*OvStage, syntax:*CrustTypeSyntax)->*CrustName {
     if (*stage).failed { return null(*CrustName); }
     var found:*CrustName = crust_map_get(&(*stage).type_keys, syntax as usize) as *CrustName;
     if found != null(*CrustName) { return found; }
-    (*stage).scratch.size = 0usize;
+    var begin:usize = (*stage).scratch.size;
     ov_encode_type(stage, syntax, &(*stage).scratch, 0usize);
-    found = ov_intern(stage, (*stage).scratch.data, (*stage).scratch.size);
+    found = ov_finish_key(stage, begin);
     if found != null(*CrustName) { ov_put(stage, &(*stage).type_keys, syntax as usize, found as *u8); }
     return found;
 }
@@ -64,7 +64,7 @@ fn ov_same(stage:*OvStage, a:*CrustTypeSyntax, b:*CrustTypeSyntax)->bool {
 }
 
 fn ov_parameters(stage:*OvStage, syntax:*CrustTypeSyntax)->*CrustName {
-    (*stage).scratch.size = 0usize;
+    var begin:usize = (*stage).scratch.size;
     ov_text(stage, &(*stage).scratch, "a");
     ov_number(stage, &(*stage).scratch, (*syntax).param_count as u64);
     var index:usize = 0usize;
@@ -72,7 +72,7 @@ fn ov_parameters(stage:*OvStage, syntax:*CrustTypeSyntax)->*CrustName {
         ov_encode_type(stage, (*syntax).params[index], &(*stage).scratch, 0usize);
         index = index + 1usize;
     }
-    return ov_intern(stage, (*stage).scratch.data, (*stage).scratch.size);
+    return ov_finish_key(stage, begin);
 }
 
 fn ov_function_syntax(stage:*OvStage, declaration:*CrustDecl)->*CrustTypeSyntax {

@@ -13,6 +13,7 @@ record OhState {
     call_calls:usize;
     statement_calls:usize;
     contract_calls:usize;
+    nested_growth:bool;
 }
 
 fn oh_length(text:*u8)->usize {
@@ -40,10 +41,12 @@ fn oh_error(state:*OhState, stage:*OvStage, location:*CrustLoc, kind:u32)->bool 
 }
 
 fn oh_read_type(reader:*CrustReader, user:*u8)->*CrustTypeSyntax {
-    if !rr_is_name(reader, "meter") { return null(*CrustTypeSyntax); }
+    var kind:u32 = OH_METER;
+    if rr_is_name(reader, "second") { kind = OH_METER + 1u32; }
+    else { if !rr_is_name(reader, "meter") { return null(*CrustTypeSyntax); } }
     var offset:usize = (*reader).token.offset;
     rr_next(reader);
-    var syntax:*CrustTypeSyntax = rr_new_type(reader, OH_METER, offset);
+    var syntax:*CrustTypeSyntax = rr_new_type(reader, kind, offset);
     var base:*CrustTypeSyntax = rr_type(reader);
     var link:*OhType = rr_alloc(reader, sizeof(OhType), alignof(OhType)) as *OhType;
     if (*reader).failed { return null(*CrustTypeSyntax); }
@@ -56,10 +59,25 @@ fn oh_read_type(reader:*CrustReader, user:*u8)->*CrustTypeSyntax {
 
 fn oh_type_key(stage:*OvStage, syntax:*CrustTypeSyntax, buffer:*OvText,
                depth:usize, user:*u8)->bool {
-    if (*syntax).kind != OH_METER { return false; }
+    if (*syntax).kind != OH_METER && (*syntax).kind != OH_METER + 1u32 { return false; }
     var state:*OhState = user as *OhState;
     (*state).type_calls = (*state).type_calls + 1usize;
     if oh_error(state, stage, &(*syntax).loc, 1u32) { return true; }
+    var payload:*u8 = "units_of_measure_with_explicit_representation_contract_and_a_long_encoding_that_crosses_the_buffer_growth_boundary";
+    ov_part(stage, buffer, payload, oh_length(payload));
+    var probe:*CrustTypeSyntax = ov_type(stage, CRUST_T_U32, &(*syntax).loc);
+    if (*stage).failed { return true; }
+    if (*state).failure == 6u32 {
+        (*probe).kind = OH_METER + 2u32;
+        (*state).failures = (*state).failures + 1usize;
+        (*state).error_offset = (*syntax).loc.offset;
+    }
+    var capacity:usize = (*buffer).capacity;
+    if !ov_same(stage, (*syntax).base, probe) {
+        if !(*stage).failed { ov_error(stage, &(*syntax).loc, "unit type requires u32"); }
+        return true;
+    }
+    if (*buffer).capacity > capacity { (*state).nested_growth = true; }
     ov_encode_type(stage, (*syntax).base, buffer, depth + 1usize);
     return true;
 }
@@ -99,17 +117,17 @@ fn oh_contract(stage:*OvStage, declaration:*CrustDecl, user:*u8)->*CrustName {
     return name;
 }
 
-fn oh_test(failure:u32)->bool {
+fn oh_test(failure:u32, output:*u8)->bool {
     var context:CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
     var state:OhState = make OhState {
         failure:failure, failures:0usize, error_offset:0usize, types:null(*OhType),
         type_calls:0usize, binding_calls:0usize, name_calls:0usize, group_calls:0usize,
-        call_calls:0usize, statement_calls:0usize, contract_calls:0usize
+        call_calls:0usize, statement_calls:0usize, contract_calls:0usize, nested_growth:false
     };
     var source:CrustSource = make CrustSource {
         path:"overload-hook-input", identity:1u64, size:0usize,
-        bytes:"fn choose(value:meter u32)->u32{return 41u32;}\nfn choose(value:u32)->u32{return 42u32;}\nfn metered(value:meter u32)->u32{return (choose)(value);}\nfn plain(value:u32)->u32{return choose(value);}\nfn zero()->unit{}\nfn invoke()->unit{zero();}"
+        bytes:"fn choose(value:meter u32)->u32{return 41u32;}\nfn choose(value:u32)->u32{return 42u32;}\nfn metered(value:meter u32)->u32{return (choose)(value);}\nfn plain(value:u32)->u32{return choose(value);}\nfn zero()->unit{}\nfn invoke()->unit{zero();}\nfn choose(value:second u32)->u32{return 43u32;}\nfn seconded(value:second u32)->u32{return choose(value);}\nfn run_target(argc:i32,argv:**u8)->i32{var sum:u32=metered(0u32 as meter u32)+plain(0u32)+seconded(0u32 as second u32);return sum as i32-126i32;}"
     };
     source.size = oh_length(source.bytes);
     var reader_hooks:CrustReaderHooks = make CrustReaderHooks {
@@ -125,17 +143,20 @@ fn oh_test(failure:u32)->bool {
     var stage:OvStage = uninit;
     ov_init(&stage, &context, "meter_fixture_v1", &hooks);
     var success:bool = parsed != null(*CrustUnit) && ov_prepare(&stage);
-    var valid:bool = context.failure == null(*u8);
+    var valid:bool = context.failure == null(*u8) && stage.scratch.size == 0usize;
     if failure != 0u32 {
+        var expected:*u8 = "external overload hook failed";
+        if failure == 6u32 { expected = "overload stage has no encoding for this type"; }
         valid = valid && !success && stage.failed && state.failures == 1usize &&
             context.error_count == 1usize && context.error_loc.source == &source &&
             context.error_loc.offset == state.error_offset &&
-            oh_equal(&context.error[0usize], "external overload hook failed");
+            oh_equal(&context.error[0usize], expected);
     } else {
         valid = valid && success && !stage.failed && context.error_count == 0usize &&
             state.type_calls != 0usize && state.binding_calls != 0usize &&
-            state.statement_calls != 0usize && state.contract_calls == 6usize &&
-            state.name_calls == 3usize && state.group_calls == 1usize && state.call_calls == 3usize;
+            state.statement_calls != 0usize && state.contract_calls == 9usize &&
+            state.name_calls == 4usize && state.group_calls == 1usize && state.call_calls == 7usize &&
+            state.nested_growth && stage.scratch.size == 0usize;
         if valid {
             var special:*CrustDecl = (*parsed).declarations;
             var ordinary:*CrustDecl = (*special).next;
@@ -151,6 +172,15 @@ fn oh_test(failure:u32)->bool {
                 type_link = (*type_link).next;
             }
             valid = valid && crust_collect(&context) && crust_resolve(&context) && crust_check(&context);
+            if valid {
+                var entry:*CrustDecl = (*parsed).declarations;
+                while (*entry).next != null(*CrustDecl) { entry = (*entry).next; }
+                var options:CBackendOptions = make CBackendOptions {
+                    mode:0u32, output:output, symbols:null(*u8),
+                    cflags:null(**u8), cflag_count:0usize, ldflags:null(**u8), ldflag_count:0usize
+                };
+                valid = c_backend_build(&context, entry, &options) == 0i32;
+            }
         }
     }
     if !valid {
@@ -169,9 +199,10 @@ fn oh_test(failure:u32)->bool {
 }
 
 fn main(argc:i32, argv:**u8)->i32 {
+    if argc != 2i32 { return 2i32; }
     var kind:u32 = 0u32;
-    while kind <= 5u32 {
-        if !oh_test(kind) { return 1i32; }
+    while kind <= 6u32 {
+        if !oh_test(kind, argv[1usize]) { return 1i32; }
         kind = kind + 1u32;
     }
     return 0i32;

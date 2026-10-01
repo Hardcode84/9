@@ -142,6 +142,9 @@ for each source range, then `ov_prepare`. That last call runs `ov_collect`,
 public. After successful preparation, run the next checker and backend.
 Keep the context, source bytes, stage, and hooks live through their use.
 Operations on one context are serial; they share its arena and key buffer.
+Type hooks can call the public type and selection queries. A nested query
+preserves the bytes already appended by the enclosing hook, including when
+the shared buffer grows. Each query releases its temporary byte range on return.
 Keep source signatures and record fields unchanged between collection and
 mangling. Lower their type representations after overload preparation.
 Record field lookups use a name index built during collection. A constructor

@@ -23,9 +23,13 @@ def main():
         harness = work / "harness"
         library = work / "ordinary-overload.so"
         shutil.copyfile(build / "crust-overload-library.so", library)
+        backend = work / "ordinary-backend.so"
+        shutil.copyfile(build / "crust-c-library.so", backend)
         sources = [
             "api/crust0.crs",
             "api/crust0_host.crs",
+            "api/crust0_stage.crs",
+            "stages/c/api.crs",
             "stages/overload/model.crs",
             "stages/overload/extension.crs",
             "stages/reader/model.crs",
@@ -41,6 +45,7 @@ def main():
                 *sources,
                 *("--cflag=" + flag for flag in shlex.split(args.cflags)),
                 "--ldflag=" + str(library),
+                "--ldflag=" + str(backend),
                 "--ldflag=" + str(build / "libcrust0.a"),
                 "--ldflag=" + str(build / "libcrust0_host.a"),
                 *("--ldflag=" + flag for flag in shlex.split(args.ldflags)),
@@ -49,8 +54,12 @@ def main():
             check=True,
             timeout=120,
         )
-        subprocess.run([str(harness)], cwd=ROOT, check=True, timeout=30)
-    print("Overload hooks: custom type, exact callee visits, and five diagnostic paths passed")
+        target = work / "target"
+        subprocess.run([str(harness), str(target)], cwd=ROOT, check=True, timeout=30)
+        subprocess.run([str(target)], cwd=ROOT, check=True, timeout=30)
+    print(
+        "Overload hooks: nested type queries, buffer growth, target execution, and diagnostics passed"
+    )
 
 
 if __name__ == "__main__":

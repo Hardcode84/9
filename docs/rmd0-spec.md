@@ -594,6 +594,15 @@ run a compiler. It uses the same calls, data, and memory operations as other
 programs. The seed has no second evaluator, phase macro system, or automatic
 execution of function bodies during type resolution.
 
+In the source-defined compilation model, the user program selects its stages.
+Each custom stage is an ordinary function defined in the user source or supplied
+by an external library. The compiler must not recognize a particular backend's
+name, path, or implementation. A standalone
+driver can prepare and execute those calls, but it does not replace the
+requirement that the override be in the user source. The
+[source metastage review](source-metastages.md) defines the phase requirements.
+It introduces no additional RMD0 grammar.
+
 ### Public construction interface
 
 An implementation must publish its driver and compiler libraries with source

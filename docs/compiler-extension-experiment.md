@@ -22,7 +22,11 @@ Reading guide: [interface](#1-extension-boundary),
 Expose the complete compiler as libraries. The standard RMD driver is one
 program that uses these libraries. A user can replace the base syntax,
 language rules, intermediate representations, scheduling, and backend adapter.
-The interface is ordinary compiler code with explicit inputs and outputs.
+The user program contains the code that selects its custom stages. These
+stages are ordinary functions, defined in the user source or supplied by
+external libraries. The C backend is one such library. A separate build file
+is not required. The interface is ordinary compiler code with explicit inputs
+and outputs.
 It does not require a universal grammar engine or a plugin registry.
 
 | Component | User control | Required contract |
@@ -134,10 +138,13 @@ the reader and expansion rules. This is evidence for the interface model,
 not for C-level compilation speed.
 [Racket language construction](https://docs.racket-lang.org/guide/languages.html)
 
-Select the language package before parsing its source. Use a build driver or
-manifest that maps input units to prepared readers. An optional fixed source
-directive could select the reader for a following region. That directive
-would itself need a grammar already known to the compiler.
+Select the language package before parsing its source. Compilation code in the
+user program maps input units to prepared readers. An already available reader
+must recognize that compilation code. A directive that selects a reader for
+a following region would also need an already known grammar. The
+[Zig and Jai review](source-metastages.md) rejects a mandatory two-region
+envelope for ordinary backend selection. The exact source spelling is not
+selected by this experiment.
 
 Compile each reader with an earlier available compiler configuration. Once
 prepared, the reader can process many files. It does not need to compile its

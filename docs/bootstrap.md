@@ -61,8 +61,8 @@ The C implementation uses `-std=c99 -pedantic-errors` and treats warnings as
 errors. Its host operations use the POSIX library; it does not use GNU C syntax.
 The build checks the selected host representation. It rejects other hosts.
 
-The implementation has 4,813 physical C and header lines, including comments
-and blank lines. The reader, checker, storage code, and core header use 2,962
+The implementation has 4,832 physical C and header lines, including comments
+and blank lines. The reader, checker, storage code, and core header use 2,981
 lines. The assembly backend and its header use 1,419 lines. The driver and host
 functions use 432 lines. Tests, examples, generated declarations, and scripts
 are separate. Use `wc -l src/*.c include/*.h runtime/*.c` to repeat the count.
@@ -107,6 +107,7 @@ version as its compiler libraries.
 | Operation | Input and result |
 |---|---|
 | `rmd_read` | Source bytes to an owned syntax unit |
+| `rmd_read_range` | A byte range to an owned unit, with locations in the original source |
 | `rmd_bind` | A selected name and complete external declaration facts to a borrowed binding |
 | `rmd_collect` | Owned syntax units to the top-level namespace |
 | `rmd_resolve` | Collected declarations and bindings to types, layouts, and signatures |
@@ -114,6 +115,14 @@ version as its compiler libraries.
 | `rmd_check` | All owned functions and constants to checked input |
 | `rmd_x64_prepare` | Checked input with link names to a public frame and expression plan |
 | `rmd_x64_emit_program` | That plan to assembly |
+
+`rmd_read_range` accepts `[begin, end)` within the source. Empty ranges are
+valid. It does not read excluded bytes, change the source descriptor, or copy
+the source text. Keep the full descriptor and bytes live until context
+destruction. Declaration ordinals start at one in each returned unit.
+Callers that combine distinct ranges must assign distinct declaration
+identities, as for other independently constructed units. This API adds no
+stage syntax or automatic compile-time execution.
 
 The frame plan retains checked operations. Instruction selection, required
 trap sequences, and final assembly remain in the emitter. Thus `--prepare`
@@ -246,10 +255,12 @@ replacement-stage programs. The integer expectations use Python mathematical
 integers. Trap tests require abnormal process termination. Allocation tests
 fail every arena allocation point in a complete compilation and check release.
 
-The final GCC, Clang, and AddressSanitizer/UndefinedBehaviorSanitizer runs each
-pass 10,896 C API checks and 353 integration process checks. The integration
-cases include 10,220 integer comparisons, 61 required traps, and 224 C/RMD0
-layout comparisons. The allocation sweep covers 19 failure points. The parallel
+The current strict GCC run passes 10,915 C API checks and 398 integration
+process checks. The range-reader suite also passes 259 checks with Clang and
+AddressSanitizer/UndefinedBehaviorSanitizer. The integration cases include
+10,220 integer comparisons, 65 required traps, 224 public API layout comparisons,
+and 20 native file-status layout comparisons. The allocation sweep covers
+19 failure points. The parallel
 test checks six consumers in serial order and two concurrent orders, with
 shared provider facts unchanged. Both complete specification examples run.
 

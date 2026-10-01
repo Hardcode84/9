@@ -280,6 +280,11 @@ void rmd_map_set(RmdContext *ctx, RmdMap *map, uintptr_t key, void *value);
 
 /* Input bytes and source descriptors remain live until the context is destroyed. */
 bool rmd_read(RmdContext *ctx, RmdSource *source, RmdUnit **result);
+/* Read [begin, end) with absolute source locations. Empty ranges are valid.
+   Invalid ranges or syntax return false, retain a diagnostic, and set result to null.
+   Input bytes and source descriptors remain live until the context is destroyed. */
+bool rmd_read_range(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
+                    RmdUnit **result);
 /* A binding borrows complete resolved facts. The provider must outlive this context. */
 bool rmd_bind(RmdContext *ctx, RmdName *name, RmdDecl *declaration);
 /* Owned syntax has one expression or statement node per occurrence. */

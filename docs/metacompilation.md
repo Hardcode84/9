@@ -12,6 +12,11 @@ its public construction contract. Module management is a library stage, along
 with richer syntax, ownership policy, and backend adaptation. The candidate
 features in this study are not additional seed requirements.
 
+The [source metastage review](source-metastages.md) updates the selection model.
+The user program selects its custom stages through ordinary library calls.
+A separate build file is not required. Backend selection does not require
+the proposed two-region file envelope. No new source syntax is adopted yet.
+
 Reading guide: [Jai evidence](#2-what-public-jai-evidence-establishes),
 [research](#3-research-that-applies),
 [Forth and Factor](#36-forth-compiler-construction-through-ordinary-words),
@@ -30,8 +35,10 @@ extensive metaprogramming can coexist with short complete builds. Neither
 establishes the required C-level frontend speed for this language.
 
 Make the compiler a public library. Expose the core representations and every
-compilation stage. Implement the standard compiler as a driver written against
-that library. Users can inspect, replace, remove, and compose its stages.
+compilation stage. Implement the standard compiler with that library. Let
+compilation code in the user program inspect, replace, remove, and compose
+its stages. A separately compiled driver is one execution mechanism, not the
+required location of the user's stage override.
 This includes complete base syntax replacement and the interface to LLVM or
 another backend. The [compiler extension experiment](compiler-extension-experiment.md)
 defines these interfaces and a C compiler witness.
@@ -567,8 +574,12 @@ setup, scheduling, and enabled passes in the same frontend timing boundary.
 
 The user can replace the lexer and the whole grammar, including declarations,
 operators, and whitespace rules. Select the reader before it reads the target
-source. Use a build driver or manifest for this selection. A custom reader can
-also define explicit changes in parsing rules within a file.
+source. Source-defined compilation code makes this selection through ordinary
+libraries. Its own reader must already be available. It cannot select a reader
+retroactively for bytes already consumed. A custom reader can also define
+explicit changes in parsing rules within a file. The
+[source review](source-metastages.md) separates this early dependency from
+backend replacement, which needs no change to the source grammar.
 
 Syntax extensions that produce standard RMD code or IR use its checkers.
 A complete C frontend supplies C binding, type, conversion, and pointer rules. It can use

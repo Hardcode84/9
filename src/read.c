@@ -26,6 +26,7 @@ typedef struct {
     RmdContext *ctx;
     RmdSource *source;
     size_t offset;
+    size_t end;
     unsigned depth;
     Token token;
 } Reader;
@@ -104,7 +105,7 @@ static unsigned char escape_byte(unsigned char c)
 static void read_string(Reader *reader)
 {
     const unsigned char *source = reader->source->bytes;
-    size_t size = reader->source->size;
+    size_t size = reader->end;
     size_t start = reader->offset + 1;
     size_t end = start;
     size_t decoded = 0;
@@ -160,7 +161,7 @@ static void read_string(Reader *reader)
 static void read_number(Reader *reader)
 {
     const unsigned char *source = reader->source->bytes;
-    size_t size = reader->source->size;
+    size_t size = reader->end;
     size_t start = reader->offset;
     size_t end = start;
     size_t digits;
@@ -199,7 +200,7 @@ static void read_number(Reader *reader)
 static void next_token(Reader *reader)
 {
     const unsigned char *source = reader->source->bytes;
-    size_t size = reader->source->size;
+    size_t size = reader->end;
     size_t start;
     unsigned char c;
     const Keyword *word;
@@ -755,7 +756,7 @@ static RmdDecl *read_declaration(Reader *reader)
     return decl;
 }
 
-static RmdUnit *read_unit(RmdContext *ctx, RmdSource *source)
+static RmdUnit *read_unit(RmdContext *ctx, RmdSource *source, size_t begin, size_t end)
 {
     Reader reader;
     RmdUnit *unit;
@@ -764,6 +765,8 @@ static RmdUnit *read_unit(RmdContext *ctx, RmdSource *source)
     memset(&reader, 0, sizeof(reader));
     reader.ctx = ctx;
     reader.source = source;
+    reader.offset = begin;
+    reader.end = end;
     unit = NEW(&reader, RmdUnit);
     unit->source = source;
     tail = &unit->declarations;
@@ -780,22 +783,33 @@ static RmdUnit *read_unit(RmdContext *ctx, RmdSource *source)
     return unit;
 }
 
-bool rmd_read(RmdContext *ctx, RmdSource *source, RmdUnit **result)
+bool rmd_read_range(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
+                    RmdUnit **result)
 {
     RmdFailureFrame failure;
     RmdUnit *unit;
     *result = NULL;
+    if (begin > end || end > source->size) {
+        rmd_set_error(ctx, source, begin <= source->size ? begin : source->size,
+                      "source range must satisfy begin <= end <= source size");
+        return false;
+    }
     failure.previous = ctx->failure;
     ctx->failure = &failure;
     if (setjmp(failure.jump) != 0) {
         ctx->failure = failure.previous;
         return false;
     }
-    unit = read_unit(ctx, source);
+    unit = read_unit(ctx, source, begin, end);
     if (ctx->last_unit == NULL) ctx->units = unit;
     else ctx->last_unit->next = unit;
     ctx->last_unit = unit;
     *result = unit;
     ctx->failure = failure.previous;
     return true;
+}
+
+bool rmd_read(RmdContext *ctx, RmdSource *source, RmdUnit **result)
+{
+    return rmd_read_range(ctx, source, 0, source->size, result);
 }

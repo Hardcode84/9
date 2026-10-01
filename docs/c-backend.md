@@ -11,6 +11,12 @@ not select instructions or translate expressions. The assembly backend is
 needed for the first build only. The C-stage executable has no `rmd_x64_`
 symbols.
 
+The standalone driver proves backend construction and self-compilation. The
+required source-defined stage override is a separate integration step. It
+must call this backend as an ordinary external library, with no special
+compiler selector. See the [Zig and Jai review](source-metastages.md) for the
+phase contract and the decision to keep the source grammar unchanged here.
+
 ## Build and use
 
 The selected host and target are Linux x86-64, LP64, and the System V ABI.
@@ -32,7 +38,7 @@ This is self-compilation of the backend and driver. The reader and checker
 remain C99. The default `make` target does not build this optional backend.
 
 The stage has 1,896 physical RMD0 lines, including comments and blank lines.
-The C99 seed remains 4,813 C and header lines. Tests and generated API
+The C99 seed has 4,832 C and header lines. Tests and generated API
 declarations are separate. Use `wc -l stages/c/*.rmd` to repeat the stage count.
 
 | Option | Result |
@@ -189,7 +195,7 @@ output, and uses it to compile and run the intrusive-list program. It also
 checks native names, allocation-size failures, output failures, and the
 absence of C backend helper calls.
 
-The final seed run passes 10,896 C API checks and 398 integration process
+The current seed run passes 10,915 C API checks and 398 integration process
 checks. The C backend run passes 348 integration process checks. Each common
 suite includes 10,220 integer comparisons, 65 trap processes, 224 public API
 layout comparisons, and 20 native file-status layout comparisons.

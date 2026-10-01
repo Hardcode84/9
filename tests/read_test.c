@@ -359,6 +359,104 @@ static void test_failure_boundary(void)
     rmd_context_destroy(&ctx);
 }
 
+static void test_read_range(void)
+{
+    static const char prefix[] = "\0@\xff\nignored\n";
+    static const char text[] = "\0@\xff\nignored\n"
+        "fn selected() -> u8 {\n    return 7u8;\n}\n" "\"\0@\xff";
+    static const char broken[] = "\0@\xff\nignored\n"
+        "fn broken() -> unit {\n    @\n}\n" "\0@\xff";
+    static const char incomplete[] = "\0@\xff\nignored\nfn incomplete() -> unit {}";
+    static const char string[] = "const s: *u8 = \"x\";";
+    static const char number[] = "const n: u8 = 1u8;";
+    static const char comment[] = "// bounded comment\0suffix";
+    RmdContext ctx;
+    RmdSource source = source_text(text, sizeof(text) - 1, 29);
+    RmdSource bad_source = source_text(broken, sizeof(broken) - 1, 30);
+    RmdSource incomplete_source = source_text(incomplete, sizeof(incomplete) - 1, 31);
+    RmdSource string_source = source_text(string, sizeof(string) - 1, 32);
+    RmdSource number_source = source_text(number, sizeof(number) - 1, 33);
+    RmdSource comment_source = source_text(comment, sizeof(comment) - 1, 34);
+    RmdUnit *unit;
+    RmdUnit *rejected;
+    RmdDecl *decl;
+    size_t begin = sizeof(prefix) - 1;
+    size_t end = begin + sizeof("fn selected() -> u8 {\n    return 7u8;\n}\n") - 1;
+    size_t error_offset = begin + sizeof("fn broken() -> unit {\n    ") - 1;
+    rmd_context_init(&ctx, NULL);
+    if (!rmd_read_range(&ctx, &source, begin, end, &unit)) {
+        check(false, "range excludes invalid prefix and suffix bytes");
+        fprintf(stderr, "%s\n", ctx.error);
+        rmd_context_destroy(&ctx);
+        return;
+    }
+    check(unit->source == &source && source.bytes == (const unsigned char *)text &&
+          source.size == sizeof(text) - 1,
+          "range retains the complete original source");
+    decl = unit->declarations;
+    check(decl != NULL && decl->next == NULL && decl->unit_identity == 29 &&
+          decl->identity == 1 && decl->loc.source == &source && decl->loc.offset == begin,
+          "range declarations retain identity and absolute locations");
+    check(decl->body->body->expr->loc.source == &source &&
+          decl->body->body->expr->loc.offset ==
+              begin + sizeof("fn selected() -> u8 {\n    return ") - 1,
+          "range expression location includes preceding source lines");
+    check(!rmd_read_range(&ctx, &bad_source, begin, sizeof(broken) - 4, &rejected) &&
+          rejected == NULL && ctx.error_loc.source == &bad_source &&
+          ctx.error_loc.offset == error_offset,
+          "range diagnostic retains the original source and absolute offset");
+    check(ctx.units == unit && ctx.last_unit == unit && unit->next == NULL &&
+          ctx.failure == NULL, "failed range publishes no partial unit");
+    end = sizeof(incomplete) - 2;
+    check(!rmd_read_range(&ctx, &incomplete_source, begin, end, &rejected) &&
+          ctx.error_loc.source == &incomplete_source && ctx.error_loc.offset == end,
+          "range end is EOF even when the next original byte completes the declaration");
+    check(!rmd_read_range(&ctx, &string_source, 0, sizeof(string) - 3, &rejected) &&
+          strstr(ctx.error, "unterminated string") != NULL,
+          "string scanning does not cross the range end");
+    check(!rmd_read_range(&ctx, &number_source, 0, sizeof("const n: u8 = 1") - 1,
+                          &rejected) && ctx.error_loc.source == &number_source &&
+          ctx.error_loc.offset == sizeof("const n: u8 = ") - 1 &&
+          strcmp(ctx.error, "expected an expression") == 0,
+          "integer scanning does not use a suffix outside the range");
+    check(rmd_read_range(&ctx, &comment_source, 0, sizeof("// bounded comment") - 1,
+                         &rejected) && rejected->declarations == NULL,
+          "comment scanning excludes the zero byte after the range");
+    rmd_context_destroy(&ctx);
+}
+
+static void test_invalid_ranges(void)
+{
+    static const char text[] = "@\0@";
+    static const size_t invalid[][2] = {
+        {1, 0}, {0, sizeof(text)}, {sizeof(text), sizeof(text)}, {0, SIZE_MAX},
+        {SIZE_MAX, SIZE_MAX}
+    };
+    RmdContext ctx;
+    RmdSource source = source_text(text, sizeof(text) - 1, 1);
+    RmdUnit *unit;
+    RmdUnit *previous;
+    size_t index;
+    rmd_context_init(&ctx, NULL);
+    for (index = 0; index <= source.size; ++index) {
+        check(rmd_read_range(&ctx, &source, index, index, &unit) &&
+              unit->declarations == NULL && unit->source == &source,
+              "empty range accepts no source bytes");
+    }
+    previous = ctx.last_unit;
+    for (index = 0; index < sizeof(invalid) / sizeof(invalid[0]); ++index) {
+        check(!rmd_read_range(&ctx, &source, invalid[index][0], invalid[index][1], &unit) &&
+              unit == NULL && ctx.last_unit == previous && previous->next == NULL &&
+              ctx.failure == NULL && ctx.error_count == index + 1 &&
+              ctx.error_loc.source == &source && ctx.error_loc.offset <= source.size &&
+              strstr(ctx.error, "source range") != NULL,
+              "invalid range is a diagnostic without a published unit");
+    }
+    check(rmd_read_range(&ctx, &source, 1, 1, &unit) && previous->next == unit,
+          "reader accepts a valid range after range errors");
+    rmd_context_destroy(&ctx);
+}
+
 static void test_constructors(void)
 {
     static const char text[] =
@@ -469,6 +567,8 @@ int main(void)
     test_ast();
     test_constructors();
     test_failure_boundary();
+    test_read_range();
+    test_invalid_ranges();
     test_limits();
     printf("reader: %u/%u checks passed\n", checks - failures, checks);
     return failures == 0 ? 0 : 1;

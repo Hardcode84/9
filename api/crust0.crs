@@ -262,6 +262,7 @@ record CrustContext {
     name_capacity: usize;
     globals: CrustMap;
     identities: CrustMap;
+    type_comparison: *u8;
     builtins: [CrustType; 12];
     units: *CrustUnit;
     last_unit: *CrustUnit;
@@ -296,7 +297,7 @@ extern fn crust_resolve_unit(ctx: *CrustContext, unit_value: *CrustUnit) -> bool
 extern fn crust_check_unit(ctx: *CrustContext, unit_value: *CrustUnit) -> bool = "crust_check_unit";
 extern fn crust_check_root(ctx: *CrustContext, scope: *CrustRootScope, statement: *CrustStmt) -> bool = "crust_check_root";
 extern fn crust_try_resolve_type(ctx: *CrustContext, syntax: *CrustTypeSyntax) -> *CrustType = "crust_try_resolve_type";
-extern fn crust_type_equal(a: *CrustType, b: *CrustType) -> bool = "crust_type_equal";
+extern fn crust_try_type_equal(ctx: *CrustContext, a: *CrustType, b: *CrustType, result: *bool) -> bool = "crust_try_type_equal";
 extern fn crust_type_integer(type: *CrustType) -> bool = "crust_type_integer";
 extern fn crust_type_signed(type: *CrustType) -> bool = "crust_type_signed";
 extern fn crust_type_scalar(type: *CrustType) -> bool = "crust_type_scalar";

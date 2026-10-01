@@ -306,6 +306,7 @@ struct CrustContext {
     size_t name_capacity;
     CrustMap globals;
     CrustMap identities;
+    void *type_comparison;
     CrustType builtins[CRUST_T_UNIT + 1];
     CrustUnit *units;
     CrustUnit *last_unit;
@@ -361,7 +362,8 @@ bool crust_read_range(CrustContext *ctx, CrustSource *source, size_t begin, size
    Input bytes and source descriptors remain live until context destruction. */
 bool crust_read_one(CrustContext *ctx, CrustSource *source, size_t begin, size_t end,
                     CrustAction *result);
-/* A binding borrows complete resolved facts. The provider must outlive this context. */
+/* A binding borrows complete resolved facts. The provider must outlive this context.
+   Failure publishes no binding or provider identity. */
 bool crust_bind(CrustContext *ctx, CrustName *name, CrustDecl *declaration);
 /* Owned syntax has one expression or statement node per occurrence. */
 bool crust_collect(CrustContext *ctx);
@@ -381,8 +383,11 @@ bool crust_check_root(CrustContext *ctx, CrustRootScope *scope, CrustStmt *state
 CrustType *crust_resolve_type(CrustContext *ctx, CrustTypeSyntax *syntax);
 /* Return null and retain a diagnostic if type resolution fails. */
 CrustType *crust_try_resolve_type(CrustContext *ctx, CrustTypeSyntax *syntax);
-/* Type queries require the resolved facts produced by resolve or accepted by bind. */
-bool crust_type_equal(const CrustType *a, const CrustType *b);
+/* Type queries require complete resolved facts. */
+/* Exact type comparison requires a failure frame for scratch allocation. */
+bool crust_type_equal(CrustContext *ctx, const CrustType *a, const CrustType *b);
+/* On allocation failure, retain a diagnostic and leave result unchanged. */
+bool crust_try_type_equal(CrustContext *ctx, const CrustType *a, const CrustType *b, bool *result);
 bool crust_type_integer(const CrustType *type);
 bool crust_type_signed(const CrustType *type);
 bool crust_type_scalar(const CrustType *type);

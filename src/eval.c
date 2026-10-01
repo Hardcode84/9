@@ -271,10 +271,17 @@ static CrustName *native_link_name(CrustEval *eval, CrustDecl *declaration)
 
 static bool check_native_declaration(CrustEval *eval, CrustDecl *declaration, EvalNative *native)
 {
-    if (is_function(native->prototype) != is_function(declaration) ||
-        (is_function(declaration)
-             ? !crust_eval_native_type_equal(native->prototype->type, declaration->type)
-             : !crust_type_equal(native->prototype->type, declaration->type)))
+    bool equal = false;
+    if (is_function(native->prototype) == is_function(declaration)) {
+        bool compared = is_function(declaration)
+                            ? crust_eval_native_type_equal(eval->context, native->prototype->type,
+                                                           declaration->type, &equal)
+                            : crust_try_type_equal(eval->context, native->prototype->type,
+                                                   declaration->type, &equal);
+        if (!compared)
+            return false;
+    }
+    if (!equal)
         return error_at(eval, declaration->loc, "conflicting native ABI for symbol");
     if (declaration->kind != CRUST_D_EXTERN && native->definition != NULL)
         return error_at(eval, declaration->loc, "duplicate native definition for symbol");

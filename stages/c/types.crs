@@ -4,53 +4,100 @@ fn c_native_kind(input: *CrustType) -> u32 {
     return (*input).kind;
 }
 
-fn c_native_equal(left: *CrustType, right: *CrustType) -> bool {
-    if left == right { return true; }
-    var kind: u32 = c_native_kind(left);
-    if kind != c_native_kind(right) { return false; }
-    if kind != CRUST_T_FUNCTION {
-        return kind != CRUST_T_ARRAY && kind != CRUST_T_RECORD;
-    }
-    if (*left).param_count != (*right).param_count ||
-       !c_native_equal((*left).base, (*right).base) { return false; }
-    var index: usize = 0usize;
-    while index < (*left).param_count {
-        if !c_native_equal((*left).params[index], (*right).params[index]) { return false; }
-        index = index + 1usize;
-    }
-    return true;
-}
-
-fn c_exact_type_equal(left: *CrustType, right: *CrustType) -> bool {
-    if left == right { return true; }
-    var kind: u32 = (*left).kind;
-    if kind != (*right).kind { return false; }
-    if kind == CRUST_T_RECORD {
-        var a: *CrustDecl = (*left).record_decl;
-        var b: *CrustDecl = (*right).record_decl;
-        return (*a).unit_identity == (*b).unit_identity && (*a).identity == (*b).identity;
-    }
-    if kind == CRUST_T_POINTER { return c_exact_type_equal((*left).base, (*right).base); }
-    if kind == CRUST_T_ARRAY {
-        return (*left).count == (*right).count && c_exact_type_equal((*left).base, (*right).base);
-    }
-    if kind == CRUST_T_FUNCTION {
-        if (*left).param_count != (*right).param_count ||
-           !c_exact_type_equal((*left).base, (*right).base) { return false; }
-        var index: usize = 0usize;
-        while index < (*left).param_count {
-            if !c_exact_type_equal((*left).params[index], (*right).params[index]) { return false; }
-            index = index + 1usize;
-        }
-    }
-    return true;
-}
-
 fn c_type_mix(hash: usize, value: usize) -> usize {
     var result: usize = hash ^ (value + 11400714819323198485usize +
                                (hash << 6usize) + (hash >> 2usize));
     if result == 0usize { return 1usize; }
     return result;
+}
+
+fn c_pair_slot(work: *CComparison, left: *CrustType, right: *CrustType) -> usize {
+    var mask: usize = (*work).capacity * 2usize - 1usize;
+    var slot: usize = c_map_hash(c_type_mix(left as usize, right as usize)) & mask;
+    while (*work).slots[slot] != 0usize {
+        var pair: *CTypePair = &(*work).pairs[(*work).slots[slot] - 1usize];
+        if (*pair).left == left && (*pair).right == right { return slot; }
+        slot = (slot + 1usize) & mask;
+    }
+    return slot;
+}
+
+fn c_pair_grow(stage: *CStage) -> bool {
+    var work: *CComparison = &(*stage).comparison;
+    if (*work).capacity > 9223372036854775807usize / sizeof(CTypePair) / 2usize {
+        c_error(&(*stage).status, null(*CrustSource), 0usize, "C type comparison size overflow");
+        return false;
+    }
+    var capacity: usize = (*work).capacity * 2usize;
+    if capacity == 0usize { capacity = 16usize; }
+    var pairs: *CTypePair = c_alloc(&(*stage).status, capacity * sizeof(CTypePair), alignof(CTypePair)) as *CTypePair;
+    var slots: *usize = c_alloc(&(*stage).status, capacity * 2usize * sizeof(usize), alignof(usize)) as *usize;
+    if pairs == null(*CTypePair) || slots == null(*usize) { return false; }
+    crust0_host_move_bytes(pairs as *u8, (*work).pairs as *u8, (*work).count * sizeof(CTypePair));
+    var index: usize = 0usize;
+    while index < capacity * 2usize { slots[index] = 0usize; index = index + 1usize; }
+    (*work).pairs = pairs;
+    (*work).slots = slots;
+    (*work).capacity = capacity;
+    index = 0usize;
+    while index < (*work).count {
+        var slot: usize = c_pair_slot(work, pairs[index].left, pairs[index].right);
+        slots[slot] = index + 1usize;
+        pairs[index].slot = slot;
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn c_exact_pair(stage: *CStage, left: *CrustType, right: *CrustType) -> bool {
+    if (*stage).status.failed { return false; }
+    while left != right {
+        var kind: u32 = (*left).kind;
+        if kind != (*right).kind { return false; }
+        if kind == CRUST_T_RECORD {
+            var a: *CrustDecl = (*left).record_decl;
+            var b: *CrustDecl = (*right).record_decl;
+            return (*a).unit_identity == (*b).unit_identity && (*a).identity == (*b).identity;
+        }
+        if kind == CRUST_T_FUNCTION { break; }
+        if kind != CRUST_T_ARRAY && kind != CRUST_T_POINTER { return true; }
+        if kind == CRUST_T_ARRAY && (*left).count != (*right).count { return false; }
+        left = (*left).base;
+        right = (*right).base;
+    }
+    if left == right { return true; }
+    var work: *CComparison = &(*stage).comparison;
+    if (*work).capacity != 0usize && (*work).slots[c_pair_slot(work, left, right)] != 0usize { return true; }
+    if (*work).count == (*work).capacity && !c_pair_grow(stage) { return false; }
+    var slot: usize = c_pair_slot(work, left, right);
+    (*work).pairs[(*work).count] = make CTypePair { left: left, right: right, slot: slot };
+    (*work).count = (*work).count + 1usize;
+    (*work).slots[slot] = (*work).count;
+    return true;
+}
+
+fn c_exact_type_equal(stage: *CStage, left: *CrustType, right: *CrustType) -> bool {
+    var work: *CComparison = &(*stage).comparison;
+    var equal: bool = c_exact_pair(stage, left, right);
+    var index: usize = 0usize;
+    while equal && index < (*work).count {
+        var a: *CrustType = (*work).pairs[index].left;
+        var b: *CrustType = (*work).pairs[index].right;
+        equal = (*a).param_count == (*b).param_count && c_exact_pair(stage, (*a).base, (*b).base);
+        var parameter: usize = 0usize;
+        while equal && parameter < (*a).param_count {
+            equal = c_exact_pair(stage, (*a).params[parameter], (*b).params[parameter]);
+            parameter = parameter + 1usize;
+        }
+        index = index + 1usize;
+    }
+    index = 0usize;
+    while index < (*work).count {
+        (*work).slots[(*work).pairs[index].slot] = 0usize;
+        index = index + 1usize;
+    }
+    (*work).count = 0usize;
+    return equal;
 }
 
 fn c_type_composite(input: *CrustType) -> bool {
@@ -323,11 +370,13 @@ fn c_bind(stage: *CStage, declaration: *CrustDecl, owned: bool) -> *CBinding {
             var equal: bool = c_function_decl(previous) == c_function_decl(declaration);
             if equal {
                 if c_function_decl(declaration) {
-                    equal = c_native_equal((*previous).type, (*declaration).type);
+                    // Canonical C function types preserve scalar native ABI equivalence.
+                    equal = c_type(stage, (*previous).type) == c_type(stage, (*declaration).type);
                 } else {
-                    equal = c_exact_type_equal((*previous).type, (*declaration).type);
+                    equal = c_exact_type_equal(stage, (*previous).type, (*declaration).type);
                 }
             }
+            if (*stage).status.failed { return null(*CBinding); }
             if !equal {
                 c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
                         "conflicting native ABI for symbol");

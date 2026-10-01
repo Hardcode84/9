@@ -16,6 +16,7 @@ C_ONLY = {
     "crust_map_set",
     "crust_resolve_type",
     "crust_pointer_type",
+    "crust_type_equal",
     "crust_x64_reserve",
     "crust_x64_prepare_function",
     "crust_x64_output",

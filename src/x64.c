@@ -1,3 +1,4 @@
+#include "core_internal.h"
 #include "crust0_x64.h"
 
 #include <assert.h>
@@ -279,7 +280,7 @@ static CrustTypeKind native_kind(CrustType *type)
     return type->kind;
 }
 
-static bool native_type_equal(CrustType *left, CrustType *right)
+static bool native_type_equal_impl(CrustContext *ctx, CrustType *left, CrustType *right)
 {
     size_t index;
     if (left == right)
@@ -288,12 +289,25 @@ static bool native_type_equal(CrustType *left, CrustType *right)
         return false;
     if (left->kind != CRUST_T_FUNCTION)
         return left->kind != CRUST_T_RECORD && left->kind != CRUST_T_ARRAY;
-    if (left->param_count != right->param_count || !native_type_equal(left->base, right->base))
+    if (left->param_count != right->param_count)
+        return false;
+    if (crust_type_compare_seen(ctx, left, right))
+        return true;
+    if (!native_type_equal_impl(ctx, left->base, right->base))
         return false;
     for (index = 0; index < left->param_count; ++index)
-        if (!native_type_equal(left->params[index], right->params[index]))
+        if (!native_type_equal_impl(ctx, left->params[index], right->params[index]))
             return false;
     return true;
+}
+
+static bool native_type_equal(CrustContext *ctx, CrustType *left, CrustType *right)
+{
+    bool result;
+    crust_type_compare_reset(ctx);
+    result = native_type_equal_impl(ctx, left, right);
+    crust_type_compare_reset(ctx);
+    return result;
 }
 
 static bool function_symbol(CrustDecl *declaration)
@@ -330,8 +344,10 @@ static void prepare_alias(CrustX64Program *program, CrustDecl *declaration, bool
     if (previous) {
         if (function_symbol(previous->declaration) != function_symbol(declaration) ||
             (function_symbol(declaration)
-                 ? !native_type_equal(previous->declaration->type, declaration->type)
-                 : !crust_type_equal(previous->declaration->type, declaration->type)))
+                 ? !native_type_equal(program->context, previous->declaration->type,
+                                      declaration->type)
+                 : !crust_type_equal(program->context, previous->declaration->type,
+                                     declaration->type)))
             crust_fail(program->context, declaration->loc, "conflicting native ABI for symbol %s",
                        declaration->link_name);
         if (previous != alias && previous->definition && definition)

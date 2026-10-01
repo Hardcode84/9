@@ -1,3 +1,4 @@
+#include "core_internal.h"
 #include "eval_native.h"
 
 #include <ffi.h>
@@ -27,7 +28,7 @@ static CrustTypeKind native_kind(CrustType *type)
     return type->kind;
 }
 
-bool crust_eval_native_type_equal(CrustType *left, CrustType *right)
+static bool native_type_equal(CrustContext *context, CrustType *left, CrustType *right)
 {
     size_t index;
     if (left == right)
@@ -36,12 +37,34 @@ bool crust_eval_native_type_equal(CrustType *left, CrustType *right)
         return false;
     if (left->kind != CRUST_T_FUNCTION)
         return left->kind != CRUST_T_RECORD && left->kind != CRUST_T_ARRAY;
-    if (left->param_count != right->param_count ||
-        !crust_eval_native_type_equal(left->base, right->base))
+    if (left->param_count != right->param_count)
+        return false;
+    if (crust_type_compare_seen(context, left, right))
+        return true;
+    if (!native_type_equal(context, left->base, right->base))
         return false;
     for (index = 0; index < left->param_count; ++index)
-        if (!crust_eval_native_type_equal(left->params[index], right->params[index]))
+        if (!native_type_equal(context, left->params[index], right->params[index]))
             return false;
+    return true;
+}
+
+bool crust_eval_native_type_equal(CrustContext *context, CrustType *left, CrustType *right,
+                                  bool *result)
+{
+    CrustFailureFrame frame;
+    bool equal;
+    frame.previous = context->failure;
+    context->failure = &frame;
+    if (setjmp(frame.jump) != 0) {
+        context->failure = frame.previous;
+        return false;
+    }
+    crust_type_compare_reset(context);
+    equal = native_type_equal(context, left, right);
+    crust_type_compare_reset(context);
+    context->failure = frame.previous;
+    *result = equal;
     return true;
 }
 

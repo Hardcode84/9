@@ -1,4 +1,4 @@
-#include "crust0.h"
+#include "core_internal.h"
 
 #include <limits.h>
 #include <stdarg.h>
@@ -365,6 +365,36 @@ void *crust_map_get(const CrustMap *map, uintptr_t key)
     return NULL;
 }
 
+void crust_map_reserve(CrustContext *ctx, CrustMap *map, size_t count)
+{
+    size_t capacity = map->capacity == 0 ? 64 : map->capacity;
+    CrustMapEntry *entries;
+    size_t slot;
+    size_t index;
+    if (count <= map->capacity / 2)
+        return;
+    while (count > capacity / 2) {
+        if (capacity > SIZE_MAX / 2) {
+            CrustLoc loc = {NULL, 0};
+            crust_fail(ctx, loc, "map allocation size overflow");
+        }
+        capacity *= 2;
+    }
+    entries =
+        crust_grow_array(ctx, NULL, 0, capacity, sizeof(*entries), CRUST_ALIGNOF(CrustMapEntry));
+    for (index = 0; index < map->capacity; ++index) {
+        if (map->entries[index].key != 0) {
+            slot = map_hash(map->entries[index].key) & (capacity - 1);
+            while (entries[slot].key != 0) {
+                slot = (slot + 1) & (capacity - 1);
+            }
+            entries[slot] = map->entries[index];
+        }
+    }
+    map->entries = entries;
+    map->capacity = capacity;
+}
+
 void crust_map_set(CrustContext *ctx, CrustMap *map, uintptr_t key, void *value)
 {
     size_t slot;
@@ -372,28 +402,7 @@ void crust_map_set(CrustContext *ctx, CrustMap *map, uintptr_t key, void *value)
         CrustLoc loc = {NULL, 0};
         crust_fail(ctx, loc, "zero is not a table key");
     }
-    if (map->count >= map->capacity / 2) {
-        size_t capacity = map->capacity == 0 ? 64 : map->capacity * 2;
-        CrustMapEntry *entries;
-        size_t index;
-        if (capacity < map->capacity) {
-            CrustLoc loc = {NULL, 0};
-            crust_fail(ctx, loc, "map allocation size overflow");
-        }
-        entries = crust_grow_array(ctx, NULL, 0, capacity, sizeof(*entries),
-                                   CRUST_ALIGNOF(CrustMapEntry));
-        for (index = 0; index < map->capacity; ++index) {
-            if (map->entries[index].key != 0) {
-                slot = map_hash(map->entries[index].key) & (capacity - 1);
-                while (entries[slot].key != 0) {
-                    slot = (slot + 1) & (capacity - 1);
-                }
-                entries[slot] = map->entries[index];
-            }
-        }
-        map->entries = entries;
-        map->capacity = capacity;
-    }
+    crust_map_reserve(ctx, map, map->count + 1);
     slot = map_hash(key) & (map->capacity - 1);
     while (map->entries[slot].key != 0 && map->entries[slot].key != key) {
         slot = (slot + 1) & (map->capacity - 1);
@@ -403,4 +412,83 @@ void crust_map_set(CrustContext *ctx, CrustMap *map, uintptr_t key, void *value)
         ++map->count;
     }
     map->entries[slot].value = value;
+}
+
+typedef struct {
+    const CrustType *left;
+    const CrustType *right;
+    size_t slot;
+} TypePair;
+
+typedef struct {
+    TypePair *pairs;
+    size_t *slots;
+    size_t count;
+    size_t capacity;
+} TypeComparison;
+
+void crust_type_compare_reset(CrustContext *ctx)
+{
+    TypeComparison *work = ctx->type_comparison;
+    size_t index;
+    if (work == NULL)
+        return;
+    for (index = 0; index < work->count; ++index)
+        work->slots[work->pairs[index].slot] = 0;
+    work->count = 0;
+}
+
+static size_t pair_slot(const CrustType *left, const CrustType *right, size_t capacity)
+{
+    size_t hash = map_hash((uintptr_t)left);
+    return (hash ^ (map_hash((uintptr_t)right) + (hash << 6) + (hash >> 2))) & (capacity - 1);
+}
+
+static void grow_type_comparison(CrustContext *ctx, TypeComparison *work)
+{
+    size_t capacity = work->capacity == 0 ? 64 : work->capacity * 2;
+    TypePair *pairs;
+    size_t *slots;
+    size_t index;
+    if (capacity < work->capacity) {
+        CrustLoc loc = {NULL, 0};
+        crust_fail(ctx, loc, "type comparison size overflow");
+    }
+    pairs = crust_grow_array(ctx, work->pairs, work->count, capacity / 2, sizeof(*pairs),
+                             CRUST_ALIGNOF(TypePair));
+    slots = crust_grow_array(ctx, NULL, 0, capacity, sizeof(*slots), CRUST_ALIGNOF(size_t));
+    for (index = 0; index < work->count; ++index) {
+        size_t slot = pair_slot(pairs[index].left, pairs[index].right, capacity);
+        while (slots[slot] != 0)
+            slot = (slot + 1) & (capacity - 1);
+        slots[slot] = index + 1;
+        pairs[index].slot = slot;
+    }
+    work->pairs = pairs;
+    work->slots = slots;
+    work->capacity = capacity;
+}
+
+bool crust_type_compare_seen(CrustContext *ctx, const CrustType *left, const CrustType *right)
+{
+    TypeComparison *work = ctx->type_comparison;
+    size_t slot;
+    if (work == NULL) {
+        work = crust_alloc(ctx, sizeof(*work), CRUST_ALIGNOF(TypeComparison));
+        ctx->type_comparison = work;
+    }
+    if (work->count == work->capacity / 2)
+        grow_type_comparison(ctx, work);
+    slot = pair_slot(left, right, work->capacity);
+    while (work->slots[slot] != 0) {
+        TypePair *pair = &work->pairs[work->slots[slot] - 1];
+        if (pair->left == left && pair->right == right)
+            return true;
+        slot = (slot + 1) & (work->capacity - 1);
+    }
+    work->pairs[work->count].left = left;
+    work->pairs[work->count].right = right;
+    work->pairs[work->count].slot = slot;
+    work->slots[slot] = ++work->count;
+    return false;
 }

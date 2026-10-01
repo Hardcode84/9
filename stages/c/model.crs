@@ -20,6 +20,9 @@ record CBuffer {
 record CEntry { key: usize; value: usize; }
 record CMap { entries: *CEntry; count: usize; capacity: usize; }
 
+record CTypePair { left: *CrustType; right: *CrustType; slot: usize; }
+record CComparison { pairs: *CTypePair; slots: *usize; count: usize; capacity: usize; }
+
 record CTypeInfo {
     source: *CrustType;
     identity: usize;
@@ -47,6 +50,7 @@ record CStage {
     declarations: CMap;
     native_names: CMap;
     symbols: CMap;
+    comparison: CComparison;
     first_type: *CTypeInfo;
     last_type: *CTypeInfo;
     first_binding: *CBinding;

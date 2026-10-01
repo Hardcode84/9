@@ -29,6 +29,9 @@ fn c_stage_init(stage: *CStage, ctx: *CrustContext) -> unit {
     (*stage).symbols = make CMap {
         entries: null(*CEntry), count: 0usize, capacity: 0usize
     };
+    (*stage).comparison = make CComparison {
+        pairs: null(*CTypePair), slots: null(*usize), count: 0usize, capacity: 0usize
+    };
     (*stage).first_type = null(*CTypeInfo);
     (*stage).last_type = null(*CTypeInfo);
     (*stage).first_binding = null(*CBinding);

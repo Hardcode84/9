@@ -1,0 +1,97 @@
+extern fn c_test_reset(fail_at:usize)->unit = "crust_test_allocation_reset";
+extern fn c_test_calls()->usize = "crust_test_allocation_calls";
+extern fn c_test_live()->usize = "crust_test_allocation_live";
+
+fn c_test_function(value:*CrustType, result:*CrustType, params:**CrustType, count:usize)->unit {
+    *value = make CrustType {
+        kind:CRUST_T_FUNCTION, size:8u64, align:8u32, base:result, count:0u64,
+        params:params, param_count:count, record_decl:null(*CrustDecl)
+    };
+}
+
+fn c_test_comparison_reuse()->i32 {
+    var context:CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var stage:CStage = uninit;
+    c_stage_init(&stage, &context);
+    var integer:*CrustType = &context.builtins[CRUST_T_I32 as usize];
+    var different:*CrustType = &context.builtins[CRUST_T_U32 as usize];
+    var result:*CrustType = &context.builtins[CRUST_T_UNIT as usize];
+    var copy:CrustType = *integer;
+    if !c_exact_type_equal(&stage, integer, &copy) || c_exact_type_equal(&stage, integer, different) ||
+       stage.comparison.capacity != 0usize { return 20i32; }
+    var left:[CrustType;40] = uninit;
+    var right:[CrustType;40] = uninit;
+    var left_params:[*CrustType;80] = uninit;
+    var right_params:[*CrustType;80] = uninit;
+    var a:*CrustType = integer;
+    var b:*CrustType = integer;
+    var index:usize = 0usize;
+    while index < 40usize {
+        left_params[2usize*index] = a; left_params[2usize*index+1usize] = a;
+        right_params[2usize*index] = b; right_params[2usize*index+1usize] = b;
+        c_test_function(&left[index], result, &left_params[2usize*index], 2usize);
+        c_test_function(&right[index], result, &right_params[2usize*index], 2usize);
+        a = &left[index]; b = &right[index]; index = index + 1usize;
+    }
+    if !c_exact_type_equal(&stage, a, b) || stage.status.failed || stage.comparison.count != 0usize { return 21i32; }
+    var calls:usize = c_test_calls();
+    index = 0usize;
+    while index < 100usize {
+        right_params[0usize] = different;
+        if c_exact_type_equal(&stage, a, b) { return 22i32; }
+        right_params[0usize] = integer;
+        if !c_exact_type_equal(&stage, a, b) || stage.comparison.count != 0usize { return 23i32; }
+        index = index + 1usize;
+    }
+    if c_test_calls() != calls || stage.status.failed || context.error_count != 0usize { return 24i32; }
+    c_stage_destroy(&stage);
+    crust_context_destroy(&context);
+    if c_test_live() != 0usize { return 25i32; }
+    return 0i32;
+}
+
+fn c_test_comparison_failures()->i32 {
+    var context:CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var result:*CrustType = &context.builtins[CRUST_T_UNIT as usize];
+    var left:[CrustType;4096] = uninit;
+    var right:[CrustType;4096] = uninit;
+    var left_params:[*CrustType;4096] = uninit;
+    var right_params:[*CrustType;4096] = uninit;
+    var index:usize = 0usize;
+    while index < 4096usize {
+        c_test_function(&left[index], result, null(**CrustType), 0usize);
+        c_test_function(&right[index], result, null(**CrustType), 0usize);
+        left_params[index] = &left[index]; right_params[index] = &right[index];
+        index = index + 1usize;
+    }
+    var a:CrustType = uninit;
+    var b:CrustType = uninit;
+    c_test_function(&a, result, &left_params[0usize], 4096usize);
+    c_test_function(&b, result, &right_params[0usize], 4096usize);
+    var fail_at:usize = 1usize;
+    while true {
+        c_test_reset(fail_at);
+        context.error_count = 0usize;
+        context.error[0usize] = 0u8;
+        var stage:CStage = uninit;
+        c_stage_init(&stage, &context);
+        var success:bool = c_exact_type_equal(&stage, &a, &b);
+        if success {
+            if stage.status.failed || context.error_count != 0usize || c_test_calls() >= fail_at { return 26i32; }
+        } else {
+            if !stage.status.failed || context.error_count != 1usize || context.error[0usize] == 0u8 ||
+               c_test_calls() != fail_at { return 27i32; }
+        }
+        if stage.comparison.count != 0usize { return 28i32; }
+        c_stage_destroy(&stage);
+        if c_test_live() != 0usize || stage.comparison.capacity != 0usize { return 29i32; }
+        if success { break; }
+        fail_at = fail_at + 1usize;
+    }
+    crust_context_destroy(&context);
+    c_test_reset(0usize);
+    if fail_at < 4usize { return 30i32; }
+    return 0i32;
+}

@@ -1,6 +1,8 @@
 #include "crust0.h"
+#include "crust0_x64.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static unsigned checks;
@@ -444,6 +446,242 @@ static void test_invalid_bound_layout(void)
     crust_context_destroy(&consumer);
 }
 
+typedef struct {
+    CrustType types[256];
+    CrustType *parameters[256][2];
+} FunctionTypes;
+
+static CrustType *function_types(CrustContext *ctx, FunctionTypes *graph, size_t count)
+{
+    size_t index;
+    memset(graph, 0, sizeof(*graph));
+    for (index = 0; index < count; ++index) {
+        CrustType *type = &graph->types[index];
+        type->kind = CRUST_T_FUNCTION;
+        type->size = 8;
+        type->align = 8;
+        type->base = &ctx->builtins[CRUST_T_UNIT];
+        type->params = graph->parameters[index];
+        type->param_count = 2;
+        type->params[0] = index == 0 ? &ctx->builtins[CRUST_T_U8] : &graph->types[index - 1];
+        type->params[1] = type->params[0];
+    }
+    return &graph->types[count - 1];
+}
+
+static CrustDecl supplied_function(CrustName *name, uint64_t identity, CrustType *type)
+{
+    CrustDecl declaration;
+    memset(&declaration, 0, sizeof(declaration));
+    declaration.kind = CRUST_D_EXTERN;
+    declaration.name = name;
+    declaration.unit_identity = 700;
+    declaration.identity = identity;
+    declaration.link_name = "shared_callback";
+    declaration.type = type;
+    return declaration;
+}
+
+static void test_shared_function_types(void)
+{
+    CrustContext ctx;
+    FunctionTypes left;
+    FunctionTypes right;
+    CrustName left_name = {"left", 4, 0};
+    CrustName right_name = {"right", 5, 0};
+    CrustDecl a;
+    CrustDecl b;
+    CrustSource source = source_text("fn same() -> bool { return left == right; }", 701);
+    CrustUnit *unit;
+    FILE *output;
+    size_t bytes;
+    unsigned index;
+    bool equal = false;
+    crust_context_init(&ctx, NULL);
+    a = supplied_function(&left_name, 1, function_types(&ctx, &left, 40));
+    b = supplied_function(&right_name, 2, function_types(&ctx, &right, 40));
+    check(crust_try_type_equal(&ctx, a.type, b.type, &equal) && equal,
+          "shared function type graphs compare by structure");
+    bytes = ctx.arena.bytes_reserved;
+    for (index = 0; index < 512; ++index)
+        check(crust_try_type_equal(&ctx, a.type, b.type, &equal) && equal,
+              "type comparison workspace can be reused");
+    check(ctx.arena.bytes_reserved == bytes, "warm comparisons do not grow the arena");
+    right.parameters[0][1] = &ctx.builtins[CRUST_T_U16];
+    check(crust_try_type_equal(&ctx, a.type, b.type, &equal) && !equal,
+          "comparison does not cache facts across unpublished type edits");
+    right.parameters[0][1] = &ctx.builtins[CRUST_T_U8];
+    check(crust_bind(&ctx, &left_name, &a) && crust_bind(&ctx, &right_name, &b) &&
+              check_source(&ctx, &source, &unit),
+          "a consumer checks against independently supplied shared type graphs");
+    if (ctx.error_count == 0) {
+        unit->declarations->link_name = "same";
+        output = tmpfile();
+        check(output != NULL, "native alias test opens output");
+        if (output != NULL) {
+            check(crust_x64_emit(&ctx, output, NULL),
+                  "native aliases accept equivalent shared callback signatures");
+            check(fclose(output) == 0, "native alias output closes");
+        }
+    }
+    crust_context_destroy(&ctx);
+}
+
+static void test_shared_type_depth(void)
+{
+    CrustContext ctx;
+    FunctionTypes graph;
+    CrustType wrapper;
+    CrustType root;
+    CrustType *params[2];
+    CrustName name = {"deep", 4, 0};
+    CrustDecl declaration;
+    crust_context_init(&ctx, NULL);
+    params[0] = function_types(&ctx, &graph, 254);
+    memset(&wrapper, 0, sizeof(wrapper));
+    wrapper.kind = CRUST_T_POINTER;
+    wrapper.size = 8;
+    wrapper.align = 8;
+    wrapper.base = params[0];
+    params[1] = &wrapper;
+    root = *params[0];
+    root.params = params;
+    declaration = supplied_function(&name, 1, &root);
+    check(!crust_bind(&ctx, &name, &declaration) &&
+              strstr(ctx.error, "semantic nesting limit") != NULL,
+          "a reused type must fit the depth limit at every occurrence");
+    check(ctx.identities.count == 0 && ctx.globals.count == 0,
+          "a rejected shared type graph publishes nothing");
+    crust_context_destroy(&ctx);
+    crust_context_init(&ctx, NULL);
+    declaration.type = function_types(&ctx, &graph, 4);
+    declaration.type->params[1] = declaration.type;
+    check(!crust_bind(&ctx, &name, &declaration) && strstr(ctx.error, "cyclic structural") != NULL,
+          "structural cycles cannot masquerade as shared type facts");
+    crust_context_destroy(&ctx);
+}
+
+typedef struct {
+    size_t calls;
+    size_t live;
+    size_t fail_at;
+} AllocationCounts;
+
+static void *count_allocate(void *user, size_t size)
+{
+    AllocationCounts *counts = user;
+    void *allocation;
+    if (++counts->calls == counts->fail_at)
+        return NULL;
+    allocation = malloc(size);
+    if (allocation != NULL)
+        ++counts->live;
+    return allocation;
+}
+
+static void count_release(void *user, void *allocation)
+{
+    AllocationCounts *counts = user;
+    --counts->live;
+    free(allocation);
+}
+
+static void test_binding_publication_failure(void)
+{
+    CrustContext provider;
+    CrustUnit *unit;
+    char text[40000] = {0};
+    CrustSource source = source_text(text, 750);
+    size_t index;
+    bool completed = false;
+    source.size = 0;
+    for (index = 0; index < 1000; ++index) {
+        int size = snprintf(text + source.size, sizeof(text) - source.size,
+                            "record R%zu { next: *R%zu; }\n", index, (index + 1) % 1000);
+        if (size < 0 || (size_t)size >= sizeof(text) - source.size) {
+            check(false, "binding allocation fixture fits its source buffer");
+            return;
+        }
+        source.size += (size_t)size;
+    }
+    crust_context_init(&provider, NULL);
+    if (!check_source(&provider, &source, &unit)) {
+        check(false, "binding allocation provider checks");
+        crust_context_destroy(&provider);
+        return;
+    }
+    for (index = 1; index <= 64 && !completed; ++index) {
+        AllocationCounts counts = {0, 0, index};
+        CrustAllocator allocator = {&counts, count_allocate, count_release};
+        CrustContext consumer;
+        crust_context_init(&consumer, &allocator);
+        completed = crust_bind(&consumer, unit->declarations->name, unit->declarations);
+        if (!completed) {
+            check(consumer.identities.count == 0 && consumer.globals.count == 0,
+                  "allocation failure cannot publish provider facts");
+            check(consumer.failure == NULL && strstr(consumer.error, "allocation") != NULL,
+                  "binding allocation failure retains its diagnostic and restores the frame");
+            counts.fail_at = 0;
+            check(crust_bind(&consumer, unit->declarations->name, unit->declarations),
+                  "a failed binding can be retried");
+        }
+        crust_context_destroy(&consumer);
+        check(counts.live == 0, "binding failure and retry release all arena blocks");
+    }
+    check(completed, "binding allocation sweep reaches success");
+    crust_context_destroy(&provider);
+}
+
+static void test_comparison_allocation_failure(void)
+{
+    enum { COUNT = 4096 };
+    CrustType left[COUNT];
+    CrustType right[COUNT];
+    CrustType *left_params[COUNT];
+    CrustType *right_params[COUNT];
+    CrustType a;
+    CrustType b;
+    CrustContext provider;
+    size_t index;
+    bool completed = false;
+    crust_context_init(&provider, NULL);
+    memset(left, 0, sizeof(left));
+    for (index = 0; index < COUNT; ++index) {
+        left[index].kind = CRUST_T_FUNCTION;
+        left[index].size = 8;
+        left[index].align = 8;
+        left[index].base = &provider.builtins[CRUST_T_U8];
+        right[index] = left[index];
+        left_params[index] = &left[index];
+        right_params[index] = &right[index];
+    }
+    a = left[0];
+    a.params = left_params;
+    a.param_count = COUNT;
+    b = a;
+    b.params = right_params;
+    for (index = 1; index <= 64 && !completed; ++index) {
+        AllocationCounts counts = {0, 0, index};
+        CrustAllocator allocator = {&counts, count_allocate, count_release};
+        CrustContext ctx;
+        bool equal = false;
+        crust_context_init(&ctx, &allocator);
+        completed = crust_try_type_equal(&ctx, &a, &b, &equal);
+        if (!completed) {
+            check(!equal && ctx.failure == NULL && strstr(ctx.error, "allocation") != NULL,
+                  "type comparison failure preserves its output and restores the frame");
+            counts.fail_at = 0;
+            check(crust_try_type_equal(&ctx, &a, &b, &equal) && equal,
+                  "comparison can retry after workspace allocation failure");
+        }
+        check(equal, "wide supplied function graphs compare equally");
+        crust_context_destroy(&ctx);
+        check(counts.live == 0, "comparison failure and retry release all arena blocks");
+    }
+    check(completed, "comparison allocation sweep reaches success");
+    crust_context_destroy(&provider);
+}
+
 static bool check_stream(CrustContext *ctx, CrustRootScope *scope, CrustSource *source)
 {
     size_t cursor = 0;
@@ -678,6 +916,10 @@ int main(void)
     test_constant_facts();
     test_function_constant_facts();
     test_invalid_bound_layout();
+    test_shared_function_types();
+    test_shared_type_depth();
+    test_binding_publication_failure();
+    test_comparison_allocation_failure();
     test_root_checks();
     test_unit_checks();
     test_injected_root_local();

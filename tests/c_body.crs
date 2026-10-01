@@ -58,7 +58,7 @@ fn body_test_emit(stage:*CStage, declaration:*CrustDecl, opaque:*u8)->bool {
 }
 
 fn main(argc:i32, argv:**u8)->i32 {
-    if argc != 2i32 { return 1i32; }
+    if argc != 3i32 { return 1i32; }
     var context:CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
     var text:*u8 = "fn helper(x:i32)->i32 { var result:i32=x+increment; return result; } fn entry(argc:i32,argv:**u8)->i32 { return helper(argc)-2i32; } const increment:i32=1i32; extern fn absent()->unit=\"body_absent\";";
@@ -123,6 +123,102 @@ fn main(argc:i32, argv:**u8)->i32 {
     var result:i32 = c_backend_build_with_body(&context, entry, &options, body_test_emit, &state as *u8);
     if result == 0i32 && (state.calls != 2usize || (*helper).body != null(*CrustStmt) ||
                          (*entry).body != null(*CrustStmt)) { result = 6i32; }
+    crust_context_destroy(&context);
+    if result == 0i32 { result = body_dag_test(argv[2usize]); }
+    return result;
+}
+
+record BodyDag { callback:*CrustDecl; alias:*CrustDecl; }
+
+fn body_dag_type(context:*CrustContext, leaf:*CrustType)->*CrustType {
+    var result:*CrustType = leaf;
+    var depth:usize = 0usize;
+    while depth < 40usize {
+        var node:*CrustType = crust_try_alloc(context, sizeof(CrustType), alignof(CrustType)) as *CrustType;
+        var params:**CrustType = crust_try_alloc(context, 2usize * sizeof(*CrustType), alignof(*CrustType)) as **CrustType;
+        if node == null(*CrustType) || params == null(**CrustType) { return null(*CrustType); }
+        params[0usize] = result;
+        params[1usize] = result;
+        *node = make CrustType {
+            kind:CRUST_T_FUNCTION, size:8u64, align:8u32,
+            base:&(*context).builtins[CRUST_T_UNIT as usize], count:0u64, params:params,
+            param_count:2usize, record_decl:null(*CrustDecl)
+        };
+        result = node;
+        depth = depth + 1usize;
+    }
+    return result;
+}
+
+fn body_dag_signature(declaration:*CrustDecl, signature:*CrustType)->unit {
+    (*declaration).type = signature;
+    (*(*declaration).symbol).type = signature;
+    var parameter:*CrustParam = (*declaration).params;
+    var index:usize = 0usize;
+    while parameter != null(*CrustParam) {
+        (*parameter).type = (*signature).params[index];
+        if (*parameter).symbol != null(*CrustSymbol) {
+            (*(*parameter).symbol).type = (*parameter).type;
+        }
+        parameter = (*parameter).next;
+        index = index + 1usize;
+    }
+}
+
+fn body_dag_emit(stage:*CStage, declaration:*CrustDecl, user:*u8)->bool {
+    var state:*BodyDag = user as *BodyDag;
+    if declaration == (*state).callback { c_text(stage, "{}\n"); }
+    else {
+        c_text(stage, "{\n");
+        c_global(stage, (*state).alias);
+        c_text(stage, "(0,0);\nreturn ");
+        c_global(stage, (*state).callback);
+        c_text(stage, "==");
+        c_global(stage, (*state).alias);
+        c_text(stage, "?0:1;\n}\n");
+    }
+    return !(*stage).status.failed;
+}
+
+fn body_dag_test(output:*u8)->i32 {
+    var context:CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var text:*u8 = "fn callback(a:fn()->unit,b:fn()->unit)->unit{} extern fn alias(a:fn()->unit,b:fn()->unit)->unit=\"dag_shared\"; fn entry(argc:i32,argv:**u8)->i32{return 0i32;}";
+    var source:CrustSource = make CrustSource {identity:1u64, path:"body-type-dag", bytes:text, size:body_test_length(text)};
+    var parsed:*CrustUnit = null(*CrustUnit);
+    if !crust_read(&context, &source, &parsed) || !crust_collect(&context) ||
+       !crust_resolve(&context) || !crust_check(&context) { return 10i32; }
+    var callback:*CrustDecl = (*parsed).declarations;
+    var alias:*CrustDecl = (*callback).next;
+    var entry:*CrustDecl = (*alias).next;
+    var left:*CrustType = body_dag_type(&context, &context.builtins[CRUST_T_ISIZE as usize]);
+    var right:*CrustType = body_dag_type(&context, &context.builtins[CRUST_T_I64 as usize]);
+    if left == null(*CrustType) || right == null(*CrustType) { return 11i32; }
+    body_dag_signature(callback, left);
+    body_dag_signature(alias, right);
+    (*callback).body = null(*CrustStmt);
+    (*entry).body = null(*CrustStmt);
+    (*callback).link_name = "dag_shared";
+    (*entry).link_name = "dag_entry";
+    var state:BodyDag = make BodyDag {callback:callback, alias:alias};
+    var options:CBackendOptions = make CBackendOptions {
+        mode:0u32, output:output, symbols:null(*u8),
+        cflags:null(**u8), cflag_count:0usize, ldflags:null(**u8), ldflag_count:0usize
+    };
+    var result:i32 = c_backend_build_with_body(&context, entry, &options, body_dag_emit, &state as *u8);
+    if result == 0i32 {
+        var leaf:*CrustType = right;
+        while (*(*leaf).params[0usize]).kind == CRUST_T_FUNCTION { leaf = (*leaf).params[0usize]; }
+        (*leaf).params[0usize] = &context.builtins[CRUST_T_U64 as usize];
+        var stage:CStage = uninit;
+        c_stage_init(&stage, &context);
+        if c_emit_with_body(&stage, entry, body_dag_emit, &state as *u8) ||
+           !stage.status.failed || context.error_count != 1usize ||
+           !body_test_equal(&context.error[0usize], "conflicting native ABI for symbol") {
+            result = 12i32;
+        }
+        c_stage_destroy(&stage);
+    }
     crust_context_destroy(&context);
     return result;
 }

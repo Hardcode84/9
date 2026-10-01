@@ -135,6 +135,10 @@ them live during emission. Only declarations in `context.units` are defined
 in the output. Supplied provider facts remain read-only. Type and symbol
 identities do not depend on allocation addresses. Equal native names are
 combined before C emission, and incompatible declarations are rejected.
+Function signatures use the selected scalar ABI for this comparison. Data
+pointer types have one native representation; `isize` matches `i64`, and
+`usize` matches `u64`. Shared function-type graphs remain shared during
+comparison and C type emission. Constants require exact seed type equality.
 
 The C stage treats an empty `link_name` as a private definition. It emits C
 `static` linkage and does not give that definition a native rename. Private

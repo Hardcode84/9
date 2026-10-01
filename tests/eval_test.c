@@ -254,6 +254,75 @@ done:
     crust_context_destroy(&context);
 }
 
+typedef struct {
+    CrustType types[40];
+    CrustType *parameters[40][2];
+} NativeTypeGraph;
+
+static CrustDecl native_graph_declaration(CrustContext *ctx, NativeTypeGraph *graph,
+                                          CrustTypeKind leaf, uint64_t identity)
+{
+    CrustDecl declaration;
+    size_t index;
+    memset(graph, 0, sizeof(*graph));
+    for (index = 0; index < 40; ++index) {
+        CrustType *type = &graph->types[index];
+        type->kind = CRUST_T_FUNCTION;
+        type->size = 8;
+        type->align = 8;
+        type->base = &ctx->builtins[CRUST_T_UNIT];
+        type->param_count = 2;
+        type->params = graph->parameters[index];
+        type->params[0] = index == 0 ? &ctx->builtins[leaf] : &graph->types[index - 1];
+        type->params[1] = type->params[0];
+    }
+    memset(&declaration, 0, sizeof(declaration));
+    declaration.kind = CRUST_D_EXTERN;
+    declaration.unit_identity = 800;
+    declaration.identity = identity;
+    declaration.type = &graph->types[39];
+    declaration.link_name = "graph_callback";
+    return declaration;
+}
+
+static void test_native_type_graph(void)
+{
+    CrustContext context;
+    NativeTypeGraph left;
+    NativeTypeGraph right;
+    NativeTypeGraph wrong;
+    CrustDecl a;
+    CrustDecl b;
+    CrustDecl bad;
+    CrustEval *eval;
+    Resolver resolver;
+    AllocatorState state = {false, 0, 0, 0};
+    CrustAllocator allocator = {&state, test_allocate, test_release};
+    crust_context_init(&context, &allocator);
+    a = native_graph_declaration(&context, &left, CRUST_T_USIZE, 1);
+    b = native_graph_declaration(&context, &right, CRUST_T_U64, 2);
+    bad = native_graph_declaration(&context, &wrong, CRUST_T_U32, 3);
+    eval = new_eval(&context, &resolver);
+    resolver.enabled = false;
+    check(crust_eval_prepare(eval, &a), "first shared native signature prepares");
+    check(crust_try_alloc(&context, 65536, 1) != NULL,
+          "native comparison failure fixture fills the current arena block");
+    state.fail = true;
+    check(!crust_eval_prepare(eval, &b) && strstr(context.error, "allocation") != NULL &&
+              context.failure == NULL,
+          "native comparison allocation failure returns through its C boundary");
+    state.fail = false;
+    check(crust_eval_prepare(eval, &b),
+          "shared native signatures retain usize and u64 ABI equivalence after retry");
+    check(!crust_eval_prepare(eval, &bad) &&
+              strstr(context.error, "conflicting native ABI") != NULL,
+          "shared native signatures reject a mismatched nested argument");
+    check(resolver.lookups == 0, "shared native signature checking needs no symbol lookup");
+    crust_eval_destroy(eval);
+    crust_context_destroy(&context);
+    check(state.live == 0, "shared native signature checking releases its workspace");
+}
+
 static void test_native_identity(void)
 {
     const char *text = "extern fn a(p:*u8)->u64=\"shared\";"
@@ -856,6 +925,7 @@ int main(void)
     test_runtime();
     test_reentry();
     test_native_identity();
+    test_native_type_graph();
     test_callback_types();
     test_root();
     test_root_storage();

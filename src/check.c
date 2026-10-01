@@ -1,4 +1,4 @@
-#include "crust0.h"
+#include "core_internal.h"
 
 #include <limits.h>
 #include <string.h>
@@ -23,9 +23,15 @@ struct BindWork {
 };
 
 typedef struct {
+    unsigned state;
+    unsigned depth;
+} BoundType;
+
+typedef struct {
     CrustContext *ctx;
     CrustMap pending;
     CrustMap visited;
+    CrustMap types;
     Identity *identities;
     BindWork *work;
     BindWork **tail;
@@ -136,26 +142,37 @@ static bool record_types_equal(const CrustType *a, const CrustType *b)
             a->record_decl->unit_identity == b->record_decl->unit_identity);
 }
 
-bool crust_type_equal(const CrustType *a, const CrustType *b)
+static bool type_equal(CrustContext *ctx, const CrustType *a, const CrustType *b);
+
+static bool function_types_equal(CrustContext *ctx, const CrustType *a, const CrustType *b)
 {
     size_t i;
+    if (a->param_count != b->param_count)
+        return false;
+    if (crust_type_compare_seen(ctx, a, b))
+        return true;
+    if (!type_equal(ctx, a->base, b->base))
+        return false;
+    for (i = 0; i < a->param_count; ++i) {
+        if (!type_equal(ctx, a->params[i], b->params[i]))
+            return false;
+    }
+    return true;
+}
+
+static bool type_equal(CrustContext *ctx, const CrustType *a, const CrustType *b)
+{
     if (a == b)
         return a != NULL;
     if (a == NULL || b == NULL || a->kind != b->kind)
         return false;
     switch (a->kind) {
     case CRUST_T_POINTER:
-        return crust_type_equal(a->base, b->base);
+        return type_equal(ctx, a->base, b->base);
     case CRUST_T_ARRAY:
-        return a->count == b->count && crust_type_equal(a->base, b->base);
+        return a->count == b->count && type_equal(ctx, a->base, b->base);
     case CRUST_T_FUNCTION:
-        if (a->param_count != b->param_count || !crust_type_equal(a->base, b->base))
-            return false;
-        for (i = 0; i < a->param_count; ++i) {
-            if (!crust_type_equal(a->params[i], b->params[i]))
-                return false;
-        }
-        return true;
+        return function_types_equal(ctx, a, b);
     case CRUST_T_RECORD:
         return record_types_equal(a, b);
     case CRUST_T_NAME:
@@ -163,6 +180,31 @@ bool crust_type_equal(const CrustType *a, const CrustType *b)
     default:
         return true;
     }
+}
+
+bool crust_type_equal(CrustContext *ctx, const CrustType *a, const CrustType *b)
+{
+    bool result;
+    crust_type_compare_reset(ctx);
+    result = type_equal(ctx, a, b);
+    crust_type_compare_reset(ctx);
+    return result;
+}
+
+bool crust_try_type_equal(CrustContext *ctx, const CrustType *a, const CrustType *b, bool *result)
+{
+    CrustFailureFrame frame;
+    bool equal;
+    frame.previous = ctx->failure;
+    ctx->failure = &frame;
+    if (setjmp(frame.jump) != 0) {
+        ctx->failure = frame.previous;
+        return false;
+    }
+    equal = crust_type_equal(ctx, a, b);
+    ctx->failure = frame.previous;
+    *result = equal;
+    return true;
 }
 
 static uintptr_t identity_key(const CrustDecl *decl)
@@ -274,7 +316,7 @@ static bool constant_equal(CrustContext *ctx, CrustExpr *a, CrustExpr *b, unsign
     check_depth(ctx, a->loc, depth);
     a = ungroup(ctx, a, depth);
     b = ungroup(ctx, b, depth);
-    if (!crust_type_equal(a->type, b->type))
+    if (!crust_type_equal(ctx, a->type, b->type))
         return false;
     if (constant_bits(a, &left) && constant_bits(b, &right))
         return left == right;
@@ -294,7 +336,7 @@ static bool constant_equal(CrustContext *ctx, CrustExpr *a, CrustExpr *b, unsign
     }
 }
 
-static bool record_facts_equal(CrustDecl *a, CrustDecl *b)
+static bool record_facts_equal(CrustContext *ctx, CrustDecl *a, CrustDecl *b)
 {
     CrustField *left;
     CrustField *right;
@@ -305,7 +347,7 @@ static bool record_facts_equal(CrustDecl *a, CrustDecl *b)
     right = b->fields;
     while (left != NULL && right != NULL) {
         if (!same_name(left->name, right->name) || left->offset != right->offset ||
-            !crust_type_equal(left->type, right->type))
+            !crust_type_equal(ctx, left->type, right->type))
             return false;
         left = left->next;
         right = right->next;
@@ -321,10 +363,10 @@ static bool same_declaration_facts(CrustContext *ctx, CrustDecl *a, CrustDecl *b
         return true;
     if ((!a_function || !b_function) && a->kind != b->kind)
         return false;
-    if (!crust_type_equal(a->type, b->type))
+    if (!crust_type_equal(ctx, a->type, b->type))
         return false;
     if (a->kind == CRUST_D_RECORD)
-        return record_facts_equal(a, b);
+        return record_facts_equal(ctx, a, b);
     if (a->link_name == NULL || b->link_name == NULL || strcmp(a->link_name, b->link_name) != 0)
         return false;
     return a_function || constant_equal(ctx, a->init, b->init, 0);
@@ -499,35 +541,42 @@ static uint64_t align_size(CrustContext *ctx, uint64_t size, uint32_t align, Cru
     return size + padding;
 }
 
-static void check_bound_shape(CrustContext *ctx, CrustType *type, CrustLoc loc, unsigned depth);
+static unsigned check_bound_shape(Binding *binding, CrustType *type, CrustLoc loc, unsigned depth);
 
-static void check_bound_pointer(CrustContext *ctx, CrustType *type, CrustLoc loc, unsigned depth)
+static unsigned check_bound_pointer(Binding *binding, CrustType *type, CrustLoc loc, unsigned depth)
 {
-    check_bound_shape(ctx, type->base, loc, depth + 1);
+    unsigned height = 1 + check_bound_shape(binding, type->base, loc, depth + 1);
     if (type->base->kind == CRUST_T_UNIT || type->size != 8 || type->align != 8)
-        crust_fail(ctx, loc, "invalid bound pointer type");
+        crust_fail(binding->ctx, loc, "invalid bound pointer type");
+    return height;
 }
 
-static void check_bound_array(CrustContext *ctx, CrustType *type, CrustLoc loc, unsigned depth)
+static unsigned check_bound_array(Binding *binding, CrustType *type, CrustLoc loc, unsigned depth)
 {
-    check_bound_shape(ctx, type->base, loc, depth + 1);
+    unsigned height = 1 + check_bound_shape(binding, type->base, loc, depth + 1);
     if (type->base->kind == CRUST_T_UNIT || type->count == 0 ||
         type->count > (uint64_t)INT64_MAX / type->base->size ||
         type->size != type->count * type->base->size || type->align != type->base->align)
-        crust_fail(ctx, loc, "invalid bound array layout");
+        crust_fail(binding->ctx, loc, "invalid bound array layout");
+    return height;
 }
 
-static void check_bound_function(CrustContext *ctx, CrustType *type, CrustLoc loc, unsigned depth)
+static unsigned check_bound_function(Binding *binding, CrustType *type, CrustLoc loc,
+                                     unsigned depth)
 {
+    CrustContext *ctx = binding->ctx;
     size_t i;
-    check_bound_shape(ctx, type->base, loc, depth + 1);
+    unsigned height = 1 + check_bound_shape(binding, type->base, loc, depth + 1);
     if ((type->base->kind != CRUST_T_UNIT && !crust_type_scalar(type->base)) || type->size != 8 ||
         type->align != 8 || (type->param_count != 0 && type->params == NULL))
         crust_fail(ctx, loc, "invalid bound function signature");
     for (i = 0; i < type->param_count; ++i) {
-        check_bound_shape(ctx, type->params[i], loc, depth + 1);
+        unsigned child = 1 + check_bound_shape(binding, type->params[i], loc, depth + 1);
+        if (child > height)
+            height = child;
         require_scalar(ctx, type->params[i], loc);
     }
+    return height;
 }
 
 static void check_bound_record_identity(CrustContext *ctx, CrustType *type, CrustLoc loc)
@@ -537,8 +586,41 @@ static void check_bound_record_identity(CrustContext *ctx, CrustType *type, Crus
         crust_fail(ctx, loc, "incomplete bound record identity");
 }
 
-static void check_bound_shape(CrustContext *ctx, CrustType *type, CrustLoc loc, unsigned depth)
+static unsigned check_bound_composite(Binding *binding, CrustType *type, CrustLoc loc,
+                                      unsigned depth)
 {
+    CrustContext *ctx = binding->ctx;
+    BoundType *work = crust_map_get(&binding->types, (uintptr_t)type);
+    if (work != NULL) {
+        if (work->state == 1)
+            crust_fail(ctx, loc, "cyclic structural type facts");
+        check_depth(ctx, loc, depth + work->depth);
+        return work->depth;
+    }
+    work = crust_alloc(ctx, sizeof(*work), CRUST_ALIGNOF(BoundType));
+    work->state = 1;
+    crust_map_set(ctx, &binding->types, (uintptr_t)type, work);
+    switch (type->kind) {
+    case CRUST_T_POINTER:
+        work->depth = check_bound_pointer(binding, type, loc, depth);
+        break;
+    case CRUST_T_ARRAY:
+        work->depth = check_bound_array(binding, type, loc, depth);
+        break;
+    case CRUST_T_FUNCTION:
+        work->depth = check_bound_function(binding, type, loc, depth);
+        break;
+    default:
+        crust_fail(ctx, loc, "invalid bound type kind");
+    }
+    check_depth(ctx, loc, depth + work->depth);
+    work->state = 2;
+    return work->depth;
+}
+
+static unsigned check_bound_shape(Binding *binding, CrustType *type, CrustLoc loc, unsigned depth)
+{
+    CrustContext *ctx = binding->ctx;
     check_depth(ctx, loc, depth);
     if (type == NULL)
         crust_fail(ctx, loc, "incomplete bound type facts");
@@ -546,27 +628,16 @@ static void check_bound_shape(CrustContext *ctx, CrustType *type, CrustLoc loc, 
         if (type->size != ctx->builtins[type->kind].size ||
             type->align != ctx->builtins[type->kind].align)
             crust_fail(ctx, loc, "bound scalar layout does not match the target profile");
-        return;
+        return 0;
     }
     if (type->size == 0 || type->size > (uint64_t)INT64_MAX || type->align == 0 ||
         type->align > 8 || (type->align & (type->align - 1)) != 0)
         crust_fail(ctx, loc, "incomplete bound storage layout");
-    switch (type->kind) {
-    case CRUST_T_POINTER:
-        check_bound_pointer(ctx, type, loc, depth);
-        break;
-    case CRUST_T_ARRAY:
-        check_bound_array(ctx, type, loc, depth);
-        break;
-    case CRUST_T_FUNCTION:
-        check_bound_function(ctx, type, loc, depth);
-        break;
-    case CRUST_T_RECORD:
+    if (type->kind == CRUST_T_RECORD) {
         check_bound_record_identity(ctx, type, loc);
-        break;
-    default:
-        crust_fail(ctx, loc, "invalid bound type kind");
+        return 0;
     }
+    return check_bound_composite(binding, type, loc, depth);
 }
 
 static void bind_field_name(CrustContext *ctx, CrustMap *fields, CrustField *field)
@@ -595,7 +666,7 @@ static void queue_bound_record(Binding *binding, CrustDecl *decl)
         return;
     for (field = decl->fields; field != NULL; field = field->next) {
         bind_field_name(ctx, &fields, field);
-        check_bound_shape(ctx, field->type, field->loc, 0);
+        (void)check_bound_shape(binding, field->type, field->loc, 0);
         if (field->type->kind == CRUST_T_UNIT)
             crust_fail(ctx, field->loc, "unit is not a bound field type");
         size = align_size(ctx, size, field->type->align, field->loc);
@@ -620,22 +691,29 @@ static void queue_bound_record(Binding *binding, CrustDecl *decl)
     binding->tail = &work->next;
 }
 
-static void bind_type_records(Binding *binding, CrustType *type, unsigned depth)
+static void bind_type_records(Binding *binding, CrustType *type)
 {
+    BoundType *work;
     size_t i;
-    check_depth(binding->ctx, no_location(), depth);
+    if (type->kind == CRUST_T_RECORD) {
+        queue_bound_record(binding, type->record_decl);
+        return;
+    }
+    if (type->kind <= CRUST_T_UNIT)
+        return;
+    work = crust_map_get(&binding->types, (uintptr_t)type);
+    if (work->state == 3)
+        return;
+    work->state = 3;
     switch (type->kind) {
     case CRUST_T_POINTER:
     case CRUST_T_ARRAY:
-        bind_type_records(binding, type->base, depth + 1);
+        bind_type_records(binding, type->base);
         break;
     case CRUST_T_FUNCTION:
-        bind_type_records(binding, type->base, depth + 1);
+        bind_type_records(binding, type->base);
         for (i = 0; i < type->param_count; ++i)
-            bind_type_records(binding, type->params[i], depth + 1);
-        break;
-    case CRUST_T_RECORD:
-        queue_bound_record(binding, type->record_decl);
+            bind_type_records(binding, type->params[i]);
         break;
     default:
         break;
@@ -650,14 +728,14 @@ static void bind_constant_function(Binding *binding, CrustExpr *expr)
         expr->symbol->decl == NULL)
         crust_fail(ctx, expr->loc, "incomplete bound constant function reference");
     function = expr->symbol->decl;
-    check_bound_shape(ctx, function->type, function->loc, 0);
+    (void)check_bound_shape(binding, function->type, function->loc, 0);
     if ((function->kind != CRUST_D_FUNCTION && function->kind != CRUST_D_EXTERN) ||
         function->identity == 0 || function->type->kind != CRUST_T_FUNCTION ||
         function->link_name == NULL || function->link_name[0] == '\0' ||
-        !crust_type_equal(function->type, expr->type))
+        !crust_type_equal(ctx, function->type, expr->type))
         crust_fail(ctx, expr->loc, "incomplete bound constant function facts");
     (void)binding_identity(binding, function);
-    bind_type_records(binding, function->type, 0);
+    bind_type_records(binding, function->type);
 }
 
 static void check_bound_constant_leaf(CrustContext *ctx, CrustExpr *expr)
@@ -986,7 +1064,8 @@ static void bind_constant_facts(Binding *binding, CrustDecl *decl)
     CrustContext *ctx = binding->ctx;
     Identity *entry;
     if (decl->type->kind == CRUST_T_UNIT || decl->link_name == NULL || decl->link_name[0] == '\0' ||
-        decl->init == NULL || !decl->checked || !crust_type_equal(decl->type, decl->init->type))
+        decl->init == NULL || !decl->checked ||
+        !crust_type_equal(ctx, decl->type, decl->init->type))
         crust_fail(ctx, decl->loc, "incomplete bound constant facts");
     entry = identity_find(&ctx->identities, decl);
     if (entry == NULL || entry->decl != decl)
@@ -1013,6 +1092,20 @@ static void bind_declaration_facts(Binding *binding, CrustDecl *decl)
     }
 }
 
+static void reserve_binding_publication(Binding *binding)
+{
+    CrustContext *ctx = binding->ctx;
+    Identity *entry;
+    size_t count = ctx->identities.count;
+    for (entry = binding->identities; entry != NULL; entry = entry->pending_next) {
+        if (count == SIZE_MAX)
+            crust_fail(ctx, entry->decl->loc, "too many declaration identities");
+        ++count;
+    }
+    crust_map_reserve(ctx, &ctx->identities, count);
+    crust_map_reserve(ctx, &ctx->globals, ctx->globals.count + 1);
+}
+
 bool crust_bind(CrustContext *ctx, CrustName *name, CrustDecl *decl)
 {
     CrustFailureFrame frame;
@@ -1034,19 +1127,20 @@ bool crust_bind(CrustContext *ctx, CrustName *name, CrustDecl *decl)
     memset(&binding, 0, sizeof(binding));
     binding.ctx = ctx;
     binding.tail = &binding.work;
-    check_bound_shape(ctx, decl->type, decl->loc, 0);
+    (void)check_bound_shape(&binding, decl->type, decl->loc, 0);
     bind_declaration_facts(&binding, decl);
-    bind_type_records(&binding, decl->type, 0);
+    bind_type_records(&binding, decl->type);
     for (work = binding.work; work != NULL; work = work->next) {
         CrustField *field;
         for (field = work->decl->fields; field != NULL; field = field->next)
-            bind_type_records(&binding, field->type, 0);
+            bind_type_records(&binding, field->type);
     }
     for (work = binding.work; work != NULL; work = work->next)
         (void)bound_layout_path(&binding, work->decl->type, 0);
     symbol = new_symbol(ctx, name, declaration_kind(decl), decl->loc);
     symbol->type = decl->type;
     symbol->decl = decl;
+    reserve_binding_publication(&binding);
     for (entry = binding.identities; entry != NULL; entry = entry->pending_next) {
         if (entry->decl->kind == CRUST_D_RECORD) {
             work = crust_map_get(&binding.visited, (uintptr_t)entry->decl);
@@ -1115,7 +1209,7 @@ bool crust_resolve_unit(CrustContext *ctx, CrustUnit *unit_value)
 
 static void same_type(Checker *checker, CrustType *expected, CrustType *actual, CrustLoc loc)
 {
-    if (!crust_type_equal(expected, actual))
+    if (!crust_type_equal(checker->ctx, expected, actual))
         crust_fail(checker->ctx, loc, "type mismatch");
 }
 
@@ -1351,14 +1445,14 @@ static CrustType *check_array(Checker *checker, CrustExpr *expr)
     return type;
 }
 
-static bool valid_cast(CrustType *left, CrustType *type)
+static bool valid_cast(CrustContext *ctx, CrustType *left, CrustType *type)
 {
     if (crust_type_integer(left) || left->kind == CRUST_T_BOOL)
         return crust_type_integer(type) || type->kind == CRUST_T_BOOL ||
                (left->kind == CRUST_T_USIZE && type->kind == CRUST_T_POINTER);
     if (left->kind == CRUST_T_POINTER)
         return type->kind == CRUST_T_POINTER || type->kind == CRUST_T_USIZE;
-    return crust_type_scalar(left) && crust_type_equal(left, type);
+    return crust_type_scalar(left) && crust_type_equal(ctx, left, type);
 }
 
 static CrustType *check_typed_expr(Checker *checker, CrustExpr *expr)
@@ -1370,7 +1464,7 @@ static CrustType *check_typed_expr(Checker *checker, CrustExpr *expr)
     case CRUST_E_CAST:
         left = check_expr(checker, expr->left);
         type = crust_resolve_type(ctx, expr->syntax_type);
-        if (!valid_cast(left, type))
+        if (!valid_cast(ctx, left, type))
             crust_fail(ctx, expr->loc, "invalid cast");
         break;
     case CRUST_E_RECORD:

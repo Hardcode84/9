@@ -47,7 +47,11 @@ def main():
             cwd=ROOT,
             check=True,
         )
-        subprocess.run([str(harness), str(output)], cwd=ROOT, check=True)
+        dag_output = work / "type-dag"
+        subprocess.run(
+            [str(harness), str(output), str(dag_output)], cwd=ROOT, check=True, timeout=30
+        )
+        subprocess.run([str(dag_output)], cwd=ROOT, check=True, timeout=10)
         result = subprocess.run([str(output)], cwd=ROOT, check=False)
         if result.returncode != 42:
             raise RuntimeError(f"external body returned {result.returncode}, expected 42")
@@ -64,7 +68,7 @@ def main():
         if re.search(rb"\br_g[0-9]+\b", public) or b"body_entry" not in public:
             raise RuntimeError(f"private symbols escaped native visibility: {public!r}")
     print(
-        "C body extension: native result, absent seed bodies, private linkage, and four failure paths passed"
+        "C body extension: native results, shared type DAGs, private linkage, and failure paths passed"
     )
 
 

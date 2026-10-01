@@ -7,8 +7,10 @@ typedef struct CrustEvalAbi CrustEvalAbi;
 typedef struct CrustEvalClosure CrustEvalClosure;
 typedef uint64_t (*CrustEvalCallback)(void *user, void **arguments);
 
-/* Inputs must have complete, checked scalar signature facts. */
-bool crust_eval_native_type_equal(CrustType *left, CrustType *right);
+/* Inputs must have complete, checked scalar signature facts.
+   Failure retains an allocation diagnostic and leaves result unchanged. */
+bool crust_eval_native_type_equal(CrustContext *context, CrustType *left, CrustType *right,
+                                  bool *result);
 /* The context owns the result. Failure returns null with a diagnostic. */
 CrustEvalAbi *crust_eval_native_abi(CrustContext *context, CrustType *type, CrustLoc location);
 /* Call a non-null address with this exact ABI. Arguments point to typed storage.

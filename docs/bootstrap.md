@@ -193,12 +193,20 @@ The declarations in `context.units` are local definitions. A supplied binding
 does not add its provider to that list. Providers retain ownership of their
 facts. The binding operation validates incomplete or conflicting facts at
 that boundary. It does not change provider declarations. Equal nominal record
-identities are pairs of driver-assigned unit and declaration integers.
+identities are pairs of driver-assigned unit and declaration integers. A failed
+binding publishes neither a name binding nor provider identities, including
+when destination table allocation fails.
 
 Resolved type queries consume complete type facts. They do not validate
-arbitrary C object graphs. A checked expression records its type and its place
-and write permissions. Backend preparation adds aggregate value slots, scratch
-slots, and argument slots where required. A scalar emitter leaves its result
+arbitrary C object graphs. `crust_try_type_equal` takes a scratch context and
+writes exact equality to its result pointer. Allocation failure returns false,
+retains a diagnostic, and leaves the result unchanged. Repeated comparisons
+reuse context storage without retaining results across calls. The C-only
+`crust_type_equal` helper requires an active failure frame.
+
+A checked expression records its type and its place and write permissions.
+Backend preparation adds aggregate value slots, scratch slots, and argument
+slots where required. A scalar emitter leaves its result
 in RAX with the type's signed or unsigned extension. An aggregate emitter
 leaves an address to its complete value copy. A place emitter leaves an address
 without reading the stored value. The frame size has 16-byte alignment.

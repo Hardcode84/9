@@ -25,6 +25,9 @@ fn c_test_oom() -> i32 {
 fn main(argc: i32, argv: **u8) -> i32 {
     if argc == 2i32 && c_equal(argv[1usize], "oom") { return c_test_oom(); }
     if argc != 1i32 { return 15i32; }
+    var compared:i32 = c_test_comparison_reuse();
+    if compared == 0i32 { compared = c_test_comparison_failures(); }
+    if compared != 0i32 { return compared; }
     var context: CrustContext = uninit;
     context.error_count = 0usize;
     var stage: CStage = uninit;

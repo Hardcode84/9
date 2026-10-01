@@ -294,6 +294,7 @@ static void compile_consumer(Work *work)
     CrustSymbol *alias;
     CrustName *node_name;
     CrustName *alias_name;
+    bool aliases_equal = false;
     Result *result = work->result;
     FILE *output = NULL;
     memset(result, 0, sizeof(*result));
@@ -308,7 +309,8 @@ static void compile_consumer(Work *work)
     node = crust_map_get(&ctx.globals, (uintptr_t)node_name);
     alias = crust_map_get(&ctx.globals, (uintptr_t)alias_name);
     result->aliases_equal = node != NULL && alias != NULL && node->decl == alias->decl &&
-                            crust_type_equal(node->type, alias->type);
+                            crust_try_type_equal(&ctx, node->type, alias->type, &aliases_equal) &&
+                            aliases_equal;
     result->unit_identity = unit->declarations->unit_identity;
     result->declaration_identity = unit->declarations->identity;
     if (!crust_check_body(&ctx, unit->declarations))
@@ -414,8 +416,13 @@ int main(void)
     for (index = 0; index < 2; ++index)
         if (!prepare_provider(&providers[index], index))
             stop("provider preparation failed");
-    check(!crust_type_equal(providers[0].record->type, providers[1].record->type),
-          "same-layout records from different providers have distinct identities");
+    {
+        bool equal = true;
+        check(crust_try_type_equal(&providers[0].context, providers[0].record->type,
+                                   providers[1].record->type, &equal) &&
+                  !equal,
+              "same-layout records from different providers have distinct identities");
+    }
     check(providers[0].record->unit_identity == 101 && providers[0].record->identity == 1 &&
               providers[1].record->unit_identity == 102 && providers[1].record->identity == 1,
           "provider identities come from the driver input order");

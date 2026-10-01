@@ -222,6 +222,19 @@ fn main(argc:i32,argv:**u8)->i32 {
     long_string += "if text[0usize]!=120u8 || text[4999usize]!=120u8 || text[5000usize]!=0u8{return 1i32;}return 0i32;}"
     command([executable("long-string", long_string)])
 
+    allocation_wrapper = work / "c-stage-alloc.o"
+    command(
+        [
+            *cc,
+            *STRICT,
+            *cflags,
+            "-Iinclude",
+            "-c",
+            "tests/c_stage_alloc.c",
+            "-o",
+            allocation_wrapper,
+        ]
+    )
     foundation = executable(
         "c-stage-foundation",
         inputs=[
@@ -229,7 +242,14 @@ fn main(argc:i32,argv:**u8)->i32 {
             "api/crust0_host.crs",
             "stages/c/model.crs",
             "stages/c/base.crs",
+            "stages/c/types.crs",
+            "tests/c_types.crs",
             "tests/c_stage.crs",
+        ],
+        libraries=[
+            allocation_wrapper,
+            build / "libcrust0.a",
+            "-Wl,--wrap=crust0_host_alloc,--wrap=crust0_host_free",
         ],
     )
     quoted_source = work / "c-stage-quoted.c"

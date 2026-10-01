@@ -358,7 +358,7 @@ class Failure(Exception):
 class Suite:
     def __init__(self, args, work):
         self.build = args.build.resolve()
-        self.compiler = self.build / "rmd-resource"
+        self.compiler = self.build / "crust-resource"
         self.work = work
         self.options = ["--cflag=-O2", *("--cflag=" + flag for flag in args.cflag),
                         *("--ldflag=" + flag for flag in args.ldflag)]
@@ -380,7 +380,7 @@ class Suite:
         return result
 
     def source(self, name, source):
-        path = self.work / (name + ".rmd")
+        path = self.work / (name + ".crust")
         path.write_bytes(source if isinstance(source, bytes) else source.encode())
         return path
 
@@ -444,17 +444,17 @@ class Suite:
                     raise Failure(f"failed compilation changed {output}")
         elif name == "cli-source-root":
             package = self.work / "ordinary resource package"
-            for relative in ("api/rmd0_stage.rmd", "stages/resources/api.rmd",
-                             "examples/resources/hello/main.rmd"):
+            for relative in ("api/crust0_stage.crust", "stages/resources/api.crust",
+                             "examples/resources/hello/main.crust"):
                 destination = package / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / relative, destination)
             output = package / "build/resource-hello"
             output.parent.mkdir()
-            shutil.copyfile(self.build / "rmd-resource-library.so",
-                            output.parent / "rmd-resource-library.so")
-            source = package / "examples/resources/hello/main.rmd"
-            runner = self.build / "rmd"
+            shutil.copyfile(self.build / "crust-resource-library.so",
+                            output.parent / "crust-resource-library.so")
+            source = package / "examples/resources/hello/main.crust"
+            runner = self.build / "crust"
             result = self.command([runner, source], cwd=self.work)
             if result.stdout or result.stderr:
                 raise Failure(f"root compilation produced output: {result.stdout!r} {result.stderr!r}")
@@ -508,10 +508,10 @@ def main():
         return 0
     if args.timeout <= 0:
         parser.error("timeout must be positive")
-    compiler = args.build.resolve() / "rmd-resource"
+    compiler = args.build.resolve() / "crust-resource"
     if not compiler.is_file():
         parser.error(f"compiler does not exist: {compiler}")
-    work = Path(tempfile.mkdtemp(prefix="rmd-resources-"))
+    work = Path(tempfile.mkdtemp(prefix="crust-resources-"))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     suite = Suite(args, work)
     failures = 0

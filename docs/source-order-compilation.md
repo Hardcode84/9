@@ -1,5 +1,8 @@
 # Source-order compilation programs
 
+The linked measurements retain the source names and hashes from the recorded
+runs.
+
 Date: 2026-10-01. Status: design study retained as the experiment record.
 This study examined the [native host block](source-stages.md) at revision
 `9cff8f4`. The [source runner](source-runner.md) now implements its selected
@@ -14,10 +17,10 @@ and required changes describe that earlier revision.
 Use this command as the intended user interface:
 
 ```sh
-rmd main.rmd
+crust main.crust
 ```
 
-`main.rmd` is the host compilation program. Its code selects language readers,
+`main.crust` is the host compilation program. Its code selects language readers,
 checks, backends, input files, and outputs. These operations use ordinary
 libraries. The launcher does not select a backend or require a second build
 script. Arguments after the root path are data for that program.
@@ -44,17 +47,17 @@ different cost from a dispatch for every token or syntax node.
 
 ## What a root program does
 
-This example specifies call order only. It is pseudocode, not accepted RMD0
+This example specifies call order only. It is pseudocode, not accepted Crust0
 syntax. It does not propose type inference, methods, or new import keywords.
 
 ```text
-compiler = host.load("compiler/rmd")
+compiler = host.load("compiler/crust")
 c_backend = host.load("project/c_backend")
 
 app = compiler.new_target()
 compiler.use_backend(app, c_backend)
-compiler.include(app, "src/list.rmd")
-compiler.include(app, "src/application.rmd")
+compiler.include(app, "src/list.crust")
+compiler.include(app, "src/application.crust")
 compiler.build(app, "build/application")
 ```
 
@@ -132,7 +135,7 @@ python3 benchmarks/source-order/python_boundaries.py
 Forth's text interpreter looks up a word and performs its interpretation or
 compilation behavior before continuing. Words can consume input. The standard
 also exposes the input position through `>IN`. This is a direct precedent for
-code that changes how subsequent input is processed. It does not require RMD
+code that changes how subsequent input is processed. It does not require Crust
 to adopt stack syntax or Forth's error rules.
 [Forth standard, sections 3.3.3.5 and 3.4](https://forth-standard.org/standard/usage)
 
@@ -140,7 +143,7 @@ Common Lisp's file compiler processes each top-level form before it reads the
 next one. Compile-time effects can therefore change the reader for later
 forms. This does not mean that every top-level function call executes during
 compilation: the language has rules such as `eval-when` for that distinction.
-RMD can avoid that choice in the root by assigning the entire root to the host
+Crust can avoid that choice in the root by assigning the entire root to the host
 phase and submitting target inputs explicitly.
 [Common Lisp top-level processing](https://www.lispworks.com/documentation/HyperSpec/Body/03_bca.htm)
 
@@ -148,13 +151,13 @@ phase and submitting target inputs explicitly.
 
 Racket distinguishes reading input from expanding syntax. A module reader can
 accept a different character syntax. Syntax expansion alone does not provide
-that operation. The useful RMD boundary is a callable reader over bytes, with
+that operation. The useful Crust boundary is a callable reader over bytes, with
 an explicit result and source location.
 [Racket reader protocol](https://docs.racket-lang.org/guide/hash-lang_reader.html)
 
 Flatt's work on composable macros explains failures caused by mixing values
 from different phases or compilation instances. It uses explicit dependencies
-and separate phase state. The RMD consequence is to keep host execution state
+and separate phase state. The Crust consequence is to keep host execution state
 separate from target facts, and to identify the inputs of a prepared stage.
 A process-global collection of whichever extensions happened to run first
 does not establish those dependencies.
@@ -165,7 +168,7 @@ later entries. Its implementation restricts grammar changes to top-level
 boundaries. This is close to the requested order. Its reported compilation
 cost is seconds with cached language preparation, and longer when syntax
 rules change. Its SDF parser has cubic worst-case cost. This establishes a
-working extension model, but supplies no evidence for C-level speed. RMD can
+working extension model, but supplies no evidence for C-level speed. Crust can
 use the boundary rule with prepared reader functions, without adopting its
 grammar construction machinery.
 [Erdweg et al., SugarJ, sections 4.1–4.3](https://www.informatik.uni-marburg.de/~seba/publications/sugarj.pdf)
@@ -185,7 +188,7 @@ for the next unread root bytes. Source position alone is not such a contract.
 [Jaibreak build source at a fixed revision](https://github.com/tsoding/jaibreak/blob/e7e206a66ae3140c5c588feb72591c2d641b0882/first.jai)
 
 The [earlier comparison](source-metastages.md) gives the wider Zig and Jai
-evidence. The present proposal changes RMD's source execution contract; it
+evidence. The present proposal changes Crust's source execution contract; it
 does not claim that Jai or Zig already implements it.
 
 ## The minimum execution contract
@@ -197,7 +200,7 @@ action can run. An extension cannot define the syntax needed to load itself
 unless an earlier reader already accepts that syntax.
 
 The installed compiler supplies one initial runner and its explicit bindings.
-The first bootstrap can implement this runner in C99. A prepared RMD library
+The first bootstrap can implement this runner in C99. A prepared Crust library
 can supply a later runner. The seed needs an entry interface and host services;
 it does not need a package search algorithm or backend registry. The installed
 prelude can provide ordinary loading and compiler helper functions. Its code
@@ -385,9 +388,9 @@ These findings were checked against commit `9cff8f4`.
 | `take` in `src/read.c` always calls `next_token` | Permit consumption of the final token without lexing the next action. |
 | `read_block` and record parsing lex beyond `}` | Return an exact action boundary. A loop around the current declaration reader is insufficient. |
 | `read_meta` has one exact transfer after its final `}` | Generalize the boundary contract; the existing special case does not execute arbitrary root actions. |
-| `rmd_read_range` parses a complete fixed range | Add a reader operation that returns the next offset, or supply an external reader with that contract. |
+| `crust_read_range` parses a complete fixed range | Add a reader operation that returns the next offset, or supply an external reader with that contract. |
 | Each parsed range starts declaration ordinals at 1 | Distinguish the ordinal spaces of disjoint ranges. Preserve the identity of the same declaration when it is used in another context. |
-| `rmd_collect` and `rmd_resolve` revisit all owned declarations | Check closed target batches once. Do not append and rescan the complete context after every root action. |
+| `crust_collect` and `crust_resolve` revisit all owned declarations | Check closed target batches once. Do not append and rescan the complete context after every root action. |
 | The root grammar accepts declarations only | Add host action reading and persistent host value storage in the runner. |
 | The launcher prepares one native host module before calling `build` | Supply execution before reading later actions. Repeating native preparation per action fails the cost objective. |
 | Target contexts are destroyed before host code unloads | Preserve this lifetime for all callbacks and queued work. |
@@ -405,7 +408,7 @@ the same record declaration must retain its nominal type identity across
 contexts and imported interfaces.
 
 The current API supports independent target contexts and supplied bindings.
-It does not provide a general incremental host checker or an RMD evaluator.
+It does not provide a general incremental host checker or a Crust evaluator.
 Those are concrete implementation requirements, not consequences of deleting
 the `meta` braces.
 
@@ -415,7 +418,7 @@ Existing measurements provide the baseline. These are medians in milliseconds
 from 25 randomized paired rounds. Prepared stage libraries were explicit
 inputs. Target GCC compilation and linking were excluded.
 
-| Workload | Prepared RMD frontend and C text output | Complete current native host request | Matched original C, GCC syntax |
+| Workload | Prepared Crust frontend and C text output | Complete current native host request | Matched original C, GCC syntax |
 |---|---:|---:|---:|
 | 1,000 functions | 13.478 | 23.484 | 18.445 |
 | 8,000 functions | 109.505 | 123.053 | 111.167 |
@@ -447,11 +450,11 @@ statements, user function bodies, reader replacement, or general callbacks.
 It establishes that native-call setup can be small, not that a complete source
 runner meets the speed rule.
 
-A complete execution candidate must implement the applicable RMD0 expression
+A complete execution candidate must implement the applicable Crust0 expression
 and statement rules, scalar and pointer ABI mapping, aligned local storage,
 function values, recursion, and native callbacks into host functions. It must
 also define reentrant calls and error propagation. A call-only configuration
-language cannot be presented as ordinary RMD execution.
+language cannot be presented as ordinary Crust execution.
 
 The current seed is about 5,400 C and header lines. This investigation adds no
 evaluator and establishes no new line-count result. The user asked whether
@@ -466,13 +469,13 @@ The first experiment must prove reader transfer and real target output.
 Do not build a general interpreter first. Use explicit prepared host libraries
 and a small experimental executor. Reject unsupported action forms.
 
-The witness root performs setup, selects the ordinary RMD C backend, includes
+The witness root performs setup, selects the ordinary Crust C backend, includes
 the real intrusive-list input, switches its own reader, and requests output.
 All compilation choices occur in the root. The harness receives the root path
 and has no backend-specific branch.
 
 Immediately after the reader-switch call's semicolon, put a byte rejected by
-the initial grammar. The selected RMD reader must consume a small custom form
+the initial grammar. The selected Crust reader must consume a small custom form
 that creates a target helper with observable behavior. The intrusive target
 must call that helper, including a forward call to an ordinary target function.
 Skipping an invalid marker without changing target meaning is insufficient.
@@ -521,7 +524,7 @@ required before replacing the current implementation with this source model.
 
 | Property | Current host block | Proposed source runner |
 |---|---|---|
-| User command | Root first, then stage arguments | `rmd main.rmd`, then root arguments |
+| User command | Root first, then stage arguments | `crust main.crust`, then root arguments |
 | Host selection | Leading `meta` block and named entry | Root execution starts with the first action |
 | Host dependency loading | Flat prefix input list | Ordinary executed library calls |
 | Target input | Remaining root range or explicit other files | Explicit target submission; other files are the simple case |

@@ -5,8 +5,8 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-INPUTS = ("api/rmd0.rmd", "api/rmd0_host.rmd", "api/rmd0_eval.rmd",
-          "api/rmd0_run.rmd", "stages/host.rmd")
+INPUTS = ("api/crust0.crust", "api/crust0_host.crust", "api/crust0_eval.crust",
+          "api/crust0_run.crust", "stages/host.crust")
 
 
 def main():
@@ -20,7 +20,7 @@ def main():
         for offset in range(0, len(data), 32):
             lines.append("    " + ",".join(str(byte) for byte in data[offset:offset + 32]) + ",")
         lines.append("};")
-    lines.append("static RmdSource installed_sources[] = {")
+    lines.append("static CrustSource installed_sources[] = {")
     for index, name in enumerate(INPUTS):
         lines.append(f'    {{"<installed {name}>", prelude_{index}, sizeof(prelude_{index}), {index + 1}}},')
     lines.extend(["};", ""])

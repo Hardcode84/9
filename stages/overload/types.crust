@@ -1,0 +1,113 @@
+fn ov_encode_type(stage:*OvStage, syntax:*CrustTypeSyntax, buffer:*OvText, depth:usize)->unit {
+    if (*stage).failed { return; }
+    if depth == 256usize {
+        ov_error(stage, &(*syntax).loc, "overload type nesting exceeds 256");
+        return;
+    }
+    var kind:u32 = (*syntax).kind;
+    if kind <= CRUST_T_UNIT {
+        ov_text(stage, buffer, "b");
+        ov_number(stage, buffer, kind as u64);
+        return;
+    }
+    if kind == CRUST_T_NAME {
+        ov_text(stage, buffer, "n");
+        ov_part(stage, buffer, (*(*syntax).name).text, (*(*syntax).name).size);
+        return;
+    }
+    if kind == CRUST_T_POINTER || kind == CRUST_T_ARRAY {
+        if kind == CRUST_T_POINTER { ov_text(stage, buffer, "p"); }
+        else { ov_text(stage, buffer, "a"); ov_number(stage, buffer, (*syntax).count); }
+        ov_encode_type(stage, (*syntax).base, buffer, depth + 1usize);
+        return;
+    }
+    if kind == CRUST_T_FUNCTION {
+        ov_text(stage, buffer, "f");
+        ov_number(stage, buffer, (*syntax).param_count as u64);
+        var index:usize = 0usize;
+        while index < (*syntax).param_count && !(*stage).failed {
+            ov_encode_type(stage, (*syntax).params[index], buffer, depth + 1usize);
+            index = index + 1usize;
+        }
+        ov_text(stage, buffer, "r");
+        ov_encode_type(stage, (*syntax).base, buffer, depth + 1usize);
+        return;
+    }
+    var hooks:*OvHooks = (*stage).hooks;
+    if hooks != null(*OvHooks) && (*hooks).type_key != null(fn(*OvStage,*CrustTypeSyntax,*OvText,usize,*u8)->bool) {
+        ov_text(stage, buffer, "x");
+        ov_number(stage, buffer, kind as u64);
+        var errors:usize = (*(*stage).context).error_count;
+        var handled:bool = (*hooks).type_key(stage, syntax, buffer, depth, (*hooks).user);
+        if (*(*stage).context).error_count != errors { (*stage).failed = true; }
+        if handled || (*stage).failed { return; }
+    }
+    ov_error(stage, &(*syntax).loc, "overload stage has no encoding for this type");
+}
+
+fn ov_type_key(stage:*OvStage, syntax:*CrustTypeSyntax)->*CrustName {
+    if (*stage).failed { return null(*CrustName); }
+    var found:*CrustName = crust_map_get(&(*stage).type_keys, syntax as usize) as *CrustName;
+    if found != null(*CrustName) { return found; }
+    (*stage).scratch.size = 0usize;
+    ov_encode_type(stage, syntax, &(*stage).scratch, 0usize);
+    found = ov_intern(stage, (*stage).scratch.data, (*stage).scratch.size);
+    if found != null(*CrustName) { ov_put(stage, &(*stage).type_keys, syntax as usize, found as *u8); }
+    return found;
+}
+
+fn ov_same(stage:*OvStage, a:*CrustTypeSyntax, b:*CrustTypeSyntax)->bool {
+    if a == null(*CrustTypeSyntax) || b == null(*CrustTypeSyntax) || (*stage).failed { return false; }
+    var left:*CrustName = ov_type_key(stage, a);
+    var right:*CrustName = ov_type_key(stage, b);
+    return !(*stage).failed && left == right;
+}
+
+fn ov_parameters(stage:*OvStage, syntax:*CrustTypeSyntax)->*CrustName {
+    (*stage).scratch.size = 0usize;
+    ov_text(stage, &(*stage).scratch, "a");
+    ov_number(stage, &(*stage).scratch, (*syntax).param_count as u64);
+    var index:usize = 0usize;
+    while index < (*syntax).param_count && !(*stage).failed {
+        ov_encode_type(stage, (*syntax).params[index], &(*stage).scratch, 0usize);
+        index = index + 1usize;
+    }
+    return ov_intern(stage, (*stage).scratch.data, (*stage).scratch.size);
+}
+
+fn ov_function_syntax(stage:*OvStage, declaration:*CrustDecl)->*CrustTypeSyntax {
+    var syntax:*CrustTypeSyntax = ov_type(stage, CRUST_T_FUNCTION, &(*declaration).loc);
+    if syntax == null(*CrustTypeSyntax) { return syntax; }
+    (*syntax).base = (*declaration).syntax_type;
+    (*syntax).param_count = (*declaration).param_count;
+    (*syntax).params = ov_alloc(stage, (*syntax).param_count * sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    var index:usize = 0usize;
+    var parameter:*CrustParam = (*declaration).params;
+    while parameter != null(*CrustParam) {
+        (*syntax).params[index] = (*parameter).syntax_type;
+        parameter = (*parameter).next;
+        index = index + 1usize;
+    }
+    return syntax;
+}
+
+fn ov_select(stage:*OvStage, group:*OvGlobal, syntax:*CrustTypeSyntax, parameters_only:bool, loc:*CrustLoc)->*OvFunction {
+    if (*stage).failed { return null(*OvFunction); }
+    if group == null(*OvGlobal) || (*group).first == null(*OvFunction) || (*syntax).kind != CRUST_T_FUNCTION {
+        ov_error(stage, loc, "overload selection requires a function name and function type");
+        return null(*OvFunction);
+    }
+    var key:*CrustName = ov_parameters(stage, syntax);
+    if (*stage).failed { return null(*OvFunction); }
+    var found:*OvFunction = crust_map_get(&(*group).signatures, key as usize) as *OvFunction;
+    if found == null(*OvFunction) {
+        ov_error(stage, loc, "no overload matches the exact parameter types");
+        return null(*OvFunction);
+    }
+    if !parameters_only && !ov_same(stage, (*(*found).syntax).base, (*syntax).base) {
+        ov_error(stage, loc, "overload function value result type does not match");
+        return null(*OvFunction);
+    }
+    return found;
+}

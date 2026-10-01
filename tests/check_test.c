@@ -1,4 +1,4 @@
-#include "rmd0.h"
+#include "crust0.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -15,9 +15,9 @@ static void check(bool condition, const char *name)
     }
 }
 
-static RmdSource source_text(const char *text, uint64_t identity)
+static CrustSource source_text(const char *text, uint64_t identity)
 {
-    RmdSource source;
+    CrustSource source;
     source.path = "checker-test";
     source.bytes = (const unsigned char *)text;
     source.size = strlen(text);
@@ -25,26 +25,26 @@ static RmdSource source_text(const char *text, uint64_t identity)
     return source;
 }
 
-static bool check_source(RmdContext *ctx, RmdSource *source, RmdUnit **unit)
+static bool check_source(CrustContext *ctx, CrustSource *source, CrustUnit **unit)
 {
-    return rmd_read(ctx, source, unit) && rmd_collect(ctx) &&
-           rmd_resolve(ctx) && rmd_check(ctx);
+    return crust_read(ctx, source, unit) && crust_collect(ctx) &&
+           crust_resolve(ctx) && crust_check(ctx);
 }
 
 static void source_case(const char *name, const char *text, const char *error)
 {
-    RmdContext ctx;
-    RmdSource source = source_text(text, 1);
-    RmdUnit *unit;
+    CrustContext ctx;
+    CrustSource source = source_text(text, 1);
+    CrustUnit *unit;
     bool accepted;
     bool passed;
-    rmd_context_init(&ctx, NULL);
+    crust_context_init(&ctx, NULL);
     accepted = check_source(&ctx, &source, &unit);
     passed = error == NULL ? accepted : !accepted && strstr(ctx.error, error) != NULL;
     check(passed, name);
     if (!passed) fprintf(stderr, "diagnostic: %s\n", ctx.error);
     check(ctx.failure == NULL, "stage restores failure frame");
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void test_witness_rules(void)
@@ -77,27 +77,27 @@ static void test_witness_rules(void)
 
 static void test_shared_bindings(void)
 {
-    RmdContext provider;
-    RmdContext consumer;
-    RmdSource provided = source_text(
+    CrustContext provider;
+    CrustContext consumer;
+    CrustSource provided = source_text(
         "record Hook { prev: *Hook; next: *Hook; }"
         "record Node { value: u64; hook: Hook; }"
         "extern fn read_node(p: *Node) -> u64 = \"read_node\";", 11);
-    RmdSource consumed = source_text(
+    CrustSource consumed = source_text(
         "fn value(p: *Node) -> u64 { return (*p).value; }"
         "fn pass(p: *Node) -> u64 { return read_node(p); }"
         "fn alias(p: *Alias) -> *Node { return p; }", 12);
-    RmdName alias = { "Alias", 5, 0 };
-    RmdUnit *provided_unit;
-    RmdUnit *consumed_unit;
-    RmdDecl *node;
-    RmdDecl *function;
-    RmdDecl node_before;
-    RmdDecl function_before;
-    RmdField field_before;
-    RmdType type_before;
-    rmd_context_init(&provider, NULL);
-    rmd_context_init(&consumer, NULL);
+    CrustName alias = { "Alias", 5, 0 };
+    CrustUnit *provided_unit;
+    CrustUnit *consumed_unit;
+    CrustDecl *node;
+    CrustDecl *function;
+    CrustDecl node_before;
+    CrustDecl function_before;
+    CrustField field_before;
+    CrustType type_before;
+    crust_context_init(&provider, NULL);
+    crust_context_init(&consumer, NULL);
     if (!check_source(&provider, &provided, &provided_unit)) {
         check(false, "provider resolves");
         goto done;
@@ -110,11 +110,11 @@ static void test_shared_bindings(void)
     type_before = *node->type;
     check(node->type->size == 24 && node->type->align == 8 &&
           node->fields->next->offset == 8, "embedded hook layout");
-    check(rmd_bind(&consumer, provided_unit->declarations->name,
+    check(crust_bind(&consumer, provided_unit->declarations->name,
                    provided_unit->declarations), "bind recursive record");
-    check(rmd_bind(&consumer, node->name, node), "bind record in a second context");
-    check(rmd_bind(&consumer, &alias, node), "two names share nominal identity");
-    check(rmd_bind(&consumer, function->name, function), "bind function signature");
+    check(crust_bind(&consumer, node->name, node), "bind record in a second context");
+    check(crust_bind(&consumer, &alias, node), "two names share nominal identity");
+    check(crust_bind(&consumer, function->name, function), "bind function signature");
     check(check_source(&consumer, &consumed, &consumed_unit),
           "field access and calls use shared facts");
     check(memcmp(node, &node_before, sizeof(*node)) == 0 &&
@@ -122,12 +122,12 @@ static void test_shared_bindings(void)
           memcmp(node->type, &type_before, sizeof(*node->type)) == 0 &&
           memcmp(function, &function_before, sizeof(*function)) == 0,
           "consumer does not modify published declarations");
-    check(!rmd_bind(&consumer, node->name, node) &&
+    check(!crust_bind(&consumer, node->name, node) &&
           strstr(consumer.error, "duplicate name") != NULL,
           "duplicate supplied name rejected");
 done:
-    rmd_context_destroy(&consumer);
-    rmd_context_destroy(&provider);
+    crust_context_destroy(&consumer);
+    crust_context_destroy(&provider);
 }
 
 static void test_complete_forms(void)
@@ -268,27 +268,27 @@ static void test_resource_bounds(void)
 
 static void test_identity_facts(void)
 {
-    RmdContext first;
-    RmdContext second;
-    RmdContext consumer;
-    RmdSource first_source = source_text(
+    CrustContext first;
+    CrustContext second;
+    CrustContext consumer;
+    CrustSource first_source = source_text(
         "record Inner { value: u32; } record Outer { inner: *Inner; }"
         "extern fn good(p: *Inner) -> unit = \"native\";", 40);
-    RmdSource second_source = source_text(
+    CrustSource second_source = source_text(
         "record Inner { value: i32; } record Outer { inner: *Inner; }"
         "extern fn bad(p: *Inner) -> unit = \"native\";", 40);
-    RmdSource duplicate = source_text("record Different { x: u8; }", 40);
-    RmdUnit *first_unit;
-    RmdUnit *second_unit;
-    RmdUnit *duplicate_unit;
-    RmdName other = { "Other", 5, 0 };
-    RmdDecl *outer;
-    RmdDecl *bad;
+    CrustSource duplicate = source_text("record Different { x: u8; }", 40);
+    CrustUnit *first_unit;
+    CrustUnit *second_unit;
+    CrustUnit *duplicate_unit;
+    CrustName other = { "Other", 5, 0 };
+    CrustDecl *outer;
+    CrustDecl *bad;
     size_t identities;
     size_t globals;
-    rmd_context_init(&first, NULL);
-    rmd_context_init(&second, NULL);
-    rmd_context_init(&consumer, NULL);
+    crust_context_init(&first, NULL);
+    crust_context_init(&second, NULL);
+    crust_context_init(&consumer, NULL);
     if (!check_source(&first, &first_source, &first_unit) ||
         !check_source(&second, &second_source, &second_unit)) {
         check(false, "identity providers resolve");
@@ -296,44 +296,44 @@ static void test_identity_facts(void)
     }
     outer = first_unit->declarations->next;
     bad = second_unit->declarations->next->next;
-    check(rmd_bind(&consumer, outer->name, outer), "record binding supplies dependency facts");
+    check(crust_bind(&consumer, outer->name, outer), "record binding supplies dependency facts");
     identities = consumer.identities.count;
     globals = consumer.globals.count;
-    check(!rmd_bind(&consumer, &other, second_unit->declarations->next) &&
+    check(!crust_bind(&consumer, &other, second_unit->declarations->next) &&
           strstr(consumer.error, "conflicting facts") != NULL,
           "conflicting nominal dependency rejected through matching pointer field");
-    check(!rmd_bind(&consumer, bad->name, bad) &&
+    check(!crust_bind(&consumer, bad->name, bad) &&
           strstr(consumer.error, "conflicting facts") != NULL,
           "function binding checks nominal dependencies");
     check(consumer.identities.count == identities && consumer.globals.count == globals,
           "failed binding does not publish partial facts");
-    check(rmd_bind(&consumer, outer->next->name, outer->next),
+    check(crust_bind(&consumer, outer->next->name, outer->next),
           "correct binding succeeds after rejected facts");
-    check(rmd_read(&first, &duplicate, &duplicate_unit) && !rmd_collect(&first) &&
+    check(crust_read(&first, &duplicate, &duplicate_unit) && !crust_collect(&first) &&
           strstr(first.error, "share one identity") != NULL,
           "distinct source declarations cannot reuse identities");
 done:
-    rmd_context_destroy(&consumer);
-    rmd_context_destroy(&second);
-    rmd_context_destroy(&first);
+    crust_context_destroy(&consumer);
+    crust_context_destroy(&second);
+    crust_context_destroy(&first);
 }
 
 static void test_constant_facts(void)
 {
-    RmdContext first;
-    RmdContext second;
-    RmdContext third;
-    RmdContext consumer;
-    RmdSource a = source_text("const a: u8 = -255u8;", 50);
-    RmdSource b = source_text("const b: u8 = (1u8);", 50);
-    RmdSource c = source_text("const c: u8 = 2u8;", 50);
-    RmdUnit *ua;
-    RmdUnit *ub;
-    RmdUnit *uc;
-    rmd_context_init(&first, NULL);
-    rmd_context_init(&second, NULL);
-    rmd_context_init(&third, NULL);
-    rmd_context_init(&consumer, NULL);
+    CrustContext first;
+    CrustContext second;
+    CrustContext third;
+    CrustContext consumer;
+    CrustSource a = source_text("const a: u8 = -255u8;", 50);
+    CrustSource b = source_text("const b: u8 = (1u8);", 50);
+    CrustSource c = source_text("const c: u8 = 2u8;", 50);
+    CrustUnit *ua;
+    CrustUnit *ub;
+    CrustUnit *uc;
+    crust_context_init(&first, NULL);
+    crust_context_init(&second, NULL);
+    crust_context_init(&third, NULL);
+    crust_context_init(&consumer, NULL);
     if (!check_source(&first, &a, &ua) || !check_source(&second, &b, &ub) ||
         !check_source(&third, &c, &uc)) {
         check(false, "constant providers resolve");
@@ -342,32 +342,32 @@ static void test_constant_facts(void)
     ua->declarations->link_name = "shared_constant";
     ub->declarations->link_name = "shared_constant";
     uc->declarations->link_name = "shared_constant";
-    check(rmd_bind(&consumer, ua->declarations->name, ua->declarations),
+    check(crust_bind(&consumer, ua->declarations->name, ua->declarations),
           "constant facts bind");
-    check(rmd_bind(&consumer, ub->declarations->name, ub->declarations),
+    check(crust_bind(&consumer, ub->declarations->name, ub->declarations),
           "equivalent constant values share identity");
-    check(!rmd_bind(&consumer, uc->declarations->name, uc->declarations) &&
+    check(!crust_bind(&consumer, uc->declarations->name, uc->declarations) &&
           strstr(consumer.error, "conflicting facts") != NULL,
           "different constant values cannot share identity");
 done:
-    rmd_context_destroy(&consumer);
-    rmd_context_destroy(&third);
-    rmd_context_destroy(&second);
-    rmd_context_destroy(&first);
+    crust_context_destroy(&consumer);
+    crust_context_destroy(&third);
+    crust_context_destroy(&second);
+    crust_context_destroy(&first);
 }
 
 static void test_invalid_bound_layout(void)
 {
-    RmdContext consumer;
-    RmdDecl decl;
-    RmdField field;
-    RmdType type;
-    RmdName record_name = { "Recursive", 9, 0 };
-    RmdName field_name = { "value", 5, 0 };
+    CrustContext consumer;
+    CrustDecl decl;
+    CrustField field;
+    CrustType type;
+    CrustName record_name = { "Recursive", 9, 0 };
+    CrustName field_name = { "value", 5, 0 };
     memset(&decl, 0, sizeof(decl));
     memset(&field, 0, sizeof(field));
     memset(&type, 0, sizeof(type));
-    decl.kind = RMD_D_RECORD;
+    decl.kind = CRUST_D_RECORD;
     decl.name = &record_name;
     decl.unit_identity = 60;
     decl.identity = 1;
@@ -376,33 +376,33 @@ static void test_invalid_bound_layout(void)
     decl.field_count = 1;
     field.name = &field_name;
     field.type = &type;
-    type.kind = RMD_T_RECORD;
+    type.kind = CRUST_T_RECORD;
     type.size = 8;
     type.align = 8;
     type.record_decl = &decl;
-    rmd_context_init(&consumer, NULL);
-    check(!rmd_bind(&consumer, &record_name, &decl) &&
+    crust_context_init(&consumer, NULL);
+    check(!crust_bind(&consumer, &record_name, &decl) &&
           strstr(consumer.error, "by-value cycle") != NULL,
           "precomputed sizes cannot hide imported by-value recursion");
     check(consumer.identities.count == 0 && consumer.globals.count == 0,
           "invalid imported layout publishes nothing");
-    rmd_context_destroy(&consumer);
+    crust_context_destroy(&consumer);
 }
 
-static bool check_stream(RmdContext *ctx, RmdRootScope *scope, RmdSource *source)
+static bool check_stream(CrustContext *ctx, CrustRootScope *scope, CrustSource *source)
 {
     size_t cursor = 0;
     for (;;) {
-        RmdAction action;
-        if (!rmd_read_one(ctx, source, cursor, source->size, &action))
+        CrustAction action;
+        if (!crust_read_one(ctx, source, cursor, source->size, &action))
             return false;
         if (action.declaration != NULL) {
-            RmdUnit unit = { source, action.declaration, NULL };
-            if (!rmd_collect_unit(ctx, &unit) || !rmd_resolve_unit(ctx, &unit) ||
-                !rmd_check_unit(ctx, &unit))
+            CrustUnit unit = { source, action.declaration, NULL };
+            if (!crust_collect_unit(ctx, &unit) || !crust_resolve_unit(ctx, &unit) ||
+                !crust_check_unit(ctx, &unit))
                 return false;
         } else if (action.statement != NULL) {
-            if (!rmd_check_root(ctx, scope, action.statement))
+            if (!crust_check_root(ctx, scope, action.statement))
                 return false;
         } else {
             return true;
@@ -413,31 +413,31 @@ static bool check_stream(RmdContext *ctx, RmdRootScope *scope, RmdSource *source
 
 static void root_case(const char *name, const char *text, const char *error)
 {
-    RmdContext ctx;
-    RmdRootScope scope;
-    RmdSource source = source_text(text, 71);
+    CrustContext ctx;
+    CrustRootScope scope;
+    CrustSource source = source_text(text, 71);
     bool accepted;
     bool passed;
-    rmd_context_init(&ctx, NULL);
+    crust_context_init(&ctx, NULL);
     memset(&scope, 0, sizeof(scope));
     accepted = check_stream(&ctx, &scope, &source);
     passed = error == NULL ? accepted : !accepted && strstr(ctx.error, error) != NULL;
     check(passed, name);
     if (!passed) fprintf(stderr, "diagnostic: %s\n", ctx.error);
     check(ctx.failure == NULL, "root checking restores its failure frame");
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void test_root_checks(void)
 {
-    RmdContext ctx;
-    RmdRootScope scope;
-    RmdSource source = source_text(
+    CrustContext ctx;
+    CrustRootScope scope;
+    CrustSource source = source_text(
         "var x: i32 = 1i32; x = x + 2i32; "
         "{ var y: i32 = x; }; { var y: i32 = x; }; return x;", 72);
-    RmdAction action;
-    RmdSymbol *variable;
-    RmdSymbol *first_nested;
+    CrustAction action;
+    CrustSymbol *variable;
+    CrustSymbol *first_nested;
     size_t cursor;
     root_case("persistent root variable", "var x: i32 = 1i32; x = 2i32; return x;", NULL);
     root_case("root return type", "return 1u32;", "type mismatch");
@@ -473,75 +473,75 @@ static void test_root_checks(void)
               NULL);
     root_case("root does not bind an unread later record",
               "record A { b: *B; } record B { a: *A; }", "unknown name");
-    rmd_context_init(&ctx, NULL);
+    crust_context_init(&ctx, NULL);
     memset(&scope, 0, sizeof(scope));
-    if (!rmd_read_one(&ctx, &source, 0, source.size, &action) ||
-        !rmd_check_root(&ctx, &scope, action.statement)) {
+    if (!crust_read_one(&ctx, &source, 0, source.size, &action) ||
+        !crust_check_root(&ctx, &scope, action.statement)) {
         check(false, "root symbol witness begins");
         goto done;
     }
     variable = action.statement->symbol;
     cursor = action.end;
-    check(rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
-          rmd_check_root(&ctx, &scope, action.statement) &&
+    check(crust_read_one(&ctx, &source, cursor, source.size, &action) &&
+          crust_check_root(&ctx, &scope, action.statement) &&
           action.statement->expr->symbol == variable &&
           action.statement->value->left->symbol == variable,
           "later root actions use the same resolved local symbol");
     cursor = action.end;
-    if (!rmd_read_one(&ctx, &source, cursor, source.size, &action) ||
-        !rmd_check_root(&ctx, &scope, action.statement)) {
+    if (!crust_read_one(&ctx, &source, cursor, source.size, &action) ||
+        !crust_check_root(&ctx, &scope, action.statement)) {
         check(false, "first nested root block checks");
         goto done;
     }
     first_nested = action.statement->body->symbol;
-    check(rmd_map_get(&scope.locals, (uintptr_t)first_nested->name) == NULL &&
+    check(crust_map_get(&scope.locals, (uintptr_t)first_nested->name) == NULL &&
           scope.scope == variable, "nested root bindings do not persist");
     cursor = action.end;
-    check(rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
-          rmd_check_root(&ctx, &scope, action.statement) &&
+    check(crust_read_one(&ctx, &source, cursor, source.size, &action) &&
+          crust_check_root(&ctx, &scope, action.statement) &&
           action.statement->body->symbol != first_nested,
           "separate root blocks use distinct local symbols");
     cursor = action.end;
-    check(rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
-          rmd_check_root(&ctx, &scope, action.statement) &&
+    check(crust_read_one(&ctx, &source, cursor, source.size, &action) &&
+          crust_check_root(&ctx, &scope, action.statement) &&
           action.statement->expr->symbol == variable,
           "root return keeps the persistent symbol identity");
 done:
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void test_unit_checks(void)
 {
-    RmdContext ctx;
-    RmdSource first = source_text("fn first(v: i32) -> i32 { return v; }", 81);
-    RmdSource second = source_text(
+    CrustContext ctx;
+    CrustSource first = source_text("fn first(v: i32) -> i32 { return v; }", 81);
+    CrustSource second = source_text(
         "record A { b: *B; } record B { a: *A; }"
         "fn second(v: i32) -> i32 { if v == 0i32 { return first(v); } return third(v - 1i32); }"
         "fn third(v: i32) -> i32 { return second(v); }", 82);
-    RmdSource later = source_text("fn invalid() -> unit { missing(); }", 83);
-    RmdUnit *first_unit;
-    RmdUnit *second_unit;
-    RmdUnit *later_unit;
-    RmdSymbol *parameter;
+    CrustSource later = source_text("fn invalid() -> unit { missing(); }", 83);
+    CrustUnit *first_unit;
+    CrustUnit *second_unit;
+    CrustUnit *later_unit;
+    CrustSymbol *parameter;
     size_t bindings;
-    rmd_context_init(&ctx, NULL);
-    if (!rmd_read(&ctx, &first, &first_unit) || !rmd_collect_unit(&ctx, first_unit) ||
-        !rmd_resolve_unit(&ctx, first_unit) || !rmd_check_unit(&ctx, first_unit)) {
+    crust_context_init(&ctx, NULL);
+    if (!crust_read(&ctx, &first, &first_unit) || !crust_collect_unit(&ctx, first_unit) ||
+        !crust_resolve_unit(&ctx, first_unit) || !crust_check_unit(&ctx, first_unit)) {
         check(false, "initial host unit checks");
         goto done;
     }
     parameter = first_unit->declarations->params->symbol;
-    if (!rmd_read(&ctx, &second, &second_unit) || !rmd_read(&ctx, &later, &later_unit)) {
+    if (!crust_read(&ctx, &second, &second_unit) || !crust_read(&ctx, &later, &later_unit)) {
         check(false, "later host units parse");
         goto done;
     }
     bindings = ctx.globals.count;
-    check(rmd_collect_unit(&ctx, second_unit) && ctx.globals.count == bindings + 4 &&
+    check(crust_collect_unit(&ctx, second_unit) && ctx.globals.count == bindings + 4 &&
           later_unit->declarations->symbol == NULL,
           "unit collection does not scan later linked units");
-    check(rmd_resolve_unit(&ctx, second_unit) && later_unit->declarations->type == NULL,
+    check(crust_resolve_unit(&ctx, second_unit) && later_unit->declarations->type == NULL,
           "unit resolution preserves forward references within the selected unit");
-    check(rmd_check_unit(&ctx, second_unit) &&
+    check(crust_check_unit(&ctx, second_unit) &&
           second_unit->declarations->next->next->checked &&
           second_unit->declarations->next->next->next->checked,
           "loaded host units support mutual recursion and earlier declarations");
@@ -550,40 +550,40 @@ static void test_unit_checks(void)
           "checking a new unit does not recheck old function bodies");
     check(later_unit->declarations->symbol == NULL && !later_unit->declarations->checked,
           "checking a unit leaves a later unit untouched");
-    check(rmd_collect_unit(&ctx, later_unit) && rmd_resolve_unit(&ctx, later_unit) &&
-          !rmd_check_unit(&ctx, later_unit) && strstr(ctx.error, "unknown name") != NULL,
+    check(crust_collect_unit(&ctx, later_unit) && crust_resolve_unit(&ctx, later_unit) &&
+          !crust_check_unit(&ctx, later_unit) && strstr(ctx.error, "unknown name") != NULL,
           "checking the selected unit diagnoses every body");
     check(ctx.failure == NULL, "unit checks restore the failure frame");
 done:
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void test_injected_root_local(void)
 {
-    RmdContext ctx;
-    RmdRootScope scope;
-    RmdSymbol *injected;
-    RmdType *pointer;
-    RmdSource source;
-    RmdSource returned = source_text("return *run + x0 + x79;", 85);
-    RmdAction action;
+    CrustContext ctx;
+    CrustRootScope scope;
+    CrustSymbol *injected;
+    CrustType *pointer;
+    CrustSource source;
+    CrustSource returned = source_text("return *run + x0 + x79;", 85);
+    CrustAction action;
     char text[4096];
     size_t size = 0;
     size_t index;
-    rmd_context_init(&ctx, NULL);
+    crust_context_init(&ctx, NULL);
     memset(&scope, 0, sizeof(scope));
-    injected = rmd_try_alloc(&ctx, sizeof(*injected), RMD_ALIGNOF(RmdSymbol));
-    pointer = rmd_try_pointer_type(&ctx, &ctx.builtins[RMD_T_I32]);
+    injected = crust_try_alloc(&ctx, sizeof(*injected), CRUST_ALIGNOF(CrustSymbol));
+    pointer = crust_try_pointer_type(&ctx, &ctx.builtins[CRUST_T_I32]);
     if (injected == NULL || pointer == NULL) {
         check(false, "injected root symbol allocation");
         goto done;
     }
-    injected->kind = RMD_SYM_LOCAL;
-    injected->name = rmd_try_intern(&ctx, (const unsigned char *)"run", 3);
+    injected->kind = CRUST_SYM_LOCAL;
+    injected->name = crust_try_intern(&ctx, (const unsigned char *)"run", 3);
     injected->type = pointer;
     scope.scope = injected;
     if (injected->name == NULL ||
-        !rmd_try_map_set(&ctx, &scope.locals, (uintptr_t)injected->name, injected)) {
+        !crust_try_map_set(&ctx, &scope.locals, (uintptr_t)injected->name, injected)) {
         check(false, "injected root symbol publication");
         goto done;
     }
@@ -598,14 +598,14 @@ static void test_injected_root_local(void)
     }
     source = source_text(text, 84);
     check(check_stream(&ctx, &scope, &source) && scope.locals.count == 81 &&
-          rmd_map_get(&scope.locals, (uintptr_t)injected->name) == injected,
+          crust_map_get(&scope.locals, (uintptr_t)injected->name) == injected,
           "injected root symbols survive growth of persistent local storage");
-    check(rmd_read_one(&ctx, &returned, 0, returned.size, &action) &&
-          rmd_check_root(&ctx, &scope, action.statement) &&
+    check(crust_read_one(&ctx, &returned, 0, returned.size, &action) &&
+          crust_check_root(&ctx, &scope, action.statement) &&
           action.statement->expr->left->left->left->symbol == injected,
           "checked actions retain the caller's injected symbol identity");
 done:
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 int main(void)

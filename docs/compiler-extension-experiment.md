@@ -6,7 +6,7 @@ This document extends the [metacompilation study](metacompilation.md).
 It defines how much of the compiler a user can replace. It adds no compiler
 implementation or timing result.
 
-The [RMD0 specification](rmd0-spec.md) defines the concrete bootstrap language
+The [Crust0 specification](crust0-spec.md) defines the concrete bootstrap language
 and takes precedence over seed proposals in this study. Its core has explicit
 declaration bindings; module management belongs to a metastage.
 
@@ -19,7 +19,7 @@ Reading guide: [interface](#1-extension-boundary),
 
 ## 1. Extension boundary
 
-Expose the complete compiler as libraries. The standard RMD driver is one
+Expose the complete compiler as libraries. The standard Crust driver is one
 program that uses these libraries. A user can replace the base syntax,
 language rules, intermediate representations, scheduling, and backend adapter.
 The user program contains the code that selects its custom stages. These
@@ -39,14 +39,14 @@ It does not require a universal grammar engine or a plugin registry.
 | Backend adapter | Replace target queries, ABI lowering, IR construction, passes, and emission | Preserve source meaning and satisfy the chosen backend contract |
 | Build services | Select scheduling, caching, linking, and artifact output | Track the inputs that affect each result |
 
-Use two entry routes. A syntax extension can produce standard RMD code or IR,
-which the normal RMD checkers accept or reject. A complete language frontend
+Use two entry routes. A syntax extension can produce standard Crust code or IR,
+which the normal Crust checkers accept or reject. A complete language frontend
 can supply its own checker and lower to public low-level operations. It need not use the
-RMD syntax tree or ownership checker. A frontend can also use its own IR and
+Crust syntax tree or ownership checker. A frontend can also use its own IR and
 provide the conversion to its selected backend.
 
 Shared low-level operations need explicit meanings for storage, arithmetic,
-control flow, calls, and memory access. They must not attach RMD ownership or
+control flow, calls, and memory access. They must not attach Crust ownership or
 non-aliasing assumptions to arbitrary foreign-language pointers. A changed
 checker or lowering stage is part of that compiler's trusted implementation.
 Each compiler configuration claims only the guarantees that it establishes.
@@ -67,7 +67,7 @@ Keep three layers distinct:
 | Layer | Contents |
 |---|---|
 | Bootstrap seed | Primitive values, storage, calls, control flow, and basic type and layout operations sufficient to build compiler libraries |
-| Standard RMD language libraries | Reader, module management, binding and type rules, ownership and borrowing, address stability, unsafe policy, and cleanup lowering |
+| Standard Crust language libraries | Reader, module management, binding and type rules, ownership and borrowing, address stability, unsafe policy, and cleanup lowering |
 | Backend libraries | Target description, ABI operations, backend IR construction, optimization, and emission |
 
 The seed does not contain a special ownership algorithm. It admits low-level
@@ -86,7 +86,7 @@ source operation was a borrow, a move, or a resource acquisition.
 The standard sequence can be:
 
 ~~~text
-RMD reader and type rules
+Crust reader and type rules
     -> typed resource IR with moves, borrows, scopes, and unsafe regions
     -> ownership and lifetime checker
     -> checked resource IR
@@ -101,7 +101,7 @@ required. Any edit after checking must preserve the checked facts or trigger
 the affected check again.
 
 The spelling and parsing of `unsafe` belong to the selected reader. Its
-meaning belongs to the selected language checker. In standard RMD, it can
+meaning belongs to the selected language checker. In standard Crust, it can
 mark a region or function that permits specified unchecked operations.
 An unsafe region's implementation must establish the operation's preconditions.
 An unsafe function's signature declares obligations for its callers. A safe
@@ -113,18 +113,18 @@ it does not obtain the generator's unsafe permissions merely through insertion.
 
 The seed and a C reader need no `unsafe` keyword. C uses its own pointer rules.
 A custom language can choose another syntax or another policy. The standard
-RMD driver selects its safety stages by default. Removing them changes the
-language guarantee; it is not a speed result for standard checked RMD.
+Crust driver selects its safety stages by default. Removing them changes the
+language guarantee; it is not a speed result for standard checked Crust.
 
-Compile the ownership library with an earlier available seed or RMD compiler.
-Then execute that library to check later RMD programs. Do not require it to
+Compile the ownership library with an earlier available seed or Crust compiler.
+Then execute that library to check later Crust programs. Do not require it to
 check its own unfinished implementation during construction. Later self-builds
 can check the library under the resulting standard language rules.
 
 Measure the checker's work within the frontend budget. Prepared native code
 avoids repeated stage construction; it does not remove analysis cost. Plain
 functions need not run complex loan analysis when their operations and called
-interfaces create no such obligations. C mode does not run the RMD checker.
+interfaces create no such obligations. C mode does not run the Crust checker.
 
 This placement does not solve the direct-list lifetime problem. The standard
 ownership library still needs a precise contract for individual destruction,
@@ -136,7 +136,7 @@ not evidence that the rules meet the requirement.
 ## 2. Replace the base syntax
 
 Complete syntax replacement is permitted. A C frontend can own a file from
-its first byte. A Lisp reader, a Forth reader, or a different RMD grammar can
+its first byte. A Lisp reader, a Forth reader, or a different Crust grammar can
 do the same. Racket provides a useful precedent: a language can replace both
 the reader and expansion rules. This is evidence for the interface model,
 not for C-level compilation speed.
@@ -154,7 +154,7 @@ Compile each reader with an earlier available compiler configuration. Once
 prepared, the reader can process many files. It does not need to compile its
 own definition each time it sees an input file.
 
-The default RMD reader keeps its regular, name-independent grammar. A custom
+The default Crust reader keeps its regular, name-independent grammar. A custom
 reader can add operators, use indentation, combine grammar fragments, or
 change parsing rules in source order. Its implementation must define conflict
 resolution and dependencies. Worker completion order must not decide grammar
@@ -255,8 +255,8 @@ Do not introduce a second general IR solely to make this interface look uniform.
 
 ## 4. C compiler witness
 
-Build a C frontend and driver in RMD through the public compiler libraries.
-Call the resulting compiler `rmd-cc`. It must process unchanged C source and
+Build a C frontend and driver in Crust through the public compiler libraries.
+Call the resulting compiler `crust-cc`. It must process unchanged C source and
 headers, establish the selected C semantics, and use the public backend adapter.
 The primary path must implement its own preprocessing, parsing, and checking.
 A call to Clang or a host preprocessor is a separately named comparison.
@@ -264,23 +264,23 @@ A call to Clang or a host preprocessor is a separately named comparison.
 The construction is:
 
 ~~~text
-installed RMD compiler + C frontend and driver written in RMD
-    -> rmd-cc
+installed Crust compiler + C frontend and driver written in Crust
+    -> crust-cc
     -> unchanged C source
     -> C checks and lowering
     -> public LLVM adapter
     -> object, executable, and program result
 ~~~
 
-This tests compiler construction through libraries. RMD self-hosting is the
-separate act of compiling the RMD compiler's own RMD source. A C bootstrap
-chain can extend this witness without adding an RMD-to-C translation backend.
+This tests compiler construction through libraries. Crust self-hosting is the
+separate act of compiling the Crust compiler's own Crust source. A C bootstrap
+chain can extend this witness without adding a Crust-to-C translation backend.
 
 C support needs more than its grammar. It needs preprocessing and includes,
 scopes, conversions, initializers, linkage, object lifetimes, qualifiers,
 aggregate layout, and the selected target ABI. These obligations are present
-even when the compiler implementation uses safe RMD code. They do not require
-adding RMD destructors or ownership checks to ordinary C programs.
+even when the compiler implementation uses safe Crust code. They do not require
+adding Crust destructors or ownership checks to ordinary C programs.
 [C11 committee draft N1570, clauses 5.1.1.2, 6.2, 6.3, 6.5, 6.7, and 6.10](https://www.open-std.org/jtc1/sc22/wg14/www/docs/n1570.pdf)
 
 ### Freeze the inputs
@@ -326,13 +326,13 @@ rule and establish a working reference profile before freezing the benchmark.
 ### Require executable results
 
 Start with the C SQLite reader linked to a reference-built SQLite library.
-Then compile the frozen SQLite implementation with `rmd-cc` and run the same
+Then compile the frozen SQLite implementation with `crust-cc` and run the same
 reader. Add a fixed selection from SQLite's public tests and record every
 selected test. SQLite's complete internal test program is not all public;
 TH3 is proprietary.
 [SQLite test harnesses](https://sqlite.org/testing.html#test_harnesses)
 
-Compile chibicc with `rmd-cc` to produce B1. Use B1 to compile the same chibicc
+Compile chibicc with `crust-cc` to produce B1. Use B1 to compile the same chibicc
 source to B2, then use B2 to produce B3. Run the selected compiler tests for
 each result. Freeze source paths, options, headers, assembler, and linker.
 Require deterministic B2/B3 output equality. B1 and B2 have different code
@@ -368,8 +368,8 @@ record serialization and decoding separately on both sides.
 
 | Configuration | Timed work | Interpretation |
 |---|---|---|
-| Installed `rmd-cc`, cold C build | Fresh process, component loading, empty compilation-result caches, complete C check or handoff | Primary comparison with installed Clang and GCC |
-| Installed RMD, project stages supplied as source | All required stage preparation and the complete C build through the selected endpoint | On-demand compiler extension cost |
+| Installed `crust-cc`, cold C build | Fresh process, component loading, empty compilation-result caches, complete C check or handoff | Primary comparison with installed Clang and GCC |
+| Installed Crust, project stages supplied as source | All required stage preparation and the complete C build through the selected endpoint | On-demand compiler extension cost |
 | Prepared project stages, cold C build | Loading and execution of supplied stage artifacts; empty application-result caches; complete C check or handoff | Prepared-stage result, with the artifact starting state recorded |
 | Full compiler construction | Declared seed, compiler libraries, C frontend, adapters, and requested C build | Construction benchmark with an explicit starting state |
 | Warm application | Actual cache validation, loading, and remaining work | Application-result reuse, with stage preparation state recorded separately |
@@ -423,7 +423,7 @@ even when source bytes are unchanged.
 ## 6. Decision gates
 
 1. Freeze the C inputs, feature manifest, target, expected results, and timing
-   endpoints. Keep RMD's safe SQLite and direct-list requirements separate.
+   endpoints. Keep Crust's safe SQLite and direct-list requirements separate.
 2. Produce the C SQLite reader through public frontend and backend calls.
    Reach its final output before expanding the C feature set. Do this without
    seed changes, private compiler hooks, or host frontend delegation.
@@ -448,6 +448,6 @@ even when source bytes are unchanged.
 
 Do not average away a failed workload or assign an arbitrary interface-cost
 allowance. Identify the failing operation and repeat the same witness after
-changing its contract. No result here proves RMD ownership-checking speed,
+changing its contract. No result here proves Crust ownership-checking speed,
 safe intrusive-list reclamation, or complete Linux/GCC/LLVM source coverage.
 Those claims retain their own required witnesses.

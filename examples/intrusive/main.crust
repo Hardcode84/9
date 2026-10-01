@@ -1,0 +1,15 @@
+host_source(run, "../../api/crust0_stage.crust");
+host_source(run, "../../stages/c/api.crust");
+host_source(run, "../../stages/c/build.crust");
+host_link(run, "../../build/crust-c-library.so");
+
+var target: *CrustSource = host_input(run, "program.crust", 1u64);
+if (*run).argc != 0i32 {
+    return c_build(target, 0usize, (*run).argc, (*run).argv);
+};
+var arguments: [*u8; 4] = uninit;
+arguments[0usize] = "-o";
+arguments[1usize] = host_path(run, "../../build/intrusive-from-root");
+arguments[2usize] = "--ldflag";
+arguments[3usize] = host_path(run, "../../build/libcrust0_host.a");
+return c_build(target, 0usize, 4i32, &arguments[0usize]);

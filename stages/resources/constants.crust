@@ -1,0 +1,131 @@
+fn rs_constant_syntax(stage: *RsStage, expression: *CrustExpr) -> unit {
+    if expression == null(*CrustExpr) || (*stage).failed { return; }
+    if (*expression).syntax_type != null(*CrustTypeSyntax) {
+        (*expression).syntax_type = rs_lower_type(stage, (*expression).syntax_type);
+    }
+    rs_constant_syntax(stage, (*expression).left);
+    rs_constant_syntax(stage, (*expression).right);
+    var index: usize = 0usize;
+    while index < (*expression).arg_count && !(*stage).failed {
+        rs_constant_syntax(stage, (*expression).args[index]);
+        index = index + 1usize;
+    }
+    var item: *CrustInit = (*expression).inits;
+    while item != null(*CrustInit) && !(*stage).failed {
+        rs_constant_syntax(stage, (*item).value);
+        item = (*item).next;
+    }
+}
+
+// Copy an initializer within the semantic nesting limit and lower its source types.
+// Preserve the source tree. Seed constant checking must follow this operation.
+fn rs_lower_constant(stage: *RsStage, expression: *CrustExpr) -> *CrustExpr {
+    var result: *CrustExpr = rs_clone_expr(stage, expression);
+    rs_constant_syntax(stage, result);
+    if (*stage).failed { return null(*CrustExpr); }
+    return result;
+}
+
+fn rs_constant_source(stage: *RsStage, expression: *CrustExpr, expected: *CrustTypeSyntax) -> unit {
+    if (*stage).failed { return; }
+    var kind: u32 = (*expression).kind;
+    var location: *CrustLoc = &(*expression).loc;
+    if kind == CRUST_E_GROUP {
+        rs_constant_source(stage, (*expression).left, expected);
+        return;
+    }
+    if kind == CRUST_E_NAME {
+        var global: *RsGlobal = rs_global(stage, (*expression).name);
+        if (*global).unsafe_call || (*global).drop_only {
+            rs_error(stage, location, "constant initializer cannot retain an unsafe function");
+            return;
+        }
+        if !rs_same(stage, (*global).syntax, expected) {
+            rs_error(stage, location, "constant function value has incompatible source types or borrow modes");
+        }
+        return;
+    }
+    if kind == CRUST_E_NULL || kind == CRUST_E_RECORD || kind == CRUST_E_ARRAY {
+        if !rs_same(stage, (*expression).syntax_type, expected) {
+            rs_error(stage, location, "constant initializer has incompatible source types or borrow modes");
+            return;
+        }
+    }
+    if kind == CRUST_E_RECORD {
+        var global: *RsGlobal = rs_global(stage, (*expected).name);
+        var fields: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+        var field: *CrustField = (*(*global).source).fields;
+        while field != null(*CrustField) && !(*stage).failed {
+            rs_put(stage, &fields, (*field).name as usize, (*field).syntax_type as *u8);
+            field = (*field).next;
+        }
+        var item: *CrustInit = (*expression).inits;
+        while item != null(*CrustInit) && !(*stage).failed {
+            var syntax: *CrustTypeSyntax = crust_map_get(&fields, (*item).name as usize) as *CrustTypeSyntax;
+            rs_constant_source(stage, (*item).value, syntax);
+            item = (*item).next;
+        }
+        return;
+    }
+    if kind == CRUST_E_ARRAY {
+        var index: usize = 0usize;
+        while index < (*expression).arg_count && !(*stage).failed {
+            rs_constant_source(stage, (*expression).args[index], (*expected).base);
+            index = index + 1usize;
+        }
+    }
+}
+
+fn rs_constant_typed(stage: *RsStage, expression: *CrustExpr) -> unit {
+    if expression == null(*CrustExpr) || (*stage).failed { return; }
+    var kind: u32 = (*expression).kind;
+    var location: *CrustLoc = &(*expression).loc;
+    if kind == CRUST_E_UNARY && ((*expression).op == CRUST_OP_ADDRESS || (*expression).op == CRUST_OP_DEREF) {
+        rs_error(stage, location, "constant initializer cannot access a raw address");
+        return;
+    }
+    if kind == CRUST_E_BINARY && ((*expression).op == CRUST_OP_ADD || (*expression).op == CRUST_OP_SUB) {
+        if (*(*(*expression).left).type).kind == CRUST_T_POINTER || (*(*(*expression).right).type).kind == CRUST_T_POINTER {
+            rs_error(stage, location, "constant initializer cannot perform pointer arithmetic");
+            return;
+        }
+    }
+    if (kind == CRUST_E_FIELD || kind == CRUST_E_INDEX) && (*(*(*expression).left).type).kind == CRUST_T_POINTER {
+        rs_error(stage, location, "constant initializer cannot access a raw pointer");
+        return;
+    }
+    if kind == CRUST_E_CAST {
+        var from: u32 = (*(*(*expression).left).type).kind;
+        var into: u32 = (*(*expression).type).kind;
+        if from == CRUST_T_POINTER || from == CRUST_T_FUNCTION || into == CRUST_T_POINTER || into == CRUST_T_FUNCTION {
+            rs_error(stage, location, "constant initializer cannot cast a pointer or function value");
+            return;
+        }
+    }
+    rs_constant_typed(stage, (*expression).left);
+    rs_constant_typed(stage, (*expression).right);
+    var index: usize = 0usize;
+    while index < (*expression).arg_count && !(*stage).failed {
+        rs_constant_typed(stage, (*expression).args[index]);
+        index = index + 1usize;
+    }
+    var item: *CrustInit = (*expression).inits;
+    while item != null(*CrustInit) && !(*stage).failed {
+        rs_constant_typed(stage, (*item).value);
+        item = (*item).next;
+    }
+}
+
+// Require successful seed constant checking of the lowered target units.
+// Check source function effects and borrow modes before any target emission.
+fn rs_check_constants(stage: *RsStage) -> bool {
+    var global: *RsGlobal = (*stage).first_global;
+    while global != null(*RsGlobal) && !(*stage).failed {
+        if (*(*global).source).kind == CRUST_D_CONST {
+            rs_constant_source(stage, (*(*global).source).init, (*global).syntax);
+            rs_constant_typed(stage, (*(*global).lowered).init);
+        }
+        global = (*global).next;
+    }
+    return !(*stage).failed;
+}

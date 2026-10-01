@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the RMD0 declarations for the compiler's selected C99 interface."""
+"""Publish the CRUST0 declarations for the compiler's selected C99 interface."""
 
 import argparse
 from pathlib import Path
@@ -7,18 +7,18 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 C_ONLY = {
-    "rmd_run_stage", "rmd_alloc", "rmd_grow_array", "rmd_copy_string",
-    "rmd_intern", "rmd_fail", "rmd_map_set", "rmd_resolve_type", "rmd_pointer_type",
-    "rmd_x64_reserve", "rmd_x64_prepare_function", "rmd_x64_output",
-    "rmd_x64_emit_function", "rmd_x64_emit_expression", "rmd_x64_emit_place",
-    "rmd_x64_emit_statement", "rmd_x64_emit_constant", "rmd_x64_emit_constant_value",
+    "crust_run_stage", "crust_alloc", "crust_grow_array", "crust_copy_string",
+    "crust_intern", "crust_fail", "crust_map_set", "crust_resolve_type", "crust_pointer_type",
+    "crust_x64_reserve", "crust_x64_prepare_function", "crust_x64_output",
+    "crust_x64_emit_function", "crust_x64_emit_expression", "crust_x64_emit_place",
+    "crust_x64_emit_statement", "crust_x64_emit_constant", "crust_x64_emit_constant_value",
 }
 SCALARS = {
     "void": "unit", "bool": "bool", "char": "u8", "unsigned char": "u8",
     "int32_t": "i32", "uint32_t": "u32", "uint64_t": "u64", "size_t": "usize",
     "uintptr_t": "usize", "unsigned": "u32",
 }
-OPAQUE = {"void", "FILE", "RmdArenaBlock", "RmdFailureFrame", "RmdEval", "RmdRunState"}
+OPAQUE = {"void", "FILE", "CrustArenaBlock", "CrustFailureFrame", "CrustEval", "CrustRunState"}
 
 
 def main():
@@ -27,7 +27,7 @@ def main():
     args = parser.parse_args()
     enums = {}
     headers = {}
-    for stem in ("rmd0", "rmd0_host", "rmd0_x64", "rmd0_stage", "rmd0_eval", "rmd0_run"):
+    for stem in ("crust0", "crust0_host", "crust0_x64", "crust0_stage", "crust0_eval", "crust0_run"):
         source = (ROOT / "include" / f"{stem}.h").read_text()
         source = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
         source = re.sub(r"^#.*$", "", source, flags=re.M)
@@ -47,7 +47,7 @@ def main():
             base = SCALARS[base]
         elif base in enums:
             base = "u32"
-        elif not re.fullmatch(r"Rmd\w+", base):
+        elif not re.fullmatch(r"Crust\w+", base):
             raise ValueError(f"unsupported interface type: {text}")
         return "*" * pointers + base
 
@@ -64,8 +64,8 @@ def main():
         result, name, count = ordinary.groups()
         result = ctype(result)
         if count:
-            if count == "RMD_T_UNIT + 1":
-                count = str(enums["RmdTypeKind"].index("RMD_T_UNIT") + 1)
+            if count == "CRUST_T_UNIT + 1":
+                count = str(enums["CrustTypeKind"].index("CRUST_T_UNIT") + 1)
             if not count.isdecimal():
                 raise ValueError(f"unsupported interface array: {text}")
             result = f"[{result}; {count}]"
@@ -91,7 +91,7 @@ def main():
         remaining = re.sub(record_pattern, "", source, flags=re.S)
         remaining = re.sub(r"typedef enum\s*\{.*?\}\s*\w+\s*;", "", remaining, flags=re.S)
         remaining = re.sub(r"typedef struct \w+ \w+\s*;", "", remaining)
-        remaining = re.sub(r"extern const RmdX64Ops rmd_x64_default_ops\s*;", "", remaining)
+        remaining = re.sub(r"extern const CrustX64Ops crust_x64_default_ops\s*;", "", remaining)
         for prototype in remaining.split(";"):
             prototype = " ".join(prototype.split())
             if not prototype:
@@ -106,7 +106,7 @@ def main():
             rendered = ", ".join(f"{param}: {kind}" for param, kind in params)
             lines.append(f'extern fn {name}({rendered}) -> {ctype(result)} = "{name}";')
         output = "\n".join(lines).rstrip() + "\n"
-        path = ROOT / "api" / f"{stem}.rmd"
+        path = ROOT / "api" / f"{stem}.crust"
         if args.check:
             if not path.exists() or path.read_text() != output:
                 raise SystemExit(f"API declarations differ: {path.relative_to(ROOT)}; run tools/api.py")

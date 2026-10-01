@@ -6,10 +6,10 @@ import re
 import subprocess
 
 ROOT = Path.cwd()
-HERE = Path(os.environ.get("RMD_PROOF_DIR", ROOT / ".profile-cache/source-order-proof-replay"))
-APIS = [ROOT / p for p in ("api/rmd0.rmd", "api/rmd0_stage.rmd", "stages/c/api.rmd")]
-APIS += [HERE / "model.rmd", HERE / "interface.rmd"]
-TARGET = ROOT / "examples/intrusive/program.rmd"
+HERE = Path(os.environ.get("CRUST_PROOF_DIR", ROOT / ".profile-cache/source-order-proof-replay"))
+APIS = [ROOT / p for p in ("api/crust0.crust", "api/crust0_stage.crust", "stages/c/api.crust")]
+APIS += [HERE / "model.crust", HERE / "interface.crust"]
+TARGET = ROOT / "examples/intrusive/program.crust"
 PREFIX = b"set_backend(session, c_backend_build);\nset_reader(session, alternate);"
 source = PREFIX + b"\0@include |" + str(TARGET).encode() + b"|\n@emit\n"
 ENV = os.environ.copy()
@@ -19,7 +19,7 @@ observations = []
 
 
 def command(root, directory, response, report):
-    result = ["taskset", "-c", os.environ.get("RMD_PROOF_CPU", "6"), str(directory / "runner"), str(root)]
+    result = ["taskset", "-c", os.environ.get("CRUST_PROOF_CPU", "6"), str(directory / "runner"), str(root)]
     for path in APIS:
         result += ["--api", str(path)]
     result += ["--load", str(directory / "reader.plugin"), "--load", str(directory / "output.plugin")]
@@ -30,7 +30,7 @@ def command(root, directory, response, report):
 
 def run(name, contents, directory, status=0, diagnostic=None, emits=None, selections=None, reads=None):
     variant = "san" if directory.name == "san" else "native"
-    root = HERE / f"{variant}-{name}.rmd"
+    root = HERE / f"{variant}-{name}.crust"
     root.write_bytes(contents)
     response = HERE / f"{variant}-{name}.rsp"
     report = HERE / f"{variant}-{name}.json"
@@ -87,13 +87,13 @@ for directory in (HERE, HERE / "san"):
         diagnostic=b"proof expected a name", emits=0, selections=0, reads=0)
     run("old-reader-hostile", source.replace(b"set_reader(session, alternate);", b""), directory,
         status=1, diagnostic=b"proof expected a name", emits=0, selections=0, reads=0)
-    bad_target = HERE / "target-host-name.rmd"
+    bad_target = HERE / "target-host-name.crust"
     bad_target.write_text("fn main(argc:i32,argv:**u8)->i32 { return set_reader(); }\n")
     process, _ = run("host-name-not-target", source.replace(str(TARGET).encode(), str(bad_target).encode()), directory,
                      status=1, diagnostic=b"unknown name 'set_reader'", emits=0, selections=1, reads=3)
     column = bad_target.read_text().index("set_reader") + 1
     assert str(bad_target).encode() + f":1:{column}:".encode() in process.stderr, process.stderr
-    forward = HERE / "forward-target.rmd"
+    forward = HERE / "forward-target.crust"
     forward.write_text("fn main(argc:i32,argv:**u8)->i32 { return later(); }\nfn later()->i32 { return 0i32; }\n")
     process, _ = run("target-forward-reference", source.replace(str(TARGET).encode(), str(forward).encode()), directory,
                      emits=1, selections=1, reads=3)
@@ -102,7 +102,7 @@ for directory in (HERE, HERE / "san"):
 target_run = subprocess.run([str(HERE / "target")], check=True, capture_output=True)
 assert target_run.stdout == b"intrusive: ok\n" and not target_run.stderr
 symbols = subprocess.run(["nm", str(HERE / "target")], check=True, capture_output=True).stdout
-assert not re.search(rb"\b(?:rmd_(?:context|read|collect|resolve|check|x64)\w*|c_program|c_backend_build|ffi_\w*|set_backend|set_reader|alternate|include_input|queue_emit)\b", symbols)
+assert not re.search(rb"\b(?:crust_(?:context|read|collect|resolve|check|x64)\w*|c_program|c_backend_build|ffi_\w*|set_backend|set_reader|alternate|include_input|queue_emit)\b", symbols)
 dynamic = subprocess.run(["readelf", "-dW", str(HERE / "target")], check=True, capture_output=True).stdout
 assert not re.search(rb"reader\.plugin|output\.plugin|libffi", dynamic)
 result = {"status": "passed", "checks": len(observations), "observations": observations,

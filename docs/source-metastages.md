@@ -9,17 +9,17 @@ unimplemented code refer to that earlier state.
 ## Decision
 
 Keep the stage override in the user program. Treat the C backend as an ordinary
-external RMD library. The compiler must not recognize its name, path, symbols,
+external Crust library. The compiler must not recognize its name, path, symbols,
 or implementation. Module management and other stages use the same rule.
 
-Do not adopt the proposed `#rmd-meta` and `#rmd-payload` file envelope for
+Do not adopt the proposed `#crust-meta` and `#crust-payload` file envelope for
 backend selection. A backend can consume the result of the normal reader.
 It does not need a new file format or an opaque application region.
 
 Use Jai as the closer reference for compiler control. Use Zig as a reference
 for explicit compile-time execution within a fixed grammar. Neither gives
 evidence that every compiler stage can be replaced by an ordinary application.
-RMD must establish that stronger interface with its own implementation and tests.
+Crust must establish that stronger interface with its own implementation and tests.
 
 The first design problem is the ownership of code and data in each phase.
 Choose the source spelling after that contract is complete. A phase is an
@@ -35,7 +35,7 @@ that grammar.
 
 Compile-time execution interprets ordinary Zig functions when their inputs
 permit it. It rejects access to runtime values and calls to external functions.
-Thus a normal `comptime` block cannot call the native RMD frontend or spawn
+Thus a normal `comptime` block cannot call the native Crust frontend or spawn
 GCC. Compiler-provided operations, such as `@embedFile`, have their own rules.
 They do not imply general host input/output access.
 [Zig 0.16 language reference](https://ziglang.org/documentation/0.16.0/#comptime)
@@ -48,7 +48,7 @@ system tracks dependencies between these operations and can cache results.
 [Zig build system](https://ziglang.org/learn/build-system/)
 
 Using one language for both programs does not make the build program an
-inline part of the target source. RMD's requested source override must work
+inline part of the target source. Crust's requested source override must work
 without a separate build file. Zig's build system is useful evidence for
 explicit dependencies, but it does not supply that source model.
 
@@ -140,11 +140,11 @@ rule or a result reproduced here. The article's proposed interpreter design is
 explicitly an estimate. Do not infer a required VM-only implementation from it.
 [Jai experiments](https://pre-sence.com/archives/tour-of-jai/)
 
-## What RMD should take from this evidence
+## What Crust should take from this evidence
 
-| Concern | RMD decision |
+| Concern | Crust decision |
 |---|---|
-| Source entry | Put compilation control in the user program. Use ordinary RMD functions and data. |
+| Source entry | Put compilation control in the user program. Use ordinary Crust functions and data. |
 | Backend | Call an ordinary external library through its published interface. Give the C backend no compiler privilege. |
 | Host execution | Permit the required native compiler, memory, file, and process calls. Zig-style constant evaluation alone is insufficient. |
 | Phase membership | Identify the code and dependencies that run on the host. Keep them out of the target unless the target explicitly uses them. |
@@ -152,11 +152,11 @@ explicitly an estimate. Do not infer a required VM-only implementation from it.
 | Parallel work | Publish required facts before dependent work starts. Let independent work proceed. |
 | Optional reuse | Keep prepared code reuse separate from caching the effects or results of its execution. |
 
-These are RMD design decisions. They are not additional claims about Jai or Zig.
+These are Crust design decisions. They are not additional claims about Jai or Zig.
 
 ### Minimum source model
 
-Prefer one explicit entry for host compilation code in normal RMD source.
+Prefer one explicit entry for host compilation code in normal Crust source.
 Its body calls normal library functions. The entry can select or replace
 readers, module operations, checks, lowering, and emission through public APIs.
 The source spelling of this entry is not selected by this review.
@@ -167,7 +167,7 @@ membership and preparation dependencies. A reserved function name alone does
 not define those properties. Neither choice requires general compile-time
 evaluation in every expression or calls into user code during type resolution.
 
-The normal RMD reader can recognize the compilation entry and application
+The normal Crust reader can recognize the compilation entry and application
 declarations under one fixed grammar. It need not perform type lookup while
 parsing. Later stages separate host compilation code from target code.
 Prepare and check only the selected host code and its declared dependencies
@@ -185,19 +185,19 @@ two-region format for every source file.
 Complete reader replacement remains required. It must have a separate witness
 with bytes that the default reader cannot accept. That witness must specify
 the initial reader and when control passes to the replacement. It must not
-silently fall back to RMD parsing.
+silently fall back to Crust parsing.
 
 ### The concrete implementation boundary
 
 The current seed has public compiler data and ordinary function values. It
 can compile a host program that calls compiler libraries. It has no automatic
-source-defined compilation entry yet. The standalone `rmd-c` driver proves
-the RMD backend algorithms; it does not complete source-defined selection.
+source-defined compilation entry yet. The standalone `crust-c` driver proves
+the Crust backend algorithms; it does not complete source-defined selection.
 
 Three current mechanisms need explicit treatment:
 
-1. `rmd_resolve` and `rmd_check` traverse the owned declarations in a context.
-   `rmd_x64_prepare` and `c_emit` also traverse that context's definitions.
+1. `crust_resolve` and `crust_check` traverse the owned declarations in a context.
+   `crust_x64_prepare` and `c_emit` also traverse that context's definitions.
    Choosing another entry function does not restrict these traversals to the
    functions that it calls. Split phase ownership before these operations.
 2. `c_driver_names` puts link-name strings in the C stage arena. Its current
@@ -210,10 +210,10 @@ Three current mechanisms need explicit treatment:
    mechanism has a real cost and a different ownership contract.
 
 These points are verified in `src/check.c`, `src/x64.c`,
-`stages/c/emit.rmd`, and `stages/c/driver.rmd`. They are the work required by
+`stages/c/emit.crust`, and `stages/c/driver.crust`. They are the work required by
 the source model. New syntax alone would not fix them.
 
-The generic `rmd_read_range` API reads a selected byte range with locations in
+The generic `crust_read_range` API reads a selected byte range with locations in
 the original source. It adds no framing or stage syntax. It permits a library
 reader to retain correct diagnostics without copying the selected source text.
 It does not establish phase separation or execute a metaprogram.

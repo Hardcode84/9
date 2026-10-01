@@ -1,8 +1,8 @@
-# RMD: exploration of a small systems language
+# Crust: exploration of a small systems language
 
 Date: 2026-09-30. Updated: 2026-10-01. Status: research and a proposed experiment.
 
-The [RMD0 specification](rmd0-spec.md) now defines the bootstrap language.
+The [Crust0 specification](crust0-spec.md) now defines the bootstrap language.
 The richer syntax and checked rules below remain research candidates, not seed
 features. Module management is a library stage under that specification.
 
@@ -16,7 +16,7 @@ Reading guide: [recommendation](#1-recommendation),
 [acceptance gates](#10-production-witness-and-acceptance-gates).
 
 The [compiler profiles](compiler-profiles.md) contain measured C, C++, and Rust
-check costs. They are evidence about existing compilers, not an RMD speed result.
+check costs. They are evidence about existing compilers, not a Crust speed result.
 The [systems source study](systems-capabilities.md) records concrete Linux, GCC,
 LLVM, and Coho requirements. It explains the direct-link representation target.
 The [metacompilation study](metacompilation.md) examines a small core with
@@ -30,7 +30,7 @@ cleanup position of a local that is initialized again.
 
 ## 1. Recommendation
 
-Start with the [minimal seed](rmd0-spec.md) and public compiler libraries.
+Start with the [minimal seed](crust0-spec.md) and public compiler libraries.
 For the separate checked-language experiment, evaluate tagged unions,
 move-only resources, automatic scope cleanup, and local borrows. Use explicit
 interfaces and function types. Keep module policy in a library. Make the default
@@ -42,7 +42,7 @@ libraries. Implement the standard compiler pipeline through those same
 interfaces. Users can replace the driver and its stages. A custom pipeline
 must state the semantic guarantees of its selected checks.
 This includes the lexer, complete grammar, language rules, and backend adapter.
-Select a language before parsing its input. The default RMD grammar and checks
+Select a language before parsing its input. The default Crust grammar and checks
 remain one compiler configuration, implemented through the public interfaces.
 
 Keep the bootstrap seed smaller than the standard language. Implement ownership,
@@ -50,7 +50,7 @@ borrowing, address stability, cleanup, and the meaning of `unsafe` in compiled
 standard language stages. The seed has no hidden ownership solver. The
 [ownership stage contract](compiler-extension-experiment.md#ownership-and-unsafe-are-language-stages)
 preserves resource operations until checking and cleanup lowering are complete.
-The semantics below describe the standard checked RMD configuration.
+The semantics below describe the standard checked Crust configuration.
 
 **C-level front-end speed is the first acceptance condition.** A feature that fails
 this condition does not enter the standard language, even if it has no runtime cost.
@@ -90,7 +90,7 @@ extension in which a returned view names one input as its source. Neither versio
 by itself establishes the lifetime of stored graph links.
 
 This document proposes rules. It does not claim a soundness proof, a completed
-language, or a measured RMD speed result. The source research used three parallel
+language, or a measured Crust speed result. The source research used three parallel
 investigations: C/C++/D, Rust/Zig, and academic ownership models. The C/C++/D
 investigation also covers public Jai material.
 
@@ -320,7 +320,7 @@ The code shows library practice, not a normative language specification.
 [Jaison typed parser](https://github.com/rluba/jaison/blob/master/typed.jai)
 
 The public code also uses name-first declarations, including `name :: definition`.
-This keeps declarations compact. RMD instead starts declarations with fixed
+This keeps declarations compact. Crust instead starts declarations with fixed
 keywords so that readers and parsers see their role immediately. This is a design
 choice, not evidence that Jai's parser is slow.
 
@@ -749,7 +749,7 @@ establish that target.
 
 Start with a circular head and two address fields per hook. A detached hook
 points to itself. Each payload can contain several independent hooks.
-The following is representation pseudocode. It is not a checked RMD program.
+The following is representation pseudocode. It is not a checked Crust program.
 
 ~~~text
 record Hook {
@@ -784,7 +784,7 @@ an explicit membership mechanism.
 
 Plain unlink and insertion must allocate nothing. The two-pointer layout uses
 16 bytes per hook under an ordinary 64-bit pointer ABI. This is a layout target,
-not a measured RMD result. Additional checked-pointer metadata must be specified
+not a measured Crust result. Additional checked-pointer metadata must be specified
 and measured separately. Do not hide it in the allocator or call it free.
 
 #### Ownership and automatic cleanup
@@ -900,7 +900,7 @@ follow from these capability requirements.
 
 ## 7. Syntax that is simple to parse and read
 
-For the default RMD grammar, prefer keywords and visible boundaries over minimum
+For the default Crust grammar, prefer keywords and visible boundaries over minimum
 character count. Its parser must not consult declarations to decide whether an
 expression is a type. It must not backtrack over arbitrary token sequences.
 
@@ -1107,7 +1107,7 @@ says the compiler did not implement that parallelism. It also explains why
 compile-time mutation of globals would impose an order.
 [Don's message](https://forum.dlang.org/post/j9f8id%24pf3%241%40digitalmars.com)
 
-For RMD, the design inference is to preserve the phase boundaries in the language.
+For Crust, the design inference is to preserve the phase boundaries in the language.
 Do not make lexing or parsing call semantic analysis to interpret source syntax.
 Keep a module's meaning independent of the context that imports it.
 These rules expose parallel work in files. They do not prove independent semantic

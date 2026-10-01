@@ -17,15 +17,15 @@ import overload_resources
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = [
-    "api/rmd0.rmd", "api/rmd0_host.rmd",
-    "stages/c/model.rmd", "stages/c/base.rmd",
-    *[f"stages/reader/{name}.rmd" for name in ("model", "lex", "parse")],
-    *[f"stages/resources/{name}.rmd" for name in (
+    "api/crust0.crust", "api/crust0_host.crust",
+    "stages/c/model.crust", "stages/c/base.crust",
+    *[f"stages/reader/{name}.crust" for name in ("model", "lex", "parse")],
+    *[f"stages/resources/{name}.crust" for name in (
         "model", "base", "read", "types", "constants", "state", "cleanup",
         "places", "expr", "control")],
-    *[f"stages/overload/{name}.rmd" for name in (
+    *[f"stages/overload/{name}.crust" for name in (
         "model", "base", "types", "collect", "read", "resolve", "resources")],
-    "tests/overload_alloc.rmd",
+    "tests/overload_alloc.crust",
 ]
 
 
@@ -89,10 +89,10 @@ def main():
         for name, mode, _ in selected:
             print(f"{mode}: {name}")
         return 0
-    compiler = args.build.resolve() / "rmd-c"
+    compiler = args.build.resolve() / "crust-c"
     if not compiler.is_file():
         parser.error(f"compiler does not exist: {compiler}")
-    work = args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix="rmd-overload-alloc-"))
+    work = args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix="crust-overload-alloc-"))
     work.mkdir(parents=True, exist_ok=True)
     environment = dict(os.environ)
     environment["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1"
@@ -125,7 +125,7 @@ def main():
         for name, mode, sources in selected:
             inputs = []
             for index, source in enumerate(sources):
-                path = work / f"{name}-{index}.rmd"
+                path = work / f"{name}-{index}.crust"
                 path.write_text(source)
                 inputs.append(path)
             result = run([executable, mode, *inputs])

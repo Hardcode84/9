@@ -1,0 +1,136 @@
+fn ov_driver_exports(cli:*CCli, overloads:*OvStage)->bool {
+    var context:*CrustContext = (*overloads).context;
+    var index:usize = 0usize;
+    while index < (*cli).export_count {
+        var text:*u8 = (*cli).exports[index];
+        var name:*CrustName = ov_intern(overloads, text, c_length(text));
+        if (*overloads).failed { return false; }
+        var group:*OvGlobal = ov_global(overloads, name);
+        if group == null(*OvGlobal) {
+            return c_driver_error(&(*cli).driver, "exported source declaration was not found");
+        }
+        if ov_reserved(text) {
+            return c_driver_error(&(*cli).driver, "export uses the reserved overload symbol prefix");
+        }
+        if (*group).count > 1usize {
+            return c_driver_error(&(*cli).driver, "--export is ambiguous for an overload family; define a named wrapper");
+        }
+        if (*group).first != null(*OvFunction) { name = (*(*group).first).internal_name; }
+        var symbol:*CrustSymbol = crust_map_get(&(*context).globals, name as usize) as *CrustSymbol;
+        var declaration:*CrustDecl = (*symbol).decl;
+        if (*declaration).kind != CRUST_D_FUNCTION && (*declaration).kind != CRUST_D_CONST {
+            return c_driver_error(&(*cli).driver, "--export requires a defined function or constant");
+        }
+        (*declaration).link_name = (*(*group).name).text;
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn ov_driver_entry(cli:*CCli, overloads:*OvStage)->*CrustDecl {
+    var name:*CrustName = ov_intern(overloads, (*cli).entry_name, c_length((*cli).entry_name));
+    if (*overloads).failed { return null(*CrustDecl); }
+    var group:*OvGlobal = ov_global(overloads, name);
+    if group == null(*OvGlobal) || (*group).first == null(*OvFunction) {
+        c_driver_error(&(*cli).driver, "entry function was not found");
+        return null(*CrustDecl);
+    }
+    var loc:CrustLoc = (*(*group).declaration).loc;
+    var syntax:*CrustTypeSyntax = ov_type(overloads, CRUST_T_FUNCTION, &loc);
+    var integer:*CrustTypeSyntax = ov_type(overloads, CRUST_T_I32, &loc);
+    var byte:*CrustTypeSyntax = ov_type(overloads, CRUST_T_U8, &loc);
+    var pointer:*CrustTypeSyntax = ov_type(overloads, CRUST_T_POINTER, &loc);
+    var pointers:*CrustTypeSyntax = ov_type(overloads, CRUST_T_POINTER, &loc);
+    var parameters:**CrustTypeSyntax = ov_alloc(overloads, 2usize * sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
+    if (*overloads).failed { return null(*CrustDecl); }
+    (*pointer).base = byte;
+    (*pointers).base = pointer;
+    parameters[0usize] = integer;
+    parameters[1usize] = pointers;
+    (*syntax).params = parameters;
+    (*syntax).param_count = 2usize;
+    (*syntax).base = integer;
+    var selected:*OvFunction = ov_select(overloads, group, syntax, false, &loc);
+    if selected == null(*OvFunction) { return null(*CrustDecl); }
+    var symbol:*CrustSymbol = crust_map_get(&(*(*overloads).context).globals, (*selected).internal_name as usize) as *CrustSymbol;
+    if (*(*symbol).decl).kind != CRUST_D_FUNCTION {
+        c_driver_error(&(*cli).driver, "entry must be a defined fn(i32, **u8) -> i32");
+        return null(*CrustDecl);
+    }
+    return (*symbol).decl;
+}
+
+fn ov_driver_build(cli:*CCli, overloads:*OvStage,
+    reader:fn(*OvStage,*CrustSource,usize,usize)->bool,
+    prepare:fn(*OvStage)->bool, body:fn(*CStage,*CrustDecl,*u8)->bool, user:*u8)->i32 {
+    var context:*CrustContext = (*overloads).context;
+    if (*cli).root != null(*CrustSource) &&
+       !reader(overloads, (*cli).root, (*cli).target_begin, (*(*cli).root).size) { return 1i32; }
+    var index:usize = 0usize;
+    while index < (*cli).source_count {
+        var source:*CrustSource = &(*cli).sources[index];
+        var bytes:*u8 = null(*u8);
+        var size:usize = 0usize;
+        if crust0_host_read_file((*source).path, &bytes, &size) != 0i32 {
+            c_driver_io_error(&(*cli).driver, "cannot read input", (*source).path, *c_driver_errno());
+            return 1i32;
+        }
+        (*source).bytes = crust_try_copy_string(context, bytes, size);
+        (*source).size = size;
+        crust0_host_free(bytes);
+        if (*source).bytes == null(*u8) { return 1i32; }
+        if !reader(overloads, source, 0usize, size) { return 1i32; }
+        index = index + 1usize;
+    }
+    if !prepare(overloads) || !ov_driver_exports(cli, overloads) { return 1i32; }
+    if (*cli).mode == 3u32 { return 0i32; }
+    if !c_driver_names(&(*cli).driver) { return 1i32; }
+    var entry:*CrustDecl = null(*CrustDecl);
+    if !(*cli).library {
+        entry = ov_driver_entry(cli, overloads);
+        if entry == null(*CrustDecl) { return 1i32; }
+    }
+    if (*cli).mode == 4u32 {
+        if c_emit_with_body(&(*cli).stage, entry, body, user) { return 0i32; }
+        return 1i32;
+    }
+    return c_backend_build_with_body(context, entry, &(*cli).options, body, user);
+}
+
+fn ov_check(stage:*OvStage)->bool {
+    if !ov_prepare(stage) { return false; }
+    var context:*CrustContext = (*stage).context;
+    return crust_collect(context) && crust_resolve(context) && crust_check(context);
+}
+
+// Require an empty initialized context and source storage live through its destruction.
+// Complete the requested output. Retain diagnostics without printing them.
+fn overload_program(request:*CrustBuild)->i32 {
+    var cli:CCli = uninit;
+    var context:*CrustContext = (*request).context;
+    var success:bool = c_driver_init(&cli, context, (*request).argc);
+    cli.root = (*request).source;
+    cli.target_begin = (*request).target_begin;
+    var overloads:OvStage = uninit;
+    ov_init(&overloads, context, "crust0_x64_v1", null(*OvHooks));
+    var result:i32 = 1i32;
+    if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
+        result = ov_driver_build(&cli, &overloads, ov_read, ov_check,
+            null(fn(*CStage,*CrustDecl,*u8)->bool), null(*u8));
+    }
+    c_stage_destroy(&cli.stage);
+    return result;
+}
+
+// Compile the retained source from begin through EOF, print failures, and release its context.
+fn overload_build(source:*CrustSource, begin:usize, argc:i32, argv:**u8)->i32 {
+    var context:CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var request:CrustBuild = make CrustBuild {
+        context:&context, source:source, target_begin:begin, argc:argc, argv:argv
+    };
+    var result:i32 = overload_program(&request);
+    if context.error_count != 0usize { c_driver_diagnostic(&context); }
+    crust_context_destroy(&context);
+    return result;
+}

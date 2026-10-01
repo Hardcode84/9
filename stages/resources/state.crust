@@ -1,0 +1,292 @@
+fn rs_note(function: *RsFunction, local: *RsLocal) -> unit {
+    var change: *RsChange = rs_alloc((*function).stage, sizeof(RsChange), alignof(RsChange)) as *RsChange;
+    if change == null(*RsChange) { return; }
+    (*change).local = local;
+    (*change).initialized = (*local).initialized;
+    (*change).readers = (*local).readers;
+    (*change).exclusive = (*local).exclusive;
+    (*change).next = (*function).changes;
+    (*function).changes = change;
+}
+
+fn rs_live(function: *RsFunction, local: *RsLocal, initialized: bool) -> unit {
+    if (*local).initialized == initialized { return; }
+    rs_note(function, local);
+    (*local).initialized = initialized;
+}
+
+fn rs_restore(function: *RsFunction, marker: *RsChange) -> unit {
+    while (*function).changes != marker {
+        var change: *RsChange = (*function).changes;
+        var local: *RsLocal = (*change).local;
+        (*local).initialized = (*change).initialized;
+        (*local).readers = (*change).readers;
+        (*local).exclusive = (*change).exclusive;
+        (*function).changes = (*change).next;
+    }
+}
+
+fn rs_outer(local: *RsLocal, scope: *RsScope) -> bool {
+    while scope != null(*RsScope) {
+        if (*local).scope == scope { return true; }
+        scope = (*scope).parent;
+    }
+    return false;
+}
+
+fn rs_snapshot(function: *RsFunction, marker: *RsChange, scope: *RsScope) -> *RsChange {
+    (*function).stamp = (*function).stamp + 1usize;
+    var stamp: usize = (*function).stamp;
+    var result: *RsChange = null(*RsChange);
+    var change: *RsChange = (*function).changes;
+    while change != marker && !(*(*function).stage).failed {
+        var local: *RsLocal = (*change).local;
+        if (*local).stamp != stamp && rs_outer(local, scope) {
+            (*local).stamp = stamp;
+            var saved: *RsChange = rs_alloc((*function).stage, sizeof(RsChange), alignof(RsChange)) as *RsChange;
+            if saved == null(*RsChange) { return result; }
+            (*saved).local = local;
+            (*saved).initialized = (*local).initialized;
+            (*saved).readers = (*local).readers;
+            (*saved).exclusive = (*local).exclusive;
+            (*saved).next = result;
+            result = saved;
+        }
+        change = (*change).next;
+    }
+    return result;
+}
+
+fn rs_apply(function: *RsFunction, snapshot: *RsChange) -> unit {
+    while snapshot != null(*RsChange) && !(*(*function).stage).failed {
+        var local: *RsLocal = (*snapshot).local;
+        if (*local).initialized != (*snapshot).initialized || (*local).readers != (*snapshot).readers ||
+           (*local).exclusive != (*snapshot).exclusive {
+            rs_note(function, local);
+            (*local).initialized = (*snapshot).initialized;
+            (*local).readers = (*snapshot).readers;
+            (*local).exclusive = (*snapshot).exclusive;
+        }
+        snapshot = (*snapshot).next;
+    }
+}
+
+fn rs_check_snapshot(function: *RsFunction, snapshot: *RsChange, location: *CrustLoc) -> unit {
+    while snapshot != null(*RsChange) && !(*(*function).stage).failed {
+        var local: *RsLocal = (*snapshot).local;
+        if (*local).initialized != (*snapshot).initialized || (*local).readers != (*snapshot).readers ||
+           (*local).exclusive != (*snapshot).exclusive {
+            rs_error((*function).stage, location, "continuing paths must agree on initialization and ownership");
+            return;
+        }
+        snapshot = (*snapshot).next;
+    }
+}
+
+fn rs_scope(function: *RsFunction) -> *RsScope {
+    var scope: *RsScope = rs_alloc((*function).stage, sizeof(RsScope), alignof(RsScope)) as *RsScope;
+    if scope != null(*RsScope) { (*scope).parent = (*function).scope; (*function).scope = scope; }
+    return scope;
+}
+
+fn rs_access(function: *RsFunction, local: *RsLocal, write: bool, location: *CrustLoc) -> unit {
+    if !(*local).initialized {
+        rs_error((*function).stage, location, "value is uninitialized or has been moved");
+        return;
+    }
+    if (*local).exclusive || (write && ((*local).readers != 0usize || (*local).mode == RS_READ)) {
+        rs_error((*function).stage, location, "access conflicts with an active borrow");
+    }
+}
+
+fn rs_lend(function: *RsFunction, local: *RsLocal, mode: u32, location: *CrustLoc) -> unit {
+    rs_access(function, local, mode == RS_MUT, location);
+    if (*(*function).stage).failed { return; }
+    rs_note(function, local);
+    if mode == RS_MUT { (*local).exclusive = true; }
+    else { (*local).readers = (*local).readers + 1usize; }
+}
+
+fn rs_end_loan(function: *RsFunction, local: *RsLocal) -> unit {
+    if !(*local).initialized || (*local).parent_loan == null(*RsLocal) { return; }
+    var parent: *RsLocal = (*local).parent_loan;
+    rs_note(function, parent);
+    if (*local).mode == RS_MUT { (*parent).exclusive = false; }
+    else { (*parent).readers = (*parent).readers - 1usize; }
+    rs_live(function, local, false);
+}
+
+fn rs_release_scope(function: *RsFunction, scope: *RsScope) -> unit {
+    var local: *RsLocal = (*scope).first;
+    while local != null(*RsLocal) && !(*(*function).stage).failed {
+        if (*local).mode == RS_READ || (*local).mode == RS_MUT { rs_end_loan(function, local); }
+        local = (*local).next;
+    }
+}
+
+fn rs_leave_scope(function: *RsFunction) -> unit {
+    var scope: *RsScope = (*function).scope;
+    rs_release_scope(function, scope);
+    var local: *RsLocal = (*scope).first;
+    while local != null(*RsLocal) && !(*(*function).stage).failed {
+        if (*local).name != null(*CrustName) {
+            rs_put((*function).stage, &(*function).locals, (*local).name as usize, null(*u8));
+        }
+        local = (*local).next;
+    }
+    (*function).scope = (*scope).parent;
+}
+
+fn rs_place_local(function: *RsFunction, local: *RsLocal, location: *CrustLoc) -> *CrustExpr {
+    var expression: *CrustExpr = rs_named((*function).stage, (*local).storage, location);
+    if (*local).indirect { expression = rs_unary((*function).stage, CRUST_OP_DEREF, expression, location); }
+    return expression;
+}
+
+fn rs_action(function: *RsFunction, owner: *RsLocal, statement: *CrustStmt) -> *RsAction {
+    var action: *RsAction = rs_alloc((*function).stage, sizeof(RsAction), alignof(RsAction)) as *RsAction;
+    if action == null(*RsAction) { return action; }
+    (*action).owner = owner;
+    (*action).statement = statement;
+    var scope: *RsScope = (*function).scope;
+    if (*scope).first_action == null(*RsAction) { (*scope).first_action = action; }
+    else { (*(*scope).last_action).next = action; }
+    (*scope).last_action = action;
+    return action;
+}
+
+fn rs_local(function: *RsFunction, name: *CrustName, syntax: *CrustTypeSyntax,
+            parameter: *CrustParam, location: *CrustLoc) -> *RsLocal {
+    var stage: *RsStage = (*function).stage;
+    if name != null(*CrustName) && (crust_map_get(&(*function).locals, name as usize) != null(*u8) || rs_global(stage, name) != null(*RsGlobal)) {
+        rs_error(stage, location, "local name is already visible");
+        return null(*RsLocal);
+    }
+    var local: *RsLocal = rs_alloc(stage, sizeof(RsLocal), alignof(RsLocal)) as *RsLocal;
+    if local == null(*RsLocal) { return local; }
+    (*local).name = name;
+    (*local).syntax = syntax;
+    if (*syntax).kind == RS_READ || (*syntax).kind == RS_MUT {
+        (*local).mode = (*syntax).kind;
+        (*local).syntax = (*syntax).base;
+        (*local).indirect = true;
+    }
+    (*local).owning = (*local).mode == 0u32 && rs_owns(stage, syntax);
+    (*local).scope = (*function).scope;
+    (*local).next = (*(*function).scope).first;
+    (*(*function).scope).first = local;
+    if name != null(*CrustName) { rs_put(stage, &(*function).locals, name as usize, local as *u8); }
+    if parameter != null(*CrustParam) {
+        (*local).storage = (*parameter).name;
+        (*local).initialized = true;
+        if rs_indirect(syntax) { (*local).indirect = true; }
+    } else {
+        (*local).storage = rs_name(stage);
+        var declaration: *CrustStmt = rs_stmt_node(stage, CRUST_S_VAR, location);
+        if declaration == null(*CrustStmt) { return null(*RsLocal); }
+        (*declaration).name = (*local).storage;
+        (*declaration).syntax_type = rs_lower_type(stage, syntax);
+        (*declaration).uninitialized = true;
+        if (*function).declarations == null(*CrustStmt) { (*function).declarations = declaration; }
+        else { (*(*function).last_declaration).next = declaration; }
+        (*function).last_declaration = declaration;
+    }
+    if (*stage).failed { return null(*RsLocal); }
+    if (*local).owning { rs_action(function, local, null(*CrustStmt)); }
+    return local;
+}
+
+fn rs_value(function: *RsFunction, syntax: *CrustTypeSyntax, expression: *CrustExpr) -> *RsValue {
+    var value: *RsValue = rs_alloc((*function).stage, sizeof(RsValue), alignof(RsValue)) as *RsValue;
+    if value != null(*RsValue) { (*value).syntax = syntax; (*value).expression = expression; }
+    return value;
+}
+
+fn rs_assign(function: *RsFunction, output: *RsStatements, place: *CrustExpr, value: *CrustExpr, location: *CrustLoc) -> unit {
+    var statement: *CrustStmt = rs_stmt_node((*function).stage, CRUST_S_ASSIGN, location);
+    if statement != null(*CrustStmt) { (*statement).expr = place; (*statement).value = value; rs_append(output, statement); }
+}
+
+fn rs_capture(function: *RsFunction, output: *RsStatements, value: *RsValue, location: *CrustLoc) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    if (*stage).failed || value == null(*RsValue) { return null(*RsValue); }
+    if (*(*value).syntax).kind == CRUST_T_UNIT { return value; }
+    if rs_owns(stage, (*value).syntax) && !(*value).owned {
+        rs_error(stage, location, "copy of a resource requires an explicit move");
+        return null(*RsValue);
+    }
+    if (*value).unsafe_call {
+        rs_error(stage, location, "unsafe functions can only be called directly");
+        return null(*RsValue);
+    }
+    var local: *RsLocal = rs_local(function, null(*CrustName), (*value).syntax, null(*CrustParam), location);
+    if local == null(*RsLocal) { return null(*RsValue); }
+    var place: *CrustExpr = rs_named(stage, (*local).storage, location);
+    rs_assign(function, output, place, (*value).expression, location);
+    (*local).initialized = true;
+    if (*value).owned && (*value).local != null(*RsLocal) { rs_live(function, (*value).local, false); }
+    if (*(*value).syntax).kind == RS_READ || (*(*value).syntax).kind == RS_MUT {
+        (*local).parent_loan = (*(*value).local).parent_loan;
+        rs_live(function, (*value).local, false);
+    }
+    var result: *RsValue = rs_value(function, (*value).syntax, rs_named(stage, (*local).storage, location));
+    if result != null(*RsValue) {
+        (*result).local = local;
+        if (*(*value).syntax).kind == RS_READ || (*(*value).syntax).kind == RS_MUT { (*result).mode = (*(*value).syntax).kind; }
+        (*result).owned = (*local).owning;
+    }
+    return result;
+}
+
+fn rs_terminal(function: *RsFunction) -> *RsChain {
+    var chain: *RsChain = rs_alloc((*function).stage, sizeof(RsChain), alignof(RsChain)) as *RsChain;
+    if chain != null(*RsChain) {
+        (*chain).identity = (*function).next_label;
+        (*function).next_label = (*function).next_label + 1usize;
+    }
+    return chain;
+}
+
+fn rs_chain(function: *RsFunction, action: *RsAction, next: *RsChain) -> *RsChain {
+    rs_prepare_action(function, action);
+    if (*(*function).stage).failed { return null(*RsChain); }
+    var key: usize = ((action as usize) >> 3usize) ^ ((next as usize) * 11400714819323198485usize);
+    if key == 0usize { key = 1usize; }
+    var head: *RsChain = crust_map_get(&(*function).chain_map, key) as *RsChain;
+    var entry: *RsChain = head;
+    while entry != null(*RsChain) {
+        if (*entry).action == action && (*entry).next == next { return entry; }
+        entry = (*entry).hash_next;
+    }
+    entry = rs_terminal(function);
+    if entry == null(*RsChain) { return entry; }
+    (*entry).action = action;
+    (*entry).next = next;
+    (*entry).hash_next = head;
+    (*entry).all_next = (*function).chains;
+    (*function).chains = entry;
+    rs_put((*function).stage, &(*function).chain_map, key, entry as *u8);
+    return entry;
+}
+
+fn rs_cleanup(function: *RsFunction, scope: *RsScope, stop: *RsScope, target: *RsChain) -> *RsChain {
+    if scope == stop { return target; }
+    var chain: *RsChain = rs_cleanup(function, (*scope).parent, stop, target);
+    var action: *RsAction = (*scope).first_action;
+    while action != null(*RsAction) && !(*(*function).stage).failed {
+        if (*action).owner == null(*RsLocal) || (*(*action).owner).initialized {
+            chain = rs_chain(function, action, chain);
+        }
+        action = (*action).next;
+    }
+    return chain;
+}
+
+fn rs_exit(function: *RsFunction, statement: *CrustStmt, stop: *RsScope,
+           target: *RsChain, continuation: *RsChain) -> unit {
+    var exit_value: *RsExit = rs_alloc((*function).stage, sizeof(RsExit), alignof(RsExit)) as *RsExit;
+    if exit_value == null(*RsExit) { return; }
+    (*exit_value).chain = rs_cleanup(function, (*function).scope, stop, target);
+    (*exit_value).continuation = continuation;
+    rs_put((*function).stage, &(*function).exits, statement as usize, exit_value as *u8);
+}

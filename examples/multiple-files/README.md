@@ -3,14 +3,14 @@
 Run from the repository root after `make all c-stage`:
 
 ```sh
-build/rmd examples/multiple-files/main.rmd
+build/crust examples/multiple-files/main.crust
 build/multiple-files
 ```
 
 The executable prints `Hello from another source file!` and returns zero.
 
-[main.rmd](main.rmd) is the compilation program. It captures
-[program.rmd](program.rmd) and supplies [greeting.rmd](greeting.rmd) as another
+[main.crust](main.crust) is the compilation program. It captures
+[program.crust](program.crust) and supplies [greeting.crust](greeting.crust) as another
 target input. The function in the first file can call `greeting`, whose
 definition is in the second file. Both target units use one checked namespace.
 

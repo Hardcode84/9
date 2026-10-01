@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute RMD host programs and source-selected compiler stages."""
+"""Execute CRUST host programs and source-selected compiler stages."""
 import argparse
 import importlib.util
 import json
@@ -32,49 +32,49 @@ def string(value):
 
 
 def compilation_root(target, library, allocator_checks=False):
-    prefix = (f'host_source(run, {string(ROOT / "api/rmd0_stage.rmd")});\n'
-              f'host_source(run, {string(ROOT / "stages/c/api.rmd")});\n'
+    prefix = (f'host_source(run, {string(ROOT / "api/crust0_stage.crust")});\n'
+              f'host_source(run, {string(ROOT / "stages/c/api.crust")});\n'
               f'host_link(run, {string(library)});\n')
-    allocation = "rmd_context_init(&target_context, null(*RmdAllocator));\n"
+    allocation = "crust_context_init(&target_context, null(*CrustAllocator));\n"
     release = ""
     if allocator_checks:
         prefix += """
 record AllocationCount { allocated:usize; released:usize; }
 fn target_allocate(user:*u8, size:usize)->*u8 {
     var counts:*AllocationCount = user as *AllocationCount;
-    var result:*u8 = rmd0_host_alloc(size, 8usize);
+    var result:*u8 = crust0_host_alloc(size, 8usize);
     if result != null(*u8) { (*counts).allocated = (*counts).allocated + 1usize; }
     return result;
 }
 fn target_release(user:*u8, bytes:*u8)->unit {
     var counts:*AllocationCount = user as *AllocationCount;
     (*counts).released = (*counts).released + 1usize;
-    rmd0_host_free(bytes);
+    crust0_host_free(bytes);
 }
 var counts:AllocationCount = make AllocationCount { allocated:0usize, released:0usize };
-var allocator:RmdAllocator = make RmdAllocator {
+var allocator:CrustAllocator = make CrustAllocator {
     user:&counts as *u8, allocate:target_allocate, release:target_release
 };
 """
-        allocation = "rmd_context_init(&target_context, &allocator);\n"
+        allocation = "crust_context_init(&target_context, &allocator);\n"
         release = "if counts.allocated == 0usize || counts.allocated != counts.released { return 93i32; };\n"
-    return prefix + "var target_context:RmdContext = uninit;\n" + allocation + f"""
-var target_source:*RmdSource = host_input(run, {string(target)}, 1u64);
-if target_source == null(*RmdSource) {{ return 1i32; }};
-var request:RmdBuild = make RmdBuild {{
+    return prefix + "var target_context:CrustContext = uninit;\n" + allocation + f"""
+var target_source:*CrustSource = host_input(run, {string(target)}, 1u64);
+if target_source == null(*CrustSource) {{ return 1i32; }};
+var request:CrustBuild = make CrustBuild {{
     context:&target_context, source:target_source, target_begin:0usize,
     argc:(*run).argc, argv:(*run).argv
 }};
 var result:i32 = c_program(&request);
-if result != 0i32 {{ rmd_run_diagnostic(&target_context); }};
-rmd_context_destroy(&target_context);
+if result != 0i32 {{ crust_run_diagnostic(&target_context); }};
+crust_context_destroy(&target_context);
 """ + release + "return result;\n"
 
 
 class Suite:
     def __init__(self, arguments):
         self.build = arguments.build.resolve()
-        self.runner = self.build / "rmd"
+        self.runner = self.build / "crust"
         self.work = self.build / "source-order-tests"
         self.work.mkdir(parents=True, exist_ok=True)
         self.cc = shlex.split(arguments.cc)
@@ -84,7 +84,7 @@ class Suite:
         self.native = self.work / "native.plugin"
         self.backend = self.work / "copied libraries" / "ordinary output.plugin"
         self.backend.parent.mkdir(exist_ok=True)
-        shutil.copyfile(self.build / "rmd-c-library.so", self.backend)
+        shutil.copyfile(self.build / "crust-c-library.so", self.backend)
 
     def command(self, command, expected=0, stdout=subprocess.PIPE, **options):
         command = list(map(str, command))
@@ -107,7 +107,7 @@ class Suite:
         return path
 
     def root(self, name, contents, arguments=(), expected=0, diagnostic=None, stdout=None, **options):
-        path = self.write(name + ".rmd", contents)
+        path = self.write(name + ".crust", contents)
         result = self.command([self.runner, path, *arguments], expected=expected, **options)
         if diagnostic is not None:
             assert diagnostic in result.stderr, (name, result.stderr)
@@ -122,7 +122,7 @@ class Suite:
                       ROOT / "tests/native.c", *self.ldflags, "-o", self.native])
 
     def host_unit(self, name, body, expected=0, native=False):
-        path = self.write(name + "-unit.rmd", body)
+        path = self.write(name + "-unit.crust", body)
         prefix = f'host_link(run, {string(self.native)});\n' if native else ""
         return self.root(name, prefix + f'host_source(run, {string(path)});\nreturn main((*run).argc, (*run).argv);\n',
                          ["runtime-witness"], expected=expected)
@@ -131,12 +131,12 @@ class Suite:
 def check_root(suite):
     suite.root("empty", "", stdout=b"")
     suite.root("trivia", "// no implicit target\n// complete\n", stdout=b"")
-    buffered_output = suite.write("buffered-output.rmd",
+    buffered_output = suite.write("buffered-output.crust",
                                  'extern fn native_puts(text:*u8)->i32="puts"; native_puts("buffered root output");')
     for argument in ("--help", "--version", buffered_output):
         with open("/dev/full", "wb") as full:
             failure = suite.command([suite.runner, argument], expected=1, stdout=full)
-        assert b"rmd: cannot write standard output" in failure.stderr, failure.stderr
+        assert b"crust: cannot write standard output" in failure.stderr, failure.stderr
     suite.root("arguments", """
 if (*run).argc != 2i32 || (*run).argv[2usize] != null(*u8) { return 1i32; };
 if (*run).argv[0usize][0usize] != 65u8 || (*run).argv[1usize][0usize] != 66u8 { return 2i32; };
@@ -160,18 +160,18 @@ if fact(6u32) != 720u32 { return 1i32; };
 return 0i32;
 """)
     suite.root("return-skips-unread", b"return 37i32;\0unread", expected=37)
-    suite.root("effect-once-before-return", 'rmd0_host_write_stream(1u32,"X",1usize); return 37i32;',
+    suite.root("effect-once-before-return", 'crust0_host_write_stream(1u32,"X",1usize); return 37i32;',
                expected=37, stdout=b"X")
     suite.root("status-survives-ordinary-action", "(*run).status=37i32; var value:u32=1u32;", expected=37)
     suite.root("nested-default-execution-retains-status", """
-fn consume_next(current:*RmdRun)->bool {
+fn consume_next(current:*CrustRun)->bool {
     var action:*u8=null(*u8);
-    if !rmd_run_read(current,&action) { return false; }
+    if !crust_run_read(current,&action) { return false; }
     if action==null(*u8) {
-        rmd_set_error((*current).context,(*current).source,(*current).cursor,"expected nested action");
+        crust_set_error((*current).context,(*current).source,(*current).cursor,"expected nested action");
         return false;
     }
-    return rmd_run_execute(current,action);
+    return crust_run_execute(current,action);
 }
 (*run).status=37i32;
 consume_next(run);
@@ -194,34 +194,34 @@ if consumed!=7u32 { return 1i32; };
         assert b"error:" in result.stderr, (name, result.stderr)
     marker = suite.work / "earlier-effect.txt"
     marker.unlink(missing_ok=True)
-    code = f'rmd0_host_write_file({string(marker)}, "once", 4usize);\n@'
+    code = f'crust0_host_write_file({string(marker)}, "once", 4usize);\n@'
     result = suite.root("effect-before-parse-error", code, expected=1)
     assert marker.read_bytes() == b"once" and b":2:1:" in result.stderr, result.stderr
-    unit = suite.write("mutual.rmd", """
+    unit = suite.write("mutual.crust", """
 fn even(value:u32)->bool { if value==0u32{return true;} return odd(value-1u32); }
 fn odd(value:u32)->bool { if value==0u32{return false;} return even(value-1u32); }
 """)
     relative = os.path.relpath(unit, suite.work)
     suite.root("closed-forward-references", f'host_source(run,{string(relative)}); if !even(10u32) || !odd(9u32){{return 1i32;}};', cwd="/tmp")
-    saved = suite.write("snapshot-input.rmd", "immutable snapshot\n")
+    saved = suite.write("snapshot-input.crust", "immutable snapshot\n")
     encoded = os.fsencode(saved)
     body = f"var path_bytes:[u8; {len(encoded)+1}] = make [u8; {len(encoded)+1}] {{" + ",".join(f"{byte}u8" for byte in encoded+b"\0") + "};\n"
-    body += "var snapshot:*RmdSource=host_input(run,&path_bytes[0usize],99u64);\n"
-    body += "if snapshot==null(*RmdSource){return 1i32;}; path_bytes[0usize]=88u8;\n"
+    body += "var snapshot:*CrustSource=host_input(run,&path_bytes[0usize],99u64);\n"
+    body += "if snapshot==null(*CrustSource){return 1i32;}; path_bytes[0usize]=88u8;\n"
     body += f"if (*snapshot).path[0usize]!=47u8 || (*snapshot).size!={len('immutable snapshot'+chr(10))}usize || (*snapshot).bytes[0usize]!=105u8{{return 2i32;}};\n"
     suite.root("captured-path-storage", body)
-    conflict = suite.write("local-conflict.rmd", "fn taken()->unit{}")
+    conflict = suite.write("local-conflict.crust", "fn taken()->unit{}")
     suite.root("local-declaration-conflict", f'var taken:u32=1u32; host_source(run,{string(conflict)});',
                expected=1, diagnostic=b"conflicts with a root local")
 
 
 def check_runtime(suite):
     suite.native_library()
-    suite.root("full-runtime", f'host_link(run,{string(suite.native)}); host_source(run,{string(ROOT / "tests/runtime.rmd")}); '
+    suite.root("full-runtime", f'host_link(run,{string(suite.native)}); host_source(run,{string(ROOT / "tests/runtime.crust")}); '
                'return main((*run).argc,(*run).argv);', ["runtime-witness"])
     for name, declaration, statement, diagnostic in (
         ("callback-trap", "", "trap;", b"required execution trap"),
-        ("callback-error", 'extern fn absent()->i32="rmd_callback_missing_symbol";',
+        ("callback-error", 'extern fn absent()->i32="crust_callback_missing_symbol";',
          "return absent();", b"unresolved native symbol"),
     ):
         body = ('extern fn native_callback(function:fn(i8,u8,i16,u16,i32,u32,i64,u64)->i32)->i32="native_callback";'
@@ -267,16 +267,16 @@ def check_runtime(suite):
 READER_PREFIX = """
 record ReaderState { reads:usize; executions:usize; boundary:usize; }
 record ReaderPayload { byte:u8; }
-fn wrong_executor(current:*RmdRun, payload:*u8)->bool {
-    rmd_set_error((*current).context,(*current).source,(*current).cursor,"wrong executor selected");
+fn wrong_executor(current:*CrustRun, payload:*u8)->bool {
+    crust_set_error((*current).context,(*current).source,(*current).cursor,"wrong executor selected");
     return false;
 }
-fn selected_reader(current:*RmdRun, output:**u8)->bool {
+fn selected_reader(current:*CrustRun, output:**u8)->bool {
     var state:*ReaderState = (*current).user as *ReaderState;
     (*state).reads = (*state).reads + 1usize;
     if (*current).cursor == (*(*current).source).size {
         if (*state).reads != 2usize || (*state).executions != 1usize {
-            rmd_set_error((*current).context,(*current).source,(*current).cursor,"reader counts differ");
+            crust_set_error((*current).context,(*current).source,(*current).cursor,"reader counts differ");
             return false;
         }
         *output = null(*u8);
@@ -284,14 +284,14 @@ fn selected_reader(current:*RmdRun, output:**u8)->bool {
     }
     var position:usize = (*current).cursor;
     if position != (*state).boundary || (*(*current).source).bytes[position] != 0u8 {
-        rmd_set_error((*current).context,(*current).source,position,"incorrect reader boundary");
+        crust_set_error((*current).context,(*current).source,position,"incorrect reader boundary");
         return false;
     }
     if position + 1usize >= (*(*current).source).size || (*(*current).source).bytes[position+1usize] != 65u8 {
-        rmd_set_error((*current).context,(*current).source,position+1usize,"expected alternate A");
+        crust_set_error((*current).context,(*current).source,position+1usize,"expected alternate A");
         return false;
     }
-    var payload:*ReaderPayload = rmd_try_alloc((*current).context,sizeof(ReaderPayload),alignof(ReaderPayload)) as *ReaderPayload;
+    var payload:*ReaderPayload = crust_try_alloc((*current).context,sizeof(ReaderPayload),alignof(ReaderPayload)) as *ReaderPayload;
     if payload == null(*ReaderPayload) { return false; }
     (*payload).byte = 65u8;
     (*current).cursor = position + 2usize;
@@ -299,14 +299,14 @@ fn selected_reader(current:*RmdRun, output:**u8)->bool {
     *output = payload as *u8;
     return true;
 }
-fn selected_executor(current:*RmdRun, opaque:*u8)->bool {
+fn selected_executor(current:*CrustRun, opaque:*u8)->bool {
     var state:*ReaderState = (*current).user as *ReaderState;
     var payload:*ReaderPayload = opaque as *ReaderPayload;
     (*state).executions = (*state).executions + 1usize;
     if (*payload).byte != 65u8 { return false; }
-    return rmd0_host_write_stream(1u32,&(*payload).byte,1usize) == 0i32;
+    return crust0_host_write_stream(1u32,&(*payload).byte,1usize) == 0i32;
 }
-fn install_reader(current:*RmdRun,state:*ReaderState)->unit {
+fn install_reader(current:*CrustRun,state:*ReaderState)->unit {
     (*state).boundary = (*current).cursor;
     (*current).user = state as *u8;
     (*current).read = selected_reader;
@@ -319,9 +319,9 @@ install_reader(run,&reader_state);"""
 def check_readers(suite):
     suite.root("interpreted-reader-transfer", READER_PREFIX.encode() + b"\0A", stdout=b"A")
     suite.root("reader-reentry-explicit-return", b"""
-fn nested_reader(current:*RmdRun,output:**u8)->bool {
-    (*current).read=rmd_run_read;
-    var completed:bool=rmd_run_loop(current);
+fn nested_reader(current:*CrustRun,output:**u8)->bool {
+    (*current).read=crust_run_read;
+    var completed:bool=crust_run_loop(current);
     *output=null(*u8);
     return completed;
 }
@@ -340,32 +340,32 @@ fn nested_reader(current:*RmdRun,output:**u8)->bool {
         "reader-out-of-range": ("(*current).cursor = (*(*current).source).size + 1usize; *output = current as *u8; return true;", b"invalid cursor"),
         "reader-early-eof": ("*output = null(*u8); return true;", b"EOF with unread bytes"),
         "reader-no-diagnostic": ("return false;", b"reader failed without a diagnostic"),
-        "reader-changes-source": ("(*current).source = null(*RmdSource); return true;", b"reader changed the source"),
+        "reader-changes-source": ("(*current).source = null(*CrustSource); return true;", b"reader changed the source"),
     }
     for name, (body, diagnostic) in cases.items():
-        code = f"fn reader(current:*RmdRun,output:**u8)->bool{{{body}}}\n(*run).read=reader;".encode() + b"\0"
+        code = f"fn reader(current:*CrustRun,output:**u8)->bool{{{body}}}\n(*run).read=reader;".encode() + b"\0"
         suite.root(name, code, expected=1, diagnostic=diagnostic)
     for value in (-1, 256):
         body = (f"(*current).status={value}i32; (*current).cursor=(*(*current).source).size;"
                 "*output=null(*u8); return true;")
-        code = f"fn reader(current:*RmdRun,output:**u8)->bool{{{body}}}\n(*run).read=reader;".encode() + b"\0"
+        code = f"fn reader(current:*CrustRun,output:**u8)->bool{{{body}}}\n(*run).read=reader;".encode() + b"\0"
         suite.root(f"reader-invalid-eof-status-{value}", code, expected=1,
                    diagnostic=b"root status must be between zero and 255")
-    rewind = READER_PREFIX.replace("return rmd0_host_write_stream(1u32,&(*payload).byte,1usize) == 0i32;",
+    rewind = READER_PREFIX.replace("return crust0_host_write_stream(1u32,&(*payload).byte,1usize) == 0i32;",
                                   "(*current).cursor=0usize; return true;")
     suite.root("executor-rewinds", rewind.encode() + b"\0A", expected=1, diagnostic=b"invalid cursor")
 
 
 def check_foreign_errors(suite):
-    suite.root("unneeded-native-symbol", 'extern fn absent()->i32="rmd_test_absent_symbol"; return 0i32;')
-    suite.root("missing-native-symbol", 'extern fn absent()->i32="rmd_test_absent_symbol"; return absent();',
+    suite.root("unneeded-native-symbol", 'extern fn absent()->i32="crust_test_absent_symbol"; return 0i32;')
+    suite.root("missing-native-symbol", 'extern fn absent()->i32="crust_test_absent_symbol"; return absent();',
                expected=1, diagnostic=b"unresolved native symbol")
-    suite.root("native-signature-conflict", 'extern fn a()->u8="rmd_test_shared"; extern fn b()->u64="rmd_test_shared";',
+    suite.root("native-signature-conflict", 'extern fn a()->u8="crust_test_shared"; extern fn b()->u64="crust_test_shared";',
                expected=1, diagnostic=b"native")
-    suite.root("missing-input", 'host_source(run,"no-such-source.rmd");', expected=1, diagnostic=b"cannot read source input")
+    suite.root("missing-input", 'host_source(run,"no-such-source.crust");', expected=1, diagnostic=b"cannot read source input")
     suite.root("empty-input-path", 'host_source(run,"");', expected=1, diagnostic=b"input path is empty")
     suite.root("missing-library", 'host_link(run,"no-such-library.plugin");', expected=1, diagnostic=b"cannot load native input")
-    suite.root("no-implicit-loader-search", 'rmd_run_link(run,"libc.so.6");', expected=1, diagnostic=b"error:")
+    suite.root("no-implicit-loader-search", 'crust_run_link(run,"libc.so.6");', expected=1, diagnostic=b"error:")
     libraries = []
     for index in range(2):
         path = suite.write(f"ambiguous-{index}.c", f"int shared_symbol(void);\nint shared_symbol(void){{return {index};}}\n")
@@ -381,23 +381,23 @@ def check_foreign_errors(suite):
 
 
 def check_target(suite):
-    target = ROOT / "examples/intrusive/program.rmd"
+    target = ROOT / "examples/intrusive/program.crust"
     response = suite.work / "intrusive.rsp"
     code = compilation_root(target, suite.backend, allocator_checks=True)
     result = suite.root("intrusive-stage", code, ["--emit-c", "--symbols", response])
     c_path = suite.write("intrusive.c", result.stdout)
     reference = suite.work / "reference.rsp"
-    prepared = suite.command([suite.build / "rmd-c", "--emit-c", "--symbols", reference, target])
+    prepared = suite.command([suite.build / "crust-c", "--emit-c", "--symbols", reference, target])
     assert result.stdout == prepared.stdout and response.read_bytes() == reference.read_bytes()
-    prefix = (f'host_source(run,{string(ROOT / "api/rmd0_stage.rmd")});\n'
-              f'host_source(run,{string(ROOT / "stages/c/api.rmd")});\n'
-              f'host_source(run,{string(ROOT / "stages/c/build.rmd")});\n'
+    prefix = (f'host_source(run,{string(ROOT / "api/crust0_stage.crust")});\n'
+              f'host_source(run,{string(ROOT / "stages/c/api.crust")});\n'
+              f'host_source(run,{string(ROOT / "stages/c/build.crust")});\n'
               f'host_link(run,{string(suite.backend)});\n'
-              f'var captured:*RmdSource=host_input(run,{string(target)},1u64);\n')
+              f'var captured:*CrustSource=host_input(run,{string(target)},1u64);\n')
     reader = READER_PREFIX.replace("boundary:usize; }",
-                                  "boundary:usize; target:*RmdSource; argc:i32; argv:**u8; }")
+                                  "boundary:usize; target:*CrustSource; argc:i32; argv:**u8; }")
     reader = reader.replace("boundary:0usize};", "boundary:0usize,target:captured,argc:(*run).argc,argv:(*run).argv};")
-    reader = reader.replace("return rmd0_host_write_stream(1u32,&(*payload).byte,1usize) == 0i32;",
+    reader = reader.replace("return crust0_host_write_stream(1u32,&(*payload).byte,1usize) == 0i32;",
                             "return c_build((*state).target,0usize,(*state).argc,(*state).argv) == 0i32;")
     transferred = suite.root("reader-selected-intrusive", (prefix + reader).encode() + b"\0A",
                              ["--emit-c", "--symbols", response])
@@ -408,15 +408,15 @@ def check_target(suite):
     suite.command([*suite.cc, "-std=c99", "-pedantic-errors", *suite.cflags, "-Wno-overlength-strings",
                    "-c", c_path, "-o", raw])
     suite.command(["objcopy", "@" + str(response), raw, obj])
-    suite.command([*suite.cc, "-no-pie", obj, suite.build / "librmd0_host.a", *suite.ldflags, "-o", executable])
+    suite.command([*suite.cc, "-no-pie", obj, suite.build / "libcrust0_host.a", *suite.ldflags, "-o", executable])
     assert suite.command([executable]).stdout == b"intrusive: ok\n"
     symbols = suite.command(["nm", executable]).stdout
-    assert not re.search(rb"\b(?:rmd_(?:run|eval|context|read|check|collect|resolve)\w*|c_program|c_backend_build|ffi_\w*)\b", symbols)
+    assert not re.search(rb"\b(?:crust_(?:run|eval|context|read|check|collect|resolve)\w*|c_program|c_backend_build|ffi_\w*)\b", symbols)
     needed = suite.command(["readelf", "-dW", executable]).stdout
     assert b"libffi" not in needed and suite.backend.name.encode() not in needed
-    later = suite.write("forward-target.rmd", "fn main(argc:i32,argv:**u8)->i32{return later();}\nfn later()->i32{return 0i32;}\n")
+    later = suite.write("forward-target.crust", "fn main(argc:i32,argv:**u8)->i32{return later();}\nfn later()->i32{return 0i32;}\n")
     suite.root("target-forward", compilation_root(later, suite.backend), ["--emit-c", "--symbols", "/dev/null"])
-    bad = suite.write("host-name-target.rmd", "fn main(argc:i32,argv:**u8)->i32{return host_source();}\n")
+    bad = suite.write("host-name-target.crust", "fn main(argc:i32,argv:**u8)->i32{return host_source();}\n")
     result = suite.root("target-separate-names", compilation_root(bad, suite.backend),
                         ["--emit-c", "--symbols", "/dev/null"], expected=1, diagnostic=b"unknown name 'host_source'")
     assert str(bad).encode() + b":1:" in result.stderr, result.stderr
@@ -429,7 +429,7 @@ const extra_value: i32 = 42i32;
 const extra_callback: fn(*Extra) -> i32 = helper;
 fn helper(item: *Extra) -> i32 { return (*item).value; }
 '''
-    extra = suite.work / "retained-extra.rmd"
+    extra = suite.work / "retained-extra.crust"
     extra.write_text(extra_text)
     generated = suite.work / "retained.c"
     symbols = suite.work / "retained.rsp"
@@ -438,7 +438,7 @@ fn helper(item: *Extra) -> i32 { return (*item).value; }
     body = '''extern fn compare_bytes(left:*u8,right:*u8,size:usize)->i32 = "memcmp";
 extern fn compare_text(left:*u8,right:*u8)->i32 = "strcmp";
 extern fn text_size(text:*u8)->usize = "strlen";
-fn build(request:*RmdBuild)->i32 {
+fn build(request:*CrustBuild)->i32 {
     if sizeof(CBackendOptions)!=56usize || alignof(CBackendOptions)!=8usize ||
        offsetof(CBackendOptions,mode)!=0usize || offsetof(CBackendOptions,output)!=8usize ||
        offsetof(CBackendOptions,symbols)!=16usize || offsetof(CBackendOptions,cflags)!=24usize ||
@@ -446,27 +446,27 @@ fn build(request:*RmdBuild)->i32 {
        offsetof(CBackendOptions,ldflag_count)!=48usize { return 80i32; }
     if (*request).argc!=2i32 || compare_text((*request).argv[0usize],"-o")!=0i32 { return 81i32; }
     var args:[*u8;2] = make [*u8;2] { "--prepare", @EXTRA@ };
-    var prepare:RmdBuild = *request;
+    var prepare:CrustBuild = *request;
     prepare.argc = 2i32;
     prepare.argv = &args[0usize];
     var status:i32 = c_program(&prepare);
     if status!=0i32 { return status; }
-    var context:*RmdContext = (*request).context;
-    var parsed:*RmdUnit = (*context).units;
-    if parsed==null(*RmdUnit) || (*parsed).source!=(*request).source ||
-       (*parsed).next==null(*RmdUnit) { return 82i32; }
-    var entry:*RmdDecl = (*parsed).declarations;
-    var extra_source:*RmdSource = (*(*parsed).next).source;
+    var context:*CrustContext = (*request).context;
+    var parsed:*CrustUnit = (*context).units;
+    if parsed==null(*CrustUnit) || (*parsed).source!=(*request).source ||
+       (*parsed).next==null(*CrustUnit) { return 82i32; }
+    var entry:*CrustDecl = (*parsed).declarations;
+    var extra_source:*CrustSource = (*(*parsed).next).source;
     if compare_text((*(*entry).name).text,"main")!=0i32 ||
        compare_text((*extra_source).path,@EXTRA@)!=0i32 ||
        (*extra_source).size!=text_size(@EXTRA_TEXT@) ||
        compare_bytes((*extra_source).bytes,@EXTRA_TEXT@,(*extra_source).size)!=0i32 { return 83i32; }
-    var saved_name:*u8 = rmd_try_copy_string(context,(*entry).link_name,text_size((*entry).link_name));
+    var saved_name:*u8 = crust_try_copy_string(context,(*entry).link_name,text_size((*entry).link_name));
     if saved_name==null(*u8) { return 1i32; }
-    var before_decl:RmdDecl = *entry;
-    var before_type:RmdType = *(*entry).type;
-    var before_body:RmdStmt = *(*entry).body;
-    var before_source:RmdSource = *extra_source;
+    var before_decl:CrustDecl = *entry;
+    var before_type:CrustType = *(*entry).type;
+    var before_body:CrustStmt = *(*entry).body;
+    var before_source:CrustSource = *extra_source;
     var options:CBackendOptions = make CBackendOptions {
         mode:2u32,output:@GENERATED@,symbols:@SYMBOLS@,
         cflags:null(**u8),cflag_count:0usize,ldflags:null(**u8),ldflag_count:0usize
@@ -478,10 +478,10 @@ fn build(request:*RmdBuild)->i32 {
     options.symbols = null(*u8);
     status = c_backend_build(context,entry,&options);
     if status!=0i32 { return status; }
-    if compare_bytes(entry as *u8,&before_decl as *u8,sizeof(RmdDecl))!=0i32 ||
-       compare_bytes((*entry).type as *u8,&before_type as *u8,sizeof(RmdType))!=0i32 ||
-       compare_bytes((*entry).body as *u8,&before_body as *u8,sizeof(RmdStmt))!=0i32 ||
-       compare_bytes(extra_source as *u8,&before_source as *u8,sizeof(RmdSource))!=0i32 ||
+    if compare_bytes(entry as *u8,&before_decl as *u8,sizeof(CrustDecl))!=0i32 ||
+       compare_bytes((*entry).type as *u8,&before_type as *u8,sizeof(CrustType))!=0i32 ||
+       compare_bytes((*entry).body as *u8,&before_body as *u8,sizeof(CrustStmt))!=0i32 ||
+       compare_bytes(extra_source as *u8,&before_source as *u8,sizeof(CrustSource))!=0i32 ||
        compare_text((*entry).link_name,saved_name)!=0i32 ||
        compare_bytes((*extra_source).bytes,@EXTRA_TEXT@,(*extra_source).size)!=0i32 { return 84i32; }
     return 0i32;
@@ -494,14 +494,14 @@ fn build(request:*RmdBuild)->i32 {
     return extra_callback(&item);
 }
 '''
-    target_path = suite.write("retained-target.rmd", target)
+    target_path = suite.write("retained-target.crust", target)
     program = compilation_root(target_path, suite.backend)
-    program = program.replace("var target_context:RmdContext = uninit;", body + "\nvar target_context:RmdContext = uninit;")
+    program = program.replace("var target_context:CrustContext = uninit;", body + "\nvar target_context:CrustContext = uninit;")
     program = program.replace("var result:i32 = c_program(&request);", "var result:i32 = build(&request);")
     output = suite.work / "retained-context"
     suite.root("retained-context", program, ["-o", output])
     assert b"int main(" in generated.read_bytes()
-    assert b"_rmd0_u" in symbols.read_bytes()
+    assert b"_crust0_u" in symbols.read_bytes()
     suite.command([output], expected=42)
 
 def check_pointer_constants(suite):
@@ -538,13 +538,13 @@ def check_examples(suite):
         shutil.copytree(ROOT / directory, package / directory)
     output = package / "build"
     output.mkdir()
-    for name in ("rmd-c-library.so", "librmd0_host.a"):
+    for name in ("crust-c-library.so", "libcrust0_host.a"):
         shutil.copyfile(suite.build / name, output / name)
     elsewhere = package / "working directory"
     elsewhere.mkdir()
 
     def compile_example(name, arguments=()):
-        path = package / "examples" / name / "main.rmd"
+        path = package / "examples" / name / "main.crust"
         result = suite.command([suite.runner, path, *arguments], cwd=elsewhere)
         assert not result.stdout and not result.stderr, (name, result)
         return path
@@ -561,11 +561,11 @@ def check_examples(suite):
 
     flags = [item for flag in suite.cflags for item in ("--cflag", flag)]
     flags += [item for flag in suite.ldflags for item in ("--ldflag", flag)]
-    compile_example("intrusive", ["-o", output / "intrusive", "--ldflag", output / "librmd0_host.a", *flags])
+    compile_example("intrusive", ["-o", output / "intrusive", "--ldflag", output / "libcrust0_host.a", *flags])
     assert suite.command([output / "intrusive"]).stdout == b"intrusive: ok\n"
 
-    reader = package / "examples/reader-switch/main.rmd"
-    expected = b"Hello from a reader written in RMD!\nThese lines use the new grammar.\n"
+    reader = package / "examples/reader-switch/main.crust"
+    expected = b"Hello from a reader written in CRUST!\nThese lines use the new grammar.\n"
     result = suite.command([suite.runner, reader], cwd=elsewhere)
     assert result.stdout == expected and not result.stderr, result
     with open("/dev/full", "wb") as full:
@@ -579,7 +579,7 @@ def check_examples(suite):
     assert b"expected '> ' before text" in result.stderr, result.stderr
 
     original = hello.read_text()
-    broken = hello.with_name("bad-target.rmd")
+    broken = hello.with_name("bad-target.crust")
     broken.write_text(original + "fn bad()->i32{return missing_value;}\n")
     retained = (output / "hello").read_bytes()
     result = suite.command([suite.runner, broken], expected=1, cwd=elsewhere)

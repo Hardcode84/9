@@ -1,0 +1,49 @@
+host_source(run, "../../../api/crust0_stage.crust");
+host_source(run, "../../../stages/resources/api.crust");
+host_link(run, "../../../build/crust-resource-library.so");
+
+var arguments:[*u8;2] = make [*u8;2] {
+    "-o", host_path(run, "../../../build/resource-hello")
+};
+return resource_build((*run).source, (*run).cursor, 2i32, &arguments[0usize]);
+
+// The resource stage reads the remainder of this file.
+extern fn native_dup(descriptor:i32)->i32 = "dup";
+extern fn native_close(descriptor:i32)->i32 = "close";
+extern fn native_write(descriptor:i32, bytes:*u8, size:usize)->isize = "write";
+extern fn native_exit(status:i32)->unit = "exit";
+
+resource Output { descriptor:i32; } drop output_drop;
+
+fn output_open()->Output {
+    unsafe {
+        var descriptor:i32 = native_dup(1i32);
+        if descriptor < 0i32 { native_exit(1i32); trap; }
+        return make Output { descriptor:descriptor };
+    }
+}
+
+fn output_drop(output:mut Output)->unit {
+    unsafe {
+        if native_close(output.descriptor) != 0i32 { native_exit(2i32); trap; }
+    }
+}
+
+fn hello(output:mut Output)->unit {
+    unsafe {
+        var text:*u8 = "Hello, resources!\n";
+        var offset:usize = 0usize;
+        while offset < 18usize {
+            var size:isize = native_write(output.descriptor, text + (offset as isize), 18usize - offset);
+            if size <= 0isize { native_exit(1i32); trap; }
+            offset = offset + (size as usize);
+        }
+    }
+}
+
+fn main(argc:i32, argv:**u8)->i32 {
+    var first:Output = output_open();
+    var output:Output = move first;
+    defer hello(mut output);
+    return 0i32;
+}

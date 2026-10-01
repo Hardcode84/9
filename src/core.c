@@ -1,4 +1,4 @@
-#include "rmd0.h"
+#include "crust0.h"
 
 #include <stdarg.h>
 #include <limits.h>
@@ -7,11 +7,11 @@
 #include <string.h>
 
 #if !defined(__linux__) || !defined(__x86_64__)
-#error RMD0 version 0.1 requires a Linux x86-64 host
+#error CRUST0 version 0.1 requires a Linux x86-64 host
 #endif
 
-typedef char RmdHostProfile[(CHAR_BIT == 8 && sizeof(void *) == 8 &&
-                            sizeof(size_t) == 8 && sizeof(RmdTypeKind) == 4 &&
+typedef char CrustHostProfile[(CHAR_BIT == 8 && sizeof(void *) == 8 &&
+                            sizeof(size_t) == 8 && sizeof(CrustTypeKind) == 4 &&
                             sizeof(short) == 2 && sizeof(int) == 4 && sizeof(long) == 8 &&
                             sizeof(bool) == 1 && sizeof(void (*)(void)) == 8) ? 1 : -1];
 
@@ -20,13 +20,13 @@ typedef union {
     void *pointer;
     uint64_t integer;
     void (*function)(void);
-} RmdArenaAlign;
+} CrustArenaAlign;
 
-struct RmdArenaBlock {
-    RmdArenaBlock *next;
+struct CrustArenaBlock {
+    CrustArenaBlock *next;
     size_t used;
     size_t capacity;
-    RmdArenaAlign alignment;
+    CrustArenaAlign alignment;
     unsigned char data[];
 };
 
@@ -42,7 +42,7 @@ static void default_release(void *user, void *allocation)
     free(allocation);
 }
 
-void rmd_arena_init(RmdArena *arena, const RmdAllocator *allocator)
+void crust_arena_init(CrustArena *arena, const CrustAllocator *allocator)
 {
     memset(arena, 0, sizeof(*arena));
     if (allocator != NULL) {
@@ -53,11 +53,11 @@ void rmd_arena_init(RmdArena *arena, const RmdAllocator *allocator)
     }
 }
 
-void rmd_arena_destroy(RmdArena *arena)
+void crust_arena_destroy(CrustArena *arena)
 {
-    RmdArenaBlock *block = arena->blocks;
+    CrustArenaBlock *block = arena->blocks;
     while (block != NULL) {
-        RmdArenaBlock *next = block->next;
+        CrustArenaBlock *next = block->next;
         arena->allocator.release(arena->allocator.user, block);
         block = next;
     }
@@ -65,15 +65,15 @@ void rmd_arena_destroy(RmdArena *arena)
     arena->bytes_reserved = 0;
 }
 
-void *rmd_arena_alloc(RmdArena *arena, size_t size, size_t alignment)
+void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
 {
-    RmdArenaBlock *block = arena->blocks;
+    CrustArenaBlock *block = arena->blocks;
     size_t offset;
     size_t capacity;
-    size_t prefix = offsetof(RmdArenaBlock, data);
+    size_t prefix = offsetof(CrustArenaBlock, data);
     if (size == 0 || alignment == 0 ||
         (alignment & (alignment - 1)) != 0 ||
-        alignment > RMD_ALIGNOF(RmdArenaAlign)) {
+        alignment > CRUST_ALIGNOF(CrustArenaAlign)) {
         return NULL;
     }
     if (block != NULL && block->used <= SIZE_MAX - (alignment - 1)) {
@@ -100,28 +100,28 @@ void *rmd_arena_alloc(RmdArena *arena, size_t size, size_t alignment)
     return block->data;
 }
 
-void rmd_context_init(RmdContext *ctx, const RmdAllocator *allocator)
+void crust_context_init(CrustContext *ctx, const CrustAllocator *allocator)
 {
     static const unsigned sizes[] = {1, 1, 2, 2, 4, 4, 8, 8, 8, 8, 1, 0};
     size_t index;
     memset(ctx, 0, sizeof(*ctx));
-    rmd_arena_init(&ctx->arena, allocator);
+    crust_arena_init(&ctx->arena, allocator);
     for (index = 0; index < sizeof(sizes) / sizeof(sizes[0]); ++index) {
-        ctx->builtins[index].kind = (RmdTypeKind)index;
+        ctx->builtins[index].kind = (CrustTypeKind)index;
         ctx->builtins[index].size = sizes[index];
         ctx->builtins[index].align = sizes[index];
     }
 }
 
-void rmd_context_destroy(RmdContext *ctx)
+void crust_context_destroy(CrustContext *ctx)
 {
-    rmd_arena_destroy(&ctx->arena);
+    crust_arena_destroy(&ctx->arena);
     memset(ctx, 0, sizeof(*ctx));
 }
 
-bool rmd_run_stage(RmdContext *ctx, void (*stage)(RmdContext *, void *), void *data)
+bool crust_run_stage(CrustContext *ctx, void (*stage)(CrustContext *, void *), void *data)
 {
-    RmdFailureFrame frame;
+    CrustFailureFrame frame;
     frame.previous = ctx->failure;
     ctx->failure = &frame;
     if (setjmp(frame.jump) != 0) {
@@ -133,7 +133,7 @@ bool rmd_run_stage(RmdContext *ctx, void (*stage)(RmdContext *, void *), void *d
     return true;
 }
 
-void rmd_set_error(RmdContext *ctx, RmdSource *source, size_t offset, const char *message)
+void crust_set_error(CrustContext *ctx, CrustSource *source, size_t offset, const char *message)
 {
     size_t length = 0;
     while (length < sizeof(ctx->error) - 1 && message[length] != '\0') ++length;
@@ -145,38 +145,38 @@ void rmd_set_error(RmdContext *ctx, RmdSource *source, size_t offset, const char
 }
 
 typedef struct { size_t size; size_t alignment; void *result; } AllocRequest;
-typedef struct { const unsigned char *text; size_t size; RmdName *result; } NameRequest;
+typedef struct { const unsigned char *text; size_t size; CrustName *result; } NameRequest;
 
-static void allocate_stage(RmdContext *ctx, void *data)
+static void allocate_stage(CrustContext *ctx, void *data)
 {
     AllocRequest *request = data;
-    request->result = rmd_alloc(ctx, request->size, request->alignment);
+    request->result = crust_alloc(ctx, request->size, request->alignment);
 }
 
-void *rmd_try_alloc(RmdContext *ctx, size_t size, size_t alignment)
+void *crust_try_alloc(CrustContext *ctx, size_t size, size_t alignment)
 {
     AllocRequest request = {size, alignment, NULL};
-    (void)rmd_run_stage(ctx, allocate_stage, &request);
+    (void)crust_run_stage(ctx, allocate_stage, &request);
     return request.result;
 }
 
-static void intern_stage(RmdContext *ctx, void *data)
+static void intern_stage(CrustContext *ctx, void *data)
 {
     NameRequest *request = data;
-    request->result = rmd_intern(ctx, request->text, request->size);
+    request->result = crust_intern(ctx, request->text, request->size);
 }
 
-RmdName *rmd_try_intern(RmdContext *ctx, const unsigned char *text, size_t size)
+CrustName *crust_try_intern(CrustContext *ctx, const unsigned char *text, size_t size)
 {
     NameRequest request = {text, size, NULL};
-    (void)rmd_run_stage(ctx, intern_stage, &request);
+    (void)crust_run_stage(ctx, intern_stage, &request);
     return request.result;
 }
 
-void *rmd_try_grow_array(RmdContext *ctx, const void *old, size_t count,
+void *crust_try_grow_array(CrustContext *ctx, const void *old, size_t count,
                          size_t capacity, size_t item_size, size_t alignment)
 {
-    RmdFailureFrame frame;
+    CrustFailureFrame frame;
     void *result;
     frame.previous = ctx->failure;
     ctx->failure = &frame;
@@ -184,14 +184,14 @@ void *rmd_try_grow_array(RmdContext *ctx, const void *old, size_t count,
         ctx->failure = frame.previous;
         return NULL;
     }
-    result = rmd_grow_array(ctx, old, count, capacity, item_size, alignment);
+    result = crust_grow_array(ctx, old, count, capacity, item_size, alignment);
     ctx->failure = frame.previous;
     return result;
 }
 
-char *rmd_try_copy_string(RmdContext *ctx, const unsigned char *text, size_t size)
+char *crust_try_copy_string(CrustContext *ctx, const unsigned char *text, size_t size)
 {
-    RmdFailureFrame frame;
+    CrustFailureFrame frame;
     char *result;
     frame.previous = ctx->failure;
     ctx->failure = &frame;
@@ -199,26 +199,26 @@ char *rmd_try_copy_string(RmdContext *ctx, const unsigned char *text, size_t siz
         ctx->failure = frame.previous;
         return NULL;
     }
-    result = rmd_copy_string(ctx, text, size);
+    result = crust_copy_string(ctx, text, size);
     ctx->failure = frame.previous;
     return result;
 }
 
-bool rmd_try_map_set(RmdContext *ctx, RmdMap *map, uintptr_t key, void *value)
+bool crust_try_map_set(CrustContext *ctx, CrustMap *map, uintptr_t key, void *value)
 {
-    RmdFailureFrame frame;
+    CrustFailureFrame frame;
     frame.previous = ctx->failure;
     ctx->failure = &frame;
     if (setjmp(frame.jump) != 0) {
         ctx->failure = frame.previous;
         return false;
     }
-    rmd_map_set(ctx, map, key, value);
+    crust_map_set(ctx, map, key, value);
     ctx->failure = frame.previous;
     return true;
 }
 
-void rmd_fail(RmdContext *ctx, RmdLoc loc, const char *format, ...)
+void crust_fail(CrustContext *ctx, CrustLoc loc, const char *format, ...)
 {
     va_list args;
     ctx->error_loc = loc;
@@ -231,48 +231,48 @@ void rmd_fail(RmdContext *ctx, RmdLoc loc, const char *format, ...)
     if (ctx->failure != NULL) {
         longjmp(ctx->failure->jump, 1);
     }
-    fprintf(stderr, "rmd0: %s\n", ctx->error);
+    fprintf(stderr, "crust0: %s\n", ctx->error);
     abort();
 }
 
-void *rmd_alloc(RmdContext *ctx, size_t size, size_t alignment)
+void *crust_alloc(CrustContext *ctx, size_t size, size_t alignment)
 {
     void *result;
     if (size == 0) {
         return NULL;
     }
-    result = rmd_arena_alloc(&ctx->arena, size, alignment);
+    result = crust_arena_alloc(&ctx->arena, size, alignment);
     if (result == NULL) {
-        RmdLoc loc = {NULL, 0};
-        rmd_fail(ctx, loc, "allocation failed for %zu bytes", size);
+        CrustLoc loc = {NULL, 0};
+        crust_fail(ctx, loc, "allocation failed for %zu bytes", size);
     }
     memset(result, 0, size);
     return result;
 }
 
-void *rmd_grow_array(RmdContext *ctx, const void *old, size_t count,
+void *crust_grow_array(CrustContext *ctx, const void *old, size_t count,
                     size_t capacity, size_t item_size, size_t alignment)
 {
     void *result;
     if (item_size == 0 || count > capacity || capacity > SIZE_MAX / item_size) {
-        RmdLoc loc = {NULL, 0};
-        rmd_fail(ctx, loc, "array allocation size overflow");
+        CrustLoc loc = {NULL, 0};
+        crust_fail(ctx, loc, "array allocation size overflow");
     }
-    result = rmd_alloc(ctx, capacity * item_size, alignment);
+    result = crust_alloc(ctx, capacity * item_size, alignment);
     if (count != 0) {
         memcpy(result, old, count * item_size);
     }
     return result;
 }
 
-char *rmd_copy_string(RmdContext *ctx, const unsigned char *text, size_t size)
+char *crust_copy_string(CrustContext *ctx, const unsigned char *text, size_t size)
 {
     char *result;
     if (size == SIZE_MAX) {
-        RmdLoc loc = {NULL, 0};
-        rmd_fail(ctx, loc, "string allocation size overflow");
+        CrustLoc loc = {NULL, 0};
+        crust_fail(ctx, loc, "string allocation size overflow");
     }
-    result = rmd_alloc(ctx, size + 1, 1);
+    result = crust_alloc(ctx, size + 1, 1);
     if (size != 0) {
         memcpy(result, text, size);
     }
@@ -290,19 +290,19 @@ static uint64_t string_hash(const unsigned char *text, size_t size)
     return hash;
 }
 
-static void grow_names(RmdContext *ctx)
+static void grow_names(CrustContext *ctx)
 {
     size_t capacity = ctx->name_capacity == 0 ? 256 : ctx->name_capacity * 2;
-    RmdName **entries;
+    CrustName **entries;
     size_t index;
     if (capacity < ctx->name_capacity) {
-        RmdLoc loc = {NULL, 0};
-        rmd_fail(ctx, loc, "name table size overflow");
+        CrustLoc loc = {NULL, 0};
+        crust_fail(ctx, loc, "name table size overflow");
     }
-    entries = rmd_grow_array(ctx, NULL, 0, capacity, sizeof(*entries),
-                             RMD_ALIGNOF(RmdName *));
+    entries = crust_grow_array(ctx, NULL, 0, capacity, sizeof(*entries),
+                             CRUST_ALIGNOF(CrustName *));
     for (index = 0; index < ctx->name_capacity; ++index) {
-        RmdName *name = ctx->names[index];
+        CrustName *name = ctx->names[index];
         if (name != NULL) {
             size_t slot = (size_t)name->hash & (capacity - 1);
             while (entries[slot] != NULL) {
@@ -315,11 +315,11 @@ static void grow_names(RmdContext *ctx)
     ctx->name_capacity = capacity;
 }
 
-RmdName *rmd_intern(RmdContext *ctx, const unsigned char *text, size_t size)
+CrustName *crust_intern(CrustContext *ctx, const unsigned char *text, size_t size)
 {
     uint64_t hash = string_hash(text, size);
     size_t slot;
-    RmdName *name;
+    CrustName *name;
     if (ctx->name_count >= ctx->name_capacity / 2) {
         grow_names(ctx);
     }
@@ -331,8 +331,8 @@ RmdName *rmd_intern(RmdContext *ctx, const unsigned char *text, size_t size)
         }
         slot = (slot + 1) & (ctx->name_capacity - 1);
     }
-    name = rmd_alloc(ctx, sizeof(*name), RMD_ALIGNOF(RmdName));
-    name->text = rmd_copy_string(ctx, text, size);
+    name = crust_alloc(ctx, sizeof(*name), CRUST_ALIGNOF(CrustName));
+    name->text = crust_copy_string(ctx, text, size);
     name->size = size;
     name->hash = hash;
     ctx->names[slot] = name;
@@ -351,7 +351,7 @@ static size_t map_hash(uintptr_t key)
     return (size_t)value;
 }
 
-void *rmd_map_get(const RmdMap *map, uintptr_t key)
+void *crust_map_get(const CrustMap *map, uintptr_t key)
 {
     size_t slot;
     if (map->capacity == 0 || key == 0) {
@@ -367,23 +367,23 @@ void *rmd_map_get(const RmdMap *map, uintptr_t key)
     return NULL;
 }
 
-void rmd_map_set(RmdContext *ctx, RmdMap *map, uintptr_t key, void *value)
+void crust_map_set(CrustContext *ctx, CrustMap *map, uintptr_t key, void *value)
 {
     size_t slot;
     if (key == 0) {
-        RmdLoc loc = {NULL, 0};
-        rmd_fail(ctx, loc, "zero is not a table key");
+        CrustLoc loc = {NULL, 0};
+        crust_fail(ctx, loc, "zero is not a table key");
     }
     if (map->count >= map->capacity / 2) {
         size_t capacity = map->capacity == 0 ? 64 : map->capacity * 2;
-        RmdMapEntry *entries;
+        CrustMapEntry *entries;
         size_t index;
         if (capacity < map->capacity) {
-            RmdLoc loc = {NULL, 0};
-            rmd_fail(ctx, loc, "map allocation size overflow");
+            CrustLoc loc = {NULL, 0};
+            crust_fail(ctx, loc, "map allocation size overflow");
         }
-        entries = rmd_grow_array(ctx, NULL, 0, capacity, sizeof(*entries),
-                                 RMD_ALIGNOF(RmdMapEntry));
+        entries = crust_grow_array(ctx, NULL, 0, capacity, sizeof(*entries),
+                                 CRUST_ALIGNOF(CrustMapEntry));
         for (index = 0; index < map->capacity; ++index) {
             if (map->entries[index].key != 0) {
                 slot = map_hash(map->entries[index].key) & (capacity - 1);

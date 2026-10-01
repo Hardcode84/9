@@ -1,0 +1,94 @@
+fn ov_init(stage:*OvStage, context:*CrustContext, abi:*u8, hooks:*OvHooks)->unit {
+    (*stage).context = context;
+    (*stage).abi = abi;
+    (*stage).hooks = hooks;
+    (*stage).globals = make CrustMap { entries:null(*CrustMapEntry), count:0usize, capacity:0usize };
+    (*stage).declarations = (*stage).globals;
+    (*stage).type_keys = (*stage).globals;
+    (*stage).first_global = null(*OvGlobal);
+    (*stage).first_function = null(*OvFunction);
+    (*stage).scratch = make OvText { data:null(*u8), size:0usize, capacity:0usize };
+    (*stage).failed = false;
+}
+
+fn ov_error(stage:*OvStage, loc:*CrustLoc, message:*u8)->unit {
+    if (*stage).failed { return; }
+    (*stage).failed = true;
+    crust_set_error((*stage).context, (*loc).source, (*loc).offset, message);
+}
+
+fn ov_alloc(stage:*OvStage, size:usize, alignment:usize)->*u8 {
+    if (*stage).failed || size == 0usize { return null(*u8); }
+    var result:*u8 = crust_try_alloc((*stage).context, size, alignment);
+    if result == null(*u8) { (*stage).failed = true; }
+    return result;
+}
+
+fn ov_put(stage:*OvStage, map:*CrustMap, key:usize, value:*u8)->unit {
+    if (*stage).failed { return; }
+    if !crust_try_map_set((*stage).context, map, key, value) { (*stage).failed = true; }
+}
+
+fn ov_intern(stage:*OvStage, bytes:*u8, size:usize)->*CrustName {
+    if (*stage).failed { return null(*CrustName); }
+    var name:*CrustName = crust_try_intern((*stage).context, bytes, size);
+    if name == null(*CrustName) { (*stage).failed = true; }
+    return name;
+}
+
+fn ov_bytes(stage:*OvStage, buffer:*OvText, bytes:*u8, size:usize)->unit {
+    if (*stage).failed || size == 0usize { return; }
+    if size > 9223372036854775807usize - (*buffer).size {
+        var loc:CrustLoc = make CrustLoc { source:null(*CrustSource), offset:0usize };
+        ov_error(stage, &loc, "overload signature size exceeds target limit");
+        return;
+    }
+    var needed:usize = (*buffer).size + size;
+    if needed > (*buffer).capacity {
+        var capacity:usize = (*buffer).capacity;
+        if capacity == 0usize { capacity = 128usize; }
+        while capacity < needed {
+            if capacity > 9223372036854775807usize / 2usize { capacity = needed; }
+            else { capacity = capacity * 2usize; }
+        }
+        var data:*u8 = ov_alloc(stage, capacity, 1usize);
+        if data == null(*u8) { return; }
+        crust0_host_move_bytes(data, (*buffer).data, (*buffer).size);
+        (*buffer).data = data;
+        (*buffer).capacity = capacity;
+    }
+    crust0_host_move_bytes((*buffer).data + (*buffer).size as isize, bytes, size);
+    (*buffer).size = needed;
+}
+
+fn ov_text(stage:*OvStage, buffer:*OvText, text:*u8)->unit {
+    ov_bytes(stage, buffer, text, c_length(text));
+}
+
+fn ov_number(stage:*OvStage, buffer:*OvText, value:u64)->unit {
+    var digits:[u8;20] = uninit;
+    var index:usize = 20usize;
+    while true {
+        index = index - 1usize;
+        digits[index] = (value % 10u64) as u8 + 48u8;
+        value = value / 10u64;
+        if value == 0u64 { break; }
+    }
+    ov_bytes(stage, buffer, &digits[index], 20usize - index);
+    ov_text(stage, buffer, "_");
+}
+
+fn ov_part(stage:*OvStage, buffer:*OvText, bytes:*u8, size:usize)->unit {
+    ov_number(stage, buffer, size as u64);
+    ov_bytes(stage, buffer, bytes, size);
+}
+
+fn ov_type(stage:*OvStage, kind:u32, loc:*CrustLoc)->*CrustTypeSyntax {
+    var syntax:*CrustTypeSyntax = ov_alloc(stage, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
+    if syntax != null(*CrustTypeSyntax) { (*syntax).kind = kind; (*syntax).loc = *loc; }
+    return syntax;
+}
+
+fn ov_global(stage:*OvStage, name:*CrustName)->*OvGlobal {
+    return crust_map_get(&(*stage).globals, name as usize) as *OvGlobal;
+}

@@ -21,7 +21,7 @@ SPEC.loader.exec_module(BASE)
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--before", type=Path, required=True)
-    parser.add_argument("--after", type=Path, default=Path("build/rmd0"))
+    parser.add_argument("--after", type=Path, default=Path("build/crust0"))
     parser.add_argument("--before-revision", required=True)
     parser.add_argument("--cpu", type=int, default=4)
     parser.add_argument("--rounds", type=int, default=25)
@@ -37,11 +37,11 @@ def main():
     directory = Path(tempfile.mkdtemp(prefix="plain-source-", dir=cache))
     workloads = [BASE.generate(directory, count) for count in (1000, 8000)]
     workloads.append({"name": "intrusive", "library": False,
-                      "paths": {"rmd": ROOT / "examples/intrusive/program.rmd"}})
+                      "paths": {"crust": ROOT / "examples/intrusive/program.crust"}})
     binaries = {"before": args.before.resolve(), "after": args.after.resolve()}
     hashes = {name: BASE.binary_info(path) for name, path in binaries.items()}
     commands = {workload["name"]: {
-        name: [str(binary), str(workload["paths"]["rmd"]),
+        name: [str(binary), str(workload["paths"]["crust"]),
                *(["--library"] if workload["library"] else []), "-S"]
         for name, binary in binaries.items()} for workload in workloads}
     for name, routes in commands.items():
@@ -80,10 +80,10 @@ def main():
         if BASE.binary_info(path) != hashes[name]:
             raise RuntimeError(f"Compiler changed during measurement: {name}")
     result = {"environment": BASE.environment(args.cpu), "before_revision": args.before_revision,
-              "boundary": "Source-first plain RMD to complete assembly; no native assembly or linking; identical output bytes",
+              "boundary": "Source-first plain CRUST to complete assembly; no native assembly or linking; identical output bytes",
               "method": "Fresh processes; 25 or more randomized paired rounds; 10000 bootstrap draws; warm OS cache",
               "binaries": hashes, "commands": commands, "samples": samples, "summary": summary,
-              "input_hashes": {workload["name"]: BASE.sha256(workload["paths"]["rmd"]) for workload in workloads},
+              "input_hashes": {workload["name"]: BASE.sha256(workload["paths"]["crust"]) for workload in workloads},
               "source_sha256": BASE.compiler_sources()}
     BASE.save(args.output, result)
     print(json.dumps(summary, indent=2))

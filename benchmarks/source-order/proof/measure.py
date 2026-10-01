@@ -10,8 +10,8 @@ import statistics
 import subprocess
 
 ROOT = Path.cwd()
-HERE = Path(os.environ.get('RMD_PROOF_DIR', ROOT / '.profile-cache/source-order-proof-replay'))
-BUILD = Path(os.environ.get('RMD_PROOF_BUILD', ROOT / 'build'))
+HERE = Path(os.environ.get('CRUST_PROOF_DIR', ROOT / '.profile-cache/source-order-proof-replay'))
+BUILD = Path(os.environ.get('CRUST_PROOF_BUILD', ROOT / 'build'))
 SPEC = importlib.util.spec_from_file_location('bootstrap_measure', ROOT / 'benchmarks/bootstrap/measure.py')
 BASE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BASE)
@@ -28,8 +28,8 @@ def checked(command):
         raise RuntimeError((command, result.returncode, result.stderr))
     return result.stdout
 
-interfaces = [ROOT / p for p in ('api/rmd0.rmd', 'api/rmd0_stage.rmd', 'stages/c/api.rmd')]
-interfaces += [HERE / 'model.rmd', HERE / 'interface.rmd']
+interfaces = [ROOT / p for p in ('api/crust0.crust', 'api/crust0_stage.crust', 'stages/c/api.crust')]
+interfaces += [HERE / 'model.crust', HERE / 'interface.crust']
 
 def proof_command(source):
     result = [str(HERE / 'runner'), str(source)]
@@ -39,19 +39,19 @@ def proof_command(source):
     return result + ['--', '/dev/null']
 
 commands = {
-    'source-order-output': proof_command(HERE / 'main.rmd'),
-    'fixed-reader-output': proof_command(HERE / 'native-no-reader-change.rmd'),
-    'prepared-output': [str(BUILD / 'rmd-c'), '--emit-c', '--symbols', '/dev/null', str(ROOT / 'examples/intrusive/program.rmd')],
+    'source-order-output': proof_command(HERE / 'main.crust'),
+    'fixed-reader-output': proof_command(HERE / 'native-no-reader-change.crust'),
+    'prepared-output': [str(BUILD / 'crust-c'), '--emit-c', '--symbols', '/dev/null', str(ROOT / 'examples/intrusive/program.crust')],
     'gcc-original-syntax': ['gcc', '-std=c99', '-pedantic-errors', '-O0', '-g0', '-fsyntax-only', '-Iinclude', 'benchmarks/bootstrap/intrusive.c'],
 }
-paths = [HERE / p for p in ('runner', 'reader.plugin', 'output.plugin', 'runner.c', 'proof.h', 'model.rmd', 'interface.rmd', 'plugin.rmd', 'main.rmd', 'native-no-reader-change.rmd', 'verify.py', 'verification.json', 'measure.py')]
-paths += [BUILD / p for p in ('rmd-c','rmd-c-library.so','librmd0_host.a')]
+paths = [HERE / p for p in ('runner', 'reader.plugin', 'output.plugin', 'runner.c', 'proof.h', 'model.crust', 'interface.crust', 'plugin.crust', 'main.crust', 'native-no-reader-change.crust', 'verify.py', 'verification.json', 'measure.py')]
+paths += [BUILD / p for p in ('crust-c','crust-c-library.so','libcrust0_host.a')]
 paths += [HERE / 'replay-build.json']
-paths += interfaces + [ROOT / p for p in ( 'examples/intrusive/program.rmd', 'benchmarks/bootstrap/intrusive.c', 'benchmarks/bootstrap/measure.py')]
+paths += interfaces + [ROOT / p for p in ( 'examples/intrusive/program.crust', 'benchmarks/bootstrap/intrusive.c', 'benchmarks/bootstrap/measure.py')]
 paths += [BUILD / p for p in ('core.o', 'read.o', 'check.o', 'host.o')]
-paths += sorted((ROOT / 'src').glob('*.c')) + sorted((ROOT / 'include').glob('*.h')) + sorted((ROOT / 'stages/c').glob('*.rmd'))
+paths += sorted((ROOT / 'src').glob('*.c')) + sorted((ROOT / 'include').glob('*.h')) + sorted((ROOT / 'stages/c').glob('*.crust'))
 hashes = {str(path): info(path) for path in paths}
-if info(HERE / 'output.plugin')['sha256'] != info(BUILD / 'rmd-c-library.so')['sha256']:
+if info(HERE / 'output.plugin')['sha256'] != info(BUILD / 'crust-c-library.so')['sha256']:
     raise RuntimeError('Ordinary backend copy differs from prepared input')
 if json.loads((HERE/'verification.json').read_text())['status'] != 'passed':
     raise RuntimeError('Correctness gate missing')
@@ -70,14 +70,14 @@ result = {
     'commands': commands, 'warmups': [], 'samples': [],
     'replay_build': json.loads((HERE / 'replay-build.json').read_text()),
     'scope': {
-        'source-order-output': 'Fresh process; interface source IO/read/collect/resolve/check; root IO; ordinary initial call parse/check; dlopen/dlsym and libffi call preparation/execution; reader switch before hostile NUL; RMD alternate reader; checked actions; target source IO/read/check; complete C and rename output; destruction with RMD callbacks; dlclose.',
+        'source-order-output': 'Fresh process; interface source IO/read/collect/resolve/check; root IO; ordinary initial call parse/check; dlopen/dlsym and libffi call preparation/execution; reader switch before hostile NUL; CRUST alternate reader; checked actions; target source IO/read/check; complete C and rename output; destruction with CRUST callbacks; dlclose.',
         'fixed-reader-output': 'Same executor, interfaces, libraries, target, and output; ordinary initial reader handles all root actions without grammar change.',
         'prepared-output': 'Prepared standalone native C backend; actual target frontend/full C and rename output.',
         'gcc-original-syntax': 'Matched original C preprocessing and semantic checking.',
         'included_setup': 'All per-invocation host interface parsing, checking, module loading, ffi preparation, root execution and cleanup. No as/ld or per-form subprocess occurs.',
         'excluded': 'Prepared runner and explicit reader/backend library builds; final generated-target GCC/objcopy/link; correctness preflight.',
         'cold_definition': 'New process, module load and call preparation per invocation; filesystem caches are warm.',
-        'not_established': 'Full RMD host evaluation, root variables/declarations/control flow, interpreted callbacks/closures, arbitrary action representations, or full runner speed.',
+        'not_established': 'Full CRUST host evaluation, root variables/declarations/control flow, interpreted callbacks/closures, arbitrary action representations, or full runner speed.',
     },
 }
 BASE.save(HERE/'result.json', result)

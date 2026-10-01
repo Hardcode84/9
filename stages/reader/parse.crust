@@ -1,0 +1,663 @@
+fn rr_enter(reader:*CrustReader)->bool {
+    if (*reader).failed { return false; }
+    if (*reader).depth>=256u32 {
+        rr_error(reader,(*reader).token.offset,"parser nesting limit of 256 exceeded");return false;
+    }
+    (*reader).depth=(*reader).depth+1u32;return true;
+}
+
+fn rr_leave(reader:*CrustReader)->unit { (*reader).depth=(*reader).depth-1u32; }
+
+fn rr_capacity(reader:*CrustReader,capacity:usize)->usize {
+    if capacity>(~0usize)/2usize {
+        rr_error(reader,(*reader).token.offset,"too many list entries");return 0usize;
+    }
+    if capacity==0usize { return 4usize; }
+    return capacity*2usize;
+}
+
+fn rr_new_expr(reader:*CrustReader,kind:u32,offset:usize)->*CrustExpr {
+    var result:*CrustExpr=rr_alloc(reader,sizeof(CrustExpr),alignof(CrustExpr)) as *CrustExpr;
+    if result!=null(*CrustExpr) {
+        (*result).kind=kind;(*result).loc=make CrustLoc {source:(*reader).source,offset:offset};
+    }
+    return result;
+}
+
+fn rr_new_stmt(reader:*CrustReader,kind:u32,offset:usize)->*CrustStmt {
+    var result:*CrustStmt=rr_alloc(reader,sizeof(CrustStmt),alignof(CrustStmt)) as *CrustStmt;
+    if result!=null(*CrustStmt) {
+        (*result).kind=kind;(*result).loc=make CrustLoc {source:(*reader).source,offset:offset};
+    }
+    return result;
+}
+
+fn rr_new_type(reader:*CrustReader,kind:u32,offset:usize)->*CrustTypeSyntax {
+    var result:*CrustTypeSyntax=rr_alloc(reader,sizeof(CrustTypeSyntax),alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
+    if result!=null(*CrustTypeSyntax) {
+        (*result).kind=kind;(*result).loc=make CrustLoc {source:(*reader).source,offset:offset};
+    }
+    return result;
+}
+
+fn rr_new_decl(reader:*CrustReader,kind:u32,offset:usize)->*CrustDecl {
+    var result:*CrustDecl=rr_alloc(reader,sizeof(CrustDecl),alignof(CrustDecl)) as *CrustDecl;
+    if result!=null(*CrustDecl) {
+        (*result).kind=kind;(*result).loc=make CrustLoc {source:(*reader).source,offset:offset};
+    }
+    return result;
+}
+
+fn rr_hook_checked(reader:*CrustReader,count:usize,offset:usize,cursor:usize,kind:u32,handled:bool,errors:usize)->bool {
+    if (*(*reader).context).error_count!=errors { (*reader).failed=true;return false; }
+    if (*reader).failed {
+        crust_set_error((*reader).context,(*reader).source,offset,"reader hook failed without a diagnostic");
+        return false;
+    }
+    if handled {
+        if (*reader).token_count<=count {
+            rr_error(reader,offset,"reader hook returned syntax without consuming input");return false;
+        }
+    } else {
+        if (*reader).token_count!=count || (*reader).token.offset!=offset || (*reader).offset!=cursor || (*reader).token.kind!=kind {
+            rr_error(reader,offset,"unhandled reader hook consumed or changed its token");return false;
+        }
+    }
+    return true;
+}
+
+// Parse one type with its hook. Use rr_standard_type to delegate this production.
+fn rr_type(reader:*CrustReader)->*CrustTypeSyntax {
+    if !rr_enter(reader) { return null(*CrustTypeSyntax); }
+    var result:*CrustTypeSyntax=null(*CrustTypeSyntax);
+    if (*reader).hooks!=null(*CrustReaderHooks) &&
+       (*(*reader).hooks).type_syntax!=null(fn(*CrustReader,*u8)->*CrustTypeSyntax) {
+        var count:usize=(*reader).token_count;
+        var offset:usize=(*reader).token.offset;
+        var cursor:usize=(*reader).offset;
+        var kind:u32=(*reader).token.kind;
+        var errors:usize=(*(*reader).context).error_count;
+        result=(*(*reader).hooks).type_syntax(reader,(*(*reader).hooks).user);
+        if !rr_hook_checked(reader,count,offset,cursor,kind,result!=null(*CrustTypeSyntax),errors) {
+            rr_leave(reader);return null(*CrustTypeSyntax);
+        }
+    }
+    if result==null(*CrustTypeSyntax) { result=rr_standard_type(reader); }
+    rr_leave(reader);
+    if (*reader).failed { return null(*CrustTypeSyntax); }
+    return result;
+}
+
+// Bypass only this type hook. Nested types still use rr_type.
+fn rr_standard_type(reader:*CrustReader)->*CrustTypeSyntax {
+    if (*reader).failed { return null(*CrustTypeSyntax); }
+    var result:*CrustTypeSyntax=rr_new_type(reader,CRUST_T_NAME,(*reader).token.offset);
+    if result==null(*CrustTypeSyntax) { return result; }
+    if (*reader).token.kind==RR_TYPE {
+        (*result).kind=(*reader).token.integer_type;
+        rr_next(reader);
+    } else {
+        if (*reader).token.kind==RR_NAME { (*result).name=rr_name(reader); }
+        else {
+            if rr_take(reader,42u32) {
+                (*result).kind=CRUST_T_POINTER;(*result).base=rr_type(reader);
+            } else {
+                if rr_take(reader,91u32) {
+                    (*result).kind=CRUST_T_ARRAY;(*result).base=rr_type(reader);
+                    if !rr_expect(reader,59u32,"expected ';' in array type") { return null(*CrustTypeSyntax); }
+                    if (*reader).token.kind!=RR_COUNT {
+                        rr_error(reader,(*reader).token.offset,"expected an unsuffixed decimal array count");return null(*CrustTypeSyntax);
+                    }
+                    (*result).count=(*reader).token.integer;
+                    if !rr_next(reader) || !rr_expect(reader,93u32,"expected ']'") { return null(*CrustTypeSyntax); }
+                } else {
+                    if rr_take(reader,RR_FN) {
+                        (*result).kind=CRUST_T_FUNCTION;
+                        if !rr_expect(reader,40u32,"expected '('") { return null(*CrustTypeSyntax); }
+                        var capacity:usize=0usize;
+                        while (*reader).token.kind!=41u32 && !(*reader).failed {
+                            if (*result).param_count==capacity {
+                                capacity=rr_capacity(reader,capacity);
+                                if (*reader).failed { return null(*CrustTypeSyntax); }
+                                (*result).params=crust_try_grow_array((*reader).context,(*result).params as *u8,
+                                    (*result).param_count,capacity,sizeof(*CrustTypeSyntax),alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
+                                if (*result).params==null(**CrustTypeSyntax) { rr_allocation_failed(reader);return null(*CrustTypeSyntax); }
+                            }
+                            var parameter:*CrustTypeSyntax=rr_type(reader);
+                            if parameter==null(*CrustTypeSyntax) { return null(*CrustTypeSyntax); }
+                            (*result).params[(*result).param_count]=parameter;
+                            (*result).param_count=(*result).param_count+1usize;
+                            if !rr_take(reader,44u32) { break; }
+                        }
+                        if !rr_expect(reader,41u32,"expected ')'") || !rr_expect(reader,RR_ARROW,"expected '->'") {
+                            return null(*CrustTypeSyntax);
+                        }
+                        (*result).base=rr_type(reader);
+                    } else { rr_error(reader,(*reader).token.offset,"expected a type"); }
+                }
+            }
+        }
+    }
+    if (*reader).failed { return null(*CrustTypeSyntax); }
+    return result;
+}
+
+fn rr_arguments(reader:*CrustReader,expression:*CrustExpr,end:u32)->bool {
+    var capacity:usize=0usize;
+    while (*reader).token.kind!=end && !(*reader).failed {
+        if (*expression).arg_count==capacity {
+            capacity=rr_capacity(reader,capacity);
+            if (*reader).failed { return false; }
+            (*expression).args=crust_try_grow_array((*reader).context,(*expression).args as *u8,
+                (*expression).arg_count,capacity,sizeof(*CrustExpr),alignof(*CrustExpr)) as **CrustExpr;
+            if (*expression).args==null(**CrustExpr) { rr_allocation_failed(reader);return false; }
+        }
+        var argument:*CrustExpr=rr_expression(reader);
+        if argument==null(*CrustExpr) { return false; }
+        (*expression).args[(*expression).arg_count]=argument;
+        (*expression).arg_count=(*expression).arg_count+1usize;
+        if !rr_take(reader,44u32) { break; }
+    }
+    if end==41u32 { return rr_expect(reader,end,"expected ')'"); }
+    return rr_expect(reader,end,"expected '}'");
+}
+
+fn rr_constructor(reader:*CrustReader,offset:usize)->*CrustExpr {
+    var result:*CrustExpr=null(*CrustExpr);
+    if (*reader).token.kind==91u32 {
+        result=rr_new_expr(reader,CRUST_E_ARRAY,offset);
+        if result==null(*CrustExpr) { return result; }
+        (*result).syntax_type=rr_type(reader);
+        if !rr_expect(reader,123u32,"expected '{'") || !rr_arguments(reader,result,125u32) { return null(*CrustExpr); }
+    } else {
+        if (*reader).token.kind!=RR_NAME {
+            rr_error(reader,(*reader).token.offset,"expected a record name or an array type after 'make'");return null(*CrustExpr);
+        }
+        result=rr_new_expr(reader,CRUST_E_RECORD,offset);
+        if result==null(*CrustExpr) { return result; }
+        (*result).syntax_type=rr_type(reader);
+        var tail:**CrustInit=&(*result).inits;
+        if !rr_expect(reader,123u32,"expected '{'") { return null(*CrustExpr); }
+        while (*reader).token.kind!=125u32 && !(*reader).failed {
+            var item:*CrustInit=rr_alloc(reader,sizeof(CrustInit),alignof(CrustInit)) as *CrustInit;
+            if item==null(*CrustInit) { return null(*CrustExpr); }
+            (*item).loc=make CrustLoc {source:(*reader).source,offset:(*reader).token.offset};
+            (*item).name=rr_name(reader);
+            if !rr_expect(reader,58u32,"expected ':'") { return null(*CrustExpr); }
+            (*item).value=rr_expression(reader);
+            if (*reader).failed { return null(*CrustExpr); }
+            *tail=item;tail=&(*item).next;
+            if !rr_take(reader,44u32) { break; }
+        }
+        if !rr_expect(reader,125u32,"expected '}'") { return null(*CrustExpr); }
+    }
+    return result;
+}
+
+fn rr_primary(reader:*CrustReader)->*CrustExpr {
+    if (*reader).failed { return null(*CrustExpr); }
+    var token:CrustReaderToken=(*reader).token;
+    var result:*CrustExpr=null(*CrustExpr);
+    if token.kind==RR_NAME {
+        result=rr_new_expr(reader,CRUST_E_NAME,token.offset);
+        if result==null(*CrustExpr) { return result; }
+        (*result).name=token.name;rr_next(reader);
+    } else {
+        if token.kind==RR_INTEGER {
+            result=rr_new_expr(reader,CRUST_E_INTEGER,token.offset);
+            if result==null(*CrustExpr) { return result; }
+            (*result).integer=token.integer;(*result).literal_type=token.integer_type;rr_next(reader);
+        } else {
+            if token.kind==RR_TRUE || token.kind==RR_FALSE {
+                result=rr_new_expr(reader,CRUST_E_BOOL,token.offset);
+                if result==null(*CrustExpr) { return result; }
+                (*result).integer=(token.kind==RR_TRUE) as u64;rr_next(reader);
+            } else {
+                if token.kind==RR_STRING {
+                    result=rr_new_expr(reader,CRUST_E_STRING,token.offset);
+                    if result==null(*CrustExpr) { return result; }
+                    (*result).bytes=token.bytes;(*result).byte_count=token.byte_count;rr_next(reader);
+                } else {
+                    if token.kind==40u32 {
+                        if !rr_next(reader) { return null(*CrustExpr); }
+                        result=rr_new_expr(reader,CRUST_E_GROUP,token.offset);
+                        if result==null(*CrustExpr) { return result; }
+                        (*result).left=rr_expression(reader);
+                        if !rr_expect(reader,41u32,"expected ')'") { return null(*CrustExpr); }
+                    } else {
+                        if token.kind==RR_MAKE {
+                            if !rr_next(reader) { return null(*CrustExpr); }
+                            return rr_constructor(reader,token.offset);
+                        }
+                        if token.kind==RR_NULL || token.kind==RR_SIZEOF || token.kind==RR_ALIGNOF {
+                            if !rr_next(reader) { return null(*CrustExpr); }
+                            var kind:u32=CRUST_E_NULL;
+                            if token.kind==RR_SIZEOF { kind=CRUST_E_SIZEOF; }
+                            if token.kind==RR_ALIGNOF { kind=CRUST_E_ALIGNOF; }
+                            result=rr_new_expr(reader,kind,token.offset);
+                            if result==null(*CrustExpr) || !rr_expect(reader,40u32,"expected '('") { return null(*CrustExpr); }
+                            (*result).syntax_type=rr_type(reader);
+                            if !rr_expect(reader,41u32,"expected ')'") { return null(*CrustExpr); }
+                        } else {
+                            if token.kind!=RR_OFFSETOF {
+                                rr_error(reader,token.offset,"expected an expression");return null(*CrustExpr);
+                            }
+                            if !rr_next(reader) { return null(*CrustExpr); }
+                            result=rr_new_expr(reader,CRUST_E_OFFSETOF,token.offset);
+                            if result==null(*CrustExpr) || !rr_expect(reader,40u32,"expected '('") { return null(*CrustExpr); }
+                            (*result).syntax_type=rr_new_type(reader,CRUST_T_NAME,(*reader).token.offset);
+                            if (*result).syntax_type==null(*CrustTypeSyntax) { return null(*CrustExpr); }
+                            (*(*result).syntax_type).name=rr_name(reader);
+                            if !rr_expect(reader,44u32,"expected ','") { return null(*CrustExpr); }
+                            (*result).field_name=rr_name(reader);
+                            if !rr_expect(reader,41u32,"expected ')'") { return null(*CrustExpr); }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (*reader).failed { return null(*CrustExpr); }
+    return result;
+}
+
+fn rr_postfix(reader:*CrustReader)->*CrustExpr {
+    var expression:*CrustExpr=rr_primary(reader);
+    if expression==null(*CrustExpr) { return expression; }
+    while !(*reader).failed {
+        var offset:usize=(*reader).token.offset;
+        var next:*CrustExpr=null(*CrustExpr);
+        if rr_take(reader,40u32) {
+            next=rr_new_expr(reader,CRUST_E_CALL,offset);
+            if next==null(*CrustExpr) { return next; }
+            (*next).left=expression;
+            if !rr_arguments(reader,next,41u32) { return null(*CrustExpr); }
+        } else {
+            if rr_take(reader,91u32) {
+                next=rr_new_expr(reader,CRUST_E_INDEX,offset);
+                if next==null(*CrustExpr) { return next; }
+                (*next).left=expression;(*next).right=rr_expression(reader);
+                if !rr_expect(reader,93u32,"expected ']'") { return null(*CrustExpr); }
+            } else {
+                if rr_take(reader,46u32) {
+                    next=rr_new_expr(reader,CRUST_E_FIELD,offset);
+                    if next==null(*CrustExpr) { return next; }
+                    (*next).left=expression;(*next).field_name=rr_name(reader);
+                } else {
+                    if (*reader).failed { return null(*CrustExpr); }
+                    return expression;
+                }
+            }
+        }
+        expression=next;
+    }
+    return null(*CrustExpr);
+}
+
+// Parse a complete unary operand, including its standard postfix operations.
+fn rr_prefix(reader:*CrustReader)->*CrustExpr {
+    if !rr_enter(reader) { return null(*CrustExpr); }
+    var result:*CrustExpr=null(*CrustExpr);
+    if (*reader).hooks!=null(*CrustReaderHooks) &&
+       (*(*reader).hooks).prefix!=null(fn(*CrustReader,*u8)->*CrustExpr) {
+        var count:usize=(*reader).token_count;
+        var offset:usize=(*reader).token.offset;
+        var cursor:usize=(*reader).offset;
+        var kind:u32=(*reader).token.kind;
+        var errors:usize=(*(*reader).context).error_count;
+        result=(*(*reader).hooks).prefix(reader,(*(*reader).hooks).user);
+        if !rr_hook_checked(reader,count,offset,cursor,kind,result!=null(*CrustExpr),errors) {
+            rr_leave(reader);return null(*CrustExpr);
+        }
+    }
+    if result==null(*CrustExpr) { result=rr_standard_prefix(reader); }
+    rr_leave(reader);
+    if (*reader).failed { return null(*CrustExpr); }
+    return result;
+}
+
+fn rr_standard_prefix(reader:*CrustReader)->*CrustExpr {
+    if (*reader).failed { return null(*CrustExpr); }
+    var kind:u32=(*reader).token.kind;
+    var operation:u32=CRUST_OP_NEG;
+    if kind==33u32 { operation=CRUST_OP_NOT; }
+    if kind==126u32 { operation=CRUST_OP_BIT_NOT; }
+    if kind==42u32 { operation=CRUST_OP_DEREF; }
+    if kind==38u32 { operation=CRUST_OP_ADDRESS; }
+    if kind!=45u32 && kind!=33u32 && kind!=126u32 && kind!=42u32 && kind!=38u32 { return rr_postfix(reader); }
+    var offset:usize=(*reader).token.offset;
+    if !rr_next(reader) { return null(*CrustExpr); }
+    var result:*CrustExpr=rr_new_expr(reader,CRUST_E_UNARY,offset);
+    if result==null(*CrustExpr) { return result; }
+    (*result).op=operation;(*result).left=rr_prefix(reader);
+    if (*reader).failed { return null(*CrustExpr); }
+    return result;
+}
+
+fn rr_cast(reader:*CrustReader)->*CrustExpr {
+    var expression:*CrustExpr=rr_prefix(reader);
+    if expression==null(*CrustExpr) { return expression; }
+    while (*reader).token.kind==RR_AS && !(*reader).failed {
+        var converted:*CrustExpr=rr_new_expr(reader,CRUST_E_CAST,(*reader).token.offset);
+        if converted==null(*CrustExpr) || !rr_next(reader) { return null(*CrustExpr); }
+        (*converted).left=expression;(*converted).syntax_type=rr_type(reader);expression=converted;
+    }
+    if (*reader).failed { return null(*CrustExpr); }
+    return expression;
+}
+
+fn rr_operator(token:u32,operation:*u32)->u32 {
+    if token==RR_OR { *operation=CRUST_OP_OR;return 1u32; }
+    if token==RR_AND { *operation=CRUST_OP_AND;return 2u32; }
+    if token==124u32 { *operation=CRUST_OP_BIT_OR;return 3u32; }
+    if token==94u32 { *operation=CRUST_OP_BIT_XOR;return 4u32; }
+    if token==38u32 { *operation=CRUST_OP_BIT_AND;return 5u32; }
+    if token==RR_EQ { *operation=CRUST_OP_EQ;return 6u32; }
+    if token==RR_NE { *operation=CRUST_OP_NE;return 6u32; }
+    if token==60u32 { *operation=CRUST_OP_LT;return 7u32; }
+    if token==RR_LE { *operation=CRUST_OP_LE;return 7u32; }
+    if token==62u32 { *operation=CRUST_OP_GT;return 7u32; }
+    if token==RR_GE { *operation=CRUST_OP_GE;return 7u32; }
+    if token==RR_SHL { *operation=CRUST_OP_SHL;return 8u32; }
+    if token==RR_SHR { *operation=CRUST_OP_SHR;return 8u32; }
+    if token==43u32 { *operation=CRUST_OP_ADD;return 9u32; }
+    if token==45u32 { *operation=CRUST_OP_SUB;return 9u32; }
+    if token==42u32 { *operation=CRUST_OP_MUL;return 10u32; }
+    if token==47u32 { *operation=CRUST_OP_DIV;return 10u32; }
+    if token==37u32 { *operation=CRUST_OP_REM;return 10u32; }
+    return 0u32;
+}
+
+fn rr_binary(reader:*CrustReader,minimum:u32)->*CrustExpr {
+    var left:*CrustExpr=rr_cast(reader);
+    if left==null(*CrustExpr) { return left; }
+    var compared:bool=false;
+    var equated:bool=false;
+    while !(*reader).failed {
+        var operation:u32=CRUST_OP_ADD;
+        var precedence:u32=rr_operator((*reader).token.kind,&operation);
+        if precedence<minimum { return left; }
+        if (precedence==7u32 && compared)||(precedence==6u32 && equated) {
+            rr_error(reader,(*reader).token.offset,"comparisons cannot chain at the same precedence");return null(*CrustExpr);
+        }
+        if precedence==7u32 { compared=true; }
+        if precedence==6u32 { equated=true; }
+        var expression:*CrustExpr=rr_new_expr(reader,CRUST_E_BINARY,(*reader).token.offset);
+        if expression==null(*CrustExpr) || !rr_next(reader) { return null(*CrustExpr); }
+        (*expression).op=operation;(*expression).left=left;
+        (*expression).right=rr_binary(reader,precedence+1u32);
+        left=expression;
+    }
+    return null(*CrustExpr);
+}
+
+fn rr_expression(reader:*CrustReader)->*CrustExpr {
+    if !rr_enter(reader) { return null(*CrustExpr); }
+    var result:*CrustExpr=rr_binary(reader,1u32);
+    rr_leave(reader);
+    if (*reader).failed { return null(*CrustExpr); }
+    return result;
+}
+
+fn rr_simple_statement(reader:*CrustReader)->*CrustStmt {
+    var offset:usize=(*reader).token.offset;
+    var result:*CrustStmt=null(*CrustStmt);
+    if rr_take(reader,RR_VAR) {
+        result=rr_new_stmt(reader,CRUST_S_VAR,offset);
+        if result==null(*CrustStmt) { return result; }
+        (*result).name=rr_name(reader);
+        if !rr_expect(reader,58u32,"expected ':'") { return null(*CrustStmt); }
+        (*result).syntax_type=rr_type(reader);
+        if !rr_expect(reader,61u32,"expected '='") { return null(*CrustStmt); }
+        (*result).uninitialized=rr_take(reader,RR_UNINIT);
+        if !(*result).uninitialized { (*result).value=rr_expression(reader); }
+    } else {
+        if rr_take(reader,RR_BREAK) { result=rr_new_stmt(reader,CRUST_S_BREAK,offset); }
+        else {
+            if rr_take(reader,RR_CONTINUE) { result=rr_new_stmt(reader,CRUST_S_CONTINUE,offset); }
+            else {
+                if rr_take(reader,RR_TRAP) { result=rr_new_stmt(reader,CRUST_S_TRAP,offset); }
+                else {
+                    if rr_take(reader,RR_RETURN) {
+                        result=rr_new_stmt(reader,CRUST_S_RETURN,offset);
+                        if result==null(*CrustStmt) { return result; }
+                        if (*reader).token.kind!=59u32 { (*result).expr=rr_expression(reader); }
+                    } else {
+                        result=rr_new_stmt(reader,CRUST_S_EXPR,offset);
+                        if result==null(*CrustStmt) { return result; }
+                        (*result).expr=rr_expression(reader);
+                        if rr_take(reader,61u32) {
+                            (*result).kind=CRUST_S_ASSIGN;(*result).value=rr_expression(reader);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if result==null(*CrustStmt) || !rr_expect(reader,59u32,"expected ';'") { return null(*CrustStmt); }
+    return result;
+}
+
+fn rr_statement(reader:*CrustReader)->*CrustStmt {
+    if (*reader).failed { return null(*CrustStmt); }
+    var result:*CrustStmt=null(*CrustStmt);
+    if (*reader).hooks!=null(*CrustReaderHooks) &&
+       (*(*reader).hooks).statement!=null(fn(*CrustReader,*u8)->*CrustStmt) {
+        var count:usize=(*reader).token_count;
+        var offset:usize=(*reader).token.offset;
+        var cursor:usize=(*reader).offset;
+        var kind:u32=(*reader).token.kind;
+        var errors:usize=(*(*reader).context).error_count;
+        if !rr_enter(reader) { return null(*CrustStmt); }
+        result=(*(*reader).hooks).statement(reader,(*(*reader).hooks).user);
+        rr_leave(reader);
+        if !rr_hook_checked(reader,count,offset,cursor,kind,result!=null(*CrustStmt),errors) { return null(*CrustStmt); }
+        if result!=null(*CrustStmt) && (*result).next!=null(*CrustStmt) {
+            rr_error(reader,offset,"statement hook must return one unlinked statement");return null(*CrustStmt);
+        }
+    }
+    if result==null(*CrustStmt) { result=rr_standard_statement(reader); }
+    return result;
+}
+
+fn rr_standard_statement(reader:*CrustReader)->*CrustStmt {
+    if (*reader).failed { return null(*CrustStmt); }
+    if (*reader).token.kind==123u32 { return rr_block(reader); }
+    var offset:usize=(*reader).token.offset;
+    if rr_take(reader,RR_IF) {
+        var result:*CrustStmt=rr_new_stmt(reader,CRUST_S_IF,offset);
+        if result==null(*CrustStmt) { return result; }
+        (*result).expr=rr_expression(reader);(*result).body=rr_block(reader);
+        if rr_take(reader,RR_ELSE) { (*result).otherwise=rr_block(reader); }
+        if (*reader).failed { return null(*CrustStmt); }
+        return result;
+    }
+    if rr_take(reader,RR_WHILE) {
+        var result:*CrustStmt=rr_new_stmt(reader,CRUST_S_WHILE,offset);
+        if result==null(*CrustStmt) { return result; }
+        (*result).expr=rr_expression(reader);(*result).body=rr_block(reader);
+        if (*reader).failed { return null(*CrustStmt); }
+        return result;
+    }
+    return rr_simple_statement(reader);
+}
+
+// Consume a standard braced block. Each contained statement can use its hook.
+fn rr_block(reader:*CrustReader)->*CrustStmt {
+    if !rr_enter(reader) { return null(*CrustStmt); }
+    var result:*CrustStmt=rr_new_stmt(reader,CRUST_S_BLOCK,(*reader).token.offset);
+    if result==null(*CrustStmt) || !rr_expect(reader,123u32,"expected '{'") {
+        rr_leave(reader);return null(*CrustStmt);
+    }
+    var tail:**CrustStmt=&(*result).body;
+    while (*reader).token.kind!=125u32 && !(*reader).failed {
+        if (*reader).token.kind==RR_EOF {
+            rr_error(reader,(*reader).token.offset,"expected '}' before end of input");break;
+        }
+        var statement:*CrustStmt=rr_statement(reader);
+        if statement==null(*CrustStmt) { break; }
+        *tail=statement;tail=&(*statement).next;
+    }
+    var complete:bool=rr_expect(reader,125u32,"expected '}'");
+    rr_leave(reader);
+    if !complete { return null(*CrustStmt); }
+    return result;
+}
+
+// Consume RR_RECORD, its fields, and the closing brace. Nested types use hooks.
+fn rr_record(reader:*CrustReader)->*CrustDecl {
+    var result:*CrustDecl=rr_new_decl(reader,CRUST_D_RECORD,(*reader).token.offset);
+    if result==null(*CrustDecl) || !rr_expect(reader,RR_RECORD,"expected 'record'") { return null(*CrustDecl); }
+    (*result).name=rr_name(reader);
+    if !rr_expect(reader,123u32,"expected '{'") { return null(*CrustDecl); }
+    var tail:**CrustField=&(*result).fields;
+    while !(*reader).failed {
+        var field:*CrustField=rr_alloc(reader,sizeof(CrustField),alignof(CrustField)) as *CrustField;
+        if field==null(*CrustField) { return null(*CrustDecl); }
+        (*field).loc=make CrustLoc {source:(*reader).source,offset:(*reader).token.offset};
+        (*field).name=rr_name(reader);
+        if !rr_expect(reader,58u32,"expected ':'") { return null(*CrustDecl); }
+        (*field).syntax_type=rr_type(reader);
+        if !rr_expect(reader,59u32,"expected ';'") { return null(*CrustDecl); }
+        (*field).index=(*result).field_count;
+        (*result).field_count=(*result).field_count+1usize;
+        *tail=field;tail=&(*field).next;
+        if (*reader).token.kind==125u32 { break; }
+    }
+    if !rr_expect(reader,125u32,"expected '}'") { return null(*CrustDecl); }
+    return result;
+}
+
+// Consume an ordinary or extern function header through its result type.
+// Leave the next token current. The result has no body or native symbol.
+fn rr_function_header(reader:*CrustReader)->*CrustDecl {
+    var kind:u32=CRUST_D_FUNCTION;
+    var token:u32=(*reader).token.kind;
+    if token==RR_EXTERN { kind=CRUST_D_EXTERN; }
+    if token!=RR_FN && token!=RR_EXTERN {
+        rr_error(reader,(*reader).token.offset,"expected a function declaration");return null(*CrustDecl);
+    }
+    var result:*CrustDecl=rr_new_decl(reader,kind,(*reader).token.offset);
+    if result==null(*CrustDecl) || !rr_next(reader) { return null(*CrustDecl); }
+    if kind==CRUST_D_EXTERN && !rr_expect(reader,RR_FN,"expected 'fn'") { return null(*CrustDecl); }
+    (*result).name=rr_name(reader);
+    if !rr_expect(reader,40u32,"expected '('") { return null(*CrustDecl); }
+    var tail:**CrustParam=&(*result).params;
+    while (*reader).token.kind!=41u32 && !(*reader).failed {
+        var parameter:*CrustParam=rr_alloc(reader,sizeof(CrustParam),alignof(CrustParam)) as *CrustParam;
+        if parameter==null(*CrustParam) { return null(*CrustDecl); }
+        (*parameter).loc=make CrustLoc {source:(*reader).source,offset:(*reader).token.offset};
+        (*parameter).name=rr_name(reader);
+        if !rr_expect(reader,58u32,"expected ':'") { return null(*CrustDecl); }
+        (*parameter).syntax_type=rr_type(reader);
+        if (*reader).failed { return null(*CrustDecl); }
+        *tail=parameter;tail=&(*parameter).next;
+        (*result).param_count=(*result).param_count+1usize;
+        if !rr_take(reader,44u32) { break; }
+    }
+    if !rr_expect(reader,41u32,"expected ')'") || !rr_expect(reader,RR_ARROW,"expected '->'") { return null(*CrustDecl); }
+    (*result).syntax_type=rr_type(reader);
+    if (*reader).failed { return null(*CrustDecl); }
+    return result;
+}
+
+// Require a successful function header. Consume its standard body or extern suffix.
+fn rr_function_end(reader:*CrustReader,result:*CrustDecl)->*CrustDecl {
+    if (*reader).failed { return null(*CrustDecl); }
+    if (*result).kind==CRUST_D_FUNCTION { (*result).body=rr_block(reader); }
+    else {
+        if !rr_expect(reader,61u32,"expected '='") { return null(*CrustDecl); }
+        if (*reader).token.kind!=RR_STRING {
+            rr_error(reader,(*reader).token.offset,"expected a native symbol string");return null(*CrustDecl);
+        }
+        if (*reader).token.byte_count==1usize {
+            rr_error(reader,(*reader).token.offset,"native symbol name must not be empty");return null(*CrustDecl);
+        }
+        var index:usize=0usize;
+        while index+1usize<(*reader).token.byte_count {
+            var byte:u8=(*reader).token.bytes[index];
+            if byte==0u8 || byte>=128u8 {
+                rr_error(reader,(*reader).token.offset,"native symbol name must be ASCII without zero bytes");return null(*CrustDecl);
+            }
+            index=index+1usize;
+        }
+        (*result).link_name=(*reader).token.bytes;
+        if !rr_next(reader) || !rr_expect(reader,59u32,"expected ';'") { return null(*CrustDecl); }
+    }
+    if (*reader).failed { return null(*CrustDecl); }
+    return result;
+}
+
+// Consume a complete ordinary or extern function, including its final delimiter.
+fn rr_function(reader:*CrustReader)->*CrustDecl {
+    var result:*CrustDecl=rr_function_header(reader);
+    if result==null(*CrustDecl) { return result; }
+    return rr_function_end(reader,result);
+}
+
+fn rr_standard_declaration(reader:*CrustReader)->*CrustDecl {
+    if (*reader).failed { return null(*CrustDecl); }
+    if (*reader).token.kind==RR_RECORD { return rr_record(reader); }
+    if (*reader).token.kind==RR_FN || (*reader).token.kind==RR_EXTERN { return rr_function(reader); }
+    if (*reader).token.kind!=RR_CONST {
+        rr_error(reader,(*reader).token.offset,"expected a declaration");return null(*CrustDecl);
+    }
+    var result:*CrustDecl=rr_new_decl(reader,CRUST_D_CONST,(*reader).token.offset);
+    if result==null(*CrustDecl) || !rr_next(reader) { return null(*CrustDecl); }
+    (*result).name=rr_name(reader);
+    if !rr_expect(reader,58u32,"expected ':'") { return null(*CrustDecl); }
+    (*result).syntax_type=rr_type(reader);
+    if !rr_expect(reader,61u32,"expected '='") { return null(*CrustDecl); }
+    (*result).init=rr_expression(reader);
+    if !rr_expect(reader,59u32,"expected ';'") { return null(*CrustDecl); }
+    return result;
+}
+
+fn rr_declaration(reader:*CrustReader)->*CrustDecl {
+    if (*reader).failed { return null(*CrustDecl); }
+    var result:*CrustDecl=null(*CrustDecl);
+    if (*reader).hooks!=null(*CrustReaderHooks) &&
+       (*(*reader).hooks).declaration!=null(fn(*CrustReader,*u8)->*CrustDecl) {
+        var count:usize=(*reader).token_count;
+        var offset:usize=(*reader).token.offset;
+        var cursor:usize=(*reader).offset;
+        var kind:u32=(*reader).token.kind;
+        var errors:usize=(*(*reader).context).error_count;
+        if !rr_enter(reader) { return null(*CrustDecl); }
+        result=(*(*reader).hooks).declaration(reader,(*(*reader).hooks).user);
+        rr_leave(reader);
+        if !rr_hook_checked(reader,count,offset,cursor,kind,result!=null(*CrustDecl),errors) { return null(*CrustDecl); }
+        if result!=null(*CrustDecl) && (*result).next!=null(*CrustDecl) {
+            rr_error(reader,offset,"declaration hook must return one unlinked declaration");return null(*CrustDecl);
+        }
+    }
+    if result==null(*CrustDecl) { result=rr_standard_declaration(reader); }
+    return result;
+}
+
+// Read a complete declaration unit. Publish it in context only after success.
+// The source and its descriptor remain live until context destruction.
+fn rr_read(context:*CrustContext,source:*CrustSource,begin:usize,end:usize,hooks:*CrustReaderHooks)->*CrustUnit {
+    var reader:CrustReader=uninit;
+    if !rr_init(&reader,context,source,begin,end,hooks) { return null(*CrustUnit); }
+    var parsed:*CrustUnit=rr_alloc(&reader,sizeof(CrustUnit),alignof(CrustUnit)) as *CrustUnit;
+    if parsed==null(*CrustUnit) { return parsed; }
+    (*parsed).source=source;
+    var tail:**CrustDecl=&(*parsed).declarations;
+    var ordinal:u64=0u64;
+    while reader.token.kind!=RR_EOF && !reader.failed {
+        var declaration:*CrustDecl=rr_declaration(&reader);
+        if declaration==null(*CrustDecl) { return null(*CrustUnit); }
+        if ordinal==~0u64 {
+            rr_error(&reader,(*declaration).loc.offset,"too many declarations");return null(*CrustUnit);
+        }
+        ordinal=ordinal+1u64;
+        (*declaration).unit_identity=(*source).identity;(*declaration).identity=ordinal;
+        *tail=declaration;tail=&(*declaration).next;
+    }
+    if reader.failed { return null(*CrustUnit); }
+    if (*context).last_unit==null(*CrustUnit) { (*context).units=parsed; }
+    else { (*(*context).last_unit).next=parsed; }
+    (*context).last_unit=parsed;
+    return parsed;
+}

@@ -1,7 +1,7 @@
 # Measured frontend compilation costs
 
 Date: 2026-09-30. These are local measurements of installed compilers.
-They are not measurements of the proposed RMD language.
+They are not measurements of the proposed Crust language.
 
 ## Main results
 

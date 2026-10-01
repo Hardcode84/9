@@ -1,5 +1,5 @@
 #define _XOPEN_SOURCE 700
-#include "rmd0_run.h"
+#include "crust0_run.h"
 
 #include <dlfcn.h>
 #include <stdio.h>
@@ -11,19 +11,19 @@ struct NativeModule {
     NativeModule *next;
 };
 
-struct RmdRunState {
+struct CrustRunState {
     NativeModule *modules;
-    RmdEval *initial_eval;
+    CrustEval *initial_eval;
 };
 
-void rmd_run_diagnostic(const RmdContext *context)
+void crust_run_diagnostic(const CrustContext *context)
 {
-    const RmdSource *source = context->error_loc.source;
+    const CrustSource *source = context->error_loc.source;
     size_t line = 1;
     size_t column = 1;
     size_t index;
     if (source == NULL) {
-        fprintf(stderr, "rmd: error: %s\n", context->error);
+        fprintf(stderr, "crust: error: %s\n", context->error);
         return;
     }
     for (index = 0; index < context->error_loc.offset && index < source->size; ++index) {
@@ -34,17 +34,17 @@ void rmd_run_diagnostic(const RmdContext *context)
             context->error);
 }
 
-static bool run_error(RmdRun *run, const char *message)
+static bool run_error(CrustRun *run, const char *message)
 {
-    rmd_set_error(run->context, run->source,
+    crust_set_error(run->context, run->source,
                   run->cursor <= run->source->size ? run->cursor : run->source->size,
                   message);
     return false;
 }
 
-static bool resolve_native(void *user, RmdDecl *declaration, void **result)
+static bool resolve_native(void *user, CrustDecl *declaration, void **result)
 {
-    RmdRun *run = user;
+    CrustRun *run = user;
     NativeModule *module;
     void *address;
     char message[512];
@@ -59,7 +59,7 @@ static bool resolve_native(void *user, RmdDecl *declaration, void **result)
         if (dlerror() != NULL) continue;
         if (candidate != NULL && address != NULL && candidate != address) {
             (void)snprintf(message, sizeof(message), "ambiguous native symbol '%s'", name);
-            rmd_set_error(run->context, declaration->loc.source, declaration->loc.offset,
+            crust_set_error(run->context, declaration->loc.source, declaration->loc.offset,
                           message);
             return false;
         }
@@ -67,7 +67,7 @@ static bool resolve_native(void *user, RmdDecl *declaration, void **result)
     }
     if (address == NULL) {
         (void)snprintf(message, sizeof(message), "unresolved native symbol '%s'", name);
-        rmd_set_error(run->context, declaration->loc.source, declaration->loc.offset,
+        crust_set_error(run->context, declaration->loc.source, declaration->loc.offset,
                       message);
         return false;
     }
@@ -75,7 +75,7 @@ static bool resolve_native(void *user, RmdDecl *declaration, void **result)
     return true;
 }
 
-bool rmd_run_link(RmdRun *run, const char *path)
+bool crust_run_link(CrustRun *run, const char *path)
 {
     NativeModule *module;
     void *handle;
@@ -83,7 +83,7 @@ bool rmd_run_link(RmdRun *run, const char *path)
     if (path == NULL || path[0] == '\0') return run_error(run, "native path is empty");
     if (strchr(path, '/') == NULL)
         return run_error(run, "native path must contain '/' (use './' for a current-directory file)");
-    module = rmd_try_alloc(run->context, sizeof(*module), RMD_ALIGNOF(NativeModule));
+    module = crust_try_alloc(run->context, sizeof(*module), CRUST_ALIGNOF(NativeModule));
     if (module == NULL) return false;
     handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
     if (handle == NULL) {
@@ -98,35 +98,35 @@ bool rmd_run_link(RmdRun *run, const char *path)
     return true;
 }
 
-bool rmd_run_init(RmdRun *run, RmdContext *context, RmdSource *source,
+bool crust_run_init(CrustRun *run, CrustContext *context, CrustSource *source,
                   int32_t argc, char **argv)
 {
-    RmdEvalOptions options;
+    CrustEvalOptions options;
     memset(run, 0, sizeof(*run));
     run->context = context;
     run->source = source;
     run->argc = argc;
     run->argv = argv;
-    run->read = rmd_run_read;
-    run->execute = rmd_run_execute;
+    run->read = crust_run_read;
+    run->execute = crust_run_execute;
     if (source->identity == UINT64_MAX)
         return run_error(run, "no identity remains for host inputs");
     run->next_identity = source->identity + 1;
-    run->state = rmd_try_alloc(context, sizeof(*run->state), RMD_ALIGNOF(RmdRunState));
+    run->state = crust_try_alloc(context, sizeof(*run->state), CRUST_ALIGNOF(CrustRunState));
     if (run->state == NULL) return false;
     options.resolve = resolve_native;
     options.user = run;
-    run->eval = rmd_eval_create(context, &options);
+    run->eval = crust_eval_create(context, &options);
     run->state->initial_eval = run->eval;
     return run->eval != NULL;
 }
 
-bool rmd_run_destroy(RmdRun *run)
+bool crust_run_destroy(CrustRun *run)
 {
     NativeModule *module;
     bool success = true;
     if (run->state == NULL) return true;
-    if (run->state->initial_eval != NULL) rmd_eval_destroy(run->state->initial_eval);
+    if (run->state->initial_eval != NULL) crust_eval_destroy(run->state->initial_eval);
     for (module = run->state->modules; module != NULL; module = module->next) {
         if (dlclose(module->handle) != 0) {
             const char *error = dlerror();
@@ -134,7 +134,7 @@ bool rmd_run_destroy(RmdRun *run)
             (void)snprintf(message, sizeof(message), "cannot unload native input: %s",
                            error == NULL ? "loader failure" : error);
             (void)run_error(run, message);
-            rmd_run_diagnostic(run->context);
+            crust_run_diagnostic(run->context);
             success = false;
         }
     }
@@ -142,59 +142,59 @@ bool rmd_run_destroy(RmdRun *run)
     return success;
 }
 
-bool rmd_run_check_unit(RmdRun *run, RmdUnit *unit)
+bool crust_run_check_unit(CrustRun *run, CrustUnit *unit)
 {
-    RmdDecl *declaration;
+    CrustDecl *declaration;
     for (declaration = unit->declarations; declaration != NULL; declaration = declaration->next) {
-        if (rmd_map_get(&run->scope.locals, (uintptr_t)declaration->name) != NULL) {
-            rmd_set_error(run->context, declaration->loc.source, declaration->loc.offset,
+        if (crust_map_get(&run->scope.locals, (uintptr_t)declaration->name) != NULL) {
+            crust_set_error(run->context, declaration->loc.source, declaration->loc.offset,
                           "declaration conflicts with a root local");
             return false;
         }
     }
-    if (!rmd_collect_unit(run->context, unit) || !rmd_resolve_unit(run->context, unit) ||
-        !rmd_check_unit(run->context, unit)) return false;
+    if (!crust_collect_unit(run->context, unit) || !crust_resolve_unit(run->context, unit) ||
+        !crust_check_unit(run->context, unit)) return false;
     for (declaration = unit->declarations; declaration != NULL; declaration = declaration->next) {
-        if (!rmd_eval_prepare(run->eval, declaration)) return false;
+        if (!crust_eval_prepare(run->eval, declaration)) return false;
     }
     return true;
 }
 
-bool rmd_run_read(RmdRun *run, void **result)
+bool crust_run_read(CrustRun *run, void **result)
 {
-    RmdAction action;
-    RmdAction *stored;
+    CrustAction action;
+    CrustAction *stored;
     *result = NULL;
-    if (!rmd_read_one(run->context, run->source, run->cursor, run->source->size,
+    if (!crust_read_one(run->context, run->source, run->cursor, run->source->size,
                       &action)) return false;
     run->cursor = action.end;
     if (action.declaration == NULL && action.statement == NULL) return true;
-    stored = rmd_try_alloc(run->context, sizeof(*stored), RMD_ALIGNOF(RmdAction));
+    stored = crust_try_alloc(run->context, sizeof(*stored), CRUST_ALIGNOF(CrustAction));
     if (stored == NULL) return false;
     *stored = action;
     *result = stored;
     return true;
 }
 
-bool rmd_run_execute(RmdRun *run, void *data)
+bool crust_run_execute(CrustRun *run, void *data)
 {
-    RmdAction *action = data;
+    CrustAction *action = data;
     bool returned;
     int32_t status;
     if ((action->declaration == NULL) == (action->statement == NULL))
-        return run_error(run, "RMD action must contain one declaration or statement");
+        return run_error(run, "CRUST action must contain one declaration or statement");
     if (action->declaration != NULL) {
-        RmdUnit *unit = rmd_try_alloc(run->context, sizeof(*unit), RMD_ALIGNOF(RmdUnit));
+        CrustUnit *unit = crust_try_alloc(run->context, sizeof(*unit), CRUST_ALIGNOF(CrustUnit));
         if (unit == NULL) return false;
         unit->source = action->declaration->loc.source;
         unit->declarations = action->declaration;
         if (run->context->last_unit == NULL) run->context->units = unit;
         else run->context->last_unit->next = unit;
         run->context->last_unit = unit;
-        return rmd_run_check_unit(run, unit);
+        return crust_run_check_unit(run, unit);
     }
-    if (!rmd_check_root(run->context, &run->scope, action->statement)) return false;
-    if (!rmd_eval_statement(run->eval, action->statement, &returned, &status)) return false;
+    if (!crust_check_root(run->context, &run->scope, action->statement)) return false;
+    if (!crust_eval_statement(run->eval, action->statement, &returned, &status)) return false;
     if (returned) {
         run->returned = true;
         run->status = status;
@@ -202,14 +202,14 @@ bool rmd_run_execute(RmdRun *run, void *data)
     return true;
 }
 
-bool rmd_run_loop(RmdRun *run)
+bool crust_run_loop(CrustRun *run)
 {
     while (!run->returned) {
-        RmdSource *source = run->source;
+        CrustSource *source = run->source;
         size_t begin = run->cursor;
         size_t consumed;
-        bool (*reader)(RmdRun *, void **) = run->read;
-        bool (*execute)(RmdRun *, void *) = run->execute;
+        bool (*reader)(CrustRun *, void **) = run->read;
+        bool (*execute)(CrustRun *, void *) = run->execute;
         void *action = NULL;
         if (reader == NULL || execute == NULL)
             return run_error(run, "root reader and executor must be callable");

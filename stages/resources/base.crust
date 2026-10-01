@@ -1,0 +1,94 @@
+fn rs_error(stage: *RsStage, location: *CrustLoc, message: *u8) -> unit {
+    if (*stage).failed { return; }
+    (*stage).failed = true;
+    crust_set_error((*stage).context, (*location).source, (*location).offset, message);
+}
+
+fn rs_alloc(stage: *RsStage, size: usize, alignment: usize) -> *u8 {
+    if (*stage).failed { return null(*u8); }
+    if size == 0usize { return null(*u8); }
+    var result: *u8 = crust_try_alloc((*stage).context, size, alignment);
+    if result == null(*u8) { (*stage).failed = true; }
+    return result;
+}
+
+fn rs_put(stage: *RsStage, table: *CrustMap, key: usize, value: *u8) -> unit {
+    if (*stage).failed { return; }
+    if !crust_try_map_set((*stage).context, table, key, value) { (*stage).failed = true; }
+}
+
+// Mark an external declaration with this stage's complete source ABI contract.
+// Call before preparation. Retain the declaration and its source types through stage use.
+// The caller must provide a native name and the provider's same source interface.
+fn rs_source_import(stage: *RsStage, declaration: *CrustDecl) -> bool {
+    rs_put(stage, &(*stage).source_imports, declaration as usize, declaration as *u8);
+    return !(*stage).failed;
+}
+
+fn rs_name(stage: *RsStage) -> *CrustName {
+    var bytes: [u8; 32] = uninit;
+    var end: usize = 32usize;
+    var value: usize = (*stage).next_name;
+    (*stage).next_name = value + 1usize;
+    while true {
+        end = end - 1usize;
+        bytes[end] = (value % 10usize) as u8 + 48u8;
+        value = value / 10usize;
+        if value == 0usize { break; }
+    }
+    end = end - 1usize; bytes[end] = 36u8;
+    var name: *CrustName = crust_try_intern((*stage).context, &bytes[end], 32usize - end);
+    if name == null(*CrustName) { (*stage).failed = true; }
+    return name;
+}
+
+fn rs_type_node(stage: *RsStage, kind: u32, location: *CrustLoc) -> *CrustTypeSyntax {
+    var node: *CrustTypeSyntax = rs_alloc(stage, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
+    if node != null(*CrustTypeSyntax) { (*node).kind = kind; (*node).loc = *location; }
+    return node;
+}
+
+fn rs_expr_node(stage: *RsStage, kind: u32, location: *CrustLoc) -> *CrustExpr {
+    var node: *CrustExpr = rs_alloc(stage, sizeof(CrustExpr), alignof(CrustExpr)) as *CrustExpr;
+    if node != null(*CrustExpr) { (*node).kind = kind; (*node).loc = *location; }
+    return node;
+}
+
+fn rs_stmt_node(stage: *RsStage, kind: u32, location: *CrustLoc) -> *CrustStmt {
+    var node: *CrustStmt = rs_alloc(stage, sizeof(CrustStmt), alignof(CrustStmt)) as *CrustStmt;
+    if node != null(*CrustStmt) { (*node).kind = kind; (*node).loc = *location; }
+    return node;
+}
+
+fn rs_named(stage: *RsStage, name: *CrustName, location: *CrustLoc) -> *CrustExpr {
+    var node: *CrustExpr = rs_expr_node(stage, CRUST_E_NAME, location);
+    if node != null(*CrustExpr) { (*node).name = name; }
+    return node;
+}
+
+fn rs_unary(stage: *RsStage, op: u32, operand: *CrustExpr, location: *CrustLoc) -> *CrustExpr {
+    var node: *CrustExpr = rs_expr_node(stage, CRUST_E_UNARY, location);
+    if node != null(*CrustExpr) { (*node).op = op; (*node).left = operand; }
+    return node;
+}
+
+fn rs_append(list: *RsStatements, statement: *CrustStmt) -> unit {
+    if statement == null(*CrustStmt) { return; }
+    if (*list).first == null(*CrustStmt) { (*list).first = statement; }
+    else { (*(*list).last).next = statement; }
+    (*list).last = statement;
+}
+
+fn rs_block(stage: *RsStage, list: *RsStatements, location: *CrustLoc) -> *CrustStmt {
+    var node: *CrustStmt = rs_stmt_node(stage, CRUST_S_BLOCK, location);
+    if node != null(*CrustStmt) { (*node).body = (*list).first; }
+    return node;
+}
+
+fn rs_init(stage: *RsStage, context: *CrustContext) -> unit {
+    var bytes: *u8 = stage as *u8;
+    var index: usize = 0usize;
+    while index < sizeof(RsStage) { bytes[index] = 0u8; index = index + 1usize; }
+    (*stage).context = context;
+    (*stage).next_name = 1usize;
+}

@@ -1,14 +1,17 @@
 # Source-order compilation
 
+The linked measurements retain the source names and hashes from the recorded
+runs.
+
 Date: 2026-10-01. This document defines the implemented root runner. The
-[language specification](rmd0-spec.md) defines the RMD0 value and execution
+[language specification](crust0-spec.md) defines the Crust0 value and execution
 rules. The [design study](source-order-compilation.md) records the decision
 and the required experiments.
 
 Run a compilation program with:
 
 ```sh
-rmd main.rmd
+crust main.crust
 ```
 
 The root runs from its first action. It selects compiler stages, reads target
@@ -24,7 +27,7 @@ The optional C backend also requires GCC, GNU assembler, and GNU `objcopy`.
 
 ```sh
 make all c-stage
-build/rmd examples/hello/main.rmd
+build/crust examples/hello/main.crust
 build/hello
 make check check-c check-stage
 ```
@@ -33,14 +36,14 @@ The target prints `Hello, world!`. The
 [example index](../examples/README.md) also covers compiler and target arguments,
 multiple files, intrusive lists, reader replacement, and a custom assembly stage.
 
-The [hello example](../examples/hello/main.rmd) contains the complete build
+The [hello example](../examples/hello/main.crust) contains the complete build
 description and target program in one file:
 
-```rmd
-host_source(run, "../../api/rmd0_stage.rmd");
-host_source(run, "../../stages/c/api.rmd");
-host_source(run, "../../stages/c/build.rmd");
-host_link(run, "../../build/rmd-c-library.so");
+```crust
+host_source(run, "../../api/crust0_stage.crust");
+host_source(run, "../../stages/c/api.crust");
+host_source(run, "../../stages/c/build.crust");
+host_link(run, "../../build/crust-c-library.so");
 
 var arguments: [*u8; 2] = make [*u8; 2] {
     "-o", host_path(run, "../../build/hello")
@@ -57,10 +60,10 @@ fn main(argc: i32, argv: **u8) -> i32 {
 ```
 
 The source selects an ordinary shared library. A copy with another filename
-works through the same interface. The [C backend](c-backend.md) is all RMD0.
+works through the same interface. The [C backend](c-backend.md) is all Crust0.
 Its output does not depend on the root evaluator or compiler libraries.
 
-`c_build(source, begin, argc, argv)` is an ordinary RMD helper. It compiles the
+`c_build(source, begin, argc, argv)` is an ordinary Crust helper. It compiles the
 range from `begin` through source EOF. The cursor already points past the root
 return's semicolon, so the target starts there. A separate target file uses
 `begin = 0`. The helper creates a target context, calls
@@ -75,21 +78,21 @@ the original line numbers.
 
 ## Initial bindings and arguments
 
-The launcher captures the root bytes once. It supplies `run: *RmdRun` as a
+The launcher captures the root bytes once. It supplies `run: *CrustRun` as a
 root variable. Its `argc` and `argv` fields contain only arguments after the
 root path. `argv[argc]` is null. The root gives those arguments their meaning.
 The launcher accepts `--help` and `--version` in place of a root operand.
 Use a directory prefix for a root file with one of those names.
 
-The installed declarations are `api/rmd0.rmd`, `api/rmd0_host.rmd`,
-`api/rmd0_eval.rmd`, and `api/rmd0_run.rmd`. The installed helper source is
-`stages/host.rmd`. The build embeds these version-matched sources. Every
+The installed declarations are `api/crust0.crust`, `api/crust0_host.crust`,
+`api/crust0_eval.crust`, and `api/crust0_run.crust`. The installed helper source is
+`stages/host.crust`. The build embeds these version-matched sources. Every
 invocation reads and checks them. No saved checked tree or execution result
 is reused. A root must not load those same declarations a second time.
 
 These interfaces expose syntax, types, bindings, incremental checks,
 evaluation calls, and the root cursor and operation fields. Include
-`api/rmd0_x64.rmd` to call the optional seed assembly backend. Include a
+`api/crust0_x64.crust` to call the optional seed assembly backend. Include a
 library's consumer declarations before calling that library.
 
 The `host_` names are ordinary functions. Their prefix avoids conflicts with
@@ -112,7 +115,7 @@ RootAction = Declaration
 an `i32` value. `break` and `continue` require an enclosing loop. Function and
 record declarations end at their final brace. For example:
 
-```rmd
+```crust
 var total: i32 = 0i32;
 while total < 4i32 { total = total + 1i32; };
 if total == 4i32 { return 0i32; } else { return 1i32; };
@@ -159,20 +162,20 @@ declarations given to it. Host declarations do not become target definitions.
 
 ## Reader and executor replacement
 
-`RmdRun` publishes these fields for root control:
+`CrustRun` publishes these fields for root control:
 
 | Field | Contract |
 | --- | --- |
 | `context`, `source` | Borrowed host context and immutable root snapshot |
 | `cursor` | Byte offset of the next unread root region |
-| `read` | `fn(*RmdRun, **u8) -> bool`; produces an opaque action |
-| `execute` | `fn(*RmdRun, *u8) -> bool`; consumes that action |
+| `read` | `fn(*CrustRun, **u8) -> bool`; produces an opaque action |
+| `execute` | `fn(*CrustRun, *u8) -> bool`; consumes that action |
 | `user` | Caller-selected state for these operations |
 | `eval`, `scope` | Default host evaluator and persistent local bindings |
 | `next_identity` | Identity used by the ordinary host-source helper |
 | `argc`, `argv` | Borrowed root arguments |
 | `returned`, `status` | Root completion and process result |
-| `state` | Native resources owned by `rmd_run_init` and `rmd_run_destroy` |
+| `state` | Native resources owned by `crust_run_init` and `crust_run_destroy` |
 
 The loop captures both operation pointers before calling the reader. The
 returned action uses that captured executor. A change during reading or
@@ -184,8 +187,8 @@ moving outside the source, moving backwards, replacing the source, or claiming
 EOF with unread bytes produces a diagnostic. Execution can consume additional
 input, but cannot move before the end committed by the reader.
 
-The default operations are `rmd_run_read` and `rmd_run_execute`. Their payload
-is a public `RmdAction`. A custom pair can use any representation. Assign its
+The default operations are `crust_run_read` and `crust_run_execute`. Their payload
+is a public `CrustAction`. A custom pair can use any representation. Assign its
 functions to `run.read` and `run.execute` with ordinary function values. There
 is no grammar registry or mandatory intermediate representation. A custom
 executor can call a different checker or evaluator.
@@ -198,7 +201,7 @@ root values and destroy it after its final use.
 
 ## Files and native inputs
 
-The installed RMD helper library provides four operations:
+The installed Crust helper library provides four operations:
 
 | Function | Result |
 | --- | --- |
@@ -227,7 +230,7 @@ Extern declarations can precede `host_link`: symbol lookup occurs when the
 function value is needed. Native declarations with one link name must have
 compatible scalar ABI types, including when they are not called.
 
-Only shared libraries are input to `host_link`. The direct `rmd_run_link` API
+Only shared libraries are input to `host_link`. The direct `crust_run_link` API
 requires a path containing `/`; it does not search for a bare library name.
 Preparing an object, archive,
 or changed native library is an explicit build operation in source. The
@@ -235,7 +238,7 @@ launcher does not invoke a hidden compiler or linker to prepare root actions.
 
 ## Execution and lifetime
 
-The checked-tree evaluator implements the RMD0 expressions and statements,
+The checked-tree evaluator implements the Crust0 expressions and statements,
 including wrapping integer arithmetic, required traps, aggregate copies,
 function values, recursion, and native callbacks. It uses arena storage for
 prepared calls and reusable activation frames. A loop does not allocate a new

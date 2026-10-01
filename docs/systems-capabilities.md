@@ -1,4 +1,4 @@
-# Systems source requirements for RMD
+# Systems source requirements for Crust
 
 Date: 2026-09-30. Status: source study and design requirements.
 
@@ -276,7 +276,7 @@ assignment, access, and destruction costs.
 ## Acceptance experiments
 
 Freeze small source-derived cases before adding more language machinery.
-These are proposed tests. No RMD compiler or translation of these cases exists.
+These are proposed tests. No Crust compiler or translation of these cases exists.
 
 | Case | Required visible result and failure tests |
 |---|---|

@@ -128,7 +128,7 @@ def reject_cases():
 class Suite(ResourceSuite):
     def __init__(self, args, work):
         super().__init__(args, work)
-        self.compiler = self.build / "rmd-overload-resource"
+        self.compiler = self.build / "crust-overload-resource"
 
     def object(self, name, *sources):
         output = self.work / (name + ".o")
@@ -157,7 +157,7 @@ class Suite(ResourceSuite):
             def symbols(path):
                 output = self.command(["nm", "--defined-only", "--format=posix", path]).stdout
                 return {line.split()[0] for line in output.splitlines()
-                        if line.split()[0].startswith(b"rmd_ov1_")}
+                        if line.split()[0].startswith(b"crust_ov1_")}
             names = symbols(first)
             if len(names) != 6 or names != symbols(second):
                 raise Failure("source ABI symbols depend on input order or omit a definition")
@@ -226,9 +226,9 @@ def main():
         for group, name, _, _ in cases:
             print(f"{group}: {name}")
         return 0
-    if not (args.build / "rmd-overload-resource").is_file():
-        parser.error("build rmd-overload-resource before this test")
-    work = Path(tempfile.mkdtemp(prefix="rmd-overload-resources-"))
+    if not (args.build / "crust-overload-resource").is_file():
+        parser.error("build crust-overload-resource before this test")
+    work = Path(tempfile.mkdtemp(prefix="crust-overload-resources-"))
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     suite = Suite(args, work)
     passed = 0

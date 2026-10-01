@@ -1,0 +1,137 @@
+const RS_READ: u32 = 100u32;
+const RS_MUT: u32 = 101u32;
+const RS_MOVE: u32 = 102u32;
+const RS_DEFER: u32 = 103u32;
+const RS_UNSAFE: u32 = 104u32;
+const RS_FORGET: u32 = 105u32;
+
+record RsResource {
+    declaration: *CrustDecl;
+    drop_name: *CrustName;
+    next: *RsResource;
+}
+
+record RsGlobal {
+    source: *CrustDecl;
+    lowered: *CrustDecl;
+    syntax: *CrustTypeSyntax;
+    resource: *RsResource;
+    unsafe_call: bool;
+    drop_only: bool;
+    drop: *RsGlobal;
+    next: *RsGlobal;
+}
+
+record RsStage {
+    context: *CrustContext;
+    sources: *CrustUnit;
+    resources: *RsResource;
+    globals: CrustMap;
+    first_global: *RsGlobal;
+    last_global: *RsGlobal;
+    unsafe_functions: CrustMap;
+    source_imports: CrustMap;
+    lowered_types: CrustMap;
+    ownership: CrustMap;
+    functions: CrustMap;
+    next_name: usize;
+    failed: bool;
+}
+
+record RsScope {
+    parent: *RsScope;
+    first: *RsLocal;
+    first_action: *RsAction;
+    last_action: *RsAction;
+}
+
+record RsLocal {
+    name: *CrustName;
+    syntax: *CrustTypeSyntax;
+    storage: *CrustName;
+    indirect: bool;
+    initialized: bool;
+    owning: bool;
+    mode: u32;
+    readers: usize;
+    exclusive: bool;
+    parent_loan: *RsLocal;
+    stamp: usize;
+    scope: *RsScope;
+    next: *RsLocal;
+}
+
+record RsValue {
+    syntax: *CrustTypeSyntax;
+    expression: *CrustExpr;
+    local: *RsLocal;
+    mode: u32;
+    owned: bool;
+    unsafe_call: bool;
+}
+
+record RsAction {
+    owner: *RsLocal;
+    statement: *CrustStmt;
+    validated: bool;
+    next: *RsAction;
+}
+
+record RsChain {
+    action: *RsAction;
+    next: *RsChain;
+    identity: usize;
+    hash_next: *RsChain;
+    all_next: *RsChain;
+}
+
+record RsExit {
+    chain: *RsChain;
+    continuation: *RsChain;
+}
+
+record RsChange {
+    local: *RsLocal;
+    initialized: bool;
+    readers: usize;
+    exclusive: bool;
+    next: *RsChange;
+}
+
+record RsLoop {
+    parent: *RsLoop;
+    scope: *RsScope;
+    break_target: *RsChain;
+    continue_target: *RsChain;
+    entry: *RsChange;
+    has_break: bool;
+}
+
+record RsFunction {
+    stage: *RsStage;
+    global: *RsGlobal;
+    locals: CrustMap;
+    scope: *RsScope;
+    loop: *RsLoop;
+    changes: *RsChange;
+    declarations: *CrustStmt;
+    last_declaration: *CrustStmt;
+    validation: *CrustStmt;
+    last_validation: *CrustStmt;
+    exits: CrustMap;
+    loop_targets: CrustMap;
+    seed_blocks: CrustMap;
+    chain_map: CrustMap;
+    chains: *RsChain;
+    next_label: usize;
+    result: *RsLocal;
+    output: *CrustName;
+    returned: *RsChain;
+    body: *CrustStmt;
+    epilogue: *CrustStmt;
+    unsafe_depth: usize;
+    stamp: usize;
+    expression_depth: u32;
+}
+
+record RsStatements { first: *CrustStmt; last: *CrustStmt; }

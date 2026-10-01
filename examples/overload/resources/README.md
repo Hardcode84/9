@@ -2,7 +2,7 @@
 
 ```sh
 make all overload-stage
-build/rmd examples/overload/resources/main.rmd
+build/crust examples/overload/resources/main.crust
 build/overload-resources
 ```
 
@@ -13,7 +13,7 @@ Owned overloads.
 Deferred overload.
 ```
 
-The root selects a package that composes two RMD stages. Overload selection
+The root selects a package that composes two Crust stages. Overload selection
 runs before ownership checking and cleanup lowering.
 
 `write` accepts a raw string or a shared view of owned text. The source type

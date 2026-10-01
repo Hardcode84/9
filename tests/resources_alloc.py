@@ -15,12 +15,12 @@ import resources
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = [
-    "api/rmd0.rmd", "api/rmd0_host.rmd",
-    "stages/reader/model.rmd", "stages/reader/lex.rmd", "stages/reader/parse.rmd",
-    *[f"stages/resources/{name}.rmd" for name in (
+    "api/crust0.crust", "api/crust0_host.crust",
+    "stages/reader/model.crust", "stages/reader/lex.crust", "stages/reader/parse.crust",
+    *[f"stages/resources/{name}.crust" for name in (
         "model", "base", "read", "types", "constants", "state", "cleanup",
         "places", "expr", "control")],
-    "tests/resources_alloc.rmd",
+    "tests/resources_alloc.crust",
 ]
 
 
@@ -32,10 +32,10 @@ def main():
     parser.add_argument("--no-sanitize", action="store_true")
     parser.add_argument("--work", type=Path)
     args = parser.parse_args()
-    compiler = args.build.resolve() / "rmd-c"
+    compiler = args.build.resolve() / "crust-c"
     if not compiler.is_file():
         parser.error(f"compiler does not exist: {compiler}")
-    work = args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix="rmd-resources-alloc-"))
+    work = args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix="crust-resources-alloc-"))
     work.mkdir(parents=True, exist_ok=True)
     environment = dict(os.environ)
     environment["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1"
@@ -67,12 +67,12 @@ def main():
         for name, source, _ in resources.runtime_cases():
             if args.case and not any(fnmatch.fnmatchcase(name, pattern) for pattern in args.case):
                 continue
-            path = work / f"{name}.rmd"
+            path = work / f"{name}.crust"
             path.write_text(source)
             cases.append((name, [path]))
         if not args.case or any(fnmatch.fnmatchcase("sqlite", pattern) for pattern in args.case):
-            cases.append(("sqlite", [ROOT / "examples/resources/sqlite/library.rmd",
-                                      ROOT / "examples/resources/sqlite/program.rmd"]))
+            cases.append(("sqlite", [ROOT / "examples/resources/sqlite/library.crust",
+                                      ROOT / "examples/resources/sqlite/program.crust"]))
         if not cases:
             parser.error("no test cases selected")
         total = 0

@@ -18,8 +18,8 @@ def sha(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--compiler", type=Path, default=Path("build/rmd-resource"))
-    parser.add_argument("--runner", type=Path, default=Path("build/rmd"))
+    parser.add_argument("--compiler", type=Path, default=Path("build/crust-resource"))
+    parser.add_argument("--runner", type=Path, default=Path("build/crust"))
     parser.add_argument("--work", type=Path, default=Path(".profile-cache/resources-sqlite"))
     parser.add_argument("--output", type=Path, default=EXAMPLE / "validation.json")
     parser.add_argument("--sanitizers", action="store_true")
@@ -55,8 +55,8 @@ def main():
             raise AssertionError(record)
         return result
 
-    library = EXAMPLE / "library.rmd"
-    program = EXAMPLE / "program.rmd"
+    library = EXAMPLE / "library.crust"
+    program = EXAMPLE / "program.crust"
     sqlite = baseline_work / "sqlite3.o"
     if not sqlite.is_file():
         raise SystemExit("Run benchmarks/resources/verify.py before this check.")
@@ -65,8 +65,8 @@ def main():
     command([args.compiler, "--check", library, program])
     command([args.compiler, "--cflag=-O2", "-o", compiler_target, library, program,
              "--ldflag", sqlite, "--ldflag=-ldl", "--ldflag=-lm", "--ldflag=-pthread"])
-    command([args.runner, EXAMPLE / "main.rmd"])
-    command([args.runner, EXAMPLE / "main.rmd", "--check"])
+    command([args.runner, EXAMPLE / "main.crust"])
+    command([args.runner, EXAMPLE / "main.crust", "--check"])
     executables = [compiler_target, root_target]
     if args.sanitizers:
         sanitized = args.work / "sqlite-resource-sanitize"
@@ -110,13 +110,13 @@ def main():
         "callback-mode": ("fn wrong(value:mut Bytes, context:mut QueryContext)->i32 { return 0i32; } fn bad(value:mut Statement, context:mut QueryContext)->i32 { return with_blob(mut value,0i32,mut context,wrong); }", "incompatible type or borrow mode"),
     }
     for name, (text, diagnostic) in negatives.items():
-        path = args.work / (name + ".rmd")
+        path = args.work / (name + ".crust")
         path.write_text(text + "\n")
         result = command([args.compiler, "--library", "--check", library, path], expected=1)
         assert diagnostic.encode() in result.stderr, (name, result.stderr)
         report["rejections"].append({"name": name, "diagnostic": result.stderr.decode(),
                                      "source": text, "source_sha256": sha(path)})
-    format_source = args.work / "format.rmd"
+    format_source = args.work / "format.crust"
     format_source.write_text('''fn main(argc:i32,argv:**u8)->i32 {
     if write_number(1i32,0u64)!=0i32 {return 1i32;}
     unsafe {if write_bytes(1i32," ",1usize)!=0i32 {return 1i32;}}
@@ -159,13 +159,13 @@ int main(void) {
         result = command([executable])
         assert result.stdout == b"0 9 10 18446744073709551615\n" and result.stderr == b"", result
     report["format_checks"] = len(format_binaries)
-    forbidden = {"resource_program", "resource_build", "rs_prepare", "rmd_context_init", "rmd_read", "rmd_run_main"}
+    forbidden = {"resource_program", "resource_build", "rs_prepare", "crust_context_init", "crust_read", "crust_run_main"}
     for executable in executables:
         symbols = command(["nm", "-g", executable]).stdout.decode().splitlines()
         found = {line.split()[-1] for line in symbols if line.split()} & forbidden
         assert not found, (executable, sorted(found))
     declaration_names = re.findall(r"^(?:(?:unsafe |extern )?fn|record|resource|const)\s+([A-Za-z_]\w*)", library.read_text(), re.M)
-    native_name = "_rmd0_u1_d" + str(declaration_names.index("write_number") + 1)
+    native_name = "_crust0_u1_d" + str(declaration_names.index("write_number") + 1)
     disassembly = command(["objdump", "-d", "--disassemble=" + native_name, compiler_target]).stdout
     assert ("<" + native_name + ">:").encode() in disassembly, "write_number native identity was not found"
     assembly = args.work / "write-number.asm"
@@ -181,13 +181,13 @@ int main(void) {
                                  "native_symbol": native_name,
                                  "observed_instructions": [line.strip() for line in disassembly.decode().splitlines()
                                                            if any(op in line for op in ("pxor", "movaps", "movl   $0x0"))]}
-    paths = [*sorted(EXAMPLE.glob("*.rmd")), EXAMPLE / "verify.py",
-             *sorted(Path("stages/resources").glob("*.rmd")),
-             *sorted(Path("stages/reader").glob("*.rmd")),
-             *sorted(Path("stages/c").glob("*.rmd"))]
+    paths = [*sorted(EXAMPLE.glob("*.crust")), EXAMPLE / "verify.py",
+             *sorted(Path("stages/resources").glob("*.crust")),
+             *sorted(Path("stages/reader").glob("*.crust")),
+             *sorted(Path("stages/c").glob("*.crust"))]
     report["source_sha256"] = {str(path): sha(path) for path in paths}
     report["binary_sha256"] = {str(path): sha(path) for path in
-                               [args.compiler, args.runner, Path("build/rmd-resource-library.so"),
+                               [args.compiler, args.runner, Path("build/crust-resource-library.so"),
                                 sqlite, *executables, *format_binaries]}
     report["complete"] = True
     encoded = json.dumps(report, indent=2) + "\n"

@@ -1,0 +1,135 @@
+// This reader accepts one decimal exit status and an optional final line feed.
+// Supply api/crust0.crust, api/crust0_host.crust, and api/crust0_x64.crust to build it.
+
+extern fn file_open(path: *u8, mode: *u8) -> *u8 = "fopen";
+extern fn file_close(file: *u8) -> i32 = "fclose";
+extern fn text_length(text: *u8) -> usize = "strlen";
+
+record AnswerTree {
+    parsed: CrustUnit;
+    declaration: CrustDecl;
+    result_type: CrustTypeSyntax;
+    block: CrustStmt;
+    returning: CrustStmt;
+    add: CrustExpr;
+    left: CrustExpr;
+    right: CrustExpr;
+}
+
+fn read_answer(ctx: *CrustContext, source: *CrustSource) -> *CrustDecl {
+    var value: u64 = 0u64;
+    var index: usize = 0usize;
+    while index < (*source).size {
+        var byte: u8 = (*source).bytes[index];
+        if byte == 10u8 && index + 1usize == (*source).size { break; }
+        if byte < 48u8 || byte > 57u8 {
+            crust_set_error(ctx, source, index, "expected a decimal digit");
+            return null(*CrustDecl);
+        }
+        value = value * 10u64 + (byte - 48u8) as u64;
+        if value > 255u64 {
+            crust_set_error(ctx, source, index, "exit status exceeds 255");
+            return null(*CrustDecl);
+        }
+        index = index + 1usize;
+    }
+    if index == 0usize {
+        crust_set_error(ctx, source, index, "expected an exit status");
+        return null(*CrustDecl);
+    }
+    var tree: *AnswerTree = crust_try_alloc(ctx, sizeof(AnswerTree), alignof(AnswerTree)) as *AnswerTree;
+    if tree == null(*AnswerTree) { return null(*CrustDecl); }
+    var name: *CrustName = crust_try_intern(ctx, "answer", 6usize);
+    if name == null(*CrustName) {
+        return null(*CrustDecl);
+    }
+    var location: CrustLoc = make CrustLoc { source: source, offset: 0usize };
+    (*tree).result_type.kind = CRUST_T_I32;
+    (*tree).result_type.loc = location;
+    (*tree).declaration.kind = CRUST_D_FUNCTION;
+    (*tree).declaration.loc = location;
+    (*tree).declaration.name = name;
+    (*tree).declaration.link_name = "crust_stage_answer";
+    (*tree).declaration.unit_identity = (*source).identity;
+    (*tree).declaration.identity = 1u64;
+    (*tree).declaration.syntax_type = &(*tree).result_type;
+    (*tree).declaration.body = &(*tree).block;
+    (*tree).block.kind = CRUST_S_BLOCK;
+    (*tree).block.body = &(*tree).returning;
+    (*tree).returning.kind = CRUST_S_RETURN;
+    (*tree).returning.expr = &(*tree).add;
+    (*tree).add.kind = CRUST_E_BINARY;
+    (*tree).add.op = CRUST_OP_ADD;
+    (*tree).add.left = &(*tree).left;
+    (*tree).add.right = &(*tree).right;
+    (*tree).left.kind = CRUST_E_INTEGER;
+    (*tree).left.literal_type = CRUST_T_I32;
+    (*tree).left.integer = value;
+    (*tree).right.kind = CRUST_E_INTEGER;
+    (*tree).right.literal_type = CRUST_T_I32;
+    (*tree).parsed.source = source;
+    (*tree).parsed.declarations = &(*tree).declaration;
+    (*ctx).units = &(*tree).parsed;
+    (*ctx).last_unit = &(*tree).parsed;
+    return &(*tree).declaration;
+}
+
+fn lower_expression(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool {
+    if (*expression).kind == CRUST_E_BINARY && (*expression).op == CRUST_OP_ADD &&
+       (*(*expression).type).kind == CRUST_T_I32 &&
+       (*(*expression).right).kind == CRUST_E_INTEGER && (*(*expression).right).integer == 0u64 {
+        if !crust_x64_try_emit_expression(emitter, (*expression).left) { return false; }
+        return crust_x64_write(emitter, "\t# stage: add zero\n");
+    }
+    return crust_x64_try_emit_expression(emitter, expression);
+}
+
+fn compile_answer(ctx: *CrustContext, source: *CrustSource, output: *u8) -> bool {
+    var entry: *CrustDecl = read_answer(ctx, source);
+    if entry == null(*CrustDecl) { return false; }
+    if !crust_collect(ctx) || !crust_resolve(ctx) || !crust_check(ctx) { return false; }
+    var program: *CrustX64Program = null(*CrustX64Program);
+    if !crust_x64_prepare(ctx, &program, null(*CrustDecl)) { return false; }
+    var file: *u8 = file_open(output, "wb");
+    if file == null(*u8) {
+        crust_set_error(ctx, source, 0usize, "cannot open assembly output");
+        return false;
+    }
+    var operations: CrustX64Ops = make CrustX64Ops {
+        expression: lower_expression,
+        place: null(fn(*CrustX64Emitter,*CrustExpr)->bool),
+        statement: null(fn(*CrustX64Emitter,*CrustStmt)->bool)
+    };
+    var success: bool = crust_x64_emit_program_with_ops(program, file, &operations);
+    if file_close(file) != 0i32 {
+        crust_set_error(ctx, source, 0usize, "cannot close assembly output");
+        return false;
+    }
+    return success;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 3i32 {
+        crust0_host_write_stream(2u32, "usage: stage INPUT OUTPUT\n", 26usize);
+        return 1i32;
+    }
+    var bytes: *u8 = null(*u8);
+    var size: usize = 0usize;
+    if crust0_host_read_file(argv[1usize], &bytes, &size) != 0i32 {
+        crust0_host_write_stream(2u32, "cannot read input\n", 18usize);
+        return 1i32;
+    }
+    var source: CrustSource = make CrustSource { path: argv[1usize], bytes: bytes, size: size, identity: 1u64 };
+    var ctx: CrustContext = uninit;
+    crust_context_init(&ctx, null(*CrustAllocator));
+    var success: bool = compile_answer(&ctx, &source, argv[2usize]);
+    if !success {
+        var error_text: *u8 = &ctx.error[0usize];
+        crust0_host_write_stream(2u32, error_text, text_length(error_text));
+        crust0_host_write_stream(2u32, "\n", 1usize);
+    }
+    crust_context_destroy(&ctx);
+    crust0_host_free(bytes);
+    if !success { return 1i32; }
+    return 0i32;
+}

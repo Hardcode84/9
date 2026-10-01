@@ -1,4 +1,4 @@
-#include "rmd0_x64.h"
+#include "crust0_x64.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -15,14 +15,14 @@ typedef struct {
 } Snapshot;
 
 typedef struct {
-    RmdContext context;
-    RmdSource source;
-    RmdUnit *unit;
-    RmdDecl *record;
-    RmdDecl *value;
-    RmdDecl *function;
-    RmdDecl *private_value;
-    RmdDecl *callback;
+    CrustContext context;
+    CrustSource source;
+    CrustUnit *unit;
+    CrustDecl *record;
+    CrustDecl *value;
+    CrustDecl *function;
+    CrustDecl *private_value;
+    CrustDecl *callback;
     Snapshot snapshots[SNAPSHOT_COUNT];
     size_t snapshot_count;
 } Provider;
@@ -69,7 +69,7 @@ typedef struct {
 
 typedef struct {
     const char *text;
-    RmdName *name;
+    CrustName *name;
 } NameInput;
 
 static const char ordinary_consumer[] =
@@ -127,9 +127,9 @@ static void snapshot(Provider *provider, const void *object, size_t size)
 
 static void freeze_provider(Provider *provider)
 {
-    RmdDecl *decl;
-    RmdField *field;
-    RmdParam *param;
+    CrustDecl *decl;
+    CrustField *field;
+    CrustParam *param;
     snapshot(provider, &provider->context, sizeof(provider->context));
     snapshot(provider, provider->unit, sizeof(*provider->unit));
     for (decl = provider->unit->declarations; decl != NULL; decl = decl->next) {
@@ -185,14 +185,14 @@ static bool prepare_provider(Provider *provider, unsigned index)
         {"provider_b_value", "provider_b_read_node", "provider_b_private", "provider_b_callback"}
     };
     memset(provider, 0, sizeof(*provider));
-    rmd_context_init(&provider->context, NULL);
+    crust_context_init(&provider->context, NULL);
     provider->source.path = index == 0 ? "provider-a" : "provider-b";
     provider->source.bytes = (const unsigned char *)sources[index];
     provider->source.size = strlen(sources[index]);
     provider->source.identity = 101 + index;
-    if (!rmd_read(&provider->context, &provider->source, &provider->unit) ||
-        !rmd_collect(&provider->context) || !rmd_resolve(&provider->context) ||
-        !rmd_check(&provider->context)) {
+    if (!crust_read(&provider->context, &provider->source, &provider->unit) ||
+        !crust_collect(&provider->context) || !crust_resolve(&provider->context) ||
+        !crust_check(&provider->context)) {
         fprintf(stderr, "provider: %s\n", provider->context.error);
         return false;
     }
@@ -209,26 +209,26 @@ static bool prepare_provider(Provider *provider, unsigned index)
     return true;
 }
 
-static void intern_name(RmdContext *ctx, void *data)
+static void intern_name(CrustContext *ctx, void *data)
 {
     NameInput *input = data;
-    input->name = rmd_intern(ctx, (const unsigned char *)input->text, strlen(input->text));
+    input->name = crust_intern(ctx, (const unsigned char *)input->text, strlen(input->text));
 }
 
-static bool bind_name(RmdContext *ctx, const char *name, RmdDecl *decl,
-                      RmdName **bound_name)
+static bool bind_name(CrustContext *ctx, const char *name, CrustDecl *decl,
+                      CrustName **bound_name)
 {
     NameInput input;
     input.text = name;
     input.name = NULL;
-    if (!rmd_run_stage(ctx, intern_name, &input) || !rmd_bind(ctx, input.name, decl))
+    if (!crust_run_stage(ctx, intern_name, &input) || !crust_bind(ctx, input.name, decl))
         return false;
     if (bound_name != NULL) *bound_name = input.name;
     return true;
 }
 
-static bool apply_policy(RmdContext *ctx, const Work *work,
-                         RmdName **node_name, RmdName **alias_name)
+static bool apply_policy(CrustContext *ctx, const Work *work,
+                         CrustName **node_name, CrustName **alias_name)
 {
     const Policy *policy = work->policy;
     Provider *provider = &work->providers[policy->provider];
@@ -246,10 +246,10 @@ static bool apply_policy(RmdContext *ctx, const Work *work,
 
 static void test_constant_dependency(Provider *provider)
 {
-    RmdContext ctx;
-    RmdDecl conflicting_function = *provider->function;
+    CrustContext ctx;
+    CrustDecl conflicting_function = *provider->function;
     conflicting_function.link_name = "conflicting_function_link";
-    rmd_context_init(&ctx, NULL);
+    crust_context_init(&ctx, NULL);
     check(bind_name(&ctx, "saved", provider->callback, NULL),
           "constant binding supplies its function dependency");
     check(!bind_name(&ctx, "conflict", &conflicting_function, NULL) &&
@@ -259,7 +259,7 @@ static void test_constant_dependency(Provider *provider)
           "valid dependency alias is accepted after a rejected binding");
     check(bind_name(&ctx, "saved_again", provider->callback, NULL),
           "constant identity can have multiple supplied names");
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void read_output(FILE *output, Result *result)
@@ -279,36 +279,36 @@ static void read_output(FILE *output, Result *result)
 
 static void compile_consumer(Work *work)
 {
-    RmdContext ctx;
-    RmdSource source;
-    RmdUnit *unit;
-    RmdX64Program *program;
-    RmdSymbol *node;
-    RmdSymbol *alias;
-    RmdName *node_name;
-    RmdName *alias_name;
+    CrustContext ctx;
+    CrustSource source;
+    CrustUnit *unit;
+    CrustX64Program *program;
+    CrustSymbol *node;
+    CrustSymbol *alias;
+    CrustName *node_name;
+    CrustName *alias_name;
     Result *result = work->result;
     FILE *output = NULL;
     memset(result, 0, sizeof(*result));
-    rmd_context_init(&ctx, NULL);
+    crust_context_init(&ctx, NULL);
     source.path = work->policy->link_name;
     source.bytes = (const unsigned char *)work->policy->source;
     source.size = strlen(work->policy->source);
     source.identity = 1001 + work->index;
-    if (!apply_policy(&ctx, work, &node_name, &alias_name) || !rmd_read(&ctx, &source, &unit) ||
-        !rmd_collect(&ctx) || !rmd_resolve(&ctx)) goto done;
-    node = rmd_map_get(&ctx.globals, (uintptr_t)node_name);
-    alias = rmd_map_get(&ctx.globals, (uintptr_t)alias_name);
+    if (!apply_policy(&ctx, work, &node_name, &alias_name) || !crust_read(&ctx, &source, &unit) ||
+        !crust_collect(&ctx) || !crust_resolve(&ctx)) goto done;
+    node = crust_map_get(&ctx.globals, (uintptr_t)node_name);
+    alias = crust_map_get(&ctx.globals, (uintptr_t)alias_name);
     result->aliases_equal = node != NULL && alias != NULL &&
-        node->decl == alias->decl && rmd_type_equal(node->type, alias->type);
+        node->decl == alias->decl && crust_type_equal(node->type, alias->type);
     result->unit_identity = unit->declarations->unit_identity;
     result->declaration_identity = unit->declarations->identity;
-    if (!rmd_check_body(&ctx, unit->declarations)) goto done;
+    if (!crust_check_body(&ctx, unit->declarations)) goto done;
     unit->declarations->link_name = work->policy->link_name;
-    if (!rmd_x64_prepare(&ctx, &program, NULL)) goto done;
+    if (!crust_x64_prepare(&ctx, &program, NULL)) goto done;
     output = tmpfile();
     if (output == NULL) stop("cannot open private output file");
-    if (!rmd_x64_emit_program(program, output)) goto done;
+    if (!crust_x64_emit_program(program, output)) goto done;
     read_output(output, result);
     result->accepted = true;
 done:
@@ -319,7 +319,7 @@ done:
         if (ctx.error_loc.source != NULL)
             result->error_source_identity = ctx.error_loc.source->identity;
     }
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void *worker(void *data)
@@ -400,7 +400,7 @@ int main(void)
     unsigned round;
     for (index = 0; index < 2; ++index)
         if (!prepare_provider(&providers[index], index)) stop("provider preparation failed");
-    check(!rmd_type_equal(providers[0].record->type, providers[1].record->type),
+    check(!crust_type_equal(providers[0].record->type, providers[1].record->type),
           "same-layout records from different providers have distinct identities");
     check(providers[0].record->unit_identity == 101 && providers[0].record->identity == 1 &&
           providers[1].record->unit_identity == 102 && providers[1].record->identity == 1,
@@ -456,7 +456,7 @@ int main(void)
         size_t copy;
         for (copy = 0; copy < providers[index].snapshot_count; ++copy)
             free(providers[index].snapshots[copy].bytes);
-        rmd_context_destroy(&providers[index].context);
+        crust_context_destroy(&providers[index].context);
     }
     printf("parallel: %u/%u checks passed; 6 jobs, serial and two concurrent orders\n",
            checks - failures, checks);

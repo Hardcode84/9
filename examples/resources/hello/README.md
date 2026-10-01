@@ -4,7 +4,7 @@ Run from the repository root:
 
 ```sh
 make all resource-stage
-build/rmd examples/resources/hello/main.rmd
+build/crust examples/resources/hello/main.crust
 build/resource-hello
 ```
 

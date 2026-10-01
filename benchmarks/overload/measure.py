@@ -55,7 +55,7 @@ def source_pair(count, calls, overloaded, short):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--compiler", type=Path, default=Path("build/rmd-c"))
+    parser.add_argument("--compiler", type=Path, default=Path("build/crust-c"))
     parser.add_argument("--stage-compiler", type=Path)
     parser.add_argument("--work", type=Path, default=Path(".profile-cache/overload-baseline"))
     parser.add_argument("--output", type=Path, default=Path(".profile-cache/overload-baseline/results.json"))
@@ -77,12 +77,12 @@ def main():
     makefile = Path("Makefile").read_text()
     frozen_paths = [args.compiler, Path(__file__).resolve().relative_to(ROOT), Path("benchmarks/resources/measure.py"),
                     Path("runtime/host.c"), Path("src/core.c"), Path("src/read.c"), Path("src/check.c"),
-                    Path("include/rmd0.h"), Path("include/rmd0_host.h"), Path("include/rmd0_stage.h"),
-                    Path("Makefile"), Path("build/librmd0.a"), Path("build/librmd0_host.a"),
+                    Path("include/crust0.h"), Path("include/crust0_host.h"), Path("include/crust0_stage.h"),
+                    Path("Makefile"), Path("build/libcrust0.a"), Path("build/libcrust0_host.a"),
                     *map(Path, make_words(makefile, "C_STAGE"))]
     if args.stage_compiler:
         frozen_paths.append(args.stage_compiler)
-        frozen_paths += [*map(Path, make_words(makefile, "OVERLOAD_LIBRARY")), Path("stages/overload/main.rmd")]
+        frozen_paths += [*map(Path, make_words(makefile, "OVERLOAD_LIBRARY")), Path("stages/overload/main.crust")]
     frozen = {str(path): sha(path) for path in frozen_paths}
     workloads = []
     for count in counts:
@@ -94,7 +94,7 @@ def main():
                 directory = args.work / f"family-{count}" / label
                 directory.mkdir(parents=True, exist_ok=True)
                 provider, caller, expected = source_pair(count, args.calls, overloaded, short)
-                paths = [directory / "provider.rmd", directory / "caller.rmd"]
+                paths = [directory / "provider.crust", directory / "caller.crust"]
                 for path, text in zip(paths, (provider, caller)):
                     path.write_text(text)
                 variants[label] = {"sources": {str(path): {"bytes": path.stat().st_size, "sha256": sha(path)} for path in paths},
@@ -206,7 +206,7 @@ def main():
         observations = [HELPERS.timed(command) for command in commands]
         native_preparation = {"commands": commands, "observations": observations,
                               "total_wall_ms": sum(item["wall_ns"] for item in observations) / 1e6,
-                              "scope": "one construction of the native overload/reader/C stage from RMD source with an installed RMD C compiler; includes GCC optimization, object assembly, symbol renaming, and shared linking",
+                              "scope": "one construction of the native overload/reader/C stage from CRUST source with an installed CRUST C compiler; includes GCC optimization, object assembly, symbol renaming, and shared linking",
                               "statistic": "one observation per command; no confidence interval",
                               "source_bytes": sum(Path(path).stat().st_size for path in stage_sources),
                               "source_sha256": {path: sha(path) for path in stage_sources},
@@ -231,14 +231,14 @@ def main():
                          "stage_preparation": "installed native stage binary; its construction cost is not in these samples",
                          "check": "existing C-stage parsing and ordinary semantic checks",
                          "prepare": "existing C-stage checks plus complete C text and symbol-rename construction in memory",
-                         "stage_check": "RMD reader, overload selection and mangling, then ordinary seed semantic checks",
+                         "stage_check": "CRUST reader, overload selection and mangling, then ordinary seed semantic checks",
                          "stage_prepare": "stage_check plus complete C text and symbol-rename construction in memory",
                          "usage": "wait4 process user/system CPU and peak RSS; wall time includes launch and completion",
                          "bootstrap": "10000 resamples of complete paired rounds; ratio-of-medians 95 percent interval",
                          "noise": "one logical CPU pinned; shared caches, kernel activity, and machine-wide load remain uncontrolled",
                          "symbols": "paired callee spellings have equal byte length; short and padded controls differ by four bytes per declaration/call"},
               "workloads": workloads, "native_stage_preparation": native_preparation, "complete": True,
-              "conclusion": "This is an explicit-name RMD baseline; no overload-stage cost or C-speed result is established unless its candidate is measured separately."}
+              "conclusion": "This is an explicit-name CRUST baseline; no overload-stage cost or C-speed result is established unless its candidate is measured separately."}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text((json.dumps(report, indent=2) + "\n").replace(str(ROOT), "@REPO@"))
     print(args.output, flush=True)

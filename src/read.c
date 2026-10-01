@@ -1,4 +1,4 @@
-#include "rmd0.h"
+#include "crust0.h"
 
 #include <limits.h>
 #include <string.h>
@@ -14,17 +14,17 @@ enum {
 
 typedef struct {
     int kind;
-    RmdLoc loc;
-    RmdName *name;
+    CrustLoc loc;
+    CrustName *name;
     uint64_t integer;
-    RmdTypeKind integer_type;
+    CrustTypeKind integer_type;
     const unsigned char *bytes;
     size_t byte_count;
 } Token;
 
 typedef struct {
-    RmdContext *ctx;
-    RmdSource *source;
+    CrustContext *ctx;
+    CrustSource *source;
     size_t offset;
     size_t end;
     unsigned depth;
@@ -35,12 +35,12 @@ typedef struct {
     const char *text;
     size_t size;
     int token;
-    RmdTypeKind type;
+    CrustTypeKind type;
 } Keyword;
 
-#define KEYWORD(text, token) { text, sizeof(text) - 1, token, RMD_T_UNIT }
+#define KEYWORD(text, token) { text, sizeof(text) - 1, token, CRUST_T_UNIT }
 #define TYPEWORD(text, type) { text, sizeof(text) - 1, TOK_TYPE, type }
-#define NEW(reader, type) rmd_alloc((reader)->ctx, sizeof(type), RMD_ALIGNOF(type))
+#define NEW(reader, type) crust_alloc((reader)->ctx, sizeof(type), CRUST_ALIGNOF(type))
 #define READ_DEPTH_LIMIT 256u
 
 static const Keyword keywords[] = {
@@ -55,12 +55,12 @@ static const Keyword keywords[] = {
     KEYWORD("sizeof", TOK_SIZEOF), KEYWORD("alignof", TOK_ALIGNOF),
     KEYWORD("offsetof", TOK_OFFSETOF), KEYWORD("true", TOK_TRUE),
     KEYWORD("false", TOK_FALSE),
-    TYPEWORD("i8", RMD_T_I8), TYPEWORD("u8", RMD_T_U8),
-    TYPEWORD("i16", RMD_T_I16), TYPEWORD("u16", RMD_T_U16),
-    TYPEWORD("i32", RMD_T_I32), TYPEWORD("u32", RMD_T_U32),
-    TYPEWORD("i64", RMD_T_I64), TYPEWORD("u64", RMD_T_U64),
-    TYPEWORD("isize", RMD_T_ISIZE), TYPEWORD("usize", RMD_T_USIZE),
-    TYPEWORD("bool", RMD_T_BOOL), TYPEWORD("unit", RMD_T_UNIT)
+    TYPEWORD("i8", CRUST_T_I8), TYPEWORD("u8", CRUST_T_U8),
+    TYPEWORD("i16", CRUST_T_I16), TYPEWORD("u16", CRUST_T_U16),
+    TYPEWORD("i32", CRUST_T_I32), TYPEWORD("u32", CRUST_T_U32),
+    TYPEWORD("i64", CRUST_T_I64), TYPEWORD("u64", CRUST_T_U64),
+    TYPEWORD("isize", CRUST_T_ISIZE), TYPEWORD("usize", CRUST_T_USIZE),
+    TYPEWORD("bool", CRUST_T_BOOL), TYPEWORD("unit", CRUST_T_UNIT)
 };
 
 static bool name_start(unsigned char c)
@@ -114,28 +114,28 @@ static void read_string(Reader *reader)
     while (end < size && source[end] != '"') {
         unsigned char c = source[end++];
         if (c == 0 || c == '\n' || c == '\r')
-            rmd_fail(reader->ctx, reader->token.loc, "invalid byte in string literal");
+            crust_fail(reader->ctx, reader->token.loc, "invalid byte in string literal");
         if (c == '\\') {
             if (end == size)
-                rmd_fail(reader->ctx, reader->token.loc, "unterminated string escape");
+                crust_fail(reader->ctx, reader->token.loc, "unterminated string escape");
             c = source[end++];
             if (c == 'x') {
                 if (size - end < 2 || hex_digit(source[end]) < 0 ||
                     hex_digit(source[end + 1]) < 0)
-                    rmd_fail(reader->ctx, reader->token.loc, "expected two hexadecimal escape digits");
+                    crust_fail(reader->ctx, reader->token.loc, "expected two hexadecimal escape digits");
                 end += 2;
             } else if (c != '\\' && c != '"' && c != 'n' && c != 'r' &&
                        c != 't' && c != '0') {
-                rmd_fail(reader->ctx, reader->token.loc, "unknown string escape");
+                crust_fail(reader->ctx, reader->token.loc, "unknown string escape");
             }
         }
         ++decoded;
     }
     if (end == size)
-        rmd_fail(reader->ctx, reader->token.loc, "unterminated string literal");
+        crust_fail(reader->ctx, reader->token.loc, "unterminated string literal");
     if (decoded == SIZE_MAX)
-        rmd_fail(reader->ctx, reader->token.loc, "string literal is too large");
-    bytes = rmd_alloc(reader->ctx, decoded + 1, RMD_ALIGNOF(unsigned char));
+        crust_fail(reader->ctx, reader->token.loc, "string literal is too large");
+    bytes = crust_alloc(reader->ctx, decoded + 1, CRUST_ALIGNOF(unsigned char));
     i = 0;
     while (start < end) {
         unsigned char c = source[start++];
@@ -178,18 +178,18 @@ static void read_number(Reader *reader)
         int digit = hex_digit(source[start]);
         if (digit < 0 || (unsigned)digit >= base) break;
         if (value > (UINT64_MAX - (unsigned)digit) / base)
-            rmd_fail(reader->ctx, reader->token.loc, "integer token exceeds 64 bits");
+            crust_fail(reader->ctx, reader->token.loc, "integer token exceeds 64 bits");
         value = value * base + (unsigned)digit;
         ++start;
     }
     if (start == digits)
-        rmd_fail(reader->ctx, reader->token.loc, "integer token has no digits");
+        crust_fail(reader->ctx, reader->token.loc, "integer token has no digits");
     if (start == end && base == 10) {
         reader->token.kind = TOK_COUNT;
     } else {
         suffix = keyword(source + start, end - start);
-        if (suffix == NULL || suffix->token != TOK_TYPE || suffix->type > RMD_T_USIZE)
-            rmd_fail(reader->ctx, reader->token.loc, "invalid integer type suffix");
+        if (suffix == NULL || suffix->token != TOK_TYPE || suffix->type > CRUST_T_USIZE)
+            crust_fail(reader->ctx, reader->token.loc, "invalid integer type suffix");
         reader->token.kind = TOK_INTEGER;
         reader->token.integer_type = suffix->type;
     }
@@ -213,10 +213,10 @@ static inline void skip_trivia(Reader *reader)
         reader->offset += 2;
         while (reader->offset < size && source[reader->offset] != '\n') {
             if (source[reader->offset] == 0) {
-                RmdLoc loc;
+                CrustLoc loc;
                 loc.source = reader->source;
                 loc.offset = reader->offset;
-                rmd_fail(reader->ctx, loc, "zero byte in source");
+                crust_fail(reader->ctx, loc, "zero byte in source");
             }
             ++reader->offset;
         }
@@ -250,7 +250,7 @@ static void next_token(Reader *reader)
             reader->token.integer_type = word->type;
         } else {
             reader->token.kind = TOK_NAME;
-            reader->token.name = rmd_intern(reader->ctx, source + start, reader->offset - start);
+            reader->token.name = crust_intern(reader->ctx, source + start, reader->offset - start);
         }
         return;
     }
@@ -282,7 +282,7 @@ static void next_token(Reader *reader)
         }
     }
     if (c == 0 || strchr("{}()[]:;,.=+-*/%&|^!~<>", c) == NULL)
-        rmd_fail(reader->ctx, reader->token.loc, "invalid source byte 0x%02x", (unsigned)c);
+        crust_fail(reader->ctx, reader->token.loc, "invalid source byte 0x%02x", (unsigned)c);
 }
 
 static bool take(Reader *reader, int kind)
@@ -295,18 +295,18 @@ static bool take(Reader *reader, int kind)
 static void expect(Reader *reader, int kind, const char *description)
 {
     if (!take(reader, kind))
-        rmd_fail(reader->ctx, reader->token.loc, "expected %s", description);
+        crust_fail(reader->ctx, reader->token.loc, "expected %s", description);
 }
 
 static void expect_current(Reader *reader, int kind, const char *description)
 {
     if (reader->token.kind != kind)
-        rmd_fail(reader->ctx, reader->token.loc, "expected %s", description);
+        crust_fail(reader->ctx, reader->token.loc, "expected %s", description);
 }
 
-static RmdName *read_name(Reader *reader)
+static CrustName *read_name(Reader *reader)
 {
-    RmdName *name = reader->token.name;
+    CrustName *name = reader->token.name;
     expect(reader, TOK_NAME, "an identifier");
     return name;
 }
@@ -314,56 +314,56 @@ static RmdName *read_name(Reader *reader)
 static void enter(Reader *reader)
 {
     if (reader->depth == READ_DEPTH_LIMIT)
-        rmd_fail(reader->ctx, reader->token.loc, "parser nesting limit of %u exceeded", READ_DEPTH_LIMIT);
+        crust_fail(reader->ctx, reader->token.loc, "parser nesting limit of %u exceeded", READ_DEPTH_LIMIT);
     ++reader->depth;
 }
 
 static size_t grow_capacity(Reader *reader, size_t capacity)
 {
     if (capacity > SIZE_MAX / 2)
-        rmd_fail(reader->ctx, reader->token.loc, "too many list entries");
+        crust_fail(reader->ctx, reader->token.loc, "too many list entries");
     return capacity == 0 ? 4 : capacity * 2;
 }
 
-static RmdTypeSyntax *read_type(Reader *reader);
-static RmdExpr *read_expr(Reader *reader);
-static RmdStmt *read_block(Reader *reader);
-static RmdStmt *read_block_contents(Reader *reader);
+static CrustTypeSyntax *read_type(Reader *reader);
+static CrustExpr *read_expr(Reader *reader);
+static CrustStmt *read_block(Reader *reader);
+static CrustStmt *read_block_contents(Reader *reader);
 
-static RmdTypeSyntax *read_type(Reader *reader)
+static CrustTypeSyntax *read_type(Reader *reader)
 {
-    RmdTypeSyntax *type;
+    CrustTypeSyntax *type;
     enter(reader);
-    type = NEW(reader, RmdTypeSyntax);
+    type = NEW(reader, CrustTypeSyntax);
     type->loc = reader->token.loc;
     if (reader->token.kind == TOK_TYPE) {
         type->kind = reader->token.integer_type;
         next_token(reader);
     } else if (reader->token.kind == TOK_NAME) {
-        type->kind = RMD_T_NAME;
+        type->kind = CRUST_T_NAME;
         type->name = read_name(reader);
     } else if (take(reader, '*')) {
-        type->kind = RMD_T_POINTER;
+        type->kind = CRUST_T_POINTER;
         type->base = read_type(reader);
     } else if (take(reader, '[')) {
-        type->kind = RMD_T_ARRAY;
+        type->kind = CRUST_T_ARRAY;
         type->base = read_type(reader);
         expect(reader, ';', "';' in array type");
         if (reader->token.kind != TOK_COUNT)
-            rmd_fail(reader->ctx, reader->token.loc, "expected an unsuffixed decimal array count");
+            crust_fail(reader->ctx, reader->token.loc, "expected an unsuffixed decimal array count");
         type->count = reader->token.integer;
         next_token(reader);
         expect(reader, ']', "']'");
     } else if (take(reader, TOK_FN)) {
         size_t capacity = 0;
-        type->kind = RMD_T_FUNCTION;
+        type->kind = CRUST_T_FUNCTION;
         expect(reader, '(', "'('");
         if (reader->token.kind != ')') {
             for (;;) {
                 if (type->param_count == capacity) {
                     capacity = grow_capacity(reader, capacity);
-                    type->params = rmd_grow_array(reader->ctx, type->params, type->param_count,
-                        capacity, sizeof(*type->params), RMD_ALIGNOF(RmdTypeSyntax *));
+                    type->params = crust_grow_array(reader->ctx, type->params, type->param_count,
+                        capacity, sizeof(*type->params), CRUST_ALIGNOF(CrustTypeSyntax *));
                 }
                 type->params[type->param_count++] = read_type(reader);
                 if (!take(reader, ',') || reader->token.kind == ')') break;
@@ -373,29 +373,29 @@ static RmdTypeSyntax *read_type(Reader *reader)
         expect(reader, TOK_ARROW, "'->'");
         type->base = read_type(reader);
     } else {
-        rmd_fail(reader->ctx, reader->token.loc, "expected a type");
+        crust_fail(reader->ctx, reader->token.loc, "expected a type");
     }
     --reader->depth;
     return type;
 }
 
-static RmdExpr *new_expr(Reader *reader, RmdExprKind kind, RmdLoc loc)
+static CrustExpr *new_expr(Reader *reader, CrustExprKind kind, CrustLoc loc)
 {
-    RmdExpr *expr = NEW(reader, RmdExpr);
+    CrustExpr *expr = NEW(reader, CrustExpr);
     expr->kind = kind;
     expr->loc = loc;
     return expr;
 }
 
-static void read_arguments(Reader *reader, RmdExpr *expr, int end)
+static void read_arguments(Reader *reader, CrustExpr *expr, int end)
 {
     size_t capacity = 0;
     if (reader->token.kind != end) {
         for (;;) {
             if (expr->arg_count == capacity) {
                 capacity = grow_capacity(reader, capacity);
-                expr->args = rmd_grow_array(reader->ctx, expr->args, expr->arg_count,
-                    capacity, sizeof(*expr->args), RMD_ALIGNOF(RmdExpr *));
+                expr->args = crust_grow_array(reader->ctx, expr->args, expr->arg_count,
+                    capacity, sizeof(*expr->args), CRUST_ALIGNOF(CrustExpr *));
             }
             expr->args[expr->arg_count++] = read_expr(reader);
             if (!take(reader, ',') || reader->token.kind == end) break;
@@ -404,23 +404,23 @@ static void read_arguments(Reader *reader, RmdExpr *expr, int end)
     expect(reader, end, end == ')' ? "')'" : "'}'");
 }
 
-static RmdExpr *read_constructor(Reader *reader, RmdLoc loc)
+static CrustExpr *read_constructor(Reader *reader, CrustLoc loc)
 {
-    RmdExpr *expr;
+    CrustExpr *expr;
     if (reader->token.kind == '[') {
-        expr = new_expr(reader, RMD_E_ARRAY, loc);
+        expr = new_expr(reader, CRUST_E_ARRAY, loc);
         expr->syntax_type = read_type(reader);
         expect(reader, '{', "'{'");
         read_arguments(reader, expr, '}');
     } else if (reader->token.kind == TOK_NAME) {
-        RmdInit **tail;
-        expr = new_expr(reader, RMD_E_RECORD, loc);
+        CrustInit **tail;
+        expr = new_expr(reader, CRUST_E_RECORD, loc);
         expr->syntax_type = read_type(reader);
         tail = &expr->inits;
         expect(reader, '{', "'{'");
         if (reader->token.kind != '}') {
             for (;;) {
-                RmdInit *init = NEW(reader, RmdInit);
+                CrustInit *init = NEW(reader, CrustInit);
                 init->loc = reader->token.loc;
                 init->name = read_name(reader);
                 expect(reader, ':', "':'");
@@ -432,43 +432,43 @@ static RmdExpr *read_constructor(Reader *reader, RmdLoc loc)
         }
         expect(reader, '}', "'}'");
     } else {
-        rmd_fail(reader->ctx, reader->token.loc, "expected a record name or an array type after 'make'");
+        crust_fail(reader->ctx, reader->token.loc, "expected a record name or an array type after 'make'");
         return NULL;
     }
     return expr;
 }
 
-static RmdExpr *read_primary(Reader *reader)
+static CrustExpr *read_primary(Reader *reader)
 {
     Token token = reader->token;
-    RmdExpr *expr;
+    CrustExpr *expr;
     switch (token.kind) {
     case TOK_NAME:
-        expr = new_expr(reader, RMD_E_NAME, token.loc);
+        expr = new_expr(reader, CRUST_E_NAME, token.loc);
         expr->name = token.name;
         next_token(reader);
         return expr;
     case TOK_INTEGER:
-        expr = new_expr(reader, RMD_E_INTEGER, token.loc);
+        expr = new_expr(reader, CRUST_E_INTEGER, token.loc);
         expr->integer = token.integer;
         expr->literal_type = token.integer_type;
         next_token(reader);
         return expr;
     case TOK_TRUE:
     case TOK_FALSE:
-        expr = new_expr(reader, RMD_E_BOOL, token.loc);
+        expr = new_expr(reader, CRUST_E_BOOL, token.loc);
         expr->integer = token.kind == TOK_TRUE;
         next_token(reader);
         return expr;
     case TOK_STRING:
-        expr = new_expr(reader, RMD_E_STRING, token.loc);
+        expr = new_expr(reader, CRUST_E_STRING, token.loc);
         expr->bytes = token.bytes;
         expr->byte_count = token.byte_count;
         next_token(reader);
         return expr;
     case '(':
         next_token(reader);
-        expr = new_expr(reader, RMD_E_GROUP, token.loc);
+        expr = new_expr(reader, CRUST_E_GROUP, token.loc);
         expr->left = read_expr(reader);
         expect(reader, ')', "')'");
         return expr;
@@ -479,18 +479,18 @@ static RmdExpr *read_primary(Reader *reader)
     case TOK_SIZEOF:
     case TOK_ALIGNOF:
         next_token(reader);
-        expr = new_expr(reader, token.kind == TOK_NULL ? RMD_E_NULL :
-            token.kind == TOK_SIZEOF ? RMD_E_SIZEOF : RMD_E_ALIGNOF, token.loc);
+        expr = new_expr(reader, token.kind == TOK_NULL ? CRUST_E_NULL :
+            token.kind == TOK_SIZEOF ? CRUST_E_SIZEOF : CRUST_E_ALIGNOF, token.loc);
         expect(reader, '(', "'('");
         expr->syntax_type = read_type(reader);
         expect(reader, ')', "')'");
         return expr;
     case TOK_OFFSETOF:
         next_token(reader);
-        expr = new_expr(reader, RMD_E_OFFSETOF, token.loc);
+        expr = new_expr(reader, CRUST_E_OFFSETOF, token.loc);
         expect(reader, '(', "'('");
-        expr->syntax_type = NEW(reader, RmdTypeSyntax);
-        expr->syntax_type->kind = RMD_T_NAME;
+        expr->syntax_type = NEW(reader, CrustTypeSyntax);
+        expr->syntax_type->kind = CRUST_T_NAME;
         expr->syntax_type->loc = reader->token.loc;
         expr->syntax_type->name = read_name(reader);
         expect(reader, ',', "','");
@@ -498,28 +498,28 @@ static RmdExpr *read_primary(Reader *reader)
         expect(reader, ')', "')'");
         return expr;
     default:
-        rmd_fail(reader->ctx, token.loc, "expected an expression");
+        crust_fail(reader->ctx, token.loc, "expected an expression");
         return NULL;
     }
 }
 
-static RmdExpr *read_postfix(Reader *reader)
+static CrustExpr *read_postfix(Reader *reader)
 {
-    RmdExpr *expr = read_primary(reader);
+    CrustExpr *expr = read_primary(reader);
     for (;;) {
-        RmdLoc loc = reader->token.loc;
-        RmdExpr *next;
+        CrustLoc loc = reader->token.loc;
+        CrustExpr *next;
         if (take(reader, '(')) {
-            next = new_expr(reader, RMD_E_CALL, loc);
+            next = new_expr(reader, CRUST_E_CALL, loc);
             next->left = expr;
             read_arguments(reader, next, ')');
         } else if (take(reader, '[')) {
-            next = new_expr(reader, RMD_E_INDEX, loc);
+            next = new_expr(reader, CRUST_E_INDEX, loc);
             next->left = expr;
             next->right = read_expr(reader);
             expect(reader, ']', "']'");
         } else if (take(reader, '.')) {
-            next = new_expr(reader, RMD_E_FIELD, loc);
+            next = new_expr(reader, CRUST_E_FIELD, loc);
             next->left = expr;
             next->field_name = read_name(reader);
         } else {
@@ -529,36 +529,36 @@ static RmdExpr *read_postfix(Reader *reader)
     }
 }
 
-static RmdExpr *read_unary(Reader *reader)
+static CrustExpr *read_unary(Reader *reader)
 {
-    RmdOp op;
-    RmdExpr *expr;
-    RmdLoc loc = reader->token.loc;
+    CrustOp op;
+    CrustExpr *expr;
+    CrustLoc loc = reader->token.loc;
     enter(reader);
     switch (reader->token.kind) {
-    case '-': op = RMD_OP_NEG; break;
-    case '!': op = RMD_OP_NOT; break;
-    case '~': op = RMD_OP_BIT_NOT; break;
-    case '*': op = RMD_OP_DEREF; break;
-    case '&': op = RMD_OP_ADDRESS; break;
+    case '-': op = CRUST_OP_NEG; break;
+    case '!': op = CRUST_OP_NOT; break;
+    case '~': op = CRUST_OP_BIT_NOT; break;
+    case '*': op = CRUST_OP_DEREF; break;
+    case '&': op = CRUST_OP_ADDRESS; break;
     default:
         expr = read_postfix(reader);
         --reader->depth;
         return expr;
     }
     next_token(reader);
-    expr = new_expr(reader, RMD_E_UNARY, loc);
+    expr = new_expr(reader, CRUST_E_UNARY, loc);
     expr->op = op;
     expr->left = read_unary(reader);
     --reader->depth;
     return expr;
 }
 
-static RmdExpr *read_cast(Reader *reader)
+static CrustExpr *read_cast(Reader *reader)
 {
-    RmdExpr *expr = read_unary(reader);
+    CrustExpr *expr = read_unary(reader);
     while (reader->token.kind == TOK_AS) {
-        RmdExpr *cast = new_expr(reader, RMD_E_CAST, reader->token.loc);
+        CrustExpr *cast = new_expr(reader, CRUST_E_CAST, reader->token.loc);
         next_token(reader);
         cast->left = expr;
         cast->syntax_type = read_type(reader);
@@ -567,46 +567,46 @@ static RmdExpr *read_cast(Reader *reader)
     return expr;
 }
 
-static unsigned binary_operator(int token, RmdOp *op)
+static unsigned binary_operator(int token, CrustOp *op)
 {
     switch (token) {
-    case TOK_OR: *op = RMD_OP_OR; return 1;
-    case TOK_AND: *op = RMD_OP_AND; return 2;
-    case '|': *op = RMD_OP_BIT_OR; return 3;
-    case '^': *op = RMD_OP_BIT_XOR; return 4;
-    case '&': *op = RMD_OP_BIT_AND; return 5;
-    case TOK_EQ: *op = RMD_OP_EQ; return 6;
-    case TOK_NE: *op = RMD_OP_NE; return 6;
-    case '<': *op = RMD_OP_LT; return 7;
-    case TOK_LE: *op = RMD_OP_LE; return 7;
-    case '>': *op = RMD_OP_GT; return 7;
-    case TOK_GE: *op = RMD_OP_GE; return 7;
-    case TOK_SHL: *op = RMD_OP_SHL; return 8;
-    case TOK_SHR: *op = RMD_OP_SHR; return 8;
-    case '+': *op = RMD_OP_ADD; return 9;
-    case '-': *op = RMD_OP_SUB; return 9;
-    case '*': *op = RMD_OP_MUL; return 10;
-    case '/': *op = RMD_OP_DIV; return 10;
-    case '%': *op = RMD_OP_REM; return 10;
+    case TOK_OR: *op = CRUST_OP_OR; return 1;
+    case TOK_AND: *op = CRUST_OP_AND; return 2;
+    case '|': *op = CRUST_OP_BIT_OR; return 3;
+    case '^': *op = CRUST_OP_BIT_XOR; return 4;
+    case '&': *op = CRUST_OP_BIT_AND; return 5;
+    case TOK_EQ: *op = CRUST_OP_EQ; return 6;
+    case TOK_NE: *op = CRUST_OP_NE; return 6;
+    case '<': *op = CRUST_OP_LT; return 7;
+    case TOK_LE: *op = CRUST_OP_LE; return 7;
+    case '>': *op = CRUST_OP_GT; return 7;
+    case TOK_GE: *op = CRUST_OP_GE; return 7;
+    case TOK_SHL: *op = CRUST_OP_SHL; return 8;
+    case TOK_SHR: *op = CRUST_OP_SHR; return 8;
+    case '+': *op = CRUST_OP_ADD; return 9;
+    case '-': *op = CRUST_OP_SUB; return 9;
+    case '*': *op = CRUST_OP_MUL; return 10;
+    case '/': *op = CRUST_OP_DIV; return 10;
+    case '%': *op = CRUST_OP_REM; return 10;
     default: return 0;
     }
 }
 
-static RmdExpr *read_binary(Reader *reader, unsigned minimum)
+static CrustExpr *read_binary(Reader *reader, unsigned minimum)
 {
-    RmdExpr *left = read_cast(reader);
+    CrustExpr *left = read_cast(reader);
     bool compared = false;
     bool equated = false;
     for (;;) {
-        RmdOp op = RMD_OP_ADD;
+        CrustOp op = CRUST_OP_ADD;
         unsigned precedence = binary_operator(reader->token.kind, &op);
-        RmdExpr *expr;
+        CrustExpr *expr;
         if (precedence < minimum) return left;
         if ((precedence == 7 && compared) || (precedence == 6 && equated))
-            rmd_fail(reader->ctx, reader->token.loc, "comparisons cannot chain at the same precedence");
+            crust_fail(reader->ctx, reader->token.loc, "comparisons cannot chain at the same precedence");
         if (precedence == 7) compared = true;
         if (precedence == 6) equated = true;
-        expr = new_expr(reader, RMD_E_BINARY, reader->token.loc);
+        expr = new_expr(reader, CRUST_E_BINARY, reader->token.loc);
         expr->op = op;
         expr->left = left;
         next_token(reader);
@@ -615,29 +615,29 @@ static RmdExpr *read_binary(Reader *reader, unsigned minimum)
     }
 }
 
-static RmdExpr *read_expr(Reader *reader)
+static CrustExpr *read_expr(Reader *reader)
 {
-    RmdExpr *expr;
+    CrustExpr *expr;
     enter(reader);
     expr = read_binary(reader, 1);
     --reader->depth;
     return expr;
 }
 
-static RmdStmt *new_stmt(Reader *reader, RmdStmtKind kind, RmdLoc loc)
+static CrustStmt *new_stmt(Reader *reader, CrustStmtKind kind, CrustLoc loc)
 {
-    RmdStmt *stmt = NEW(reader, RmdStmt);
+    CrustStmt *stmt = NEW(reader, CrustStmt);
     stmt->kind = kind;
     stmt->loc = loc;
     return stmt;
 }
 
-static RmdStmt *read_simple_statement(Reader *reader)
+static CrustStmt *read_simple_statement(Reader *reader)
 {
-    RmdStmt *stmt;
-    RmdLoc loc = reader->token.loc;
+    CrustStmt *stmt;
+    CrustLoc loc = reader->token.loc;
     if (take(reader, TOK_VAR)) {
-        stmt = new_stmt(reader, RMD_S_VAR, loc);
+        stmt = new_stmt(reader, CRUST_S_VAR, loc);
         stmt->name = read_name(reader);
         expect(reader, ':', "':'");
         stmt->syntax_type = read_type(reader);
@@ -645,19 +645,19 @@ static RmdStmt *read_simple_statement(Reader *reader)
         stmt->uninitialized = take(reader, TOK_UNINIT);
         if (!stmt->uninitialized) stmt->value = read_expr(reader);
     } else if (take(reader, TOK_BREAK)) {
-        stmt = new_stmt(reader, RMD_S_BREAK, loc);
+        stmt = new_stmt(reader, CRUST_S_BREAK, loc);
     } else if (take(reader, TOK_CONTINUE)) {
-        stmt = new_stmt(reader, RMD_S_CONTINUE, loc);
+        stmt = new_stmt(reader, CRUST_S_CONTINUE, loc);
     } else if (take(reader, TOK_TRAP)) {
-        stmt = new_stmt(reader, RMD_S_TRAP, loc);
+        stmt = new_stmt(reader, CRUST_S_TRAP, loc);
     } else if (take(reader, TOK_RETURN)) {
-        stmt = new_stmt(reader, RMD_S_RETURN, loc);
+        stmt = new_stmt(reader, CRUST_S_RETURN, loc);
         if (reader->token.kind != ';') stmt->expr = read_expr(reader);
     } else {
-        stmt = new_stmt(reader, RMD_S_EXPR, loc);
+        stmt = new_stmt(reader, CRUST_S_EXPR, loc);
         stmt->expr = read_expr(reader);
         if (take(reader, '=')) {
-            stmt->kind = RMD_S_ASSIGN;
+            stmt->kind = CRUST_S_ASSIGN;
             stmt->value = read_expr(reader);
         }
     }
@@ -665,20 +665,20 @@ static RmdStmt *read_simple_statement(Reader *reader)
     return stmt;
 }
 
-static RmdStmt *read_statement(Reader *reader)
+static CrustStmt *read_statement(Reader *reader)
 {
-    RmdStmt *stmt;
-    RmdLoc loc = reader->token.loc;
+    CrustStmt *stmt;
+    CrustLoc loc = reader->token.loc;
     if (reader->token.kind == '{') return read_block(reader);
     if (take(reader, TOK_IF)) {
-        stmt = new_stmt(reader, RMD_S_IF, loc);
+        stmt = new_stmt(reader, CRUST_S_IF, loc);
         stmt->expr = read_expr(reader);
         stmt->body = read_block(reader);
         if (take(reader, TOK_ELSE)) stmt->otherwise = read_block(reader);
         return stmt;
     }
     if (take(reader, TOK_WHILE)) {
-        stmt = new_stmt(reader, RMD_S_WHILE, loc);
+        stmt = new_stmt(reader, CRUST_S_WHILE, loc);
         stmt->expr = read_expr(reader);
         stmt->body = read_block(reader);
         return stmt;
@@ -688,17 +688,17 @@ static RmdStmt *read_statement(Reader *reader)
     return stmt;
 }
 
-static RmdStmt *read_block_contents(Reader *reader)
+static CrustStmt *read_block_contents(Reader *reader)
 {
-    RmdStmt *block;
-    RmdStmt **tail;
+    CrustStmt *block;
+    CrustStmt **tail;
     enter(reader);
-    block = new_stmt(reader, RMD_S_BLOCK, reader->token.loc);
+    block = new_stmt(reader, CRUST_S_BLOCK, reader->token.loc);
     expect(reader, '{', "'{'");
     tail = &block->body;
     while (reader->token.kind != '}') {
         if (reader->token.kind == TOK_EOF)
-            rmd_fail(reader->ctx, reader->token.loc, "expected '}' before end of input");
+            crust_fail(reader->ctx, reader->token.loc, "expected '}' before end of input");
         *tail = read_statement(reader);
         tail = &(*tail)->next;
     }
@@ -706,25 +706,25 @@ static RmdStmt *read_block_contents(Reader *reader)
     return block;
 }
 
-static RmdStmt *read_block(Reader *reader)
+static CrustStmt *read_block(Reader *reader)
 {
-    RmdStmt *block = read_block_contents(reader);
+    CrustStmt *block = read_block_contents(reader);
     next_token(reader);
     return block;
 }
 
-static RmdDecl *read_declaration(Reader *reader)
+static CrustDecl *read_declaration(Reader *reader)
 {
     Token token = reader->token;
-    RmdDecl *decl = NEW(reader, RmdDecl);
+    CrustDecl *decl = NEW(reader, CrustDecl);
     decl->loc = token.loc;
     if (take(reader, TOK_RECORD)) {
-        RmdField **tail = &decl->fields;
-        decl->kind = RMD_D_RECORD;
+        CrustField **tail = &decl->fields;
+        decl->kind = CRUST_D_RECORD;
         decl->name = read_name(reader);
         expect(reader, '{', "'{'");
         do {
-            RmdField *field = NEW(reader, RmdField);
+            CrustField *field = NEW(reader, CrustField);
             field->loc = reader->token.loc;
             field->name = read_name(reader);
             expect(reader, ':', "':'");
@@ -735,15 +735,15 @@ static RmdDecl *read_declaration(Reader *reader)
             tail = &field->next;
         } while (reader->token.kind != '}');
     } else if (token.kind == TOK_FN || token.kind == TOK_EXTERN) {
-        RmdParam **tail = &decl->params;
-        decl->kind = token.kind == TOK_FN ? RMD_D_FUNCTION : RMD_D_EXTERN;
+        CrustParam **tail = &decl->params;
+        decl->kind = token.kind == TOK_FN ? CRUST_D_FUNCTION : CRUST_D_EXTERN;
         next_token(reader);
-        if (decl->kind == RMD_D_EXTERN) expect(reader, TOK_FN, "'fn'");
+        if (decl->kind == CRUST_D_EXTERN) expect(reader, TOK_FN, "'fn'");
         decl->name = read_name(reader);
         expect(reader, '(', "'('");
         if (reader->token.kind != ')') {
             for (;;) {
-                RmdParam *param = NEW(reader, RmdParam);
+                CrustParam *param = NEW(reader, CrustParam);
                 param->loc = reader->token.loc;
                 param->name = read_name(reader);
                 expect(reader, ':', "':'");
@@ -757,25 +757,25 @@ static RmdDecl *read_declaration(Reader *reader)
         expect(reader, ')', "')'");
         expect(reader, TOK_ARROW, "'->'");
         decl->syntax_type = read_type(reader);
-        if (decl->kind == RMD_D_FUNCTION) {
+        if (decl->kind == CRUST_D_FUNCTION) {
             decl->body = read_block_contents(reader);
         } else {
             size_t i;
             expect(reader, '=', "'='");
             if (reader->token.kind != TOK_STRING)
-                rmd_fail(reader->ctx, reader->token.loc, "expected a native symbol string");
+                crust_fail(reader->ctx, reader->token.loc, "expected a native symbol string");
             if (reader->token.byte_count == 1)
-                rmd_fail(reader->ctx, reader->token.loc, "native symbol name must not be empty");
+                crust_fail(reader->ctx, reader->token.loc, "native symbol name must not be empty");
             for (i = 0; i + 1 < reader->token.byte_count; ++i) {
                 if (reader->token.bytes[i] == 0 || reader->token.bytes[i] >= 128)
-                    rmd_fail(reader->ctx, reader->token.loc, "native symbol name must be ASCII without zero bytes");
+                    crust_fail(reader->ctx, reader->token.loc, "native symbol name must be ASCII without zero bytes");
             }
             decl->link_name = (const char *)reader->token.bytes;
             next_token(reader);
             expect_current(reader, ';', "';'");
         }
     } else if (take(reader, TOK_CONST)) {
-        decl->kind = RMD_D_CONST;
+        decl->kind = CRUST_D_CONST;
         decl->name = read_name(reader);
         expect(reader, ':', "':'");
         decl->syntax_type = read_type(reader);
@@ -783,30 +783,30 @@ static RmdDecl *read_declaration(Reader *reader)
         decl->init = read_expr(reader);
         expect_current(reader, ';', "';'");
     } else {
-        rmd_fail(reader->ctx, token.loc, "expected a declaration");
+        crust_fail(reader->ctx, token.loc, "expected a declaration");
     }
     return decl;
 }
 
-static RmdUnit *read_unit(RmdContext *ctx, RmdSource *source, size_t begin, size_t end)
+static CrustUnit *read_unit(CrustContext *ctx, CrustSource *source, size_t begin, size_t end)
 {
     Reader reader;
-    RmdUnit *unit;
-    RmdDecl **tail;
+    CrustUnit *unit;
+    CrustDecl **tail;
     uint64_t ordinal = 0;
     memset(&reader, 0, sizeof(reader));
     reader.ctx = ctx;
     reader.source = source;
     reader.offset = begin;
     reader.end = end;
-    unit = NEW(&reader, RmdUnit);
+    unit = NEW(&reader, CrustUnit);
     unit->source = source;
     tail = &unit->declarations;
     next_token(&reader);
     while (reader.token.kind != TOK_EOF) {
-        RmdDecl *decl = read_declaration(&reader);
+        CrustDecl *decl = read_declaration(&reader);
         if (ordinal == UINT64_MAX)
-            rmd_fail(ctx, decl->loc, "too many declarations");
+            crust_fail(ctx, decl->loc, "too many declarations");
         decl->unit_identity = source->identity;
         decl->identity = ++ordinal;
         *tail = decl;
@@ -816,14 +816,14 @@ static RmdUnit *read_unit(RmdContext *ctx, RmdSource *source, size_t begin, size
     return unit;
 }
 
-bool rmd_read_range(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
-                    RmdUnit **result)
+bool crust_read_range(CrustContext *ctx, CrustSource *source, size_t begin, size_t end,
+                    CrustUnit **result)
 {
-    RmdFailureFrame failure;
-    RmdUnit *unit;
+    CrustFailureFrame failure;
+    CrustUnit *unit;
     *result = NULL;
     if (begin > end || end > source->size) {
-        rmd_set_error(ctx, source, begin <= source->size ? begin : source->size,
+        crust_set_error(ctx, source, begin <= source->size ? begin : source->size,
                       "source range must satisfy begin <= end <= source size");
         return false;
     }
@@ -842,14 +842,14 @@ bool rmd_read_range(RmdContext *ctx, RmdSource *source, size_t begin, size_t end
     return true;
 }
 
-bool rmd_read_one(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
-                  RmdAction *result)
+bool crust_read_one(CrustContext *ctx, CrustSource *source, size_t begin, size_t end,
+                  CrustAction *result)
 {
-    RmdFailureFrame failure;
+    CrustFailureFrame failure;
     Reader reader;
     memset(result, 0, sizeof(*result));
     if (begin > end || end > source->size) {
-        rmd_set_error(ctx, source, begin <= source->size ? begin : source->size,
+        crust_set_error(ctx, source, begin <= source->size ? begin : source->size,
                       "source range must satisfy begin <= end <= source size");
         return false;
     }
@@ -868,9 +868,9 @@ bool rmd_read_one(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
     next_token(&reader);
     if (reader.token.kind == TOK_RECORD || reader.token.kind == TOK_FN ||
         reader.token.kind == TOK_EXTERN || reader.token.kind == TOK_CONST) {
-        RmdDecl *decl = read_declaration(&reader);
+        CrustDecl *decl = read_declaration(&reader);
         if (decl->loc.offset >= UINT64_MAX)
-            rmd_fail(ctx, decl->loc, "declaration offset exceeds the identity limit");
+            crust_fail(ctx, decl->loc, "declaration offset exceeds the identity limit");
         decl->unit_identity = source->identity;
         decl->identity = (uint64_t)decl->loc.offset + 1;
         result->declaration = decl;
@@ -888,7 +888,7 @@ bool rmd_read_one(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
     return true;
 }
 
-bool rmd_read(RmdContext *ctx, RmdSource *source, RmdUnit **result)
+bool crust_read(CrustContext *ctx, CrustSource *source, CrustUnit **result)
 {
-    return rmd_read_range(ctx, source, 0, source->size, result);
+    return crust_read_range(ctx, source, 0, source->size, result);
 }

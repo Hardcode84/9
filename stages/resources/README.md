@@ -1,26 +1,26 @@
 # Resource compiler stage
 
-This ordinary RMD library implements ownership, local loans, RAII, and `defer`.
+This ordinary Crust library implements ownership, local loans, RAII, and `defer`.
 The C99 seed has no resource policy or new keyword. The root program chooses
 the library with ordinary source calls.
 
 ```sh
 make all resource-stage
-build/rmd examples/resources/hello/main.rmd
+build/crust examples/resources/hello/main.crust
 build/resource-hello
 make check-reader check-resources
 ```
 
-The [hello source](../../examples/resources/hello/main.rmd) contains the
+The [hello source](../../examples/resources/hello/main.crust) contains the
 compilation program and target program. The [SQLite application](../../examples/resources/sqlite/README.md)
 uses separate target files and tests actual connection, statement, and byte-view
 lifetimes. Its root also contains all compiler and linker options.
 
 ## Source rules
 
-The stage extends RMD0 with these forms:
+The stage extends Crust0 with these forms:
 
-```rmd
+```crust
 resource File { handle: *u8; } drop file_drop;
 
 fn file_drop(value: mut File) -> unit { /* audited release */ }
@@ -36,7 +36,7 @@ defer update(mut second);
 
 A resource is a nominal record with a declared drop function. Its raw fields
 and construction require `unsafe`. Ordinary records and fixed arrays own their
-resource fields and elements. Other values retain RMD0 copy semantics.
+resource fields and elements. Other values retain Crust0 copy semantics.
 
 - Initialization creates one cleanup obligation. A move transfers it and makes
   the whole source binding unavailable. Resource copies and partial moves fail.
@@ -96,11 +96,11 @@ retains the seed's defined wrapping and trap rules.
 
 ## Compiler interfaces
 
-[api.rmd](api.rmd) provides `resource_build` and `resource_program` for a root.
+[api.crust](api.crust) provides `resource_build` and `resource_program` for a root.
 Both take ordinary source and option data. There is no special runner path,
 package name, destructor name, or foreign API recognized by the seed.
 
-[extension.rmd](extension.rmd) exposes the lower-level sequence:
+[extension.crust](extension.crust) exposes the lower-level sequence:
 
 1. Initialize a context and `RsStage`.
 2. Call `rs_read` for each retained source range.
@@ -120,7 +120,7 @@ declaration has the source stage's unsafe marker. A safe source import can suppl
 a resource's drop function. It has the same exclusive-borrow signature and
 explicit-call restrictions as a local drop definition.
 
-The optional [overload adapter](../overload/resources.rmd) reads bare function
+The optional [overload adapter](../overload/resources.crust) reads bare function
 prototypes, selects calls with source borrow modes, and assigns structural native
 names. Initialize `RsStage`, then call `ov_resources_init`, `ov_resources_read`
 for each source, and `ov_resources_prepare`. Call `rs_prepare` after that sequence.
@@ -140,11 +140,11 @@ alone omits the planned cleanup. `resource_program` completes output before
 its local stage ends; a retained context from that call cannot be used alone
 to emit the resource program again.
 
-The [RMD reader](../reader/README.md) is independent of resources. Its four hooks
+The [Crust reader](../reader/README.md) is independent of resources. Its four hooks
 can add declarations, statements, prefix expressions, and type syntax. A stage
 can also replace the complete reader. The reader contains no resource keyword.
 
-The [C backend extension](../c/extension.rmd) accepts a callback for each complete
+The [C backend extension](../c/extension.crust) accepts a callback for each complete
 function body. The callback can emit its own control flow and can use checked
 expression and statement services. It does not require a seed body. A separate
 test emits labels and branches from an external library with null seed bodies.
@@ -163,7 +163,7 @@ call stays direct. Arrays use reverse loops, not unrolled drop lists.
 
 Record and array parameters use pointers to caller snapshots. Aggregate results
 use caller-provided storage. The stage retains explicit left-to-right evaluation
-with local temporaries. This is an internal RMD ABI; foreign signatures must use
+with local temporaries. This is an internal Crust ABI; foreign signatures must use
 explicit scalar ABI types. Target optimization can remove temporaries, but the
 ABI and its costs must be checked in actual output.
 

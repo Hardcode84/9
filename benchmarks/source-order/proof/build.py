@@ -23,17 +23,17 @@ def main():
     if args.cpu not in os.sched_getaffinity(0):
         raise SystemExit("selected CPU is not allowed")
     os.sched_setaffinity(0, {args.cpu})
-    for name in ("rmd-c", "rmd-c-library.so", "core.o", "read.o", "check.o", "host.o", "librmd0_host.a"):
+    for name in ("crust-c", "crust-c-library.so", "core.o", "read.o", "check.o", "host.o", "libcrust0_host.a"):
         if not (build / name).is_file():
             raise SystemExit("missing input " + str(build / name) + "; run make all c-stage first")
     work.mkdir(parents=True, exist_ok=True)
     (work / "san").mkdir(exist_ok=True)
-    for name in ("runner.c", "proof.h", "model.rmd", "interface.rmd", "plugin.rmd", "verify.py", "measure.py"):
+    for name in ("runner.c", "proof.h", "model.crust", "interface.crust", "plugin.crust", "verify.py", "measure.py"):
         shutil.copyfile(source / name, work / name)
     env = os.environ.copy()
-    env["RMD_PROOF_DIR"] = str(work)
-    env["RMD_PROOF_CPU"] = str(args.cpu)
-    env["RMD_PROOF_BUILD"] = str(build)
+    env["CRUST_PROOF_DIR"] = str(work)
+    env["CRUST_PROOF_CPU"] = str(args.cpu)
+    env["CRUST_PROOF_BUILD"] = str(build)
     commands = []
 
     def run(command, output=None):
@@ -51,16 +51,16 @@ def main():
 
     strict = ["-std=c99", "-pedantic-errors", "-Wall", "-Wextra", "-Werror",
               "-Wstrict-prototypes", "-Wmissing-prototypes", "-Wshadow", "-Wvla"]
-    interfaces = [root / item for item in ("api/rmd0.rmd", "api/rmd0_host.rmd", "api/rmd0_stage.rmd", "stages/c/api.rmd")]
+    interfaces = [root / item for item in ("api/crust0.crust", "api/crust0_host.crust", "api/crust0_stage.crust", "stages/c/api.crust")]
     exports = []
     for name in ("set_backend", "set_reader", "alternate", "include_input", "queue_emit", "reject_reader"):
         exports += ["--export", name]
-    run([build / "rmd-c", "--library", "--emit-c", "--symbols", work / "plugin.rsp", *exports,
-         *interfaces, work / "model.rmd", work / "plugin.rmd"], work / "plugin.c")
+    run([build / "crust-c", "--library", "--emit-c", "--symbols", work / "plugin.rsp", *exports,
+         *interfaces, work / "model.crust", work / "plugin.crust"], work / "plugin.c")
     backend_sources = [root / item for item in (
-        "api/rmd0.rmd", "api/rmd0_host.rmd", "api/rmd0_stage.rmd", "stages/c/model.rmd",
-        "stages/c/base.rmd", "stages/c/types.rmd", "stages/c/emit.rmd", "stages/c/driver.rmd", "stages/c/program.rmd")]
-    run([build / "rmd-c", "--library", "--emit-c", "--symbols", work / "backend.rsp",
+        "api/crust0.crust", "api/crust0_host.crust", "api/crust0_stage.crust", "stages/c/model.crust",
+        "stages/c/base.crust", "stages/c/types.crust", "stages/c/emit.crust", "stages/c/driver.crust", "stages/c/program.crust")]
+    run([build / "crust-c", "--library", "--emit-c", "--symbols", work / "backend.rsp",
          "--export", "c_backend_build", "--export", "c_program", *backend_sources], work / "backend.c")
 
     def library(name, destination, flags, directory):
@@ -71,7 +71,7 @@ def main():
              directory / (name + ".o"), "-o", directory / destination])
 
     library("plugin", "reader.plugin", ["-O2", "-g0", "-fstack-clash-protection"], work)
-    shutil.copyfile(build / "rmd-c-library.so", work / "output.plugin")
+    shutil.copyfile(build / "crust-c-library.so", work / "output.plugin")
     run(["gcc", "-O2", "-g0", *strict, "-Iinclude", work / "runner.c",
          *[build / item for item in ("core.o", "read.o", "check.o", "host.o")],
          "-rdynamic", "-ldl", "-lffi", "-o", work / "runner"])
@@ -80,22 +80,22 @@ def main():
          "src/check.c", "runtime/host.c", "-rdynamic", "-ldl", "-lffi", "-no-pie", "-o", work / "san/runner"])
     library("plugin", "reader.plugin", sanitized, work / "san")
     library("backend", "output.plugin", sanitized, work / "san")
-    run([build / "rmd-c", "--emit-c", "--symbols", work / "reference.rsp", "examples/intrusive/program.rmd"], work / "reference.c")
+    run([build / "crust-c", "--emit-c", "--symbols", work / "reference.rsp", "examples/intrusive/program.crust"], work / "reference.c")
     prefix = b"set_backend(session, c_backend_build);\nset_reader(session, alternate);"
-    (work / "main.rmd").write_bytes(prefix + b"\0@include |" + str(root / "examples/intrusive/program.rmd").encode() + b"|\n@emit\n")
-    command = [work / "runner", work / "main.rmd"]
-    for path in (root / "api/rmd0.rmd", root / "api/rmd0_stage.rmd", root / "stages/c/api.rmd", work / "model.rmd", work / "interface.rmd"):
+    (work / "main.crust").write_bytes(prefix + b"\0@include |" + str(root / "examples/intrusive/program.crust").encode() + b"|\n@emit\n")
+    command = [work / "runner", work / "main.crust"]
+    for path in (root / "api/crust0.crust", root / "api/crust0_stage.crust", root / "stages/c/api.crust", work / "model.crust", work / "interface.crust"):
         command += ["--api", path]
     command += ["--load", work / "reader.plugin", "--load", work / "output.plugin", "--", work / "output.rsp"]
     run(command, work / "output.c")
     run(["gcc", "-std=c99", "-pedantic-errors", "-O2", "-g0", "-fstack-clash-protection", "-Wno-overlength-strings",
          "-c", work / "output.c", "-o", work / "target-raw.o"])
     run(["objcopy", "@" + str(work / "output.rsp"), work / "target-raw.o", work / "target.o"])
-    run(["gcc", "-no-pie", work / "target.o", build / "librmd0_host.a", "-o", work / "target"])
+    run(["gcc", "-no-pie", work / "target.o", build / "libcrust0_host.a", "-o", work / "target"])
     if run([work / "target"]) != b"intrusive: ok\n":
         raise RuntimeError("incorrect target output")
     print(run(["python3", work / "verify.py"]).decode(), end="")
-    print("Timing was not run. Use measure.py with the same RMD_PROOF_DIR and RMD_PROOF_BUILD.")
+    print("Timing was not run. Use measure.py with the same CRUST_PROOF_DIR and CRUST_PROOF_BUILD.")
 
 
 if __name__ == "__main__":

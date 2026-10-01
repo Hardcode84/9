@@ -1,6 +1,6 @@
 #define _XOPEN_SOURCE 700
 #include "proof.h"
-#include "rmd0_host.h"
+#include "crust0_host.h"
 
 #include <assert.h>
 #include <dlfcn.h>
@@ -13,9 +13,9 @@
 typedef void (*Native)(void);
 typedef char NativeSize[(sizeof(Native) == sizeof(void *)) ? 1 : -1];
 
-static void diagnostic(const RmdContext *context)
+static void diagnostic(const CrustContext *context)
 {
-    const RmdSource *source = context->error_loc.source;
+    const CrustSource *source = context->error_loc.source;
     size_t line = 1;
     size_t column = 1;
     size_t index;
@@ -27,16 +27,16 @@ static void diagnostic(const RmdContext *context)
     fprintf(stderr, "%s:%zu:%zu: %s\n", source->path, line, column, context->error);
 }
 
-static bool error(RmdContext *context, RmdSource *source, size_t offset, const char *message)
+static bool error(CrustContext *context, CrustSource *source, size_t offset, const char *message)
 {
-    rmd_set_error(context, source, offset, message);
+    crust_set_error(context, source, offset, message);
     return false;
 }
 
-static RmdExpr *new_expression(RmdContext *context, RmdSource *source,
-                                size_t offset, RmdExprKind kind)
+static CrustExpr *new_expression(CrustContext *context, CrustSource *source,
+                                size_t offset, CrustExprKind kind)
 {
-    RmdExpr *expression = rmd_try_alloc(context, sizeof(*expression), RMD_ALIGNOF(RmdExpr));
+    CrustExpr *expression = crust_try_alloc(context, sizeof(*expression), CRUST_ALIGNOF(CrustExpr));
     if (expression != NULL) {
         expression->kind = kind;
         expression->loc.source = source;
@@ -50,7 +50,7 @@ static bool whitespace(unsigned char byte)
     return byte == ' ' || byte == '\n' || byte == '\r' || byte == '\t';
 }
 
-static void skip_space(const RmdSource *source, size_t *offset)
+static void skip_space(const CrustSource *source, size_t *offset)
 {
     while (*offset < source->size && whitespace(source->bytes[*offset])) ++*offset;
 }
@@ -61,25 +61,25 @@ static bool name_byte(unsigned char byte, bool first)
            byte == '_' || (!first && byte >= '0' && byte <= '9');
 }
 
-static RmdExpr *read_name(RmdContext *context, RmdSource *source, size_t *offset)
+static CrustExpr *read_name(CrustContext *context, CrustSource *source, size_t *offset)
 {
     size_t start = *offset;
-    RmdExpr *expression;
+    CrustExpr *expression;
     if (start == source->size || !name_byte(source->bytes[start], true)) {
         error(context, source, start, "proof expected a name");
         return NULL;
     }
     do { ++*offset; }
     while (*offset < source->size && name_byte(source->bytes[*offset], false));
-    expression = new_expression(context, source, start, RMD_E_NAME);
+    expression = new_expression(context, source, start, CRUST_E_NAME);
     if (expression != NULL) {
-        expression->name = rmd_try_intern(context, source->bytes + start, *offset - start);
+        expression->name = crust_try_intern(context, source->bytes + start, *offset - start);
         if (expression->name == NULL) return NULL;
     }
     return expression;
 }
 
-static bool punctuation(RmdContext *context, RmdSource *source,
+static bool punctuation(CrustContext *context, CrustSource *source,
                          size_t *offset, unsigned char byte)
 {
     skip_space(source, offset);
@@ -89,9 +89,9 @@ static bool punctuation(RmdContext *context, RmdSource *source,
     return true;
 }
 
-static RmdExpr *read_argument(RmdContext *context, RmdSource *source, size_t *offset)
+static CrustExpr *read_argument(CrustContext *context, CrustSource *source, size_t *offset)
 {
-    RmdExpr *expression;
+    CrustExpr *expression;
     size_t start;
     skip_space(source, offset);
     if (*offset == source->size || source->bytes[*offset] != '"')
@@ -109,9 +109,9 @@ static RmdExpr *read_argument(RmdContext *context, RmdSource *source, size_t *of
         error(context, source, start, "unterminated proof string");
         return NULL;
     }
-    expression = new_expression(context, source, start - 1, RMD_E_STRING);
+    expression = new_expression(context, source, start - 1, CRUST_E_STRING);
     if (expression == NULL) return NULL;
-    expression->bytes = (const unsigned char *)rmd_try_copy_string(context, source->bytes + start, *offset - start);
+    expression->bytes = (const unsigned char *)crust_try_copy_string(context, source->bytes + start, *offset - start);
     expression->byte_count = *offset - start + 1;
     ++*offset;
     return expression->bytes == NULL ? NULL : expression;
@@ -120,18 +120,18 @@ static RmdExpr *read_argument(RmdContext *context, RmdSource *source, size_t *of
 static int32_t initial_reader(void *state, void *arena, void *result)
 {
     ProofSession *session = state;
-    RmdContext *context = arena;
+    CrustContext *context = arena;
     ProofAction *action = result;
-    RmdSource *source = session->source;
+    CrustSource *source = session->source;
     size_t offset = session->cursor;
-    RmdExpr *call;
+    CrustExpr *call;
     skip_space(source, &offset);
     if (offset == source->size) { action->next_offset = offset; return 0; }
-    call = new_expression(context, source, offset, RMD_E_CALL);
+    call = new_expression(context, source, offset, CRUST_E_CALL);
     if (call == NULL) return -1;
     call->left = read_name(context, source, &offset);
     if (call->left == NULL || !punctuation(context, source, &offset, '(')) return -1;
-    call->args = rmd_try_alloc(context, 2 * sizeof(*call->args), RMD_ALIGNOF(RmdExpr *));
+    call->args = crust_try_alloc(context, 2 * sizeof(*call->args), CRUST_ALIGNOF(CrustExpr *));
     if (call->args == NULL) return -1;
     do {
         if (call->arg_count == 2) {
@@ -153,81 +153,81 @@ static int32_t initial_reader(void *state, void *arena, void *result)
     return 1;
 }
 
-static RmdDecl *lookup(RmdContext *provider, const char *text, size_t size)
+static CrustDecl *lookup(CrustContext *provider, const char *text, size_t size)
 {
-    RmdName *name = rmd_try_intern(provider, (const unsigned char *)text, size);
-    RmdSymbol *symbol;
+    CrustName *name = crust_try_intern(provider, (const unsigned char *)text, size);
+    CrustSymbol *symbol;
     if (name == NULL) return NULL;
-    symbol = rmd_map_get(&provider->globals, (uintptr_t)name);
+    symbol = crust_map_get(&provider->globals, (uintptr_t)name);
     return symbol == NULL ? NULL : symbol->decl;
 }
 
-static bool bind_name(RmdContext *context, RmdContext *provider, RmdName *name, RmdLoc location)
+static bool bind_name(CrustContext *context, CrustContext *provider, CrustName *name, CrustLoc location)
 {
-    RmdDecl *declaration;
-    if (rmd_map_get(&context->globals, (uintptr_t)name) != NULL) return true;
+    CrustDecl *declaration;
+    if (crust_map_get(&context->globals, (uintptr_t)name) != NULL) return true;
     declaration = lookup(provider, name->text, name->size);
     if (declaration == NULL)
         return error(context, location.source, location.offset, "unknown root binding");
-    return rmd_bind(context, name, declaration);
+    return crust_bind(context, name, declaration);
 }
 
-static RmdDecl *check_action(RmdContext *context, RmdContext *provider, ProofAction *action)
+static CrustDecl *check_action(CrustContext *context, CrustContext *provider, ProofAction *action)
 {
-    RmdDecl *session_record = lookup(provider, "ProofSession", sizeof("ProofSession") - 1);
-    RmdDecl *function;
-    RmdType *type;
-    RmdParam *parameter;
-    RmdStmt *block;
-    RmdStmt *statement;
-    RmdName *session_name;
+    CrustDecl *session_record = lookup(provider, "ProofSession", sizeof("ProofSession") - 1);
+    CrustDecl *function;
+    CrustType *type;
+    CrustParam *parameter;
+    CrustStmt *block;
+    CrustStmt *statement;
+    CrustName *session_name;
     size_t index;
-    RmdExpr *call = action->call;
+    CrustExpr *call = action->call;
     if (session_record == NULL) return NULL;
-    assert(call->kind == RMD_E_CALL && call->left->kind == RMD_E_NAME);
-    if (!rmd_bind(context, session_record->name, session_record) ||
+    assert(call->kind == CRUST_E_CALL && call->left->kind == CRUST_E_NAME);
+    if (!crust_bind(context, session_record->name, session_record) ||
         !bind_name(context, provider, call->left->name, call->left->loc)) return NULL;
-    session_name = rmd_try_intern(context, (const unsigned char *)"session", 7);
+    session_name = crust_try_intern(context, (const unsigned char *)"session", 7);
     if (session_name == NULL) return NULL;
     for (index = 0; index < call->arg_count; ++index) {
-        RmdExpr *argument = call->args[index];
-        if (argument->kind == RMD_E_NAME && argument->name != session_name &&
+        CrustExpr *argument = call->args[index];
+        if (argument->kind == CRUST_E_NAME && argument->name != session_name &&
             !bind_name(context, provider, argument->name, argument->loc)) return NULL;
     }
-    function = rmd_try_alloc(context, sizeof(*function), RMD_ALIGNOF(RmdDecl));
-    type = rmd_try_alloc(context, sizeof(*type), RMD_ALIGNOF(RmdType));
-    parameter = rmd_try_alloc(context, sizeof(*parameter), RMD_ALIGNOF(RmdParam));
-    block = rmd_try_alloc(context, sizeof(*block), RMD_ALIGNOF(RmdStmt));
-    statement = rmd_try_alloc(context, sizeof(*statement), RMD_ALIGNOF(RmdStmt));
+    function = crust_try_alloc(context, sizeof(*function), CRUST_ALIGNOF(CrustDecl));
+    type = crust_try_alloc(context, sizeof(*type), CRUST_ALIGNOF(CrustType));
+    parameter = crust_try_alloc(context, sizeof(*parameter), CRUST_ALIGNOF(CrustParam));
+    block = crust_try_alloc(context, sizeof(*block), CRUST_ALIGNOF(CrustStmt));
+    statement = crust_try_alloc(context, sizeof(*statement), CRUST_ALIGNOF(CrustStmt));
     if (function == NULL || type == NULL || parameter == NULL || block == NULL || statement == NULL) return NULL;
     parameter->name = session_name;
     parameter->loc = call->loc;
-    parameter->type = rmd_try_pointer_type(context, session_record->type);
-    type->params = rmd_try_alloc(context, sizeof(*type->params), RMD_ALIGNOF(RmdType *));
+    parameter->type = crust_try_pointer_type(context, session_record->type);
+    type->params = crust_try_alloc(context, sizeof(*type->params), CRUST_ALIGNOF(CrustType *));
     if (parameter->type == NULL || type->params == NULL) return NULL;
-    type->kind = RMD_T_FUNCTION;
+    type->kind = CRUST_T_FUNCTION;
     type->size = sizeof(Native);
-    type->align = RMD_ALIGNOF(Native);
-    type->base = &context->builtins[RMD_T_I32];
+    type->align = CRUST_ALIGNOF(Native);
+    type->base = &context->builtins[CRUST_T_I32];
     type->param_count = 1;
     type->params[0] = parameter->type;
-    block->kind = RMD_S_BLOCK;
+    block->kind = CRUST_S_BLOCK;
     block->loc = call->loc;
     block->body = statement;
-    statement->kind = RMD_S_RETURN;
+    statement->kind = CRUST_S_RETURN;
     statement->loc = call->loc;
     statement->expr = call;
-    function->kind = RMD_D_FUNCTION;
+    function->kind = CRUST_D_FUNCTION;
     function->loc = call->loc;
     function->type = type;
     function->params = parameter;
     function->param_count = 1;
     function->body = block;
     function->resolve_state = 2;
-    return rmd_check_body(context, function) ? function : NULL;
+    return crust_check_body(context, function) ? function : NULL;
 }
 
-static Native native_address(RmdContext *context, const RmdDecl *declaration,
+static Native native_address(CrustContext *context, const CrustDecl *declaration,
                               void **libraries, size_t count)
 {
     void *address = NULL;
@@ -254,12 +254,12 @@ static Native native_address(RmdContext *context, const RmdDecl *declaration,
     return result;
 }
 
-static bool execute_action(ProofSession *session, RmdContext *context,
-                            RmdDecl *function, ProofAction *action,
+static bool execute_action(ProofSession *session, CrustContext *context,
+                            CrustDecl *function, ProofAction *action,
                             void **libraries, size_t library_count)
 {
-    RmdExpr *call = action->call;
-    RmdDecl *declaration = call->left->symbol->decl;
+    CrustExpr *call = action->call;
+    CrustDecl *declaration = call->left->symbol->decl;
     Native native;
     ffi_cif interface;
     ffi_type *types[2];
@@ -269,22 +269,22 @@ static bool execute_action(ProofSession *session, RmdContext *context,
     uint32_t bits;
     int32_t status;
     size_t index;
-    if (declaration->kind != RMD_D_EXTERN || declaration->type->base->kind != RMD_T_I32 || call->arg_count > 2)
+    if (declaration->kind != CRUST_D_EXTERN || declaration->type->base->kind != CRUST_T_I32 || call->arg_count > 2)
         return error(context, call->loc.source, call->loc.offset, "proof requires an external status-returning call");
     native = native_address(context, declaration, libraries, library_count);
     if (native == NULL) return false;
     for (index = 0; index < call->arg_count; ++index) {
-        RmdExpr *argument = call->args[index];
+        CrustExpr *argument = call->args[index];
         types[index] = &ffi_type_pointer;
-        if (argument->kind == RMD_E_NAME && argument->symbol == function->params->symbol) {
+        if (argument->kind == CRUST_E_NAME && argument->symbol == function->params->symbol) {
             storage[index].pointer = session;
             values[index] = &storage[index].pointer;
-        } else if (argument->kind == RMD_E_NAME && argument->type->kind == RMD_T_FUNCTION &&
-                   argument->symbol->decl->kind == RMD_D_EXTERN) {
+        } else if (argument->kind == CRUST_E_NAME && argument->type->kind == CRUST_T_FUNCTION &&
+                   argument->symbol->decl->kind == CRUST_D_EXTERN) {
             storage[index].function = native_address(context, argument->symbol->decl, libraries, library_count);
             if (storage[index].function == NULL) return false;
             values[index] = &storage[index].function;
-        } else if (argument->kind == RMD_E_STRING) {
+        } else if (argument->kind == CRUST_E_STRING) {
             storage[index].pointer = (void *)argument->bytes;
             values[index] = &storage[index].pointer;
         } else {
@@ -301,7 +301,7 @@ static bool execute_action(ProofSession *session, RmdContext *context,
     return status == 0;
 }
 
-static bool interface_layout(RmdContext *provider)
+static bool interface_layout(CrustContext *provider)
 {
     static const size_t offsets[] = {
         offsetof(ProofSession, owner), offsetof(ProofSession, source), offsetof(ProofSession, cursor),
@@ -312,15 +312,15 @@ static bool interface_layout(RmdContext *provider)
         offsetof(ProofSession, emits), offsetof(ProofSession, allocations), offsetof(ProofSession, releases),
         offsetof(ProofSession, root_done), offsetof(ProofSession, reader_active), offsetof(ProofSession, custom_started)
     };
-    RmdDecl *declaration = lookup(provider, "ProofSession", 12);
-    RmdDecl *action = lookup(provider, "ProofAction", 11);
-    RmdField *field;
+    CrustDecl *declaration = lookup(provider, "ProofSession", 12);
+    CrustDecl *action = lookup(provider, "ProofAction", 11);
+    CrustField *field;
     size_t index;
-    if (declaration == NULL || declaration->kind != RMD_D_RECORD ||
-        declaration->type->size != sizeof(ProofSession) || declaration->type->align != RMD_ALIGNOF(ProofSession) ||
+    if (declaration == NULL || declaration->kind != CRUST_D_RECORD ||
+        declaration->type->size != sizeof(ProofSession) || declaration->type->align != CRUST_ALIGNOF(ProofSession) ||
         declaration->field_count != sizeof(offsets) / sizeof(offsets[0]) ||
-        action == NULL || action->kind != RMD_D_RECORD || action->type->size != sizeof(ProofAction) ||
-        action->type->align != RMD_ALIGNOF(ProofAction) || action->field_count != 2 ||
+        action == NULL || action->kind != CRUST_D_RECORD || action->type->size != sizeof(ProofAction) ||
+        action->type->align != CRUST_ALIGNOF(ProofAction) || action->field_count != 2 ||
         action->fields->offset != offsetof(ProofAction, call) ||
         action->fields->next->offset != offsetof(ProofAction, next_offset))
         return error(provider, NULL, 0, "proof interface layout differs from the runner");
@@ -331,26 +331,26 @@ static bool interface_layout(RmdContext *provider)
     return true;
 }
 
-static bool read_provider(RmdContext *context, const char *path, uint64_t identity)
+static bool read_provider(CrustContext *context, const char *path, uint64_t identity)
 {
-    RmdSource *source = rmd_try_alloc(context, sizeof(*source), RMD_ALIGNOF(RmdSource));
-    RmdUnit *parsed;
+    CrustSource *source = crust_try_alloc(context, sizeof(*source), CRUST_ALIGNOF(CrustSource));
+    CrustUnit *parsed;
     unsigned char *bytes;
     if (source == NULL) return false;
     source->path = path;
     source->identity = identity;
-    if (rmd0_host_read_file(path, &bytes, &source->size) != 0)
+    if (crust0_host_read_file(path, &bytes, &source->size) != 0)
         return error(context, NULL, 0, "cannot read proof host interface");
-    source->bytes = (const unsigned char *)rmd_try_copy_string(context, bytes, source->size);
+    source->bytes = (const unsigned char *)crust_try_copy_string(context, bytes, source->size);
     free(bytes);
-    return source->bytes != NULL && rmd_read(context, source, &parsed);
+    return source->bytes != NULL && crust_read(context, source, &parsed);
 }
 
 int main(int argc, char **argv)
 {
-    RmdContext provider;
-    RmdContext target;
-    RmdSource source;
+    CrustContext provider;
+    CrustContext target;
+    CrustSource source;
     ProofSession session;
     void **libraries;
     size_t library_count = 0;
@@ -362,8 +362,8 @@ int main(int argc, char **argv)
     if (argc < 2) { fputs("usage: runner ROOT --api FILE --load LIBRARY [--report FILE] -- ROOT_ARGUMENTS\n", stderr); return 1; }
     libraries = calloc((size_t)argc, sizeof(*libraries));
     if (libraries == NULL) { perror("source-proof: libraries"); return 1; }
-    rmd_context_init(&provider, NULL);
-    rmd_context_init(&target, NULL);
+    crust_context_init(&provider, NULL);
+    crust_context_init(&target, NULL);
     memset(&session, 0, sizeof(session));
     session.owner = &provider;
     session.source = &source;
@@ -393,20 +393,20 @@ int main(int argc, char **argv)
             report = argv[index];
         } else { fputs("source-proof: unknown launcher option\n", stderr); goto done; }
     }
-    if (!rmd_collect(&provider) || !rmd_resolve(&provider) || !rmd_check(&provider) ||
+    if (!crust_collect(&provider) || !crust_resolve(&provider) || !crust_check(&provider) ||
         !interface_layout(&provider)) goto done;
-    if (rmd0_host_read_file(source.path, &root_bytes, &source.size) != 0) {
+    if (crust0_host_read_file(source.path, &root_bytes, &source.size) != 0) {
         error(&provider, NULL, 0, "cannot read root source"); goto done;
     }
     source.bytes = root_bytes;
     while (session.cursor < source.size) {
-        RmdContext action_context;
+        CrustContext action_context;
         ProofAction action;
-        RmdDecl *function;
+        CrustDecl *function;
         size_t start = session.cursor;
         int32_t read_status;
         bool success = false;
-        rmd_context_init(&action_context, NULL);
+        crust_context_init(&action_context, NULL);
         memset(&action, 0, sizeof(action));
         session.reader_active = true;
         read_status = session.reader(&session, &action_context, &action);
@@ -425,7 +425,7 @@ int main(int argc, char **argv)
             success = execute_action(&session, &action_context, function, &action, libraries, library_count);
 action_done:
         if (action_context.error_count != 0) { diagnostic(&action_context); success = false; }
-        rmd_context_destroy(&action_context);
+        crust_context_destroy(&action_context);
         if (!success || provider.error_count != 0 || target.error_count != 0) goto done;
     }
     session.root_done = true;
@@ -437,7 +437,7 @@ action_done:
 done:
     if (provider.error_count != 0) { diagnostic(&provider); status = 1; }
     if (target.error_count != 0) { diagnostic(&target); status = 1; }
-    rmd_context_destroy(&target);
+    crust_context_destroy(&target);
     if (session.allocations != session.releases) {
         fputs("source-proof: target allocator callbacks did not balance\n", stderr); status = 1;
     }
@@ -456,7 +456,7 @@ done:
             if (!success) { perror("source-proof: report write"); status = 1; }
         }
     }
-    rmd_context_destroy(&provider);
+    crust_context_destroy(&provider);
     while (library_count != 0) {
         --library_count;
         if (dlclose(libraries[library_count]) != 0) { fputs("source-proof: unload failed\n", stderr); status = 1; }

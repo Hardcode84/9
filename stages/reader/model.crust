@@ -1,0 +1,86 @@
+// Single-byte punctuation uses its ASCII value. Other token kinds start at 256.
+const RR_EOF:u32=256u32;
+const RR_NAME:u32=257u32;
+const RR_INTEGER:u32=258u32;
+const RR_COUNT:u32=259u32;
+const RR_STRING:u32=260u32;
+const RR_TYPE:u32=261u32;
+const RR_RECORD:u32=262u32;
+const RR_FN:u32=263u32;
+const RR_EXTERN:u32=264u32;
+const RR_CONST:u32=265u32;
+const RR_VAR:u32=266u32;
+const RR_UNINIT:u32=267u32;
+const RR_IF:u32=268u32;
+const RR_ELSE:u32=269u32;
+const RR_WHILE:u32=270u32;
+const RR_BREAK:u32=271u32;
+const RR_CONTINUE:u32=272u32;
+const RR_RETURN:u32=273u32;
+const RR_TRAP:u32=274u32;
+const RR_AS:u32=275u32;
+const RR_MAKE:u32=276u32;
+const RR_NULL:u32=277u32;
+const RR_SIZEOF:u32=278u32;
+const RR_ALIGNOF:u32=279u32;
+const RR_OFFSETOF:u32=280u32;
+const RR_TRUE:u32=281u32;
+const RR_FALSE:u32=282u32;
+const RR_ARROW:u32=283u32;
+const RR_EQ:u32=284u32;
+const RR_NE:u32=285u32;
+const RR_LE:u32=286u32;
+const RR_GE:u32=287u32;
+const RR_SHL:u32=288u32;
+const RR_SHR:u32=289u32;
+const RR_AND:u32=290u32;
+const RR_OR:u32=291u32;
+
+// text borrows the original bytes. bytes contains a zero-terminated decoded
+// string when kind is RR_STRING; byte_count includes that final zero.
+record CrustReaderToken {
+    kind:u32;
+    offset:usize;
+    length:usize;
+    text:*u8;
+    name:*CrustName;
+    integer:u64;
+    integer_type:u32;
+    bytes:*u8;
+    byte_count:usize;
+}
+
+// A null callback selects the standard production. A callback returns null
+// without consuming a token when unhandled, or sets reader.failed on failure.
+// A handled callback consumes its complete production and returns its syntax.
+// A new context diagnostic also stops the reader.
+record CrustReaderHooks {
+    user:*u8;
+    declaration:fn(*CrustReader,*u8)->*CrustDecl;
+    statement:fn(*CrustReader,*u8)->*CrustStmt;
+    prefix:fn(*CrustReader,*u8)->*CrustExpr;
+    type_syntax:fn(*CrustReader,*u8)->*CrustTypeSyntax;
+}
+
+// Source storage and hook state must remain live through all reader calls.
+// offset is the end of the current token. token.offset is its original start.
+// failed is sticky. Parsing does not change a failed reader's diagnostic.
+record CrustReader {
+    context:*CrustContext;
+    source:*CrustSource;
+    offset:usize;
+    end:usize;
+    depth:u32;
+    token_count:usize;
+    token_limit:usize;
+    token:CrustReaderToken;
+    failed:bool;
+    hooks:*CrustReaderHooks;
+}
+
+record CrustReaderKeyword {
+    text:*u8;
+    size:usize;
+    kind:u32;
+    type:u32;
+}

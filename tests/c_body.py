@@ -18,19 +18,19 @@ def main():
     parser.add_argument("--ldflags", default="")
     args = parser.parse_args()
     build = args.build.resolve()
-    with tempfile.TemporaryDirectory(prefix="rmd-c-body-") as directory:
+    with tempfile.TemporaryDirectory(prefix="crust-c-body-") as directory:
         work = Path(directory)
         harness = work / "harness"
         output = work / "program"
         library = work / "ordinary-backend.so"
-        shutil.copyfile(build / "rmd-c-library.so", library)
-        sources = ["api/rmd0.rmd", "api/rmd0_stage.rmd", "stages/c/model.rmd",
-                   "stages/c/api.rmd", "stages/c/extension.rmd", "tests/c_body.rmd"]
-        subprocess.run([str(build / "rmd-c"), "-o", str(harness), *sources,
+        shutil.copyfile(build / "crust-c-library.so", library)
+        sources = ["api/crust0.crust", "api/crust0_stage.crust", "stages/c/model.crust",
+                   "stages/c/api.crust", "stages/c/extension.crust", "tests/c_body.crust"]
+        subprocess.run([str(build / "crust-c"), "-o", str(harness), *sources,
                         *("--cflag=" + flag for flag in shlex.split(args.cflags)),
                         "--ldflag=" + str(library),
-                        "--ldflag=" + str(build / "librmd0.a"),
-                        "--ldflag=" + str(build / "librmd0_host.a"),
+                        "--ldflag=" + str(build / "libcrust0.a"),
+                        "--ldflag=" + str(build / "libcrust0_host.a"),
                         *("--ldflag=" + flag for flag in shlex.split(args.ldflags))],
                        cwd=ROOT, check=True)
         subprocess.run([str(harness), str(output)], cwd=ROOT, check=True)

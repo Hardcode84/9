@@ -1,0 +1,24 @@
+fn main(argc:i32, argv:**u8)->i32 {
+    if argc == 2i32 && c_equal(argv[1usize], "--help") {
+        var text:*u8 = "usage: crust-resource [--check | --prepare | --emit-c | --object]\n                    [--library | --entry NAME] [-o OUTPUT] [--symbols RESPONSEFILE]\n                    [--cflag ARG] [--ldflag ARG] [--export NAME] SOURCE...\n";
+        if crust0_host_write_stream(1u32, text, c_length(text)) == 0i32 { return 0i32; }
+        c_driver_stderr("crust-resource: cannot write standard output\n");
+        return 1i32;
+    }
+    if argc == 2i32 && c_equal(argv[1usize], "--version") {
+        var text:*u8 = "crust-resource (CRUST0 resource stage, Linux x86-64 LP64)\n";
+        if crust0_host_write_stream(1u32, text, c_length(text)) == 0i32 { return 0i32; }
+        c_driver_stderr("crust-resource: cannot write standard output\n");
+        return 1i32;
+    }
+    var context:CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var request:CrustBuild = make CrustBuild {
+        context:&context, source:null(*CrustSource), target_begin:0usize,
+        argc:argc - 1i32, argv:argv + 1isize
+    };
+    var result:i32 = resource_program(&request);
+    if context.error_count != 0usize { c_driver_diagnostic(&context); }
+    crust_context_destroy(&context);
+    return result;
+}

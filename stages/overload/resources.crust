@@ -1,0 +1,187 @@
+fn ov_resources_type_key(stage: *OvStage, syntax: *CrustTypeSyntax,
+                         text: *OvText, depth: usize, user: *u8) -> bool {
+    if (*syntax).kind != RS_READ && (*syntax).kind != RS_MUT { return false; }
+    ov_encode_type(stage, (*syntax).base, text, depth + 1usize);
+    return true;
+}
+
+fn ov_resources_binding_type(stage: *OvStage, syntax: *CrustTypeSyntax,
+                             user: *u8) -> *CrustTypeSyntax {
+    if (*syntax).kind == RS_READ || (*syntax).kind == RS_MUT { return (*syntax).base; }
+    return syntax;
+}
+
+fn ov_resources_expression(walk: *OvWalk, expression: *CrustExpr,
+                           expected: *CrustTypeSyntax, user: *u8) -> *CrustTypeSyntax {
+    var stage: *OvStage = (*walk).stage;
+    var kind: u32 = (*expression).kind;
+    var location: *CrustLoc = &(*expression).loc;
+    if kind == RS_MOVE { return ov_expression(walk, (*expression).left, expected); }
+    if kind == RS_READ || kind == RS_MUT {
+        var operand_expected: *CrustTypeSyntax = null(*CrustTypeSyntax);
+        if expected != null(*CrustTypeSyntax) && (*expected).kind == kind {
+            operand_expected = (*expected).base;
+        }
+        var base: *CrustTypeSyntax = ov_expression(walk, (*expression).left, operand_expected);
+        if (*stage).failed { return null(*CrustTypeSyntax); }
+        var result: *CrustTypeSyntax = ov_type(stage, kind, location);
+        if result != null(*CrustTypeSyntax) { (*result).base = base; }
+        return result;
+    }
+    if kind == CRUST_E_UNARY && (*expression).op == CRUST_OP_DEREF {
+        var operand: *CrustTypeSyntax = ov_expression(walk, (*expression).left, null(*CrustTypeSyntax));
+        if (*stage).failed { return null(*CrustTypeSyntax); }
+        if (*operand).kind != CRUST_T_POINTER && (*operand).kind != RS_READ && (*operand).kind != RS_MUT {
+            ov_error(stage, location, "dereference requires a pointer or borrowed view");
+            return null(*CrustTypeSyntax);
+        }
+        return (*operand).base;
+    }
+    if kind == CRUST_E_FIELD || kind == CRUST_E_INDEX {
+        var base: *CrustTypeSyntax = ov_expression(walk, (*expression).left, null(*CrustTypeSyntax));
+        if (*stage).failed { return null(*CrustTypeSyntax); }
+        if (*base).kind == RS_READ || (*base).kind == RS_MUT { base = (*base).base; }
+        if kind == CRUST_E_FIELD {
+            if (*base).kind == CRUST_T_POINTER { base = (*base).base; }
+            return ov_field_type(stage, base, (*expression).field_name, location);
+        }
+        ov_expression(walk, (*expression).right, null(*CrustTypeSyntax));
+        if (*stage).failed { return null(*CrustTypeSyntax); }
+        if (*base).kind != CRUST_T_ARRAY && (*base).kind != CRUST_T_POINTER {
+            ov_error(stage, location, "indexing requires an array or raw pointer");
+            return null(*CrustTypeSyntax);
+        }
+        return (*base).base;
+    }
+    return null(*CrustTypeSyntax);
+}
+
+fn ov_resources_statement(walk: *OvWalk, statement: *CrustStmt, user: *u8) -> bool {
+    if (*statement).kind == RS_UNSAFE {
+        ov_statement(walk, (*statement).body);
+        return true;
+    }
+    if (*statement).kind == RS_DEFER || (*statement).kind == RS_FORGET {
+        ov_expression(walk, (*statement).expr, null(*CrustTypeSyntax));
+        return true;
+    }
+    return false;
+}
+
+fn ov_resources_contract(stage: *OvStage, declaration: *CrustDecl,
+                         user: *u8) -> *CrustName {
+    var resources: *RsStage = user as *RsStage;
+    var text: *u8 = "safe";
+    var size: usize = 4usize;
+    if (*declaration).kind == CRUST_D_EXTERN ||
+       crust_map_get(&(*resources).unsafe_functions, declaration as usize) != null(*u8) {
+        text = "unsafe";
+        size = 6usize;
+    }
+    return ov_intern(stage, text, size);
+}
+
+fn ov_resources_read_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
+    var resources: *RsStage = user as *RsStage;
+    if rr_is_name(reader, "unsafe") {
+        rr_next(reader);
+        if (*reader).failed { return null(*CrustDecl); }
+        if (*reader).token.kind != RR_FN {
+            rr_error(reader, (*reader).token.offset, "expected fn after unsafe declaration modifier");
+            return null(*CrustDecl);
+        }
+        var declaration: *CrustDecl = ov_function(reader);
+        if !(*reader).failed {
+            rs_put(resources, &(*resources).unsafe_functions, declaration as usize, declaration as *u8);
+            if (*resources).failed { (*reader).failed = true; }
+        }
+        return declaration;
+    }
+    if (*reader).token.kind == RR_FN || (*reader).token.kind == RR_EXTERN {
+        return ov_function(reader);
+    }
+    return rs_read_declaration(reader, user);
+}
+
+// Require an initialized resource stage. Retain both stages and hooks through preparation.
+// Use the provider's same ABI domain and complete record and resource declarations.
+fn ov_resources_init(stage: *OvStage, resources: *RsStage,
+                      abi: *u8, hooks: *OvHooks) -> unit {
+    *hooks = make OvHooks {
+        user: resources as *u8, type_key: ov_resources_type_key,
+        binding_type: ov_resources_binding_type, expression: ov_resources_expression,
+        statement: ov_resources_statement, contract: ov_resources_contract
+    };
+    ov_init(stage, (*resources).context, abi, hooks);
+}
+
+// Read one complete source range before overload preparation.
+// Retain the source descriptor and bytes through both stage lifetimes.
+fn ov_resources_read(stage: *OvStage, source: *CrustSource,
+                      begin: usize, end: usize) -> bool {
+    var resources: *RsStage = (*(*stage).hooks).user as *RsStage;
+    if (*stage).failed || (*resources).failed { return false; }
+    var hooks: CrustReaderHooks = make CrustReaderHooks {
+        user: resources as *u8, declaration: ov_resources_read_declaration,
+        statement: rs_read_statement, prefix: rs_read_prefix, type_syntax: rs_read_type
+    };
+    if rr_read((*stage).context, source, begin, end, &hooks) == null(*CrustUnit) {
+        (*stage).failed = true;
+        (*resources).failed = true;
+        return false;
+    }
+    return true;
+}
+
+// Require collected overloads whose declarations still have their source names.
+// Resolve each resource drop by its complete exclusive-borrow signature.
+fn ov_resources_drop_names(stage: *OvStage) -> bool {
+    var resources: *RsStage = (*(*stage).hooks).user as *RsStage;
+    var resource: *RsResource = (*resources).resources;
+    while resource != null(*RsResource) && !(*stage).failed {
+        var location: *CrustLoc = &(*(*resource).declaration).loc;
+        var signature: *CrustTypeSyntax = ov_type(stage, CRUST_T_FUNCTION, location);
+        var parameter: *CrustTypeSyntax = ov_type(stage, RS_MUT, location);
+        var record_type: *CrustTypeSyntax = ov_type(stage, CRUST_T_NAME, location);
+        var result: *CrustTypeSyntax = ov_type(stage, CRUST_T_UNIT, location);
+        var parameters: **CrustTypeSyntax = ov_alloc(stage, sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
+        if (*stage).failed { return false; }
+        (*record_type).name = (*(*resource).declaration).name;
+        (*parameter).base = record_type;
+        parameters[0usize] = parameter;
+        (*signature).params = parameters;
+        (*signature).param_count = 1usize;
+        (*signature).base = result;
+        var group: *OvGlobal = ov_global(stage, (*resource).drop_name);
+        if group == null(*OvGlobal) || (*group).first == null(*OvFunction) {
+            ov_error(stage, location, "resource drop does not name a function");
+            return false;
+        }
+        var selected: *OvFunction = ov_select(stage, group, signature, false, location);
+        if (*stage).failed { return false; }
+        (*resource).drop_name = (*selected).internal_name;
+        resource = (*resource).next;
+    }
+    return !(*stage).failed;
+}
+
+// Select overloads once, publish source ABI names, and preserve resource import contracts.
+// Call rs_prepare next. This operation does not check moves, loans, or cleanup.
+fn ov_resources_prepare(stage: *OvStage) -> bool {
+    var resources: *RsStage = (*(*stage).hooks).user as *RsStage;
+    if (*stage).failed || (*resources).failed { return false; }
+    if !ov_collect(stage) || !ov_resources_drop_names(stage) ||
+       !ov_resolve(stage) || !ov_mangle(stage) {
+        (*resources).failed = true;
+        return false;
+    }
+    var function: *OvFunction = (*stage).first_function;
+    while function != null(*OvFunction) && !(*resources).failed {
+        if (*function).source_import {
+            rs_source_import(resources, (*function).declaration);
+        }
+        function = (*function).all_next;
+    }
+    if (*resources).failed { (*stage).failed = true; }
+    return !(*stage).failed;
+}

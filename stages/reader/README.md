@@ -1,28 +1,28 @@
-# RMD reader library
+# Crust reader library
 
-This library reads the RMD0 declaration grammar. All lexer and parser code is
-ordinary RMD. It calls the public arena, name, and diagnostic APIs. It does not
+This library reads the Crust0 declaration grammar. All lexer and parser code is
+ordinary Crust. It calls the public arena, name, and diagnostic APIs. It does not
 call the seed reader.
 
-Load these files after `api/rmd0.rmd`:
+Load these files after `api/crust0.crust`:
 
-1. `model.rmd`
-2. `lex.rmd`
-3. `parse.rmd`
+1. `model.crust`
+2. `lex.crust`
+3. `parse.crust`
 
 Call `rr_read(context, source, begin, end, hooks)`. A null hook pointer selects
 the standard grammar. Success returns a unit and appends it to the context.
 Failure returns null, retains the first diagnostic, and publishes no unit.
 Keep the source descriptor and bytes live until context destruction.
 
-The public `RmdReaderToken` exposes kind, original offset, raw text and length,
+The public `CrustReaderToken` exposes kind, original offset, raw text and length,
 interned name, numeric value and type, and decoded string bytes. Single-byte
 punctuation uses its ASCII value. The `RR_*` constants describe other tokens.
 `rr_init` starts a reader over a source range. `rr_next`, `rr_take`, `rr_expect`,
 `rr_name`, and `rr_is_name` provide token access. `rr_expect` takes a complete
 error message. `rr_error` retains a diagnostic at an original source offset.
 
-`RmdReaderHooks` supplies an optional function for a declaration, statement,
+`CrustReaderHooks` supplies an optional function for a declaration, statement,
 prefix expression, or type. Each function receives the reader and `user`.
 A null result means unhandled and must leave the token and cursor unchanged.
 A handled hook consumes its complete production. A new context diagnostic or

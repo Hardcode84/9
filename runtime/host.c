@@ -1,11 +1,11 @@
 #define _POSIX_C_SOURCE 200809L
-#include "rmd0_host.h"
+#include "crust0_host.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-void *rmd0_host_alloc(size_t size, size_t alignment)
+void *crust0_host_alloc(size_t size, size_t alignment)
 {
     void *result = NULL;
     if (size == 0 || size > (size_t)INTPTR_MAX || alignment == 0 ||
@@ -21,19 +21,19 @@ void *rmd0_host_alloc(size_t size, size_t alignment)
     return result;
 }
 
-void rmd0_host_free(void *data)
+void crust0_host_free(void *data)
 {
     free(data);
 }
 
-void rmd0_host_move_bytes(void *dst, const void *src, size_t size)
+void crust0_host_move_bytes(void *dst, const void *src, size_t size)
 {
     if (size != 0) {
         memmove(dst, src, size);
     }
 }
 
-int32_t rmd0_host_read_file(const char *path, unsigned char **data, size_t *size)
+int32_t crust0_host_read_file(const char *path, unsigned char **data, size_t *size)
 {
     FILE *file;
     unsigned char *buffer = NULL;
@@ -102,7 +102,7 @@ static int write_bytes(FILE *file, const unsigned char *data, size_t size)
     return 0;
 }
 
-int32_t rmd0_host_write_file(const char *path, const unsigned char *data, size_t size)
+int32_t crust0_host_write_file(const char *path, const unsigned char *data, size_t size)
 {
     FILE *file = fopen(path, "wb");
     int status;
@@ -116,7 +116,7 @@ int32_t rmd0_host_write_file(const char *path, const unsigned char *data, size_t
     return status;
 }
 
-int32_t rmd0_host_write_stream(uint32_t stream, const unsigned char *data, size_t size)
+int32_t crust0_host_write_stream(uint32_t stream, const unsigned char *data, size_t size)
 {
     FILE *file;
     int status;

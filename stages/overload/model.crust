@@ -1,0 +1,55 @@
+record OvText { data:*u8; size:usize; capacity:usize; }
+
+record OvHooks {
+    user:*u8;
+    type_key:fn(*OvStage,*CrustTypeSyntax,*OvText,usize,*u8)->bool;
+    binding_type:fn(*OvStage,*CrustTypeSyntax,*u8)->*CrustTypeSyntax;
+    expression:fn(*OvWalk,*CrustExpr,*CrustTypeSyntax,*u8)->*CrustTypeSyntax;
+    statement:fn(*OvWalk,*CrustStmt,*u8)->bool;
+    contract:fn(*OvStage,*CrustDecl,*u8)->*CrustName;
+}
+
+record OvGlobal {
+    name:*CrustName;
+    declaration:*CrustDecl;
+    first:*OvFunction;
+    count:usize;
+    signatures:CrustMap;
+    fields:CrustMap;
+    next:*OvGlobal;
+}
+
+record OvFunction {
+    declaration:*CrustDecl;
+    group:*OvGlobal;
+    syntax:*CrustTypeSyntax;
+    parameters:*CrustName;
+    contract:*CrustName;
+    internal_name:*CrustName;
+    native_name:*u8;
+    source_import:bool;
+    next:*OvFunction;
+    all_next:*OvFunction;
+}
+
+record OvStage {
+    context:*CrustContext;
+    abi:*u8;
+    hooks:*OvHooks;
+    globals:CrustMap;
+    declarations:CrustMap;
+    type_keys:CrustMap;
+    first_global:*OvGlobal;
+    first_function:*OvFunction;
+    scratch:OvText;
+    failed:bool;
+}
+
+record OvLocal { syntax:*CrustTypeSyntax; }
+record OvScope { parent:*OvScope; bindings:CrustMap; }
+record OvWalk {
+    stage:*OvStage;
+    scope:*OvScope;
+    result:*CrustTypeSyntax;
+    depth:usize;
+}

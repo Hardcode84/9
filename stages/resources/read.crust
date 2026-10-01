@@ -1,0 +1,88 @@
+fn rs_read_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
+    var stage: *RsStage = user as *RsStage;
+    if rr_is_name(reader, "resource") {
+        (*reader).token.kind = RR_RECORD;
+        var declaration: *CrustDecl = rr_record(reader);
+        if (*reader).failed { return null(*CrustDecl); }
+        if !rr_is_name(reader, "drop") {
+            rr_error(reader, (*reader).token.offset, "expected drop FUNCTION after resource record");
+            return null(*CrustDecl);
+        }
+        rr_next(reader);
+        var drop_name: *CrustName = rr_name(reader);
+        rr_expect(reader, 59u32, "expected ';' after resource drop function");
+        if (*reader).failed { return null(*CrustDecl); }
+        var resource: *RsResource = rs_alloc(stage, sizeof(RsResource), alignof(RsResource)) as *RsResource;
+        if resource == null(*RsResource) { (*reader).failed = true; return null(*CrustDecl); }
+        (*resource).declaration = declaration;
+        (*resource).drop_name = drop_name;
+        (*resource).next = (*stage).resources;
+        (*stage).resources = resource;
+        return declaration;
+    }
+    if rr_is_name(reader, "unsafe") {
+        rr_next(reader);
+        if (*reader).token.kind != RR_FN {
+            rr_error(reader, (*reader).token.offset, "expected fn after unsafe declaration modifier");
+            return null(*CrustDecl);
+        }
+        var declaration: *CrustDecl = rr_function(reader);
+        if !(*reader).failed {
+            rs_put(stage, &(*stage).unsafe_functions, declaration as usize, declaration as *u8);
+            if (*stage).failed { (*reader).failed = true; }
+        }
+        return declaration;
+    }
+    return null(*CrustDecl);
+}
+
+fn rs_read_statement(reader: *CrustReader, user: *u8) -> *CrustStmt {
+    var kind: u32 = 0u32;
+    if rr_is_name(reader, "defer") { kind = RS_DEFER; }
+    else { if rr_is_name(reader, "unsafe") { kind = RS_UNSAFE; }
+    else { if rr_is_name(reader, "forget") { kind = RS_FORGET; }
+    else { return null(*CrustStmt); } } }
+    var statement: *CrustStmt = rr_new_stmt(reader, kind, (*reader).token.offset);
+    rr_next(reader);
+    if (*reader).failed { return null(*CrustStmt); }
+    if kind == RS_UNSAFE { (*statement).body = rr_block(reader); }
+    else {
+        (*statement).expr = rr_expression(reader);
+        rr_expect(reader, 59u32, "expected ';' after resource statement");
+    }
+    return statement;
+}
+
+fn rs_read_prefix(reader: *CrustReader, user: *u8) -> *CrustExpr {
+    var kind: u32 = 0u32;
+    if rr_is_name(reader, "move") { kind = RS_MOVE; }
+    else { if rr_is_name(reader, "read") { kind = RS_READ; }
+    else { if rr_is_name(reader, "mut") { kind = RS_MUT; }
+    else { return null(*CrustExpr); } } }
+    var expression: *CrustExpr = rr_new_expr(reader, kind, (*reader).token.offset);
+    rr_next(reader);
+    if !(*reader).failed { (*expression).left = rr_prefix(reader); }
+    return expression;
+}
+
+fn rs_read_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax {
+    var kind: u32 = 0u32;
+    if rr_is_name(reader, "read") { kind = RS_READ; }
+    else { if rr_is_name(reader, "mut") { kind = RS_MUT; }
+    else { return null(*CrustTypeSyntax); } }
+    var syntax: *CrustTypeSyntax = rr_new_type(reader, kind, (*reader).token.offset);
+    rr_next(reader);
+    if !(*reader).failed { (*syntax).base = rr_type(reader); }
+    return syntax;
+}
+
+// Read one complete source range. Retain source storage through stage use.
+fn rs_read(stage: *RsStage, source: *CrustSource, begin: usize, end: usize) -> bool {
+    var hooks: CrustReaderHooks = make CrustReaderHooks {
+        user: stage as *u8, declaration: rs_read_declaration,
+        statement: rs_read_statement, prefix: rs_read_prefix, type_syntax: rs_read_type
+    };
+    var unit_value: *CrustUnit = rr_read((*stage).context, source, begin, end, &hooks);
+    if unit_value == null(*CrustUnit) { (*stage).failed = true; return false; }
+    return true;
+}

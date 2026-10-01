@@ -1,4 +1,4 @@
-#include "rmd0_eval.h"
+#include "crust0_eval.h"
 
 #include <assert.h>
 #include <ffi.h>
@@ -32,7 +32,7 @@ typedef struct {
 struct EvalAbi {
     ffi_cif cif;
     ffi_type **arguments;
-    RmdType *type;
+    CrustType *type;
 };
 
 struct EvalFrame {
@@ -42,22 +42,22 @@ struct EvalFrame {
 };
 
 struct EvalPlan {
-    RmdMap symbols;
-    RmdMap expressions;
+    CrustMap symbols;
+    CrustMap expressions;
     size_t size;
     EvalFrame *available;
 };
 
 struct EvalNative {
-    RmdDecl *prototype;
+    CrustDecl *prototype;
     EvalDecl *definition;
     void *address;
     bool published;
 };
 
 struct EvalDecl {
-    RmdEval *eval;
-    RmdDecl *declaration;
+    CrustEval *eval;
+    CrustDecl *declaration;
     EvalNative *native;
     EvalPlan *plan;
     unsigned char *constant;
@@ -67,17 +67,17 @@ struct EvalDecl {
     EvalDecl *next;
 };
 
-struct RmdEval {
-    RmdContext *context;
-    RmdEvalOptions options;
-    RmdMap declarations;
-    RmdMap identities;
-    RmdMap natives;
-    RmdMap functions;
-    RmdMap abis;
-    RmdMap roots;
-    RmdMap statements;
-    RmdMap expressions;
+struct CrustEval {
+    CrustContext *context;
+    CrustEvalOptions options;
+    CrustMap declarations;
+    CrustMap identities;
+    CrustMap natives;
+    CrustMap functions;
+    CrustMap abis;
+    CrustMap roots;
+    CrustMap statements;
+    CrustMap expressions;
     EvalDecl *first;
 };
 
@@ -85,30 +85,30 @@ typedef enum {
     EVAL_NEXT, EVAL_RETURN, EVAL_BREAK, EVAL_CONTINUE
 } EvalFlow;
 
-static bool eval_expression(RmdEval *eval, EvalFrame *frame,
-                             RmdExpr *expression, EvalValue *result);
-static bool eval_statement(RmdEval *eval, EvalFrame *frame,
-                            RmdStmt *statement, EvalFlow *flow, EvalValue *result);
-static bool call_declaration(RmdEval *eval, EvalDecl *declaration,
+static bool eval_expression(CrustEval *eval, EvalFrame *frame,
+                             CrustExpr *expression, EvalValue *result);
+static bool eval_statement(CrustEval *eval, EvalFrame *frame,
+                            CrustStmt *statement, EvalFlow *flow, EvalValue *result);
+static bool call_declaration(CrustEval *eval, EvalDecl *declaration,
                               void *const *arguments, EvalValue *result);
-static bool function_address(RmdEval *eval, EvalDecl *declaration, void **result);
+static bool function_address(CrustEval *eval, EvalDecl *declaration, void **result);
 
-static bool error_at(RmdEval *eval, RmdLoc location, const char *message)
+static bool error_at(CrustEval *eval, CrustLoc location, const char *message)
 {
-    rmd_set_error(eval->context, location.source, location.offset, message);
+    crust_set_error(eval->context, location.source, location.offset, message);
     return false;
 }
 
-static RmdLoc no_location(void)
+static CrustLoc no_location(void)
 {
-    RmdLoc location = {NULL, 0};
+    CrustLoc location = {NULL, 0};
     return location;
 }
 
-static void fatal_error(RmdEval *eval)
+static void fatal_error(CrustEval *eval)
 {
-    RmdContext *context = eval->context;
-    RmdSource *source = context->error_loc.source;
+    CrustContext *context = eval->context;
+    CrustSource *source = context->error_loc.source;
     if (source != NULL && source->path != NULL) {
         size_t line = 1;
         size_t column = 1;
@@ -119,26 +119,26 @@ static void fatal_error(RmdEval *eval)
         }
         fprintf(stderr, "%s:%zu:%zu: error: %s\n", source->path, line, column, context->error);
     } else
-        fprintf(stderr, "RMD evaluation failed: %s\n", context->error);
+        fprintf(stderr, "CRUST evaluation failed: %s\n", context->error);
     (void)fflush(stderr);
     (void)fflush(stdout);
     abort();
 }
 
-static void required_trap(RmdEval *eval, RmdLoc location)
+static void required_trap(CrustEval *eval, CrustLoc location)
 {
     (void)error_at(eval, location, "required execution trap");
     fatal_error(eval);
 }
 
-static void *allocate(RmdEval *eval, size_t size, size_t alignment)
+static void *allocate(CrustEval *eval, size_t size, size_t alignment)
 {
-    return rmd_try_alloc(eval->context, size, alignment);
+    return crust_try_alloc(eval->context, size, alignment);
 }
 
-static bool aggregate_type(RmdType *type)
+static bool aggregate_type(CrustType *type)
 {
-    return type->kind == RMD_T_RECORD || type->kind == RMD_T_ARRAY;
+    return type->kind == CRUST_T_RECORD || type->kind == CRUST_T_ARRAY;
 }
 
 static uint64_t mask_bits(unsigned bits)
@@ -146,32 +146,32 @@ static uint64_t mask_bits(unsigned bits)
     return bits == 64 ? UINT64_MAX : (UINT64_C(1) << bits) - 1;
 }
 
-static uint64_t type_mask(RmdType *type)
+static uint64_t type_mask(CrustType *type)
 {
     return mask_bits((unsigned)(type->size * 8));
 }
 
-static uint64_t extended_bits(uint64_t value, RmdType *type)
+static uint64_t extended_bits(uint64_t value, CrustType *type)
 {
     unsigned bits = (unsigned)(type->size * 8);
     uint64_t mask = mask_bits(bits);
     value &= mask;
-    if (rmd_type_signed(type) && (value & (UINT64_C(1) << (bits - 1))) != 0)
+    if (crust_type_signed(type) && (value & (UINT64_C(1) << (bits - 1))) != 0)
         value |= ~mask;
     return value;
 }
 
-static uint64_t load_bits(const void *address, RmdType *type)
+static uint64_t load_bits(const void *address, CrustType *type)
 {
     uint64_t value = 0;
-    if (type->kind != RMD_T_UNIT)
+    if (type->kind != CRUST_T_UNIT)
         memcpy(&value, address, (size_t)type->size);
     return value;
 }
 
-static void store_value(void *address, RmdType *type, EvalValue value)
+static void store_value(void *address, CrustType *type, EvalValue value)
 {
-    if (type->kind == RMD_T_UNIT)
+    if (type->kind == CRUST_T_UNIT)
         return;
     if (aggregate_type(type))
         memmove(address, value.aggregate, (size_t)type->size);
@@ -179,19 +179,19 @@ static void store_value(void *address, RmdType *type, EvalValue value)
         memcpy(address, &value.bits, (size_t)type->size);
 }
 
-static RmdTypeKind native_kind(RmdType *type)
+static CrustTypeKind native_kind(CrustType *type)
 {
-    if (type->kind == RMD_T_ISIZE) return RMD_T_I64;
-    if (type->kind == RMD_T_USIZE) return RMD_T_U64;
+    if (type->kind == CRUST_T_ISIZE) return CRUST_T_I64;
+    if (type->kind == CRUST_T_USIZE) return CRUST_T_U64;
     return type->kind;
 }
 
-static bool native_type_equal(RmdType *left, RmdType *right)
+static bool native_type_equal(CrustType *left, CrustType *right)
 {
     size_t index;
     if (left == right) return true;
     if (native_kind(left) != native_kind(right)) return false;
-    if (left->kind != RMD_T_FUNCTION)
+    if (left->kind != CRUST_T_FUNCTION)
         return !aggregate_type(left);
     if (left->param_count != right->param_count ||
         !native_type_equal(left->base, right->base)) return false;
@@ -200,12 +200,12 @@ static bool native_type_equal(RmdType *left, RmdType *right)
     return true;
 }
 
-static bool is_function(RmdDecl *declaration)
+static bool is_function(CrustDecl *declaration)
 {
-    return declaration->kind == RMD_D_FUNCTION || declaration->kind == RMD_D_EXTERN;
+    return declaration->kind == CRUST_D_FUNCTION || declaration->kind == CRUST_D_EXTERN;
 }
 
-static uintptr_t identity_key(RmdDecl *declaration)
+static uintptr_t identity_key(CrustDecl *declaration)
 {
     uint64_t identity = declaration->identity;
     uintptr_t key = (uintptr_t)(identity ^ (declaration->unit_identity +
@@ -213,43 +213,43 @@ static uintptr_t identity_key(RmdDecl *declaration)
     return key == 0 ? 1 : key;
 }
 
-static EvalDecl *find_declaration(RmdEval *eval, RmdDecl *declaration)
+static EvalDecl *find_declaration(CrustEval *eval, CrustDecl *declaration)
 {
-    return rmd_map_get(&eval->declarations, (uintptr_t)declaration);
+    return crust_map_get(&eval->declarations, (uintptr_t)declaration);
 }
 
-static ffi_type *ffi_value_type(RmdType *type)
+static ffi_type *ffi_value_type(CrustType *type)
 {
     switch (type->kind) {
-    case RMD_T_I8: return &ffi_type_sint8;
-    case RMD_T_U8: case RMD_T_BOOL: return &ffi_type_uint8;
-    case RMD_T_I16: return &ffi_type_sint16;
-    case RMD_T_U16: return &ffi_type_uint16;
-    case RMD_T_I32: return &ffi_type_sint32;
-    case RMD_T_U32: return &ffi_type_uint32;
-    case RMD_T_I64: case RMD_T_ISIZE: return &ffi_type_sint64;
-    case RMD_T_U64: case RMD_T_USIZE: return &ffi_type_uint64;
-    case RMD_T_UNIT: return &ffi_type_void;
-    case RMD_T_POINTER: case RMD_T_FUNCTION: return &ffi_type_pointer;
+    case CRUST_T_I8: return &ffi_type_sint8;
+    case CRUST_T_U8: case CRUST_T_BOOL: return &ffi_type_uint8;
+    case CRUST_T_I16: return &ffi_type_sint16;
+    case CRUST_T_U16: return &ffi_type_uint16;
+    case CRUST_T_I32: return &ffi_type_sint32;
+    case CRUST_T_U32: return &ffi_type_uint32;
+    case CRUST_T_I64: case CRUST_T_ISIZE: return &ffi_type_sint64;
+    case CRUST_T_U64: case CRUST_T_USIZE: return &ffi_type_uint64;
+    case CRUST_T_UNIT: return &ffi_type_void;
+    case CRUST_T_POINTER: case CRUST_T_FUNCTION: return &ffi_type_pointer;
     default: abort();
     }
 }
 
-static EvalAbi *prepare_abi(RmdEval *eval, RmdType *type, RmdLoc location)
+static EvalAbi *prepare_abi(CrustEval *eval, CrustType *type, CrustLoc location)
 {
-    EvalAbi *abi = rmd_map_get(&eval->abis, (uintptr_t)type);
+    EvalAbi *abi = crust_map_get(&eval->abis, (uintptr_t)type);
     size_t index;
     if (abi != NULL) return abi;
     if (type->param_count > UINT_MAX || type->param_count > SIZE_MAX / sizeof(ffi_type *)) {
         (void)error_at(eval, location, "native parameter count exceeds the libffi limit");
         return NULL;
     }
-    abi = allocate(eval, sizeof(*abi), RMD_ALIGNOF(EvalAbi));
+    abi = allocate(eval, sizeof(*abi), CRUST_ALIGNOF(EvalAbi));
     if (abi == NULL) return NULL;
     abi->type = type;
     if (type->param_count != 0) {
         abi->arguments = allocate(eval, type->param_count * sizeof(*abi->arguments),
-                                  RMD_ALIGNOF(ffi_type *));
+                                  CRUST_ALIGNOF(ffi_type *));
         if (abi->arguments == NULL) return NULL;
     }
     for (index = 0; index < type->param_count; ++index)
@@ -259,22 +259,22 @@ static EvalAbi *prepare_abi(RmdEval *eval, RmdType *type, RmdLoc location)
         (void)error_at(eval, location, "libffi rejected the native function signature");
         return NULL;
     }
-    if (!rmd_try_map_set(eval->context, &eval->abis, (uintptr_t)type, abi)) return NULL;
+    if (!crust_try_map_set(eval->context, &eval->abis, (uintptr_t)type, abi)) return NULL;
     return abi;
 }
 
-RmdEval *rmd_eval_create(RmdContext *context, const RmdEvalOptions *options)
+CrustEval *crust_eval_create(CrustContext *context, const CrustEvalOptions *options)
 {
-    RmdEval *eval;
+    CrustEval *eval;
     if (context == NULL) return NULL;
-    eval = rmd_try_alloc(context, sizeof(*eval), RMD_ALIGNOF(RmdEval));
+    eval = crust_try_alloc(context, sizeof(*eval), CRUST_ALIGNOF(CrustEval));
     if (eval == NULL) return NULL;
     eval->context = context;
     if (options != NULL) eval->options = *options;
     return eval;
 }
 
-void rmd_eval_destroy(RmdEval *eval)
+void crust_eval_destroy(CrustEval *eval)
 {
     EvalDecl *declaration;
     if (eval == NULL) return;
@@ -286,32 +286,32 @@ void rmd_eval_destroy(RmdEval *eval)
     }
 }
 
-bool rmd_eval_prepare(RmdEval *eval, RmdDecl *declaration)
+bool crust_eval_prepare(CrustEval *eval, CrustDecl *declaration)
 {
     EvalDecl *prepared;
     EvalDecl *same;
     EvalNative *native = NULL;
-    RmdName *name = NULL;
+    CrustName *name = NULL;
     const unsigned char *cursor;
     uintptr_t key;
     if (declaration == NULL || declaration->type == NULL)
         return error_at(eval, no_location(), "evaluation requires a checked declaration");
     if (find_declaration(eval, declaration) != NULL) return true;
-    if (declaration->kind == RMD_D_RECORD) return true;
-    if (declaration->kind == RMD_D_FUNCTION && !declaration->checked)
+    if (declaration->kind == CRUST_D_RECORD) return true;
+    if (declaration->kind == CRUST_D_FUNCTION && !declaration->checked)
         return error_at(eval, declaration->loc, "evaluation requires a checked function body");
-    if (declaration->kind == RMD_D_CONST && !declaration->checked)
+    if (declaration->kind == CRUST_D_CONST && !declaration->checked)
         return error_at(eval, declaration->loc, "evaluation requires a checked constant");
     key = identity_key(declaration);
     if (declaration->identity != 0) {
-        for (same = rmd_map_get(&eval->identities, key); same != NULL; same = same->identity_next) {
+        for (same = crust_map_get(&eval->identities, key); same != NULL; same = same->identity_next) {
             if (same->declaration->identity == declaration->identity &&
                 same->declaration->unit_identity == declaration->unit_identity)
-                return rmd_try_map_set(eval->context, &eval->declarations,
+                return crust_try_map_set(eval->context, &eval->declarations,
                                         (uintptr_t)declaration, same);
         }
     }
-    if (declaration->kind == RMD_D_EXTERN && declaration->link_name == NULL)
+    if (declaration->kind == CRUST_D_EXTERN && declaration->link_name == NULL)
         return error_at(eval, declaration->loc, "external function has no native link name");
     if (declaration->link_name != NULL) {
         cursor = (const unsigned char *)declaration->link_name;
@@ -322,44 +322,44 @@ bool rmd_eval_prepare(RmdEval *eval, RmdDecl *declaration)
                 return error_at(eval, declaration->loc, "native link name is not ASCII");
             ++cursor;
         }
-        name = rmd_try_intern(eval->context, (const unsigned char *)declaration->link_name,
+        name = crust_try_intern(eval->context, (const unsigned char *)declaration->link_name,
                                (size_t)(cursor - (const unsigned char *)declaration->link_name));
         if (name == NULL) return false;
-        native = rmd_map_get(&eval->natives, (uintptr_t)name);
+        native = crust_map_get(&eval->natives, (uintptr_t)name);
         if (native != NULL) {
             if (is_function(native->prototype) != is_function(declaration) ||
                 (is_function(declaration) ?
                  !native_type_equal(native->prototype->type, declaration->type) :
-                 !rmd_type_equal(native->prototype->type, declaration->type)))
+                 !crust_type_equal(native->prototype->type, declaration->type)))
                 return error_at(eval, declaration->loc, "conflicting native ABI for symbol");
-            if (declaration->kind != RMD_D_EXTERN && native->definition != NULL)
+            if (declaration->kind != CRUST_D_EXTERN && native->definition != NULL)
                 return error_at(eval, declaration->loc, "duplicate native definition for symbol");
-            if (declaration->kind != RMD_D_EXTERN && native->published)
+            if (declaration->kind != CRUST_D_EXTERN && native->published)
                 return error_at(eval, declaration->loc, "native callable identity was already published");
         }
     }
-    prepared = allocate(eval, sizeof(*prepared), RMD_ALIGNOF(EvalDecl));
+    prepared = allocate(eval, sizeof(*prepared), CRUST_ALIGNOF(EvalDecl));
     if (prepared == NULL) return false;
     prepared->eval = eval;
     prepared->declaration = declaration;
     if (name != NULL && native == NULL) {
-        native = allocate(eval, sizeof(*native), RMD_ALIGNOF(EvalNative));
+        native = allocate(eval, sizeof(*native), CRUST_ALIGNOF(EvalNative));
         if (native == NULL) return false;
         native->prototype = declaration;
-        if (!rmd_try_map_set(eval->context, &eval->natives, (uintptr_t)name, native)) return false;
+        if (!crust_try_map_set(eval->context, &eval->natives, (uintptr_t)name, native)) return false;
     }
     prepared->native = native;
     prepared->next = eval->first;
     eval->first = prepared;
-    if (native != NULL && declaration->kind != RMD_D_EXTERN) native->definition = prepared;
+    if (native != NULL && declaration->kind != CRUST_D_EXTERN) native->definition = prepared;
     if (declaration->identity != 0) {
-        prepared->identity_next = rmd_map_get(&eval->identities, key);
-        if (!rmd_try_map_set(eval->context, &eval->identities, key, prepared)) {
+        prepared->identity_next = crust_map_get(&eval->identities, key);
+        if (!crust_try_map_set(eval->context, &eval->identities, key, prepared)) {
             if (native != NULL && native->definition == prepared) native->definition = NULL;
             return false;
         }
     }
-    if (!rmd_try_map_set(eval->context, &eval->declarations, (uintptr_t)declaration, prepared)) {
+    if (!crust_try_map_set(eval->context, &eval->declarations, (uintptr_t)declaration, prepared)) {
         if (declaration->identity == 0 && native != NULL && native->definition == prepared)
             native->definition = NULL;
         return false;
@@ -367,14 +367,14 @@ bool rmd_eval_prepare(RmdEval *eval, RmdDecl *declaration)
     return true;
 }
 
-static EvalDecl *get_declaration(RmdEval *eval, RmdDecl *declaration)
+static EvalDecl *get_declaration(CrustEval *eval, CrustDecl *declaration)
 {
-    if (!rmd_eval_prepare(eval, declaration)) return NULL;
+    if (!crust_eval_prepare(eval, declaration)) return NULL;
     return find_declaration(eval, declaration);
 }
 
-static bool reserve_slot(RmdEval *eval, EvalPlan *plan, size_t size,
-                          size_t alignment, RmdLoc location, size_t *result)
+static bool reserve_slot(CrustEval *eval, EvalPlan *plan, size_t size,
+                          size_t alignment, CrustLoc location, size_t *result)
 {
     size_t offset;
     if (plan->size > SIZE_MAX - (alignment - 1))
@@ -387,36 +387,36 @@ static bool reserve_slot(RmdEval *eval, EvalPlan *plan, size_t size,
     return true;
 }
 
-static bool prepare_symbol(RmdEval *eval, EvalPlan *plan, RmdSymbol *symbol)
+static bool prepare_symbol(CrustEval *eval, EvalPlan *plan, CrustSymbol *symbol)
 {
-    EvalSlot *slot = allocate(eval, sizeof(*slot), RMD_ALIGNOF(EvalSlot));
+    EvalSlot *slot = allocate(eval, sizeof(*slot), CRUST_ALIGNOF(EvalSlot));
     if (slot == NULL || !reserve_slot(eval, plan, (size_t)symbol->type->size,
                                       symbol->type->align, symbol->loc, &slot->offset)) return false;
-    return rmd_try_map_set(eval->context, &plan->symbols, (uintptr_t)symbol, slot);
+    return crust_try_map_set(eval->context, &plan->symbols, (uintptr_t)symbol, slot);
 }
 
-static bool prepare_expression(RmdEval *eval, EvalPlan *plan, RmdExpr *expression)
+static bool prepare_expression(CrustEval *eval, EvalPlan *plan, CrustExpr *expression)
 {
     EvalExpr *prepared;
-    RmdInit *init;
+    CrustInit *init;
     size_t index;
     if (expression == NULL) return true;
-    if (aggregate_type(expression->type) || expression->kind == RMD_E_CALL) {
-        prepared = allocate(eval, sizeof(*prepared), RMD_ALIGNOF(EvalExpr));
+    if (aggregate_type(expression->type) || expression->kind == CRUST_E_CALL) {
+        prepared = allocate(eval, sizeof(*prepared), CRUST_ALIGNOF(EvalExpr));
         if (prepared == NULL) return false;
         if (aggregate_type(expression->type) &&
             !reserve_slot(eval, plan, (size_t)expression->type->size, expression->type->align,
                             expression->loc, &prepared->value)) return false;
-        if (expression->kind == RMD_E_CALL) {
+        if (expression->kind == CRUST_E_CALL) {
             if (expression->arg_count > SIZE_MAX / sizeof(uint64_t) ||
                 expression->arg_count > SIZE_MAX / sizeof(void *))
                 return error_at(eval, expression->loc, "evaluation argument storage overflow");
             if (!reserve_slot(eval, plan, expression->arg_count * sizeof(uint64_t),
-                                RMD_ALIGNOF(uint64_t), expression->loc, &prepared->arguments) ||
+                                CRUST_ALIGNOF(uint64_t), expression->loc, &prepared->arguments) ||
                 !reserve_slot(eval, plan, expression->arg_count * sizeof(void *),
-                                RMD_ALIGNOF(void *), expression->loc, &prepared->pointers)) return false;
+                                CRUST_ALIGNOF(void *), expression->loc, &prepared->pointers)) return false;
         }
-        if (!rmd_try_map_set(eval->context, &plan->expressions, (uintptr_t)expression, prepared))
+        if (!crust_try_map_set(eval->context, &plan->expressions, (uintptr_t)expression, prepared))
             return false;
     }
     if (!prepare_expression(eval, plan, expression->left) ||
@@ -428,37 +428,37 @@ static bool prepare_expression(RmdEval *eval, EvalPlan *plan, RmdExpr *expressio
     return true;
 }
 
-static bool prepare_statement(RmdEval *eval, EvalPlan *plan, RmdStmt *statement,
+static bool prepare_statement(CrustEval *eval, EvalPlan *plan, CrustStmt *statement,
                                bool persistent)
 {
-    RmdStmt *child;
+    CrustStmt *child;
     if (statement == NULL) return true;
-    if (statement->kind == RMD_S_VAR) {
+    if (statement->kind == CRUST_S_VAR) {
         if (persistent) {
-            void *storage = rmd_map_get(&eval->roots, (uintptr_t)statement->symbol);
+            void *storage = crust_map_get(&eval->roots, (uintptr_t)statement->symbol);
             if (storage == NULL) {
                 storage = allocate(eval, (size_t)statement->symbol->type->size,
                                      statement->symbol->type->align);
-                if (storage == NULL || !rmd_try_map_set(eval->context, &eval->roots,
+                if (storage == NULL || !crust_try_map_set(eval->context, &eval->roots,
                        (uintptr_t)statement->symbol, storage)) return false;
             }
         } else if (!prepare_symbol(eval, plan, statement->symbol)) return false;
     }
     if (!prepare_expression(eval, plan, statement->expr) ||
         !prepare_expression(eval, plan, statement->value)) return false;
-    if (statement->kind == RMD_S_BLOCK) {
+    if (statement->kind == CRUST_S_BLOCK) {
         for (child = statement->body; child != NULL; child = child->next)
             if (!prepare_statement(eval, plan, child, false)) return false;
     } else if (!prepare_statement(eval, plan, statement->body, false)) return false;
     return prepare_statement(eval, plan, statement->otherwise, false);
 }
 
-static EvalPlan *function_plan(RmdEval *eval, EvalDecl *declaration)
+static EvalPlan *function_plan(CrustEval *eval, EvalDecl *declaration)
 {
     EvalPlan *plan;
-    RmdParam *param;
+    CrustParam *param;
     if (declaration->plan != NULL) return declaration->plan;
-    plan = allocate(eval, sizeof(*plan), RMD_ALIGNOF(EvalPlan));
+    plan = allocate(eval, sizeof(*plan), CRUST_ALIGNOF(EvalPlan));
     if (plan == NULL) return NULL;
     for (param = declaration->declaration->params; param != NULL; param = param->next)
         if (!prepare_symbol(eval, plan, param->symbol)) return NULL;
@@ -467,18 +467,18 @@ static EvalPlan *function_plan(RmdEval *eval, EvalDecl *declaration)
     return plan;
 }
 
-static EvalFrame *acquire_frame(RmdEval *eval, EvalPlan *plan)
+static EvalFrame *acquire_frame(CrustEval *eval, EvalPlan *plan)
 {
     EvalFrame *frame = plan->available;
     if (frame != NULL) {
         plan->available = frame->next;
         return frame;
     }
-    frame = allocate(eval, sizeof(*frame), RMD_ALIGNOF(EvalFrame));
+    frame = allocate(eval, sizeof(*frame), CRUST_ALIGNOF(EvalFrame));
     if (frame == NULL) return NULL;
     frame->plan = plan;
-    frame->storage = rmd_arena_alloc(&eval->context->arena, plan->size == 0 ? 1 : plan->size,
-                                      RMD_ALIGNOF(uint64_t));
+    frame->storage = crust_arena_alloc(&eval->context->arena, plan->size == 0 ? 1 : plan->size,
+                                      CRUST_ALIGNOF(uint64_t));
     if (frame->storage == NULL) {
         (void)error_at(eval, no_location(), "evaluation frame allocation failed");
         return NULL;
@@ -492,35 +492,35 @@ static void release_frame(EvalFrame *frame)
     frame->plan->available = frame;
 }
 
-static void *symbol_address(RmdEval *eval, EvalFrame *frame, RmdSymbol *symbol)
+static void *symbol_address(CrustEval *eval, EvalFrame *frame, CrustSymbol *symbol)
 {
-    EvalSlot *slot = rmd_map_get(&frame->plan->symbols, (uintptr_t)symbol);
+    EvalSlot *slot = crust_map_get(&frame->plan->symbols, (uintptr_t)symbol);
     if (slot != NULL) return frame->storage + slot->offset;
-    return rmd_map_get(&eval->roots, (uintptr_t)symbol);
+    return crust_map_get(&eval->roots, (uintptr_t)symbol);
 }
 
-static unsigned char *expression_storage(EvalFrame *frame, RmdExpr *expression)
+static unsigned char *expression_storage(EvalFrame *frame, CrustExpr *expression)
 {
-    EvalExpr *prepared = rmd_map_get(&frame->plan->expressions, (uintptr_t)expression);
+    EvalExpr *prepared = crust_map_get(&frame->plan->expressions, (uintptr_t)expression);
     return frame->storage + prepared->value;
 }
 
-static bool constant_address(RmdEval *eval, EvalDecl *declaration, void **result)
+static bool constant_address(CrustEval *eval, EvalDecl *declaration, void **result)
 {
-    RmdDecl *syntax = declaration->declaration;
+    CrustDecl *syntax = declaration->declaration;
     unsigned char *storage;
     if (declaration->constant != NULL) {
         *result = declaration->constant;
         return true;
     }
     storage = allocate(eval, (size_t)syntax->type->size, syntax->type->align);
-    if (storage == NULL || !rmd_eval_expression(eval, syntax->init, storage)) return false;
+    if (storage == NULL || !crust_eval_expression(eval, syntax->init, storage)) return false;
     declaration->constant = storage;
     *result = storage;
     return true;
 }
 
-static bool eval_place(RmdEval *eval, EvalFrame *frame, RmdExpr *expression,
+static bool eval_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
                         void **result)
 {
     EvalValue value;
@@ -528,22 +528,22 @@ static bool eval_place(RmdEval *eval, EvalFrame *frame, RmdExpr *expression,
     void *address;
     EvalDecl *declaration;
     switch (expression->kind) {
-    case RMD_E_NAME:
-        if (expression->symbol->kind == RMD_SYM_CONST) {
+    case CRUST_E_NAME:
+        if (expression->symbol->kind == CRUST_SYM_CONST) {
             declaration = get_declaration(eval, expression->symbol->decl);
             return declaration != NULL && constant_address(eval, declaration, result);
         }
         *result = symbol_address(eval, frame, expression->symbol);
         assert(*result != NULL);
         return true;
-    case RMD_E_GROUP:
+    case CRUST_E_GROUP:
         return eval_place(eval, frame, expression->left, result);
-    case RMD_E_UNARY:
-        assert(expression->op == RMD_OP_DEREF);
+    case CRUST_E_UNARY:
+        assert(expression->op == CRUST_OP_DEREF);
         if (!eval_expression(eval, frame, expression->left, &value)) return false;
         *result = (void *)(uintptr_t)value.bits;
         return true;
-    case RMD_E_FIELD:
+    case CRUST_E_FIELD:
         if (expression->left->place) {
             if (!eval_place(eval, frame, expression->left, &address)) return false;
         } else {
@@ -552,8 +552,8 @@ static bool eval_place(RmdEval *eval, EvalFrame *frame, RmdExpr *expression,
         }
         *result = (void *)((uintptr_t)address + (uintptr_t)expression->field->offset);
         return true;
-    case RMD_E_INDEX:
-        if (expression->left->type->kind == RMD_T_POINTER) {
+    case CRUST_E_INDEX:
+        if (expression->left->type->kind == CRUST_T_POINTER) {
             if (!eval_expression(eval, frame, expression->left, &value)) return false;
             address = (void *)(uintptr_t)value.bits;
         } else if (expression->left->place) {
@@ -569,7 +569,7 @@ static bool eval_place(RmdEval *eval, EvalFrame *frame, RmdExpr *expression,
     }
 }
 
-static bool read_place(RmdEval *eval, EvalFrame *frame, RmdExpr *expression,
+static bool read_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
                         EvalValue *result)
 {
     void *address;
@@ -581,10 +581,10 @@ static bool read_place(RmdEval *eval, EvalFrame *frame, RmdExpr *expression,
     return true;
 }
 
-static uint64_t divide_bits(RmdEval *eval, RmdExpr *expression,
+static uint64_t divide_bits(CrustEval *eval, CrustExpr *expression,
                              uint64_t left, uint64_t right)
 {
-    RmdType *type = expression->left->type;
+    CrustType *type = expression->left->type;
     unsigned bits = (unsigned)(type->size * 8);
     uint64_t mask = mask_bits(bits);
     uint64_t sign = UINT64_C(1) << (bits - 1);
@@ -594,87 +594,87 @@ static uint64_t divide_bits(RmdEval *eval, RmdExpr *expression,
     uint64_t b;
     uint64_t value;
     if (right == 0) required_trap(eval, expression->loc);
-    if (!rmd_type_signed(type))
-        return expression->op == RMD_OP_DIV ? left / right : left % right;
+    if (!crust_type_signed(type))
+        return expression->op == CRUST_OP_DIV ? left / right : left % right;
     if (left == sign && right == mask) required_trap(eval, expression->loc);
     negative_left = (left & sign) != 0;
     negative_right = (right & sign) != 0;
     a = negative_left ? (UINT64_C(0) - left) & mask : left;
     b = negative_right ? (UINT64_C(0) - right) & mask : right;
-    value = expression->op == RMD_OP_DIV ? a / b : a % b;
-    if (expression->op == RMD_OP_DIV ? negative_left != negative_right : negative_left)
+    value = expression->op == CRUST_OP_DIV ? a / b : a % b;
+    if (expression->op == CRUST_OP_DIV ? negative_left != negative_right : negative_left)
         value = UINT64_C(0) - value;
     return value & mask;
 }
 
-static bool binary_expression(RmdEval *eval, EvalFrame *frame,
-                               RmdExpr *expression, EvalValue *result)
+static bool binary_expression(CrustEval *eval, EvalFrame *frame,
+                               CrustExpr *expression, EvalValue *result)
 {
     EvalValue left;
     EvalValue right;
-    RmdType *type = expression->left->type;
+    CrustType *type = expression->left->type;
     uint64_t a;
     uint64_t b;
     uint64_t sign;
     unsigned bits = (unsigned)(type->size * 8);
     if (!eval_expression(eval, frame, expression->left, &left)) return false;
-    if (expression->op == RMD_OP_AND && left.bits == 0) {
+    if (expression->op == CRUST_OP_AND && left.bits == 0) {
         result->bits = 0;
         return true;
     }
-    if (expression->op == RMD_OP_OR && left.bits != 0) {
+    if (expression->op == CRUST_OP_OR && left.bits != 0) {
         result->bits = 1;
         return true;
     }
     if (!eval_expression(eval, frame, expression->right, &right)) return false;
     a = left.bits;
     b = right.bits;
-    if (type->kind == RMD_T_POINTER &&
-        (expression->op == RMD_OP_ADD || expression->op == RMD_OP_SUB)) {
+    if (type->kind == CRUST_T_POINTER &&
+        (expression->op == CRUST_OP_ADD || expression->op == CRUST_OP_SUB)) {
         b *= type->base->size;
-        result->bits = expression->op == RMD_OP_ADD ? a + b : a - b;
+        result->bits = expression->op == CRUST_OP_ADD ? a + b : a - b;
         return true;
     }
     switch (expression->op) {
-    case RMD_OP_ADD: result->bits = a + b; break;
-    case RMD_OP_SUB: result->bits = a - b; break;
-    case RMD_OP_MUL: result->bits = a * b; break;
-    case RMD_OP_DIV: case RMD_OP_REM:
+    case CRUST_OP_ADD: result->bits = a + b; break;
+    case CRUST_OP_SUB: result->bits = a - b; break;
+    case CRUST_OP_MUL: result->bits = a * b; break;
+    case CRUST_OP_DIV: case CRUST_OP_REM:
         result->bits = divide_bits(eval, expression, a, b); break;
-    case RMD_OP_SHL: case RMD_OP_SHR:
+    case CRUST_OP_SHL: case CRUST_OP_SHR:
         if (b >= bits) required_trap(eval, expression->loc);
-        if (expression->op == RMD_OP_SHL) result->bits = a << (unsigned)b;
+        if (expression->op == CRUST_OP_SHL) result->bits = a << (unsigned)b;
         else {
             result->bits = a >> (unsigned)b;
-            if (b != 0 && rmd_type_signed(type) &&
+            if (b != 0 && crust_type_signed(type) &&
                 (a & (UINT64_C(1) << (bits - 1))) != 0)
                 result->bits |= mask_bits(bits) ^ mask_bits(bits - (unsigned)b);
         }
         break;
-    case RMD_OP_BIT_AND: result->bits = a & b; break;
-    case RMD_OP_BIT_OR: result->bits = a | b; break;
-    case RMD_OP_BIT_XOR: result->bits = a ^ b; break;
-    case RMD_OP_EQ: result->bits = a == b; return true;
-    case RMD_OP_NE: result->bits = a != b; return true;
-    case RMD_OP_LT: case RMD_OP_LE: case RMD_OP_GT: case RMD_OP_GE:
-        if (rmd_type_signed(type)) {
+    case CRUST_OP_BIT_AND: result->bits = a & b; break;
+    case CRUST_OP_BIT_OR: result->bits = a | b; break;
+    case CRUST_OP_BIT_XOR: result->bits = a ^ b; break;
+    case CRUST_OP_EQ: result->bits = a == b; return true;
+    case CRUST_OP_NE: result->bits = a != b; return true;
+    case CRUST_OP_LT: case CRUST_OP_LE: case CRUST_OP_GT: case CRUST_OP_GE:
+        if (crust_type_signed(type)) {
             sign = UINT64_C(1) << (bits - 1);
             a ^= sign;
             b ^= sign;
         }
-        if (expression->op == RMD_OP_LT) result->bits = a < b;
-        else if (expression->op == RMD_OP_LE) result->bits = a <= b;
-        else if (expression->op == RMD_OP_GT) result->bits = a > b;
+        if (expression->op == CRUST_OP_LT) result->bits = a < b;
+        else if (expression->op == CRUST_OP_LE) result->bits = a <= b;
+        else if (expression->op == CRUST_OP_GT) result->bits = a > b;
         else result->bits = a >= b;
         return true;
-    case RMD_OP_AND: case RMD_OP_OR: result->bits = b != 0; return true;
+    case CRUST_OP_AND: case CRUST_OP_OR: result->bits = b != 0; return true;
     default: abort();
     }
     result->bits &= type_mask(expression->type);
     return true;
 }
 
-static bool call_native(RmdEval *eval, EvalAbi *abi, void *address,
+static bool call_native(CrustEval *eval, EvalAbi *abi, void *address,
                          void *const *arguments, EvalValue *result)
 {
     void (*function)(void);
@@ -683,40 +683,40 @@ static bool call_native(RmdEval *eval, EvalAbi *abi, void *address,
     memcpy(&function, &address, sizeof(function));
     ffi_call(&abi->cif, function, &returned, (void **)arguments);
     result->bits = (uint64_t)returned;
-    if (abi->type->base->kind != RMD_T_UNIT) result->bits &= type_mask(abi->type->base);
+    if (abi->type->base->kind != CRUST_T_UNIT) result->bits &= type_mask(abi->type->base);
     return true;
 }
 
-static bool call_expression(RmdEval *eval, EvalFrame *frame,
-                             RmdExpr *expression, EvalValue *result)
+static bool call_expression(CrustEval *eval, EvalFrame *frame,
+                             CrustExpr *expression, EvalValue *result)
 {
-    EvalExpr *prepared = rmd_map_get(&frame->plan->expressions, (uintptr_t)expression);
-    RmdExpr *callee = expression->left;
+    EvalExpr *prepared = crust_map_get(&frame->plan->expressions, (uintptr_t)expression);
+    CrustExpr *callee = expression->left;
     EvalDecl *declaration = NULL;
     EvalValue value;
     void *address = NULL;
     void **arguments = (void **)(void *)(frame->storage + prepared->pointers);
     uint64_t *values = (uint64_t *)(void *)(frame->storage + prepared->arguments);
     size_t index;
-    while (callee->kind == RMD_E_GROUP) callee = callee->left;
-    if (callee->kind == RMD_E_NAME && callee->symbol->kind == RMD_SYM_FUNCTION) {
+    while (callee->kind == CRUST_E_GROUP) callee = callee->left;
+    if (callee->kind == CRUST_E_NAME && callee->symbol->kind == CRUST_SYM_FUNCTION) {
         declaration = get_declaration(eval, callee->symbol->decl);
         if (declaration == NULL) return false;
         if (declaration->native != NULL && declaration->native->definition != NULL)
             declaration = declaration->native->definition;
-        if (declaration->declaration->kind == RMD_D_EXTERN &&
+        if (declaration->declaration->kind == CRUST_D_EXTERN &&
             !function_address(eval, declaration, &address)) return false;
     } else {
         if (!eval_expression(eval, frame, expression->left, &value)) return false;
         address = (void *)(uintptr_t)value.bits;
-        declaration = rmd_map_get(&eval->functions, (uintptr_t)address);
+        declaration = crust_map_get(&eval->functions, (uintptr_t)address);
     }
     for (index = 0; index < expression->arg_count; ++index) {
         if (!eval_expression(eval, frame, expression->args[index], &value)) return false;
         values[index] = value.bits;
         arguments[index] = &values[index];
     }
-    if (declaration != NULL && declaration->declaration->kind == RMD_D_FUNCTION)
+    if (declaration != NULL && declaration->declaration->kind == CRUST_D_FUNCTION)
         return call_declaration(eval, declaration, arguments, result);
     if (prepared->abi == NULL) {
         prepared->abi = prepare_abi(eval, expression->left->type, expression->loc);
@@ -725,68 +725,68 @@ static bool call_expression(RmdEval *eval, EvalFrame *frame,
     return call_native(eval, prepared->abi, address, arguments, result);
 }
 
-static bool eval_expression(RmdEval *eval, EvalFrame *frame,
-                             RmdExpr *expression, EvalValue *result)
+static bool eval_expression(CrustEval *eval, EvalFrame *frame,
+                             CrustExpr *expression, EvalValue *result)
 {
     EvalValue value;
     EvalDecl *declaration;
     void *address;
-    RmdInit *init;
+    CrustInit *init;
     size_t index;
     result->bits = 0;
     result->aggregate = NULL;
     switch (expression->kind) {
-    case RMD_E_NAME:
-        if (expression->symbol->kind != RMD_SYM_FUNCTION)
+    case CRUST_E_NAME:
+        if (expression->symbol->kind != CRUST_SYM_FUNCTION)
             return read_place(eval, frame, expression, result);
         declaration = get_declaration(eval, expression->symbol->decl);
         if (declaration == NULL || !function_address(eval, declaration, &address)) return false;
         result->bits = (uint64_t)(uintptr_t)address;
         return true;
-    case RMD_E_INTEGER: case RMD_E_BOOL: case RMD_E_SIZEOF:
-    case RMD_E_ALIGNOF: case RMD_E_OFFSETOF:
+    case CRUST_E_INTEGER: case CRUST_E_BOOL: case CRUST_E_SIZEOF:
+    case CRUST_E_ALIGNOF: case CRUST_E_OFFSETOF:
         result->bits = expression->integer;
         return true;
-    case RMD_E_STRING:
+    case CRUST_E_STRING:
         result->bits = (uint64_t)(uintptr_t)expression->bytes;
         return true;
-    case RMD_E_NULL:
+    case CRUST_E_NULL:
         return true;
-    case RMD_E_GROUP:
+    case CRUST_E_GROUP:
         return eval_expression(eval, frame, expression->left, result);
-    case RMD_E_UNARY:
-        if (expression->op == RMD_OP_DEREF)
+    case CRUST_E_UNARY:
+        if (expression->op == CRUST_OP_DEREF)
             return read_place(eval, frame, expression, result);
-        if (expression->op == RMD_OP_ADDRESS) {
+        if (expression->op == CRUST_OP_ADDRESS) {
             if (!eval_place(eval, frame, expression->left, &address)) return false;
             result->bits = (uint64_t)(uintptr_t)address;
             return true;
         }
         if (!eval_expression(eval, frame, expression->left, &value)) return false;
-        if (expression->op == RMD_OP_NEG) result->bits = UINT64_C(0) - value.bits;
-        else if (expression->op == RMD_OP_NOT) result->bits = value.bits == 0;
+        if (expression->op == CRUST_OP_NEG) result->bits = UINT64_C(0) - value.bits;
+        else if (expression->op == CRUST_OP_NOT) result->bits = value.bits == 0;
         else result->bits = ~value.bits;
         result->bits &= type_mask(expression->type);
         return true;
-    case RMD_E_BINARY:
+    case CRUST_E_BINARY:
         return binary_expression(eval, frame, expression, result);
-    case RMD_E_CALL:
+    case CRUST_E_CALL:
         return call_expression(eval, frame, expression, result);
-    case RMD_E_INDEX: case RMD_E_FIELD:
+    case CRUST_E_INDEX: case CRUST_E_FIELD:
         return read_place(eval, frame, expression, result);
-    case RMD_E_CAST:
+    case CRUST_E_CAST:
         if (!eval_expression(eval, frame, expression->left, &value)) return false;
-        if (expression->type->kind == RMD_T_BOOL) result->bits = value.bits != 0;
+        if (expression->type->kind == CRUST_T_BOOL) result->bits = value.bits != 0;
         else result->bits = extended_bits(value.bits, expression->left->type) & type_mask(expression->type);
         return true;
-    case RMD_E_RECORD:
+    case CRUST_E_RECORD:
         result->aggregate = expression_storage(frame, expression);
         for (init = expression->inits; init != NULL; init = init->next) {
             if (!eval_expression(eval, frame, init->value, &value)) return false;
             store_value(result->aggregate + init->field->offset, init->field->type, value);
         }
         return true;
-    case RMD_E_ARRAY:
+    case CRUST_E_ARRAY:
         result->aggregate = expression_storage(frame, expression);
         for (index = 0; index < expression->arg_count; ++index) {
             if (!eval_expression(eval, frame, expression->args[index], &value)) return false;
@@ -798,32 +798,32 @@ static bool eval_expression(RmdEval *eval, EvalFrame *frame,
     }
 }
 
-static bool eval_statement(RmdEval *eval, EvalFrame *frame,
-                            RmdStmt *statement, EvalFlow *flow, EvalValue *result)
+static bool eval_statement(CrustEval *eval, EvalFrame *frame,
+                            CrustStmt *statement, EvalFlow *flow, EvalValue *result)
 {
     EvalValue value;
     void *address;
-    RmdStmt *child;
+    CrustStmt *child;
     *flow = EVAL_NEXT;
     switch (statement->kind) {
-    case RMD_S_BLOCK:
+    case CRUST_S_BLOCK:
         for (child = statement->body; child != NULL; child = child->next) {
             if (!eval_statement(eval, frame, child, flow, result)) return false;
             if (*flow != EVAL_NEXT) break;
         }
         return true;
-    case RMD_S_VAR:
+    case CRUST_S_VAR:
         if (statement->uninitialized) return true;
         if (!eval_expression(eval, frame, statement->value, &value)) return false;
         address = symbol_address(eval, frame, statement->symbol);
         assert(address != NULL);
         store_value(address, statement->symbol->type, value);
         return true;
-    case RMD_S_IF:
+    case CRUST_S_IF:
         if (!eval_expression(eval, frame, statement->expr, &value)) return false;
         child = value.bits != 0 ? statement->body : statement->otherwise;
         return child == NULL || eval_statement(eval, frame, child, flow, result);
-    case RMD_S_WHILE:
+    case CRUST_S_WHILE:
         for (;;) {
             if (!eval_expression(eval, frame, statement->expr, &value)) return false;
             if (value.bits == 0) return true;
@@ -832,18 +832,18 @@ static bool eval_statement(RmdEval *eval, EvalFrame *frame,
             if (*flow == EVAL_BREAK) { *flow = EVAL_NEXT; return true; }
             *flow = EVAL_NEXT;
         }
-    case RMD_S_BREAK: *flow = EVAL_BREAK; return true;
-    case RMD_S_CONTINUE: *flow = EVAL_CONTINUE; return true;
-    case RMD_S_RETURN:
+    case CRUST_S_BREAK: *flow = EVAL_BREAK; return true;
+    case CRUST_S_CONTINUE: *flow = EVAL_CONTINUE; return true;
+    case CRUST_S_RETURN:
         if (statement->expr != NULL && !eval_expression(eval, frame, statement->expr, result)) return false;
         *flow = EVAL_RETURN;
         return true;
-    case RMD_S_TRAP:
+    case CRUST_S_TRAP:
         required_trap(eval, statement->loc);
         return false;
-    case RMD_S_EXPR:
+    case CRUST_S_EXPR:
         return eval_expression(eval, frame, statement->expr, &value);
-    case RMD_S_ASSIGN:
+    case CRUST_S_ASSIGN:
         if (!eval_place(eval, frame, statement->expr, &address) ||
             !eval_expression(eval, frame, statement->value, &value)) return false;
         store_value(address, statement->expr->type, value);
@@ -852,12 +852,12 @@ static bool eval_statement(RmdEval *eval, EvalFrame *frame,
     }
 }
 
-static bool call_declaration(RmdEval *eval, EvalDecl *declaration,
+static bool call_declaration(CrustEval *eval, EvalDecl *declaration,
                               void *const *arguments, EvalValue *result)
 {
     EvalPlan *plan;
     EvalFrame *frame;
-    RmdParam *param;
+    CrustParam *param;
     EvalFlow flow = EVAL_NEXT;
     size_t index = 0;
     bool success;
@@ -865,7 +865,7 @@ static bool call_declaration(RmdEval *eval, EvalDecl *declaration,
     EvalAbi *abi;
     if (declaration->native != NULL && declaration->native->definition != NULL)
         declaration = declaration->native->definition;
-    if (declaration->declaration->kind == RMD_D_EXTERN) {
+    if (declaration->declaration->kind == CRUST_D_EXTERN) {
         if (!function_address(eval, declaration, &address)) return false;
         abi = prepare_abi(eval, declaration->declaration->type, declaration->declaration->loc);
         return abi != NULL && call_native(eval, abi, address, arguments, result);
@@ -889,18 +889,18 @@ static void native_callback(ffi_cif *cif, void *returned, void **arguments, void
 {
     EvalDecl *declaration = user;
     EvalValue result;
-    RmdType *type = declaration->declaration->type->base;
+    CrustType *type = declaration->declaration->type->base;
     ffi_arg bits;
     (void)cif;
     if (!call_declaration(declaration->eval, declaration, arguments, &result))
         fatal_error(declaration->eval);
-    if (type->kind != RMD_T_UNIT) {
+    if (type->kind != CRUST_T_UNIT) {
         bits = (ffi_arg)extended_bits(result.bits, type);
         memcpy(returned, &bits, sizeof(bits));
     }
 }
 
-static bool function_address(RmdEval *eval, EvalDecl *declaration, void **result)
+static bool function_address(CrustEval *eval, EvalDecl *declaration, void **result)
 {
     EvalAbi *abi;
     size_t errors;
@@ -911,7 +911,7 @@ static bool function_address(RmdEval *eval, EvalDecl *declaration, void **result
         *result = declaration->native->address;
         return true;
     }
-    if (declaration->declaration->kind == RMD_D_EXTERN) {
+    if (declaration->declaration->kind == CRUST_D_EXTERN) {
         if (eval->options.resolve == NULL)
             return error_at(eval, declaration->declaration->loc, "no native symbol resolver was supplied");
         errors = eval->context->error_count;
@@ -943,7 +943,7 @@ static bool function_address(RmdEval *eval, EvalDecl *declaration, void **result
         declaration->closure = NULL;
         return error_at(eval, declaration->declaration->loc, "libffi rejected the native callback");
     }
-    if (!rmd_try_map_set(eval->context, &eval->functions, (uintptr_t)address, declaration)) {
+    if (!crust_try_map_set(eval->context, &eval->functions, (uintptr_t)address, declaration)) {
         ffi_closure_free(declaration->closure);
         declaration->closure = NULL;
         return false;
@@ -957,7 +957,7 @@ static bool function_address(RmdEval *eval, EvalDecl *declaration, void **result
     return true;
 }
 
-bool rmd_eval_function(RmdEval *eval, RmdDecl *declaration, void *result)
+bool crust_eval_function(CrustEval *eval, CrustDecl *declaration, void *result)
 {
     EvalDecl *prepared;
     void *address;
@@ -969,7 +969,7 @@ bool rmd_eval_function(RmdEval *eval, RmdDecl *declaration, void *result)
     return true;
 }
 
-bool rmd_eval_call(RmdEval *eval, RmdDecl *declaration,
+bool crust_eval_call(CrustEval *eval, CrustDecl *declaration,
                    void *const *arguments, size_t count, void *result)
 {
     EvalDecl *prepared;
@@ -982,7 +982,7 @@ bool rmd_eval_call(RmdEval *eval, RmdDecl *declaration,
     for (index = 0; index < count; ++index)
         if (arguments[index] == NULL)
             return error_at(eval, declaration->loc, "evaluation argument storage is null");
-    if (declaration->type->base->kind != RMD_T_UNIT && result == NULL)
+    if (declaration->type->base->kind != CRUST_T_UNIT && result == NULL)
         return error_at(eval, declaration->loc, "evaluation result storage is null");
     prepared = get_declaration(eval, declaration);
     if (prepared == NULL || !call_declaration(eval, prepared, arguments, &value)) return false;
@@ -990,20 +990,20 @@ bool rmd_eval_call(RmdEval *eval, RmdDecl *declaration,
     return true;
 }
 
-bool rmd_eval_expression(RmdEval *eval, RmdExpr *expression, void *result)
+bool crust_eval_expression(CrustEval *eval, CrustExpr *expression, void *result)
 {
     EvalPlan *plan;
     EvalFrame *frame;
     EvalValue value;
     bool success;
     if (expression == NULL || expression->type == NULL ||
-        (expression->type->kind != RMD_T_UNIT && result == NULL))
+        (expression->type->kind != CRUST_T_UNIT && result == NULL))
         return error_at(eval, no_location(), "expression evaluation requires checked syntax and result storage");
-    plan = rmd_map_get(&eval->expressions, (uintptr_t)expression);
+    plan = crust_map_get(&eval->expressions, (uintptr_t)expression);
     if (plan == NULL) {
-        plan = allocate(eval, sizeof(*plan), RMD_ALIGNOF(EvalPlan));
+        plan = allocate(eval, sizeof(*plan), CRUST_ALIGNOF(EvalPlan));
         if (plan == NULL || !prepare_expression(eval, plan, expression) ||
-            !rmd_try_map_set(eval->context, &eval->expressions, (uintptr_t)expression, plan)) return false;
+            !crust_try_map_set(eval->context, &eval->expressions, (uintptr_t)expression, plan)) return false;
     }
     frame = acquire_frame(eval, plan);
     if (frame == NULL) return false;
@@ -1013,7 +1013,7 @@ bool rmd_eval_expression(RmdEval *eval, RmdExpr *expression, void *result)
     return success;
 }
 
-bool rmd_eval_statement(RmdEval *eval, RmdStmt *statement, bool *returned, int32_t *status)
+bool crust_eval_statement(CrustEval *eval, CrustStmt *statement, bool *returned, int32_t *status)
 {
     EvalPlan *plan;
     EvalFrame *frame;
@@ -1024,11 +1024,11 @@ bool rmd_eval_statement(RmdEval *eval, RmdStmt *statement, bool *returned, int32
         return error_at(eval, no_location(), "statement evaluation requires syntax and return storage");
     *returned = false;
     *status = 0;
-    plan = rmd_map_get(&eval->statements, (uintptr_t)statement);
+    plan = crust_map_get(&eval->statements, (uintptr_t)statement);
     if (plan == NULL) {
-        plan = allocate(eval, sizeof(*plan), RMD_ALIGNOF(EvalPlan));
+        plan = allocate(eval, sizeof(*plan), CRUST_ALIGNOF(EvalPlan));
         if (plan == NULL || !prepare_statement(eval, plan, statement, true) ||
-            !rmd_try_map_set(eval->context, &eval->statements, (uintptr_t)statement, plan)) return false;
+            !crust_try_map_set(eval->context, &eval->statements, (uintptr_t)statement, plan)) return false;
     }
     frame = acquire_frame(eval, plan);
     if (frame == NULL) return false;
@@ -1041,14 +1041,14 @@ bool rmd_eval_statement(RmdEval *eval, RmdStmt *statement, bool *returned, int32
     return success;
 }
 
-bool rmd_eval_bind(RmdEval *eval, RmdSymbol *symbol, void *storage)
+bool crust_eval_bind(CrustEval *eval, CrustSymbol *symbol, void *storage)
 {
     void *previous;
     if (symbol == NULL || symbol->type == NULL || storage == NULL ||
-        (symbol->kind != RMD_SYM_LOCAL && symbol->kind != RMD_SYM_PARAM))
+        (symbol->kind != CRUST_SYM_LOCAL && symbol->kind != CRUST_SYM_PARAM))
         return error_at(eval, no_location(), "evaluation binding requires a local symbol and storage");
-    previous = rmd_map_get(&eval->roots, (uintptr_t)symbol);
+    previous = crust_map_get(&eval->roots, (uintptr_t)symbol);
     if (previous != NULL && previous != storage)
         return error_at(eval, symbol->loc, "evaluation binding storage cannot change");
-    return rmd_try_map_set(eval->context, &eval->roots, (uintptr_t)symbol, storage);
+    return crust_try_map_set(eval->context, &eval->roots, (uintptr_t)symbol, storage);
 }

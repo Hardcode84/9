@@ -1,5 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
-#include "rmd0_host.h"
+#include "crust0_host.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -21,7 +21,7 @@ static void check(bool condition, const char *message)
 
 int main(void)
 {
-    char path[] = "/tmp/rmd0-host-XXXXXX";
+    char path[] = "/tmp/crust0-host-XXXXXX";
     unsigned char contents[10000];
     unsigned char overlap[] = "abcdef";
     unsigned char *data;
@@ -34,37 +34,37 @@ int main(void)
     }
     check(close(descriptor) == 0, "close temporary file descriptor");
     for (index = 0; index < sizeof(contents); ++index) contents[index] = (unsigned char)index;
-    check(rmd0_host_read_file(path, &data, &size) == 0 && data == NULL && size == 0,
+    check(crust0_host_read_file(path, &data, &size) == 0 && data == NULL && size == 0,
           "empty read returns no allocation");
-    check(rmd0_host_write_file(path, contents, sizeof(contents)) == 0, "write binary bytes");
-    check(rmd0_host_read_file(path, &data, &size) == 0 && size == sizeof(contents) &&
+    check(crust0_host_write_file(path, contents, sizeof(contents)) == 0, "write binary bytes");
+    check(crust0_host_read_file(path, &data, &size) == 0 && size == sizeof(contents) &&
           memcmp(data, contents, size) == 0, "read grows the buffer and preserves bytes");
-    rmd0_host_free(data);
-    check(rmd0_host_write_file(path, NULL, 0) == 0, "empty write truncates");
-    check(rmd0_host_read_file(path, &data, &size) == 0 && size == 0 && data == NULL,
+    crust0_host_free(data);
+    check(crust0_host_write_file(path, NULL, 0) == 0, "empty write truncates");
+    check(crust0_host_read_file(path, &data, &size) == 0 && size == 0 && data == NULL,
           "truncated read is empty");
     check(unlink(path) == 0, "remove test file");
     data = contents;
     size = sizeof(contents);
-    check(rmd0_host_read_file(path, &data, &size) != 0 && data == NULL && size == 0,
+    check(crust0_host_read_file(path, &data, &size) != 0 && data == NULL && size == 0,
           "failed read clears both outputs");
-    check(rmd0_host_write_file("/dev/full", contents, sizeof(contents)) != 0,
+    check(crust0_host_write_file("/dev/full", contents, sizeof(contents)) != 0,
           "write reports output failure");
-    check(rmd0_host_write_stream(3, NULL, 0) != 0, "invalid stream fails");
-    check(rmd0_host_write_stream(1, NULL, 0) == 0, "zero byte stream write permits null");
-    rmd0_host_move_bytes(overlap + 1, overlap, 5);
+    check(crust0_host_write_stream(3, NULL, 0) != 0, "invalid stream fails");
+    check(crust0_host_write_stream(1, NULL, 0) == 0, "zero byte stream write permits null");
+    crust0_host_move_bytes(overlap + 1, overlap, 5);
     check(memcmp(overlap, "aabcde", 6) == 0, "byte move preserves overlapping input");
-    rmd0_host_move_bytes(NULL, NULL, 0);
-    check(rmd0_host_alloc(0, 1) == NULL, "zero allocation returns null");
-    check(rmd0_host_alloc(8, 3) == NULL, "invalid alignment fails");
-    check(rmd0_host_alloc(SIZE_MAX, 1) == NULL, "oversized allocation fails");
+    crust0_host_move_bytes(NULL, NULL, 0);
+    check(crust0_host_alloc(0, 1) == NULL, "zero allocation returns null");
+    check(crust0_host_alloc(8, 3) == NULL, "invalid alignment fails");
+    check(crust0_host_alloc(SIZE_MAX, 1) == NULL, "oversized allocation fails");
     for (index = 1; index <= 4096; index *= 2) {
-        data = rmd0_host_alloc(31, index);
+        data = crust0_host_alloc(31, index);
         check(data != NULL && (uintptr_t)data % index == 0, "host allocation alignment");
         memset(data, 0, 31);
-        rmd0_host_free(data);
+        crust0_host_free(data);
     }
-    rmd0_host_free(NULL);
+    crust0_host_free(NULL);
     printf("host: %u/%u checks passed\n", checks - failures, checks);
     return failures == 0 ? 0 : 1;
 }

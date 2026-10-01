@@ -4,11 +4,11 @@ Build the optional stage, then run this source file:
 
 ```sh
 make all overload-stage
-build/rmd examples/overload/hello/main.rmd
+build/crust examples/overload/hello/main.crust
 build/overload-hello
 ```
 
-The root selects an ordinary RMD compiler library. That library reads the
+The root selects an ordinary Crust compiler library. That library reads the
 remainder of the same file. `hello` accepts a string or a repetition count.
 The local function type also selects the string overload without a call.
 

@@ -1,4 +1,4 @@
-#include "rmd0_host.h"
+#include "crust0_host.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -57,13 +57,13 @@ int main(int argc, char **argv)
     (void)argc;
     (void)argv;
     init(&head);
-    first = rmd0_host_alloc(sizeof(Node), offsetof(NodeAlignment, node));
+    first = crust0_host_alloc(sizeof(Node), offsetof(NodeAlignment, node));
     if (first == NULL) {
         return 1;
     }
-    second = rmd0_host_alloc(sizeof(Node), offsetof(NodeAlignment, node));
+    second = crust0_host_alloc(sizeof(Node), offsetof(NodeAlignment, node));
     if (second == NULL) {
-        rmd0_host_free(first);
+        crust0_host_free(first);
         return 2;
     }
     first->value = 11;
@@ -73,7 +73,7 @@ int main(int argc, char **argv)
     insert_after(&head, &first->hook);
     insert_after(&first->hook, &second->hook);
     unlink_node(&first->hook);
-    rmd0_host_free(first);
+    crust0_host_free(first);
     found = node_of(head.next);
     if (found != second || found->value != 22) {
         return 3;
@@ -81,27 +81,27 @@ int main(int argc, char **argv)
     if (head.prev != &second->hook || second->hook.prev != &head) {
         return 4;
     }
-    first = rmd0_host_alloc(sizeof(Node), offsetof(NodeAlignment, node));
+    first = crust0_host_alloc(sizeof(Node), offsetof(NodeAlignment, node));
     if (first == NULL) {
         unlink_node(&second->hook);
-        rmd0_host_free(second);
+        crust0_host_free(second);
         return 5;
     }
     first->value = 33;
     init(&first->hook);
     insert_after(&head, &first->hook);
     unlink_node(&second->hook);
-    rmd0_host_free(second);
+    crust0_host_free(second);
     found = node_of(head.next);
     if (found != first || found->value != 33 || head.prev != &first->hook) {
         return 6;
     }
     unlink_node(&first->hook);
-    rmd0_host_free(first);
+    crust0_host_free(first);
     if (head.next != &head || head.prev != &head) {
         return 7;
     }
-    if (rmd0_host_write_stream(1, (const unsigned char *)"intrusive: ok\n", 14) != 0) {
+    if (crust0_host_write_stream(1, (const unsigned char *)"intrusive: ok\n", 14) != 0) {
         return 8;
     }
     return 0;

@@ -1,9 +1,9 @@
 # Function overload stage
 
-This optional stage is an RMD program. The seed has one function per name.
+This optional stage is a Crust program. The seed has one function per name.
 The stage selects a function and replaces its source name before the next
 checker runs. Generated calls have no runtime dispatch.
-The standalone package retains the RMD0 scalar function ABI. The resource
+The standalone package retains the Crust0 scalar function ABI. The resource
 package also supports aggregate value calls under that stage's rules.
 
 ## Selection rules
@@ -62,25 +62,25 @@ and linking. The seed and the default compilation path have no overload pass.
 
 ```sh
 make all overload-stage
-build/rmd examples/overload/hello/main.rmd
+build/crust examples/overload/hello/main.crust
 build/overload-hello
-build/rmd examples/overload/separate/main.rmd
+build/crust examples/overload/separate/main.crust
 build/overload-separate
-build/rmd examples/overload/resources/main.rmd
+build/crust examples/overload/resources/main.crust
 build/overload-resources
 make check-overload
 make check-overload-alloc
 ```
 
-The [hello root](../../examples/overload/hello/main.rmd) loads `api.rmd` and an
-ordinary compiled RMD library. It calls `overload_build` with the unread range
+The [hello root](../../examples/overload/hello/main.crust) loads `api.crust` and an
+ordinary compiled Crust library. It calls `overload_build` with the unread range
 of its own source. The seed has no package-name check or overload syntax.
-The [separate-object root](../../examples/overload/separate/main.rmd) controls
+The [separate-object root](../../examples/overload/separate/main.crust) controls
 both compiler calls and the link input. The
-[resource root](../../examples/overload/resources/main.rmd) selects the composed
-package through `resource_api.rmd`.
+[resource root](../../examples/overload/resources/main.crust) selects the composed
+package through `resource_api.crust`.
 
-`build/rmd-overload` and `build/rmd-overload-resource` are command wrappers for
+`build/crust-overload` and `build/crust-overload-resource` are command wrappers for
 these same libraries. They accept the C stage's input and output options.
 `--check` stops after semantic checking. `--prepare` also constructs C text in
 memory. `--library --object` emits a native object without a hosted entry.
@@ -92,7 +92,7 @@ with its plain source name. An overloaded family is ambiguous for this option.
 Use a separately named wrapper when a native caller needs one family member.
 A plain export changes that declaration's linkage contract; source imports
 must use the normal mangled definition or an explicit native interface.
-Explicit native names with the `rmd_ov1_` prefix are rejected. That prefix
+Explicit native names with the `crust_ov1_` prefix are rejected. That prefix
 belongs to source ABI imports and definitions.
 
 ## Native name format
@@ -103,7 +103,7 @@ Use letters, digits, and underscores for portable domain names.
 
 | Source type | Encoding |
 | --- | --- |
-| Builtin | `b N(kind)` with the RMD0 builtin kind number |
+| Builtin | `b N(kind)` with the Crust0 builtin kind number |
 | Named record | `n S(name)` |
 | Pointer | `p Type` |
 | Array | `a N(count) Type` |
@@ -115,11 +115,11 @@ The selection key is `a N(arity) Parameters`.
 The native name is:
 
 ```text
-rmd_ov1_d S(domain) n S(source_name) SelectionKey r Result c S(contract)
+crust_ov1_d S(domain) n S(source_name) SelectionKey r Result c S(contract)
 ```
 
 Spaces in this notation are separators; they are not emitted.
-The standalone package uses domain `rmd0_x64_v1` and contract `s`.
+The standalone package uses domain `crust0_x64_v1` and contract `s`.
 The resource package uses domain `resources_x64_v1` and contract `safe` or
 `unsafe`. Its extension type payload is the encoded base type. Thus `read T`
 and `mut T` keep distinct names even when both lower to machine pointers.
@@ -130,12 +130,12 @@ For example, `fn twice(value:i32)->i32` has this native name in the standalone
 package:
 
 ```text
-rmd_ov1_d11_rmd0_x64_v1n5_twicea1_b4_rb4_c1_s
+crust_ov1_d13_crust0_x64_v1n5_twicea1_b4_rb4_c1_s
 ```
 
 ## Public composition API
 
-`model.rmd` and `extension.rmd` expose the stage state and operations.
+`model.crust` and `extension.crust` expose the stage state and operations.
 `ov_init` takes a context, an ABI domain, and optional hooks. Call `ov_read`
 for each source range, then `ov_prepare`. That last call runs `ov_collect`,
 `ov_resolve`, and `ov_mangle` in order. The individual operations are also

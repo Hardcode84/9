@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile, link, and execute the RMD0 semantic and native interface cases."""
+"""Compile, link, and execute the CRUST0 semantic and native interface cases."""
 
 import argparse
 import os
@@ -96,25 +96,25 @@ def main():
 
     def executable(name, source=None, inputs=None, libraries=(), entry=None):
         if source is not None:
-            path = work / f"{name}.rmd"
+            path = work / f"{name}.crust"
             path.write_text(source)
             inputs = [path]
         output = work / name
         entry_options = ["--entry", entry] if entry is not None else []
         if args.backend == "c":
-            obj = work / f"{name}.rmd.o"
+            obj = work / f"{name}.crust.o"
             command([compiler, "--object", "-o", obj, *c_options, *entry_options, *inputs])
         else:
             assembly = work / f"{name}.s"
             command([compiler, "-S", "-o", assembly, *entry_options, *inputs])
             obj = assemble(assembly)
-        command([*cc, "-no-pie", obj, *libraries, build / "librmd0_host.a", *ldflags, "-o", output])
+        command([*cc, "-no-pie", obj, *libraries, build / "libcrust0_host.a", *ldflags, "-o", output])
         return output
 
     native = work / "native.o"
     command([*cc, *STRICT, "-O2", "-c", "tests/native.c", "-o", native])
-    command([executable("runtime", inputs=["tests/runtime.rmd"], libraries=[native])])
-    intrusive = executable("intrusive", inputs=["examples/intrusive/program.rmd"])
+    command([executable("runtime", inputs=["tests/runtime.crust"], libraries=[native])])
+    intrusive = executable("intrusive", inputs=["examples/intrusive/program.crust"])
     assert command([intrusive]).stdout == b"intrusive: ok\n"
 
     dynamic = """
@@ -164,7 +164,7 @@ fn main(argc:i32,argv:**u8)->i32 {
     # Both drivers assign this native name to the first declaration in unit 1.
     owned_alias = '''
 fn target()->u64{return 42u64;}
-extern fn alias()->u64="_rmd0_u1_d1";
+extern fn alias()->u64="_crust0_u1_d1";
 const captured:fn()->u64=target;
 fn main(argc:i32,argv:**u8)->i32 {
     if target!=alias || captured!=alias {return 1i32;}
@@ -178,8 +178,8 @@ fn main(argc:i32,argv:**u8)->i32 {
     long_string += 'if text[0usize]!=120u8 || text[4999usize]!=120u8 || text[5000usize]!=0u8{return 1i32;}return 0i32;}'
     command([executable("long-string", long_string)])
 
-    foundation = executable("c-stage-foundation", inputs=["api/rmd0.rmd", "api/rmd0_host.rmd",
-                             "stages/c/model.rmd", "stages/c/base.rmd", "tests/c_stage.rmd"])
+    foundation = executable("c-stage-foundation", inputs=["api/crust0.crust", "api/crust0_host.crust",
+                             "stages/c/model.crust", "stages/c/base.crust", "tests/c_stage.crust"])
     quoted_source = work / "c-stage-quoted.c"
     quoted_source.write_bytes(command([foundation]).stdout)
     command([*cc, *STRICT, "-O3", quoted_source, "-o", work / "c-stage-quoted"])
@@ -189,7 +189,7 @@ fn main(argc:i32,argv:**u8)->i32 {
                                                                     "allocator_may_return_null=1"]))
     command([foundation, "oom"], env=allocation_environment)
 
-    native_names = [".Lrmd_0_string_1", ".Lrmd_1_label_1", "line\nbreak", 'quote"back\\name',
+    native_names = [".Lcrust_0_string_1", ".Lcrust_1_label_1", "line\nbreak", 'quote"back\\name',
                     "1", ".", "\x7fend", ".LFE0", ".LC0", ".LFB0", ".Ltext0",
                     "".join(chr(value) for value in range(1, 128))]
     native_source = work / "native-names.c"
@@ -211,7 +211,7 @@ fn main(argc:i32,argv:**u8)->i32 {
     named_source = "\n".join(declarations) + "\nfn main(argc:i32,argv:**u8)->i32{" + "".join(calls) + "return 0i32;}\n"
     command([executable("native-names", named_source, libraries=[native_renamed])])
 
-    specification = (ROOT / "docs" / "rmd0-spec.md").read_text()
+    specification = (ROOT / "docs" / "crust0-spec.md").read_text()
     example_section = specification.split("## 13 Complete seed examples\n", 1)[1].split("\n## 14 ", 1)[0]
     examples = re.findall(r"^~~~text\n(.*?)^~~~\s*$", example_section, re.M | re.S)
     if len(examples) != 2:
@@ -300,19 +300,19 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         "native-conflict": 'extern fn a()->u8="shared"; extern fn b()->u64="shared";',
         "wrong-entry": "fn main()->u32{return 0u32;}",
     }.items():
-        path = work / f"reject-{name}.rmd"
+        path = work / f"reject-{name}.crust"
         path.write_text(source)
         result = command([compiler, "--prepare", path], expected=1)
         if not result.stderr or b"error" not in result.stderr and b"entry" not in result.stderr:
             raise AssertionError(f"missing diagnostic for {name}: {result.stderr!r}")
 
-    api_stems = ("rmd0", "rmd0_host", "rmd0_x64", "rmd0_stage", "rmd0_eval", "rmd0_run")
-    api_paths = [ROOT / "api" / f"{stem}.rmd" for stem in api_stems]
+    api_stems = ("crust0", "crust0_host", "crust0_x64", "crust0_stage", "crust0_eval", "crust0_run")
+    api_paths = [ROOT / "api" / f"{stem}.crust" for stem in api_stems]
     probe = [*(f'#include "{stem}.h"' for stem in api_stems), '#include <stdio.h>', 'int main(void) {']
     for path in api_paths:
         for record, body in re.findall(r"record (\w+) \{(.*?)\}", path.read_text(), re.S):
             for query, expression in [(f"sizeof({record})", f"sizeof({record})"),
-                                      (f"alignof({record})", f"RMD_ALIGNOF({record})")]:
+                                      (f"alignof({record})", f"CRUST_ALIGNOF({record})")]:
                 probe.append(f'printf("if {query} != %zuusize {{return 1i32;}}\\n", {expression});')
             for field in re.findall(r"^    (\w+):", body, re.M):
                 probe.append(f'printf("if offsetof({record},{field}) != %zuusize {{return 2i32;}}\\n", offsetof({record},{field}));')
@@ -321,10 +321,10 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     probe_path.write_text("\n".join(probe) + "\n")
     command([*cc, *STRICT, "-Iinclude", probe_path, "-o", work / "layout-probe"])
     layout_checks = command([work / "layout-probe"]).stdout.decode()
-    layout_path = work / "layout.rmd"
+    layout_path = work / "layout.crust"
     layout_path.write_text("fn main(argc:i32,argv:**u8)->i32{\n" + layout_checks + "return 0i32;}\n")
-    command([executable("api-layout", inputs=[*api_paths, layout_path], libraries=[build / "librmd0.a"])])
-    print(f"public layouts: {len(layout_checks.splitlines())} C/RMD0 comparisons passed")
+    command([executable("api-layout", inputs=[*api_paths, layout_path], libraries=[build / "libcrust0.a"])])
+    print(f"public layouts: {len(layout_checks.splitlines())} C/CRUST0 comparisons passed")
 
     stat_fields = {"device": "st_dev", "inode": "st_ino", "links": "st_nlink", "mode": "st_mode",
                    "uid": "st_uid", "gid": "st_gid", "padding": "__pad0", "special_device": "st_rdev",
@@ -334,7 +334,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
                    "change_seconds": "st_ctim.tv_sec", "change_nanoseconds": "st_ctim.tv_nsec",
                    "reserved": "__glibc_reserved"}
     stat_record = re.search(r"^record CDriverStat \{.*?^\}",
-                            (ROOT / "stages/c/driver.rmd").read_text(), re.M | re.S).group()
+                            (ROOT / "stages/c/driver.crust").read_text(), re.M | re.S).group()
     probe = ["#define _POSIX_C_SOURCE 200809L", "#include <sys/stat.h>", "#include <stddef.h>",
              "#include <stdio.h>", "struct Alignment {char byte; struct stat value;};", "int main(void) {"]
     for expression, native_expression in [("sizeof(CDriverStat)", "sizeof(struct stat)"),
@@ -349,10 +349,10 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     command([*cc, *STRICT, stat_source, "-o", work / "stat-layout-probe"])
     stat_checks = command([work / "stat-layout-probe"]).stdout.decode()
     command([executable("stat-layout", stat_record + "\nfn main(argc:i32,argv:**u8)->i32{" + stat_checks + "return 0i32;}")])
-    print(f"driver stat layout: {len(stat_checks.splitlines())} C/RMD0 comparisons passed")
+    print(f"driver stat layout: {len(stat_checks.splitlines())} C/CRUST0 comparisons passed")
 
-    if (ROOT / "examples" / "custom-stage" / "stage.rmd").exists():
-        stage = executable("stage", inputs=[*api_paths, "examples/custom-stage/stage.rmd"], libraries=[build / "librmd0.a"])
+    if (ROOT / "examples" / "custom-stage" / "stage.crust").exists():
+        stage = executable("stage", inputs=[*api_paths, "examples/custom-stage/stage.crust"], libraries=[build / "libcrust0.a"])
         custom_input = work / "answer.txt"
         custom_input.write_text("42\n")
         custom_assembly = work / "answer.s"
@@ -370,7 +370,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
                           "\tandq $-16, %rsp"]
         register_probe += [f"\tmovabsq $0x{value:016x}, %{register}"
                            for register, value in saved_registers]
-        register_probe += ["\txorl %edi, %edi", "\txorl %esi, %esi", "\tcall rmd_stage_answer",
+        register_probe += ["\txorl %edi, %edi", "\txorl %esi, %esi", "\tcall crust_stage_answer",
                            "\tcmpl $42, %eax", "\tjne .Lregister_failure"]
         for register, value in saved_registers:
             register_probe += [f"\tmovabsq $0x{value:016x}, %r10", f"\tcmpq %r10, %{register}",
@@ -389,10 +389,10 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         custom_input.write_text("42\n")
         command([stage, custom_input, "/dev/full"], expected=1)
     else:
-        raise AssertionError("missing ordinary RMD0 stage example")
+        raise AssertionError("missing ordinary CRUST0 stage example")
 
-    valid = work / "valid.rmd"
-    invalid = work / "invalid.rmd"
+    valid = work / "valid.crust"
+    invalid = work / "invalid.crust"
     output = work / ("atomic.c" if args.backend == "c" else "atomic.s")
     dump_options = ["--emit-c"] if args.backend == "c" else []
     valid.write_text("fn main(argc:i32,argv:**u8)->i32{return 0i32;}")
@@ -401,7 +401,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     command([compiler, *dump_options, "-o", output, invalid], expected=1)
     assert output.read_text() == "retained output\n"
     command([compiler, *dump_options, "-o", work / "absent-directory" / "output", valid], expected=1)
-    command([compiler, "--check", work / "absent.rmd"], expected=1)
+    command([compiler, "--check", work / "absent.crust"], expected=1)
     for arguments in ([*dump_options, valid], ["--help"], ["--version"]):
         with open("/dev/full", "wb") as failed_output:
             result = subprocess.run([str(compiler), *map(str, arguments)], stdout=failed_output,
@@ -498,7 +498,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
             after = Path(destination).lstat()
             assert (before.st_mode, before.st_dev, before.st_ino) == (after.st_mode, after.st_dev, after.st_ino)
         assert link.is_symlink() and target.read_bytes() == expected_c
-        spaced_source = work / "source with spaces.rmd"
+        spaced_source = work / "source with spaces.crust"
         spaced_source.write_bytes(valid.read_bytes())
         spaced_executable = work / "output with spaces"
         command([compiler, "-o", spaced_executable, *c_options, *c_link_options, spaced_source])
@@ -509,19 +509,19 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
             command([work / name])
         assert not list(work.glob("*.tmp.*")), "driver left temporary files after a completed command"
 
-        library_source, library_object = work / "library.rmd", work / "library.o"
+        library_source, library_object = work / "library.crust", work / "library.o"
         library_source.write_text("fn answer()->i32{return 42i32;}")
         command([compiler, "--library", "--object", "-o", library_object, *c_options, library_source])
         library_main = work / "library-main.c"
-        library_main.write_text("#include <stdint.h>\nextern int32_t _rmd0_u1_d1(void);\n"
-                                "int main(void){return _rmd0_u1_d1();}\n")
+        library_main.write_text("#include <stdint.h>\nextern int32_t _crust0_u1_d1(void);\n"
+                                "int main(void){return _crust0_u1_d1();}\n")
         command([*cc, *STRICT, "-no-pie", library_object, library_main, *ldflags, "-o", work / "library-main"])
         command([work / "library-main"], expected=42)
 
-        stage_sources = ["api/rmd0.rmd", "api/rmd0_host.rmd", "api/rmd0_stage.rmd",
-                         *[f"stages/c/{name}.rmd"
+        stage_sources = ["api/crust0.crust", "api/crust0_host.crust", "api/crust0_stage.crust",
+                         *[f"stages/c/{name}.crust"
                          for name in ("model", "base", "types", "emit", "driver", "program", "main")]]
-        seed = build / "rmd-c-seed"
+        seed = build / "crust-c-seed"
         generations = [("seed", seed), ("current", compiler)]
         generated = []
         for name, stage_compiler in generations:
@@ -532,24 +532,24 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         stage_object = work / "self-backend.o"
         command([compiler, "--object", "-o", stage_object, *c_options, *stage_sources])
         references = command(["nm", "-u", stage_object]).stdout.decode()
-        allowed_frontend = {"rmd_context_init", "rmd_context_destroy", "rmd_read", "rmd_read_range",
-                            "rmd_collect", "rmd_resolve", "rmd_check", "rmd_try_alloc", "rmd_try_copy_string"}
+        allowed_frontend = {"crust_context_init", "crust_context_destroy", "crust_read", "crust_read_range",
+                            "crust_collect", "crust_resolve", "crust_check", "crust_try_alloc", "crust_try_copy_string"}
         for name in re.findall(r"\bU\s+(\S+)", references):
-            if name.startswith("rmd_") and name not in allowed_frontend:
+            if name.startswith("crust_") and name not in allowed_frontend:
                 raise AssertionError(f"C stage calls a forbidden native compiler helper: {name}")
-        next_compiler = work / "rmd-c-next"
-        command([*cc, "-no-pie", stage_object, build / "librmd0.a", build / "librmd0_host.a",
+        next_compiler = work / "crust-c-next"
+        command([*cc, "-no-pie", stage_object, build / "libcrust0.a", build / "libcrust0_host.a",
                  *ldflags, "-o", next_compiler])
         next_c, next_response = work / "self-next.c", work / "self-next.rsp"
         command([next_compiler, "--emit-c", "-o", next_c, "--symbols", next_response, *stage_sources])
         assert generated[1] == (next_c.read_bytes(), next_response.read_bytes()), "self-translation changed emitted artifacts"
         for stage_compiler in (seed, compiler, next_compiler):
             names = command(["nm", stage_compiler]).stdout
-            assert not re.search(rb"\brmd_x64_", names), "C stage contains a native x64 backend dependency"
+            assert not re.search(rb"\bcrust_x64_", names), "C stage contains a native x64 backend dependency"
         next_object = work / "self-intrusive.o"
-        command([next_compiler, "--object", "-o", next_object, *c_options, "examples/intrusive/program.rmd"])
+        command([next_compiler, "--object", "-o", next_object, *c_options, "examples/intrusive/program.crust"])
         next_program = work / "self-intrusive"
-        command([*cc, "-no-pie", next_object, build / "librmd0_host.a", *ldflags, "-o", next_program])
+        command([*cc, "-no-pie", next_object, build / "libcrust0_host.a", *ldflags, "-o", next_program])
         assert command([next_program]).stdout == b"intrusive: ok\n"
         print("C stage: seed, self, and next generations emit identical C and exact-symbol response files")
     print(f"integration ({args.backend}): {checks} process checks passed")

@@ -1,0 +1,24 @@
+record ProofAction { call: *CrustExpr; next_offset: usize; }
+
+record ProofSession {
+    owner: *CrustContext;
+    source: *CrustSource;
+    cursor: usize;
+    reader: fn(*ProofSession, *CrustContext, *ProofAction) -> i32;
+    backend: fn(*CrustContext, *CrustDecl, *CBackendOptions) -> i32;
+    target: *CrustContext;
+    argc: i32;
+    argv: **u8;
+    pending: fn(*ProofSession) -> i32;
+    target_source: *CrustSource;
+    switch_offset: usize;
+    selections: usize;
+    reads: usize;
+    includes: usize;
+    emits: usize;
+    allocations: usize;
+    releases: usize;
+    root_done: bool;
+    reader_active: bool;
+    custom_started: bool;
+}

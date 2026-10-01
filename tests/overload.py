@@ -118,7 +118,7 @@ def reject_cases():
         ("conflicting-import-result", "fn f(x:u8)->u8; fn f(x:u8)->u64;", ("result", "return", "signature")),
         ("conflicting-native-names", 'extern fn f(x:i32)->i32="one"; extern fn f(x:i32)->i32="two";', ("native", "conflict", "duplicate")),
         ("source-native-abi-conflict", 'fn f(x:i32)->i32; extern fn f(x:i32)->i32="f";', ("ABI", "native", "source")),
-        ("native-reserved-prefix", 'extern fn f()->unit="rmd_ov1_private";', ("reserved", "prefix")),
+        ("native-reserved-prefix", 'extern fn f()->unit="crust_ov1_private";', ("reserved", "prefix")),
         ("no-integer-promotion", "fn f(x:u64)->u64{return x;} fn g()->u64{return f(1u32);}", ("type", "overload")),
         ("no-arity-match", "fn f(x:u64)->u64{return x;} fn g()->u64{return f();}", ("argument", "parameter", "arity")),
         ("return-context-does-not-select", "fn f(x:u32)->u32{return x;} fn f(x:u64)->u64{return x;} fn g()->u64{return f(1u32);}", ("type", "return")),
@@ -203,7 +203,7 @@ class Failure(Exception):
 class Suite:
     def __init__(self, args, work):
         self.build = args.build.resolve()
-        self.compiler = self.build / "rmd-overload"
+        self.compiler = self.build / "crust-overload"
         self.work = work
         self.timeout = args.timeout
         self.flags = ["--cflag=-O2", *["--cflag=" + flag for flag in args.cflag],
@@ -221,7 +221,7 @@ class Suite:
         return result
 
     def source(self, name, source):
-        path = self.work / (name + ".rmd")
+        path = self.work / (name + ".crust")
         path.write_text(source)
         return path
 
@@ -322,20 +322,20 @@ class Suite:
         elif name in ("source-root-hello", "source-root-separate", "source-root-resources"):
             example = name.removeprefix("source-root-")
             package = self.work / name
-            interface = "resource_api.rmd" if example == "resources" else "api.rmd"
-            examples = (ROOT / "examples/overload" / example).glob("*.rmd")
-            for relative in (Path("api/rmd0_stage.rmd"), Path("stages/overload") / interface,
+            interface = "resource_api.crust" if example == "resources" else "api.crust"
+            examples = (ROOT / "examples/overload" / example).glob("*.crust")
+            for relative in (Path("api/crust0_stage.crust"), Path("stages/overload") / interface,
                              *[path.relative_to(ROOT) for path in examples]):
                 destination = package / relative
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT / relative, destination)
             library = package / "build/selected backend.plugin"
             library.parent.mkdir()
-            original_library = "rmd-overload-resource-library.so" if example == "resources" else "rmd-overload-library.so"
+            original_library = "crust-overload-resource-library.so" if example == "resources" else "crust-overload-library.so"
             shutil.copyfile(self.build / original_library, library)
-            source = package / "examples/overload" / example / "main.rmd"
+            source = package / "examples/overload" / example / "main.crust"
             source.write_text(source.read_text().replace(original_library, library.name))
-            result = self.command([self.build / "rmd", source])
+            result = self.command([self.build / "crust", source])
             if result.stdout or result.stderr:
                 raise Failure(f"source root produced unexpected output: {result.stdout!r}, {result.stderr!r}")
             output = package / "build" / ("overload-" + example)
@@ -345,7 +345,7 @@ class Suite:
             self.execute(output, expected)
             symbols = self.symbols(output)
             if any(symbol in symbols for symbol in ("overload_build", "overload_program",
-                                                   "overload_resource_build", "rmd_run_main")):
+                                                   "overload_resource_build", "crust_run_main")):
                 raise Failure("target executable contains host compilation entry points")
         else:
             raise AssertionError(name)
@@ -378,10 +378,10 @@ def main():
         return 0
     if args.timeout <= 0:
         parser.error("timeout must be positive")
-    if not (args.build / "rmd-overload").is_file():
-        parser.error("build/rmd-overload must be built before these tests")
+    if not (args.build / "crust-overload").is_file():
+        parser.error("build/crust-overload must be built before these tests")
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    work = Path(tempfile.mkdtemp(prefix="rmd-overload-"))
+    work = Path(tempfile.mkdtemp(prefix="crust-overload-"))
     suite = Suite(args, work)
     failures = 0
     counts = dict(runtime=0, reject=0, boundary=0)

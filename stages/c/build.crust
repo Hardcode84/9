@@ -1,0 +1,14 @@
+// Compile a captured target from begin through EOF. Arguments belong to
+// c_program. Complete all target work before returning its process status.
+fn c_build(target: *CrustSource, begin: usize, argument_count: i32, arguments: **u8) -> i32 {
+    var context_value: CrustContext = uninit;
+    crust_context_init(&context_value, null(*CrustAllocator));
+    var request: CrustBuild = make CrustBuild {
+        context: &context_value, source: target, target_begin: begin,
+        argc: argument_count, argv: arguments
+    };
+    var status_value: i32 = c_program(&request);
+    if context_value.error_count != 0usize { crust_run_diagnostic(&context_value); }
+    crust_context_destroy(&context_value);
+    return status_value;
+}

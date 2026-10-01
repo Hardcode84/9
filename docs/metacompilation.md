@@ -7,7 +7,7 @@ It keeps C-level compilation speed as the first requirement. This study adds
 source evidence, not new compiler timings. The earlier
 [C, C++, and Rust profiles](compiler-profiles.md) remain separate measurements.
 
-The [RMD0 specification](rmd0-spec.md) now defines the bootstrap language and
+The [Crust0 specification](crust0-spec.md) now defines the bootstrap language and
 its public construction contract. Module management is a library stage, along
 with richer syntax, ownership policy, and backend adaptation. The candidate
 features in this study are not additional seed requirements.
@@ -136,7 +136,7 @@ The inspected sources do not establish Jai's persistent cache design.
 Do not infer that the fast result came from caching.
 
 The verified API does not establish public replacement of Jai's parser,
-checker, or every compiler pass. The requested RMD interface goes further.
+checker, or every compiler pass. The requested Crust interface goes further.
 
 The [January 2026 Wookash interview](https://www.youtube.com/watch?v=1blhmslxkWg&t=4820s)
 also has a metaprogramming chapter. Its publisher metadata was checked, but
@@ -179,7 +179,7 @@ Order-sensitive side effects interfere with composition. This is direct
 evidence for both the power and the dependency cost of type-directed callbacks.
 [DeVito et al., Exotypes, PLDI 2014](https://terralang.org/pldi083-devito.pdf)
 
-For RMD, first test generation from already available type signatures and
+For Crust, first test generation from already available type signatures and
 layouts. This retains useful reflection without arbitrary calls from the
 middle of name or type resolution.
 
@@ -283,7 +283,7 @@ require data-type or program-construct checking.
 
 The ordering conclusion is our inference from these input operations.
 The Forth standard does not expose every implementation's internal IR or stages.
-For RMD, take explicit compiler operations and a bootstrapped vocabulary.
+For Crust, take explicit compiler operations and a bootstrapped vocabulary.
 The default driver gives a parser a fixed input region and known imports.
 A custom Forth-like frontend can instead expose streaming parse operations;
 its source-order dependencies remain part of its schedule and cache contract.
@@ -357,7 +357,7 @@ state. Do not mistake a compiled macro module for cached expansion results.
 Common Lisp's EVAL-WHEN makes compile, load, and execution effects explicit.
 Its file compiler processes a top-level form before reading the next, which
 permits reader changes to affect later forms. That useful control carries
-a serial dependency. A custom RMD driver may choose it; the default driver
+a serial dependency. A custom Crust driver may choose it; the default driver
 can prepare a reader once and parse independent modules separately.
 [EVAL-WHEN](https://www.lispworks.com/documentation/HyperSpec/Body/s_eval_w.htm),
 [Common Lisp top-level processing](https://www.lispworks.com/documentation/HyperSpec/Body/03_bca.htm)
@@ -376,7 +376,7 @@ not evidence for an empty-project-cache build.
 Expose representations as well as entry points. Chez provides callable
 expansion operations, but its documented replacement hook still depends on
 sc-expand because the required internal representation is not public.
-RMD must publish the input and output forms and invariants of each stage.
+Crust must publish the input and output forms and invariants of each stage.
 Users must be able to construct valid input without calling an opaque predecessor.
 [Chez system operations](https://cisco.github.io/ChezScheme/csug/system.html)
 
@@ -395,7 +395,7 @@ Fresh names and a cache do not fix those issues.
 
 ### 3.8 Combined design direction
 
-| Source family | Apply to RMD | Check explicitly |
+| Source family | Apply to Crust | Check explicitly |
 |---|---|---|
 | Jai | Ordinary-language compiler control, reflection, and visible output | Blocking generation and exported-AST cost |
 | Terra | Small low-level core with substantial feature libraries | Type-directed callbacks and generated runtime behavior |
@@ -581,10 +581,10 @@ explicit changes in parsing rules within a file. The
 [source review](source-metastages.md) separates this early dependency from
 backend replacement, which needs no change to the source grammar.
 
-Syntax extensions that produce standard RMD code or IR use its checkers.
+Syntax extensions that produce standard Crust code or IR use its checkers.
 A complete C frontend supplies C binding, type, conversion, and pointer rules. It can use
 its own syntax and semantic representations, then lower to shared low-level
-operations. Do not require C source to satisfy RMD ownership rules.
+operations. Do not require C source to satisfy Crust ownership rules.
 
 The backend adapter is also a metastage: compiler code that runs during the
 build. It can construct LLVM IR, set the LLVM pass pipeline, and request object
@@ -595,7 +595,7 @@ or native compilation of unchanged stage code.
 The [extension experiment](compiler-extension-experiment.md) specifies the
 target contract, LLVM boundary, and timing rules. Its C benchmark tests full
 frontend replacement. It does not replace the safe direct-list witness or
-establish RMD ownership-checking speed.
+establish Crust ownership-checking speed.
 
 ## 5. Parsing and parallel stages
 

@@ -40,7 +40,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--baseline", type=Path,
                         default=Path(".profile-cache/overload-validation/rmd-overload-field-scan"))
-    parser.add_argument("--candidate", type=Path, default=Path("build/rmd-overload"))
+    parser.add_argument("--candidate", type=Path, default=Path("build/crust-overload"))
     parser.add_argument("--counts", default="64,256,1024,4096")
     parser.add_argument("--rounds", type=int, default=25)
     parser.add_argument("--warmup", type=int, default=2)
@@ -58,18 +58,18 @@ def main():
     args.work.mkdir(parents=True, exist_ok=True)
     paths = [args.baseline, args.candidate, Path(__file__).relative_to(ROOT),
              Path("benchmarks/resources/measure.py"), Path("Makefile"),
-             *sorted(Path("stages/overload").glob("*.rmd")),
-             *sorted(Path("stages/reader").glob("*.rmd")),
-             *sorted(Path("stages/c").glob("*.rmd")),
+             *sorted(Path("stages/overload").glob("*.crust")),
+             *sorted(Path("stages/reader").glob("*.crust")),
+             *sorted(Path("stages/c").glob("*.crust")),
              *sorted(Path("src").glob("*.c")), *sorted(Path("include").glob("*.h")),
-             *sorted(Path("api").glob("*.rmd"))]
+             *sorted(Path("api").glob("*.crust"))]
     delta = Path("benchmarks/overload/field-index.patch")
     if delta.is_file():
         paths.append(delta)
     frozen = {str(path): sha(path) for path in paths}
     cases = []
     for count in counts:
-        path = args.work / f"fields-{count}.rmd"
+        path = args.work / f"fields-{count}.crust"
         path.write_text(workload(count))
         frozen[str(path)] = sha(path)
         commands = {"scan": [str(args.baseline), "--check", str(path)],
@@ -115,7 +115,7 @@ def main():
         "method": {"cpu": args.cpu, "paired_rounds": args.rounds,
                    "warmup_per_endpoint": args.warmup, "seed": 20261002,
                    "processes": "fresh per endpoint, one pinned worker, randomized order within each pair",
-                   "endpoint": "RMD reader, source overload selection and mangling, seed semantic checking; no C emission",
+                   "endpoint": "CRUST reader, source overload selection and mangling, seed semantic checking; no C emission",
                    "excluded": "native compiler preparation and all target GCC compilation, assembly, linking, and execution",
                    "cache": "warm filesystem cache; no source or semantic cache",
                    "interval": "10000 bootstrap resamples of complete paired rounds, ratio-of-medians 95 percent interval",
@@ -127,7 +127,7 @@ def main():
         "baseline": {"binary": str(args.baseline), "sha256": sha(args.baseline),
                      "source_provenance": "saved binary before the three-file field-index change; no source manifest was captured at its build"},
         "candidate": {"binary": str(args.candidate), "sha256": sha(args.candidate)},
-        "field_change": {"files": ["stages/overload/model.rmd", "stages/overload/collect.rmd", "stages/overload/resolve.rmd"],
+        "field_change": {"files": ["stages/overload/model.crust", "stages/overload/collect.crust", "stages/overload/resolve.crust"],
                          "description": "add a per-record field map, populate it once during collection with duplicate rejection, and replace the linear lookup",
                          "patch": str(delta) if delta.is_file() else None},
         "frozen_sha256": frozen, "workloads": cases,

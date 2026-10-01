@@ -227,7 +227,7 @@ executes the inline entry on each request.
 
 The repeatable measurement is `benchmarks/source-stages/measure.py`. It gives
 separate results for the prepared target frontend and the complete source-stage
-request. The [one-worker speed gate](rmd0-spec.md#14-conformance-and-performance-gates)
+request. The [one-worker speed gate](crust0-spec.md#14-conformance-and-performance-gates)
 must identify which of these configurations it covers. Successful output
 alone proves the phase and ownership boundary.
 

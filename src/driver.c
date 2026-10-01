@@ -1,7 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
-#include "rmd0.h"
-#include "rmd0_host.h"
-#include "rmd0_x64.h"
+#include "crust0.h"
+#include "crust0_host.h"
+#include "crust0_x64.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -13,18 +13,18 @@
 
 static void usage(FILE *stream)
 {
-    fputs("usage: rmd0 [--check | --prepare | -S] [--library | --entry NAME]\n"
+    fputs("usage: crust0 [--check | --prepare | -S] [--library | --entry NAME]\n"
           "            [--export NAME] [-o OUTPUT] SOURCE...\n", stream);
 }
 
-static void rmd_driver_diagnostic(const RmdContext *ctx)
+static void crust_driver_diagnostic(const CrustContext *ctx)
 {
-    const RmdSource *source = ctx->error_loc.source;
+    const CrustSource *source = ctx->error_loc.source;
     size_t line = 1;
     size_t column = 1;
     size_t index;
     if (source == NULL) {
-        fprintf(stderr, "rmd0: error: %s\n", ctx->error);
+        fprintf(stderr, "crust0: error: %s\n", ctx->error);
         return;
     }
     for (index = 0; index < ctx->error_loc.offset && index < source->size; ++index) {
@@ -38,10 +38,10 @@ static void rmd_driver_diagnostic(const RmdContext *ctx)
     fprintf(stderr, "%s:%zu:%zu: error: %s\n", source->path, line, column, ctx->error);
 }
 
-static bool rmd_driver_names(RmdContext *ctx)
+static bool crust_driver_names(CrustContext *ctx)
 {
-    RmdFailureFrame failure;
-    RmdUnit *unit;
+    CrustFailureFrame failure;
+    CrustUnit *unit;
     failure.previous = ctx->failure;
     ctx->failure = &failure;
     if (setjmp(failure.jump) != 0) {
@@ -49,16 +49,16 @@ static bool rmd_driver_names(RmdContext *ctx)
         return false;
     }
     for (unit = ctx->units; unit != NULL; unit = unit->next) {
-        RmdDecl *decl;
+        CrustDecl *decl;
         for (decl = unit->declarations; decl != NULL; decl = decl->next) {
-            if (decl->kind != RMD_D_RECORD && decl->link_name == NULL) {
+            if (decl->kind != CRUST_D_RECORD && decl->link_name == NULL) {
                 char buffer[96];
-                int length = snprintf(buffer, sizeof(buffer), "_rmd0_u%" PRIu64 "_d%" PRIu64,
+                int length = snprintf(buffer, sizeof(buffer), "_crust0_u%" PRIu64 "_d%" PRIu64,
                                       decl->unit_identity, decl->identity);
                 if (length < 0 || (size_t)length >= sizeof(buffer)) {
-                    rmd_fail(ctx, decl->loc, "cannot format native link identity");
+                    crust_fail(ctx, decl->loc, "cannot format native link identity");
                 }
-                decl->link_name = rmd_copy_string(ctx, (const unsigned char *)buffer,
+                decl->link_name = crust_copy_string(ctx, (const unsigned char *)buffer,
                                                  (size_t)length);
             }
         }
@@ -67,11 +67,11 @@ static bool rmd_driver_names(RmdContext *ctx)
     return true;
 }
 
-static RmdDecl *rmd_driver_find(const RmdContext *ctx, const char *name)
+static CrustDecl *crust_driver_find(const CrustContext *ctx, const char *name)
 {
-    RmdUnit *unit;
+    CrustUnit *unit;
     for (unit = ctx->units; unit != NULL; unit = unit->next) {
-        RmdDecl *decl;
+        CrustDecl *decl;
         for (decl = unit->declarations; decl != NULL; decl = decl->next) {
             if (strcmp(decl->name->text, name) == 0) {
                 return decl;
@@ -81,24 +81,24 @@ static RmdDecl *rmd_driver_find(const RmdContext *ctx, const char *name)
     return NULL;
 }
 
-static bool hosted_entry(const RmdDecl *decl)
+static bool hosted_entry(const CrustDecl *decl)
 {
-    const RmdType *type;
-    const RmdType *argv;
-    if (decl == NULL || decl->kind != RMD_D_FUNCTION) {
+    const CrustType *type;
+    const CrustType *argv;
+    if (decl == NULL || decl->kind != CRUST_D_FUNCTION) {
         return false;
     }
     type = decl->type;
-    if (type->kind != RMD_T_FUNCTION || type->param_count != 2 ||
-        type->base->kind != RMD_T_I32 || type->params[0]->kind != RMD_T_I32) {
+    if (type->kind != CRUST_T_FUNCTION || type->param_count != 2 ||
+        type->base->kind != CRUST_T_I32 || type->params[0]->kind != CRUST_T_I32) {
         return false;
     }
     argv = type->params[1];
-    return argv->kind == RMD_T_POINTER && argv->base->kind == RMD_T_POINTER &&
-           argv->base->base->kind == RMD_T_U8;
+    return argv->kind == CRUST_T_POINTER && argv->base->kind == CRUST_T_POINTER &&
+           argv->base->base->kind == CRUST_T_U8;
 }
 
-static bool emit_file(RmdX64Program *program, const char *path)
+static bool emit_file(CrustX64Program *program, const char *path)
 {
     FILE *file;
     char *temporary;
@@ -107,9 +107,9 @@ static bool emit_file(RmdX64Program *program, const char *path)
     bool success;
     struct stat info;
     if (path == NULL || strcmp(path, "-") == 0) {
-        success = rmd_x64_emit_program(program, stdout);
+        success = crust_x64_emit_program(program, stdout);
         if (fflush(stdout) != 0) {
-            fprintf(stderr, "rmd0: cannot flush output: %s\n", strerror(errno));
+            fprintf(stderr, "crust0: cannot flush output: %s\n", strerror(errno));
             success = false;
         }
         return success;
@@ -118,61 +118,61 @@ static bool emit_file(RmdX64Program *program, const char *path)
         if (!S_ISREG(info.st_mode)) {
             file = fopen(path, "wb");
             if (file == NULL) {
-                fprintf(stderr, "rmd0: cannot open output %s: %s\n", path, strerror(errno));
+                fprintf(stderr, "crust0: cannot open output %s: %s\n", path, strerror(errno));
                 return false;
             }
-            success = rmd_x64_emit_program(program, file);
+            success = crust_x64_emit_program(program, file);
             if (fclose(file) != 0) {
-                fprintf(stderr, "rmd0: cannot close output: %s\n", strerror(errno));
+                fprintf(stderr, "crust0: cannot close output: %s\n", strerror(errno));
                 success = false;
             }
             return success;
         }
     } else if (errno != ENOENT) {
-        fprintf(stderr, "rmd0: cannot inspect output %s: %s\n", path, strerror(errno));
+        fprintf(stderr, "crust0: cannot inspect output %s: %s\n", path, strerror(errno));
         return false;
     }
     length = strlen(path);
     if (length > SIZE_MAX - 16) {
-        fputs("rmd0: output path is too long\n", stderr);
+        fputs("crust0: output path is too long\n", stderr);
         return false;
     }
     temporary = malloc(length + 16);
     if (temporary == NULL) {
-        fputs("rmd0: cannot allocate output path\n", stderr);
+        fputs("crust0: cannot allocate output path\n", stderr);
         return false;
     }
     memcpy(temporary, path, length);
     memcpy(temporary + length, ".tmp.XXXXXX", 12);
     descriptor = mkstemp(temporary);
     if (descriptor < 0) {
-        fprintf(stderr, "rmd0: cannot create output %s: %s\n", path, strerror(errno));
+        fprintf(stderr, "crust0: cannot create output %s: %s\n", path, strerror(errno));
         free(temporary);
         return false;
     }
     file = fdopen(descriptor, "w");
     if (file == NULL) {
-        fprintf(stderr, "rmd0: cannot open output stream: %s\n", strerror(errno));
+        fprintf(stderr, "crust0: cannot open output stream: %s\n", strerror(errno));
         if (close(descriptor) != 0) {
-            fprintf(stderr, "rmd0: cannot close output: %s\n", strerror(errno));
+            fprintf(stderr, "crust0: cannot close output: %s\n", strerror(errno));
         }
         if (unlink(temporary) != 0) {
-            fprintf(stderr, "rmd0: cannot remove output temporary: %s\n", strerror(errno));
+            fprintf(stderr, "crust0: cannot remove output temporary: %s\n", strerror(errno));
         }
         free(temporary);
         return false;
     }
-    success = rmd_x64_emit_program(program, file);
+    success = crust_x64_emit_program(program, file);
     if (fclose(file) != 0) {
-        fprintf(stderr, "rmd0: cannot close output: %s\n", strerror(errno));
+        fprintf(stderr, "crust0: cannot close output: %s\n", strerror(errno));
         success = false;
     }
     if (success && rename(temporary, path) != 0) {
-        fprintf(stderr, "rmd0: cannot publish output %s: %s\n", path, strerror(errno));
+        fprintf(stderr, "crust0: cannot publish output %s: %s\n", path, strerror(errno));
         success = false;
     }
     if (!success && unlink(temporary) != 0) {
-        fprintf(stderr, "rmd0: cannot remove output temporary: %s\n", strerror(errno));
+        fprintf(stderr, "crust0: cannot remove output temporary: %s\n", strerror(errno));
     }
     free(temporary);
     return success;
@@ -181,10 +181,10 @@ static bool emit_file(RmdX64Program *program, const char *path)
 int main(int argc, char **argv)
 {
     enum { EMIT, CHECK, PREPARE } mode = EMIT;
-    RmdContext ctx;
-    RmdSource *sources;
-    RmdDecl *entry = NULL;
-    RmdX64Program *program = NULL;
+    CrustContext ctx;
+    CrustSource *sources;
+    CrustDecl *entry = NULL;
+    CrustX64Program *program = NULL;
     const char *entry_name = "main";
     const char *output = NULL;
     bool library = false;
@@ -195,10 +195,10 @@ int main(int argc, char **argv)
     int status = 1;
     sources = calloc((size_t)argc, sizeof(*sources));
     if (sources == NULL) {
-        fputs("rmd0: cannot allocate input list\n", stderr);
+        fputs("crust0: cannot allocate input list\n", stderr);
         return 1;
     }
-    rmd_context_init(&ctx, NULL);
+    crust_context_init(&ctx, NULL);
     for (argument = 1; argument < argc; ++argument) {
         const char *arg = argv[argument];
         if (strcmp(arg, "--help") == 0) {
@@ -206,7 +206,7 @@ int main(int argc, char **argv)
             status = 0;
             goto done;
         } else if (strcmp(arg, "--version") == 0) {
-            puts("rmd0 " RMD_VERSION " (x86-64 System V)");
+            puts("crust0 " CRUST_VERSION " (x86-64 System V)");
             status = 0;
             goto done;
         } else if (strcmp(arg, "--check") == 0) {
@@ -220,14 +220,14 @@ int main(int argc, char **argv)
         } else if (strcmp(arg, "-o") == 0 || strcmp(arg, "--entry") == 0 ||
                    strcmp(arg, "--export") == 0) {
             if (++argument == argc) {
-                fprintf(stderr, "rmd0: missing argument for %s\n", arg);
+                fprintf(stderr, "crust0: missing argument for %s\n", arg);
                 goto done;
             }
             if (strcmp(arg, "-o") == 0) output = argv[argument];
             else if (strcmp(arg, "--entry") == 0) entry_name = argv[argument];
             else exports = true;
         } else if (arg[0] == '-') {
-            fprintf(stderr, "rmd0: unknown option %s\n", arg);
+            fprintf(stderr, "crust0: unknown option %s\n", arg);
             goto done;
         } else {
             sources[source_count++].path = arg;
@@ -238,31 +238,31 @@ int main(int argc, char **argv)
         goto done;
     }
     if (output != NULL && mode != EMIT) {
-        fputs("rmd0: -o requires assembly emission\n", stderr);
+        fputs("crust0: -o requires assembly emission\n", stderr);
         goto done;
     }
     for (index = 0; index < source_count; ++index) {
         unsigned char *bytes;
-        RmdUnit *unit;
+        CrustUnit *unit;
         sources[index].identity = index + 1;
-        if (rmd0_host_read_file(sources[index].path, &bytes, &sources[index].size) != 0) {
-            fprintf(stderr, "rmd0: cannot read %s (input or allocation failure)\n",
+        if (crust0_host_read_file(sources[index].path, &bytes, &sources[index].size) != 0) {
+            fprintf(stderr, "crust0: cannot read %s (input or allocation failure)\n",
                     sources[index].path);
             goto done;
         } else {
             sources[index].bytes = bytes;
         }
-        if (!rmd_read(&ctx, &sources[index], &unit)) goto compile_error;
+        if (!crust_read(&ctx, &sources[index], &unit)) goto compile_error;
     }
-    if (!rmd_collect(&ctx) || !rmd_resolve(&ctx) || !rmd_check(&ctx)) goto compile_error;
+    if (!crust_collect(&ctx) || !crust_resolve(&ctx) || !crust_check(&ctx)) goto compile_error;
     if (exports) {
         for (argument = 1; argument < argc; ++argument) {
             if (strcmp(argv[argument], "-o") == 0 || strcmp(argv[argument], "--entry") == 0) {
                 ++argument;
             } else if (strcmp(argv[argument], "--export") == 0) {
-                RmdDecl *decl = rmd_driver_find(&ctx, argv[++argument]);
-                if (decl == NULL || (decl->kind != RMD_D_FUNCTION && decl->kind != RMD_D_CONST)) {
-                    fprintf(stderr, "rmd0: export '%s' must name a defined function or constant\n",
+                CrustDecl *decl = crust_driver_find(&ctx, argv[++argument]);
+                if (decl == NULL || (decl->kind != CRUST_D_FUNCTION && decl->kind != CRUST_D_CONST)) {
+                    fprintf(stderr, "crust0: export '%s' must name a defined function or constant\n",
                             argv[argument]);
                     goto done;
                 }
@@ -274,29 +274,29 @@ int main(int argc, char **argv)
         status = 0;
         goto done;
     }
-    if (!rmd_driver_names(&ctx)) goto compile_error;
+    if (!crust_driver_names(&ctx)) goto compile_error;
     if (!library) {
-        entry = rmd_driver_find(&ctx, entry_name);
+        entry = crust_driver_find(&ctx, entry_name);
         if (!hosted_entry(entry)) {
-            fprintf(stderr, "rmd0: entry '%s' must be a defined fn(i32, **u8) -> i32\n",
+            fprintf(stderr, "crust0: entry '%s' must be a defined fn(i32, **u8) -> i32\n",
                     entry_name);
             goto done;
         }
     }
-    if (!rmd_x64_prepare(&ctx, &program, entry)) goto compile_error;
+    if (!crust_x64_prepare(&ctx, &program, entry)) goto compile_error;
     if (mode == PREPARE || emit_file(program, output)) {
         status = 0;
         goto done;
     }
     if (ctx.error_count == 0) goto done;
 compile_error:
-    rmd_driver_diagnostic(&ctx);
+    crust_driver_diagnostic(&ctx);
 done:
     if (status == 0 && fflush(stdout) != 0) {
-        fprintf(stderr, "rmd0: cannot flush standard output: %s\n", strerror(errno));
+        fprintf(stderr, "crust0: cannot flush standard output: %s\n", strerror(errno));
         status = 1;
     }
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
     for (index = 0; index < source_count; ++index) {
         free((void *)sources[index].bytes);
     }

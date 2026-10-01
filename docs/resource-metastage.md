@@ -1,14 +1,17 @@
-# Ownership and cleanup in an RMD stage
+# Ownership and cleanup in a Crust stage
+
+The linked measurements retain the source names and hashes from the recorded
+runs.
 
 Date: 2026-10-01. Status: design record with an implemented resource stage.
 
-Implement ownership, RAII, and `defer` in an ordinary RMD compiler library.
+Implement ownership, RAII, and `defer` in an ordinary Crust compiler library.
 The root program selects that library. Keep these rules out of the C99 seed.
 RAII means that an initialized resource gets automatic scope cleanup.
 
 The [resource library](../stages/resources/README.md) now implements the bounded
 component described here. Its reader, ownership checker, cleanup lowering, and
-body emitter are RMD code. The C99 seed has no resource-specific change.
+body emitter are Crust code. The C99 seed has no resource-specific change.
 The [SQLite witness](../examples/resources/sqlite/README.md) and
 [measurement record](../benchmarks/resources/README.md) give executable evidence.
 This does not establish the persistent intrusive-list observer contract below.
@@ -16,12 +19,12 @@ This does not establish the persistent intrusive-list observer contract below.
 This document makes the [resource rules](language-exploration.md#62-ownership-and-cleanup)
 and [language-stage boundary](compiler-extension-experiment.md#ownership-and-unsafe-are-language-stages)
 concrete for the current compiler. Those notes contain the wider research.
-The [RMD0 specification](rmd0-spec.md) remains the seed contract.
+The [Crust0 specification](crust0-spec.md) remains the seed contract.
 
 ## 1. Select the stage in the source program
 
-Keep the invocation `rmd main.rmd`. Use the same transfer as the
-[hello example](../examples/hello/main.rmd): the root loads an ordinary RMD
+Keep the invocation `crust main.crust`. Use the same transfer as the
+[hello example](../examples/hello/main.crust): the root loads an ordinary Crust
 library, then calls its build function with the source and current cursor.
 The resource compiler reads the remaining bytes in its own grammar.
 It can also read separate target files. No launcher option or special package
@@ -32,16 +35,16 @@ selected backend. Its `resource_build` function has the same role as `c_build`.
 The implemented syntax and API are specified in the resource library README.
 Do not add new seed keywords to select it.
 
-A stage can instead replace `RmdRun.read` and `RmdRun.execute` for later root
-actions. The [reader example](../examples/reader-switch/main.rmd) shows this
+A stage can instead replace `CrustRun.read` and `CrustRun.execute` for later root
+actions. The [reader example](../examples/reader-switch/main.crust) shows this
 route. Install both callbacks in one root action. The runner captures the
 callback pair before it executes that action.
 
-The initial root actions still use RMD0 rules. Selecting a new stage does not
+The initial root actions still use Crust0 rules. Selecting a new stage does not
 check earlier actions again or change their meaning.
 
 Compile the library with the current seed and C backend. Then load its native
-code through the existing host interface. All resource decisions must be RMD
+code through the existing host interface. All resource decisions must be Crust
 code. Existing host allocation, input, diagnostics, and compiler APIs can
 remain in use. Do not add a C function that performs the resource analysis.
 
@@ -199,23 +202,23 @@ Neither form establishes the validity of stored list links.
 ## 4. What the current APIs permit
 
 This audit records the input APIs at revision `5bd88f0`, before implementation.
-The generic RMD reader and C body callback described after the table remove
+The generic Crust reader and C body callback described after the table remove
 the corresponding extension barriers. The seed scalar ABI remains unchanged.
 
 | Current component | Consequence for the resource stage |
 |---|---|
 | [Runner](source-runner.md) with source, cursor, and ordinary callbacks | Select a new language in the root without a launcher change. |
-| [Public syntax, type, and declaration records](../include/rmd0.h) | Construct lowered seed input and preserve source locations. |
-| [Seed reader](../src/read.c) with private lexer and parser | Write the resource reader in RMD. There is no public keyword registration callback. |
+| [Public syntax, type, and declaration records](../include/crust0.h) | Construct lowered seed input and preserve source locations. |
+| [Seed reader](../src/read.c) with private lexer and parser | Write the resource reader in Crust. There is no public keyword registration callback. |
 | [Seed checker](../src/check.c) with scalar parameters and scalar or unit results | Define a library ABI lowering for source resource records passed or returned by value. |
-| Seed records with ordinary copying and raw field access | Enforce nominal resource modes, private representation, and unsafe adoption in the RMD checker. |
-| Structured `RmdStmtKind` without labels or basic blocks | Account for the cost of copying cleanup into several exits. |
-| [C backend API](../stages/c/api.rmd) accepting checked seed input | Call `c_backend_build` after lowering and checking that input. |
+| Seed records with ordinary copying and raw field access | Enforce nominal resource modes, private representation, and unsafe adoption in the Crust checker. |
+| Structured `CrustStmtKind` without labels or basic blocks | Account for the cost of copying cleanup into several exits. |
+| [C backend API](../stages/c/api.crust) accepting checked seed input | Call `c_backend_build` after lowering and checking that input. |
 | `c_program` owning its read/check/build sequence | Use a resource driver. This function has no resource-pass insertion point. |
 
 The implementation adds a [generic reader library](../stages/reader/README.md)
 with four syntax hooks and a [generic complete-body callback](c-backend.md#custom-function-bodies).
-Both are ordinary RMD libraries. The resource driver uses those interfaces.
+Both are ordinary Crust libraries. The resource driver uses those interfaces.
 The C backend's public callback does not require a seed function body and has
 no resource-specific operation.
 
@@ -226,7 +229,7 @@ It must specify ownership transfer and initialization on each result path.
 Measure copies, stack storage, and calls against the corresponding C ABI.
 Do not assume optimization will remove an extra cost.
 
-`RmdDecl.checked` records the seed type check. It is not an ownership proof.
+`CrustDecl.checked` records the seed type check. It is not an ownership proof.
 Checking a body again creates new local symbols. Resource facts must not
 depend on the identity of those replaced symbols.
 
@@ -244,7 +247,7 @@ seed syntax tree's ownership contract.
 
 Measure unique cleanup suffixes and emitted code size. Identical suffixes
 with the same continuation can share a cleanup block. A library control-flow
-representation and an RMD C emitter can express these blocks as C labels
+representation and a Crust C emitter can express these blocks as C labels
 and branches. The seed needs no resource keyword or general `goto` feature
 for such an emitter.
 
@@ -293,7 +296,7 @@ can call back into a list or expose partially destroyed payload. A non-owning
 head detaches its nodes; it does not destroy them. These requirements cannot
 be discharged by placing a hidden unchecked list in the compiler library.
 
-The existing [intrusive example](../examples/intrusive/program.rmd) is an RMD0
+The existing [intrusive example](../examples/intrusive/program.crust) is a Crust0
 raw-pointer example. It supplies a representation and behavior reference.
 It does not establish this checked observer contract.
 
@@ -306,13 +309,13 @@ branch. Publish immutable interfaces before dependent function checks.
 Independent bodies can then be checked and lowered in parallel. Source-order
 root actions still execute in their declared order.
 When using seed APIs, give each worker a separate context and owned function
-nodes. Share only published declarations under the `rmd_bind` contract.
+nodes. Share only published declarations under the `crust_bind` contract.
 
 Functions without resource effects can skip resource-specific analysis after
 their types and called interfaces establish that fact. Absence of an ownership
 keyword is not sufficient. General initialization and access rules still apply.
 
-Start with one RMD package and one application. Do not build a pass registry,
+Start with one Crust package and one application. Do not build a pass registry,
 general effect solver, closure system, or generic container library for it.
 Use explicit error branches and concrete result types. A propagation operator
 is not required to test cleanup.

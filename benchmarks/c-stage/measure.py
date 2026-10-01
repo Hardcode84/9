@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure the RMD C stage and its GCC backend as separate processes.
+"""Measure the CRUST C stage and its GCC backend as separate processes.
 
 Run from the repository root. The script builds both stage variants, checks
 their complete output, and records fresh-process samples on one CPU. Preparation
@@ -26,9 +26,9 @@ BASE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BASE)
 
 STAGE_SOURCES = [Path(path) for path in (
-    "api/rmd0.rmd", "api/rmd0_host.rmd", "api/rmd0_stage.rmd", "stages/c/model.rmd",
-    "stages/c/base.rmd", "stages/c/types.rmd", "stages/c/emit.rmd",
-    "stages/c/driver.rmd", "stages/c/program.rmd", "stages/c/main.rmd")]
+    "api/crust0.crust", "api/crust0_host.crust", "api/crust0_stage.crust", "stages/c/model.crust",
+    "stages/c/base.crust", "stages/c/types.crust", "stages/c/emit.crust",
+    "stages/c/driver.crust", "stages/c/program.crust", "stages/c/main.crust")]
 C_FLAGS = ["-std=c99", "-pedantic-errors", "-O2", "-g0",
            "-fstack-clash-protection", "-Wno-overlength-strings"]
 C_ENDPOINTS = ("gcc-syntax", "clang-syntax")
@@ -39,7 +39,7 @@ ENDPOINTS = {
     "clang-syntax": "Clang C99 source parsing and semantic checks; -fsyntax-only",
 }
 for variant in ("seed", "optimized"):
-    origin = "x64-compiled RMD stage" if variant == "seed" else "self-C-compiled RMD stage"
+    origin = "x64-compiled CRUST stage" if variant == "seed" else "self-C-compiled CRUST stage"
     ENDPOINTS[f"{variant}-check"] = origin + "; source reading, collection, resolution, and body checks"
     ENDPOINTS[f"{variant}-prepare"] = origin + "; check plus complete C and rename text in memory; excludes final buffer concatenation and output"
     ENDPOINTS[f"{variant}-emit"] = origin + "; check plus complete C and rename text emitted to DEVNULL; no GCC process"
@@ -50,8 +50,8 @@ def sources():
              if Path(__file__).is_absolute() else Path(__file__), BASE_PATH,
              Path("tools/api.py")]
     for directory, pattern in (("src", "*.c"), ("include", "*.h"),
-                               ("runtime", "*.c"), ("api", "*.rmd"),
-                               ("stages/c", "*.rmd")):
+                               ("runtime", "*.c"), ("api", "*.crust"),
+                               ("stages/c", "*.crust")):
         paths.extend(sorted(Path(directory).glob(pattern)))
     return {str(path): BASE.sha256(path) for path in paths}
 
@@ -74,14 +74,14 @@ def prepare(build):
     build.mkdir(parents=True, exist_ok=True)
     frozen_makefile = build / "Makefile.frozen"
     frozen_makefile.write_bytes(Path("Makefile").read_bytes())
-    seed = build / "rmd-c-seed"
-    optimized = build / "rmd-c"
-    library = build / "librmd0.a"
-    host = build / "librmd0_host.a"
+    seed = build / "crust-c-seed"
+    optimized = build / "crust-c"
+    library = build / "libcrust0.a"
+    host = build / "libcrust0_host.a"
     commands = [
         ("bootstrap-compiler-and-libraries", ["make", "-f", str(frozen_makefile), "-B", "-j1", f"BUILD={build}",
                                             "CC=gcc", "CFLAGS=-O2 -g0", "all"]),
-        ("stage-x64-generation", [str(build / "rmd0"), "-S", "-o", str(seed) + ".s",
+        ("stage-x64-generation", [str(build / "crust0"), "-S", "-o", str(seed) + ".s",
                                   *map(str, STAGE_SOURCES)]),
         ("stage-x64-assembly", ["as", "--64", str(seed) + ".s", "-o", str(seed) + ".o"]),
         ("stage-x64-link", ["gcc", "-no-pie", str(seed) + ".o", str(library), str(host),
@@ -98,7 +98,7 @@ def prepare(build):
                         "stdout_sha256": hashlib.sha256(output).hexdigest()})
         print(f"Prepared {name}", flush=True)
     for binary in (seed, optimized):
-        if "rmd_x64_" in checked(["nm", str(binary)]).decode():
+        if "crust_x64_" in checked(["nm", str(binary)]).decode():
             raise RuntimeError("The C stage unexpectedly links the x64 backend")
     return {"seed": seed, "optimized": optimized}, {
         "commands": records, "flags": C_FLAGS,
@@ -108,7 +108,7 @@ def prepare(build):
         "optimized_stage_construction_ns": records[4]["wall_ns"],
         "included_in_frontend_samples": False,
         "construction_scope": "All native preparation for each stage route is included above; existing OS tools are excluded",
-        "bootstrap_compiler": BASE.binary_info(build / "rmd0"),
+        "bootstrap_compiler": BASE.binary_info(build / "crust0"),
         "seed_stage_assembly": file_info(Path(str(seed) + ".s")),
         "seed_stage_object": BASE.binary_info(Path(str(seed) + ".o")),
         "linked_libraries": {str(path): BASE.binary_info(path) for path in (library, host)},
@@ -125,7 +125,7 @@ def frontend_commands(workload, binaries):
         for phase, option in (("check", "--check"), ("prepare", "--prepare"), ("emit", "--emit-c")):
             extra = ["--symbols", "/dev/null"] if phase == "emit" else []
             commands[f"{variant}-{phase}"] = [str(binary), *mode, option, *extra,
-                                             str(workload["paths"]["rmd"])]
+                                             str(workload["paths"]["crust"])]
     return commands
 
 
@@ -137,7 +137,7 @@ def preflight(workload, binaries, directory, build):
         c_path = directory / f"{name}-{variant}.c"
         response = directory / f"{name}-{variant}.rsp"
         command = [str(binary), *mode, "--emit-c", "--symbols", str(response),
-                   str(workload["paths"]["rmd"])]
+                   str(workload["paths"]["crust"])]
         with c_path.open("wb") as output:
             checked(command, stdout=output)
         emitted[variant] = {"c": c_path, "response": response, "command": command}
@@ -160,7 +160,7 @@ def preflight(workload, binaries, directory, build):
     witness = None
     if not workload["library"]:
         executable = directory / f"{name}-c-stage"
-        checked(["gcc", "-no-pie", str(renamed), str(build / "librmd0_host.a"), "-o", str(executable)])
+        checked(["gcc", "-no-pie", str(renamed), str(build / "libcrust0_host.a"), "-o", str(executable)])
         witness = checked([str(executable)]).decode().strip()
         if witness != "intrusive: ok":
             raise RuntimeError(f"Unexpected intrusive result: {witness!r}")
@@ -203,7 +203,7 @@ def summarize(samples, workloads, count, draws, seed):
                 "fastest_c_observed": fastest, "fastest_c_bootstrap_selections": selections}
         rates = {}
         for endpoint, median in medians.items():
-            size = workload["paths"]["c" if endpoint in C_ENDPOINTS else "rmd"].stat().st_size
+            size = workload["paths"]["c" if endpoint in C_ENDPOINTS else "crust"].stat().st_size
             rates[endpoint] = {"source_bytes_per_second": size * 1e9 / median,
                               "source_MiB_per_second": size * 1e9 / median / 1048576,
                               "functions_per_second": workload["functions"] * 1e9 / median}
@@ -242,9 +242,9 @@ def main():
     if sources() != source_hashes:
         raise RuntimeError("Compiler or stage source changed during preparation")
     workloads = [BASE.generate(args.inputs, count) for count in (1000, 8000)]
-    intrusive = Path("examples/intrusive/program.rmd")
+    intrusive = Path("examples/intrusive/program.crust")
     workloads.append({"name": "intrusive", "functions": len(re.findall(r"^fn ", intrusive.read_text(), re.M)),
-                      "paths": {"c": Path("benchmarks/bootstrap/intrusive.c"), "rmd": intrusive}, "library": False})
+                      "paths": {"c": Path("benchmarks/bootstrap/intrusive.c"), "crust": intrusive}, "library": False})
     commands = {workload["name"]: frontend_commands(workload, binaries) for workload in workloads}
     toolchains = {name: BASE.tool_info(command) for name, command in
                   (("gcc", "gcc"), ("clang", "clang-20"), ("assembler", "as"),

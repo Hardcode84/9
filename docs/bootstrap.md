@@ -1,15 +1,18 @@
-# RMD0 bootstrap compiler
+# Crust0 bootstrap compiler
 
-The repository contains a C99 implementation of the RMD0 version 0.1 syntax
-and execution rules. `rmd0` reads RMD0, checks the program, and emits textual
-x86-64 assembly. `rmd` executes source-order compilation programs. GNU
+The linked measurements retain the source names and hashes from the recorded
+runs.
+
+The repository contains a C99 implementation of the Crust0 version 0.1 syntax
+and execution rules. `crust0` reads Crust0, checks the program, and emits textual
+x86-64 assembly. `crust` executes source-order compilation programs. GNU
 assembler produces object code, and GCC links it. The
 selected host and target profile is Linux x86-64 with the System V scalar ABI.
 
 This implementation is the raw bootstrap language. It does not add ownership,
 cleanup, imports, or macros. The direct-list example uses raw
 memory preconditions. It is not evidence of a checked lifetime rule.
-The [source runner](source-runner.md) executes ordinary RMD0 code that controls
+The [source runner](source-runner.md) executes ordinary Crust0 code that controls
 target compilation and can change the reader for the unread root bytes.
 
 ## Build and use
@@ -17,7 +20,7 @@ target compilation and can change the reader for the unread root bytes.
 A C99 compiler, the system C library, Make, Python 3, and libffi development
 headers and library build the default tools. GNU assembler and the system
 linker build the native examples. Python 3 also runs tests and measurements.
-The build downloads no dependencies. The standalone `build/rmd0` target does
+The build downloads no dependencies. The standalone `build/crust0` target does
 not need libffi.
 
 The build uses `CC` for C code and linking, and `AS` for generated assembly.
@@ -27,8 +30,8 @@ this target profile accepts.
 
 ```sh
 make
-build/rmd0 -S -o build/intrusive.s examples/intrusive/program.rmd
-gcc -no-pie build/intrusive.s build/librmd0_host.a -o build/intrusive
+build/crust0 -S -o build/intrusive.s examples/intrusive/program.crust
+gcc -no-pie build/intrusive.s build/libcrust0_host.a -o build/intrusive
 build/intrusive
 make check
 ```
@@ -56,7 +59,7 @@ declaration order. This is a driver policy; the core does not discover files.
 function. The linker resolves native references when it makes an executable.
 Use `--library` for preparation or emission of a library source.
 
-For source-defined compilation, use `rmd ROOT ARGUMENT...`. The root receives
+For source-defined compilation, use `crust ROOT ARGUMENT...`. The root receives
 the trailing arguments through `run`. Its actions select input files, stages,
 and output. The launcher has no backend selector. It reads and executes one
 complete action at a time and does not invoke an assembler or linker for it.
@@ -79,7 +82,7 @@ its header use 1,096 lines. The root runner and its header use 446 lines. The
 standalone driver and host interfaces use 468 lines.
 Use `wc -l src/*.c include/*.h runtime/*.c` to repeat the count.
 
-Tests, examples, and generated files are separate. The installed RMD host
+Tests, examples, and generated files are separate. The installed Crust host
 helpers use 72 lines. The 31-line prelude generator makes a 474-line C byte
 table from installed API and helper sources. The native bridge links the
 external libffi library; the tested version is 3.4.6. Its implementation is
@@ -95,8 +98,8 @@ callback. Both callbacks and their state must remain live until destruction.
 
 Syntax, types, symbols, names, and temporary tables use that arena. The context
 does not own source descriptors or source bytes. Keep them live while compiler
-data or diagnostics can refer to them. `rmd_alloc` and `rmd_try_alloc` zero
-compiler data. `rmd_arena_alloc` returns uninitialized storage. None of these
+data or diagnostics can refer to them. `crust_alloc` and `crust_try_alloc` zero
+compiler data. `crust_arena_alloc` returns uninitialized storage. None of these
 rules causes zero initialization of a source-language `uninit` variable.
 
 The reader uses ASCII tokens and recursive descent. It does not look up names.
@@ -108,14 +111,14 @@ Reader nesting and semantic traversal each have a limit of 256. The semantic
 limit also covers long expression trees and by-value type chains. These limits
 produce diagnostics. They do not truncate the input or skip checks. Pointer
 cycles stop at nominal record identities and do not consume one stack frame
-per record in the cycle. Type size must fit the RMD0 `isize` limit.
+per record in the cycle. Type size must fit the Crust0 `isize` limit.
 
 ## Public stages
 
-The public C declarations are in `include/rmd0.h`, `include/rmd0_x64.h`,
-`include/rmd0_host.h`, `include/rmd0_stage.h`, `include/rmd0_eval.h`, and
-`include/rmd0_run.h`.
-The corresponding RMD0 declarations are in `api/`. Run `make api` after an API
+The public C declarations are in `include/crust0.h`, `include/crust0_x64.h`,
+`include/crust0_host.h`, `include/crust0_stage.h`, `include/crust0_eval.h`, and
+`include/crust0_run.h`.
+The corresponding Crust0 declarations are in `api/`. Run `make api` after an API
 change. The generator handles the selected header forms only and rejects a
 form it cannot translate. It is not a C frontend. The test suite compares all
 published record sizes, alignments, and field offsets with the C compiler.
@@ -127,37 +130,37 @@ version as its compiler libraries.
 
 | Operation | Input and result |
 |---|---|
-| `rmd_read` | Source bytes to an owned syntax unit |
-| `rmd_read_range` | A byte range to an owned unit, with locations in the original source |
-| `rmd_read_one` | One unlinked root declaration or statement and its exact byte end |
-| `rmd_bind` | A selected name and complete external declaration facts to a borrowed binding |
-| `rmd_collect` | Owned syntax units to the top-level namespace |
-| `rmd_resolve` | Collected declarations and bindings to types, layouts, and signatures |
-| `rmd_check_body` | A resolved owned function to its checked body |
-| `rmd_check` | All owned functions and constants to checked input |
-| `rmd_collect_unit`, `rmd_resolve_unit`, `rmd_check_unit` | Check one owned unit without rescanning earlier units |
-| `rmd_check_root` | One root statement and persistent local bindings to checked input |
-| `rmd_eval_*` | Checked host operations, values, and native callbacks |
-| `rmd_run_*` | Source-order loop, replaceable reader/executor, and native input lifetime |
-| `rmd_x64_prepare` | Checked input with link names to a public frame and expression plan |
-| `rmd_x64_emit_program` | That plan to assembly |
+| `crust_read` | Source bytes to an owned syntax unit |
+| `crust_read_range` | A byte range to an owned unit, with locations in the original source |
+| `crust_read_one` | One unlinked root declaration or statement and its exact byte end |
+| `crust_bind` | A selected name and complete external declaration facts to a borrowed binding |
+| `crust_collect` | Owned syntax units to the top-level namespace |
+| `crust_resolve` | Collected declarations and bindings to types, layouts, and signatures |
+| `crust_check_body` | A resolved owned function to its checked body |
+| `crust_check` | All owned functions and constants to checked input |
+| `crust_collect_unit`, `crust_resolve_unit`, `crust_check_unit` | Check one owned unit without rescanning earlier units |
+| `crust_check_root` | One root statement and persistent local bindings to checked input |
+| `crust_eval_*` | Checked host operations, values, and native callbacks |
+| `crust_run_*` | Source-order loop, replaceable reader/executor, and native input lifetime |
+| `crust_x64_prepare` | Checked input with link names to a public frame and expression plan |
+| `crust_x64_emit_program` | That plan to assembly |
 
-`rmd_read_range` accepts `[begin, end)` within the source. Empty ranges are
+`crust_read_range` accepts `[begin, end)` within the source. Empty ranges are
 valid. It does not read excluded bytes, change the source descriptor, or copy
 the source text. Keep the full descriptor and bytes live until context
 destruction. Declaration ordinals start at one in each returned unit.
 Callers that combine distinct ranges must assign distinct declaration
 identities, as for other independently constructed units. This API adds no
-stage syntax or automatic compile-time execution. `rmd_read_one` instead uses
+stage syntax or automatic compile-time execution. `crust_read_one` instead uses
 the declaration's starting byte offset plus one. Callers must not mix these
 ordinal spaces under one source identity. It does not link its result into
 the context or read beyond its action delimiter. The runner controls checking
 and execution; the reader does neither.
 
-`librmd0_run.a` contains the evaluator and root loop. A native consumer links
-it with `librmd0.a`, libffi, and the system dynamic-loader interface. The
-installed executable also links `librmd0_host.a` and exports its public native
-symbols. The separate `rmd0` path does not link the evaluator.
+`libcrust0_run.a` contains the evaluator and root loop. A native consumer links
+it with `libcrust0.a`, libffi, and the system dynamic-loader interface. The
+installed executable also links `libcrust0_host.a` and exports its public native
+symbols. The separate `crust0` path does not link the evaluator.
 
 The frame plan retains checked operations. Instruction selection, required
 trap sequences, and final assembly remain in the emitter. Thus `--prepare`
@@ -200,9 +203,9 @@ without reading the stored value. The frame size has 16-byte alignment.
 
 The default path calls C operations directly. A custom operation table is
 optional. Null operations select the default operation. A callback returns
-false on failure and records a diagnostic. RMD0 callbacks use the `try` entry
-points and `rmd_x64_write`. These functions contain C error exits inside their
-own C frames and return normally to RMD0. They do not jump across RMD0 frames.
+false on failure and records a diagnostic. Crust0 callbacks use the `try` entry
+points and `crust_x64_write`. These functions contain C error exits inside their
+own C frames and return normally to Crust0. They do not jump across Crust0 frames.
 
 The place operation computes an address for a stored name, dereference, field,
 index, or group that denotes a place. Default reads of stored values use this
@@ -213,24 +216,24 @@ an address inside an aggregate temporary. Such a temporary is not a writable
 source-language place. Variable initialization and parameter stores belong to
 statement and function emission; they do not invoke the expression-place hook.
 
-Native C construction helpers can use `rmd_run_stage` with a C callback that
+Native C construction helpers can use `crust_run_stage` with a C callback that
 permits a nonlocal exit. The raw helpers require that failure frame. They are
-not published as RMD0 foreign calls. RMD0 has no variable arguments or aggregate
+not published as Crust0 foreign calls. Crust0 has no variable arguments or aggregate
 call ABI; text output and output-pointer wrappers provide those operations
 without either language feature. A caller releases resources it owns after
 each reported failure. Failed work is not a published interface.
 
 ## A compiled replacement stage
 
-`examples/custom-stage/stage.rmd` is an ordinary RMD0 program. Its reader accepts a decimal
-exit status, such as `42`, instead of RMD0 syntax. It creates a function through
+`examples/custom-stage/stage.crust` is an ordinary Crust0 program. Its reader accepts a decimal
+exit status, such as `42`, instead of Crust0 syntax. It creates a function through
 the public syntax records, invokes the checker, and emits a library. It also
 replaces integer addition by zero with a direct value transfer through the
 public backend API. The remaining operations use the standard emitter.
 
 ```sh
-build/rmd0 -o build/stage.s api/rmd0.rmd api/rmd0_host.rmd api/rmd0_x64.rmd examples/custom-stage/stage.rmd
-gcc -no-pie build/stage.s build/librmd0.a build/librmd0_host.a -o build/stage
+build/crust0 -o build/stage.s api/crust0.crust api/crust0_host.crust api/crust0_x64.crust examples/custom-stage/stage.crust
+gcc -no-pie build/stage.s build/libcrust0.a build/libcrust0_host.a -o build/stage
 build/stage examples/custom-stage/answer.txt build/answer.s
 gcc -no-pie build/answer.s examples/custom-stage/answer_main.c -o build/answer
 build/answer
@@ -241,13 +244,13 @@ reader. The example needs no plugin loader, evaluator, JIT, or compiler server.
 The test also uses a native caller that checks the result and all callee-saved
 registers. This checks the replacement stage's native calling contract.
 
-This is stage execution through RMD0. The seed compiler remains C99. The
+This is stage execution through Crust0. The seed compiler remains C99. The
 [C backend stage](c-backend.md) separately implements a complete backend and
-driver in RMD0 and compiles itself through its own output. The reader and
+driver in Crust0 and compiles itself through its own output. The reader and
 checker remain C99. Full compiler self-compilation requires their translation
-to RMD0 and a second complete build with the resulting executable.
+to Crust0 and a second complete build with the resulting executable.
 The C frontend experiment requires a separate C reader, C semantic rules, and
-an ABI adapter for C operations absent from RMD0. Neither case is established
+an ABI adapter for C operations absent from Crust0. Neither case is established
 by this small replacement-stage witness.
 
 ## Parallel use
@@ -299,7 +302,7 @@ test checks six consumers in serial order and two concurrent orders, with
 shared provider facts unchanged. Both complete specification examples run.
 The source-order suite adds 154 process checks. Its root evaluator, source
 snapshots, native callbacks, reader replacement, phase isolation, backend
-reuse, paths, and failure cases pass with the C core and RMD C backend under
+reuse, paths, and failure cases pass with the C core and Crust C backend under
 GCC AddressSanitizer and UndefinedBehaviorSanitizer. Stack-use-after-return
 detection is enabled. The evaluator suite also passes 10,829 checks under
 Clang 20 AddressSanitizer and UndefinedBehaviorSanitizer.
@@ -347,7 +350,7 @@ for the list witness and generated scaling cases. It retains the source and
 binary hashes, commands, raw paired samples, and confidence intervals. Check,
 frame preparation, and complete assembly are distinct endpoints. The installed
 stage libraries and warm operating-system file cache are stated conditions.
-Results do not establish cold stage preparation cost, checked-RMD cost, time to
+Results do not establish cold stage preparation cost, checked-Crust cost, time to
 compile Linux, GCC, LLVM, or SQLite sources, or self-hosted C frontend cost.
 
 The [final measurement](../benchmarks/bootstrap/results/frontend-2026-10-01.json)
@@ -358,20 +361,20 @@ lower median on each workload. Frequency is not fixed and the CPU is not
 reserved. The isolated single-worker build of the C99 compiler and its two
 libraries took 0.706 seconds; this build is outside the compilation samples.
 
-| Workload | GCC syntax (ms) | RMD check (ms) | RMD prepare (ms) | RMD assembly (ms) | Assembly / fastest C, with 95% interval |
+| Workload | GCC syntax (ms) | Crust check (ms) | Crust prepare (ms) | Crust assembly (ms) | Assembly / fastest C, with 95% interval |
 |---|---:|---:|---:|---:|---|
 | Intrusive list | 7.334 | 1.759 | 1.769 | 1.823 | 0.248 [0.245, 0.255] |
 | 1,000 generated functions | 18.772 | 8.628 | 10.679 | 12.695 | 0.676 [0.662, 0.692] |
 | 8,000 generated functions | 115.064 | 60.909 | 82.715 | 110.588 | 0.961 [0.955, 0.968] |
 
 Each generated function reads record fields, does integer arithmetic, branches,
-and writes a field. The C and RMD cases have equivalent operations. Each timed
+and writes a field. The C and Crust cases have equivalent operations. Each timed
 invocation starts a new process. Assembly goes to the null device. Assembly and
 linking of the result are outside the samples. The script checks complete
 assembly function counts and executes the list witness in both languages.
 
 The gate requires the upper 95% interval bound to be at most 1 against the
-faster C compiler. All three RMD endpoints pass on each workload. The intervals
+faster C compiler. All three Crust endpoints pass on each workload. The intervals
 use 10,000 resamples of complete paired rounds. Each resample selects the
 faster C median again. These are separate comparison intervals; they do not
 provide simultaneous coverage for all nine comparisons.

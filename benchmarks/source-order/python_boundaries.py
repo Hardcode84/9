@@ -135,7 +135,7 @@ assert custom_answer.answer == 42
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix="rmd-python-order-") as directory:
+    with tempfile.TemporaryDirectory(prefix="crust-python-order-") as directory:
         observations = check_boundaries(Path(directory))
     report = {
         "python": sys.version,

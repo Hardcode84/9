@@ -1,4 +1,4 @@
-#include "rmd0.h"
+#include "crust0.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -15,9 +15,9 @@ static void check(bool condition, const char *name)
     }
 }
 
-static RmdSource source_text(const char *text, size_t size, uint64_t identity)
+static CrustSource source_text(const char *text, size_t size, uint64_t identity)
 {
-    RmdSource source;
+    CrustSource source;
     source.path = "reader-test";
     source.bytes = (const unsigned char *)text;
     source.size = size;
@@ -27,19 +27,19 @@ static RmdSource source_text(const char *text, size_t size, uint64_t identity)
 
 static void syntax_case(const char *name, const char *text, size_t size, bool expected)
 {
-    RmdContext ctx;
-    RmdSource source = source_text(text, size, 1);
-    RmdUnit *unit;
+    CrustContext ctx;
+    CrustSource source = source_text(text, size, 1);
+    CrustUnit *unit;
     bool accepted;
-    rmd_context_init(&ctx, NULL);
-    accepted = rmd_read(&ctx, &source, &unit);
+    crust_context_init(&ctx, NULL);
+    accepted = crust_read(&ctx, &source, &unit);
     check(accepted == expected, name);
     if (accepted != expected) fprintf(stderr, "diagnostic: %s\n", ctx.error);
     if (!accepted) {
         check(unit == NULL && ctx.units == NULL && ctx.last_unit == NULL &&
               ctx.failure == NULL && ctx.error_count == 1, "failure leaves no published unit");
     }
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 #define SYNTAX(name, text, accepted) syntax_case(name, text, sizeof(text) - 1, accepted)
@@ -291,74 +291,74 @@ static void test_ast(void)
         "fn f(a: fn(*u8,) -> unit,) -> u64 { return a + b * c - d; }"
         "const offset: usize = offsetof(Node, hook);";
     static const unsigned char decoded[] = {'A', 0, 255, '\n', '"', '\\', 0};
-    RmdContext ctx;
-    RmdSource source = source_text(text, sizeof(text) - 1, 19);
-    RmdUnit *unit;
-    RmdDecl *decl;
-    RmdExpr *expr;
-    rmd_context_init(&ctx, NULL);
-    if (!rmd_read(&ctx, &source, &unit)) {
+    CrustContext ctx;
+    CrustSource source = source_text(text, sizeof(text) - 1, 19);
+    CrustUnit *unit;
+    CrustDecl *decl;
+    CrustExpr *expr;
+    crust_context_init(&ctx, NULL);
+    if (!crust_read(&ctx, &source, &unit)) {
         check(false, "AST fixture parses");
         fprintf(stderr, "%s\n", ctx.error);
-        rmd_context_destroy(&ctx);
+        crust_context_destroy(&ctx);
         return;
     }
     check(unit->source == &source, "source retained");
     decl = unit->declarations;
     check(decl->unit_identity == 19 && decl->identity == 1, "declaration identity");
     expr = decl->init;
-    check(expr->kind == RMD_E_UNARY && expr->op == RMD_OP_NEG &&
-          expr->left->kind == RMD_E_INTEGER && expr->left->integer == 128 &&
-          expr->left->literal_type == RMD_T_I8, "direct negative token preserved");
+    check(expr->kind == CRUST_E_UNARY && expr->op == CRUST_OP_NEG &&
+          expr->left->kind == CRUST_E_INTEGER && expr->left->integer == 128 &&
+          expr->left->literal_type == CRUST_T_I8, "direct negative token preserved");
     check(expr->loc.source == &source && expr->loc.offset == 19,
           "source byte offset");
     decl = decl->next;
-    check(decl->init->kind == RMD_E_UNARY &&
-          decl->init->left->kind == RMD_E_GROUP &&
-          decl->init->left->left->kind == RMD_E_INTEGER,
+    check(decl->init->kind == CRUST_E_UNARY &&
+          decl->init->left->kind == CRUST_E_GROUP &&
+          decl->init->left->left->kind == CRUST_E_INTEGER,
           "parentheses preserved for literal range checking");
     decl = decl->next;
     check(decl->init->byte_count == sizeof(decoded) &&
           memcmp(decl->init->bytes, decoded, sizeof(decoded)) == 0,
           "decoded bytes and trailing zero");
     decl = decl->next;
-    check(decl->param_count == 1 && decl->params->syntax_type->kind == RMD_T_FUNCTION &&
+    check(decl->param_count == 1 && decl->params->syntax_type->kind == CRUST_T_FUNCTION &&
           decl->params->syntax_type->param_count == 1 &&
-          decl->params->syntax_type->params[0]->kind == RMD_T_POINTER &&
-          decl->params->syntax_type->base->kind == RMD_T_UNIT,
+          decl->params->syntax_type->params[0]->kind == CRUST_T_POINTER &&
+          decl->params->syntax_type->base->kind == CRUST_T_UNIT,
           "nested function type and trailing commas");
     expr = decl->body->body->expr;
-    check(expr->kind == RMD_E_BINARY && expr->op == RMD_OP_SUB &&
-          expr->left->op == RMD_OP_ADD && expr->left->right->op == RMD_OP_MUL,
+    check(expr->kind == CRUST_E_BINARY && expr->op == CRUST_OP_SUB &&
+          expr->left->op == CRUST_OP_ADD && expr->left->right->op == CRUST_OP_MUL,
           "arithmetic precedence and left association");
     decl = decl->next;
-    check(decl->init->kind == RMD_E_OFFSETOF &&
+    check(decl->init->kind == CRUST_E_OFFSETOF &&
           strcmp(decl->init->syntax_type->name->text, "Node") == 0 &&
           strcmp(decl->init->field_name->text, "hook") == 0,
           "offsetof record and field");
     check(decl->identity == 5 && decl->next == NULL, "declaration order");
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void test_failure_boundary(void)
 {
-    RmdContext ctx;
-    RmdSource first = source_text("fn a() -> unit {}", 17, 1);
-    RmdSource broken = source_text("fn b() -> unit {} @", 19, 2);
-    RmdSource last = source_text("fn c() -> unit {}", 17, 3);
-    RmdUnit *first_unit;
-    RmdUnit *last_unit;
-    RmdUnit *rejected;
-    rmd_context_init(&ctx, NULL);
-    check(rmd_read(&ctx, &first, &first_unit), "first unit accepted");
-    check(!rmd_read(&ctx, &broken, &rejected), "incomplete unit rejected");
+    CrustContext ctx;
+    CrustSource first = source_text("fn a() -> unit {}", 17, 1);
+    CrustSource broken = source_text("fn b() -> unit {} @", 19, 2);
+    CrustSource last = source_text("fn c() -> unit {}", 17, 3);
+    CrustUnit *first_unit;
+    CrustUnit *last_unit;
+    CrustUnit *rejected;
+    crust_context_init(&ctx, NULL);
+    check(crust_read(&ctx, &first, &first_unit), "first unit accepted");
+    check(!crust_read(&ctx, &broken, &rejected), "incomplete unit rejected");
     check(rejected == NULL && ctx.units == first_unit && ctx.last_unit == first_unit &&
           first_unit->next == NULL, "failed parse does not append partial declarations");
-    check(rmd_read(&ctx, &last, &last_unit), "reader reusable after diagnostic");
+    check(crust_read(&ctx, &last, &last_unit), "reader reusable after diagnostic");
     check(first_unit->next == last_unit && last_unit->next == NULL &&
           ctx.last_unit == last_unit && ctx.failure == NULL,
           "successful unit appends after failed read");
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void test_read_range(void)
@@ -372,24 +372,24 @@ static void test_read_range(void)
     static const char string[] = "const s: *u8 = \"x\";";
     static const char number[] = "const n: u8 = 1u8;";
     static const char comment[] = "// bounded comment\0suffix";
-    RmdContext ctx;
-    RmdSource source = source_text(text, sizeof(text) - 1, 29);
-    RmdSource bad_source = source_text(broken, sizeof(broken) - 1, 30);
-    RmdSource incomplete_source = source_text(incomplete, sizeof(incomplete) - 1, 31);
-    RmdSource string_source = source_text(string, sizeof(string) - 1, 32);
-    RmdSource number_source = source_text(number, sizeof(number) - 1, 33);
-    RmdSource comment_source = source_text(comment, sizeof(comment) - 1, 34);
-    RmdUnit *unit;
-    RmdUnit *rejected;
-    RmdDecl *decl;
+    CrustContext ctx;
+    CrustSource source = source_text(text, sizeof(text) - 1, 29);
+    CrustSource bad_source = source_text(broken, sizeof(broken) - 1, 30);
+    CrustSource incomplete_source = source_text(incomplete, sizeof(incomplete) - 1, 31);
+    CrustSource string_source = source_text(string, sizeof(string) - 1, 32);
+    CrustSource number_source = source_text(number, sizeof(number) - 1, 33);
+    CrustSource comment_source = source_text(comment, sizeof(comment) - 1, 34);
+    CrustUnit *unit;
+    CrustUnit *rejected;
+    CrustDecl *decl;
     size_t begin = sizeof(prefix) - 1;
     size_t end = begin + sizeof("fn selected() -> u8 {\n    return 7u8;\n}\n") - 1;
     size_t error_offset = begin + sizeof("fn broken() -> unit {\n    ") - 1;
-    rmd_context_init(&ctx, NULL);
-    if (!rmd_read_range(&ctx, &source, begin, end, &unit)) {
+    crust_context_init(&ctx, NULL);
+    if (!crust_read_range(&ctx, &source, begin, end, &unit)) {
         check(false, "range excludes invalid prefix and suffix bytes");
         fprintf(stderr, "%s\n", ctx.error);
-        rmd_context_destroy(&ctx);
+        crust_context_destroy(&ctx);
         return;
     }
     check(unit->source == &source && source.bytes == (const unsigned char *)text &&
@@ -403,28 +403,28 @@ static void test_read_range(void)
           decl->body->body->expr->loc.offset ==
               begin + sizeof("fn selected() -> u8 {\n    return ") - 1,
           "range expression location includes preceding source lines");
-    check(!rmd_read_range(&ctx, &bad_source, begin, sizeof(broken) - 4, &rejected) &&
+    check(!crust_read_range(&ctx, &bad_source, begin, sizeof(broken) - 4, &rejected) &&
           rejected == NULL && ctx.error_loc.source == &bad_source &&
           ctx.error_loc.offset == error_offset,
           "range diagnostic retains the original source and absolute offset");
     check(ctx.units == unit && ctx.last_unit == unit && unit->next == NULL &&
           ctx.failure == NULL, "failed range publishes no partial unit");
     end = sizeof(incomplete) - 2;
-    check(!rmd_read_range(&ctx, &incomplete_source, begin, end, &rejected) &&
+    check(!crust_read_range(&ctx, &incomplete_source, begin, end, &rejected) &&
           ctx.error_loc.source == &incomplete_source && ctx.error_loc.offset == end,
           "range end is EOF even when the next original byte completes the declaration");
-    check(!rmd_read_range(&ctx, &string_source, 0, sizeof(string) - 3, &rejected) &&
+    check(!crust_read_range(&ctx, &string_source, 0, sizeof(string) - 3, &rejected) &&
           strstr(ctx.error, "unterminated string") != NULL,
           "string scanning does not cross the range end");
-    check(!rmd_read_range(&ctx, &number_source, 0, sizeof("const n: u8 = 1") - 1,
+    check(!crust_read_range(&ctx, &number_source, 0, sizeof("const n: u8 = 1") - 1,
                           &rejected) && ctx.error_loc.source == &number_source &&
           ctx.error_loc.offset == sizeof("const n: u8 = ") - 1 &&
           strcmp(ctx.error, "expected an expression") == 0,
           "integer scanning does not use a suffix outside the range");
-    check(rmd_read_range(&ctx, &comment_source, 0, sizeof("// bounded comment") - 1,
+    check(crust_read_range(&ctx, &comment_source, 0, sizeof("// bounded comment") - 1,
                          &rejected) && rejected->declarations == NULL,
           "comment scanning excludes the zero byte after the range");
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void test_invalid_ranges(void)
@@ -434,29 +434,29 @@ static void test_invalid_ranges(void)
         {1, 0}, {0, sizeof(text)}, {sizeof(text), sizeof(text)}, {0, SIZE_MAX},
         {SIZE_MAX, SIZE_MAX}
     };
-    RmdContext ctx;
-    RmdSource source = source_text(text, sizeof(text) - 1, 1);
-    RmdUnit *unit;
-    RmdUnit *previous;
+    CrustContext ctx;
+    CrustSource source = source_text(text, sizeof(text) - 1, 1);
+    CrustUnit *unit;
+    CrustUnit *previous;
     size_t index;
-    rmd_context_init(&ctx, NULL);
+    crust_context_init(&ctx, NULL);
     for (index = 0; index <= source.size; ++index) {
-        check(rmd_read_range(&ctx, &source, index, index, &unit) &&
+        check(crust_read_range(&ctx, &source, index, index, &unit) &&
               unit->declarations == NULL && unit->source == &source,
               "empty range accepts no source bytes");
     }
     previous = ctx.last_unit;
     for (index = 0; index < sizeof(invalid) / sizeof(invalid[0]); ++index) {
-        check(!rmd_read_range(&ctx, &source, invalid[index][0], invalid[index][1], &unit) &&
+        check(!crust_read_range(&ctx, &source, invalid[index][0], invalid[index][1], &unit) &&
               unit == NULL && ctx.last_unit == previous && previous->next == NULL &&
               ctx.failure == NULL && ctx.error_count == index + 1 &&
               ctx.error_loc.source == &source && ctx.error_loc.offset <= source.size &&
               strstr(ctx.error, "source range") != NULL,
               "invalid range is a diagnostic without a published unit");
     }
-    check(rmd_read_range(&ctx, &source, 1, 1, &unit) && previous->next == unit,
+    check(crust_read_range(&ctx, &source, 1, 1, &unit) && previous->next == unit,
           "reader accepts a valid range after range errors");
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void test_constructors(void)
@@ -471,21 +471,21 @@ static void test_constructors(void)
         "};"
         "fn f() -> unit { if make Flag { set: true }.set {}"
         " while make [bool; 1] { true }[0usize] { break; } }";
-    RmdContext ctx;
-    RmdSource source = source_text(text, sizeof(text) - 1, 1);
-    RmdUnit *unit;
-    RmdExpr *expr;
-    RmdInit *init;
-    RmdStmt *stmt;
-    rmd_context_init(&ctx, NULL);
-    if (!rmd_read(&ctx, &source, &unit)) {
+    CrustContext ctx;
+    CrustSource source = source_text(text, sizeof(text) - 1, 1);
+    CrustUnit *unit;
+    CrustExpr *expr;
+    CrustInit *init;
+    CrustStmt *stmt;
+    crust_context_init(&ctx, NULL);
+    if (!crust_read(&ctx, &source, &unit)) {
         check(false, "constructor fixture parses");
         fprintf(stderr, "%s\n", ctx.error);
-        rmd_context_destroy(&ctx);
+        crust_context_destroy(&ctx);
         return;
     }
     expr = unit->declarations->init;
-    check(expr->kind == RMD_E_RECORD && expr->syntax_type->kind == RMD_T_NAME &&
+    check(expr->kind == CRUST_E_RECORD && expr->syntax_type->kind == CRUST_T_NAME &&
           strcmp(expr->syntax_type->name->text, "Outer") == 0,
           "record constructor type");
     init = expr->inits;
@@ -493,25 +493,25 @@ static void test_constructors(void)
           strcmp(init->next->name->text, "left") == 0 && init->next->next == NULL,
           "record constructor preserves source field order");
     expr = init->value;
-    check(expr->kind == RMD_E_ARRAY && expr->arg_count == 2 &&
-          expr->syntax_type->kind == RMD_T_ARRAY && expr->syntax_type->count == 2 &&
+    check(expr->kind == CRUST_E_ARRAY && expr->arg_count == 2 &&
+          expr->syntax_type->kind == CRUST_T_ARRAY && expr->syntax_type->count == 2 &&
           strcmp(expr->syntax_type->base->name->text, "Pair") == 0,
           "array constructor type and elements");
     check(strcmp(expr->args[0]->inits->name->text, "second") == 0 &&
           expr->args[0]->inits->value->integer == 2 &&
           expr->args[1]->inits->value->integer == 3,
           "nested record construction preserves element and field order");
-    check(init->next->value->kind == RMD_E_ARRAY && init->next->value->arg_count == 0,
+    check(init->next->value->kind == CRUST_E_ARRAY && init->next->value->arg_count == 0,
           "empty constructor is retained for semantic checking");
     stmt = unit->declarations->next->body->body;
-    check(stmt->kind == RMD_S_IF && stmt->expr->kind == RMD_E_FIELD &&
-          stmt->expr->left->kind == RMD_E_RECORD && stmt->body->kind == RMD_S_BLOCK,
+    check(stmt->kind == CRUST_S_IF && stmt->expr->kind == CRUST_E_FIELD &&
+          stmt->expr->left->kind == CRUST_E_RECORD && stmt->body->kind == CRUST_S_BLOCK,
           "record constructor before condition block");
     stmt = stmt->next;
-    check(stmt->kind == RMD_S_WHILE && stmt->expr->kind == RMD_E_INDEX &&
-          stmt->expr->left->kind == RMD_E_ARRAY && stmt->body->kind == RMD_S_BLOCK,
+    check(stmt->kind == CRUST_S_WHILE && stmt->expr->kind == CRUST_E_INDEX &&
+          stmt->expr->left->kind == CRUST_E_ARRAY && stmt->body->kind == CRUST_S_BLOCK,
           "array constructor before condition block");
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
     SYNTAX("pointer constructor rejected", "const x: *R = make *R {};", false);
     SYNTAX("scalar constructor rejected", "const x: u8 = make u8 {};", false);
     SYNTAX("function constructor rejected", "const x: fn() -> unit = make fn() -> unit {};", false);
@@ -539,30 +539,30 @@ static void reject_release(void *user, void *allocation)
 
 static void test_limits(void)
 {
-    RmdAllocator allocator;
-    RmdContext ctx;
-    RmdSource source = source_text("", 0, 1);
-    RmdUnit *unit;
-    RmdAction action;
+    CrustAllocator allocator;
+    CrustContext ctx;
+    CrustSource source = source_text("", 0, 1);
+    CrustUnit *unit;
+    CrustAction action;
     char nested[512];
     size_t size = 0;
     unsigned index;
     allocator.user = NULL;
     allocator.allocate = reject_allocation;
     allocator.release = reject_release;
-    rmd_context_init(&ctx, &allocator);
-    check(!rmd_read(&ctx, &source, &unit) && unit == NULL && ctx.units == NULL &&
+    crust_context_init(&ctx, &allocator);
+    check(!crust_read(&ctx, &source, &unit) && unit == NULL && ctx.units == NULL &&
           ctx.failure == NULL && ctx.error_count == 1,
           "allocation failure is reported without a published unit");
-    check(rmd_read_one(&ctx, &source, 0, 0, &action) && action.end == 0 &&
+    check(crust_read_one(&ctx, &source, 0, 0, &action) && action.end == 0 &&
           action.declaration == NULL && action.statement == NULL,
           "action EOF needs no allocation");
     source = source_text("return 0i32;", sizeof("return 0i32;") - 1, 3);
-    check(!rmd_read_one(&ctx, &source, 0, source.size, &action) &&
+    check(!crust_read_one(&ctx, &source, 0, source.size, &action) &&
           action.declaration == NULL && action.statement == NULL && action.end == 0 &&
           ctx.failure == NULL && ctx.error_count == 2,
           "action allocation failure clears the result and restores the frame");
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
     memcpy(nested, "const x: i8 = ", 14);
     size = 14;
     for (index = 0; index < 300; ++index) nested[size++] = '-';
@@ -576,9 +576,9 @@ static void one_case(const char *name, const char *text, bool declaration, int k
     static const unsigned char tail[] = { 255, 0, '/' };
     char bytes[512];
     size_t size = strlen(text);
-    RmdContext ctx;
-    RmdSource source;
-    RmdAction action;
+    CrustContext ctx;
+    CrustSource source;
+    CrustAction action;
     if (size + sizeof(tail) > sizeof(bytes)) {
         check(false, "action fixture fits its storage");
         return;
@@ -586,8 +586,8 @@ static void one_case(const char *name, const char *text, bool declaration, int k
     memcpy(bytes, text, size);
     memcpy(bytes + size, tail, sizeof(tail));
     source = source_text(bytes, size + sizeof(tail), 91);
-    rmd_context_init(&ctx, NULL);
-    if (!rmd_read_one(&ctx, &source, 0, source.size, &action)) {
+    crust_context_init(&ctx, NULL);
+    if (!crust_read_one(&ctx, &source, 0, source.size, &action)) {
         check(false, name);
         fprintf(stderr, "diagnostic: %s\n", ctx.error);
         goto done;
@@ -600,12 +600,12 @@ static void one_case(const char *name, const char *text, bool declaration, int k
                        (int)action.statement->kind == kind, name);
     check(ctx.failure == NULL && ctx.error_count == 0,
           "action does not diagnose the unread bytes");
-    check(!rmd_read_one(&ctx, &source, action.end, source.size, &action) &&
+    check(!crust_read_one(&ctx, &source, action.end, source.size, &action) &&
           action.declaration == NULL && action.statement == NULL && action.end == 0 &&
           ctx.error_loc.offset == size && ctx.failure == NULL,
           "the next reader reports an invalid next action at its original offset");
 done:
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 static void test_read_one(void)
@@ -618,44 +618,44 @@ static void test_read_one(void)
     static const char stream[] =
         " // first\nrecord R { x: u8; } var x: i32 = 1i32;\n"
         "fn f() -> unit {} // tail\n";
-    RmdContext ctx;
-    RmdSource source;
-    RmdAction action;
-    RmdDecl *record;
+    CrustContext ctx;
+    CrustSource source;
+    CrustAction action;
+    CrustDecl *record;
     size_t cursor;
     size_t index;
-    one_case("stream record", "record R { x: u8; }", true, RMD_D_RECORD);
+    one_case("stream record", "record R { x: u8; }", true, CRUST_D_RECORD);
     one_case("stream function", "fn f() -> unit { if true {} while false {} }",
-              true, RMD_D_FUNCTION);
+              true, CRUST_D_FUNCTION);
     one_case("stream external function", "extern fn f() -> unit = \"f\";",
-              true, RMD_D_EXTERN);
-    one_case("stream constant", "const x: R = make R { x: 1u8 };", true, RMD_D_CONST);
+              true, CRUST_D_EXTERN);
+    one_case("stream constant", "const x: R = make R { x: 1u8 };", true, CRUST_D_CONST);
     one_case("stream variable", "var x: [u8; 1] = make [u8; 1] { 1u8 };",
-              false, RMD_S_VAR);
-    one_case("stream expression", "install();", false, RMD_S_EXPR);
-    one_case("stream assignment", "x = 2i32;", false, RMD_S_ASSIGN);
-    one_case("stream return", "return 7i32;", false, RMD_S_RETURN);
-    one_case("stream trap", "trap;", false, RMD_S_TRAP);
-    one_case("stream break syntax", "break;", false, RMD_S_BREAK);
-    one_case("stream continue syntax", "continue;", false, RMD_S_CONTINUE);
-    one_case("stream if without else", "if true { install(); };", false, RMD_S_IF);
+              false, CRUST_S_VAR);
+    one_case("stream expression", "install();", false, CRUST_S_EXPR);
+    one_case("stream assignment", "x = 2i32;", false, CRUST_S_ASSIGN);
+    one_case("stream return", "return 7i32;", false, CRUST_S_RETURN);
+    one_case("stream trap", "trap;", false, CRUST_S_TRAP);
+    one_case("stream break syntax", "break;", false, CRUST_S_BREAK);
+    one_case("stream continue syntax", "continue;", false, CRUST_S_CONTINUE);
+    one_case("stream if without else", "if true { install(); };", false, CRUST_S_IF);
     one_case("stream complete if else", "if true {} else { install(); };",
-              false, RMD_S_IF);
+              false, CRUST_S_IF);
     one_case("stream while", "while true { if false { break; } continue; };",
-              false, RMD_S_WHILE);
-    one_case("stream block", "{ if true {} { install(); } };", false, RMD_S_BLOCK);
+              false, CRUST_S_WHILE);
+    one_case("stream block", "{ if true {} { install(); } };", false, CRUST_S_BLOCK);
     for (index = 0; index < sizeof(invalid) / sizeof(invalid[0]); ++index) {
-        rmd_context_init(&ctx, NULL);
+        crust_context_init(&ctx, NULL);
         source = source_text(invalid[index], strlen(invalid[index]), 91);
-        check(!rmd_read_one(&ctx, &source, 0, source.size, &action) &&
+        check(!crust_read_one(&ctx, &source, 0, source.size, &action) &&
               action.declaration == NULL && action.statement == NULL && action.end == 0 &&
               ctx.failure == NULL && ctx.units == NULL,
               "incomplete root actions do not publish partial syntax");
-        rmd_context_destroy(&ctx);
+        crust_context_destroy(&ctx);
     }
-    rmd_context_init(&ctx, NULL);
+    crust_context_init(&ctx, NULL);
     source = source_text(stream, sizeof(stream) - 1, 91);
-    if (!rmd_read_one(&ctx, &source, 0, source.size, &action)) {
+    if (!crust_read_one(&ctx, &source, 0, source.size, &action)) {
         check(false, "first stream declaration parses");
         goto done;
     }
@@ -664,27 +664,27 @@ static void test_read_one(void)
           record->identity == record->loc.offset + 1,
           "stream declaration identity uses its source offset");
     cursor = action.end;
-    check(rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
-          action.statement != NULL && action.statement->kind == RMD_S_VAR,
+    check(crust_read_one(&ctx, &source, cursor, source.size, &action) &&
+          action.statement != NULL && action.statement->kind == CRUST_S_VAR,
           "later statements use the caller's cursor");
     cursor = action.end;
-    check(rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
+    check(crust_read_one(&ctx, &source, cursor, source.size, &action) &&
           action.declaration != NULL && action.declaration->identity > record->identity &&
           action.declaration->identity == action.declaration->loc.offset + 1,
           "later declarations have distinct identities in the same source");
     cursor = action.end;
-    check(cursor < source.size && rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
+    check(cursor < source.size && crust_read_one(&ctx, &source, cursor, source.size, &action) &&
           action.declaration == NULL && action.statement == NULL && action.end == source.size,
           "EOF consumes trailing trivia in the next action");
-    check(rmd_read_one(&ctx, &source, 5, 5, &action) && action.end == 5 &&
+    check(crust_read_one(&ctx, &source, 5, 5, &action) && action.end == 5 &&
           action.declaration == NULL && action.statement == NULL,
           "an empty range is EOF at its absolute offset");
-    check(!rmd_read_one(&ctx, &source, 2, 1, &action) && action.end == 0 &&
+    check(!crust_read_one(&ctx, &source, 2, 1, &action) && action.end == 0 &&
           ctx.error_loc.offset == 2, "action range rejects inverted bounds");
-    check(!rmd_read_one(&ctx, &source, 0, source.size + 1, &action) &&
+    check(!crust_read_one(&ctx, &source, 0, source.size + 1, &action) &&
           action.end == 0, "action range rejects an end past the source");
 done:
-    rmd_context_destroy(&ctx);
+    crust_context_destroy(&ctx);
 }
 
 int main(void)

@@ -1,0 +1,10 @@
+// Include api/crust0.crust and api/crust0_stage.crust before this consumer interface.
+
+// Require an empty initialized context and source storage live through its destruction.
+// Arguments are compiler options and extra source paths, without an executable name.
+// Complete the requested output and retain diagnostics in context without printing them.
+extern fn resource_program(request:*CrustBuild)->i32 = "resource_program";
+
+// Compile the source range from begin through EOF, print failures, and release its context.
+// Keep source storage and arguments live through the call. Return the process status.
+extern fn resource_build(source:*CrustSource, begin:usize, argc:i32, argv:**u8)->i32 = "resource_build";

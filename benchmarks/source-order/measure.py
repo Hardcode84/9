@@ -31,17 +31,17 @@ BASE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BASE)
 
 LIBRARY_SOURCES = [ROOT / path for path in (
-    "api/rmd0.rmd", "api/rmd0_host.rmd", "api/rmd0_stage.rmd",
-    "stages/c/model.rmd", "stages/c/base.rmd", "stages/c/types.rmd",
-    "stages/c/emit.rmd", "stages/c/driver.rmd", "stages/c/program.rmd")]
+    "api/crust0.crust", "api/crust0_host.crust", "api/crust0_stage.crust",
+    "stages/c/model.crust", "stages/c/base.crust", "stages/c/types.crust",
+    "stages/c/emit.crust", "stages/c/driver.crust", "stages/c/program.crust")]
 HOST_INTERFACES = [ROOT / path for path in (
-    "api/rmd0_stage.rmd", "stages/c/api.rmd", "stages/c/build.rmd")]
+    "api/crust0_stage.crust", "stages/c/api.crust", "stages/c/build.crust")]
 C_FLAGS = ["-std=c99", "-pedantic-errors", "-O2", "-g0",
            "-fstack-clash-protection", "-Wno-overlength-strings"]
 SYNTAX_FLAGS = ["-std=c99", "-pedantic-errors", "-O0", "-g0", "-fsyntax-only"]
 ENDPOINTS = {
-    "source-order-c-output": "Fresh rmd process: installed prelude read/check, root source-order read/check/evaluation, host inputs, dlopen/dlsym/libffi calls, target frontend, complete C and rename output, and cleanup; no target GCC",
-    "prepared-c-output": "Fresh prepared rmd-c process: target frontend and complete C and rename output; no host-entry preparation or target GCC",
+    "source-order-c-output": "Fresh crust process: installed prelude read/check, root source-order read/check/evaluation, host inputs, dlopen/dlsym/libffi calls, target frontend, complete C and rename output, and cleanup; no target GCC",
+    "prepared-c-output": "Fresh prepared crust-c process: target frontend and complete C and rename output; no host-entry preparation or target GCC",
     "gcc-original-syntax": "Fresh GCC process: preprocessing, parsing, and semantic checks on the matched original C source",
 }
 COMPARISONS = {
@@ -69,7 +69,7 @@ def checked(command, stdout=subprocess.PIPE):
 def source_hashes():
     paths = [ROOT / "Makefile", ROOT / "tools/api.py", ROOT / "tools/prelude.py", BASE_PATH, Path(__file__).resolve()]
     for directory, pattern in (("src", "*.c"), ("src", "*.h"), ("include", "*.h"),
-                               ("runtime", "*.c"), ("api", "*.rmd"), ("stages", "*.rmd"), ("stages/c", "*.rmd")):
+                               ("runtime", "*.c"), ("api", "*.crust"), ("stages", "*.crust"), ("stages/c", "*.crust")):
         paths.extend(sorted((ROOT / directory).glob(pattern)))
     return {str(path.relative_to(ROOT)): BASE.sha256(path) for path in paths}
 
@@ -81,7 +81,7 @@ def artifact_info(path, dynamic=False):
     return result
 
 
-def rmd_string(path):
+def crust_string(path):
     result = []
     for byte in os.fsencode(path):
         if byte in (34, 92):
@@ -94,9 +94,9 @@ def rmd_string(path):
 
 
 def staged_source(target, output, native_library):
-    lines = [f"host_source(run, {rmd_string(os.path.relpath(path, output.parent))});" for path in HOST_INTERFACES]
-    lines.extend((f"host_link(run, {rmd_string(os.path.relpath(native_library, output.parent))});",
-                  f"var target: *RmdSource = host_input(run, {rmd_string(os.path.relpath(target, output.parent))}, 1u64);",
+    lines = [f"host_source(run, {crust_string(os.path.relpath(path, output.parent))});" for path in HOST_INTERFACES]
+    lines.extend((f"host_link(run, {crust_string(os.path.relpath(native_library, output.parent))});",
+                  f"var target: *CrustSource = host_input(run, {crust_string(os.path.relpath(target, output.parent))}, 1u64);",
                   "return c_build(target, 0usize, (*run).argc, (*run).argv);", ""))
     program = "\n".join(lines).encode("ascii")
     output.write_bytes(program)
@@ -105,13 +105,13 @@ def staged_source(target, output, native_library):
 
 def workloads_in(directory, native_library):
     workloads = [BASE.generate(directory, count) for count in (1000, 8000)]
-    intrusive = ROOT / "examples/intrusive/program.rmd"
+    intrusive = ROOT / "examples/intrusive/program.crust"
     workloads.append({"name": "intrusive", "library": False,
                       "functions": len(re.findall(r"^fn ", intrusive.read_text(), re.M)),
-                      "paths": {"rmd": intrusive, "c": ROOT / "benchmarks/bootstrap/intrusive.c"}})
+                      "paths": {"crust": intrusive, "c": ROOT / "benchmarks/bootstrap/intrusive.c"}})
     for workload in workloads:
-        staged = directory / f"{workload['name']}-staged.rmd"
-        workload["root_source_bytes"] = staged_source(workload["paths"]["rmd"], staged, native_library)
+        staged = directory / f"{workload['name']}-staged.crust"
+        workload["root_source_bytes"] = staged_source(workload["paths"]["crust"], staged, native_library)
         workload["paths"]["staged"] = staged
     return workloads
 
@@ -122,7 +122,7 @@ def output_command(workload, binaries, route, response):
         return [str(binaries["launcher"]), str(workload["paths"]["staged"]),
                 *options, "--emit-c", "--symbols", str(response)]
     return [str(binaries["prepared"]), *options, "--emit-c", "--symbols", str(response),
-            str(workload["paths"]["rmd"])]
+            str(workload["paths"]["crust"])]
 
 
 def syntax_command(path, original_intrusive=False):
@@ -164,9 +164,9 @@ def preflight(workload, binaries, directory, build):
         witness_commands = [
             ["gcc", *C_FLAGS, "-c", str(c_path), "-o", str(raw)],
             ["objcopy", "@" + str(response), str(raw), str(renamed)],
-            ["gcc", "-no-pie", str(renamed), str(build / "librmd0_host.a"), "-o", str(executable)],
+            ["gcc", "-no-pie", str(renamed), str(build / "libcrust0_host.a"), "-o", str(executable)],
             ["gcc", *C_FLAGS, "-I" + str(ROOT / "include"), str(workload["paths"]["c"]),
-             str(build / "librmd0_host.a"), "-no-pie", "-o", str(reference)],
+             str(build / "libcrust0_host.a"), "-no-pie", "-o", str(reference)],
         ]
         for command in witness_commands:
             checked(command)
@@ -174,12 +174,12 @@ def preflight(workload, binaries, directory, build):
             if checked([str(path)]) != b"intrusive: ok\n":
                 raise RuntimeError(f"Intrusive executable witness failed: {path}")
         symbols = checked(["nm", str(executable)])
-        forbidden = re.findall(rb"\b(?:rmd_[A-Za-z0-9_]*|c_program|c_backend_build)\b", symbols)
+        forbidden = re.findall(rb"\b(?:crust_[A-Za-z0-9_]*|c_program|c_backend_build)\b", symbols)
         if forbidden:
             raise RuntimeError(f"Host compiler symbols reached the target executable: {forbidden}")
         dynamic = checked(["readelf", "-dW", str(executable)])
         needed = re.findall(rb"\(NEEDED\).*Shared library: \[([^]]+)\]", dynamic)
-        if any(b"rmd" in name for name in needed):
+        if any(b"crust" in name for name in needed):
             raise RuntimeError("The target executable depends on a compiler library")
         witness = {"commands": witness_commands, "source_order_and_reference_stdout": "intrusive: ok\n",
                    "target_executable": artifact_info(executable), "reference_executable": artifact_info(reference),
@@ -200,7 +200,7 @@ def prepare_library(build, directory):
     object_path = directory / "changed-library.o"
     library_path = directory / "changed-library.so"
     commands = [
-        ("all-library-RMD-to-object", [str(build / "rmd-c"), "--library", "--object",
+        ("all-library-CRUST-to-object", [str(build / "crust-c"), "--library", "--object",
             "--export", "c_backend_build", "--export", "c_program", "--cflag=-fPIC",
             "--cflag=-fno-semantic-interposition",
             "-o", str(object_path), *map(str, LIBRARY_SOURCES)]),
@@ -219,7 +219,7 @@ def prepare_library(build, directory):
             "commands": observations, "observed_total_wall_ns": sum(row["wall_ns"] for row in observations),
             "sources": [file_info(path) for path in LIBRARY_SOURCES],
             "object": artifact_info(object_path), "library": artifact_info(library_path, dynamic=True),
-            "scope": "Read/check/lower all library RMD sources, emit C, GCC -O2 -fPIC -fno-semantic-interposition compilation, objcopy renaming, and shared linking; installed rmd-c and system tools are inputs",
+            "scope": "Read/check/lower all library CRUST sources, emit C, GCC -O2 -fPIC -fno-semantic-interposition compilation, objcopy renaming, and shared linking; installed crust-c and system tools are inputs",
             "included_in_frontend_samples": False,
             "used_as_measured_native_input": False,
             "reason": "A separate output measures a complete source-library rebuild without changing the installed input library"}
@@ -321,8 +321,8 @@ def main():
     if args.cpu not in os.sched_getaffinity(0):
         parser.error("The selected CPU is outside the allowed affinity set")
     build = args.build_dir.resolve()
-    binaries = {"launcher": build / "rmd", "prepared": build / "rmd-c",
-                "native-library": build / "rmd-c-library.so", "host-runtime": build / "librmd0_host.a"}
+    binaries = {"launcher": build / "crust", "prepared": build / "crust-c",
+                "native-library": build / "crust-c-library.so", "host-runtime": build / "libcrust0_host.a"}
     for path in binaries.values():
         if not path.is_file():
             parser.error(f"Missing prepared input: {path}; build outside this measurement")
@@ -355,7 +355,7 @@ def main():
             "timing": "perf_counter_ns around fresh process launch and completion; includes all child processes and cleanup",
             "outputs": "Complete C stdout and rename text go to DEVNULL; preflight preserves and compares both streams",
             "cold_source_order": "Each invocation reads/checks the installed prelude and root, executes ordinary host code, loads the explicit native library, and runs the target frontend; no prepared-root cache or per-action as/ld",
-            "prepared_inputs": "Launcher, rmd-c, explicit native backend library, host runtime, and system tools already exist",
+            "prepared_inputs": "Launcher, crust-c, explicit native backend library, host runtime, and system tools already exist",
             "library_preparation": "Optional separate single rebuild observation; excluded from frontend samples and not combined with their confidence intervals",
             "excluded": "Workload generation, preflight, installed compiler construction, and final target GCC/objcopy/link execution",
             "generated_c_syntax": "Untimed preflight validation only; target GCC parsing, compilation, and linking are excluded from measurements",

@@ -25,12 +25,12 @@ import time
 ENDPOINTS = {
     "gcc-syntax": "GCC C99 parsing and semantic checks; -fsyntax-only",
     "clang-syntax": "Clang C99 parsing and semantic checks; -fsyntax-only",
-    "rmd-check": "RMD reader, declaration collection, type resolution, body checking",
-    "rmd-prepare": "RMD check plus native link validation and frame/value planning; source AST operations remain",
-    "rmd-assembly": "RMD check, preparation, lowering, and complete textual assembly emitted to stdout; stdout goes to DEVNULL",
+    "crust-check": "CRUST reader, declaration collection, type resolution, body checking",
+    "crust-prepare": "CRUST check plus native link validation and frame/value planning; source AST operations remain",
+    "crust-assembly": "CRUST check, preparation, lowering, and complete textual assembly emitted to stdout; stdout goes to DEVNULL",
 }
 C_CASES = ("gcc-syntax", "clang-syntax")
-RMD_CASES = ("rmd-check", "rmd-prepare", "rmd-assembly")
+CRUST_CASES = ("crust-check", "crust-prepare", "crust-assembly")
 ENV = {"PATH": os.environ["PATH"], "LC_ALL": "C", "LANG": "C", "TZ": "UTC"}
 
 
@@ -80,7 +80,7 @@ def generate(directory, count):
     stem = directory / f"ordinary-{count}"
     c = ["typedef unsigned long u64;\ntypedef struct Node Node;\n"
          "struct Node { u64 value; u64 salt; Node *next; };\n"]
-    rmd = ["record Node { value: u64; salt: u64; next: *Node; }\n"]
+    crust = ["record Node { value: u64; salt: u64; next: *Node; }\n"]
     for index in range(count):
         literal = (index * 53) % 4093 + 1
         name = f"work_{index:05d}"
@@ -94,7 +94,7 @@ def generate(directory, count):
             "    }\n"
             "    node->value = y;\n"
             "    return y + x;\n}\n")
-        rmd.append(
+        crust.append(
             f"fn {name}(node: *Node, x: u64) -> u64 {{\n"
             f"    var y: u64 = (x + {literal}u64) ^ (*node).value;\n"
             "    if y < (*node).salt {\n"
@@ -104,9 +104,9 @@ def generate(directory, count):
             "    }\n"
             "    (*node).value = y;\n"
             "    return y + x;\n}\n")
-    paths = {"c": stem.with_suffix(".c"), "rmd": stem.with_suffix(".rmd")}
+    paths = {"c": stem.with_suffix(".c"), "crust": stem.with_suffix(".crust")}
     paths["c"].write_text("".join(c))
-    paths["rmd"].write_text("".join(rmd))
+    paths["crust"].write_text("".join(crust))
     return {"name": f"ordinary-{count}", "functions": count, "paths": paths,
             "library": True, "expected_assembly_functions": count}
 
@@ -120,9 +120,9 @@ def commands(workload, compiler):
                          "-fsyntax-only", *include, str(workload["paths"]["c"])],
     }
     library = ["--library"] if workload["library"] else []
-    for name, option in (("rmd-check", "--check"), ("rmd-prepare", "--prepare"),
-                         ("rmd-assembly", "-S")):
-        result[name] = [str(compiler), *library, option, str(workload["paths"]["rmd"])]
+    for name, option in (("crust-check", "--check"), ("crust-prepare", "--prepare"),
+                         ("crust-assembly", "-S")):
+        result[name] = [str(compiler), *library, option, str(workload["paths"]["crust"])]
     return result
 
 
@@ -236,7 +236,7 @@ def summarize(samples, workloads, count, draws, seed):
         medians = {case: statistics.median(row[case] for row in rounds) for case in ENDPOINTS}
         fastest = min(C_CASES, key=medians.get)
         comparisons = {}
-        for endpoint in RMD_CASES:
+        for endpoint in CRUST_CASES:
             rng = random.Random(f"{seed}:{name}:{endpoint}")
             ratios = []
             fastest_draws = {case: 0 for case in C_CASES}
@@ -251,7 +251,7 @@ def summarize(samples, workloads, count, draws, seed):
             ratios.sort()
             interval = [percentile(ratios, .025), percentile(ratios, .975)]
             comparisons[endpoint] = {
-                "rmd_over_fastest_c_median_ratio": medians[endpoint] / medians[fastest],
+                "crust_over_fastest_c_median_ratio": medians[endpoint] / medians[fastest],
                 "paired_bootstrap_percentile_95_ci": interval,
                 "fastest_c_observed": fastest, "fastest_c_bootstrap_selections": fastest_draws,
                 "upper_ci_at_most_one": interval[1] <= 1,
@@ -267,7 +267,7 @@ def summarize(samples, workloads, count, draws, seed):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--compiler", type=Path, default=Path("build/perf/rmd0"))
+    parser.add_argument("--compiler", type=Path, default=Path("build/perf/crust0"))
     parser.add_argument("--inputs", type=Path, default=Path(".profile-cache/bootstrap-inputs"))
     parser.add_argument("--samples", type=int, default=25)
     parser.add_argument("--bootstrap-draws", type=int, default=10000)
@@ -278,8 +278,8 @@ def main():
         relative(path)
     if args.samples < 20 or args.bootstrap_draws < 1000:
         parser.error("Use at least 20 samples and 1000 bootstrap draws")
-    if args.compiler.name != "rmd0":
-        parser.error("The isolated Makefile build must use an rmd0 executable")
+    if args.compiler.name != "crust0":
+        parser.error("The isolated Makefile build must use an crust0 executable")
     if args.output.exists():
         parser.error("The output JSON already exists; select a new path")
     if args.cpu not in os.sched_getaffinity(0):
@@ -288,9 +288,9 @@ def main():
         parser.error("This experiment requires the Linux x86-64 execution profile")
     os.sched_setaffinity(0, {args.cpu})
     workloads = [generate(args.inputs, count) for count in (1000, 8000)]
-    witness_source = Path("examples/intrusive/program.rmd")
+    witness_source = Path("examples/intrusive/program.crust")
     workloads.append({"name": "intrusive", "functions": len(re.findall(r"^fn ", witness_source.read_text(), re.M)),
-                      "paths": {"c": Path("benchmarks/bootstrap/intrusive.c"), "rmd": witness_source},
+                      "paths": {"c": Path("benchmarks/bootstrap/intrusive.c"), "crust": witness_source},
                       "library": False,
                       "expected_assembly_functions": len(re.findall(r"^fn ", witness_source.read_text(), re.M)) + 1})
     build = ["make", "-B", "-j1", f"BUILD={args.compiler.parent}", "CC=gcc", "CFLAGS=-O2 -g0", "all"]
@@ -312,7 +312,7 @@ def main():
             raise RuntimeError(f"Unexpected executable witness output: {output!r}")
         witness_runs[name] = output
     toolchains = {name: tool_info(command) for name, command in
-                  (("gcc", "gcc"), ("clang", "clang-20"), ("rmd", str(args.compiler)))}
+                  (("gcc", "gcc"), ("clang", "clang-20"), ("crust", str(args.compiler)))}
     cc1 = capture(["gcc", "-print-prog-name=cc1"])
     toolchains["gcc"]["cc1"] = binary_info(cc1)
     toolchains["gcc"]["cc1"]["shared_libraries"] = shared_libraries(cc1)
@@ -331,7 +331,7 @@ def main():
                                                       for case in C_CASES}}
         path = args.inputs / (name + ".s")
         with path.open("wb") as output:
-            process = run_process(selected[name]["rmd-assembly"], stdout=output,
+            process = run_process(selected[name]["crust-assembly"], stdout=output,
                                   stderr=subprocess.PIPE)
         if process.returncode != 0 or process.stderr:
             raise RuntimeError(f"Assembly preflight failed for {name}: {process.stderr!r}")
@@ -362,7 +362,7 @@ def main():
                    "scope": "ordinary generated functions and the direct intrusive witness; no SQLite, self-host, or checked-language speed claim",
                    "handoff": "--prepare retains source AST operations and is not full backend handoff; full assembly is a conservative upper bound that includes lowering and emission"},
         "build": {"command": build, "wall_ns": build_ns, "stdout_sha256": hashlib.sha256(build_output.encode()).hexdigest(),
-                  "source_sha256": source_hashes, "compiler_binary": toolchains["rmd"],
+                  "source_sha256": source_hashes, "compiler_binary": toolchains["crust"],
                   "stage_preparation_in_frontend_samples": False},
         "script_sha256": script_hash, "toolchains": toolchains,
         "endpoints": ENDPOINTS, "commands": selected, "inputs": input_info,
@@ -395,7 +395,7 @@ def main():
         for kind, path in workload["paths"].items():
             if sha256(path) != input_info[workload["name"]]["sources"][kind]["sha256"]:
                 raise RuntimeError("Workload source changed during the experiment")
-    for name, command in (("gcc", "gcc"), ("clang", "clang-20"), ("rmd", str(args.compiler))):
+    for name, command in (("gcc", "gcc"), ("clang", "clang-20"), ("crust", str(args.compiler))):
         current = tool_info(command)
         if current["sha256"] != toolchains[name]["sha256"] or current["shared_libraries"] != toolchains[name]["shared_libraries"]:
             raise RuntimeError("Compiler binary changed during the experiment")

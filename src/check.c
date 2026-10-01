@@ -33,7 +33,7 @@ typedef struct {
 
 typedef struct {
     RmdContext *ctx;
-    RmdDecl *function;
+    RmdType *return_type;
     RmdMap locals;
     RmdSymbol *scope;
     unsigned loop_depth;
@@ -850,52 +850,64 @@ static void resolve_declaration(RmdContext *ctx, RmdDecl *decl, unsigned depth)
     decl->resolve_state = 2;
 }
 
-static void collect_impl(RmdContext *ctx)
+static void collect_unit_impl(RmdContext *ctx, RmdUnit *unit)
 {
-    RmdUnit *unit;
     RmdDecl *decl;
-    uint64_t ordinal;
-    for (unit = ctx->units; unit != NULL; unit = unit->next) {
-        ordinal = 0;
-        for (decl = unit->declarations; decl != NULL; decl = decl->next) {
-            RmdSymbol *old;
-            Identity *entry;
-            if (ordinal == UINT64_MAX)
-                rmd_fail(ctx, decl->loc, "too many declarations");
-            ++ordinal;
-            old = rmd_map_get(&ctx->globals, (uintptr_t)decl->name);
-            if (old != NULL) {
-                if (old == decl->symbol && old->decl == decl)
-                    continue;
-                rmd_fail(ctx, decl->loc, "duplicate name '%s'", decl->name->text);
-                return;
-            }
-            if (decl->identity == 0) {
-                decl->unit_identity = unit->source->identity;
-                decl->identity = ordinal;
-            }
-            entry = identity_find(&ctx->identities, decl);
-            if (entry != NULL && entry->decl != decl)
-                rmd_fail(ctx, decl->loc, "distinct declarations share one identity");
-            if (entry == NULL) {
-                entry = rmd_alloc(ctx, sizeof(*entry), RMD_ALIGNOF(Identity));
-                entry->decl = decl;
-                identity_insert(ctx, &ctx->identities, entry);
-            }
-            decl->symbol = new_symbol(ctx, decl->name, declaration_kind(decl),
-                                      decl->loc);
-            decl->symbol->decl = decl;
-            if (decl->kind == RMD_D_RECORD) {
-                decl->type = new_type(ctx, RMD_T_RECORD);
-                decl->type->record_decl = decl;
-                decl->symbol->type = decl->type;
-            }
-            rmd_map_set(ctx, &ctx->globals, (uintptr_t)decl->name, decl->symbol);
+    uint64_t ordinal = 0;
+    for (decl = unit->declarations; decl != NULL; decl = decl->next) {
+        RmdSymbol *old;
+        Identity *entry;
+        if (ordinal == UINT64_MAX)
+            rmd_fail(ctx, decl->loc, "too many declarations");
+        ++ordinal;
+        old = rmd_map_get(&ctx->globals, (uintptr_t)decl->name);
+        if (old != NULL) {
+            if (old == decl->symbol && old->decl == decl)
+                continue;
+            rmd_fail(ctx, decl->loc, "duplicate name '%s'", decl->name->text);
+            return;
         }
+        if (decl->identity == 0) {
+            decl->unit_identity = unit->source->identity;
+            decl->identity = ordinal;
+        }
+        entry = identity_find(&ctx->identities, decl);
+        if (entry != NULL && entry->decl != decl)
+            rmd_fail(ctx, decl->loc, "distinct declarations share one identity");
+        if (entry == NULL) {
+            entry = rmd_alloc(ctx, sizeof(*entry), RMD_ALIGNOF(Identity));
+            entry->decl = decl;
+            identity_insert(ctx, &ctx->identities, entry);
+        }
+        decl->symbol = new_symbol(ctx, decl->name, declaration_kind(decl),
+                                  decl->loc);
+        decl->symbol->decl = decl;
+        if (decl->kind == RMD_D_RECORD) {
+            decl->type = new_type(ctx, RMD_T_RECORD);
+            decl->type->record_decl = decl;
+            decl->symbol->type = decl->type;
+        }
+        rmd_map_set(ctx, &ctx->globals, (uintptr_t)decl->name, decl->symbol);
     }
 }
 
 bool rmd_collect(RmdContext *ctx)
+{
+    RmdFailureFrame frame;
+    RmdUnit *unit;
+    frame.previous = ctx->failure;
+    ctx->failure = &frame;
+    if (setjmp(frame.jump) != 0) {
+        ctx->failure = frame.previous;
+        return false;
+    }
+    for (unit = ctx->units; unit != NULL; unit = unit->next)
+        collect_unit_impl(ctx, unit);
+    ctx->failure = frame.previous;
+    return true;
+}
+
+bool rmd_collect_unit(RmdContext *ctx, RmdUnit *unit_value)
 {
     RmdFailureFrame frame;
     frame.previous = ctx->failure;
@@ -904,7 +916,7 @@ bool rmd_collect(RmdContext *ctx)
         ctx->failure = frame.previous;
         return false;
     }
-    collect_impl(ctx);
+    collect_unit_impl(ctx, unit_value);
     ctx->failure = frame.previous;
     return true;
 }
@@ -975,32 +987,56 @@ bool rmd_bind(RmdContext *ctx, RmdName *name, RmdDecl *decl)
     return true;
 }
 
+static void resolve_unit_declarations(RmdContext *ctx, RmdUnit *unit)
+{
+    RmdDecl *decl;
+    for (decl = unit->declarations; decl != NULL; decl = decl->next) {
+        if (decl->symbol == NULL)
+            rmd_fail(ctx, decl->loc, "declarations must be collected before resolution");
+        resolve_declaration(ctx, decl, 0);
+    }
+}
+
+static void finish_unit_types(RmdContext *ctx, RmdUnit *unit)
+{
+    RmdDecl *decl;
+    RmdField *field;
+    for (decl = unit->declarations; decl != NULL; decl = decl->next) {
+        finish_components(ctx, decl->type, decl->loc, 0);
+        for (field = decl->fields; field != NULL; field = field->next)
+            finish_components(ctx, field->type, field->loc, 0);
+    }
+}
+
 bool rmd_resolve(RmdContext *ctx)
 {
     RmdFailureFrame frame;
     RmdUnit *unit;
-    RmdDecl *decl;
-    RmdField *field;
     frame.previous = ctx->failure;
     ctx->failure = &frame;
     if (setjmp(frame.jump) != 0) {
         ctx->failure = frame.previous;
         return false;
     }
-    for (unit = ctx->units; unit != NULL; unit = unit->next) {
-        for (decl = unit->declarations; decl != NULL; decl = decl->next) {
-            if (decl->symbol == NULL)
-                rmd_fail(ctx, decl->loc, "declarations must be collected before resolution");
-            resolve_declaration(ctx, decl, 0);
-        }
+    for (unit = ctx->units; unit != NULL; unit = unit->next)
+        resolve_unit_declarations(ctx, unit);
+    for (unit = ctx->units; unit != NULL; unit = unit->next)
+        finish_unit_types(ctx, unit);
+    ctx->failure = frame.previous;
+    return true;
+}
+
+bool rmd_resolve_unit(RmdContext *ctx, RmdUnit *unit_value)
+{
+    RmdFailureFrame frame;
+    frame.previous = ctx->failure;
+    ctx->failure = &frame;
+    if (setjmp(frame.jump) != 0) {
+        ctx->failure = frame.previous;
+        return false;
     }
-    for (unit = ctx->units; unit != NULL; unit = unit->next) {
-        for (decl = unit->declarations; decl != NULL; decl = decl->next) {
-            finish_components(ctx, decl->type, decl->loc, 0);
-            for (field = decl->fields; field != NULL; field = field->next)
-                finish_components(ctx, field->type, field->loc, 0);
-        }
-    }
+    resolve_unit_declarations(ctx, unit_value);
+    finish_unit_types(ctx, unit_value);
     ctx->failure = frame.previous;
     return true;
 }
@@ -1344,7 +1380,7 @@ static bool check_stmt_impl(Checker *checker, RmdStmt *stmt)
             rmd_fail(ctx, stmt->loc, "loop exit used outside a loop");
         return false;
     case RMD_S_RETURN:
-        type = checker->function->type->base;
+        type = checker->return_type;
         if (stmt->expr == NULL) {
             if (type->kind != RMD_T_UNIT)
                 rmd_fail(ctx, stmt->loc, "return requires a value");
@@ -1400,7 +1436,7 @@ static void check_body_impl(RmdContext *ctx, RmdDecl *function)
         rmd_fail(ctx, no_location(), "body checking requires a resolved function");
     memset(&checker, 0, sizeof(checker));
     checker.ctx = ctx;
-    checker.function = function;
+    checker.return_type = function->type->base;
     function->checked = false;
     for (param = function->params; param != NULL; param = param->next)
         param->symbol = add_local(&checker, param->name, param->type,
@@ -1425,25 +1461,65 @@ bool rmd_check_body(RmdContext *ctx, RmdDecl *function)
     return true;
 }
 
+static void check_unit_impl(RmdContext *ctx, RmdUnit *unit)
+{
+    RmdDecl *decl;
+    for (decl = unit->declarations; decl != NULL; decl = decl->next) {
+        if (decl->kind == RMD_D_CONST)
+            check_constant(ctx, decl);
+        if (decl->kind == RMD_D_FUNCTION)
+            check_body_impl(ctx, decl);
+    }
+}
+
 bool rmd_check(RmdContext *ctx)
 {
     RmdFailureFrame frame;
     RmdUnit *unit;
-    RmdDecl *decl;
     frame.previous = ctx->failure;
     ctx->failure = &frame;
     if (setjmp(frame.jump) != 0) {
         ctx->failure = frame.previous;
         return false;
     }
-    for (unit = ctx->units; unit != NULL; unit = unit->next) {
-        for (decl = unit->declarations; decl != NULL; decl = decl->next) {
-            if (decl->kind == RMD_D_CONST)
-                check_constant(ctx, decl);
-            if (decl->kind == RMD_D_FUNCTION)
-                check_body_impl(ctx, decl);
-        }
+    for (unit = ctx->units; unit != NULL; unit = unit->next)
+        check_unit_impl(ctx, unit);
+    ctx->failure = frame.previous;
+    return true;
+}
+
+bool rmd_check_unit(RmdContext *ctx, RmdUnit *unit_value)
+{
+    RmdFailureFrame frame;
+    frame.previous = ctx->failure;
+    ctx->failure = &frame;
+    if (setjmp(frame.jump) != 0) {
+        ctx->failure = frame.previous;
+        return false;
     }
+    check_unit_impl(ctx, unit_value);
+    ctx->failure = frame.previous;
+    return true;
+}
+
+bool rmd_check_root(RmdContext *ctx, RmdRootScope *scope, RmdStmt *statement)
+{
+    RmdFailureFrame frame;
+    Checker checker;
+    frame.previous = ctx->failure;
+    ctx->failure = &frame;
+    if (setjmp(frame.jump) != 0) {
+        ctx->failure = frame.previous;
+        return false;
+    }
+    memset(&checker, 0, sizeof(checker));
+    checker.ctx = ctx;
+    checker.return_type = &ctx->builtins[RMD_T_I32];
+    checker.locals = scope->locals;
+    checker.scope = scope->scope;
+    (void)check_stmt(&checker, statement);
+    scope->locals = checker.locals;
+    scope->scope = checker.scope;
     ctx->failure = frame.previous;
     return true;
 }

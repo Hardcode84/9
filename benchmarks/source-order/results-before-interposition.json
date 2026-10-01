@@ -1,0 +1,3035 @@
+{
+  "schema": 1,
+  "status": "complete",
+  "environment": {
+    "utc": "2026-10-01T09:52:10Z",
+    "cpu_model": "AMD Ryzen Threadripper PRO 7995WX 96-Cores",
+    "logical_cpus": 192,
+    "pinned_cpu": 4,
+    "smt_siblings": {
+      "value": "4,100"
+    },
+    "governor": {
+      "value": "performance"
+    },
+    "kernel": "7.0.0-28-generic",
+    "machine": "x86_64",
+    "os_release": "PRETTY_NAME=\"Ubuntu 24.04.2 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.2 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+    "memory_kib": 527581144,
+    "load_start": [
+      "0.28",
+      "0.35",
+      "0.30"
+    ],
+    "cpu_reserved": false,
+    "frequency_control": "governor recorded; frequency and turbo are not fixed",
+    "python": "3.12.11",
+    "child_environment": {
+      "LC_ALL": "C",
+      "LANG": "C",
+      "TZ": "UTC",
+      "PATH": "inherited for executable lookup; all other variables omitted",
+      "TMPDIR": "@REPO@/.profile-cache/source-orders-gt09qmo8/temporary"
+    },
+    "load_end": [
+      "0.60",
+      "0.42",
+      "0.33"
+    ]
+  },
+  "measurement_command": [
+    "@PYTHON@",
+    "benchmarks/source-order/measure.py",
+    "--build-dir",
+    "build",
+    "--rounds",
+    "25",
+    "--warmup",
+    "1",
+    "--cpu",
+    "4",
+    "--prepare-library",
+    "--output",
+    ".profile-cache/source-order-final.json"
+  ],
+  "source_sha256": {
+    "Makefile": "2a49bbfb80acbab304e523d0270aa07e8d98e16447ae0244937841c00b2a69db",
+    "tools/api.py": "d395d18025d73156d319113b6cc491f9d088751caed23e572d868007030b3af1",
+    "tools/prelude.py": "eeb10f2f50eccd7811e522668f2a5a4fb92fd992eab2e1229fe10dfb615c4bec",
+    "benchmarks/bootstrap/measure.py": "224c7a7b5fd8844137bbc813a48ca8df4939a4fd3e0770c278b0264ccfc24a22",
+    "benchmarks/source-order/measure.py": "564caa5a9800705309af57b9ed6c626cf5e172ff3c213a44c3b1d7e021e94c05",
+    "src/check.c": "b1acb64ea46b1f5333892b368cac4a140f87215210f722fc167f9236fb5a2375",
+    "src/core.c": "791e173b7ae415b09c648e969fcc89310bde217d6514ed3b42a50757f84d385b",
+    "src/driver.c": "d389da25e3854658c4e8626b9cefb3726725a4fb3f2119cfc9c499c6af0d35e4",
+    "src/eval.c": "544bc83da94a1dd4321eed62b62f00a9c352c7a1d90958a6eb056c511318ef91",
+    "src/read.c": "93c19445afe17cadb289cd97522f5a70282403424916b94eb0ed096d9cea0016",
+    "src/run.c": "80b1f0bc18977707febc0870432defffd75dce8104f22945773a313577805418",
+    "src/run_main.c": "6175a8e24aee85946685d0bbd99b0b2dbf6eb871b30baebe18f42cc9a75bfb22",
+    "src/x64.c": "0b7dcfe6360136f12e5e599f7f1c3b843e94b15ab21785d35d295febd9fe21b8",
+    "include/rmd0.h": "3106e749b6ea68dc7276989954039860ea99805ad848694ddb895c478a46af85",
+    "include/rmd0_eval.h": "e2bde708e9de9e17c762a88a0ed39124ae5977c18f6c82d25d01f4254cbfdd8b",
+    "include/rmd0_host.h": "ed7d76ac9cbeaa59874e44ce0ba834b1431b5960e9112a4cffe063c0d15413b2",
+    "include/rmd0_run.h": "69f0967c959339956f3bb20e9fa52df38adaf2d7c1e2166a348570730630760f",
+    "include/rmd0_stage.h": "200df338d52d66dbe2900e83532c016694513e5d9cdba5ee897649e3567490a0",
+    "include/rmd0_x64.h": "5b6e2cc828e09932461b79993bf971a3ac0511d4c5f43f3c4e5d997536535eea",
+    "runtime/host.c": "152820a4bf903850c8defd28dc73eec3da66292b06465d42f9e638c6d96ce251",
+    "api/rmd0.rmd": "5e7ae5660cda6a65bd0e950e386698c5e379b5a6b786bbc95d568dcb5988c26a",
+    "api/rmd0_eval.rmd": "8eb603882edec262265c30783b9011c7fe2eddce5b80c5eead59844f1d6f7296",
+    "api/rmd0_host.rmd": "2cce512ac1ebf0a1270e3f0a49904681cd360c61aeff74f6c39b0efa3b8d2c69",
+    "api/rmd0_run.rmd": "a17f11ffecad7a415efcf5893d74a2d3d6577801c764ffda92dd5f6c0224bcd7",
+    "api/rmd0_stage.rmd": "f8adc0ccce988caa7dd9b892ec1a88506aec0c96ed27a921596d94a1cf8f7d00",
+    "api/rmd0_x64.rmd": "1c148e6d05e9f737731a72d5ef3891fd511b87eac867c28df6175579cdf251ed",
+    "stages/host.rmd": "a6ab4426a076dce0991bc6b795cd89c71ef7c31d71c4397fbbabb2af410c18a9",
+    "stages/c/api.rmd": "9b75d3cbb5241026243cb85d1f6e71802c05f012cea47d9a3636063b8f713157",
+    "stages/c/base.rmd": "7c43a2af5abfd0355f3f59afbc3cfd9a2717655e22150d52d12ea775c1c59773",
+    "stages/c/build.rmd": "17f3494143e5235f4a5a4d7980090794c796cf11a350a4f5dfc5d8ee80728a76",
+    "stages/c/driver.rmd": "2da10bd7b8681c4f9d0f2e82f27d64d031238fb459f62e8a890e357c84b0f687",
+    "stages/c/emit.rmd": "75456fdd7f737db64b527a7aca97e975d90b0d835951fb1c27fc4b45d1499bbd",
+    "stages/c/main.rmd": "124d6842dfc6d362a5a4a2642354ebd42f2bb79d8ada58b3d431229233cfc5ef",
+    "stages/c/model.rmd": "ee8d8f9106e61455223129988233c0a8414af00e37b5274243de649e9ce94a37",
+    "stages/c/program.rmd": "b8ce9a7f3ca40bd864d07e086b753c955353e0145a126fb0dc3942168a484490",
+    "stages/c/types.rmd": "495c6955545918814b38657b325090aee0a86b0e248c8fdac778ac0518ba8c8e"
+  },
+  "installed_inputs": {
+    "launcher": {
+      "path": "@REPO@/build/rmd",
+      "bytes": 451704,
+      "lines": 2879,
+      "sha256": "60e82180ea1965cc7d12b9467ac5290760672f7d1a8e693c8b61654510a696d8",
+      "file_name": "rmd",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libffi.so.8.1.4",
+          "bytes": 47672,
+          "sha256": "00f593fe192f2851b8ce23b25cec2488d769beb5a8f63e8c9e563071e1075153"
+        }
+      ]
+    },
+    "prepared": {
+      "path": "@REPO@/build/rmd-c",
+      "bytes": 1081880,
+      "lines": 7943,
+      "sha256": "aa83933886cc200d5d9e5607f796bebffca7539f2b9e8d07fb0d36c5a9958a05",
+      "file_name": "rmd-c",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ]
+    },
+    "native-library": {
+      "path": "@REPO@/build/rmd-c-library.so",
+      "bytes": 612272,
+      "lines": 4126,
+      "sha256": "066b99d3083ba990441ee00cecf5745f40ca141f7167679c84dedb818214af29",
+      "file_name": "rmd-c-library.so",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ]
+    },
+    "host-runtime": {
+      "path": "@REPO@/build/librmd0_host.a",
+      "bytes": 19016,
+      "lines": 308,
+      "sha256": "e3ef3891f2784811d03101fa5c1b408d6ef2a0746cf25169e9636ed054097018",
+      "file_name": "librmd0_host.a"
+    }
+  },
+  "installed_build_provenance": "Existing artifacts are identified by hashes; their build commands and flags are not inferred from file names",
+  "toolchains": {
+    "gcc": {
+      "file_name": "x86_64-linux-gnu-gcc-13",
+      "bytes": 1023032,
+      "sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
+      "command": "gcc",
+      "version": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ]
+    },
+    "as": {
+      "file_name": "x86_64-linux-gnu-as",
+      "bytes": 745768,
+      "sha256": "7a2ef948033b05ad0c5dcb0d5be059bc68562b5d45713d91aee21df2b4bf4e92",
+      "command": "as",
+      "version": "GNU assembler (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "ld": {
+      "file_name": "x86_64-linux-gnu-ld.bfd",
+      "bytes": 1359128,
+      "sha256": "e46a122cc3a29feba3b1d0fc2a274b6e46538be016ebe381370c0801bb98b0b8",
+      "command": "ld",
+      "version": "GNU ld (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libctf.so.0.0.0",
+          "bytes": 220384,
+          "sha256": "5708839db0b080ef4dafc44c4adaa6976b55de5078aeed35c81d55ab4d0c7841"
+        },
+        {
+          "file_name": "libjansson.so.4.14.0",
+          "bytes": 64008,
+          "sha256": "c49935a4b3ac599064281b1f257576087806d0dad7ec46f353bd983b052c5e26"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "objcopy": {
+      "file_name": "x86_64-linux-gnu-objcopy",
+      "bytes": 166536,
+      "sha256": "b22f4f909bff115ee2a37cd21ff76f5e0b8c65cd58f98edbce7b59f129980d67",
+      "command": "objcopy",
+      "version": "GNU objcopy (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "nm": {
+      "file_name": "x86_64-linux-gnu-nm",
+      "bytes": 44544,
+      "sha256": "910ad8a63896f722374fdf22951d2a436c74e3ac9677511cc56378296bdf86cc",
+      "command": "nm",
+      "version": "GNU nm (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "readelf": {
+      "file_name": "x86_64-linux-gnu-readelf",
+      "bytes": 789280,
+      "sha256": "871be389739ecf9924b052c2fde4d2a2068a54e882201b9c34897337a5a0a130",
+      "command": "readelf",
+      "version": "GNU readelf (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libctf-nobfd.so.0.0.0",
+          "bytes": 216096,
+          "sha256": "586a020b55a53a8f8029a300c6e9d2d83b33c69c493baa4a9e9f102c30779b13"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    }
+  },
+  "gcc_cc1": {
+    "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1",
+    "bytes": 30487984,
+    "lines": 112836,
+    "sha256": "5d1679131184e2de4435b426eb264bf13472fe026db8e5c6bc97445814e8e2f4",
+    "file_name": "cc1",
+    "shared_libraries": [
+      {
+        "file_name": "ld-linux-x86-64.so.2",
+        "bytes": 236616,
+        "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+      },
+      {
+        "file_name": "libc.so.6",
+        "bytes": 2129424,
+        "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+      },
+      {
+        "file_name": "libgmp.so.10.5.0",
+        "bytes": 534896,
+        "sha256": "0ccdfb6d6f5c039465f6d002cf7e4c072d48ac6a2cffc8dd6c748dec31592804"
+      },
+      {
+        "file_name": "libisl.so.23.3.0",
+        "bytes": 1863352,
+        "sha256": "db4f717fd1678b48e5dddea1cbdd2d239594a70b57e96d0923bfd9533351efa8"
+      },
+      {
+        "file_name": "libm.so.6",
+        "bytes": 952616,
+        "sha256": "fce00b6f25f459cf4ae0b7fae4257909a1a8a86f9149e7c029a5d617baf1ccd0"
+      },
+      {
+        "file_name": "libmpc.so.3.3.1",
+        "bytes": 134440,
+        "sha256": "91d2b2b0b794028c733431e01acc227ff39ee289384fdf22869c8b42ad3aaa3b"
+      },
+      {
+        "file_name": "libmpfr.so.6.2.1",
+        "bytes": 760464,
+        "sha256": "2156351fa3dedd04a7381c6ac7a8a26efa2d6fb08b80f8a2d644ccdd653710ae"
+      },
+      {
+        "file_name": "libz.so.1.3",
+        "bytes": 113000,
+        "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+      },
+      {
+        "file_name": "libzstd.so.1.5.5",
+        "bytes": 755864,
+        "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+      }
+    ]
+  },
+  "endpoints": {
+    "source-order-c-output": "Fresh rmd process: installed prelude read/check, root source-order read/check/evaluation, host inputs, dlopen/dlsym/libffi calls, target frontend, complete C and rename output, and cleanup; no target GCC",
+    "prepared-c-output": "Fresh prepared rmd-c process: target frontend and complete C and rename output; no host-entry preparation or target GCC",
+    "gcc-original-syntax": "Fresh GCC process: preprocessing, parsing, and semantic checks on the matched original C source"
+  },
+  "commands": {
+    "ordinary-1000": {
+      "source-order-c-output": [
+        "@REPO@/build/rmd",
+        "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000-staged.rmd",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ],
+      "prepared-c-output": [
+        "@REPO@/build/rmd-c",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null",
+        "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000.rmd"
+      ],
+      "gcc-original-syntax": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Wno-overlength-strings",
+        "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000.c"
+      ]
+    },
+    "ordinary-8000": {
+      "source-order-c-output": [
+        "@REPO@/build/rmd",
+        "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000-staged.rmd",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ],
+      "prepared-c-output": [
+        "@REPO@/build/rmd-c",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null",
+        "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000.rmd"
+      ],
+      "gcc-original-syntax": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Wno-overlength-strings",
+        "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000.c"
+      ]
+    },
+    "intrusive": {
+      "source-order-c-output": [
+        "@REPO@/build/rmd",
+        "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-staged.rmd",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ],
+      "prepared-c-output": [
+        "@REPO@/build/rmd-c",
+        "--emit-c",
+        "--symbols",
+        "/dev/null",
+        "@REPO@/examples/intrusive.rmd"
+      ],
+      "gcc-original-syntax": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Wno-overlength-strings",
+        "-I@REPO@/include",
+        "@REPO@/benchmarks/bootstrap/intrusive.c"
+      ]
+    }
+  },
+  "inputs": {
+    "ordinary-1000": {
+      "functions": 1000,
+      "library": true,
+      "root_source_bytes": 297,
+      "sources": {
+        "c": {
+          "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000.c",
+          "bytes": 224832,
+          "lines": 10003,
+          "sha256": "6f973234857b78a793c20a4900bd84b799e047bcf24a8ec4d64bc9e21a87a1f9"
+        },
+        "rmd": {
+          "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000.rmd",
+          "bytes": 247781,
+          "lines": 10001,
+          "sha256": "f890ae3d578d951c43fbb77cff3c333aad1dcb80d4e502364485111e6e83c12f"
+        },
+        "staged": {
+          "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000-staged.rmd",
+          "bytes": 297,
+          "lines": 6,
+          "sha256": "8cd26facc54e7f3921eeafe3bda2c1a9e9b411e4200755e7ba27cef75819c65b"
+        }
+      },
+      "explicit_host_sources": [
+        {
+          "path": "@REPO@/api/rmd0_stage.rmd",
+          "bytes": 200,
+          "lines": 9,
+          "sha256": "f8adc0ccce988caa7dd9b892ec1a88506aec0c96ed27a921596d94a1cf8f7d00"
+        },
+        {
+          "path": "@REPO@/stages/c/api.rmd",
+          "bytes": 1156,
+          "lines": 23,
+          "sha256": "9b75d3cbb5241026243cb85d1f6e71802c05f012cea47d9a3636063b8f713157"
+        },
+        {
+          "path": "@REPO@/stages/c/build.rmd",
+          "bytes": 703,
+          "lines": 14,
+          "sha256": "17f3494143e5235f4a5a4d7980090794c796cf11a350a4f5dfc5d8ee80728a76"
+        }
+      ],
+      "native_library": {
+        "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary output.plugin",
+        "bytes": 612272,
+        "lines": 4126,
+        "sha256": "066b99d3083ba990441ee00cecf5745f40ca141f7167679c84dedb818214af29"
+      }
+    },
+    "ordinary-8000": {
+      "functions": 8000,
+      "library": true,
+      "root_source_bytes": 297,
+      "sources": {
+        "c": {
+          "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000.c",
+          "bytes": 1797931,
+          "lines": 80003,
+          "sha256": "22785d8d486ff42c97a6f8e27913136001d0e07d42c8cc7d6f2c5ccc50231726"
+        },
+        "rmd": {
+          "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000.rmd",
+          "bytes": 1981880,
+          "lines": 80001,
+          "sha256": "3484923d9b0048f4d3053d2987371d18417794d2e8bc506c69cb18893803dec2"
+        },
+        "staged": {
+          "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000-staged.rmd",
+          "bytes": 297,
+          "lines": 6,
+          "sha256": "4e9a563addb0058ada41c597f7ad885ea8f1ae4fe81f2ffcb3c0284158d06a50"
+        }
+      },
+      "explicit_host_sources": [
+        {
+          "path": "@REPO@/api/rmd0_stage.rmd",
+          "bytes": 200,
+          "lines": 9,
+          "sha256": "f8adc0ccce988caa7dd9b892ec1a88506aec0c96ed27a921596d94a1cf8f7d00"
+        },
+        {
+          "path": "@REPO@/stages/c/api.rmd",
+          "bytes": 1156,
+          "lines": 23,
+          "sha256": "9b75d3cbb5241026243cb85d1f6e71802c05f012cea47d9a3636063b8f713157"
+        },
+        {
+          "path": "@REPO@/stages/c/build.rmd",
+          "bytes": 703,
+          "lines": 14,
+          "sha256": "17f3494143e5235f4a5a4d7980090794c796cf11a350a4f5dfc5d8ee80728a76"
+        }
+      ],
+      "native_library": {
+        "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary output.plugin",
+        "bytes": 612272,
+        "lines": 4126,
+        "sha256": "066b99d3083ba990441ee00cecf5745f40ca141f7167679c84dedb818214af29"
+      }
+    },
+    "intrusive": {
+      "functions": 5,
+      "library": false,
+      "root_source_bytes": 308,
+      "sources": {
+        "rmd": {
+          "path": "@REPO@/examples/intrusive.rmd",
+          "bytes": 2364,
+          "lines": 91,
+          "sha256": "a514eca3c4339c44e112fc53c4ce43f8562f830305e688a6cc23725a70fe9614"
+        },
+        "c": {
+          "path": "@REPO@/benchmarks/bootstrap/intrusive.c",
+          "bytes": 2339,
+          "lines": 108,
+          "sha256": "5dac6c5036f4a343f3cacc3e9fdb353960ec870fff50511bcc15ac841a5fa9ab"
+        },
+        "staged": {
+          "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-staged.rmd",
+          "bytes": 308,
+          "lines": 6,
+          "sha256": "5b9793451d200309c9b58a4434999057a7b924106f3a868f8991f0f3549718d3"
+        }
+      },
+      "explicit_host_sources": [
+        {
+          "path": "@REPO@/api/rmd0_stage.rmd",
+          "bytes": 200,
+          "lines": 9,
+          "sha256": "f8adc0ccce988caa7dd9b892ec1a88506aec0c96ed27a921596d94a1cf8f7d00"
+        },
+        {
+          "path": "@REPO@/stages/c/api.rmd",
+          "bytes": 1156,
+          "lines": 23,
+          "sha256": "9b75d3cbb5241026243cb85d1f6e71802c05f012cea47d9a3636063b8f713157"
+        },
+        {
+          "path": "@REPO@/stages/c/build.rmd",
+          "bytes": 703,
+          "lines": 14,
+          "sha256": "17f3494143e5235f4a5a4d7980090794c796cf11a350a4f5dfc5d8ee80728a76"
+        }
+      ],
+      "native_library": {
+        "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary output.plugin",
+        "bytes": 612272,
+        "lines": 4126,
+        "sha256": "066b99d3083ba990441ee00cecf5745f40ca141f7167679c84dedb818214af29"
+      }
+    }
+  },
+  "artifacts": {
+    "ordinary-1000": {
+      "identical_source_order_and_prepared_bytes": true,
+      "commands": {
+        "source-order": [
+          "@REPO@/build/rmd",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000-staged.rmd",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000-source-order.rsp"
+        ],
+        "prepared": [
+          "@REPO@/build/rmd-c",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000-prepared.rsp",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000.rmd"
+        ]
+      },
+      "c": {
+        "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000-source-order.c",
+        "bytes": 1489959,
+        "lines": 50018,
+        "sha256": "b640177d92b4fb8c03e05072095c21539a428aca850ebe0a041a1ed5418acf7f"
+      },
+      "rename_response": {
+        "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-1000-source-order.rsp",
+        "bytes": 39789,
+        "lines": 2000,
+        "sha256": "1f88ad89c7f3a609a1e19599b7d1b7f955fafb71997eb060242697b251e371d2"
+      },
+      "function_definitions": 1000,
+      "executable_witness": null,
+      "c_header_dependencies": {
+        "gcc-original-syntax": [
+          {
+            "name": ".profile-cache/source-orders-gt09qmo8/ordinary-1000.c",
+            "kind": "repository",
+            "bytes": 224832,
+            "sha256": "6f973234857b78a793c20a4900bd84b799e047bcf24a8ec4d64bc9e21a87a1f9"
+          },
+          {
+            "name": "stdc-predef.h",
+            "kind": "system_header",
+            "bytes": 2462,
+            "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+          }
+        ]
+      }
+    },
+    "ordinary-8000": {
+      "identical_source_order_and_prepared_bytes": true,
+      "commands": {
+        "source-order": [
+          "@REPO@/build/rmd",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000-staged.rmd",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000-source-order.rsp"
+        ],
+        "prepared": [
+          "@REPO@/build/rmd-c",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000-prepared.rsp",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000.rmd"
+        ]
+      },
+      "c": {
+        "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000-source-order.c",
+        "bytes": 12058064,
+        "lines": 400018,
+        "sha256": "e7538ddb9ad6edc4fe52ec2b2aef82aa65319bb2038896f7d9a5c275e6fda366"
+      },
+      "rename_response": {
+        "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/ordinary-8000-source-order.rsp",
+        "bytes": 333789,
+        "lines": 16000,
+        "sha256": "4f76d0b0e896be2387b243e9e3a783c70bfd04d1cfd774e040fbdbc9f6eff27d"
+      },
+      "function_definitions": 8000,
+      "executable_witness": null,
+      "c_header_dependencies": {
+        "gcc-original-syntax": [
+          {
+            "name": ".profile-cache/source-orders-gt09qmo8/ordinary-8000.c",
+            "kind": "repository",
+            "bytes": 1797931,
+            "sha256": "22785d8d486ff42c97a6f8e27913136001d0e07d42c8cc7d6f2c5ccc50231726"
+          },
+          {
+            "name": "stdc-predef.h",
+            "kind": "system_header",
+            "bytes": 2462,
+            "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+          }
+        ]
+      }
+    },
+    "intrusive": {
+      "identical_source_order_and_prepared_bytes": true,
+      "commands": {
+        "source-order": [
+          "@REPO@/build/rmd",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-staged.rmd",
+          "--emit-c",
+          "--symbols",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-source-order.rsp"
+        ],
+        "prepared": [
+          "@REPO@/build/rmd-c",
+          "--emit-c",
+          "--symbols",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-prepared.rsp",
+          "@REPO@/examples/intrusive.rmd"
+        ]
+      },
+      "c": {
+        "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-source-order.c",
+        "bytes": 10535,
+        "lines": 370,
+        "sha256": "f5e1d31b6e678498a9b9354f45eb3972860a57772879e1c67cbf802135cacbfc"
+      },
+      "rename_response": {
+        "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-source-order.rsp",
+        "bytes": 307,
+        "lines": 16,
+        "sha256": "98432755cfb15bd0fd6113dcf72cf22d51046f9347172e8a5f6d8bf68c1d142e"
+      },
+      "function_definitions": 5,
+      "executable_witness": {
+        "commands": [
+          [
+            "gcc",
+            "-std=c99",
+            "-pedantic-errors",
+            "-O2",
+            "-g0",
+            "-fstack-clash-protection",
+            "-Wno-overlength-strings",
+            "-c",
+            "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-source-order.c",
+            "-o",
+            "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-raw.o"
+          ],
+          [
+            "objcopy",
+            "@@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-source-order.rsp",
+            "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-raw.o",
+            "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive.o"
+          ],
+          [
+            "gcc",
+            "-no-pie",
+            "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive.o",
+            "@REPO@/build/librmd0_host.a",
+            "-o",
+            "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-source-order"
+          ],
+          [
+            "gcc",
+            "-std=c99",
+            "-pedantic-errors",
+            "-O2",
+            "-g0",
+            "-fstack-clash-protection",
+            "-Wno-overlength-strings",
+            "-I@REPO@/include",
+            "@REPO@/benchmarks/bootstrap/intrusive.c",
+            "@REPO@/build/librmd0_host.a",
+            "-no-pie",
+            "-o",
+            "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-c-reference"
+          ]
+        ],
+        "source_order_and_reference_stdout": "intrusive: ok\n",
+        "target_executable": {
+          "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-source-order",
+          "bytes": 24936,
+          "lines": 37,
+          "sha256": "e91a9255ad70c80e19e99a61431e558ba8be6c37eaea980a8529674982213417",
+          "file_name": "intrusive-source-order"
+        },
+        "reference_executable": {
+          "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/intrusive-c-reference",
+          "bytes": 24744,
+          "lines": 38,
+          "sha256": "12afa3e0aebdda4037439f771c8a696ab6422d557acb2ba53330d634c6f8fc70",
+          "file_name": "intrusive-c-reference"
+        },
+        "host_compiler_symbols": [],
+        "symbol_table_sha256": "add40493ac9d3c0092249487f00ace752081eca3e3b609d7a4d2c9ffb8d507c8",
+        "target_needed_libraries": [
+          "libc.so.6"
+        ]
+      },
+      "c_header_dependencies": {
+        "gcc-original-syntax": [
+          {
+            "name": "benchmarks/bootstrap/intrusive.c",
+            "kind": "repository",
+            "bytes": 2339,
+            "sha256": "5dac6c5036f4a343f3cacc3e9fdb353960ec870fff50511bcc15ac841a5fa9ab"
+          },
+          {
+            "name": "stdc-predef.h",
+            "kind": "system_header",
+            "bytes": 2462,
+            "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+          },
+          {
+            "name": "include/rmd0_host.h",
+            "kind": "repository",
+            "bytes": 505,
+            "sha256": "ed7d76ac9cbeaa59874e44ce0ba834b1431b5960e9112a4cffe063c0d15413b2"
+          },
+          {
+            "name": "stddef.h",
+            "kind": "system_header",
+            "bytes": 13735,
+            "sha256": "9efc696d6c7eb8bb1831b149c6a92f88a775809cd63e4007312b617915f81188"
+          },
+          {
+            "name": "stdint.h",
+            "kind": "system_header",
+            "bytes": 328,
+            "sha256": "86a7914ab7d6a18465a6fb9a7b54f945cad604fdbf3ca0d10e4e0254e0037911"
+          },
+          {
+            "name": "stdint.h",
+            "kind": "system_header",
+            "bytes": 8155,
+            "sha256": "c26c51b07feadd45ca25e9c95e393b6783d580ab318a567c119828191a80bbed"
+          },
+          {
+            "name": "libc-header-start.h",
+            "kind": "system_header",
+            "bytes": 4286,
+            "sha256": "e86638082f9ce98c82e3022018fa5be175473445c824fe17bd32bf9668582368"
+          },
+          {
+            "name": "features.h",
+            "kind": "system_header",
+            "bytes": 18527,
+            "sha256": "940d486d050fc87420d8ffc008e17f31ffb04467534ad1b039ed25abc52382f9"
+          },
+          {
+            "name": "features-time64.h",
+            "kind": "system_header",
+            "bytes": 1409,
+            "sha256": "345acb98767d04277e413c4951fbb199b0500be23d43cddf17c6cd9fb319a8da"
+          },
+          {
+            "name": "wordsize.h",
+            "kind": "system_header",
+            "bytes": 442,
+            "sha256": "716d8459074e2a082d65a28192b32eddbfd7587348372395b1c283a723ae4c18"
+          },
+          {
+            "name": "timesize.h",
+            "kind": "system_header",
+            "bytes": 1109,
+            "sha256": "8b686ad5fec2c4d6f759a6594d7c216337774d059623677547b7e182cc5269ae"
+          },
+          {
+            "name": "cdefs.h",
+            "kind": "system_header",
+            "bytes": 27011,
+            "sha256": "173afb522c6877dda3be1c93742c2061cd6e748ce395d2b3ae833fb49bfbfc4f"
+          },
+          {
+            "name": "long-double.h",
+            "kind": "system_header",
+            "bytes": 970,
+            "sha256": "40367287cd437d78a05313f6ec52cb0f0a711e1b6711fdcc3699bf2bf28e810f"
+          },
+          {
+            "name": "stubs.h",
+            "kind": "system_header",
+            "bytes": 384,
+            "sha256": "ef444295a0a9e8f5c40918399a00cc91ba0bd79774110cdf6e652baa6cfadb2e"
+          },
+          {
+            "name": "stubs-64.h",
+            "kind": "system_header",
+            "bytes": 481,
+            "sha256": "0b6ab3e2ed3ba79b30fe6ba81a68fc41f57965b8d56662763633431b703c9289"
+          },
+          {
+            "name": "types.h",
+            "kind": "system_header",
+            "bytes": 8806,
+            "sha256": "371847ed3adab1c19db392034f6a22407d321b1dc5f2440563f4b0b8b6c5386b"
+          },
+          {
+            "name": "typesizes.h",
+            "kind": "system_header",
+            "bytes": 3737,
+            "sha256": "047ee5ab17a95364c4b0f14c3eb0750e84e457c408f9a65a6c225ece585e0c14"
+          },
+          {
+            "name": "time64.h",
+            "kind": "system_header",
+            "bytes": 1340,
+            "sha256": "2be9170ce3621ea6062f10edef68bbc2db09bb454ec4397534263dd37b8f1f6a"
+          },
+          {
+            "name": "wchar.h",
+            "kind": "system_header",
+            "bytes": 1906,
+            "sha256": "893fa450527ce645f17922788097d5fe331e2a53012bab4e724d8a1f63e21aa2"
+          },
+          {
+            "name": "stdint-intn.h",
+            "kind": "system_header",
+            "bytes": 1037,
+            "sha256": "94286e42e4970304da5cbef69de6695c84132ff8fbd4b6d72d29aeb7406dc5ff"
+          },
+          {
+            "name": "stdint-uintn.h",
+            "kind": "system_header",
+            "bytes": 1049,
+            "sha256": "aeee224a19434556ef4a9a4afad553736789274656ca12463122300b557ce78c"
+          },
+          {
+            "name": "stdint-least.h",
+            "kind": "system_header",
+            "bytes": 1300,
+            "sha256": "5bf66871bfc18ae6d22c91d03e392c1a4cc5969ca74c5fa31b7510703a496844"
+          }
+        ]
+      }
+    }
+  },
+  "warmups": [
+    {
+      "round": 0,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 15349722
+    },
+    {
+      "round": 0,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13011644
+    },
+    {
+      "round": 0,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18345447
+    },
+    {
+      "round": 0,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 114282938
+    },
+    {
+      "round": 0,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 107606831
+    },
+    {
+      "round": 0,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111494203
+    },
+    {
+      "round": 0,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2684578
+    },
+    {
+      "round": 0,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1790607
+    },
+    {
+      "round": 0,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7632803
+    }
+  ],
+  "samples": [
+    {
+      "round": 0,
+      "sequence": 0,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2397998
+    },
+    {
+      "round": 0,
+      "sequence": 1,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6874035
+    },
+    {
+      "round": 0,
+      "sequence": 2,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1730586
+    },
+    {
+      "round": 0,
+      "sequence": 3,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 108199210
+    },
+    {
+      "round": 0,
+      "sequence": 4,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111637789
+    },
+    {
+      "round": 0,
+      "sequence": 5,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 117373846
+    },
+    {
+      "round": 0,
+      "sequence": 6,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13856941
+    },
+    {
+      "round": 0,
+      "sequence": 7,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18565828
+    },
+    {
+      "round": 0,
+      "sequence": 8,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14832385
+    },
+    {
+      "round": 1,
+      "sequence": 9,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 107547322
+    },
+    {
+      "round": 1,
+      "sequence": 10,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 112007414
+    },
+    {
+      "round": 1,
+      "sequence": 11,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 116889019
+    },
+    {
+      "round": 1,
+      "sequence": 12,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 15268530
+    },
+    {
+      "round": 1,
+      "sequence": 13,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18807300
+    },
+    {
+      "round": 1,
+      "sequence": 14,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13065625
+    },
+    {
+      "round": 1,
+      "sequence": 15,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6855466
+    },
+    {
+      "round": 1,
+      "sequence": 16,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1752370
+    },
+    {
+      "round": 1,
+      "sequence": 17,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2413041
+    },
+    {
+      "round": 2,
+      "sequence": 18,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2421934
+    },
+    {
+      "round": 2,
+      "sequence": 19,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6921355
+    },
+    {
+      "round": 2,
+      "sequence": 20,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1751799
+    },
+    {
+      "round": 2,
+      "sequence": 21,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111702967
+    },
+    {
+      "round": 2,
+      "sequence": 22,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 108992049
+    },
+    {
+      "round": 2,
+      "sequence": 23,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 116803300
+    },
+    {
+      "round": 2,
+      "sequence": 24,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13765064
+    },
+    {
+      "round": 2,
+      "sequence": 25,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18801311
+    },
+    {
+      "round": 2,
+      "sequence": 26,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14910312
+    },
+    {
+      "round": 3,
+      "sequence": 27,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 114549768
+    },
+    {
+      "round": 3,
+      "sequence": 28,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 108152089
+    },
+    {
+      "round": 3,
+      "sequence": 29,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111585260
+    },
+    {
+      "round": 3,
+      "sequence": 30,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 15230654
+    },
+    {
+      "round": 3,
+      "sequence": 31,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18640259
+    },
+    {
+      "round": 3,
+      "sequence": 32,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13103121
+    },
+    {
+      "round": 3,
+      "sequence": 33,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6924230
+    },
+    {
+      "round": 3,
+      "sequence": 34,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1757787
+    },
+    {
+      "round": 3,
+      "sequence": 35,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2470157
+    },
+    {
+      "round": 4,
+      "sequence": 36,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2424458
+    },
+    {
+      "round": 4,
+      "sequence": 37,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6699342
+    },
+    {
+      "round": 4,
+      "sequence": 38,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1900351
+    },
+    {
+      "round": 4,
+      "sequence": 39,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14866977
+    },
+    {
+      "round": 4,
+      "sequence": 40,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13228569
+    },
+    {
+      "round": 4,
+      "sequence": 41,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18375822
+    },
+    {
+      "round": 4,
+      "sequence": 42,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 107499420
+    },
+    {
+      "round": 4,
+      "sequence": 43,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111783928
+    },
+    {
+      "round": 4,
+      "sequence": 44,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 116367005
+    },
+    {
+      "round": 5,
+      "sequence": 45,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 19849314
+    },
+    {
+      "round": 5,
+      "sequence": 46,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14907618
+    },
+    {
+      "round": 5,
+      "sequence": 47,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13070973
+    },
+    {
+      "round": 5,
+      "sequence": 48,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 110523216
+    },
+    {
+      "round": 5,
+      "sequence": 49,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 116577901
+    },
+    {
+      "round": 5,
+      "sequence": 50,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 108359580
+    },
+    {
+      "round": 5,
+      "sequence": 51,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2686151
+    },
+    {
+      "round": 5,
+      "sequence": 52,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1811618
+    },
+    {
+      "round": 5,
+      "sequence": 53,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7129257
+    },
+    {
+      "round": 6,
+      "sequence": 54,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6744850
+    },
+    {
+      "round": 6,
+      "sequence": 55,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2399150
+    },
+    {
+      "round": 6,
+      "sequence": 56,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1750466
+    },
+    {
+      "round": 6,
+      "sequence": 57,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 107965809
+    },
+    {
+      "round": 6,
+      "sequence": 58,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 118863410
+    },
+    {
+      "round": 6,
+      "sequence": 59,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 112104138
+    },
+    {
+      "round": 6,
+      "sequence": 60,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 15536762
+    },
+    {
+      "round": 6,
+      "sequence": 61,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18673569
+    },
+    {
+      "round": 6,
+      "sequence": 62,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13093376
+    },
+    {
+      "round": 7,
+      "sequence": 63,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2551118
+    },
+    {
+      "round": 7,
+      "sequence": 64,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1795834
+    },
+    {
+      "round": 7,
+      "sequence": 65,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7001276
+    },
+    {
+      "round": 7,
+      "sequence": 66,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 107621212
+    },
+    {
+      "round": 7,
+      "sequence": 67,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 115267856
+    },
+    {
+      "round": 7,
+      "sequence": 68,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111952542
+    },
+    {
+      "round": 7,
+      "sequence": 69,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13813497
+    },
+    {
+      "round": 7,
+      "sequence": 70,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18623063
+    },
+    {
+      "round": 7,
+      "sequence": 71,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14641769
+    },
+    {
+      "round": 8,
+      "sequence": 72,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 107524567
+    },
+    {
+      "round": 8,
+      "sequence": 73,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111409116
+    },
+    {
+      "round": 8,
+      "sequence": 74,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 115913805
+    },
+    {
+      "round": 8,
+      "sequence": 75,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2663857
+    },
+    {
+      "round": 8,
+      "sequence": 76,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1763456
+    },
+    {
+      "round": 8,
+      "sequence": 77,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7122156
+    },
+    {
+      "round": 8,
+      "sequence": 78,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18289183
+    },
+    {
+      "round": 8,
+      "sequence": 79,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13413917
+    },
+    {
+      "round": 8,
+      "sequence": 80,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14479125
+    },
+    {
+      "round": 9,
+      "sequence": 81,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7116328
+    },
+    {
+      "round": 9,
+      "sequence": 82,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2414974
+    },
+    {
+      "round": 9,
+      "sequence": 83,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1923787
+    },
+    {
+      "round": 9,
+      "sequence": 84,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111144769
+    },
+    {
+      "round": 9,
+      "sequence": 85,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 109004567
+    },
+    {
+      "round": 9,
+      "sequence": 86,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 115562899
+    },
+    {
+      "round": 9,
+      "sequence": 87,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 15199456
+    },
+    {
+      "round": 9,
+      "sequence": 88,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13036070
+    },
+    {
+      "round": 9,
+      "sequence": 89,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18547009
+    },
+    {
+      "round": 10,
+      "sequence": 90,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14791574
+    },
+    {
+      "round": 10,
+      "sequence": 91,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18785377
+    },
+    {
+      "round": 10,
+      "sequence": 92,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13197643
+    },
+    {
+      "round": 10,
+      "sequence": 93,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1780371
+    },
+    {
+      "round": 10,
+      "sequence": 94,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2448014
+    },
+    {
+      "round": 10,
+      "sequence": 95,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6976037
+    },
+    {
+      "round": 10,
+      "sequence": 96,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111072842
+    },
+    {
+      "round": 10,
+      "sequence": 97,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 111824269
+    },
+    {
+      "round": 10,
+      "sequence": 98,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 115120965
+    },
+    {
+      "round": 11,
+      "sequence": 99,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7543409
+    },
+    {
+      "round": 11,
+      "sequence": 100,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2441113
+    },
+    {
+      "round": 11,
+      "sequence": 101,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1775263
+    },
+    {
+      "round": 11,
+      "sequence": 102,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13571063
+    },
+    {
+      "round": 11,
+      "sequence": 103,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18701621
+    },
+    {
+      "round": 11,
+      "sequence": 104,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14670933
+    },
+    {
+      "round": 11,
+      "sequence": 105,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 114618422
+    },
+    {
+      "round": 11,
+      "sequence": 106,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 108126901
+    },
+    {
+      "round": 11,
+      "sequence": 107,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111791359
+    },
+    {
+      "round": 12,
+      "sequence": 108,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 2109775
+    },
+    {
+      "round": 12,
+      "sequence": 109,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7098892
+    },
+    {
+      "round": 12,
+      "sequence": 110,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2451709
+    },
+    {
+      "round": 12,
+      "sequence": 111,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18284685
+    },
+    {
+      "round": 12,
+      "sequence": 112,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13594167
+    },
+    {
+      "round": 12,
+      "sequence": 113,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14611625
+    },
+    {
+      "round": 12,
+      "sequence": 114,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 114865542
+    },
+    {
+      "round": 12,
+      "sequence": 115,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 107991267
+    },
+    {
+      "round": 12,
+      "sequence": 116,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111403797
+    },
+    {
+      "round": 13,
+      "sequence": 117,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111510568
+    },
+    {
+      "round": 13,
+      "sequence": 118,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 110370948
+    },
+    {
+      "round": 13,
+      "sequence": 119,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 115572623
+    },
+    {
+      "round": 13,
+      "sequence": 120,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7424189
+    },
+    {
+      "round": 13,
+      "sequence": 121,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2420872
+    },
+    {
+      "round": 13,
+      "sequence": 122,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1797527
+    },
+    {
+      "round": 13,
+      "sequence": 123,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13670912
+    },
+    {
+      "round": 13,
+      "sequence": 124,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14459306
+    },
+    {
+      "round": 13,
+      "sequence": 125,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18401681
+    },
+    {
+      "round": 14,
+      "sequence": 126,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13648489
+    },
+    {
+      "round": 14,
+      "sequence": 127,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18379157
+    },
+    {
+      "round": 14,
+      "sequence": 128,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14579987
+    },
+    {
+      "round": 14,
+      "sequence": 129,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 113818070
+    },
+    {
+      "round": 14,
+      "sequence": 130,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111345750
+    },
+    {
+      "round": 14,
+      "sequence": 131,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 109794593
+    },
+    {
+      "round": 14,
+      "sequence": 132,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 2018509
+    },
+    {
+      "round": 14,
+      "sequence": 133,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7287735
+    },
+    {
+      "round": 14,
+      "sequence": 134,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2446131
+    },
+    {
+      "round": 15,
+      "sequence": 135,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 107815494
+    },
+    {
+      "round": 15,
+      "sequence": 136,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 115720164
+    },
+    {
+      "round": 15,
+      "sequence": 137,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 110996847
+    },
+    {
+      "round": 15,
+      "sequence": 138,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 15534920
+    },
+    {
+      "round": 15,
+      "sequence": 139,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13068258
+    },
+    {
+      "round": 15,
+      "sequence": 140,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18571676
+    },
+    {
+      "round": 15,
+      "sequence": 141,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2425159
+    },
+    {
+      "round": 15,
+      "sequence": 142,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6712161
+    },
+    {
+      "round": 15,
+      "sequence": 143,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1758128
+    },
+    {
+      "round": 16,
+      "sequence": 144,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 107958879
+    },
+    {
+      "round": 16,
+      "sequence": 145,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111598490
+    },
+    {
+      "round": 16,
+      "sequence": 146,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 116191141
+    },
+    {
+      "round": 16,
+      "sequence": 147,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2665019
+    },
+    {
+      "round": 16,
+      "sequence": 148,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1765199
+    },
+    {
+      "round": 16,
+      "sequence": 149,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7239092
+    },
+    {
+      "round": 16,
+      "sequence": 150,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13678775
+    },
+    {
+      "round": 16,
+      "sequence": 151,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18725317
+    },
+    {
+      "round": 16,
+      "sequence": 152,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14750082
+    },
+    {
+      "round": 17,
+      "sequence": 153,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 114941856
+    },
+    {
+      "round": 17,
+      "sequence": 154,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 108157176
+    },
+    {
+      "round": 17,
+      "sequence": 155,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 112582627
+    },
+    {
+      "round": 17,
+      "sequence": 156,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 19031286
+    },
+    {
+      "round": 17,
+      "sequence": 157,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13335269
+    },
+    {
+      "round": 17,
+      "sequence": 158,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14386066
+    },
+    {
+      "round": 17,
+      "sequence": 159,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7118191
+    },
+    {
+      "round": 17,
+      "sequence": 160,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1788433
+    },
+    {
+      "round": 17,
+      "sequence": 161,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2464859
+    },
+    {
+      "round": 18,
+      "sequence": 162,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14918314
+    },
+    {
+      "round": 18,
+      "sequence": 163,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18438516
+    },
+    {
+      "round": 18,
+      "sequence": 164,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 14192986
+    },
+    {
+      "round": 18,
+      "sequence": 165,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2433281
+    },
+    {
+      "round": 18,
+      "sequence": 166,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1780101
+    },
+    {
+      "round": 18,
+      "sequence": 167,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7206824
+    },
+    {
+      "round": 18,
+      "sequence": 168,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111164328
+    },
+    {
+      "round": 18,
+      "sequence": 169,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 110544588
+    },
+    {
+      "round": 18,
+      "sequence": 170,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 116768497
+    },
+    {
+      "round": 19,
+      "sequence": 171,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111387634
+    },
+    {
+      "round": 19,
+      "sequence": 172,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 116350170
+    },
+    {
+      "round": 19,
+      "sequence": 173,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 107888564
+    },
+    {
+      "round": 19,
+      "sequence": 174,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 15143042
+    },
+    {
+      "round": 19,
+      "sequence": 175,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13055569
+    },
+    {
+      "round": 19,
+      "sequence": 176,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18516784
+    },
+    {
+      "round": 19,
+      "sequence": 177,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6728336
+    },
+    {
+      "round": 19,
+      "sequence": 178,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1761663
+    },
+    {
+      "round": 19,
+      "sequence": 179,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2444759
+    },
+    {
+      "round": 20,
+      "sequence": 180,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 115346764
+    },
+    {
+      "round": 20,
+      "sequence": 181,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 108876415
+    },
+    {
+      "round": 20,
+      "sequence": 182,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 112427945
+    },
+    {
+      "round": 20,
+      "sequence": 183,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 15480237
+    },
+    {
+      "round": 20,
+      "sequence": 184,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13252955
+    },
+    {
+      "round": 20,
+      "sequence": 185,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18748812
+    },
+    {
+      "round": 20,
+      "sequence": 186,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6737068
+    },
+    {
+      "round": 20,
+      "sequence": 187,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1740461
+    },
+    {
+      "round": 20,
+      "sequence": 188,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2424008
+    },
+    {
+      "round": 21,
+      "sequence": 189,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6705952
+    },
+    {
+      "round": 21,
+      "sequence": 190,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1757317
+    },
+    {
+      "round": 21,
+      "sequence": 191,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2500872
+    },
+    {
+      "round": 21,
+      "sequence": 192,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18068511
+    },
+    {
+      "round": 21,
+      "sequence": 193,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14691755
+    },
+    {
+      "round": 21,
+      "sequence": 194,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13239946
+    },
+    {
+      "round": 21,
+      "sequence": 195,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 110818780
+    },
+    {
+      "round": 21,
+      "sequence": 196,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 110007763
+    },
+    {
+      "round": 21,
+      "sequence": 197,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 114608186
+    },
+    {
+      "round": 22,
+      "sequence": 198,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 108219189
+    },
+    {
+      "round": 22,
+      "sequence": 199,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111865200
+    },
+    {
+      "round": 22,
+      "sequence": 200,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 116050661
+    },
+    {
+      "round": 22,
+      "sequence": 201,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 15209000
+    },
+    {
+      "round": 22,
+      "sequence": 202,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18638937
+    },
+    {
+      "round": 22,
+      "sequence": 203,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13161699
+    },
+    {
+      "round": 22,
+      "sequence": 204,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7153714
+    },
+    {
+      "round": 22,
+      "sequence": 205,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2447091
+    },
+    {
+      "round": 22,
+      "sequence": 206,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1793891
+    },
+    {
+      "round": 23,
+      "sequence": 207,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 114494114
+    },
+    {
+      "round": 23,
+      "sequence": 208,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 108094622
+    },
+    {
+      "round": 23,
+      "sequence": 209,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111432130
+    },
+    {
+      "round": 23,
+      "sequence": 210,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 2024648
+    },
+    {
+      "round": 23,
+      "sequence": 211,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2450687
+    },
+    {
+      "round": 23,
+      "sequence": 212,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6984610
+    },
+    {
+      "round": 23,
+      "sequence": 213,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13579786
+    },
+    {
+      "round": 23,
+      "sequence": 214,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 14626247
+    },
+    {
+      "round": 23,
+      "sequence": 215,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18521741
+    },
+    {
+      "round": 24,
+      "sequence": 216,
+      "workload": "intrusive",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 2434844
+    },
+    {
+      "round": 24,
+      "sequence": 217,
+      "workload": "intrusive",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 1753010
+    },
+    {
+      "round": 24,
+      "sequence": 218,
+      "workload": "intrusive",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 6893213
+    },
+    {
+      "round": 24,
+      "sequence": 219,
+      "workload": "ordinary-8000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 111426692
+    },
+    {
+      "round": 24,
+      "sequence": 220,
+      "workload": "ordinary-8000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 117366114
+    },
+    {
+      "round": 24,
+      "sequence": 221,
+      "workload": "ordinary-8000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 108712049
+    },
+    {
+      "round": 24,
+      "sequence": 222,
+      "workload": "ordinary-1000",
+      "endpoint": "source-order-c-output",
+      "wall_ns": 15347268
+    },
+    {
+      "round": 24,
+      "sequence": 223,
+      "workload": "ordinary-1000",
+      "endpoint": "prepared-c-output",
+      "wall_ns": 13074988
+    },
+    {
+      "round": 24,
+      "sequence": 224,
+      "workload": "ordinary-1000",
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 18506168
+    }
+  ],
+  "library_preparation": {
+    "measured": true,
+    "observations_per_phase": 1,
+    "statistic": "one preparation observation, not a median or confidence interval",
+    "commands": [
+      {
+        "phase": "all-library-RMD-to-object",
+        "command": [
+          "@REPO@/build/rmd-c",
+          "--library",
+          "--object",
+          "--export",
+          "c_backend_build",
+          "--export",
+          "c_program",
+          "--cflag=-fPIC",
+          "-o",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/changed-library.o",
+          "@REPO@/api/rmd0.rmd",
+          "@REPO@/api/rmd0_host.rmd",
+          "@REPO@/api/rmd0_stage.rmd",
+          "@REPO@/stages/c/model.rmd",
+          "@REPO@/stages/c/base.rmd",
+          "@REPO@/stages/c/types.rmd",
+          "@REPO@/stages/c/emit.rmd",
+          "@REPO@/stages/c/driver.rmd",
+          "@REPO@/stages/c/program.rmd"
+        ],
+        "wall_ns": 381847049,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "phase": "shared-library-link",
+        "command": [
+          "gcc",
+          "-shared",
+          "-Wl,-Bsymbolic,-z,text,-z,relro,-z,now",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/changed-library.o",
+          "-o",
+          "@REPO@/.profile-cache/source-orders-gt09qmo8/changed-library.so"
+        ],
+        "wall_ns": 12942991,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    ],
+    "observed_total_wall_ns": 394790040,
+    "sources": [
+      {
+        "path": "@REPO@/api/rmd0.rmd",
+        "bytes": 8573,
+        "lines": 304,
+        "sha256": "5e7ae5660cda6a65bd0e950e386698c5e379b5a6b786bbc95d568dcb5988c26a"
+      },
+      {
+        "path": "@REPO@/api/rmd0_host.rmd",
+        "bytes": 624,
+        "lines": 8,
+        "sha256": "2cce512ac1ebf0a1270e3f0a49904681cd360c61aeff74f6c39b0efa3b8d2c69"
+      },
+      {
+        "path": "@REPO@/api/rmd0_stage.rmd",
+        "bytes": 200,
+        "lines": 9,
+        "sha256": "f8adc0ccce988caa7dd9b892ec1a88506aec0c96ed27a921596d94a1cf8f7d00"
+      },
+      {
+        "path": "@REPO@/stages/c/model.rmd",
+        "bytes": 1089,
+        "lines": 59,
+        "sha256": "ee8d8f9106e61455223129988233c0a8414af00e37b5274243de649e9ce94a37"
+      },
+      {
+        "path": "@REPO@/stages/c/base.rmd",
+        "bytes": 12700,
+        "lines": 337,
+        "sha256": "7c43a2af5abfd0355f3f59afbc3cfd9a2717655e22150d52d12ea775c1c59773"
+      },
+      {
+        "path": "@REPO@/stages/c/types.rmd",
+        "bytes": 17838,
+        "lines": 407,
+        "sha256": "495c6955545918814b38657b325090aee0a86b0e248c8fdac778ac0518ba8c8e"
+      },
+      {
+        "path": "@REPO@/stages/c/emit.rmd",
+        "bytes": 21776,
+        "lines": 497,
+        "sha256": "75456fdd7f737db64b527a7aca97e975d90b0d835951fb1c27fc4b45d1499bbd"
+      },
+      {
+        "path": "@REPO@/stages/c/driver.rmd",
+        "bytes": 18901,
+        "lines": 447,
+        "sha256": "2da10bd7b8681c4f9d0f2e82f27d64d031238fb459f62e8a890e357c84b0f687"
+      },
+      {
+        "path": "@REPO@/stages/c/program.rmd",
+        "bytes": 13878,
+        "lines": 314,
+        "sha256": "b8ce9a7f3ca40bd864d07e086b753c955353e0145a126fb0dc3942168a484490"
+      }
+    ],
+    "object": {
+      "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/changed-library.o",
+      "bytes": 83176,
+      "lines": 209,
+      "sha256": "81f9bbc4b3120c3ca23af14c8d6c8ca3dc7b352503a08fd57196696aef50054f",
+      "file_name": "changed-library.o"
+    },
+    "library": {
+      "path": "@REPO@/.profile-cache/source-orders-gt09qmo8/changed-library.so",
+      "bytes": 64048,
+      "lines": 173,
+      "sha256": "b5a2c5dfdb2d1ac2fd32bae3456e066303525319150554b9d238f313ed3167f9",
+      "file_name": "changed-library.so",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ]
+    },
+    "scope": "Read/check/lower all library RMD sources, emit C, GCC -O2 -fPIC compilation, objcopy renaming, and shared linking; installed rmd-c and system tools are inputs",
+    "included_in_frontend_samples": false,
+    "used_as_measured_native_input": false,
+    "reason": "A separate output measures a complete source-library rebuild without changing the installed input library"
+  },
+  "method": {
+    "rounds_per_endpoint": 25,
+    "warmups_per_endpoint": 1,
+    "seed": 20261001,
+    "bootstrap_draws": 10000,
+    "confidence": 0.95,
+    "randomization": "Shuffle workloads each round and all three endpoints within each workload",
+    "pairing": "One sample for every endpoint in the same workload and round",
+    "bootstrap": "Resample complete paired rounds; report ratio of medians and median of paired ratios separately",
+    "intervals": "Per comparison; no simultaneous-coverage claim",
+    "timing": "perf_counter_ns around fresh process launch and completion; includes all child processes and cleanup",
+    "outputs": "Complete C stdout and rename text go to DEVNULL; preflight preserves and compares both streams",
+    "cold_source_order": "Each invocation reads/checks the installed prelude and root, executes ordinary host code, loads the explicit native library, and runs the target frontend; no prepared-root cache or per-action as/ld",
+    "prepared_inputs": "Launcher, rmd-c, explicit native backend library, host runtime, and system tools already exist",
+    "library_preparation": "Optional separate single rebuild observation; excluded from frontend samples and not combined with their confidence intervals",
+    "excluded": "Workload generation, preflight, installed compiler construction, and final target GCC/objcopy/link execution",
+    "generated_c_syntax": "Untimed preflight validation only; target GCC parsing, compilation, and linking are excluded from measurements",
+    "os_file_cache": "Warm; no cache eviction; each invocation has a fresh process, evaluator, module state, and host context",
+    "compiler_cache": "No compiler or execution-result cache; no root assembler/linker preparation",
+    "cpu_affinity": "Controller and descendants pinned to the selected allowed CPU; CPU is not reserved",
+    "temporary_directory": "@REPO@/.profile-cache/source-orders-gt09qmo8/temporary",
+    "required_speed_gate": "source-order-c-output upper 95% ratio-of-medians bound <= 1 versus GCC syntax on matched original C for every workload",
+    "scope": "Direct intrusive witness and matched 1000/8000 ordinary functions; no whole-language or memory-safety claim"
+  },
+  "summary": {
+    "ordinary-1000": {
+      "rounds": 25,
+      "median_wall_ms": {
+        "source-order-c-output": 14.866977,
+        "prepared-c-output": 13.252955,
+        "gcc-original-syntax": 18.571676
+      },
+      "min_wall_ms": {
+        "source-order-c-output": 14.386066,
+        "prepared-c-output": 13.03607,
+        "gcc-original-syntax": 18.068511
+      },
+      "max_wall_ms": {
+        "source-order-c-output": 15.536762,
+        "prepared-c-output": 14.192986,
+        "gcc-original-syntax": 19.849314
+      },
+      "comparisons": {
+        "source-order-over-original-c": {
+          "numerator": "source-order-c-output",
+          "denominator": "gcc-original-syntax",
+          "ratio_of_medians": 0.8005188653948088,
+          "paired_bootstrap_percentile_95_ci": [
+            0.7889011061177208,
+            0.8159800100188117
+          ],
+          "median_of_paired_ratios": 0.7991182238031446,
+          "paired_ratio_bootstrap_percentile_95_ci": [
+            0.7896799226379421,
+            0.8159800100188117
+          ],
+          "upper_ci_at_most_one": true
+        },
+        "prepared-over-original-c": {
+          "numerator": "prepared-c-output",
+          "denominator": "gcc-original-syntax",
+          "ratio_of_medians": 0.7136111463499578,
+          "paired_bootstrap_percentile_95_ci": [
+            0.7055432692235208,
+            0.7331808602657817
+          ],
+          "median_of_paired_ratios": 0.7198899183938547,
+          "paired_ratio_bootstrap_percentile_95_ci": [
+            0.7036660557722415,
+            0.7331808602657817
+          ],
+          "upper_ci_at_most_one": true
+        },
+        "source-order-over-prepared": {
+          "numerator": "source-order-c-output",
+          "denominator": "prepared-c-output",
+          "ratio_of_medians": 1.1217858205962368,
+          "paired_bootstrap_percentile_95_ci": [
+            1.0818841327838302,
+            1.1548247684436486
+          ],
+          "median_of_paired_ratios": 1.1096536949622,
+          "paired_ratio_bootstrap_percentile_95_ci": [
+            1.0783189284128147,
+            1.159891384282064
+          ],
+          "upper_ci_at_most_one": false
+        }
+      },
+      "source_order_minus_prepared": {
+        "median_paired_difference_ms": 1.451809,
+        "scope": "Difference between complete process endpoints; not isolated host-preparation phase attribution"
+      }
+    },
+    "ordinary-8000": {
+      "rounds": 25,
+      "median_wall_ms": {
+        "source-order-c-output": 115.720164,
+        "prepared-c-output": 108.157176,
+        "gcc-original-syntax": 111.510568
+      },
+      "min_wall_ms": {
+        "source-order-c-output": 113.81807,
+        "prepared-c-output": 107.49942,
+        "gcc-original-syntax": 110.523216
+      },
+      "max_wall_ms": {
+        "source-order-c-output": 118.86341,
+        "prepared-c-output": 111.824269,
+        "gcc-original-syntax": 112.582627
+      },
+      "comparisons": {
+        "source-order-over-original-c": {
+          "numerator": "source-order-c-output",
+          "denominator": "gcc-original-syntax",
+          "ratio_of_medians": 1.0377506461988428,
+          "paired_bootstrap_percentile_95_ci": [
+            1.032377173435257,
+            1.0441858042415906
+          ],
+          "median_of_paired_ratios": 1.039751128548389,
+          "paired_ratio_bootstrap_percentile_95_ci": [
+            1.0310738511004252,
+            1.0435828738979724
+          ],
+          "upper_ci_at_most_one": false
+        },
+        "prepared-over-original-c": {
+          "numerator": "prepared-c-output",
+          "denominator": "gcc-original-syntax",
+          "ratio_of_medians": 0.9699275856975278,
+          "paired_bootstrap_percentile_95_ci": [
+            0.9673361320332132,
+            0.9759795149253282
+          ],
+          "median_of_paired_ratios": 0.9692327552940236,
+          "paired_ratio_bootstrap_percentile_95_ci": [
+            0.9673865569328044,
+            0.9757310116928228
+          ],
+          "upper_ci_at_most_one": true
+        },
+        "source-order-over-prepared": {
+          "numerator": "source-order-c-output",
+          "denominator": "prepared-c-output",
+          "ratio_of_medians": 1.0699259011718278,
+          "paired_bootstrap_percentile_95_ci": [
+            1.0615028332812024,
+            1.0761846002561792
+          ],
+          "median_of_paired_ratios": 1.0710514577739563,
+          "paired_ratio_bootstrap_percentile_95_ci": [
+            1.059428380333794,
+            1.0762536817374697
+          ],
+          "upper_ci_at_most_one": false
+        }
+      },
+      "source_order_minus_prepared": {
+        "median_paired_difference_ms": 7.646644,
+        "scope": "Difference between complete process endpoints; not isolated host-preparation phase attribution"
+      }
+    },
+    "intrusive": {
+      "rounds": 25,
+      "median_wall_ms": {
+        "source-order-c-output": 2.444759,
+        "prepared-c-output": 1.775263,
+        "gcc-original-syntax": 6.98461
+      },
+      "min_wall_ms": {
+        "source-order-c-output": 2.397998,
+        "prepared-c-output": 1.730586,
+        "gcc-original-syntax": 6.699342
+      },
+      "max_wall_ms": {
+        "source-order-c-output": 2.686151,
+        "prepared-c-output": 2.109775,
+        "gcc-original-syntax": 7.543409
+      },
+      "comparisons": {
+        "source-order-over-original-c": {
+          "numerator": "source-order-c-output",
+          "denominator": "gcc-original-syntax",
+          "ratio_of_medians": 0.3500208315138569,
+          "paired_bootstrap_percentile_95_ci": [
+            0.3421489284923348,
+            0.35466175207410533
+          ],
+          "median_of_paired_ratios": 0.35198788820482807,
+          "paired_ratio_bootstrap_percentile_95_ci": [
+            0.34627604120204136,
+            0.3613082284528038
+          ],
+          "upper_ci_at_most_one": true
+        },
+        "prepared-over-original-c": {
+          "numerator": "prepared-c-output",
+          "denominator": "gcc-original-syntax",
+          "ratio_of_medians": 0.25416780607650247,
+          "paired_bootstrap_percentile_95_ci": [
+            0.24841285090687393,
+            0.25712187492327665
+          ],
+          "median_of_paired_ratios": 0.25521237917746137,
+          "paired_ratio_bootstrap_percentile_95_ci": [
+            0.25175693751922995,
+            0.2618274414357428
+          ],
+          "upper_ci_at_most_one": true
+        },
+        "source-order-over-prepared": {
+          "numerator": "source-order-c-output",
+          "denominator": "prepared-c-output",
+          "ratio_of_medians": 1.3771249668358998,
+          "paired_bootstrap_percentile_95_ci": [
+            1.3605659255896083,
+            1.390286460223561
+          ],
+          "median_of_paired_ratios": 1.3782227234679745,
+          "paired_ratio_bootstrap_percentile_95_ci": [
+            1.3669342357540386,
+            1.3889504338252492
+          ],
+          "upper_ci_at_most_one": false
+        }
+      },
+      "source_order_minus_prepared": {
+        "median_paired_difference_ms": 0.667412,
+        "scope": "Difference between complete process endpoints; not isolated host-preparation phase attribution"
+      }
+    }
+  },
+  "speed_gate": {
+    "passed": false,
+    "failed_workloads": [
+      "ordinary-8000"
+    ],
+    "comparison": "source-order-over-original-c"
+  },
+  "path_token": "@REPO@ denotes the repository root used for this run."
+}

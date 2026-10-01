@@ -1,0 +1,308 @@
+{
+  "schema_version": 1,
+  "validation_date": "2026-10-01",
+  "result": "pass",
+  "purpose": "Validate the production source-order runner and C backend with GCC AddressSanitizer and UndefinedBehaviorSanitizer.",
+  "performance_samples": false,
+  "execution": {
+    "working_directory": "repository root",
+    "cpu_affinity": [
+      6
+    ],
+    "platform": "Linux",
+    "machine": "x86_64",
+    "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+    "cflags": "-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer",
+    "ldflags": "-fsanitize=address,undefined",
+    "environment": {
+      "ASAN_OPTIONS": "detect_leaks=0:detect_stack_use_after_return=1:abort_on_error=1",
+      "UBSAN_OPTIONS": "halt_on_error=1"
+    },
+    "command_order": "Run the listed commands in order. Each command inherits the environment and CPU affinity above.",
+    "forced_rebuild": "The first make command uses -B. It rebuilds the core, runner, seed backend, C-compiled backend, shared backend, and unit tests."
+  },
+  "coverage": {
+    "unit_checks": {
+      "core-test": 10336,
+      "read-test": 337,
+      "check-test": 178,
+      "host-test": 28,
+      "parallel-test": 75,
+      "x64-test": 121,
+      "eval-test": 10829
+    },
+    "unit_checks_total": 21904,
+    "source_order": {
+      "process_checks": 141,
+      "host_integer_comparisons": 10220,
+      "required_traps": 65
+    },
+    "c_backend": {
+      "process_checks": 348,
+      "integer_comparisons": 10220,
+      "required_traps": 65,
+      "public_layout_comparisons": 260,
+      "stat_layout_comparisons": 20,
+      "foundation_source": "tests/c_stage.rmd",
+      "foundation_cases": [
+        "Buffer overlap and growth, including the one-byte append path.",
+        "Quoted bytes compiled as C and executed.",
+        "Allocation failure reaches the required error path."
+      ],
+      "generation_check": "Seed, self, and next generations emit equal C and exact-symbol response files."
+    },
+    "api_consistency": "pass",
+    "backend_dynamic_tags": {
+      "asan_runtime": true,
+      "ubsan_runtime": true,
+      "bind_now": true,
+      "textrel": false
+    },
+    "backend_compile_flags_verified": [
+      "-fPIC",
+      "-fno-semantic-interposition",
+      "-O1",
+      "-g",
+      "-fsanitize=address,undefined",
+      "-fno-omit-frame-pointer"
+    ],
+    "sanitizer_reports": 0
+  },
+  "sanitizer_scope": [
+    "GCC AddressSanitizer and UndefinedBehaviorSanitizer instrument the C core, runner, runtime, and C-compiled RMD backend.",
+    "Stack-use-after-return detection is enabled.",
+    "LeakSanitizer is disabled because its ptrace restriction fails in this execution environment.",
+    "The assembly seed compiler output and some native test fixtures are not compiler-instrumented; they execute with the sanitizer runtime.",
+    "The foundation allocation-failure subprocess adds allocator_may_return_null=1 so allocation failure reaches its required error path."
+  ],
+  "input_consistency": {
+    "unchanged_at_each_command": true,
+    "unchanged_at_completion": true
+  },
+  "source_sha256": {
+    "Makefile": "00e0106d3b8f7fbb1eff5209a820bb24c4386575b1fae089e2aec7fc2f70e28d",
+    "api/rmd0.rmd": "5e7ae5660cda6a65bd0e950e386698c5e379b5a6b786bbc95d568dcb5988c26a",
+    "api/rmd0_eval.rmd": "8eb603882edec262265c30783b9011c7fe2eddce5b80c5eead59844f1d6f7296",
+    "api/rmd0_host.rmd": "2cce512ac1ebf0a1270e3f0a49904681cd360c61aeff74f6c39b0efa3b8d2c69",
+    "api/rmd0_run.rmd": "a17f11ffecad7a415efcf5893d74a2d3d6577801c764ffda92dd5f6c0224bcd7",
+    "api/rmd0_stage.rmd": "f8adc0ccce988caa7dd9b892ec1a88506aec0c96ed27a921596d94a1cf8f7d00",
+    "api/rmd0_x64.rmd": "1c148e6d05e9f737731a72d5ef3891fd511b87eac867c28df6175579cdf251ed",
+    "benchmarks/bootstrap/intrusive.c": "5dac6c5036f4a343f3cacc3e9fdb353960ec870fff50511bcc15ac841a5fa9ab",
+    "docs/rmd0-spec.md": "24ef52ae276e3d034b0dae90588d65e6db958eface409820d4e3a4bad487be7e",
+    "examples/intrusive.rmd": "a514eca3c4339c44e112fc53c4ce43f8562f830305e688a6cc23725a70fe9614",
+    "examples/main.rmd": "280033eb680d43bd074b354d8e5192510c74b99a7e0c0faac7397ad283e62065",
+    "examples/stage.rmd": "81f075389018949a8b0951481f25df7e9f50e08f0c7fea08ec997d0c24582120",
+    "include/rmd0.h": "3106e749b6ea68dc7276989954039860ea99805ad848694ddb895c478a46af85",
+    "include/rmd0_eval.h": "e2bde708e9de9e17c762a88a0ed39124ae5977c18f6c82d25d01f4254cbfdd8b",
+    "include/rmd0_host.h": "ed7d76ac9cbeaa59874e44ce0ba834b1431b5960e9112a4cffe063c0d15413b2",
+    "include/rmd0_run.h": "febb407eede138d87f2a6b4c644dadf5e52f2af7070b405043a2b95e83b3136c",
+    "include/rmd0_stage.h": "200df338d52d66dbe2900e83532c016694513e5d9cdba5ee897649e3567490a0",
+    "include/rmd0_x64.h": "5b6e2cc828e09932461b79993bf971a3ac0511d4c5f43f3c4e5d997536535eea",
+    "runtime/host.c": "152820a4bf903850c8defd28dc73eec3da66292b06465d42f9e638c6d96ce251",
+    "src/check.c": "b1acb64ea46b1f5333892b368cac4a140f87215210f722fc167f9236fb5a2375",
+    "src/core.c": "791e173b7ae415b09c648e969fcc89310bde217d6514ed3b42a50757f84d385b",
+    "src/driver.c": "d389da25e3854658c4e8626b9cefb3726725a4fb3f2119cfc9c499c6af0d35e4",
+    "src/eval.c": "544bc83da94a1dd4321eed62b62f00a9c352c7a1d90958a6eb056c511318ef91",
+    "src/read.c": "93c19445afe17cadb289cd97522f5a70282403424916b94eb0ed096d9cea0016",
+    "src/run.c": "14ee7ad5a5a2f56d819e99a0eee2d1d08b41573d79f8427ae8c6c3bcd9197dd9",
+    "src/run_main.c": "5dc8fba8a79bc8d731d0a5c5c21f822023d4b3ff69ab9d1a2dcea80e542b7db7",
+    "src/x64.c": "0b7dcfe6360136f12e5e599f7f1c3b843e94b15ab21785d35d295febd9fe21b8",
+    "stages/c/api.rmd": "9b75d3cbb5241026243cb85d1f6e71802c05f012cea47d9a3636063b8f713157",
+    "stages/c/base.rmd": "e6f24dcb72c6d1b9bfdac9f1d715ea3c922e2d4d917b44aa4b33e203574cb77f",
+    "stages/c/build.rmd": "17f3494143e5235f4a5a4d7980090794c796cf11a350a4f5dfc5d8ee80728a76",
+    "stages/c/driver.rmd": "2da10bd7b8681c4f9d0f2e82f27d64d031238fb459f62e8a890e357c84b0f687",
+    "stages/c/emit.rmd": "75456fdd7f737db64b527a7aca97e975d90b0d835951fb1c27fc4b45d1499bbd",
+    "stages/c/main.rmd": "124d6842dfc6d362a5a4a2642354ebd42f2bb79d8ada58b3d431229233cfc5ef",
+    "stages/c/model.rmd": "ee8d8f9106e61455223129988233c0a8414af00e37b5274243de649e9ce94a37",
+    "stages/c/program.rmd": "b8ce9a7f3ca40bd864d07e086b753c955353e0145a126fb0dc3942168a484490",
+    "stages/c/types.rmd": "495c6955545918814b38657b325090aee0a86b0e248c8fdac778ac0518ba8c8e",
+    "stages/host.rmd": "a6ab4426a076dce0991bc6b795cd89c71ef7c31d71c4397fbbabb2af410c18a9",
+    "tests/c_stage.rmd": "6be3a2a53436020cf911dbbb0a52021de32cf7a4ca85e0c3f8798863e9370e63",
+    "tests/check_test.c": "976b2cc8e7540e270ed2fd491f76410830022f879b92890014cda09dea97fe3a",
+    "tests/core_test.c": "1194822cfadeae96b9dd795d772ce105ecf207bc43426577615870407c633f49",
+    "tests/eval_test.c": "63747551ae1e31770b8fb3d2fc47573a464695eb8125f316238c6d4c60dfbf69",
+    "tests/host_test.c": "7839aa6c5d737d028d49f4cdca323ec8915d743b57945a6b5bbd6adbd0a3ce46",
+    "tests/native.c": "d1b98653f591cd1389993850e11035a0e14933fc9ed5565b549f5b6c612af51d",
+    "tests/parallel_test.c": "2dda272143df8088ef4484da81fb0d34446c0d79f8eeb57ba076550a356c0cfa",
+    "tests/read_test.c": "930f5ff9fbd80a0eaf24fa18d9d6f8534a8f3bfb261c4ba2cb17a2fe4c72d81f",
+    "tests/run.py": "850e1ed4d7b1b9c794521d41f04d84cdc10b189618833a3b0b06d2d335b5fa29",
+    "tests/runtime.rmd": "e58ea1f7e1a8dd0ab6e3104b9c46f5aa20e289b59b85245408e55a7d97a89c97",
+    "tests/source_order.py": "058805b740623cc0484f5fa797d2fa3266bbcea72b5362c0529e4f5f5cf05ab7",
+    "tests/x64_test.c": "f28d81701d2aff2684e941c592b18de6e7197ad5edc74c435dd07cb6e68b5506",
+    "tools/api.py": "d395d18025d73156d319113b6cc491f9d088751caed23e572d868007030b3af1",
+    "tools/prelude.py": "eeb10f2f50eccd7811e522668f2a5a4fb92fd992eab2e1229fe10dfb615c4bec"
+  },
+  "binary_sha256": {
+    ".profile-cache/source-order-sanitize/rmd": "c288bb446e95d3da230267ec97abec0d98016729349f5301cfa26ebd766d9ddd",
+    ".profile-cache/source-order-sanitize/rmd0": "c86e6e65880d5869c8f3b94a04425b3c8d624f2b641534d9c3cc9a47d46ee88a",
+    ".profile-cache/source-order-sanitize/rmd-c": "82811b7f358b9e59b0b3142744e680a12c04f9566fd358507b9486a1ed8ce7b7",
+    ".profile-cache/source-order-sanitize/rmd-c-library.so": "145dbdca865bccf20668bcbecf831acd12d3cf4c37af42fcbd5e6133d6e4bfd2",
+    ".profile-cache/source-order-sanitize/rmd-c-library.o": "275caab76c8b52c413ec13f6268cb0c531941bb7a0a9fe5373a6e71e186c8770"
+  },
+  "log_path_rule": "Log paths are relative to the repository root. The embedded logs are durable evidence. @REPO@ replaces the absolute repository directory in log text.",
+  "commands": [
+    {
+      "name": "build",
+      "command": [
+        "make",
+        "-j2",
+        "CC=gcc",
+        "BUILD=.profile-cache/source-order-sanitize",
+        "CFLAGS=-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer",
+        "LDFLAGS=-fsanitize=address,undefined",
+        "-B",
+        "all",
+        "c-stage",
+        ".profile-cache/source-order-sanitize/core_test",
+        ".profile-cache/source-order-sanitize/read_test",
+        ".profile-cache/source-order-sanitize/check_test",
+        ".profile-cache/source-order-sanitize/host_test",
+        ".profile-cache/source-order-sanitize/parallel_test",
+        ".profile-cache/source-order-sanitize/x64_test",
+        ".profile-cache/source-order-sanitize/eval_test"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/build.log",
+      "raw_log_sha256": "6aaac2eb18e5fcca3ba7b3f33610b45fd8935108a184a17424d856824f8a5291",
+      "normalized_log_sha256": "6aaac2eb18e5fcca3ba7b3f33610b45fd8935108a184a17424d856824f8a5291",
+      "log": "mkdir -p .profile-cache/source-order-sanitize\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla -MMD -MP -c src/core.c -o .profile-cache/source-order-sanitize/core.o\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla -MMD -MP -c src/read.c -o .profile-cache/source-order-sanitize/read.o\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla -MMD -MP -c src/check.c -o .profile-cache/source-order-sanitize/check.o\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla -MMD -MP -c src/x64.c -o .profile-cache/source-order-sanitize/x64.o\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla -MMD -MP -c src/eval.c -o .profile-cache/source-order-sanitize/eval.o\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla -MMD -MP -c src/run.c -o .profile-cache/source-order-sanitize/run.o\npython3 tools/prelude.py .profile-cache/source-order-sanitize/prelude.inc\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla -MMD -MP -c runtime/host.c -o .profile-cache/source-order-sanitize/host.o\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla -MMD -MP -c src/driver.c -o .profile-cache/source-order-sanitize/driver.o\nar rcs .profile-cache/source-order-sanitize/librmd0.a .profile-cache/source-order-sanitize/core.o .profile-cache/source-order-sanitize/read.o .profile-cache/source-order-sanitize/check.o .profile-cache/source-order-sanitize/x64.o\nar rcs .profile-cache/source-order-sanitize/librmd0_host.a .profile-cache/source-order-sanitize/host.o\ngcc -Iinclude -I.profile-cache/source-order-sanitize -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla -MMD -MP -c src/run_main.c -o .profile-cache/source-order-sanitize/run_main.o\ngcc -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer .profile-cache/source-order-sanitize/core.o .profile-cache/source-order-sanitize/read.o .profile-cache/source-order-sanitize/check.o .profile-cache/source-order-sanitize/x64.o .profile-cache/source-order-sanitize/driver.o .profile-cache/source-order-sanitize/host.o -fsanitize=address,undefined -o .profile-cache/source-order-sanitize/rmd0\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla tests/core_test.c .profile-cache/source-order-sanitize/librmd0.a .profile-cache/source-order-sanitize/librmd0_host.a -fsanitize=address,undefined -pthread -o .profile-cache/source-order-sanitize/core_test\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla tests/read_test.c .profile-cache/source-order-sanitize/librmd0.a .profile-cache/source-order-sanitize/librmd0_host.a -fsanitize=address,undefined -pthread -o .profile-cache/source-order-sanitize/read_test\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla tests/check_test.c .profile-cache/source-order-sanitize/librmd0.a .profile-cache/source-order-sanitize/librmd0_host.a -fsanitize=address,undefined -pthread -o .profile-cache/source-order-sanitize/check_test\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla tests/host_test.c .profile-cache/source-order-sanitize/librmd0.a .profile-cache/source-order-sanitize/librmd0_host.a -fsanitize=address,undefined -pthread -o .profile-cache/source-order-sanitize/host_test\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla tests/parallel_test.c .profile-cache/source-order-sanitize/librmd0.a .profile-cache/source-order-sanitize/librmd0_host.a -fsanitize=address,undefined -pthread -o .profile-cache/source-order-sanitize/parallel_test\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla tests/x64_test.c .profile-cache/source-order-sanitize/librmd0.a .profile-cache/source-order-sanitize/librmd0_host.a -fsanitize=address,undefined -pthread -o .profile-cache/source-order-sanitize/x64_test\ngcc -Iinclude -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla tests/eval_test.c tests/native.c .profile-cache/source-order-sanitize/eval.o .profile-cache/source-order-sanitize/librmd0.a .profile-cache/source-order-sanitize/librmd0_host.a -rdynamic -fsanitize=address,undefined -ldl -lffi -o .profile-cache/source-order-sanitize/eval_test\ngcc -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer .profile-cache/source-order-sanitize/core.o .profile-cache/source-order-sanitize/read.o .profile-cache/source-order-sanitize/check.o .profile-cache/source-order-sanitize/x64.o .profile-cache/source-order-sanitize/eval.o .profile-cache/source-order-sanitize/run.o .profile-cache/source-order-sanitize/run_main.o .profile-cache/source-order-sanitize/host.o -rdynamic -fsanitize=address,undefined -ldl -lffi -o .profile-cache/source-order-sanitize/rmd\nar rcs .profile-cache/source-order-sanitize/librmd0_run.a .profile-cache/source-order-sanitize/eval.o .profile-cache/source-order-sanitize/run.o\n.profile-cache/source-order-sanitize/rmd0 -S -o .profile-cache/source-order-sanitize/rmd-c-seed.s api/rmd0.rmd api/rmd0_host.rmd api/rmd0_stage.rmd stages/c/model.rmd stages/c/base.rmd stages/c/types.rmd stages/c/emit.rmd stages/c/driver.rmd stages/c/program.rmd stages/c/main.rmd\nas --64 .profile-cache/source-order-sanitize/rmd-c-seed.s -o .profile-cache/source-order-sanitize/rmd-c-seed.o\ngcc -no-pie .profile-cache/source-order-sanitize/rmd-c-seed.o .profile-cache/source-order-sanitize/librmd0.a .profile-cache/source-order-sanitize/librmd0_host.a -fsanitize=address,undefined -o .profile-cache/source-order-sanitize/rmd-c-seed\n.profile-cache/source-order-sanitize/rmd-c-seed -o .profile-cache/source-order-sanitize/rmd-c api/rmd0.rmd api/rmd0_host.rmd api/rmd0_stage.rmd stages/c/model.rmd stages/c/base.rmd stages/c/types.rmd stages/c/emit.rmd stages/c/driver.rmd stages/c/program.rmd stages/c/main.rmd --cflag -O1 --cflag -g --cflag -fsanitize=address,undefined --cflag -fno-omit-frame-pointer --ldflag .profile-cache/source-order-sanitize/librmd0.a --ldflag .profile-cache/source-order-sanitize/librmd0_host.a --ldflag -fsanitize=address,undefined\n.profile-cache/source-order-sanitize/rmd-c --library --object --export c_backend_build --export c_program --cflag=-fPIC --cflag=-fno-semantic-interposition --cflag -O1 --cflag -g --cflag -fsanitize=address,undefined --cflag -fno-omit-frame-pointer -o .profile-cache/source-order-sanitize/rmd-c-library.o api/rmd0.rmd api/rmd0_host.rmd api/rmd0_stage.rmd stages/c/model.rmd stages/c/base.rmd stages/c/types.rmd stages/c/emit.rmd stages/c/driver.rmd stages/c/program.rmd\ngcc -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now .profile-cache/source-order-sanitize/rmd-c-library.o -fsanitize=address,undefined -o .profile-cache/source-order-sanitize/rmd-c-library.so\n"
+    },
+    {
+      "name": "core-test",
+      "command": [
+        ".profile-cache/source-order-sanitize/core_test"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/core-test.log",
+      "raw_log_sha256": "31066365c9c4ebdffc7d817e3c348b8b15e319cd70522b92b57c780318b2d037",
+      "normalized_log_sha256": "31066365c9c4ebdffc7d817e3c348b8b15e319cd70522b92b57c780318b2d037",
+      "log": "allocation sweep: 19 failure points\ncore: 10336/10336 checks passed\n"
+    },
+    {
+      "name": "read-test",
+      "command": [
+        ".profile-cache/source-order-sanitize/read_test"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/read-test.log",
+      "raw_log_sha256": "20cc5902c3fb6739ada345691c0d9f515fe202fefc4644ddb4cab450b5d24b29",
+      "normalized_log_sha256": "20cc5902c3fb6739ada345691c0d9f515fe202fefc4644ddb4cab450b5d24b29",
+      "log": "reader: 337/337 checks passed\n"
+    },
+    {
+      "name": "check-test",
+      "command": [
+        ".profile-cache/source-order-sanitize/check_test"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/check-test.log",
+      "raw_log_sha256": "81bbfc5e9554eb4f63bff719af9dffd7b3d6cdd4a6a9260f84813ba1859f0737",
+      "normalized_log_sha256": "81bbfc5e9554eb4f63bff719af9dffd7b3d6cdd4a6a9260f84813ba1859f0737",
+      "log": "checker: 178/178 checks passed\n"
+    },
+    {
+      "name": "host-test",
+      "command": [
+        ".profile-cache/source-order-sanitize/host_test"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/host-test.log",
+      "raw_log_sha256": "88f497d0c936b5c7478d14e047b02631f774a9cd77a27af051539c9fb751d885",
+      "normalized_log_sha256": "88f497d0c936b5c7478d14e047b02631f774a9cd77a27af051539c9fb751d885",
+      "log": "host: 28/28 checks passed\n"
+    },
+    {
+      "name": "parallel-test",
+      "command": [
+        ".profile-cache/source-order-sanitize/parallel_test"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/parallel-test.log",
+      "raw_log_sha256": "891b55b6e9e48a2fc71cac63ac9ef6ea6b1752a4cfe3cfc6d12d05fecef7ea48",
+      "normalized_log_sha256": "891b55b6e9e48a2fc71cac63ac9ef6ea6b1752a4cfe3cfc6d12d05fecef7ea48",
+      "log": "parallel: 75/75 checks passed; 6 jobs, serial and two concurrent orders\n"
+    },
+    {
+      "name": "x64-test",
+      "command": [
+        ".profile-cache/source-order-sanitize/x64_test"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/x64-test.log",
+      "raw_log_sha256": "847f6f4548988b2afafc0c587271409412cbf9da3f13c0df4010129b7e86edc8",
+      "normalized_log_sha256": "847f6f4548988b2afafc0c587271409412cbf9da3f13c0df4010129b7e86edc8",
+      "log": "x64: 121/121 checks passed\n"
+    },
+    {
+      "name": "eval-test",
+      "command": [
+        ".profile-cache/source-order-sanitize/eval_test"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/eval-test.log",
+      "raw_log_sha256": "eec4a90f8f5a9f1f1535d4e3166b7f5b4dfc17197872072927912e00244aa768",
+      "normalized_log_sha256": "eec4a90f8f5a9f1f1535d4e3166b7f5b4dfc17197872072927912e00244aa768",
+      "log": "evaluator: 10829/10829 checks passed\n"
+    },
+    {
+      "name": "source-order",
+      "command": [
+        "make",
+        "-j2",
+        "CC=gcc",
+        "BUILD=.profile-cache/source-order-sanitize",
+        "CFLAGS=-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer",
+        "LDFLAGS=-fsanitize=address,undefined",
+        "check-stage"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/source-order.log",
+      "raw_log_sha256": "2b459c6e474ff9e4763289417c9746860e29ff7fd6fc63eb50856575f90135d1",
+      "normalized_log_sha256": "2b459c6e474ff9e4763289417c9746860e29ff7fd6fc63eb50856575f90135d1",
+      "log": "python3 tests/source_order.py --build .profile-cache/source-order-sanitize --cc 'gcc' --cflags='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' --ldflags='-fsanitize=address,undefined'\nsource order: root passed\nhost integers: 10220 comparisons; required traps: 65\nsource order: runtime passed\nsource order: readers passed\nsource order: foreign passed\nsource order: target passed\nsource order: 141 process checks passed\n"
+    },
+    {
+      "name": "c-backend",
+      "command": [
+        "make",
+        "-j2",
+        "CC=gcc",
+        "BUILD=.profile-cache/source-order-sanitize",
+        "CFLAGS=-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer",
+        "LDFLAGS=-fsanitize=address,undefined",
+        "check-c"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/c-backend.log",
+      "raw_log_sha256": "24ba29d1baba33c15748ec7b8401c639d96a71f1dc3284921d565dbb549558d8",
+      "normalized_log_sha256": "24ba29d1baba33c15748ec7b8401c639d96a71f1dc3284921d565dbb549558d8",
+      "log": "python3 tests/run.py --backend c --compiler .profile-cache/source-order-sanitize/rmd-c --cc 'gcc' --assembler 'as --64' --cflags='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' --ldflags='-fsanitize=address,undefined'\ninteger values: 10220 comparisons passed\nrequired traps: 65 processes passed\npublic layouts: 260 C/RMD0 comparisons passed\ndriver stat layout: 20 C/RMD0 comparisons passed\nC stage: seed, self, and next generations emit identical C and exact-symbol response files\nintegration (c): 348 process checks passed\n"
+    },
+    {
+      "name": "api",
+      "command": [
+        "python3",
+        "tools/api.py",
+        "--check"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/api.log",
+      "raw_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalized_log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "log": ""
+    },
+    {
+      "name": "backend-dynamic",
+      "command": [
+        "readelf",
+        "-d",
+        ".profile-cache/source-order-sanitize/rmd-c-library.so"
+      ],
+      "exit_status": 0,
+      "log_file": ".profile-cache/source-order-sanitize/backend-dynamic.log",
+      "raw_log_sha256": "bb3b7554f5e5f5fce1e87c687f6a49cf5ec3f505be71dd26c4dbf1e70fefe89a",
+      "normalized_log_sha256": "bb3b7554f5e5f5fce1e87c687f6a49cf5ec3f505be71dd26c4dbf1e70fefe89a",
+      "log": "\nDynamic section at offset 0x62c28 contains 29 entries:\n  Tag        Type                         Name/Value\n 0x0000000000000001 (NEEDED)             Shared library: [libasan.so.8]\n 0x0000000000000001 (NEEDED)             Shared library: [libubsan.so.1]\n 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]\n 0x0000000000000010 (SYMBOLIC)           0x0\n 0x000000000000000c (INIT)               0x29000\n 0x000000000000000d (FINI)               0x55a30\n 0x0000000000000019 (INIT_ARRAY)         0x63c08\n 0x000000000000001b (INIT_ARRAYSZ)       16 (bytes)\n 0x000000000000001a (FINI_ARRAY)         0x63c18\n 0x000000000000001c (FINI_ARRAYSZ)       16 (bytes)\n 0x000000006ffffef5 (GNU_HASH)           0x2f0\n 0x0000000000000005 (STRTAB)             0x2648\n 0x0000000000000006 (SYMTAB)             0xad0\n 0x000000000000000a (STRSZ)              4367 (bytes)\n 0x000000000000000b (SYMENT)             24 (bytes)\n 0x0000000000000003 (PLTGOT)             0x63e38\n 0x0000000000000002 (PLTRELSZ)           1176 (bytes)\n 0x0000000000000014 (PLTREL)             RELA\n 0x0000000000000017 (JMPREL)             0x27ff0\n 0x0000000000000007 (RELA)               0x39d8\n 0x0000000000000008 (RELASZ)             149016 (bytes)\n 0x0000000000000009 (RELAENT)            24 (bytes)\n 0x000000000000001e (FLAGS)              SYMBOLIC BIND_NOW\n 0x000000006ffffffb (FLAGS_1)            Flags: NOW\n 0x000000006ffffffe (VERNEED)            0x39a8\n 0x000000006fffffff (VERNEEDNUM)         1\n 0x000000006ffffff0 (VERSYM)             0x3758\n 0x000000006ffffff9 (RELACOUNT)          6204\n 0x0000000000000000 (NULL)               0x0\n"
+    }
+  ]
+}

@@ -1,8 +1,13 @@
 # Source-order compilation programs
 
-Date: 2026-10-01. Status: investigation and proposed contract.
-The current implementation still uses the [leading host block](source-stages.md).
-This proposal does not change the implemented grammar.
+Date: 2026-10-01. Status: design study retained as the experiment record.
+This study examined the [native host block](source-stages.md) at revision
+`9cff8f4`. The [source runner](source-runner.md) now implements its selected
+contract: exact action boundaries, semicolon-ended root compounds, incremental
+host checking, and checked-tree execution. The
+[reader-transfer proof](../benchmarks/source-order/proof.md) passed before
+the complete evaluator was added. Statements below about the current compiler
+and required changes describe that earlier revision.
 
 ## Decision
 

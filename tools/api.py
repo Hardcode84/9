@@ -18,7 +18,7 @@ SCALARS = {
     "int32_t": "i32", "uint32_t": "u32", "uint64_t": "u64", "size_t": "usize",
     "uintptr_t": "usize", "unsigned": "u32",
 }
-OPAQUE = {"void", "FILE", "RmdArenaBlock", "RmdFailureFrame"}
+OPAQUE = {"void", "FILE", "RmdArenaBlock", "RmdFailureFrame", "RmdEval", "RmdRunState"}
 
 
 def main():
@@ -27,7 +27,7 @@ def main():
     args = parser.parse_args()
     enums = {}
     headers = {}
-    for stem in ("rmd0", "rmd0_host", "rmd0_x64", "rmd0_stage"):
+    for stem in ("rmd0", "rmd0_host", "rmd0_x64", "rmd0_stage", "rmd0_eval", "rmd0_run"):
         source = (ROOT / "include" / f"{stem}.h").read_text()
         source = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
         source = re.sub(r"^#.*$", "", source, flags=re.M)

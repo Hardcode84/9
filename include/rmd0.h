@@ -24,8 +24,8 @@ typedef struct RmdField RmdField;
 typedef struct RmdParam RmdParam;
 typedef struct RmdInit RmdInit;
 typedef struct RmdUnit RmdUnit;
-typedef struct RmdMetaInput RmdMetaInput;
-typedef struct RmdMeta RmdMeta;
+typedef struct RmdAction RmdAction;
+typedef struct RmdRootScope RmdRootScope;
 
 typedef struct {
     void *user;
@@ -227,18 +227,15 @@ struct RmdUnit {
     RmdUnit *next;
 };
 
-struct RmdMetaInput {
-    RmdMetaInput *next;
-    RmdLoc loc;
-    char *path;
-    bool native;
+struct RmdAction {
+    RmdDecl *declaration;
+    RmdStmt *statement;
+    size_t end;
 };
 
-struct RmdMeta {
-    RmdUnit *host_unit;
-    RmdMetaInput *inputs;
-    size_t target_begin;
-    RmdLoc loc;
+struct RmdRootScope {
+    RmdMap locals;
+    RmdSymbol *scope;
 };
 
 typedef struct RmdFailureFrame {
@@ -301,11 +298,13 @@ bool rmd_read(RmdContext *ctx, RmdSource *source, RmdUnit **result);
    Input bytes and source descriptors remain live until the context is destroyed. */
 bool rmd_read_range(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
                     RmdUnit **result);
-/* Read one leading meta block into this host context. Do not read its target bytes.
-   Without a block, allocate nothing and return a null unit and the first token offset.
-   Publish a host unit only after a complete block. Failure clears result.
-   Input bytes and source descriptors remain live until the context is destroyed. */
-bool rmd_read_meta(RmdContext *ctx, RmdSource *source, RmdMeta *result);
+/* Read one root action without reading past its final delimiter. The result is
+   unlinked. Exactly one node is nonnull, or both are null at EOF. End is the
+   absolute offset after the delimiter, or the range end at EOF. Root blocks,
+   if, and while require a final semicolon. Failure clears result.
+   Input bytes and source descriptors remain live until context destruction. */
+bool rmd_read_one(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
+                  RmdAction *result);
 /* A binding borrows complete resolved facts. The provider must outlive this context. */
 bool rmd_bind(RmdContext *ctx, RmdName *name, RmdDecl *declaration);
 /* Owned syntax has one expression or statement node per occurrence. */
@@ -313,6 +312,15 @@ bool rmd_collect(RmdContext *ctx);
 bool rmd_resolve(RmdContext *ctx);
 bool rmd_check_body(RmdContext *ctx, RmdDecl *function);
 bool rmd_check(RmdContext *ctx);
+/* Visit only this unit. Collect, then resolve, then check its declarations.
+   Resolution and checking may use declarations already visible in the context. */
+bool rmd_collect_unit(RmdContext *ctx, RmdUnit *unit_value);
+bool rmd_resolve_unit(RmdContext *ctx, RmdUnit *unit_value);
+bool rmd_check_unit(RmdContext *ctx, RmdUnit *unit_value);
+/* Start with a zeroed scope, or visible local symbols owned by this context.
+   Retain root locals between calls. Root return values must have type i32.
+   Declared functions do not use this scope. Stop the stream after failure. */
+bool rmd_check_root(RmdContext *ctx, RmdRootScope *scope, RmdStmt *statement);
 
 RmdType *rmd_resolve_type(RmdContext *ctx, RmdTypeSyntax *syntax);
 /* Return null and retain a diagnostic if type resolution fails. */

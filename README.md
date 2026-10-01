@@ -4,8 +4,9 @@ RMD is a small systems programming language project.
 The main requirement is C-level compilation speed before backend processing.
 
 The RMD0 bootstrap compiler is implemented in pedantic C99 with arena
-allocation. It emits textual x86-64 assembly for the system assembler and
-linker. Run `make` to build it and `make check` to run the tests.
+allocation. `rmd` executes compilation programs; `rmd0` emits textual x86-64
+assembly for the system assembler and linker. Run `make` to build them and
+`make check` to run the tests. The host runner uses libffi.
 Read the [bootstrap guide](docs/bootstrap.md) for commands, public stage APIs,
 the compiled replacement-stage example, and measurement boundaries.
 
@@ -13,17 +14,19 @@ An optional [C backend stage](docs/c-backend.md) is written entirely in RMD0.
 Run `make c-stage` to build it through the seed and then through its own C
 output. It uses GCC for native code and retains the C99 reader and checker.
 
-A leading [`meta` block](docs/source-stages.md) selects compiler code from the
-user source. The [example](examples/meta.rmd) calls the external C backend:
+Run a [compilation program](docs/source-runner.md) with `rmd main.rmd`.
+The root selects its sources, stages, and outputs through ordinary calls.
+It can change the reader for its remaining bytes. The
+[example](examples/main.rmd) calls the external C backend:
 
 ```sh
-make c-stage
-build/rmd0 examples/meta.rmd -o build/meta-example
-build/meta-example
+make all c-stage
+build/rmd examples/main.rmd
+build/intrusive-from-root
 make check-stage
 ```
 
-The compiler entry controls reading, checking, and output through public APIs.
+The root controls reading, checking, and output through public APIs.
 Its code and declarations remain separate from the target program.
 
 Start with the [RMD0 language specification](docs/rmd0-spec.md). It defines the
@@ -46,11 +49,9 @@ Forth, staged language extensions, a public compiler pipeline, and caching.
 Read the [source metastage review](docs/source-metastages.md) for the Zig and
 Jai comparison and the phase contract used by the source-stage design.
 
-Read the [source-order compilation proposal](docs/source-order-compilation.md)
-for the intended `rmd main.rmd` interface. The root program selects stages,
-loads other files, and can change the reader for its remaining input. This
-proposal includes the execution contract and the required speed experiment.
-It is not yet the implemented source syntax.
+Read the [source-order design study](docs/source-order-compilation.md) for
+the research and experiment plan. The [runner contract](docs/source-runner.md)
+defines the implemented interface and its measurement boundary.
 
 Read the [compiler extension experiment](docs/compiler-extension-experiment.md)
 for a small seed, ownership and unsafe stages, complete syntax replacement,

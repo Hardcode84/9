@@ -9,7 +9,7 @@ enum {
     TOK_UNINIT, TOK_IF, TOK_ELSE, TOK_WHILE, TOK_BREAK, TOK_CONTINUE,
     TOK_RETURN, TOK_TRAP, TOK_AS, TOK_MAKE, TOK_NULL, TOK_SIZEOF,
     TOK_ALIGNOF, TOK_OFFSETOF, TOK_TRUE, TOK_FALSE, TOK_ARROW,
-    TOK_EQ, TOK_NE, TOK_LE, TOK_GE, TOK_SHL, TOK_SHR, TOK_AND, TOK_OR, TOK_META
+    TOK_EQ, TOK_NE, TOK_LE, TOK_GE, TOK_SHL, TOK_SHR, TOK_AND, TOK_OR
 };
 
 typedef struct {
@@ -60,8 +60,7 @@ static const Keyword keywords[] = {
     TYPEWORD("i32", RMD_T_I32), TYPEWORD("u32", RMD_T_U32),
     TYPEWORD("i64", RMD_T_I64), TYPEWORD("u64", RMD_T_U64),
     TYPEWORD("isize", RMD_T_ISIZE), TYPEWORD("usize", RMD_T_USIZE),
-    TYPEWORD("bool", RMD_T_BOOL), TYPEWORD("unit", RMD_T_UNIT),
-    KEYWORD("meta", TOK_META)
+    TYPEWORD("bool", RMD_T_BOOL), TYPEWORD("unit", RMD_T_UNIT)
 };
 
 static bool name_start(unsigned char c)
@@ -265,6 +264,7 @@ static void next_token(Reader *reader)
     }
     reader->token.kind = c;
     ++reader->offset;
+    if (c == ';' || c == '}') return;
     if (reader->offset < size) {
         unsigned char second = source[reader->offset];
         if (c == '-' && second == '>') reader->token.kind = TOK_ARROW;
@@ -298,6 +298,12 @@ static void expect(Reader *reader, int kind, const char *description)
         rmd_fail(reader->ctx, reader->token.loc, "expected %s", description);
 }
 
+static void expect_current(Reader *reader, int kind, const char *description)
+{
+    if (reader->token.kind != kind)
+        rmd_fail(reader->ctx, reader->token.loc, "expected %s", description);
+}
+
 static RmdName *read_name(Reader *reader)
 {
     RmdName *name = reader->token.name;
@@ -322,6 +328,7 @@ static size_t grow_capacity(Reader *reader, size_t capacity)
 static RmdTypeSyntax *read_type(Reader *reader);
 static RmdExpr *read_expr(Reader *reader);
 static RmdStmt *read_block(Reader *reader);
+static RmdStmt *read_block_contents(Reader *reader);
 
 static RmdTypeSyntax *read_type(Reader *reader)
 {
@@ -625,11 +632,10 @@ static RmdStmt *new_stmt(Reader *reader, RmdStmtKind kind, RmdLoc loc)
     return stmt;
 }
 
-static RmdStmt *read_statement(Reader *reader)
+static RmdStmt *read_simple_statement(Reader *reader)
 {
     RmdStmt *stmt;
     RmdLoc loc = reader->token.loc;
-    if (reader->token.kind == '{') return read_block(reader);
     if (take(reader, TOK_VAR)) {
         stmt = new_stmt(reader, RMD_S_VAR, loc);
         stmt->name = read_name(reader);
@@ -638,17 +644,6 @@ static RmdStmt *read_statement(Reader *reader)
         expect(reader, '=', "'='");
         stmt->uninitialized = take(reader, TOK_UNINIT);
         if (!stmt->uninitialized) stmt->value = read_expr(reader);
-    } else if (take(reader, TOK_IF)) {
-        stmt = new_stmt(reader, RMD_S_IF, loc);
-        stmt->expr = read_expr(reader);
-        stmt->body = read_block(reader);
-        if (take(reader, TOK_ELSE)) stmt->otherwise = read_block(reader);
-        return stmt;
-    } else if (take(reader, TOK_WHILE)) {
-        stmt = new_stmt(reader, RMD_S_WHILE, loc);
-        stmt->expr = read_expr(reader);
-        stmt->body = read_block(reader);
-        return stmt;
     } else if (take(reader, TOK_BREAK)) {
         stmt = new_stmt(reader, RMD_S_BREAK, loc);
     } else if (take(reader, TOK_CONTINUE)) {
@@ -666,11 +661,34 @@ static RmdStmt *read_statement(Reader *reader)
             stmt->value = read_expr(reader);
         }
     }
-    expect(reader, ';', "';'");
+    expect_current(reader, ';', "';'");
     return stmt;
 }
 
-static RmdStmt *read_block(Reader *reader)
+static RmdStmt *read_statement(Reader *reader)
+{
+    RmdStmt *stmt;
+    RmdLoc loc = reader->token.loc;
+    if (reader->token.kind == '{') return read_block(reader);
+    if (take(reader, TOK_IF)) {
+        stmt = new_stmt(reader, RMD_S_IF, loc);
+        stmt->expr = read_expr(reader);
+        stmt->body = read_block(reader);
+        if (take(reader, TOK_ELSE)) stmt->otherwise = read_block(reader);
+        return stmt;
+    }
+    if (take(reader, TOK_WHILE)) {
+        stmt = new_stmt(reader, RMD_S_WHILE, loc);
+        stmt->expr = read_expr(reader);
+        stmt->body = read_block(reader);
+        return stmt;
+    }
+    stmt = read_simple_statement(reader);
+    next_token(reader);
+    return stmt;
+}
+
+static RmdStmt *read_block_contents(Reader *reader)
 {
     RmdStmt *block;
     RmdStmt **tail;
@@ -684,8 +702,14 @@ static RmdStmt *read_block(Reader *reader)
         *tail = read_statement(reader);
         tail = &(*tail)->next;
     }
-    next_token(reader);
     --reader->depth;
+    return block;
+}
+
+static RmdStmt *read_block(Reader *reader)
+{
+    RmdStmt *block = read_block_contents(reader);
+    next_token(reader);
     return block;
 }
 
@@ -694,8 +718,6 @@ static RmdDecl *read_declaration(Reader *reader)
     Token token = reader->token;
     RmdDecl *decl = NEW(reader, RmdDecl);
     decl->loc = token.loc;
-    if (token.kind == TOK_META)
-        rmd_fail(reader->ctx, token.loc, "meta is permitted only in a leading host block");
     if (take(reader, TOK_RECORD)) {
         RmdField **tail = &decl->fields;
         decl->kind = RMD_D_RECORD;
@@ -712,7 +734,6 @@ static RmdDecl *read_declaration(Reader *reader)
             *tail = field;
             tail = &field->next;
         } while (reader->token.kind != '}');
-        next_token(reader);
     } else if (token.kind == TOK_FN || token.kind == TOK_EXTERN) {
         RmdParam **tail = &decl->params;
         decl->kind = token.kind == TOK_FN ? RMD_D_FUNCTION : RMD_D_EXTERN;
@@ -737,7 +758,7 @@ static RmdDecl *read_declaration(Reader *reader)
         expect(reader, TOK_ARROW, "'->'");
         decl->syntax_type = read_type(reader);
         if (decl->kind == RMD_D_FUNCTION) {
-            decl->body = read_block(reader);
+            decl->body = read_block_contents(reader);
         } else {
             size_t i;
             expect(reader, '=', "'='");
@@ -751,7 +772,7 @@ static RmdDecl *read_declaration(Reader *reader)
             }
             decl->link_name = (const char *)reader->token.bytes;
             next_token(reader);
-            expect(reader, ';', "';'");
+            expect_current(reader, ';', "';'");
         }
     } else if (take(reader, TOK_CONST)) {
         decl->kind = RMD_D_CONST;
@@ -760,7 +781,7 @@ static RmdDecl *read_declaration(Reader *reader)
         decl->syntax_type = read_type(reader);
         expect(reader, '=', "'='");
         decl->init = read_expr(reader);
-        expect(reader, ';', "';'");
+        expect_current(reader, ';', "';'");
     } else {
         rmd_fail(reader->ctx, token.loc, "expected a declaration");
     }
@@ -790,97 +811,9 @@ static RmdUnit *read_unit(RmdContext *ctx, RmdSource *source, size_t begin, size
         decl->identity = ++ordinal;
         *tail = decl;
         tail = &decl->next;
+        next_token(&reader);
     }
     return unit;
-}
-
-static void read_meta(RmdContext *ctx, RmdSource *source, RmdMeta *result)
-{
-    Reader reader;
-    RmdUnit *unit;
-    RmdDecl **tail;
-    RmdMetaInput **input_tail = &result->inputs;
-    uint64_t ordinal = 0;
-    memset(&reader, 0, sizeof(reader));
-    reader.ctx = ctx;
-    reader.source = source;
-    reader.end = source->size;
-    skip_trivia(&reader);
-    result->target_begin = reader.offset;
-    if (source->size - reader.offset < 4 ||
-        memcmp(source->bytes + reader.offset, "meta", 4) != 0 ||
-        (source->size - reader.offset > 4 && name_continue(source->bytes[reader.offset + 4])))
-        return;
-    next_token(&reader);
-    result->loc = reader.token.loc;
-    next_token(&reader);
-    expect(&reader, '{', "'{' after meta");
-    unit = NEW(&reader, RmdUnit);
-    unit->source = source;
-    tail = &unit->declarations;
-    while (reader.token.kind != '}') {
-        bool native = reader.token.kind == TOK_NAME &&
-            strcmp(reader.token.name->text, "link") == 0;
-        bool dependency = native || (reader.token.kind == TOK_NAME &&
-            strcmp(reader.token.name->text, "source") == 0);
-        if (reader.token.kind == TOK_EOF)
-            rmd_fail(ctx, reader.token.loc, "expected '}' to close meta block");
-        if (dependency) {
-            RmdLoc loc = reader.token.loc;
-            RmdMetaInput *input;
-            size_t index;
-            if (ordinal != 0)
-                rmd_fail(ctx, loc, "meta inputs must precede declarations");
-            next_token(&reader);
-            if (reader.token.kind != TOK_STRING)
-                rmd_fail(ctx, reader.token.loc, "expected a meta input path string");
-            if (reader.token.byte_count == 1)
-                rmd_fail(ctx, reader.token.loc, "meta input path must not be empty");
-            for (index = 0; index + 1 < reader.token.byte_count; ++index) {
-                if (reader.token.bytes[index] == 0)
-                    rmd_fail(ctx, reader.token.loc, "meta input path must not contain zero bytes");
-            }
-            input = NEW(&reader, RmdMetaInput);
-            input->loc = loc;
-            input->path = (char *)reader.token.bytes;
-            input->native = native;
-            *input_tail = input;
-            input_tail = &input->next;
-            next_token(&reader);
-            expect(&reader, ';', "';' after meta input");
-        } else {
-            RmdDecl *decl = read_declaration(&reader);
-            if (ordinal == UINT64_MAX)
-                rmd_fail(ctx, decl->loc, "too many declarations");
-            decl->unit_identity = source->identity;
-            decl->identity = ++ordinal;
-            *tail = decl;
-            tail = &decl->next;
-        }
-    }
-    result->target_begin = reader.offset;
-    result->host_unit = unit;
-}
-
-bool rmd_read_meta(RmdContext *ctx, RmdSource *source, RmdMeta *result)
-{
-    RmdFailureFrame failure;
-    memset(result, 0, sizeof(*result));
-    failure.previous = ctx->failure;
-    ctx->failure = &failure;
-    if (setjmp(failure.jump) != 0) {
-        memset(result, 0, sizeof(*result));
-        ctx->failure = failure.previous;
-        return false;
-    }
-    read_meta(ctx, source, result);
-    if (result->host_unit != NULL) {
-        if (ctx->last_unit == NULL) ctx->units = result->host_unit;
-        else ctx->last_unit->next = result->host_unit;
-        ctx->last_unit = result->host_unit;
-    }
-    ctx->failure = failure.previous;
-    return true;
 }
 
 bool rmd_read_range(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
@@ -905,6 +838,52 @@ bool rmd_read_range(RmdContext *ctx, RmdSource *source, size_t begin, size_t end
     else ctx->last_unit->next = unit;
     ctx->last_unit = unit;
     *result = unit;
+    ctx->failure = failure.previous;
+    return true;
+}
+
+bool rmd_read_one(RmdContext *ctx, RmdSource *source, size_t begin, size_t end,
+                  RmdAction *result)
+{
+    RmdFailureFrame failure;
+    Reader reader;
+    memset(result, 0, sizeof(*result));
+    if (begin > end || end > source->size) {
+        rmd_set_error(ctx, source, begin <= source->size ? begin : source->size,
+                      "source range must satisfy begin <= end <= source size");
+        return false;
+    }
+    failure.previous = ctx->failure;
+    ctx->failure = &failure;
+    if (setjmp(failure.jump) != 0) {
+        memset(result, 0, sizeof(*result));
+        ctx->failure = failure.previous;
+        return false;
+    }
+    memset(&reader, 0, sizeof(reader));
+    reader.ctx = ctx;
+    reader.source = source;
+    reader.offset = begin;
+    reader.end = end;
+    next_token(&reader);
+    if (reader.token.kind == TOK_RECORD || reader.token.kind == TOK_FN ||
+        reader.token.kind == TOK_EXTERN || reader.token.kind == TOK_CONST) {
+        RmdDecl *decl = read_declaration(&reader);
+        if (decl->loc.offset >= UINT64_MAX)
+            rmd_fail(ctx, decl->loc, "declaration offset exceeds the identity limit");
+        decl->unit_identity = source->identity;
+        decl->identity = (uint64_t)decl->loc.offset + 1;
+        result->declaration = decl;
+    } else if (reader.token.kind != TOK_EOF) {
+        if (reader.token.kind == '{' || reader.token.kind == TOK_IF ||
+            reader.token.kind == TOK_WHILE) {
+            result->statement = read_statement(&reader);
+            expect_current(&reader, ';', "';' after a root block, if, or while");
+        } else {
+            result->statement = read_simple_statement(&reader);
+        }
+    }
+    result->end = reader.offset;
     ctx->failure = failure.previous;
     return true;
 }

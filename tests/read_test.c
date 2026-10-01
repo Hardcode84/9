@@ -136,6 +136,8 @@ static void test_grammar_corpus(void)
            "fn sizeof_buffer() -> unit { var while_loop: bool = false; }", true);
     SYNTAX("syntax: removed_keywords_are_names",
            "fn module(import: u32, pub: u32) -> u32 { var unsafe: u32 = import; return unsafe + pub; }", true);
+    SYNTAX("source setup uses ordinary names",
+           "fn meta(source: u32, link: u32) -> u32 { return source + link; }", true);
     SYNTAX("syntax: high_bytes_in_comment",
            "// \377\nfn test() -> unit {}", true);
     SYNTAX("syntax: high_bytes_in_string",
@@ -535,169 +537,13 @@ static void reject_release(void *user, void *allocation)
     check(false, "failed allocator must not release absent allocation");
 }
 
-static void test_meta_absence(void)
-{
-    static const struct {
-        const char *text;
-        size_t begin;
-    } cases[] = {
-        {"", 0}, {" \t\r\n", 4}, {"// comment", 10},
-        {" \n// comment\nfn f() -> unit {}", 13},
-        {"metadata", 0}, {"meta_name", 0}, {"meta1", 0},
-        {"\"unterminated", 0}, {"@", 0}
-    };
-    RmdAllocator allocator;
-    RmdContext ctx;
-    size_t calls = 0;
-    size_t index;
-    allocator.user = &calls;
-    allocator.allocate = reject_allocation;
-    allocator.release = reject_release;
-    rmd_context_init(&ctx, &allocator);
-    for (index = 0; index < sizeof(cases) / sizeof(cases[0]); ++index) {
-        RmdSource source = source_text(cases[index].text, strlen(cases[index].text), index + 1);
-        RmdMeta meta;
-        memset(&meta, 0xff, sizeof(meta));
-        check(rmd_read_meta(&ctx, &source, &meta) && meta.host_unit == NULL &&
-              meta.inputs == NULL && meta.loc.source == NULL &&
-              meta.target_begin == cases[index].begin && calls == 0 &&
-              ctx.units == NULL && ctx.last_unit == NULL && ctx.failure == NULL &&
-              ctx.error_count == 0, "absent meta skips trivia without allocation or target lexing");
-    }
-    rmd_context_destroy(&ctx);
-}
-
-static void meta_case(const char *name, const char *text, bool expected)
-{
-    RmdContext ctx;
-    RmdSource source = source_text(text, strlen(text), 1);
-    RmdMeta meta;
-    bool accepted;
-    rmd_context_init(&ctx, NULL);
-    accepted = rmd_read_meta(&ctx, &source, &meta);
-    check(accepted == expected, name);
-    if (accepted != expected) fprintf(stderr, "diagnostic: %s\n", ctx.error);
-    if (!accepted) {
-        check(meta.host_unit == NULL && meta.inputs == NULL && meta.target_begin == 0 &&
-              meta.loc.source == NULL && ctx.units == NULL && ctx.last_unit == NULL &&
-              ctx.failure == NULL && ctx.error_count == 1,
-              "meta failure clears result and publishes no unit");
-    }
-    rmd_context_destroy(&ctx);
-}
-
-static void test_meta_grammar(void)
-{
-    meta_case("empty meta block", "meta {}", true);
-    meta_case("meta declarations only", "meta { fn source() -> unit {} fn link() -> unit {} }", true);
-    meta_case("meta inputs only", "meta { source \"api.rmd\"; link \"library.a\"; }", true);
-    meta_case("meta path byte strings", "meta { source \"\\xFF.rmd\"; }", true);
-    meta_case("meta missing open brace", "meta", false);
-    meta_case("meta missing close brace", "meta {", false);
-    meta_case("meta missing path", "meta { source; }", false);
-    meta_case("meta path must be literal", "meta { source path; }", false);
-    meta_case("meta empty source path", "meta { source \"\"; }", false);
-    meta_case("meta empty link path", "meta { link \"\"; }", false);
-    meta_case("meta zero in path", "meta { source \"a\\0b\"; }", false);
-    meta_case("meta missing input semicolon", "meta { link \"library.a\" }", false);
-    meta_case("meta input after declaration", "meta { const x: u8 = 1u8; source \"a\"; }", false);
-    meta_case("meta nested block", "meta { meta {} }", false);
-    meta_case("meta nested in function", "meta { fn f() -> unit { meta {} } }", false);
-    meta_case("meta statements are not declarations", "meta { trap; }", false);
-    SYNTAX("ordinary reader rejects leading meta", "meta {}", false);
-    SYNTAX("ordinary reader rejects misplaced meta", "fn f() -> unit {} meta {}", false);
-    SYNTAX("meta inputs are contextual names", "fn source(link: u8) -> u8 { return link; }", true);
-}
-
-static void test_meta_ownership(void)
-{
-    static const char text[] = "// original source\nmeta {\n"
-        "source \"api\\x2fcompiler.rmd\"; link \"backend.a\";\n"
-        "const shared: u8 = 1u8; fn main() -> unit {}\n}"
-        "\nconst shared: u8 = 2u8; fn main() -> unit {}";
-    RmdContext host;
-    RmdContext target;
-    RmdSource source = source_text(text, sizeof(text) - 1, 41);
-    RmdMeta meta;
-    RmdUnit *target_unit;
-    RmdMetaInput *input;
-    size_t target_begin = (size_t)(strstr(text, "\nconst shared: u8 = 2u8;") - text);
-    rmd_context_init(&host, NULL);
-    rmd_context_init(&target, NULL);
-    if (!rmd_read_meta(&host, &source, &meta) ||
-        !rmd_read_range(&target, &source, meta.target_begin, source.size, &target_unit)) {
-        check(false, "host and target fixture parses");
-        fprintf(stderr, "%s\n%s\n", host.error, target.error);
-        rmd_context_destroy(&host);
-        rmd_context_destroy(&target);
-        return;
-    }
-    check(meta.loc.source == &source && meta.loc.offset == sizeof("// original source\n") - 1 &&
-          meta.target_begin == target_begin && meta.host_unit->source == &source,
-          "meta and target offsets refer to the complete original source");
-    input = meta.inputs;
-    check(input != NULL && !input->native && strcmp(input->path, "api/compiler.rmd") == 0 &&
-          input->loc.source == &source &&
-          input->loc.offset == sizeof("// original source\nmeta {\n") - 1 &&
-          input->next != NULL && input->next->native &&
-          strcmp(input->next->path, "backend.a") == 0 && input->next->next == NULL,
-          "meta inputs preserve kind, order, decoded paths, and source location");
-    check(host.units == meta.host_unit && host.last_unit == meta.host_unit &&
-          meta.host_unit->next == NULL && target.units == target_unit && target_unit->next == NULL &&
-          meta.host_unit->declarations->identity == 1 &&
-          meta.host_unit->declarations->next->identity == 2 &&
-          meta.host_unit->declarations->unit_identity == 41 &&
-          target_unit->declarations->identity == 1 &&
-          meta.host_unit->declarations->name != target_unit->declarations->name &&
-          meta.host_unit->declarations->next->name != target_unit->declarations->next->name,
-          "host and target have separate units, ordinals, and interned names");
-    check(rmd_collect(&host) && rmd_resolve(&host) && rmd_check(&host) &&
-          rmd_collect(&target) && rmd_resolve(&target) && rmd_check(&target),
-          "host and target can define the same names independently");
-    rmd_context_destroy(&host);
-    check(strcmp(target_unit->declarations->next->name->text, "main") == 0 && rmd_check(&target),
-          "target syntax remains live after host context destruction");
-    rmd_context_destroy(&target);
-}
-
-static void test_meta_boundary(void)
-{
-    static const char text[] = "meta {}\0\xff\"invalid target";
-    static const char two[] = "meta {} meta {}";
-    static const char bad[] = "\nmeta { source \"ok.rmd\"; fn partial() -> unit {} @ }";
-    RmdContext ctx;
-    RmdSource source = source_text(text, sizeof(text) - 1, 1);
-    RmdSource second = source_text(two, sizeof(two) - 1, 2);
-    RmdSource broken = source_text(bad, sizeof(bad) - 1, 3);
-    RmdMeta meta;
-    RmdUnit *first;
-    RmdUnit *rejected;
-    rmd_context_init(&ctx, NULL);
-    check(rmd_read_meta(&ctx, &source, &meta) && meta.host_unit != NULL &&
-          meta.host_unit->declarations == NULL && meta.target_begin == sizeof("meta {}") - 1 &&
-          ctx.error_count == 0 && ctx.name_count == 0,
-          "meta closing brace does not lex invalid target bytes");
-    first = meta.host_unit;
-    check(!rmd_read_meta(&ctx, &broken, &meta) && meta.host_unit == NULL && meta.inputs == NULL &&
-          ctx.units == first && ctx.last_unit == first && first->next == NULL &&
-          ctx.error_loc.source == &broken && ctx.error_loc.offset == (size_t)(strchr(bad, '@') - bad),
-          "failed meta retains absolute diagnostic and does not publish partial declarations");
-    check(rmd_read_meta(&ctx, &second, &meta) && first->next == meta.host_unit,
-          "reader accepts a meta block after a failed block");
-    check(!rmd_read_range(&ctx, &second, meta.target_begin, second.size, &rejected) &&
-          rejected == NULL && ctx.error_loc.source == &second && ctx.error_loc.offset == 8,
-          "target reader rejects a second meta block");
-    rmd_context_destroy(&ctx);
-}
-
 static void test_limits(void)
 {
     RmdAllocator allocator;
     RmdContext ctx;
     RmdSource source = source_text("", 0, 1);
-    RmdSource meta_source = source_text("meta {}", 7, 2);
     RmdUnit *unit;
-    RmdMeta meta;
+    RmdAction action;
     char nested[512];
     size_t size = 0;
     unsigned index;
@@ -708,10 +554,14 @@ static void test_limits(void)
     check(!rmd_read(&ctx, &source, &unit) && unit == NULL && ctx.units == NULL &&
           ctx.failure == NULL && ctx.error_count == 1,
           "allocation failure is reported without a published unit");
-    check(!rmd_read_meta(&ctx, &meta_source, &meta) && meta.host_unit == NULL &&
-          meta.inputs == NULL && ctx.units == NULL && ctx.last_unit == NULL &&
+    check(rmd_read_one(&ctx, &source, 0, 0, &action) && action.end == 0 &&
+          action.declaration == NULL && action.statement == NULL,
+          "action EOF needs no allocation");
+    source = source_text("return 0i32;", sizeof("return 0i32;") - 1, 3);
+    check(!rmd_read_one(&ctx, &source, 0, source.size, &action) &&
+          action.declaration == NULL && action.statement == NULL && action.end == 0 &&
           ctx.failure == NULL && ctx.error_count == 2,
-          "meta allocation failure is reported without a published unit");
+          "action allocation failure clears the result and restores the frame");
     rmd_context_destroy(&ctx);
     memcpy(nested, "const x: i8 = ", 14);
     size = 14;
@@ -719,6 +569,122 @@ static void test_limits(void)
     memcpy(nested + size, "1i8;", 4);
     size += 4;
     syntax_case("excessive prefix nesting is a diagnostic", nested, size, false);
+}
+
+static void one_case(const char *name, const char *text, bool declaration, int kind)
+{
+    static const unsigned char tail[] = { 255, 0, '/' };
+    char bytes[512];
+    size_t size = strlen(text);
+    RmdContext ctx;
+    RmdSource source;
+    RmdAction action;
+    if (size + sizeof(tail) > sizeof(bytes)) {
+        check(false, "action fixture fits its storage");
+        return;
+    }
+    memcpy(bytes, text, size);
+    memcpy(bytes + size, tail, sizeof(tail));
+    source = source_text(bytes, size + sizeof(tail), 91);
+    rmd_context_init(&ctx, NULL);
+    if (!rmd_read_one(&ctx, &source, 0, source.size, &action)) {
+        check(false, name);
+        fprintf(stderr, "diagnostic: %s\n", ctx.error);
+        goto done;
+    }
+    check(action.end == size && ctx.units == NULL && ctx.last_unit == NULL,
+          "action stops at its delimiter and remains unlinked");
+    check(declaration ? action.declaration != NULL && action.statement == NULL &&
+                       (int)action.declaration->kind == kind :
+                       action.statement != NULL && action.declaration == NULL &&
+                       (int)action.statement->kind == kind, name);
+    check(ctx.failure == NULL && ctx.error_count == 0,
+          "action does not diagnose the unread bytes");
+    check(!rmd_read_one(&ctx, &source, action.end, source.size, &action) &&
+          action.declaration == NULL && action.statement == NULL && action.end == 0 &&
+          ctx.error_loc.offset == size && ctx.failure == NULL,
+          "the next reader reports an invalid next action at its original offset");
+done:
+    rmd_context_destroy(&ctx);
+}
+
+static void test_read_one(void)
+{
+    static const char *const invalid[] = {
+        "if true {}", "if true {} else;", "if true {} else {}",
+        "while false {}", "{}", "var x: i32 = 1i32", "return 0i32",
+        "if true { return 0i32; } else { @ };"
+    };
+    static const char stream[] =
+        " // first\nrecord R { x: u8; } var x: i32 = 1i32;\n"
+        "fn f() -> unit {} // tail\n";
+    RmdContext ctx;
+    RmdSource source;
+    RmdAction action;
+    RmdDecl *record;
+    size_t cursor;
+    size_t index;
+    one_case("stream record", "record R { x: u8; }", true, RMD_D_RECORD);
+    one_case("stream function", "fn f() -> unit { if true {} while false {} }",
+              true, RMD_D_FUNCTION);
+    one_case("stream external function", "extern fn f() -> unit = \"f\";",
+              true, RMD_D_EXTERN);
+    one_case("stream constant", "const x: R = make R { x: 1u8 };", true, RMD_D_CONST);
+    one_case("stream variable", "var x: [u8; 1] = make [u8; 1] { 1u8 };",
+              false, RMD_S_VAR);
+    one_case("stream expression", "install();", false, RMD_S_EXPR);
+    one_case("stream assignment", "x = 2i32;", false, RMD_S_ASSIGN);
+    one_case("stream return", "return 7i32;", false, RMD_S_RETURN);
+    one_case("stream trap", "trap;", false, RMD_S_TRAP);
+    one_case("stream break syntax", "break;", false, RMD_S_BREAK);
+    one_case("stream continue syntax", "continue;", false, RMD_S_CONTINUE);
+    one_case("stream if without else", "if true { install(); };", false, RMD_S_IF);
+    one_case("stream complete if else", "if true {} else { install(); };",
+              false, RMD_S_IF);
+    one_case("stream while", "while true { if false { break; } continue; };",
+              false, RMD_S_WHILE);
+    one_case("stream block", "{ if true {} { install(); } };", false, RMD_S_BLOCK);
+    for (index = 0; index < sizeof(invalid) / sizeof(invalid[0]); ++index) {
+        rmd_context_init(&ctx, NULL);
+        source = source_text(invalid[index], strlen(invalid[index]), 91);
+        check(!rmd_read_one(&ctx, &source, 0, source.size, &action) &&
+              action.declaration == NULL && action.statement == NULL && action.end == 0 &&
+              ctx.failure == NULL && ctx.units == NULL,
+              "incomplete root actions do not publish partial syntax");
+        rmd_context_destroy(&ctx);
+    }
+    rmd_context_init(&ctx, NULL);
+    source = source_text(stream, sizeof(stream) - 1, 91);
+    if (!rmd_read_one(&ctx, &source, 0, source.size, &action)) {
+        check(false, "first stream declaration parses");
+        goto done;
+    }
+    record = action.declaration;
+    check(record != NULL && record->unit_identity == 91 &&
+          record->identity == record->loc.offset + 1,
+          "stream declaration identity uses its source offset");
+    cursor = action.end;
+    check(rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
+          action.statement != NULL && action.statement->kind == RMD_S_VAR,
+          "later statements use the caller's cursor");
+    cursor = action.end;
+    check(rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
+          action.declaration != NULL && action.declaration->identity > record->identity &&
+          action.declaration->identity == action.declaration->loc.offset + 1,
+          "later declarations have distinct identities in the same source");
+    cursor = action.end;
+    check(cursor < source.size && rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
+          action.declaration == NULL && action.statement == NULL && action.end == source.size,
+          "EOF consumes trailing trivia in the next action");
+    check(rmd_read_one(&ctx, &source, 5, 5, &action) && action.end == 5 &&
+          action.declaration == NULL && action.statement == NULL,
+          "an empty range is EOF at its absolute offset");
+    check(!rmd_read_one(&ctx, &source, 2, 1, &action) && action.end == 0 &&
+          ctx.error_loc.offset == 2, "action range rejects inverted bounds");
+    check(!rmd_read_one(&ctx, &source, 0, source.size + 1, &action) &&
+          action.end == 0, "action range rejects an end past the source");
+done:
+    rmd_context_destroy(&ctx);
 }
 
 int main(void)
@@ -730,11 +696,8 @@ int main(void)
     test_failure_boundary();
     test_read_range();
     test_invalid_ranges();
-    test_meta_absence();
-    test_meta_grammar();
-    test_meta_ownership();
-    test_meta_boundary();
     test_limits();
+    test_read_one();
     printf("reader: %u/%u checks passed\n", checks - failures, checks);
     return failures == 0 ? 0 : 1;
 }

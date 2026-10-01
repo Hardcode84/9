@@ -12,7 +12,7 @@ needed for the first build only. The C-stage executable has no `rmd_x64_`
 symbols.
 
 The backend also runs as an ordinary external library selected by a
-[host block in the user source](source-stages.md). The launcher has no
+[root compilation program](source-runner.md). The launcher has no
 C-backend selector, path, or special native bridge. The source imports the
 consumer declarations, links the library, and calls `c_program` or
 `c_backend_build` through the normal RMD0 foreign interface.
@@ -36,11 +36,15 @@ then reuses storage while the list remains live.
 to produce `build/rmd-c`. Both programs use the same C99 frontend library.
 It also builds `build/rmd-c-library.so` with the same compiler. That library
 exports `c_program` and `c_backend_build` and omits the standalone `main`.
+Its build uses `-fno-semantic-interposition` with `-Bsymbolic`. Both options
+keep internal calls bound to this library's definitions. The compiler option
+also permits the same inlining as the standalone backend.
 This is self-compilation of the backend and driver. The reader and checker
 remain C99. The default `make` target does not build this optional backend.
 
-The stage has 2,108 physical RMD0 lines, including comments and blank lines.
-The C99 seed has 5,402 C and header lines. Tests and generated API
+The stage has 2,126 physical RMD0 lines, including the 14-line root helper,
+comments, and blank lines. The C99 seed has 6,621 C and header lines.
+Tests and generated API
 declarations are separate. Use `wc -l stages/c/*.rmd` to repeat the stage count.
 
 | Option | Result |
@@ -91,6 +95,7 @@ The source files have these responsibilities:
 | `program.rmd` | Source input, frontend calls, names, options, and `c_program` |
 | `main.rmd` | Standalone command-line entry |
 | `api.rmd` | Consumer declarations for the two public calls and output options |
+| `build.rmd` | Optional root helper that owns one target context through the call |
 
 An external consumer includes `api/rmd0.rmd`, `api/rmd0_stage.rmd`, and
 `stages/c/api.rmd`. It links the prepared stage library as an ordinary native
@@ -220,12 +225,13 @@ output, and uses it to compile and run the intrusive-list program. It also
 checks native names, allocation-size failures, output failures, and the
 absence of C backend helper calls.
 
-The current seed run passes 10,996 C API checks and 398 integration process
+The current seed run passes 21,904 C API checks and 398 integration process
 checks. The C backend run passes 348 integration process checks. Each common
-suite includes 10,220 integer comparisons, 65 trap processes, 243 public API
+suite includes 10,220 integer comparisons, 65 trap processes, 260 public API
 layout comparisons, and 20 native file-status layout comparisons.
-The source-stage suite adds 41 process checks. They also pass with the C core
-and the loaded backend under AddressSanitizer and UndefinedBehaviorSanitizer.
+The source-order suite checks interpreted root actions and the loaded backend.
+The [bootstrap guide](bootstrap.md#validation-and-measurements) records its
+current checks and AddressSanitizer and UndefinedBehaviorSanitizer results.
 The exact generated backend C passes Clang 20 with strict C99 syntax checks;
 the layout probes use named structures in `offsetof`.
 
@@ -262,8 +268,13 @@ commands, input hashes, tool versions, and confidence intervals. The
 [earlier run](../benchmarks/c-stage/results-pre-path-fix.json) precedes the
 driver path fixes and is separate evidence. These runs precede the source-stage
 integration and backend library split. Their hashes identify the measured
-implementation. The [source-stage measurements](source-stages.md#cost-gate)
-measure the current interface, including the cost of preparing its inline entry.
+implementation. The [native host experiment](source-stages.md#cost-gate)
+measured preparation of the earlier inline entry. The
+[source runner](source-runner.md#parallel-work-reuse-and-measurements) defines
+the current complete request boundary and records its three passing speed
+gates. The [profile experiments](../benchmarks/source-order/performance-experiments.md)
+explain the library inlining option and direct one-byte text append. All other
+tested emission changes were rejected and are absent from this implementation.
 
 Run a new measurement from the repository root. Select an available logical
 CPU and a new result path:

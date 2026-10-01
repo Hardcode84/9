@@ -389,6 +389,225 @@ static void test_invalid_bound_layout(void)
     rmd_context_destroy(&consumer);
 }
 
+static bool check_stream(RmdContext *ctx, RmdRootScope *scope, RmdSource *source)
+{
+    size_t cursor = 0;
+    for (;;) {
+        RmdAction action;
+        if (!rmd_read_one(ctx, source, cursor, source->size, &action))
+            return false;
+        if (action.declaration != NULL) {
+            RmdUnit unit = { source, action.declaration, NULL };
+            if (!rmd_collect_unit(ctx, &unit) || !rmd_resolve_unit(ctx, &unit) ||
+                !rmd_check_unit(ctx, &unit))
+                return false;
+        } else if (action.statement != NULL) {
+            if (!rmd_check_root(ctx, scope, action.statement))
+                return false;
+        } else {
+            return true;
+        }
+        cursor = action.end;
+    }
+}
+
+static void root_case(const char *name, const char *text, const char *error)
+{
+    RmdContext ctx;
+    RmdRootScope scope;
+    RmdSource source = source_text(text, 71);
+    bool accepted;
+    bool passed;
+    rmd_context_init(&ctx, NULL);
+    memset(&scope, 0, sizeof(scope));
+    accepted = check_stream(&ctx, &scope, &source);
+    passed = error == NULL ? accepted : !accepted && strstr(ctx.error, error) != NULL;
+    check(passed, name);
+    if (!passed) fprintf(stderr, "diagnostic: %s\n", ctx.error);
+    check(ctx.failure == NULL, "root checking restores its failure frame");
+    rmd_context_destroy(&ctx);
+}
+
+static void test_root_checks(void)
+{
+    RmdContext ctx;
+    RmdRootScope scope;
+    RmdSource source = source_text(
+        "var x: i32 = 1i32; x = x + 2i32; "
+        "{ var y: i32 = x; }; { var y: i32 = x; }; return x;", 72);
+    RmdAction action;
+    RmdSymbol *variable;
+    RmdSymbol *first_nested;
+    size_t cursor;
+    root_case("persistent root variable", "var x: i32 = 1i32; x = 2i32; return x;", NULL);
+    root_case("root return type", "return 1u32;", "type mismatch");
+    root_case("root return needs a value", "return;", "requires a value");
+    root_case("root loop exit needs a loop", "break;", "outside a loop");
+    root_case("root continue needs a loop", "continue;", "outside a loop");
+    root_case("root loops retain ordinary nested syntax",
+              "var x: i32 = 0i32; while x < 3i32 { x = x + 1i32; if x == 2i32 { continue; } break; };",
+              NULL);
+    root_case("root variables need earlier definitions", "var x: i32 = x;", "unknown name");
+    root_case("root calls need earlier definitions", "later(); fn later() -> unit {}", "unknown name");
+    root_case("declared functions do not capture root variables",
+              "var x: i32 = 1i32; fn read() -> i32 { return x; }", "unknown name");
+    root_case("declared function parameters are independent of root locals",
+              "var x: i32 = 1i32; fn read(x: i32) -> i32 { return x; } x = read(x);", NULL);
+    root_case("ordinary function return rules stay in effect",
+              "fn f() -> unit { return; } f(); return 0i32;", NULL);
+    root_case("root duplicate local", "var x: i32 = 0i32; var x: i32 = 1i32;", "already visible");
+    root_case("root local cannot shadow a visible declaration",
+              "const x: i32 = 1i32; var x: i32 = 2i32;", "already visible");
+    root_case("nested locals leave scope", "{ var x: i32 = 0i32; }; x = 1i32;", "unknown name");
+    root_case("nested locals cannot shadow active root locals",
+              "var x: i32 = 0i32; { var x: i32 = 1i32; };", "already visible");
+    root_case("root checks both branches",
+              "if true { return 0i32; } else { return 1u32; };", "type mismatch");
+    root_case("root declaration checks its whole body",
+              "fn f() -> unit { return; absent(); }", "unknown name");
+    root_case("root function self recursion",
+              "fn f(x: i32) -> i32 { if x == 0i32 { return x; } return f(x - 1i32); } return f(2i32);",
+              NULL);
+    root_case("earlier constants and function values remain visible",
+              "const k: i32 = 7i32; fn f() -> i32 { return k; } const callback: fn() -> i32 = f; return callback();",
+              NULL);
+    root_case("root does not bind an unread later record",
+              "record A { b: *B; } record B { a: *A; }", "unknown name");
+    rmd_context_init(&ctx, NULL);
+    memset(&scope, 0, sizeof(scope));
+    if (!rmd_read_one(&ctx, &source, 0, source.size, &action) ||
+        !rmd_check_root(&ctx, &scope, action.statement)) {
+        check(false, "root symbol witness begins");
+        goto done;
+    }
+    variable = action.statement->symbol;
+    cursor = action.end;
+    check(rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
+          rmd_check_root(&ctx, &scope, action.statement) &&
+          action.statement->expr->symbol == variable &&
+          action.statement->value->left->symbol == variable,
+          "later root actions use the same resolved local symbol");
+    cursor = action.end;
+    if (!rmd_read_one(&ctx, &source, cursor, source.size, &action) ||
+        !rmd_check_root(&ctx, &scope, action.statement)) {
+        check(false, "first nested root block checks");
+        goto done;
+    }
+    first_nested = action.statement->body->symbol;
+    check(rmd_map_get(&scope.locals, (uintptr_t)first_nested->name) == NULL &&
+          scope.scope == variable, "nested root bindings do not persist");
+    cursor = action.end;
+    check(rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
+          rmd_check_root(&ctx, &scope, action.statement) &&
+          action.statement->body->symbol != first_nested,
+          "separate root blocks use distinct local symbols");
+    cursor = action.end;
+    check(rmd_read_one(&ctx, &source, cursor, source.size, &action) &&
+          rmd_check_root(&ctx, &scope, action.statement) &&
+          action.statement->expr->symbol == variable,
+          "root return keeps the persistent symbol identity");
+done:
+    rmd_context_destroy(&ctx);
+}
+
+static void test_unit_checks(void)
+{
+    RmdContext ctx;
+    RmdSource first = source_text("fn first(v: i32) -> i32 { return v; }", 81);
+    RmdSource second = source_text(
+        "record A { b: *B; } record B { a: *A; }"
+        "fn second(v: i32) -> i32 { if v == 0i32 { return first(v); } return third(v - 1i32); }"
+        "fn third(v: i32) -> i32 { return second(v); }", 82);
+    RmdSource later = source_text("fn invalid() -> unit { missing(); }", 83);
+    RmdUnit *first_unit;
+    RmdUnit *second_unit;
+    RmdUnit *later_unit;
+    RmdSymbol *parameter;
+    size_t bindings;
+    rmd_context_init(&ctx, NULL);
+    if (!rmd_read(&ctx, &first, &first_unit) || !rmd_collect_unit(&ctx, first_unit) ||
+        !rmd_resolve_unit(&ctx, first_unit) || !rmd_check_unit(&ctx, first_unit)) {
+        check(false, "initial host unit checks");
+        goto done;
+    }
+    parameter = first_unit->declarations->params->symbol;
+    if (!rmd_read(&ctx, &second, &second_unit) || !rmd_read(&ctx, &later, &later_unit)) {
+        check(false, "later host units parse");
+        goto done;
+    }
+    bindings = ctx.globals.count;
+    check(rmd_collect_unit(&ctx, second_unit) && ctx.globals.count == bindings + 4 &&
+          later_unit->declarations->symbol == NULL,
+          "unit collection does not scan later linked units");
+    check(rmd_resolve_unit(&ctx, second_unit) && later_unit->declarations->type == NULL,
+          "unit resolution preserves forward references within the selected unit");
+    check(rmd_check_unit(&ctx, second_unit) &&
+          second_unit->declarations->next->next->checked &&
+          second_unit->declarations->next->next->next->checked,
+          "loaded host units support mutual recursion and earlier declarations");
+    check(first_unit->declarations->params->symbol == parameter &&
+          first_unit->declarations->body->body->expr->symbol == parameter,
+          "checking a new unit does not recheck old function bodies");
+    check(later_unit->declarations->symbol == NULL && !later_unit->declarations->checked,
+          "checking a unit leaves a later unit untouched");
+    check(rmd_collect_unit(&ctx, later_unit) && rmd_resolve_unit(&ctx, later_unit) &&
+          !rmd_check_unit(&ctx, later_unit) && strstr(ctx.error, "unknown name") != NULL,
+          "checking the selected unit diagnoses every body");
+    check(ctx.failure == NULL, "unit checks restore the failure frame");
+done:
+    rmd_context_destroy(&ctx);
+}
+
+static void test_injected_root_local(void)
+{
+    RmdContext ctx;
+    RmdRootScope scope;
+    RmdSymbol *injected;
+    RmdType *pointer;
+    RmdSource source;
+    RmdSource returned = source_text("return *run + x0 + x79;", 85);
+    RmdAction action;
+    char text[4096];
+    size_t size = 0;
+    size_t index;
+    rmd_context_init(&ctx, NULL);
+    memset(&scope, 0, sizeof(scope));
+    injected = rmd_try_alloc(&ctx, sizeof(*injected), RMD_ALIGNOF(RmdSymbol));
+    pointer = rmd_try_pointer_type(&ctx, &ctx.builtins[RMD_T_I32]);
+    if (injected == NULL || pointer == NULL) {
+        check(false, "injected root symbol allocation");
+        goto done;
+    }
+    injected->kind = RMD_SYM_LOCAL;
+    injected->name = rmd_try_intern(&ctx, (const unsigned char *)"run", 3);
+    injected->type = pointer;
+    scope.scope = injected;
+    if (injected->name == NULL ||
+        !rmd_try_map_set(&ctx, &scope.locals, (uintptr_t)injected->name, injected)) {
+        check(false, "injected root symbol publication");
+        goto done;
+    }
+    for (index = 0; index < 80; ++index) {
+        int written = snprintf(text + size, sizeof(text) - size,
+                               "var x%zu: i32 = *run;", index);
+        if (written < 0 || (size_t)written >= sizeof(text) - size) {
+            check(false, "root growth fixture fits its storage");
+            goto done;
+        }
+        size += (size_t)written;
+    }
+    source = source_text(text, 84);
+    check(check_stream(&ctx, &scope, &source) && scope.locals.count == 81 &&
+          rmd_map_get(&scope.locals, (uintptr_t)injected->name) == injected,
+          "injected root symbols survive growth of persistent local storage");
+    check(rmd_read_one(&ctx, &returned, 0, returned.size, &action) &&
+          rmd_check_root(&ctx, &scope, action.statement) &&
+          action.statement->expr->left->left->left->symbol == injected,
+          "checked actions retain the caller's injected symbol identity");
+done:
+    rmd_context_destroy(&ctx);
+}
+
 int main(void)
 {
     test_witness_rules();
@@ -398,6 +617,9 @@ int main(void)
     test_identity_facts();
     test_constant_facts();
     test_invalid_bound_layout();
+    test_root_checks();
+    test_unit_checks();
+    test_injected_root_local();
     printf("checker: %u/%u checks passed\n", checks - failures, checks);
     return failures == 0 ? 0 : 1;
 }

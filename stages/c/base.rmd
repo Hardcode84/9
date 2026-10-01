@@ -178,7 +178,11 @@ fn c_buffer_text(buffer: *CBuffer, text: *u8) -> unit {
         c_buffer_bytes(buffer, text, count);
         return;
     }
-    rmd0_host_move_bytes((*buffer).data + (*buffer).size as isize, text, count);
+    if count == 1usize {
+        (*buffer).data[(*buffer).size] = *text;
+    } else {
+        rmd0_host_move_bytes((*buffer).data + (*buffer).size as isize, text, count);
+    }
     (*buffer).size = (*buffer).size + count;
 }
 

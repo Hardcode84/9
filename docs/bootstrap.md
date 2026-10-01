@@ -1,21 +1,24 @@
 # RMD0 bootstrap compiler
 
 The repository contains a C99 implementation of the RMD0 version 0.1 syntax
-and execution rules. It reads RMD0, checks the program, and emits textual
-x86-64 assembly. GNU assembler produces object code, and GCC links it. The
+and execution rules. `rmd0` reads RMD0, checks the program, and emits textual
+x86-64 assembly. `rmd` executes source-order compilation programs. GNU
+assembler produces object code, and GCC links it. The
 selected host and target profile is Linux x86-64 with the System V scalar ABI.
 
 This implementation is the raw bootstrap language. It does not add ownership,
-cleanup, imports, macros, or an evaluator. The direct-list example uses raw
+cleanup, imports, or macros. The direct-list example uses raw
 memory preconditions. It is not evidence of a checked lifetime rule.
-An optional [leading host block](source-stages.md) compiles and executes
-ordinary RMD0 code that controls the target compilation.
+The [source runner](source-runner.md) executes ordinary RMD0 code that controls
+target compilation and can change the reader for the unread root bytes.
 
 ## Build and use
 
-A C99 compiler, the system C library, Make, GNU assembler, and the system linker
-are sufficient to build the compiler. Python 3 runs the tests and measurements.
-There are no downloaded build dependencies.
+A C99 compiler, the system C library, Make, Python 3, and libffi development
+headers and library build the default tools. GNU assembler and the system
+linker build the native examples. Python 3 also runs tests and measurements.
+The build downloads no dependencies. The standalone `build/rmd0` target does
+not need libffi.
 
 The build uses `CC` for C code and linking, and `AS` for generated assembly.
 The default assembly command is `as --64`. Clang builds also use GNU assembler.
@@ -53,11 +56,10 @@ declaration order. This is a driver policy; the core does not discover files.
 function. The linker resolves native references when it makes an executable.
 Use `--library` for preparation or emission of a library source.
 
-For source-defined compilation, put the root first: `rmd0 SOURCE ARGUMENT...`.
-A leading `meta` block gives all remaining arguments to its `build` entry.
-The launcher has no backend selector. It uses `as` and `ld` from `PATH` to
-prepare the entry and the system dynamic loader to call it. The plain-source
-path probes the prefix without allocation and reads the captured source once.
+For source-defined compilation, use `rmd ROOT ARGUMENT...`. The root receives
+the trailing arguments through `run`. Its actions select input files, stages,
+and output. The launcher has no backend selector. It reads and executes one
+complete action at a time and does not invoke an assembler or linker for it.
 
 The driver publishes a regular output file through a temporary file and rename.
 Source or emission failure leaves the old regular file in place. A symbolic
@@ -70,11 +72,19 @@ The C implementation uses `-std=c99 -pedantic-errors` and treats warnings as
 errors. Its host operations use the POSIX library; it does not use GNU C syntax.
 The build checks the selected host representation. It rejects other hosts.
 
-The implementation has 5,402 physical C and header lines, including comments
-and blank lines. The reader, checker, storage code, and core header use 3,102
-lines. The assembly backend and its header use 1,446 lines. The drivers and host
-interfaces use 854 lines. Tests, examples, generated declarations, and scripts
-are separate. Use `wc -l src/*.c src/*.h include/*.h runtime/*.c` to repeat the count.
+The implementation has 6,621 physical C and header lines, including comments
+and blank lines. The reader, checker, storage code, and core header use 3,165
+lines. The assembly backend and its header use 1,446 lines. The evaluator and
+its header use 1,096 lines. The root runner and its header use 446 lines. The
+standalone driver and host interfaces use 468 lines.
+Use `wc -l src/*.c include/*.h runtime/*.c` to repeat the count.
+
+Tests, examples, and generated files are separate. The installed RMD host
+helpers use 72 lines. The 31-line prelude generator makes a 474-line C byte
+table from installed API and helper sources. The native bridge links the
+external libffi library; the tested version is 3.4.6. Its implementation is
+not included in the 6,621-line count. No libffi dependency enters ordinary
+target programs.
 
 Each compiler context owns an arena. Arena blocks are normally 64 KiB. A larger
 request receives a separate larger block. Allocation sizes and alignment
@@ -103,7 +113,8 @@ per record in the cycle. Type size must fit the RMD0 `isize` limit.
 ## Public stages
 
 The public C declarations are in `include/rmd0.h`, `include/rmd0_x64.h`,
-`include/rmd0_host.h`, and `include/rmd0_stage.h`.
+`include/rmd0_host.h`, `include/rmd0_stage.h`, `include/rmd0_eval.h`, and
+`include/rmd0_run.h`.
 The corresponding RMD0 declarations are in `api/`. Run `make api` after an API
 change. The generator handles the selected header forms only and rejects a
 form it cannot translate. It is not a C frontend. The test suite compares all
@@ -118,12 +129,16 @@ version as its compiler libraries.
 |---|---|
 | `rmd_read` | Source bytes to an owned syntax unit |
 | `rmd_read_range` | A byte range to an owned unit, with locations in the original source |
-| `rmd_read_meta` | An optional leading host block to an owned host unit, explicit inputs, and the target byte offset |
+| `rmd_read_one` | One unlinked root declaration or statement and its exact byte end |
 | `rmd_bind` | A selected name and complete external declaration facts to a borrowed binding |
 | `rmd_collect` | Owned syntax units to the top-level namespace |
 | `rmd_resolve` | Collected declarations and bindings to types, layouts, and signatures |
 | `rmd_check_body` | A resolved owned function to its checked body |
 | `rmd_check` | All owned functions and constants to checked input |
+| `rmd_collect_unit`, `rmd_resolve_unit`, `rmd_check_unit` | Check one owned unit without rescanning earlier units |
+| `rmd_check_root` | One root statement and persistent local bindings to checked input |
+| `rmd_eval_*` | Checked host operations, values, and native callbacks |
+| `rmd_run_*` | Source-order loop, replaceable reader/executor, and native input lifetime |
 | `rmd_x64_prepare` | Checked input with link names to a public frame and expression plan |
 | `rmd_x64_emit_program` | That plan to assembly |
 
@@ -133,9 +148,16 @@ the source text. Keep the full descriptor and bytes live until context
 destruction. Declaration ordinals start at one in each returned unit.
 Callers that combine distinct ranges must assign distinct declaration
 identities, as for other independently constructed units. This API adds no
-stage syntax or automatic compile-time execution. The separate `rmd_read_meta`
-operation stops before target bytes. The launcher controls host preparation
+stage syntax or automatic compile-time execution. `rmd_read_one` instead uses
+the declaration's starting byte offset plus one. Callers must not mix these
+ordinal spaces under one source identity. It does not link its result into
+the context or read beyond its action delimiter. The runner controls checking
 and execution; the reader does neither.
+
+`librmd0_run.a` contains the evaluator and root loop. A native consumer links
+it with `librmd0.a`, libffi, and the system dynamic-loader interface. The
+installed executable also links `librmd0_host.a` and exports its public native
+symbols. The separate `rmd0` path does not link the evaluator.
 
 The frame plan retains checked operations. Instruction selection, required
 trap sequences, and final assembly remain in the emitter. Thus `--prepare`
@@ -262,31 +284,40 @@ probe each page so that they cannot skip a stack guard.
 
 ## Validation and measurements
 
-Run `make check` for reader, checker, allocator, host, parallel, and backend API
+Run `make check` for reader, checker, allocator, host, parallel, evaluator, and backend API
 tests. It also compiles and executes integer, native ABI, aggregate, list, and
 replacement-stage programs. The integer expectations use Python mathematical
 integers. Trap tests require abnormal process termination. Allocation tests
 fail every arena allocation point in a complete compilation and check release.
 
-The current strict GCC run passes 10,996 C API checks and 398 integration
-process checks. The reader suite also passes 311 checks with Clang and
-AddressSanitizer/UndefinedBehaviorSanitizer. The integration cases include
-10,220 integer comparisons, 65 required traps, 243 public API layout comparisons,
+The C suites pass 21,904 checks under GCC AddressSanitizer and
+UndefinedBehaviorSanitizer. The assembly integration suite passes 398 process
+checks. The C backend passes 348. The integration cases include
+10,220 integer comparisons, 65 required traps, 260 public API layout comparisons,
 and 20 native file-status layout comparisons. The allocation sweep covers
 19 failure points. The parallel
 test checks six consumers in serial order and two concurrent orders, with
 shared provider facts unchanged. Both complete specification examples run.
-The source-stage suite adds 41 process checks. Its native entry, input snapshot,
-phase isolation, backend reuse, path, and failure cases also pass with the C
-core and C backend under AddressSanitizer and UndefinedBehaviorSanitizer.
-Inline host instructions use the assembly seed and have no sanitizer instrumentation.
+The source-order suite adds 141 process checks. Its root evaluator, source
+snapshots, native callbacks, reader replacement, phase isolation, backend
+reuse, paths, and failure cases pass with the C core and RMD C backend under
+GCC AddressSanitizer and UndefinedBehaviorSanitizer. Stack-use-after-return
+detection is enabled. The evaluator suite also passes 10,829 checks under
+Clang 20 AddressSanitizer and UndefinedBehaviorSanitizer.
+The [final validation record](../benchmarks/source-order/validation.json)
+contains the GCC commands, source hashes, and complete sanitizer logs. That
+run also passes all 348 C-backend process checks, including buffer overlap
+and growth with a one-byte append.
 
 Use these commands for a second strict compiler and address/undefined-behavior
 instrumentation:
 
 ```sh
 make CC=clang-20 BUILD=build/clang check
-ASAN_OPTIONS=detect_leaks=0 make CC=clang-20 BUILD=build/sanitize CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' LDFLAGS='-fsanitize=address,undefined' check
+ASAN_OPTIONS=detect_leaks=0:detect_stack_use_after_return=1:abort_on_error=1 \
+UBSAN_OPTIONS=halt_on_error=1 make CC=gcc BUILD=build/sanitize \
+  CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
+  LDFLAGS='-fsanitize=address,undefined' all c-stage check-stage
 ```
 
 LeakSanitizer cannot run under the tracing environment used for these runs.
@@ -295,6 +326,17 @@ a general replacement for leak detection. The parallel witness also runs under
 ThreadSanitizer. The
 [final thread check](../benchmarks/bootstrap/results/parallel-2026-10-01.md)
 records the exact command, source hashes, and 75 passing checks with no report.
+
+The [source-runner results](source-runner.md#parallel-work-reuse-and-measurements)
+include root capture and execution through complete C and symbol output.
+All three inputs pass the C-speed gate. Final target GCC compilation and
+linking are excluded. The backend shared library is an explicit prepared
+input. The report records its separate rebuild cost.
+
+The assembly measurements below precede the source-order runner. Their source
+hashes identify that implementation. The
+[plain-seed comparison](../benchmarks/source-order/plain-results.json)
+compares the old and current seed separately.
 
 `benchmarks/bootstrap/measure.py` records fresh-process, single-worker timings
 for the list witness and generated scaling cases. It retains the source and

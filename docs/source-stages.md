@@ -1,15 +1,16 @@
-# Source-defined compiler stages
+# Native host-stage experiment
 
-Date: 2026-10-01. This document defines the source-stage interface implemented
-by the RMD0 launcher. The [language specification](rmd0-spec.md) defines the
-ordinary declarations and execution rules. The [Zig and Jai review](source-metastages.md)
-records the evidence used to choose this interface.
+Date: 2026-10-01. This document preserves the interface and measurements at
+revision `9cff8f4`. That native host launcher has been removed. Use the
+[source runner](source-runner.md) for the current command and contract.
+The examples and commands below require the recorded revision. The
+[Zig and Jai review](source-metastages.md) records the earlier design evidence.
 
-The [source-order proposal](source-order-compilation.md) investigates replacing
-this source form with `rmd main.rmd`, where root execution controls compilation
-and can select the reader for subsequent actions. That proposal retains host
-and target separation and the code and data lifetime requirements here. It
-does not change the current syntax.
+The [source-order study](source-order-compilation.md) led to `rmd main.rmd`,
+where root execution controls compilation and can select the next reader.
+The replacement retains host/target separation, code and data lifetimes,
+explicit native inputs, and the target-output boundary described here. Its
+checked-tree evaluator removes native preparation of each root request.
 
 The implementation proves the complete source-to-executable interface. Fresh
 native host preparation does not pass the cold speed gate. The cost section
@@ -43,7 +44,8 @@ fn main(argc: i32, argv: **u8) -> i32 {
 }
 ```
 
-This is [the executable example](../examples/meta.rmd). Build and run it with:
+The historical executable example is `examples/meta.rmd` in that revision.
+Build and run it there with:
 
 ```sh
 make c-stage

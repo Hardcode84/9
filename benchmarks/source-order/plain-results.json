@@ -1,0 +1,594 @@
+{
+  "environment": {
+    "utc": "2026-10-01T09:54:39Z",
+    "cpu_model": "AMD Ryzen Threadripper PRO 7995WX 96-Cores",
+    "logical_cpus": 192,
+    "pinned_cpu": 4,
+    "smt_siblings": {
+      "value": "4,100"
+    },
+    "governor": {
+      "value": "performance"
+    },
+    "kernel": "7.0.0-28-generic",
+    "machine": "x86_64",
+    "os_release": "PRETTY_NAME=\"Ubuntu 24.04.2 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.2 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+    "memory_kib": 527581144,
+    "load_start": [
+      "0.21",
+      "0.30",
+      "0.28"
+    ],
+    "cpu_reserved": false,
+    "frequency_control": "governor recorded; frequency and turbo are not fixed",
+    "python": "3.12.11",
+    "child_environment": {
+      "LC_ALL": "C",
+      "LANG": "C",
+      "TZ": "UTC",
+      "PATH": "inherited for executable lookup; all other variables omitted"
+    }
+  },
+  "before_revision": "8f2133da410a33d99b1f4cb33d305ab205545368",
+  "boundary": "Source-first plain RMD to complete assembly; no native assembly or linking; identical output bytes",
+  "method": "Fresh processes; 25 or more randomized paired rounds; 10000 bootstrap draws; warm OS cache",
+  "binaries": {
+    "before": {
+      "file_name": "rmd0",
+      "bytes": 382824,
+      "sha256": "01cfdd091c85f4ee36010e926dd407f643d48826cd2d894a4bb549d59dd1286f"
+    },
+    "after": {
+      "file_name": "rmd0",
+      "bytes": 350672,
+      "sha256": "33b010cf509ab0e01ec385f1aa653d4f69522929109e24b43a46f1ec1d67cb62"
+    }
+  },
+  "commands": {
+    "ordinary-1000": {
+      "before": [
+        "@REPO@/.profile-cache/source-order-baseline/rmd0",
+        "@REPO@/.profile-cache/plain-source-uiersdme/ordinary-1000.rmd",
+        "--library",
+        "-S"
+      ],
+      "after": [
+        "@REPO@/build/rmd0",
+        "@REPO@/.profile-cache/plain-source-uiersdme/ordinary-1000.rmd",
+        "--library",
+        "-S"
+      ]
+    },
+    "ordinary-8000": {
+      "before": [
+        "@REPO@/.profile-cache/source-order-baseline/rmd0",
+        "@REPO@/.profile-cache/plain-source-uiersdme/ordinary-8000.rmd",
+        "--library",
+        "-S"
+      ],
+      "after": [
+        "@REPO@/build/rmd0",
+        "@REPO@/.profile-cache/plain-source-uiersdme/ordinary-8000.rmd",
+        "--library",
+        "-S"
+      ]
+    },
+    "intrusive": {
+      "before": [
+        "@REPO@/.profile-cache/source-order-baseline/rmd0",
+        "@REPO@/examples/intrusive.rmd",
+        "-S"
+      ],
+      "after": [
+        "@REPO@/build/rmd0",
+        "@REPO@/examples/intrusive.rmd",
+        "-S"
+      ]
+    }
+  },
+  "samples": [
+    {
+      "round": 0,
+      "workload": "intrusive",
+      "before": 1745089,
+      "after": 1781834
+    },
+    {
+      "round": 0,
+      "workload": "ordinary-8000",
+      "before": 108921673,
+      "after": 110580082
+    },
+    {
+      "round": 0,
+      "workload": "ordinary-1000",
+      "after": 13793938,
+      "before": 12201057
+    },
+    {
+      "round": 1,
+      "workload": "ordinary-8000",
+      "after": 108538008,
+      "before": 110532080
+    },
+    {
+      "round": 1,
+      "workload": "ordinary-1000",
+      "after": 13662320,
+      "before": 12224012
+    },
+    {
+      "round": 1,
+      "workload": "intrusive",
+      "after": 1794011,
+      "before": 2141884
+    },
+    {
+      "round": 2,
+      "workload": "ordinary-8000",
+      "before": 109677468,
+      "after": 110395955
+    },
+    {
+      "round": 2,
+      "workload": "intrusive",
+      "before": 2059931,
+      "after": 2348824
+    },
+    {
+      "round": 2,
+      "workload": "ordinary-1000",
+      "after": 13355950,
+      "before": 12159765
+    },
+    {
+      "round": 3,
+      "workload": "intrusive",
+      "before": 1749395,
+      "after": 1782304
+    },
+    {
+      "round": 3,
+      "workload": "ordinary-1000",
+      "before": 12076190,
+      "after": 11996060
+    },
+    {
+      "round": 3,
+      "workload": "ordinary-8000",
+      "before": 107977366,
+      "after": 109867913
+    },
+    {
+      "round": 4,
+      "workload": "intrusive",
+      "after": 2037077,
+      "before": 1862054
+    },
+    {
+      "round": 4,
+      "workload": "ordinary-8000",
+      "after": 112412471,
+      "before": 113431491
+    },
+    {
+      "round": 4,
+      "workload": "ordinary-1000",
+      "after": 13719886,
+      "before": 12167106
+    },
+    {
+      "round": 5,
+      "workload": "ordinary-1000",
+      "before": 11917482,
+      "after": 12270271
+    },
+    {
+      "round": 5,
+      "workload": "ordinary-8000",
+      "before": 108045449,
+      "after": 110297978
+    },
+    {
+      "round": 5,
+      "workload": "intrusive",
+      "after": 2051178,
+      "before": 1845700
+    },
+    {
+      "round": 6,
+      "workload": "ordinary-1000",
+      "after": 13153326,
+      "before": 11994156
+    },
+    {
+      "round": 6,
+      "workload": "intrusive",
+      "before": 1776125,
+      "after": 1745759
+    },
+    {
+      "round": 6,
+      "workload": "ordinary-8000",
+      "before": 108372980,
+      "after": 109744538
+    },
+    {
+      "round": 7,
+      "workload": "ordinary-1000",
+      "after": 13609150,
+      "before": 12111483
+    },
+    {
+      "round": 7,
+      "workload": "ordinary-8000",
+      "after": 107718218,
+      "before": 109992039
+    },
+    {
+      "round": 7,
+      "workload": "intrusive",
+      "before": 2029555,
+      "after": 1875364
+    },
+    {
+      "round": 8,
+      "workload": "intrusive",
+      "before": 1833381,
+      "after": 1810447
+    },
+    {
+      "round": 8,
+      "workload": "ordinary-1000",
+      "after": 13267568,
+      "before": 11976811
+    },
+    {
+      "round": 8,
+      "workload": "ordinary-8000",
+      "before": 108500030,
+      "after": 115881557
+    },
+    {
+      "round": 9,
+      "workload": "intrusive",
+      "before": 2070577,
+      "after": 1862825
+    },
+    {
+      "round": 9,
+      "workload": "ordinary-8000",
+      "after": 110380862,
+      "before": 110971519
+    },
+    {
+      "round": 9,
+      "workload": "ordinary-1000",
+      "after": 13571864,
+      "before": 12155499
+    },
+    {
+      "round": 10,
+      "workload": "ordinary-1000",
+      "after": 11878794,
+      "before": 12057803
+    },
+    {
+      "round": 10,
+      "workload": "intrusive",
+      "before": 1775494,
+      "after": 2198609
+    },
+    {
+      "round": 10,
+      "workload": "ordinary-8000",
+      "before": 108966461,
+      "after": 109846671
+    },
+    {
+      "round": 11,
+      "workload": "ordinary-8000",
+      "after": 109747092,
+      "before": 110538961
+    },
+    {
+      "round": 11,
+      "workload": "ordinary-1000",
+      "after": 13675249,
+      "before": 12173856
+    },
+    {
+      "round": 11,
+      "workload": "intrusive",
+      "after": 1816266,
+      "before": 1777197
+    },
+    {
+      "round": 12,
+      "workload": "ordinary-8000",
+      "after": 109033281,
+      "before": 110814895
+    },
+    {
+      "round": 12,
+      "workload": "intrusive",
+      "before": 2067392,
+      "after": 1895875
+    },
+    {
+      "round": 12,
+      "workload": "ordinary-1000",
+      "after": 13626957,
+      "before": 12162840
+    },
+    {
+      "round": 13,
+      "workload": "intrusive",
+      "before": 1769174,
+      "after": 1738568
+    },
+    {
+      "round": 13,
+      "workload": "ordinary-1000",
+      "before": 12137622,
+      "after": 11967507
+    },
+    {
+      "round": 13,
+      "workload": "ordinary-8000",
+      "after": 109117137,
+      "before": 110631579
+    },
+    {
+      "round": 14,
+      "workload": "intrusive",
+      "before": 2077117,
+      "after": 1863346
+    },
+    {
+      "round": 14,
+      "workload": "ordinary-8000",
+      "before": 111167152,
+      "after": 110349786
+    },
+    {
+      "round": 14,
+      "workload": "ordinary-1000",
+      "before": 13518844,
+      "after": 12219565
+    },
+    {
+      "round": 15,
+      "workload": "ordinary-1000",
+      "after": 11958894,
+      "before": 12228919
+    },
+    {
+      "round": 15,
+      "workload": "intrusive",
+      "after": 1730596,
+      "before": 1751748
+    },
+    {
+      "round": 15,
+      "workload": "ordinary-8000",
+      "before": 108207232,
+      "after": 110397478
+    },
+    {
+      "round": 16,
+      "workload": "intrusive",
+      "before": 2069586,
+      "after": 1888394
+    },
+    {
+      "round": 16,
+      "workload": "ordinary-1000",
+      "after": 13442921,
+      "before": 12098333
+    },
+    {
+      "round": 16,
+      "workload": "ordinary-8000",
+      "after": 108501352,
+      "before": 110724048
+    },
+    {
+      "round": 17,
+      "workload": "ordinary-8000",
+      "before": 110285449,
+      "after": 110340222
+    },
+    {
+      "round": 17,
+      "workload": "ordinary-1000",
+      "before": 13571954,
+      "after": 12288058
+    },
+    {
+      "round": 17,
+      "workload": "intrusive",
+      "after": 1809185,
+      "before": 1767001
+    },
+    {
+      "round": 18,
+      "workload": "ordinary-8000",
+      "after": 108819229,
+      "before": 110530328
+    },
+    {
+      "round": 18,
+      "workload": "intrusive",
+      "before": 2066510,
+      "after": 1885800
+    },
+    {
+      "round": 18,
+      "workload": "ordinary-1000",
+      "before": 13573377,
+      "after": 12481348
+    },
+    {
+      "round": 19,
+      "workload": "ordinary-8000",
+      "after": 107956706,
+      "before": 109937888
+    },
+    {
+      "round": 19,
+      "workload": "intrusive",
+      "before": 2075604,
+      "after": 1886911
+    },
+    {
+      "round": 19,
+      "workload": "ordinary-1000",
+      "before": 13377692,
+      "after": 12386796
+    },
+    {
+      "round": 20,
+      "workload": "ordinary-8000",
+      "after": 108500772,
+      "before": 110862705
+    },
+    {
+      "round": 20,
+      "workload": "ordinary-1000",
+      "before": 13863121,
+      "after": 12416030
+    },
+    {
+      "round": 20,
+      "workload": "intrusive",
+      "after": 1809815,
+      "before": 1802385
+    },
+    {
+      "round": 21,
+      "workload": "intrusive",
+      "before": 1790566,
+      "after": 1701092
+    },
+    {
+      "round": 21,
+      "workload": "ordinary-8000",
+      "after": 108549645,
+      "before": 110826592
+    },
+    {
+      "round": 21,
+      "workload": "ordinary-1000",
+      "after": 13476922,
+      "before": 12127747
+    },
+    {
+      "round": 22,
+      "workload": "ordinary-8000",
+      "after": 108342895,
+      "before": 110098550
+    },
+    {
+      "round": 22,
+      "workload": "ordinary-1000",
+      "before": 13655099,
+      "after": 12250110
+    },
+    {
+      "round": 22,
+      "workload": "intrusive",
+      "before": 1797067,
+      "after": 1788023
+    },
+    {
+      "round": 23,
+      "workload": "intrusive",
+      "after": 2202845,
+      "before": 1719981
+    },
+    {
+      "round": 23,
+      "workload": "ordinary-1000",
+      "after": 12278574,
+      "before": 12070442
+    },
+    {
+      "round": 23,
+      "workload": "ordinary-8000",
+      "after": 108219700,
+      "before": 110007222
+    },
+    {
+      "round": 24,
+      "workload": "ordinary-1000",
+      "after": 13690753,
+      "before": 12221899
+    },
+    {
+      "round": 24,
+      "workload": "ordinary-8000",
+      "after": 108520322,
+      "before": 110496687
+    },
+    {
+      "round": 24,
+      "workload": "intrusive",
+      "after": 2046241,
+      "before": 1881704
+    }
+  ],
+  "summary": {
+    "ordinary-1000": {
+      "before_ms": 12.16284,
+      "after_ms": 13.153326,
+      "median_paired_ratio": 1.096644565903595,
+      "paired_bootstrap_95_ci": [
+        0.9851540948214198,
+        1.1165205147069652
+      ]
+    },
+    "ordinary-8000": {
+      "before_ms": 110.285449,
+      "after_ms": 109.744538,
+      "median_paired_ratio": 0.9910164277043665,
+      "paired_bootstrap_95_ci": [
+        0.9837508668294523,
+        1.0065509079768327
+      ]
+    },
+    "intrusive": {
+      "before_ms": 1.833381,
+      "after_ms": 1.862825,
+      "median_paired_ratio": 0.9879252038535223,
+      "paired_bootstrap_95_ci": [
+        0.9240271882259904,
+        1.0219834942327721
+      ]
+    }
+  },
+  "input_hashes": {
+    "ordinary-1000": "f890ae3d578d951c43fbb77cff3c333aad1dcb80d4e502364485111e6e83c12f",
+    "ordinary-8000": "3484923d9b0048f4d3053d2987371d18417794d2e8bc506c69cb18893803dec2",
+    "intrusive": "a514eca3c4339c44e112fc53c4ce43f8562f830305e688a6cc23725a70fe9614"
+  },
+  "source_sha256": {
+    "Makefile": "2a49bbfb80acbab304e523d0270aa07e8d98e16447ae0244937841c00b2a69db",
+    "src/check.c": "b1acb64ea46b1f5333892b368cac4a140f87215210f722fc167f9236fb5a2375",
+    "src/core.c": "791e173b7ae415b09c648e969fcc89310bde217d6514ed3b42a50757f84d385b",
+    "src/driver.c": "d389da25e3854658c4e8626b9cefb3726725a4fb3f2119cfc9c499c6af0d35e4",
+    "src/eval.c": "544bc83da94a1dd4321eed62b62f00a9c352c7a1d90958a6eb056c511318ef91",
+    "src/read.c": "93c19445afe17cadb289cd97522f5a70282403424916b94eb0ed096d9cea0016",
+    "src/run.c": "80b1f0bc18977707febc0870432defffd75dce8104f22945773a313577805418",
+    "src/run_main.c": "6175a8e24aee85946685d0bbd99b0b2dbf6eb871b30baebe18f42cc9a75bfb22",
+    "src/x64.c": "0b7dcfe6360136f12e5e599f7f1c3b843e94b15ab21785d35d295febd9fe21b8",
+    "include/rmd0.h": "3106e749b6ea68dc7276989954039860ea99805ad848694ddb895c478a46af85",
+    "include/rmd0_eval.h": "e2bde708e9de9e17c762a88a0ed39124ae5977c18f6c82d25d01f4254cbfdd8b",
+    "include/rmd0_host.h": "ed7d76ac9cbeaa59874e44ce0ba834b1431b5960e9112a4cffe063c0d15413b2",
+    "include/rmd0_run.h": "69f0967c959339956f3bb20e9fa52df38adaf2d7c1e2166a348570730630760f",
+    "include/rmd0_stage.h": "200df338d52d66dbe2900e83532c016694513e5d9cdba5ee897649e3567490a0",
+    "include/rmd0_x64.h": "5b6e2cc828e09932461b79993bf971a3ac0511d4c5f43f3c4e5d997536535eea",
+    "runtime/host.c": "152820a4bf903850c8defd28dc73eec3da66292b06465d42f9e638c6d96ce251"
+  },
+  "path_token": "@REPO@ denotes the repository root used for this run."
+}

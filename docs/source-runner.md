@@ -1,0 +1,316 @@
+# Source-order compilation
+
+Date: 2026-10-01. This document defines the implemented root runner. The
+[language specification](rmd0-spec.md) defines the RMD0 value and execution
+rules. The [design study](source-order-compilation.md) records the decision
+and the required experiments.
+
+Run a compilation program with:
+
+```sh
+rmd main.rmd
+```
+
+The root runs from its first action. It selects compiler stages, reads target
+inputs, and requests output through ordinary calls. An action can also select
+a different reader for the unread root bytes. There is no `meta` block,
+required `build` function, or backend selector in the launcher.
+
+## Build and example
+
+The installed host profile is Linux x86-64 System V. Build the C99 seed with
+a C99 compiler, Make, Python 3, and libffi development headers and library.
+The optional C backend also requires GCC, GNU assembler, and GNU `objcopy`.
+
+```sh
+make all c-stage
+build/rmd examples/main.rmd
+build/intrusive-from-root
+make check check-c check-stage
+```
+
+The target prints `intrusive: ok`. It inserts, unlinks, destroys, and reuses
+individual nodes while the list remains live. This is a raw-memory bootstrap
+test. It does not establish the checked language's lifetime rules.
+
+The [root example](../examples/main.rmd) is the complete build description:
+
+```rmd
+host_source(run, "../api/rmd0_stage.rmd");
+host_source(run, "../stages/c/api.rmd");
+host_source(run, "../stages/c/build.rmd");
+host_link(run, "../build/rmd-c-library.so");
+
+var target: *RmdSource = host_input(run, "intrusive.rmd", 1u64);
+var arguments: [*u8; 4] = uninit;
+arguments[0usize] = "-o";
+arguments[1usize] = host_path(run, "../build/intrusive-from-root");
+arguments[2usize] = "--ldflag";
+arguments[3usize] = host_path(run, "../build/librmd0_host.a");
+return c_build(target, 4i32, &arguments[0usize]);
+```
+
+The source selects an ordinary shared library. A copy with another filename
+works through the same interface. The [C backend](c-backend.md) is all RMD0.
+Its output does not depend on the root evaluator or compiler libraries.
+
+`c_build` is an ordinary RMD helper. It creates a target context, calls
+`c_program`, reports its diagnostic, destroys the context, and returns its
+status. The root can call individual reader, checker, and backend operations
+instead. A different language can use its own tree and target representation.
+
+## Initial bindings and arguments
+
+The launcher captures the root bytes once. It supplies `run: *RmdRun` as a
+root variable. Its `argc` and `argv` fields contain only arguments after the
+root path. `argv[argc]` is null. The root gives those arguments their meaning.
+The launcher accepts `--help` and `--version` in place of a root operand.
+Use a directory prefix for a root file with one of those names.
+
+The installed declarations are `api/rmd0.rmd`, `api/rmd0_host.rmd`,
+`api/rmd0_eval.rmd`, and `api/rmd0_run.rmd`. The installed helper source is
+`stages/host.rmd`. The build embeds these version-matched sources. Every
+invocation reads and checks them. No saved checked tree or execution result
+is reused. A root must not load those same declarations a second time.
+
+These interfaces expose syntax, types, bindings, incremental checks,
+evaluation calls, and the root cursor and operation fields. Include
+`api/rmd0_x64.rmd` to call the optional seed assembly backend. Include a
+library's consumer declarations before calling that library.
+
+The `host_` names are ordinary functions. Their prefix avoids conflicts with
+common parameter names under the seed's rule against shadowing visible names.
+`source`, `link`, and `meta` are ordinary identifiers.
+
+## Initial action grammar
+
+The initial reader accepts one declaration or root statement at a time.
+
+```text
+RootAction = Declaration
+           | ( Block | "if" Expr Block [ "else" Block ]
+             | "while" Expr Block ) ";"
+           | SimpleStatement ;
+```
+
+`SimpleStatement` has the ordinary statement grammar, excluding blocks,
+`if`, and `while`. It already has a final semicolon. A root `return` requires
+an `i32` value. `break` and `continue` require an enclosing loop. Function and
+record declarations end at their final brace. For example:
+
+```rmd
+var total: i32 = 0i32;
+while total < 4i32 { total = total + 1i32; };
+if total == 4i32 { return 0i32; } else { return 1i32; };
+```
+
+The final semicolon on a root compound statement makes its end explicit.
+The reader consumes that delimiter but does not read the next token, comment,
+or whitespace. A new reader owns all subsequent bytes. This rule requires
+no symbol lookup or per-token extension dispatch.
+
+A function body or block is one parsed action. A call inside that action
+cannot change the grammar of its already parsed remainder. A library can
+accept raw input through an explicit call when it needs a delayed region.
+
+## Names and execution
+
+Each action is checked against established host declarations and root locals.
+It executes once before the next action is read. Root variables retain their
+storage until the host context is destroyed. Locals inside a block have that
+block's lexical scope. The ordinary no-shadowing rule applies.
+
+A streamed function can refer to itself and earlier declarations. Its body
+cannot refer to an unread declaration or capture a root local. Pass root
+values, including `run`, as explicit arguments. `host_source` checks a complete
+declaration unit; functions in that unit can refer to each other in either
+source order. Target units retain the same forward-reference rule.
+
+Streamed declarations use their source identity and starting byte offset plus
+one as nominal identity. Whole-unit reads use declaration ordinals starting
+at one. Callers that combine independently read ranges or these two identity
+schemes must assign distinct identity spaces. Preserve an identity when the
+same declaration is supplied to another context.
+
+A root return ends execution immediately. Its status must be in 0 through
+255. Unread bytes after that return are not parsed. EOF also ends execution;
+the initial status is zero. EOF does not invoke a target compiler, call a
+function named `main`, or publish queued work.
+Ordinary actions retain explicit changes to the public completion state.
+A root return supplies a new completion status. A reader that synchronously
+enters the same runner can complete it; the outer loop retains that result.
+
+Host and target namespaces are separate. A target context contains only the
+declarations given to it. Host declarations do not become target definitions.
+
+## Reader and executor replacement
+
+`RmdRun` publishes these fields for root control:
+
+| Field | Contract |
+| --- | --- |
+| `context`, `source` | Borrowed host context and immutable root snapshot |
+| `cursor` | Byte offset of the next unread root region |
+| `read` | `fn(*RmdRun, **u8) -> bool`; produces an opaque action |
+| `execute` | `fn(*RmdRun, *u8) -> bool`; consumes that action |
+| `user` | Caller-selected state for these operations |
+| `eval`, `scope` | Default host evaluator and persistent local bindings |
+| `next_identity` | Identity used by the ordinary host-source helper |
+| `argc`, `argv` | Borrowed root arguments |
+| `returned`, `status` | Root completion and process result |
+| `state` | Native resources owned by `rmd_run_init` and `rmd_run_destroy` |
+
+The loop captures both operation pointers before calling the reader. The
+returned action uses that captured executor. A change during reading or
+execution selects operations for a subsequent action.
+
+A successful reader advances `cursor` and returns a non-null action. It can
+instead return null at source EOF. Returning an action without progress,
+moving outside the source, moving backwards, replacing the source, or claiming
+EOF with unread bytes produces a diagnostic. Execution can consume additional
+input, but cannot move before the end committed by the reader.
+
+The default operations are `rmd_run_read` and `rmd_run_execute`. Their payload
+is a public `RmdAction`. A custom pair can use any representation. Assign its
+functions to `run.read` and `run.execute` with ordinary function values. There
+is no grammar registry or mandatory intermediate representation. A custom
+executor can call a different checker or evaluator.
+
+Keep callback code, its state, and action storage live through all consumers.
+The default reader puts its actions in the host arena. A replacement owns its
+payload contract. Changing the `eval` field does not transfer ownership of a
+replacement evaluator to the default runner. Its creator must bind required
+root values and destroy it after its final use.
+
+## Files and native inputs
+
+The installed RMD helper library provides four operations:
+
+| Function | Result |
+| --- | --- |
+| `host_path(run, path)` | Root-relative absolute path copied into the host arena |
+| `host_input(run, path, identity)` | Captured source descriptor, path, and bytes in that arena |
+| `host_source(run, path)` | Read and check one complete host declaration unit |
+| `host_link(run, path)` | Load one exact shared-library path for host calls |
+
+Relative paths start at the directory of the root operand. They do not change
+after a host working-directory change. The root operand's directory is used
+even when the operand is a symbolic link. A loaded source does not change the
+base directory. All retained paths and source bytes are copies.
+
+The helpers implement one flat host namespace. There is no implicit file
+search, deduplication, import graph, package resolver, or source execution in
+`host_source`. Loading the same definitions twice is an error. A module library
+can use public reads, bindings, and contexts to implement another policy.
+
+Native libraries use immediate symbol binding and local loader visibility.
+They remain loaded through runner destruction. The default resolver searches
+the process and explicitly loaded libraries. At first resolution, different
+addresses for the same native name are an error. The resolved address then
+stays fixed for the evaluator's lifetime, including after a later library load.
+An unresolved requested name is an error.
+Extern declarations can precede `host_link`: symbol lookup occurs when the
+function value is needed. Native declarations with one link name must have
+compatible scalar ABI types, including when they are not called.
+
+Only shared libraries are input to `host_link`. The direct `rmd_run_link` API
+requires a path containing `/`; it does not search for a bare library name.
+Preparing an object, archive,
+or changed native library is an explicit build operation in source. The
+launcher does not invoke a hidden compiler or linker to prepare root actions.
+
+## Execution and lifetime
+
+The checked-tree evaluator implements the RMD0 expressions and statements,
+including wrapping integer arithmetic, required traps, aggregate copies,
+function values, recursion, and native callbacks. It uses arena storage for
+prepared calls and reusable activation frames. A loop does not allocate a new
+frame for each iteration. Active recursive or reentrant calls have separate
+frames.
+
+Libffi supplies the scalar native-call and callback boundary. A function
+pointer passed to native code retains one callable identity. Native callbacks
+can synchronously enter the evaluator again. One evaluator requires exclusive
+access from one thread. A library must serialize calls or use independent
+evaluators for concurrent work. The native bridge follows the
+[libffi call contract](https://github.com/libffi/libffi/blob/v3.4.6/doc/libffi.texi).
+
+The host context owns checked syntax, evaluator plans, root slots, and input
+snapshots. Destroy target contexts while their source descriptors, provider
+facts, allocator state, and callback code remain live. Complete all native
+uses of interpreted function pointers before destroying their evaluator.
+The default runner destroys its evaluator before unloading native libraries,
+then the launcher destroys the host context and releases root bytes.
+Unregister callbacks before teardown if a library finalizer can call them.
+
+Raw pointers still require the seed's memory preconditions. Calling a native
+library is a trusted process operation. This execution mechanism does not
+provide memory safety or a sandbox. The target pays no evaluator or libffi
+cost unless target code explicitly requests such services.
+
+## Errors and effects
+
+Read, check, allocation, input/output, and loader failures retain diagnostics.
+An operation that returns false without a diagnostic causes a runner error.
+A retained host diagnostic stops the root even if a statement ignored its
+boolean result. Source diagnostics preserve the captured path and byte offset.
+
+An evaluator failure during a native-to-interpreted callback cannot return
+an invented value through an arbitrary scalar ABI. It reports the failure,
+flushes output, and terminates the process. Required arithmetic traps also
+terminate abnormally. A callback that deliberately returns false through its
+declared boolean result remains an ordinary successful function execution.
+
+Earlier effects remain after a later parse or execution error. No action is
+retried or replayed. A library that requires publication after successful root
+EOF must implement that finalization contract. Default EOF supplies no
+transaction and does not complete a library's pending tasks.
+
+## Parallel work, reuse, and measurements
+
+The root cursor is serial: an action can determine how to read the next bytes.
+Independent target work can use separate mutable contexts and stable shared
+facts. Submitted jobs must retain their source, selected stages, state, and
+native code until completion. A library can schedule those jobs and join them
+before releasing their inputs. The seed adds no task scheduler.
+
+No persistent execution-result cache or prepared-root cache is implemented.
+Root effects execute on every invocation. Reusing results requires a complete
+dependency and effect contract, as described in the
+[metacompilation study](metacompilation.md#7-caching-without-changing-program-meaning).
+
+The [reader-transfer proof](../benchmarks/source-order/proof.md) established
+the first ownership and output boundary before this implementation. The
+production suite is `tests/source_order.py`. Its target GCC runs check actual
+executables outside the measurement interval. The full timing command is
+`benchmarks/source-order/measure.py`.
+
+Measure from process start through root capture, installed interface checks,
+root checking and execution, loading, target frontend work, complete C and
+symbol output, and cleanup. Exclude final target GCC compilation and linking.
+Report prepared native inputs explicitly. Preparation of a changed native
+stage is a separate measured configuration; it is not free project setup.
+
+The [final results](../benchmarks/source-order/results.json) contain 25 paired
+rounds per workload, with random endpoint order and one warmup. Each sample
+starts a fresh process. The native backend library is a prepared input.
+Operating-system file caches are not cleared between samples.
+
+| Input | Root through complete C output, ms | Prepared backend, ms | GCC syntax check, ms | Root/GCC 95% interval |
+| --- | ---: | ---: | ---: | --- |
+| Intrusive list | 2.461 | 1.774 | 7.016 | [0.34452, 0.36308] |
+| 1,000 functions | 14.018 | 13.017 | 18.640 | [0.74043, 0.77259] |
+| 8,000 functions | 109.335 | 106.080 | 111.387 | [0.97278, 0.98677] |
+
+The upper bound of each paired-bootstrap ratio interval is below 1.0. These
+results pass the required gate for the three recorded inputs and host. All
+225 timed samples used unchanged source and binary hashes. Complete C and
+symbol bytes match the prepared backend. The intrusive output also compiles
+and runs without a compiler-library dependency.
+
+The [experiment record](../benchmarks/source-order/performance-experiments.md)
+retains the first failed large-input gate, profiles, rejected changes, and the
+two measured changes that passed. It also records the separate native-library
+preparation observation and its exact compiler flags. The
+[validation record](../benchmarks/source-order/validation.json) contains the
+final sanitizer commands, input hashes, and logs.

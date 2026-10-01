@@ -306,8 +306,9 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         if not result.stderr or b"error" not in result.stderr and b"entry" not in result.stderr:
             raise AssertionError(f"missing diagnostic for {name}: {result.stderr!r}")
 
-    api_paths = [ROOT / "api" / f"{stem}.rmd" for stem in ("rmd0", "rmd0_host", "rmd0_x64", "rmd0_stage")]
-    probe = ['#include "rmd0.h"', '#include "rmd0_x64.h"', '#include "rmd0_stage.h"', '#include <stdio.h>', 'int main(void) {']
+    api_stems = ("rmd0", "rmd0_host", "rmd0_x64", "rmd0_stage", "rmd0_eval", "rmd0_run")
+    api_paths = [ROOT / "api" / f"{stem}.rmd" for stem in api_stems]
+    probe = [*(f'#include "{stem}.h"' for stem in api_stems), '#include <stdio.h>', 'int main(void) {']
     for path in api_paths:
         for record, body in re.findall(r"record (\w+) \{(.*?)\}", path.read_text(), re.S):
             for query, expression in [(f"sizeof({record})", f"sizeof({record})"),

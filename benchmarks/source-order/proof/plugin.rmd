@@ -1,0 +1,235 @@
+fn proof_length(text: *u8) -> usize {
+    var size: usize = 0usize;
+    while text[size] != 0u8 { size = size + 1usize; }
+    return size;
+}
+
+fn proof_error(session: *ProofSession, offset: usize, message: *u8) -> i32 {
+    rmd_set_error((*session).owner, (*session).source, offset, message);
+    return 1i32;
+}
+
+fn set_backend(session: *ProofSession, backend: fn(*RmdContext, *RmdDecl, *CBackendOptions) -> i32) -> i32 {
+    if backend == null(fn(*RmdContext, *RmdDecl, *CBackendOptions) -> i32) {
+        return proof_error(session, (*session).cursor, "null backend");
+    }
+    (*session).backend = backend;
+    return 0i32;
+}
+
+fn set_reader(session: *ProofSession, reader: fn(*ProofSession, *RmdContext, *ProofAction) -> i32) -> i32 {
+    (*session).selections = (*session).selections + 1usize;
+    if reader == null(fn(*ProofSession, *RmdContext, *ProofAction) -> i32) {
+        return proof_error(session, (*session).cursor, "null reader");
+    }
+    (*session).switch_offset = (*session).cursor;
+    (*session).reader = reader;
+    return 0i32;
+}
+
+fn reject_reader(session: *ProofSession, reader: fn(*ProofSession, *RmdContext, *ProofAction) -> i32) -> i32 {
+    (*session).selections = (*session).selections + 1usize;
+    return proof_error(session, (*session).cursor, "reader selection rejected");
+}
+
+fn proof_match(session: *ProofSession, offset: usize, text: *u8) -> usize {
+    var source: *RmdSource = (*session).source;
+    var index: usize = 0usize;
+    while text[index] != 0u8 {
+        if offset >= (*source).size || (*source).bytes[offset] != text[index] { return 0usize; }
+        offset = offset + 1usize;
+        index = index + 1usize;
+    }
+    return offset;
+}
+
+fn proof_expr(context: *RmdContext, source: *RmdSource, offset: usize, kind: u32) -> *RmdExpr {
+    var expression: *RmdExpr = rmd_try_alloc(context, sizeof(RmdExpr), alignof(RmdExpr)) as *RmdExpr;
+    if expression != null(*RmdExpr) {
+        (*expression).kind = kind;
+        (*expression).loc.source = source;
+        (*expression).loc.offset = offset;
+    }
+    return expression;
+}
+
+fn proof_name(context: *RmdContext, source: *RmdSource, offset: usize, name: *u8) -> *RmdExpr {
+    var expression: *RmdExpr = proof_expr(context, source, offset, RMD_E_NAME);
+    if expression == null(*RmdExpr) { return expression; }
+    (*expression).name = rmd_try_intern(context, name, proof_length(name));
+    if (*expression).name == null(*RmdName) { return null(*RmdExpr); }
+    return expression;
+}
+
+fn alternate(session: *ProofSession, context: *RmdContext, action: *ProofAction) -> i32 {
+    (*session).reads = (*session).reads + 1usize;
+    var source: *RmdSource = (*session).source;
+    var offset: usize = (*session).cursor;
+    if !(*session).custom_started {
+        if offset >= (*source).size || (*source).bytes[offset] != 0u8 {
+            proof_error(session, offset, "alternate reader requires the hostile zero byte");
+            return -1i32;
+        }
+        (*session).custom_started = true;
+        offset = offset + 1usize;
+    }
+    while offset < (*source).size && ((*source).bytes[offset] == 10u8 || (*source).bytes[offset] == 32u8) {
+        offset = offset + 1usize;
+    }
+    if offset == (*source).size { (*action).next_offset = offset; return 0i32; }
+    var start: usize = offset;
+    var after: usize = proof_match(session, offset, "@include |");
+    var path: *RmdExpr = null(*RmdExpr);
+    var callee_name: *u8 = "queue_emit";
+    var count: usize = 1usize;
+    if after != 0usize {
+        offset = after;
+        while offset < (*source).size && (*source).bytes[offset] != 124u8 {
+            if (*source).bytes[offset] == 0u8 || (*source).bytes[offset] == 10u8 {
+                proof_error(session, offset, "invalid alternate include path"); return -1i32;
+            }
+            offset = offset + 1usize;
+        }
+        if offset == (*source).size || offset == after {
+            proof_error(session, offset, "alternate include needs a nonempty closed path"); return -1i32;
+        }
+        path = proof_expr(context, source, after, RMD_E_STRING);
+        if path == null(*RmdExpr) { return -1i32; }
+        (*path).bytes = rmd_try_copy_string(context, (*source).bytes + (after as isize), offset - after);
+        if (*path).bytes == null(*u8) { return -1i32; }
+        (*path).byte_count = offset - after + 1usize;
+        offset = offset + 1usize;
+        callee_name = "include_input";
+        count = 2usize;
+    } else {
+        offset = proof_match(session, offset, "@emit");
+        if offset == 0usize {
+            proof_error(session, start, "unknown alternate root form"); return -1i32;
+        }
+    }
+    if offset < (*source).size && (*source).bytes[offset] != 10u8 {
+        proof_error(session, offset, "alternate root form needs a line end"); return -1i32;
+    }
+    var call: *RmdExpr = proof_expr(context, source, start, RMD_E_CALL);
+    if call == null(*RmdExpr) { return -1i32; }
+    (*call).left = proof_name(context, source, start, callee_name);
+    (*call).args = rmd_try_alloc(context, count * sizeof(*RmdExpr), alignof(*RmdExpr)) as **RmdExpr;
+    if (*call).left == null(*RmdExpr) || (*call).args == null(**RmdExpr) { return -1i32; }
+    (*call).arg_count = count;
+    (*call).args[0usize] = proof_name(context, source, start, "session");
+    if (*call).args[0usize] == null(*RmdExpr) { return -1i32; }
+    if count == 2usize { (*call).args[1usize] = path; }
+    (*action).call = call;
+    (*action).next_offset = offset;
+    return 1i32;
+}
+
+fn proof_allocate(user: *u8, size: usize) -> *u8 {
+    var session: *ProofSession = user as *ProofSession;
+    var allocation: *u8 = rmd0_host_alloc(size, 8usize);
+    if allocation != null(*u8) { (*session).allocations = (*session).allocations + 1usize; }
+    return allocation;
+}
+
+fn proof_release(user: *u8, allocation: *u8) -> unit {
+    var session: *ProofSession = user as *ProofSession;
+    (*session).releases = (*session).releases + 1usize;
+    rmd0_host_free(allocation);
+}
+
+fn include_input(session: *ProofSession, path: *u8) -> i32 {
+    if (*session).includes != 0usize { return proof_error(session, (*session).cursor, "proof accepts one target input"); }
+    var context: *RmdContext = (*session).target;
+    rmd_context_destroy(context);
+    var allocator: RmdAllocator = make RmdAllocator {
+        user: session as *u8, allocate: proof_allocate, release: proof_release
+    };
+    rmd_context_init(context, &allocator);
+    var source: *RmdSource = rmd_try_alloc((*session).owner, sizeof(RmdSource), alignof(RmdSource)) as *RmdSource;
+    if source == null(*RmdSource) { return 1i32; }
+    (*source).path = rmd_try_copy_string((*session).owner, path, proof_length(path));
+    if (*source).path == null(*u8) { return 1i32; }
+    var bytes: *u8 = null(*u8);
+    if rmd0_host_read_file(path, &bytes, &(*source).size) != 0i32 {
+        return proof_error(session, (*session).cursor, "cannot read explicit target input");
+    }
+    (*source).bytes = rmd_try_copy_string((*session).owner, bytes, (*source).size);
+    rmd0_host_free(bytes);
+    if (*source).bytes == null(*u8) { return 1i32; }
+    (*source).identity = 1u64;
+    (*session).target_source = source;
+    var parsed: *RmdUnit = null(*RmdUnit);
+    if !rmd_read(context, source, &parsed) { return 1i32; }
+    (*session).includes = 1usize;
+    return 0i32;
+}
+
+fn proof_decimal(buffer: *u8, offset: usize, value: u64) -> usize {
+    var digits: [u8; 20] = uninit;
+    var count: usize = 0usize;
+    while value >= 10u64 {
+        digits[count] = (value % 10u64) as u8 + 48u8;
+        count = count + 1usize;
+        value = value / 10u64;
+    }
+    digits[count] = value as u8 + 48u8;
+    count = count + 1usize;
+    while count != 0usize {
+        count = count - 1usize;
+        buffer[offset] = digits[count];
+        offset = offset + 1usize;
+    }
+    return offset;
+}
+
+fn proof_emit(session: *ProofSession) -> i32 {
+    if !(*session).root_done || (*session).reader_active {
+        return proof_error(session, (*session).cursor, "target ran before root-reader return");
+    }
+    if (*session).backend == null(fn(*RmdContext, *RmdDecl, *CBackendOptions) -> i32) {
+        return proof_error(session, (*session).cursor, "backend was not selected");
+    }
+    var context: *RmdContext = (*session).target;
+    if !rmd_collect(context) || !rmd_resolve(context) || !rmd_check(context) { return 1i32; }
+    var parsed: *RmdUnit = (*context).units;
+    var entry: *RmdDecl = null(*RmdDecl);
+    while parsed != null(*RmdUnit) {
+        var declaration: *RmdDecl = (*parsed).declarations;
+        while declaration != null(*RmdDecl) {
+            if (*declaration).kind != RMD_D_RECORD && (*declaration).link_name == null(*u8) {
+                var name: [u8; 64] = uninit;
+                rmd0_host_move_bytes(&name[0usize], "_rmd0_u", 7usize);
+                var offset: usize = proof_decimal(&name[0usize], 7usize, (*declaration).unit_identity);
+                name[offset] = 95u8;
+                name[offset + 1usize] = 100u8;
+                offset = proof_decimal(&name[0usize], offset + 2usize, (*declaration).identity);
+                (*declaration).link_name = rmd_try_copy_string(context, &name[0usize], offset);
+                if (*declaration).link_name == null(*u8) { return 1i32; }
+            }
+            var word: *u8 = (*(*declaration).name).text;
+            if (*declaration).kind == RMD_D_FUNCTION && (*(*declaration).name).size == 4usize {
+                if word[0usize] == 109u8 && word[1usize] == 97u8 && word[2usize] == 105u8 && word[3usize] == 110u8 {
+                    entry = declaration;
+                }
+            }
+            declaration = (*declaration).next;
+        }
+        parsed = (*parsed).next;
+    }
+    if entry == null(*RmdDecl) { return proof_error(session, (*session).cursor, "target main was not found"); }
+    if (*session).argc != 1i32 { return proof_error(session, (*session).cursor, "proof root requires one symbol-output argument"); }
+    var options: CBackendOptions = make CBackendOptions {
+        mode: 2u32, output: null(*u8), symbols: (*session).argv[0usize],
+        cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
+    };
+    (*session).emits = (*session).emits + 1usize;
+    return (*session).backend(context, entry, &options);
+}
+
+fn queue_emit(session: *ProofSession) -> i32 {
+    if (*session).pending != null(fn(*ProofSession) -> i32) || (*session).includes != 1usize {
+        return proof_error(session, (*session).cursor, "emit requires one input and no pending job");
+    }
+    (*session).pending = proof_emit;
+    return 0i32;
+}

@@ -66,6 +66,22 @@ fn main(argc: i32, argv: **u8) -> i32 {
     if c_buffer_end(&stage.body)[size] != 0u8 || stage.body.size != size { return 8i32; }
 
     stage.body.size = 0usize;
+    c_text(&stage, "x");
+    var previous: *u8 = stage.body.data;
+    var previous_capacity: usize = stage.body.capacity;
+    while stage.body.size < previous_capacity {
+        c_buffer_end(&stage.body);
+        c_buffer_text(&stage.body, stage.body.data + (stage.body.size - 1usize) as isize);
+    }
+    c_buffer_text(&stage.body, "x");
+    if stage.status.failed || stage.body.size != previous_capacity + 1usize ||
+       stage.body.data == previous || previous[0usize] != 120u8 { return 16i32; }
+    index = 0usize;
+    while index < stage.body.size {
+        if stage.body.data[index] != 120u8 { return 17i32; }
+        index = index + 1usize;
+    }
+    stage.body.size = 0usize;
     c_number(&stage, 0u64);
     c_text(&stage, ":");
     c_number(&stage, 18446744073709551615u64);

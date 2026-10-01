@@ -1,9 +1,10 @@
 # Source-defined metastages: Zig and Jai review
 
 Date: 2026-10-01. Status: design review before implementation. The
-[source-stage contract](source-stages.md) records the implemented syntax,
-ownership rules, and cold execution cost. This review remains the research
-record; its descriptions of unimplemented code refer to that earlier state.
+[source runner](source-runner.md) records the implemented syntax and ownership
+rules. The [earlier native-stage experiment](source-stages.md) records its cold
+execution cost. This review remains the research record; descriptions of
+unimplemented code refer to that earlier state.
 
 ## Decision
 

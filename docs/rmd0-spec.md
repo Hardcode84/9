@@ -44,9 +44,9 @@ There are no generics, overloads, implicit conversions, methods, inheritance,
 closures, exceptions, tagged unions, floating-point types, variable arguments,
 implicit compile-time function execution, or built-in module management.
 There are no module, import, pub, owner, borrow, defer, unsafe, macro,
-quotation, or general stage-definition keywords. The launcher accepts one
-optional leading `meta` block to prepare the source program's compiler entry.
-That entry calls ordinary functions through public interfaces.
+quotation, or general stage-definition keywords. The `rmd` launcher executes
+root actions in source order. Those actions call ordinary functions through
+public interfaces and can replace the reader for unread root bytes.
 
 A compiler written in RMD0 can describe richer types as ordinary data and use
 another IR. For example, a C frontend can describe C floats and unions, then
@@ -118,23 +118,13 @@ Embedded zero bytes from escapes are permitted.
 
 ## 4 Grammar
 
-The grammar below defines a plain RMD0 unit. A launcher root can instead have
-a leading host block, followed by bytes for its selected target reader:
-
-```text
-Root        = Unit | HostPrefix TargetBytes ;
-HostPrefix  = "meta" "{" { HostInput } { Declaration } "}" ;
-HostInput   = ( "source" | "link" ) String ";" ;
-```
-
-`TargetBytes` is a byte range, not a sequence of RMD0 tokens. The host reader
-stops at the closing brace. The selected compiler entry determines the target
-grammar. `meta` is reserved. `source` and `link` have their input meaning only
-at the start of a host block item. They remain ordinary names elsewhere.
-The [source-stage contract](source-stages.md) defines input paths, the entry
-signature, phase ownership, execution, and errors. `rmd_read` and
-`rmd_read_range` accept only the plain unit grammar below. `rmd_read_meta`
-reads the optional host prefix separately.
+The grammar below defines a plain RMD0 unit and the initial root actions.
+`rmd_read` and `rmd_read_range` accept a whole declaration unit. `rmd_read_one`
+reads one root action and stops at its exact delimiter. It does not tokenize
+the following byte. A selected replacement reader determines the grammar of
+subsequent input. `meta`, `source`, and `link` are ordinary identifiers.
+The [source runner contract](source-runner.md) defines input paths, initial
+bindings, phase ownership, execution, and errors.
 
 The grammar uses EBNF. Brackets mean optional text. Braces mean repetition.
 Quoted text is a token. `Name`, `Integer`, `Count`, and `String` are lexical
@@ -142,6 +132,10 @@ tokens defined above. `EOF` is the end of the source unit.
 
 ~~~text
 File        = { Declaration } EOF ;
+Root        = { RootAction } EOF ;
+RootAction  = Declaration | SimpleStatement
+            | ( Block | "if" Expr Block [ "else" Block ]
+              | "while" Expr Block ) ";" ;
 
 Declaration = "record" Name "{" Field { Field } "}"
               | "fn" Name Params "->" Type Block
@@ -160,9 +154,10 @@ IntegerType = "i8" | "i16" | "i32" | "i64" | "isize"
 
 Block       = "{" { Statement } "}" ;
 Statement   = Block
-            | "var" Name ":" Type "=" ( "uninit" | Expr ) ";"
             | "if" Expr Block [ "else" Block ]
             | "while" Expr Block
+            | SimpleStatement ;
+SimpleStatement = "var" Name ":" Type "=" ( "uninit" | Expr ) ";"
             | "break" ";" | "continue" ";"
             | "return" [ Expr ] ";" | "trap" ";"
             | Expr [ "=" Expr ] ";" ;
@@ -609,10 +604,11 @@ contracts must be explicit. RMD0 does not infer thread safety from raw pointers.
 
 ## 12 Compiler construction and metastages
 
-A metastage is an ordinary prepared program or function used to construct or
-run a compiler. It uses the same calls, data, and memory operations as other
-programs. The seed has no second evaluator, phase macro system, or automatic
-execution of function bodies during type resolution.
+A metastage is an ordinary program or function used to construct or run a
+compiler. It uses the same calls, data, and memory operations as other programs.
+The source runner executes checked RMD0 trees and can call prepared native
+libraries. It adds no phase macro system or automatic execution of function
+bodies during type resolution.
 
 In the source-defined compilation model, the user program selects its stages.
 Each custom stage is an ordinary function defined in the user source or supplied
@@ -622,6 +618,41 @@ driver can prepare and execute those calls, but it does not replace the
 requirement that the override be in the user source. The
 [source metastage review](source-metastages.md) defines the phase requirements.
 It introduces no additional RMD0 grammar.
+
+### Source-order root execution
+
+The command is `rmd ROOT [ARGUMENT...]`. Capture the root bytes once. Supply
+the public root state through the initial `run: *RmdRun` binding. Its arguments
+exclude the executable and root path. The installed prelude supplies ordinary
+host loading helpers and version-matched public compiler declarations.
+
+Read, check, and execute each complete action before reading the next one.
+Capture its reader and executor as a pair. A successful non-EOF read must
+advance within the source. Commit that end before execution. The action can
+consume more input, but cannot rewind the cursor. A new reader owns every byte
+after the consumed delimiter, including whitespace and comments. EOF must
+account for all remaining bytes under that reader's rules.
+
+Root variables retain their storage. Streamed declarations can use earlier
+declarations; a function can also refer to itself. Check its body when its
+declaration executes. Functions cannot capture root locals. A separately
+loaded whole unit retains ordinary forward references and mutual recursion.
+Neither checking route rescans all earlier root actions.
+
+A root `return` requires an `i32` result in 0 through 255 and ends the stream.
+EOF ends execution with the current status, which starts at zero. No implicit
+target compilation or finalization occurs. Later errors do not undo earlier
+effects. Retrying or replaying an action is not part of this contract.
+
+The initial root grammar requires a final semicolon after `if`, `while`, and
+bare blocks. Function and record declarations end at their closing brace.
+Other statements have their ordinary semicolon. Nested blocks and function
+bodies are parsed as part of their enclosing action; reader changes cannot
+change the meaning of bytes already parsed in that action.
+
+The [runner contract](source-runner.md) defines replaceable operation types,
+source identities, native binding, storage lifetime, and callback failure.
+The whole-unit grammar remains available through `rmd0` and the public reader.
 
 ### Public construction interface
 
@@ -703,10 +734,11 @@ The driver must establish this order where dependencies require it:
 
 A new driver can be an ordinary executable linked to compiler libraries.
 Dynamic plugins, a resident compiler server, a JIT, and persistent caches are
-not required by the library construction contract. The source launcher uses
-a native shared object for an inline `meta` entry, as specified in the
-[source-stage contract](source-stages.md). Self-compilation uses the previous compiler executable to build
-the next one; it does not require the next executable before it exists.
+not required by the library construction contract. The source runner executes
+checked root actions directly and uses libffi for native calls and callbacks.
+Root execution includes no hidden assembly or native linking step.
+Self-compilation uses the previous compiler executable to build the next one;
+it does not require the next executable before it exists.
 
 Host execution and target description are separate. `sizeof` in a running
 stage describes that stage program's execution profile. A cross-compiler gets
@@ -752,6 +784,12 @@ work product has one writer or explicit synchronization. An edit that changes
 a required fact invalidates results that used the old fact. A transformation
 may retain a result only when its contract preserves that result. These are
 compiler-library contracts, not a seed-level ownership algorithm.
+
+The root cursor has a serial dependency because an action can change its next
+reader. This does not prevent independent target work. A submitted job retains
+its selected operations, input snapshots, and required facts. Complete all work
+and callback use before releasing that state. One host evaluator requires
+exclusive access from one thread, but permits synchronous callback reentry.
 
 Worker completion order must not change accepted programs, nominal identities,
 or diagnostic ordering. Order diagnostics by the driver's stable source order,

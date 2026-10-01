@@ -1,0 +1,2412 @@
+{
+  "status": "complete",
+  "cpu": 4,
+  "rounds": 25,
+  "warmup_rounds": 1,
+  "bootstrap_draws": 10000,
+  "seed": 202610015,
+  "environment": {
+    "utc": "2026-10-01T09:26:08Z",
+    "cpu_model": "AMD Ryzen Threadripper PRO 7995WX 96-Cores",
+    "logical_cpus": 192,
+    "pinned_cpu": 4,
+    "smt_siblings": {
+      "value": "4,100"
+    },
+    "governor": {
+      "value": "performance"
+    },
+    "kernel": "7.0.0-28-generic",
+    "machine": "x86_64",
+    "os_release": "PRETTY_NAME=\"Ubuntu 24.04.2 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.2 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+    "memory_kib": 527581144,
+    "load_start": [
+      "0.31",
+      "0.27",
+      "0.33"
+    ],
+    "cpu_reserved": false,
+    "frequency_control": "governor recorded; frequency and turbo are not fixed",
+    "python": "3.12.11",
+    "child_environment": {
+      "LC_ALL": "C",
+      "LANG": "C",
+      "TZ": "UTC",
+      "PATH": "inherited for executable lookup; all other variables omitted"
+    }
+  },
+  "tools": {
+    "gcc": {
+      "file_name": "x86_64-linux-gnu-gcc-13",
+      "bytes": 1023032,
+      "sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
+      "command": "gcc",
+      "version": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ]
+    },
+    "as": {
+      "file_name": "x86_64-linux-gnu-as",
+      "bytes": 745768,
+      "sha256": "7a2ef948033b05ad0c5dcb0d5be059bc68562b5d45713d91aee21df2b4bf4e92",
+      "command": "as",
+      "version": "GNU assembler (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "ld": {
+      "file_name": "x86_64-linux-gnu-ld.bfd",
+      "bytes": 1359128,
+      "sha256": "e46a122cc3a29feba3b1d0fc2a274b6e46538be016ebe381370c0801bb98b0b8",
+      "command": "ld",
+      "version": "GNU ld (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libctf.so.0.0.0",
+          "bytes": 220384,
+          "sha256": "5708839db0b080ef4dafc44c4adaa6976b55de5078aeed35c81d55ab4d0c7841"
+        },
+        {
+          "file_name": "libjansson.so.4.14.0",
+          "bytes": 64008,
+          "sha256": "c49935a4b3ac599064281b1f257576087806d0dad7ec46f353bd983b052c5e26"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "objcopy": {
+      "file_name": "x86_64-linux-gnu-objcopy",
+      "bytes": 166536,
+      "sha256": "b22f4f909bff115ee2a37cd21ff76f5e0b8c65cd58f98edbce7b59f129980d67",
+      "command": "objcopy",
+      "version": "GNU objcopy (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "nm": {
+      "file_name": "x86_64-linux-gnu-nm",
+      "bytes": 44544,
+      "sha256": "910ad8a63896f722374fdf22951d2a436c74e3ac9677511cc56378296bdf86cc",
+      "command": "nm",
+      "version": "GNU nm (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "readelf": {
+      "file_name": "x86_64-linux-gnu-readelf",
+      "bytes": 789280,
+      "sha256": "871be389739ecf9924b052c2fde4d2a2068a54e882201b9c34897337a5a0a130",
+      "command": "readelf",
+      "version": "GNU readelf (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libctf-nobfd.so.0.0.0",
+          "bytes": 216096,
+          "sha256": "586a020b55a53a8f8029a300c6e9d2d83b33c69c493baa4a9e9f102c30779b13"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    }
+  },
+  "libffi_version": "3.4.6",
+  "runner_shared_libraries": [
+    {
+      "file_name": "ld-linux-x86-64.so.2",
+      "bytes": 236616,
+      "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+    },
+    {
+      "file_name": "libc.so.6",
+      "bytes": 2129424,
+      "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+    },
+    {
+      "file_name": "libffi.so.8.1.4",
+      "bytes": 47672,
+      "sha256": "00f593fe192f2851b8ce23b25cec2488d769beb5a8f63e8c9e563071e1075153"
+    }
+  ],
+  "input_artifacts": {
+    "@REPO@/.profile-cache/source-order-proof/runner": {
+      "path": "@REPO@/.profile-cache/source-order-proof/runner",
+      "size": 234760,
+      "sha256": "f9051c16b45310502de95d5ce842c8143bb4670c6cf8237dba7609db8c953484"
+    },
+    "@REPO@/.profile-cache/source-order-proof/reader.plugin": {
+      "path": "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+      "size": 23456,
+      "sha256": "ebe19429c6c542dad4f96c05c565c67ca1ca823fd85d85576840d5b12cf9c46f"
+    },
+    "@REPO@/.profile-cache/source-order-proof/output.plugin": {
+      "path": "@REPO@/.profile-cache/source-order-proof/output.plugin",
+      "size": 64048,
+      "sha256": "390278db9ca8f9d5aaffc9238bbeb374bd962ce25dad808da4fc87beab6072bf"
+    },
+    "@REPO@/.profile-cache/source-order-proof/runner.c": {
+      "path": "@REPO@/.profile-cache/source-order-proof/runner.c",
+      "size": 20318,
+      "sha256": "dfdcfa9c9c5bacd616ade1dc53cacbbbaeaf443a8906fc2d9d4b7facb99ee79d"
+    },
+    "@REPO@/.profile-cache/source-order-proof/proof.h": {
+      "path": "@REPO@/.profile-cache/source-order-proof/proof.h",
+      "size": 751,
+      "sha256": "5c5fee28d6202569f6e1700201e355db1d37c826d154d9509bd53d0043088a3d"
+    },
+    "@REPO@/.profile-cache/source-order-proof/model.rmd": {
+      "path": "@REPO@/.profile-cache/source-order-proof/model.rmd",
+      "size": 630,
+      "sha256": "c84a221f37b73aa948c4df52c2134d26b40a3e900fcc64b9e5dc2f1dc5ffa870"
+    },
+    "@REPO@/.profile-cache/source-order-proof/interface.rmd": {
+      "path": "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+      "size": 658,
+      "sha256": "4bfa3394260c6b5f2982d18a694a310440a0bc6a5bd3155b238150677d65563c"
+    },
+    "@REPO@/.profile-cache/source-order-proof/plugin.rmd": {
+      "path": "@REPO@/.profile-cache/source-order-proof/plugin.rmd",
+      "size": 10609,
+      "sha256": "57dc5f53a272414624086a7c04a58034a02d8387b406f730dc40f888cbc85acd"
+    },
+    "@REPO@/.profile-cache/source-order-proof/main.rmd": {
+      "path": "@REPO@/.profile-cache/source-order-proof/main.rmd",
+      "size": 140,
+      "sha256": "0bd4498f18cd76ff4047a928f67ac41517b84b11e4c47452c0c9eb58fdf0d161"
+    },
+    "@REPO@/.profile-cache/source-order-proof/native-no-reader-change.rmd": {
+      "path": "@REPO@/.profile-cache/source-order-proof/native-no-reader-change.rmd",
+      "size": 139,
+      "sha256": "7fbbc9e5bf33e11633f1911bd8f94413d374494ac21b9049887161de57c20e1b"
+    },
+    "@REPO@/.profile-cache/source-order-proof/verify.py": {
+      "path": "@REPO@/.profile-cache/source-order-proof/verify.py",
+      "size": 7018,
+      "sha256": "b12da1a8519570b65ac8875305bbd4676fc3a3ec607bfddc065f9b011e21f92c"
+    },
+    "@REPO@/.profile-cache/source-order-proof/verification.json": {
+      "path": "@REPO@/.profile-cache/source-order-proof/verification.json",
+      "size": 36861,
+      "sha256": "53a7dabc042915d7f524caabcb61d273f1d241b9f1a6645f806456214e82b682"
+    },
+    "@REPO@/.profile-cache/source-order-proof/measure.py": {
+      "path": "@REPO@/.profile-cache/source-order-proof/measure.py",
+      "size": 8118,
+      "sha256": "b1c867435375b9c5d5b79d4fc271fbfb85190e6fa358c483d9e3b462db922e7b"
+    },
+    "@REPO@/api/rmd0.rmd": {
+      "path": "@REPO@/api/rmd0.rmd",
+      "size": 8202,
+      "sha256": "677977baa6ebdd45c05b92bfe9f1228c42aba7fedc3af84dac58d23ee54b33c8"
+    },
+    "@REPO@/api/rmd0_stage.rmd": {
+      "path": "@REPO@/api/rmd0_stage.rmd",
+      "size": 200,
+      "sha256": "f8adc0ccce988caa7dd9b892ec1a88506aec0c96ed27a921596d94a1cf8f7d00"
+    },
+    "@REPO@/stages/c/api.rmd": {
+      "path": "@REPO@/stages/c/api.rmd",
+      "size": 1156,
+      "sha256": "9b75d3cbb5241026243cb85d1f6e71802c05f012cea47d9a3636063b8f713157"
+    },
+    "@REPO@/build/rmd-c": {
+      "path": "@REPO@/build/rmd-c",
+      "size": 269608,
+      "sha256": "4d298168348f8b30f30475824f2da4342ecdee2d5f3bc065108e3b9e34188554"
+    },
+    "@REPO@/build/rmd-c-library.so": {
+      "path": "@REPO@/build/rmd-c-library.so",
+      "size": 64048,
+      "sha256": "390278db9ca8f9d5aaffc9238bbeb374bd962ce25dad808da4fc87beab6072bf"
+    },
+    "@REPO@/build/librmd0_host.a": {
+      "path": "@REPO@/build/librmd0_host.a",
+      "size": 19016,
+      "sha256": "e3ef3891f2784811d03101fa5c1b408d6ef2a0746cf25169e9636ed054097018"
+    },
+    "@REPO@/examples/intrusive.rmd": {
+      "path": "@REPO@/examples/intrusive.rmd",
+      "size": 2364,
+      "sha256": "a514eca3c4339c44e112fc53c4ce43f8562f830305e688a6cc23725a70fe9614"
+    },
+    "@REPO@/benchmarks/bootstrap/intrusive.c": {
+      "path": "@REPO@/benchmarks/bootstrap/intrusive.c",
+      "size": 2339,
+      "sha256": "5dac6c5036f4a343f3cacc3e9fdb353960ec870fff50511bcc15ac841a5fa9ab"
+    },
+    "@REPO@/benchmarks/bootstrap/measure.py": {
+      "path": "@REPO@/benchmarks/bootstrap/measure.py",
+      "size": 20739,
+      "sha256": "224c7a7b5fd8844137bbc813a48ca8df4939a4fd3e0770c278b0264ccfc24a22"
+    },
+    "@REPO@/build/core.o": {
+      "path": "@REPO@/build/core.o",
+      "size": 60280,
+      "sha256": "ca5cfe94c3274d3d3aaad4562213b0337b417c9a3ba9d02bf5ccd9cf2ac5f295"
+    },
+    "@REPO@/build/read.o": {
+      "path": "@REPO@/build/read.o",
+      "size": 173248,
+      "sha256": "a9105828d157082f7d3a8859f992184006995384577924be65f66846df7e6c31"
+    },
+    "@REPO@/build/check.o": {
+      "path": "@REPO@/build/check.o",
+      "size": 163056,
+      "sha256": "384bd40e8feb05c52d73bced697003eb089a7976743be657c9a26b8175505ff4"
+    },
+    "@REPO@/build/host.o": {
+      "path": "@REPO@/build/host.o",
+      "size": 18744,
+      "sha256": "29a760835dec1718ab9719fae476b334b851d2c5a72928eedbcc75f2ee6378e9"
+    },
+    "@REPO@/src/check.c": {
+      "path": "@REPO@/src/check.c",
+      "size": 52071,
+      "sha256": "b7340cbd0e925b9f263ae150ad9be5796a3114fe3906199b2644cc8afc00fc9a"
+    },
+    "@REPO@/src/core.c": {
+      "path": "@REPO@/src/core.c",
+      "size": 12044,
+      "sha256": "791e173b7ae415b09c648e969fcc89310bde217d6514ed3b42a50757f84d385b"
+    },
+    "@REPO@/src/driver.c": {
+      "path": "@REPO@/src/driver.c",
+      "size": 11533,
+      "sha256": "474e8e9c431801793f9cea868f39cf0f480acefa4c3f45c8e9f0ab7df2ef32ac"
+    },
+    "@REPO@/src/read.c": {
+      "path": "@REPO@/src/read.c",
+      "size": 31535,
+      "sha256": "21576bdb6696dc499e2cb294a4a474ebaa9d6220b3d79bdd21309a4897ec090c"
+    },
+    "@REPO@/src/stage.c": {
+      "path": "@REPO@/src/stage.c",
+      "size": 12361,
+      "sha256": "e2f292632d5267203740f53d5d554e4d6c23b20636173df17b22e6867a5d3177"
+    },
+    "@REPO@/src/x64.c": {
+      "path": "@REPO@/src/x64.c",
+      "size": 51862,
+      "sha256": "0b7dcfe6360136f12e5e599f7f1c3b843e94b15ab21785d35d295febd9fe21b8"
+    },
+    "@REPO@/include/rmd0.h": {
+      "path": "@REPO@/include/rmd0.h",
+      "size": 9825,
+      "sha256": "8b1f6b5744b5f5e2d81ff197c7cad51f9b8f1278ba985cbfd474cbdaa127e50f"
+    },
+    "@REPO@/include/rmd0_host.h": {
+      "path": "@REPO@/include/rmd0_host.h",
+      "size": 505,
+      "sha256": "ed7d76ac9cbeaa59874e44ce0ba834b1431b5960e9112a4cffe063c0d15413b2"
+    },
+    "@REPO@/include/rmd0_stage.h": {
+      "path": "@REPO@/include/rmd0_stage.h",
+      "size": 432,
+      "sha256": "200df338d52d66dbe2900e83532c016694513e5d9cdba5ee897649e3567490a0"
+    },
+    "@REPO@/include/rmd0_x64.h": {
+      "path": "@REPO@/include/rmd0_x64.h",
+      "size": 4931,
+      "sha256": "5b6e2cc828e09932461b79993bf971a3ac0511d4c5f43f3c4e5d997536535eea"
+    },
+    "@REPO@/stages/c/base.rmd": {
+      "path": "@REPO@/stages/c/base.rmd",
+      "size": 12700,
+      "sha256": "7c43a2af5abfd0355f3f59afbc3cfd9a2717655e22150d52d12ea775c1c59773"
+    },
+    "@REPO@/stages/c/driver.rmd": {
+      "path": "@REPO@/stages/c/driver.rmd",
+      "size": 18901,
+      "sha256": "2da10bd7b8681c4f9d0f2e82f27d64d031238fb459f62e8a890e357c84b0f687"
+    },
+    "@REPO@/stages/c/emit.rmd": {
+      "path": "@REPO@/stages/c/emit.rmd",
+      "size": 21776,
+      "sha256": "75456fdd7f737db64b527a7aca97e975d90b0d835951fb1c27fc4b45d1499bbd"
+    },
+    "@REPO@/stages/c/main.rmd": {
+      "path": "@REPO@/stages/c/main.rmd",
+      "size": 1002,
+      "sha256": "124d6842dfc6d362a5a4a2642354ebd42f2bb79d8ada58b3d431229233cfc5ef"
+    },
+    "@REPO@/stages/c/model.rmd": {
+      "path": "@REPO@/stages/c/model.rmd",
+      "size": 1089,
+      "sha256": "ee8d8f9106e61455223129988233c0a8414af00e37b5274243de649e9ce94a37"
+    },
+    "@REPO@/stages/c/program.rmd": {
+      "path": "@REPO@/stages/c/program.rmd",
+      "size": 13878,
+      "sha256": "b8ce9a7f3ca40bd864d07e086b753c955353e0145a126fb0dc3942168a484490"
+    },
+    "@REPO@/stages/c/types.rmd": {
+      "path": "@REPO@/stages/c/types.rmd",
+      "size": 17838,
+      "sha256": "495c6955545918814b38657b325090aee0a86b0e248c8fdac778ac0518ba8c8e"
+    }
+  },
+  "commands": {
+    "source-order-output": [
+      "@REPO@/.profile-cache/source-order-proof/runner",
+      "@REPO@/.profile-cache/source-order-proof/main.rmd",
+      "--api",
+      "@REPO@/api/rmd0.rmd",
+      "--api",
+      "@REPO@/api/rmd0_stage.rmd",
+      "--api",
+      "@REPO@/stages/c/api.rmd",
+      "--api",
+      "@REPO@/.profile-cache/source-order-proof/model.rmd",
+      "--api",
+      "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+      "--load",
+      "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+      "--load",
+      "@REPO@/.profile-cache/source-order-proof/output.plugin",
+      "--",
+      "/dev/null"
+    ],
+    "fixed-reader-output": [
+      "@REPO@/.profile-cache/source-order-proof/runner",
+      "@REPO@/.profile-cache/source-order-proof/native-no-reader-change.rmd",
+      "--api",
+      "@REPO@/api/rmd0.rmd",
+      "--api",
+      "@REPO@/api/rmd0_stage.rmd",
+      "--api",
+      "@REPO@/stages/c/api.rmd",
+      "--api",
+      "@REPO@/.profile-cache/source-order-proof/model.rmd",
+      "--api",
+      "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+      "--load",
+      "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+      "--load",
+      "@REPO@/.profile-cache/source-order-proof/output.plugin",
+      "--",
+      "/dev/null"
+    ],
+    "prepared-output": [
+      "@REPO@/build/rmd-c",
+      "--emit-c",
+      "--symbols",
+      "/dev/null",
+      "@REPO@/examples/intrusive.rmd"
+    ],
+    "gcc-original-syntax": [
+      "gcc",
+      "-std=c99",
+      "-pedantic-errors",
+      "-O0",
+      "-g0",
+      "-fsyntax-only",
+      "-Iinclude",
+      "benchmarks/bootstrap/intrusive.c"
+    ]
+  },
+  "warmups": [
+    {
+      "endpoint": "source-order-output",
+      "wall_ns": 2232550
+    },
+    {
+      "endpoint": "fixed-reader-output",
+      "wall_ns": 2215825
+    },
+    {
+      "endpoint": "prepared-output",
+      "wall_ns": 1771258
+    },
+    {
+      "endpoint": "gcc-original-syntax",
+      "wall_ns": 7349958
+    }
+  ],
+  "samples": [
+    {
+      "round": 0,
+      "endpoint": "source-order-output",
+      "sequence": 0,
+      "wall_ns": 2196706
+    },
+    {
+      "round": 0,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 1,
+      "wall_ns": 6629958
+    },
+    {
+      "round": 0,
+      "endpoint": "prepared-output",
+      "sequence": 2,
+      "wall_ns": 1728093
+    },
+    {
+      "round": 0,
+      "endpoint": "fixed-reader-output",
+      "sequence": 3,
+      "wall_ns": 2136196
+    },
+    {
+      "round": 1,
+      "endpoint": "fixed-reader-output",
+      "sequence": 4,
+      "wall_ns": 2146701
+    },
+    {
+      "round": 1,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 5,
+      "wall_ns": 6501916
+    },
+    {
+      "round": 1,
+      "endpoint": "prepared-output",
+      "sequence": 6,
+      "wall_ns": 1707702
+    },
+    {
+      "round": 1,
+      "endpoint": "source-order-output",
+      "sequence": 7,
+      "wall_ns": 2207923
+    },
+    {
+      "round": 2,
+      "endpoint": "source-order-output",
+      "sequence": 8,
+      "wall_ns": 2121834
+    },
+    {
+      "round": 2,
+      "endpoint": "prepared-output",
+      "sequence": 9,
+      "wall_ns": 1729044
+    },
+    {
+      "round": 2,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 10,
+      "wall_ns": 6507745
+    },
+    {
+      "round": 2,
+      "endpoint": "fixed-reader-output",
+      "sequence": 11,
+      "wall_ns": 2166561
+    },
+    {
+      "round": 3,
+      "endpoint": "fixed-reader-output",
+      "sequence": 12,
+      "wall_ns": 2155224
+    },
+    {
+      "round": 3,
+      "endpoint": "prepared-output",
+      "sequence": 13,
+      "wall_ns": 1758389
+    },
+    {
+      "round": 3,
+      "endpoint": "source-order-output",
+      "sequence": 14,
+      "wall_ns": 2134783
+    },
+    {
+      "round": 3,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 15,
+      "wall_ns": 6747885
+    },
+    {
+      "round": 4,
+      "endpoint": "source-order-output",
+      "sequence": 16,
+      "wall_ns": 2179450
+    },
+    {
+      "round": 4,
+      "endpoint": "prepared-output",
+      "sequence": 17,
+      "wall_ns": 1735595
+    },
+    {
+      "round": 4,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 18,
+      "wall_ns": 6758931
+    },
+    {
+      "round": 4,
+      "endpoint": "fixed-reader-output",
+      "sequence": 19,
+      "wall_ns": 2161613
+    },
+    {
+      "round": 5,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 20,
+      "wall_ns": 7160514
+    },
+    {
+      "round": 5,
+      "endpoint": "prepared-output",
+      "sequence": 21,
+      "wall_ns": 1786450
+    },
+    {
+      "round": 5,
+      "endpoint": "source-order-output",
+      "sequence": 22,
+      "wall_ns": 2198088
+    },
+    {
+      "round": 5,
+      "endpoint": "fixed-reader-output",
+      "sequence": 23,
+      "wall_ns": 2158979
+    },
+    {
+      "round": 6,
+      "endpoint": "fixed-reader-output",
+      "sequence": 24,
+      "wall_ns": 2145880
+    },
+    {
+      "round": 6,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 25,
+      "wall_ns": 6659071
+    },
+    {
+      "round": 6,
+      "endpoint": "prepared-output",
+      "sequence": 26,
+      "wall_ns": 1701062
+    },
+    {
+      "round": 6,
+      "endpoint": "source-order-output",
+      "sequence": 27,
+      "wall_ns": 2376326
+    },
+    {
+      "round": 7,
+      "endpoint": "prepared-output",
+      "sequence": 28,
+      "wall_ns": 1710787
+    },
+    {
+      "round": 7,
+      "endpoint": "source-order-output",
+      "sequence": 29,
+      "wall_ns": 2219820
+    },
+    {
+      "round": 7,
+      "endpoint": "fixed-reader-output",
+      "sequence": 30,
+      "wall_ns": 2091629
+    },
+    {
+      "round": 7,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 31,
+      "wall_ns": 6656268
+    },
+    {
+      "round": 8,
+      "endpoint": "prepared-output",
+      "sequence": 32,
+      "wall_ns": 1703556
+    },
+    {
+      "round": 8,
+      "endpoint": "fixed-reader-output",
+      "sequence": 33,
+      "wall_ns": 2151528
+    },
+    {
+      "round": 8,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 34,
+      "wall_ns": 6380664
+    },
+    {
+      "round": 8,
+      "endpoint": "source-order-output",
+      "sequence": 35,
+      "wall_ns": 2170247
+    },
+    {
+      "round": 9,
+      "endpoint": "source-order-output",
+      "sequence": 36,
+      "wall_ns": 2142064
+    },
+    {
+      "round": 9,
+      "endpoint": "prepared-output",
+      "sequence": 37,
+      "wall_ns": 1693221
+    },
+    {
+      "round": 9,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 38,
+      "wall_ns": 6397580
+    },
+    {
+      "round": 9,
+      "endpoint": "fixed-reader-output",
+      "sequence": 39,
+      "wall_ns": 2177497
+    },
+    {
+      "round": 10,
+      "endpoint": "fixed-reader-output",
+      "sequence": 40,
+      "wall_ns": 2228774
+    },
+    {
+      "round": 10,
+      "endpoint": "source-order-output",
+      "sequence": 41,
+      "wall_ns": 2061464
+    },
+    {
+      "round": 10,
+      "endpoint": "prepared-output",
+      "sequence": 42,
+      "wall_ns": 1785159
+    },
+    {
+      "round": 10,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 43,
+      "wall_ns": 6569478
+    },
+    {
+      "round": 11,
+      "endpoint": "prepared-output",
+      "sequence": 44,
+      "wall_ns": 1744207
+    },
+    {
+      "round": 11,
+      "endpoint": "source-order-output",
+      "sequence": 45,
+      "wall_ns": 2168193
+    },
+    {
+      "round": 11,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 46,
+      "wall_ns": 6621225
+    },
+    {
+      "round": 11,
+      "endpoint": "fixed-reader-output",
+      "sequence": 47,
+      "wall_ns": 2139851
+    },
+    {
+      "round": 12,
+      "endpoint": "source-order-output",
+      "sequence": 48,
+      "wall_ns": 2137277
+    },
+    {
+      "round": 12,
+      "endpoint": "prepared-output",
+      "sequence": 49,
+      "wall_ns": 1739360
+    },
+    {
+      "round": 12,
+      "endpoint": "fixed-reader-output",
+      "sequence": 50,
+      "wall_ns": 2140051
+    },
+    {
+      "round": 12,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 51,
+      "wall_ns": 6557078
+    },
+    {
+      "round": 13,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 52,
+      "wall_ns": 6559342
+    },
+    {
+      "round": 13,
+      "endpoint": "prepared-output",
+      "sequence": 53,
+      "wall_ns": 1895374
+    },
+    {
+      "round": 13,
+      "endpoint": "fixed-reader-output",
+      "sequence": 54,
+      "wall_ns": 2112219
+    },
+    {
+      "round": 13,
+      "endpoint": "source-order-output",
+      "sequence": 55,
+      "wall_ns": 2235735
+    },
+    {
+      "round": 14,
+      "endpoint": "source-order-output",
+      "sequence": 56,
+      "wall_ns": 2180231
+    },
+    {
+      "round": 14,
+      "endpoint": "fixed-reader-output",
+      "sequence": 57,
+      "wall_ns": 2094302
+    },
+    {
+      "round": 14,
+      "endpoint": "prepared-output",
+      "sequence": 58,
+      "wall_ns": 1688654
+    },
+    {
+      "round": 14,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 59,
+      "wall_ns": 6454735
+    },
+    {
+      "round": 15,
+      "endpoint": "fixed-reader-output",
+      "sequence": 60,
+      "wall_ns": 2113331
+    },
+    {
+      "round": 15,
+      "endpoint": "source-order-output",
+      "sequence": 61,
+      "wall_ns": 2124758
+    },
+    {
+      "round": 15,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 62,
+      "wall_ns": 6567504
+    },
+    {
+      "round": 15,
+      "endpoint": "prepared-output",
+      "sequence": 63,
+      "wall_ns": 1703246
+    },
+    {
+      "round": 16,
+      "endpoint": "source-order-output",
+      "sequence": 64,
+      "wall_ns": 2944608
+    },
+    {
+      "round": 16,
+      "endpoint": "fixed-reader-output",
+      "sequence": 65,
+      "wall_ns": 2130367
+    },
+    {
+      "round": 16,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 66,
+      "wall_ns": 6453634
+    },
+    {
+      "round": 16,
+      "endpoint": "prepared-output",
+      "sequence": 67,
+      "wall_ns": 1713992
+    },
+    {
+      "round": 17,
+      "endpoint": "prepared-output",
+      "sequence": 68,
+      "wall_ns": 1714543
+    },
+    {
+      "round": 17,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 69,
+      "wall_ns": 7219263
+    },
+    {
+      "round": 17,
+      "endpoint": "source-order-output",
+      "sequence": 70,
+      "wall_ns": 2125880
+    },
+    {
+      "round": 17,
+      "endpoint": "fixed-reader-output",
+      "sequence": 71,
+      "wall_ns": 2158889
+    },
+    {
+      "round": 18,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 72,
+      "wall_ns": 6571831
+    },
+    {
+      "round": 18,
+      "endpoint": "source-order-output",
+      "sequence": 73,
+      "wall_ns": 2213541
+    },
+    {
+      "round": 18,
+      "endpoint": "prepared-output",
+      "sequence": 74,
+      "wall_ns": 1691748
+    },
+    {
+      "round": 18,
+      "endpoint": "fixed-reader-output",
+      "sequence": 75,
+      "wall_ns": 2164007
+    },
+    {
+      "round": 19,
+      "endpoint": "prepared-output",
+      "sequence": 76,
+      "wall_ns": 1702364
+    },
+    {
+      "round": 19,
+      "endpoint": "source-order-output",
+      "sequence": 77,
+      "wall_ns": 2149034
+    },
+    {
+      "round": 19,
+      "endpoint": "fixed-reader-output",
+      "sequence": 78,
+      "wall_ns": 2111789
+    },
+    {
+      "round": 19,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 79,
+      "wall_ns": 6804350
+    },
+    {
+      "round": 20,
+      "endpoint": "source-order-output",
+      "sequence": 80,
+      "wall_ns": 2102424
+    },
+    {
+      "round": 20,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 81,
+      "wall_ns": 6666302
+    },
+    {
+      "round": 20,
+      "endpoint": "prepared-output",
+      "sequence": 82,
+      "wall_ns": 1708694
+    },
+    {
+      "round": 20,
+      "endpoint": "fixed-reader-output",
+      "sequence": 83,
+      "wall_ns": 2168063
+    },
+    {
+      "round": 21,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 84,
+      "wall_ns": 6562256
+    },
+    {
+      "round": 21,
+      "endpoint": "fixed-reader-output",
+      "sequence": 85,
+      "wall_ns": 2127593
+    },
+    {
+      "round": 21,
+      "endpoint": "source-order-output",
+      "sequence": 86,
+      "wall_ns": 2263066
+    },
+    {
+      "round": 21,
+      "endpoint": "prepared-output",
+      "sequence": 87,
+      "wall_ns": 1696435
+    },
+    {
+      "round": 22,
+      "endpoint": "fixed-reader-output",
+      "sequence": 88,
+      "wall_ns": 2154743
+    },
+    {
+      "round": 22,
+      "endpoint": "prepared-output",
+      "sequence": 89,
+      "wall_ns": 1690937
+    },
+    {
+      "round": 22,
+      "endpoint": "source-order-output",
+      "sequence": 90,
+      "wall_ns": 3203958
+    },
+    {
+      "round": 22,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 91,
+      "wall_ns": 6462326
+    },
+    {
+      "round": 23,
+      "endpoint": "source-order-output",
+      "sequence": 92,
+      "wall_ns": 2128534
+    },
+    {
+      "round": 23,
+      "endpoint": "fixed-reader-output",
+      "sequence": 93,
+      "wall_ns": 2129956
+    },
+    {
+      "round": 23,
+      "endpoint": "prepared-output",
+      "sequence": 94,
+      "wall_ns": 1801953
+    },
+    {
+      "round": 23,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 95,
+      "wall_ns": 6450498
+    },
+    {
+      "round": 24,
+      "endpoint": "source-order-output",
+      "sequence": 96,
+      "wall_ns": 2135975
+    },
+    {
+      "round": 24,
+      "endpoint": "prepared-output",
+      "sequence": 97,
+      "wall_ns": 1837247
+    },
+    {
+      "round": 24,
+      "endpoint": "fixed-reader-output",
+      "sequence": 98,
+      "wall_ns": 2143997
+    },
+    {
+      "round": 24,
+      "endpoint": "gcc-original-syntax",
+      "sequence": 99,
+      "wall_ns": 6438491
+    }
+  ],
+  "build": {
+    "runner": "gcc -O2 -g0 -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla -Iinclude .profile-cache/source-order-proof/runner.c build/core.o build/read.o build/check.o build/host.o -rdynamic -ldl -lffi -o .profile-cache/source-order-proof/runner",
+    "linked_objects": "Existing frozen objects shared with installed compiler; their build flags are not inferred.",
+    "reader": "Prepared ordinary RMD library generated with build/rmd-c --library --object --cflag=-fPIC and explicit exports; linked gcc -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now.",
+    "backend": "Byte-identical copy of build/rmd-c-library.so under arbitrary output.plugin filename."
+  },
+  "scope": {
+    "source-order-output": "Fresh process; interface source IO/read/collect/resolve/check; root IO; ordinary initial call parse/check; dlopen/dlsym and libffi call preparation/execution; reader switch before hostile NUL; RMD alternate reader; checked actions; target source IO/read/check; complete C and rename output; destruction with RMD callbacks; dlclose.",
+    "fixed-reader-output": "Same executor, interfaces, libraries, target, and output; ordinary initial reader handles all root actions without grammar change.",
+    "prepared-output": "Prepared standalone native C backend; actual target frontend/full C and rename output.",
+    "gcc-original-syntax": "Matched original C preprocessing and semantic checking.",
+    "included_setup": "All per-invocation host interface parsing, checking, module loading, ffi preparation, root execution and cleanup. No as/ld or per-form subprocess occurs.",
+    "excluded": "Prepared runner and explicit reader/backend library builds; final generated-target GCC/objcopy/link; correctness preflight.",
+    "cold_definition": "New process, module load and call preparation per invocation; filesystem caches are warm.",
+    "not_established": "Full RMD host evaluation, root variables/declarations/control flow, interpreted callbacks/closures, arbitrary action representations, or full runner speed."
+  },
+  "summary": {
+    "median_ms": {
+      "source-order-output": 2.170247,
+      "fixed-reader-output": 2.14588,
+      "prepared-output": 1.713992,
+      "gcc-original-syntax": 6.567504
+    },
+    "comparisons": {
+      "source-order-output/gcc-original-syntax": {
+        "ratio_of_medians": 0.3304523301394259,
+        "paired_bootstrap_ratio_95_ci": [
+          0.3241389364684364,
+          0.33645791934968705
+        ],
+        "median_of_paired_ratios": 0.3313303040532082,
+        "median_paired_difference_ms": -4.385911,
+        "paired_difference_95_ci_ms": [
+          -4.453032,
+          -4.29919
+        ]
+      },
+      "source-order-output/prepared-output": {
+        "ratio_of_medians": 1.266194357966665,
+        "paired_bootstrap_ratio_95_ci": [
+          1.2353403433727235,
+          1.2905890680721797
+        ],
+        "median_of_paired_ratios": 1.25573650534831,
+        "median_paired_difference_ms": 0.443855,
+        "paired_difference_95_ci_ms": [
+          0.397917,
+          0.491577
+        ]
+      },
+      "source-order-output/fixed-reader-output": {
+        "ratio_of_medians": 1.011355248196544,
+        "paired_bootstrap_ratio_95_ci": [
+          0.992206639618804,
+          1.0289126139392697
+        ],
+        "median_of_paired_ratios": 1.0132448474216196,
+        "median_paired_difference_ms": 0.028342,
+        "paired_difference_95_ci_ms": [
+          -0.002774,
+          0.061222
+        ]
+      }
+    },
+    "first_gate_passed": true
+  },
+  "repository_revision": "8f2133da410a33d99b1f4cb33d305ab205545368",
+  "path_token": "@REPO@ denotes the repository root used for this run.",
+  "verification": {
+    "status": "passed",
+    "checks": 22,
+    "observations": [
+      {
+        "name": "success",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-success.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-success.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-success.rsp"
+        ],
+        "status": 0,
+        "counters": {
+          "status": 0,
+          "cursor": 140,
+          "size": 140,
+          "switch_offset": 70,
+          "selections": 1,
+          "reads": 3,
+          "includes": 1,
+          "emits": 1,
+          "allocations": 2,
+          "releases": 2,
+          "root_done": true
+        },
+        "diagnostic": "",
+        "stdout_bytes": 10535
+      },
+      {
+        "name": "no-reader-change",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-no-reader-change.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-no-reader-change.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-no-reader-change.rsp"
+        ],
+        "status": 0,
+        "counters": {
+          "status": 0,
+          "cursor": 139,
+          "size": 139,
+          "switch_offset": 0,
+          "selections": 0,
+          "reads": 0,
+          "includes": 1,
+          "emits": 1,
+          "allocations": 2,
+          "releases": 2,
+          "root_done": true
+        },
+        "diagnostic": "",
+        "stdout_bytes": 10535
+      },
+      {
+        "name": "selection-failure",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-selection-failure.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-selection-failure.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-selection-failure.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 73,
+          "size": 143,
+          "switch_offset": 0,
+          "selections": 1,
+          "reads": 0,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/native-selection-failure.rmd:2:35: reader selection rejected\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "bad-custom",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-bad-custom.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-bad-custom.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-bad-custom.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 70,
+          "size": 140,
+          "switch_offset": 70,
+          "selections": 1,
+          "reads": 1,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/native-bad-custom.rmd:2:33: unknown alternate root form\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "bad-tail-after-queue",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-bad-tail-after-queue.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-bad-tail-after-queue.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-bad-tail-after-queue.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 139,
+          "size": 141,
+          "switch_offset": 70,
+          "selections": 1,
+          "reads": 3,
+          "includes": 1,
+          "emits": 0,
+          "allocations": 1,
+          "releases": 1,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/native-bad-tail-after-queue.rmd:4:1: unknown alternate root form\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "wrong-reader-type",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-wrong-reader-type.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-wrong-reader-type.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-wrong-reader-type.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 76,
+          "size": 146,
+          "switch_offset": 0,
+          "selections": 0,
+          "reads": 0,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/native-wrong-reader-type.rmd:2:21: type mismatch\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "unknown-root",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-unknown-root.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-unknown-root.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-unknown-root.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 22,
+          "size": 22,
+          "switch_offset": 0,
+          "selections": 0,
+          "reads": 0,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/native-unknown-root.rmd:1:1: unknown root binding\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "unsupported-argument",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-unsupported-argument.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-unsupported-argument.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-unsupported-argument.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 0,
+          "size": 26,
+          "switch_offset": 0,
+          "selections": 0,
+          "reads": 0,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/native-unsupported-argument.rmd:1:21: proof expected a name\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "old-reader-hostile",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-old-reader-hostile.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-old-reader-hostile.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-old-reader-hostile.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 38,
+          "size": 109,
+          "switch_offset": 0,
+          "selections": 0,
+          "reads": 0,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/native-old-reader-hostile.rmd:2:1: proof expected a name\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "host-name-not-target",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-host-name-not-target.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-host-name-not-target.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-host-name-not-target.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 172,
+          "size": 172,
+          "switch_offset": 70,
+          "selections": 1,
+          "reads": 3,
+          "includes": 1,
+          "emits": 0,
+          "allocations": 1,
+          "releases": 1,
+          "root_done": true
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/target-host-name.rmd:1:43: unknown name 'set_reader'\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "target-forward-reference",
+        "variant": "native",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/runner",
+          "@REPO@/.profile-cache/source-order-proof/native-target-forward-reference.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/native-target-forward-reference.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/native-target-forward-reference.rsp"
+        ],
+        "status": 0,
+        "counters": {
+          "status": 0,
+          "cursor": 170,
+          "size": 170,
+          "switch_offset": 70,
+          "selections": 1,
+          "reads": 3,
+          "includes": 1,
+          "emits": 1,
+          "allocations": 1,
+          "releases": 1,
+          "root_done": true
+        },
+        "diagnostic": "",
+        "stdout_bytes": 1594
+      },
+      {
+        "name": "success",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-success.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-success.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-success.rsp"
+        ],
+        "status": 0,
+        "counters": {
+          "status": 0,
+          "cursor": 140,
+          "size": 140,
+          "switch_offset": 70,
+          "selections": 1,
+          "reads": 3,
+          "includes": 1,
+          "emits": 1,
+          "allocations": 2,
+          "releases": 2,
+          "root_done": true
+        },
+        "diagnostic": "",
+        "stdout_bytes": 10535
+      },
+      {
+        "name": "no-reader-change",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-no-reader-change.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-no-reader-change.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-no-reader-change.rsp"
+        ],
+        "status": 0,
+        "counters": {
+          "status": 0,
+          "cursor": 139,
+          "size": 139,
+          "switch_offset": 0,
+          "selections": 0,
+          "reads": 0,
+          "includes": 1,
+          "emits": 1,
+          "allocations": 2,
+          "releases": 2,
+          "root_done": true
+        },
+        "diagnostic": "",
+        "stdout_bytes": 10535
+      },
+      {
+        "name": "selection-failure",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-selection-failure.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-selection-failure.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-selection-failure.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 73,
+          "size": 143,
+          "switch_offset": 0,
+          "selections": 1,
+          "reads": 0,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/san-selection-failure.rmd:2:35: reader selection rejected\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "bad-custom",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-bad-custom.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-bad-custom.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-bad-custom.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 70,
+          "size": 140,
+          "switch_offset": 70,
+          "selections": 1,
+          "reads": 1,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/san-bad-custom.rmd:2:33: unknown alternate root form\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "bad-tail-after-queue",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-bad-tail-after-queue.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-bad-tail-after-queue.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-bad-tail-after-queue.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 139,
+          "size": 141,
+          "switch_offset": 70,
+          "selections": 1,
+          "reads": 3,
+          "includes": 1,
+          "emits": 0,
+          "allocations": 1,
+          "releases": 1,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/san-bad-tail-after-queue.rmd:4:1: unknown alternate root form\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "wrong-reader-type",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-wrong-reader-type.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-wrong-reader-type.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-wrong-reader-type.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 76,
+          "size": 146,
+          "switch_offset": 0,
+          "selections": 0,
+          "reads": 0,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/san-wrong-reader-type.rmd:2:21: type mismatch\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "unknown-root",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-unknown-root.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-unknown-root.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-unknown-root.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 22,
+          "size": 22,
+          "switch_offset": 0,
+          "selections": 0,
+          "reads": 0,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/san-unknown-root.rmd:1:1: unknown root binding\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "unsupported-argument",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-unsupported-argument.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-unsupported-argument.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-unsupported-argument.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 0,
+          "size": 26,
+          "switch_offset": 0,
+          "selections": 0,
+          "reads": 0,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/san-unsupported-argument.rmd:1:21: proof expected a name\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "old-reader-hostile",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-old-reader-hostile.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-old-reader-hostile.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-old-reader-hostile.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 38,
+          "size": 109,
+          "switch_offset": 0,
+          "selections": 0,
+          "reads": 0,
+          "includes": 0,
+          "emits": 0,
+          "allocations": 0,
+          "releases": 0,
+          "root_done": false
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/san-old-reader-hostile.rmd:2:1: proof expected a name\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "host-name-not-target",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-host-name-not-target.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-host-name-not-target.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-host-name-not-target.rsp"
+        ],
+        "status": 1,
+        "counters": {
+          "status": 1,
+          "cursor": 172,
+          "size": 172,
+          "switch_offset": 70,
+          "selections": 1,
+          "reads": 3,
+          "includes": 1,
+          "emits": 0,
+          "allocations": 1,
+          "releases": 1,
+          "root_done": true
+        },
+        "diagnostic": "@REPO@/.profile-cache/source-order-proof/target-host-name.rmd:1:43: unknown name 'set_reader'\n",
+        "stdout_bytes": 0
+      },
+      {
+        "name": "target-forward-reference",
+        "variant": "san",
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "@REPO@/.profile-cache/source-order-proof/san/runner",
+          "@REPO@/.profile-cache/source-order-proof/san-target-forward-reference.rmd",
+          "--api",
+          "@REPO@/api/rmd0.rmd",
+          "--api",
+          "@REPO@/api/rmd0_stage.rmd",
+          "--api",
+          "@REPO@/stages/c/api.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/model.rmd",
+          "--api",
+          "@REPO@/.profile-cache/source-order-proof/interface.rmd",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin",
+          "--load",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin",
+          "--report",
+          "@REPO@/.profile-cache/source-order-proof/san-target-forward-reference.json",
+          "--",
+          "@REPO@/.profile-cache/source-order-proof/san-target-forward-reference.rsp"
+        ],
+        "status": 0,
+        "counters": {
+          "status": 0,
+          "cursor": 170,
+          "size": 170,
+          "switch_offset": 70,
+          "selections": 1,
+          "reads": 3,
+          "includes": 1,
+          "emits": 1,
+          "allocations": 1,
+          "releases": 1,
+          "root_done": true
+        },
+        "diagnostic": "",
+        "stdout_bytes": 1594
+      }
+    ],
+    "target_stdout": "intrusive: ok\n",
+    "host_symbols_in_target": [],
+    "source_cursor_at_switch": 70,
+    "sanitizers": [
+      "address",
+      "undefined"
+    ],
+    "asan_options": "detect_stack_use_after_return=1:detect_leaks=0:abort_on_error=1",
+    "ubsan_options": "halt_on_error=1:print_stacktrace=1",
+    "leak_detector": "Unavailable: sandbox denies LeakSanitizer ptrace attach with EPERM, reproduced by balanced malloc/free process; see san/lsan-environment.json. Explicit target arena allocation/release counts are checked."
+  },
+  "sanitizer_build": {
+    "commands": [
+      {
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "gcc",
+          "-O1",
+          "-g",
+          "-fno-omit-frame-pointer",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-std=c99",
+          "-pedantic-errors",
+          "-Wall",
+          "-Wextra",
+          "-Werror",
+          "-Wstrict-prototypes",
+          "-Wmissing-prototypes",
+          "-Wshadow",
+          "-Wvla",
+          "-Iinclude",
+          "@REPO@/.profile-cache/source-order-proof/runner.c",
+          "src/core.c",
+          "src/read.c",
+          "src/check.c",
+          "runtime/host.c",
+          "-rdynamic",
+          "-ldl",
+          "-lffi",
+          "-no-pie",
+          "-o",
+          "@REPO@/.profile-cache/source-order-proof/san/runner"
+        ],
+        "seconds": 1.007679469883442,
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "gcc",
+          "-O1",
+          "-g",
+          "-fno-omit-frame-pointer",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-std=c99",
+          "-pedantic-errors",
+          "-Wno-overlength-strings",
+          "-fPIC",
+          "-c",
+          "@REPO@/.profile-cache/source-order-proof/plugin.c",
+          "-o",
+          "@REPO@/.profile-cache/source-order-proof/san/plugin-raw.o"
+        ],
+        "seconds": 0.18011469580233097,
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "objcopy",
+          "@@REPO@/.profile-cache/source-order-proof/plugin.rsp",
+          "@REPO@/.profile-cache/source-order-proof/san/plugin-raw.o",
+          "@REPO@/.profile-cache/source-order-proof/san/plugin.o"
+        ],
+        "seconds": 0.0030189286917448044,
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "gcc",
+          "-shared",
+          "-fsanitize=address,undefined",
+          "-Wl,-Bsymbolic,-z,text,-z,relro,-z,now",
+          "@REPO@/.profile-cache/source-order-proof/san/plugin.o",
+          "-o",
+          "@REPO@/.profile-cache/source-order-proof/san/reader.plugin"
+        ],
+        "seconds": 0.01661013253033161,
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "taskset",
+          "-c",
+          "6",
+          "gcc",
+          "-O1",
+          "-g",
+          "-fno-omit-frame-pointer",
+          "-fsanitize=address,undefined",
+          "-fno-sanitize-recover=all",
+          "-std=c99",
+          "-pedantic-errors",
+          "-Wno-overlength-strings",
+          "-fPIC",
+          "-c",
+          "@REPO@/.profile-cache/source-order-proof/backend.c",
+          "-o",
+          "@REPO@/.profile-cache/source-order-proof/san/backend-raw.o"
+        ],
+        "seconds": 1.1859620781615376,
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "objcopy",
+          "@@REPO@/.profile-cache/source-order-proof/backend.rsp",
+          "@REPO@/.profile-cache/source-order-proof/san/backend-raw.o",
+          "@REPO@/.profile-cache/source-order-proof/san/backend.o"
+        ],
+        "seconds": 0.005968266166746616,
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      },
+      {
+        "command": [
+          "gcc",
+          "-shared",
+          "-fsanitize=address,undefined",
+          "-Wl,-Bsymbolic,-z,text,-z,relro,-z,now",
+          "@REPO@/.profile-cache/source-order-proof/san/backend.o",
+          "-o",
+          "@REPO@/.profile-cache/source-order-proof/san/output.plugin"
+        ],
+        "seconds": 0.021992619149386883,
+        "status": 0,
+        "stdout": "",
+        "stderr": ""
+      }
+    ]
+  },
+  "leak_sanitizer_probe": [
+    {
+      "detect_leaks": "1",
+      "returncode": -6,
+      "stderr": "==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept '__isoc99_printf'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept '__isoc99_sprintf'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept '__isoc99_snprintf'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept '__isoc99_fprintf'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept '__isoc99_vprintf'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept '__isoc99_vsprintf'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept '__isoc99_vsnprintf'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept '__isoc99_vfprintf'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept '__b64_ntop'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept '__b64_pton'\n==9==Registered root region at 0x7df1f0a016e0 of size 96\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0a016e0 of size 96\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'pthread_mutexattr_getrobust_np'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdrmem_create'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdrstdio_create'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_short'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_u_short'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_int'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_u_int'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_long'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_u_long'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_hyper'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_u_hyper'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_longlong_t'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_u_longlong_t'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_int8_t'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_uint8_t'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_int16_t'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_uint16_t'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_int32_t'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_uint32_t'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_int64_t'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_uint64_t'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_quad_t'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_u_quad_t'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_bool'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_enum'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_char'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_u_char'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_float'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_double'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_bytes'\n==9==Registered root region at 0x7df1f0c00f40 of size 64\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f0c00f40 of size 64\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_string'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdrrec_create'\n==9==Registered root region at 0x7df1f1201310 of size 80\n==9==Registered root region at 0x7df1f0e007a0 of size 32\n==9==Unregistered root region at 0x7df1f1201310 of size 80\n==9==Unregistered root region at 0x7df1f0e007a0 of size 32\n==9==AddressSanitizer: failed to intercept 'xdr_destroy'\n==9==AddressSanitizer: libc interceptors initialized\n|| `[0x10007fff8000, 0x7fffffffffff]` || HighMem    ||\n|| `[0x02008fff7000, 0x10007fff7fff]` || HighShadow ||\n|| `[0x00008fff7000, 0x02008fff6fff]` || ShadowGap  ||\n|| `[0x00007fff8000, 0x00008fff6fff]` || LowShadow  ||\n|| `[0x000000000000, 0x00007fff7fff]` || LowMem     ||\nMemToShadow(shadow): 0x00008fff7000 0x000091ff6dff 0x004091ff6e00 0x02008fff6fff\nredzone=16\nmax_redzone=2048\nquarantine_size_mb=256M\nthread_local_quarantine_size_kb=1024K\nmalloc_context_size=30\nSHADOW_SCALE: 3\nSHADOW_GRANULARITY: 8\nSHADOW_OFFSET: 0x7fff8000\n==9==Installed the sigaction for signal 11\n==9==Installed the sigaction for signal 7\n==9==Installed the sigaction for signal 8\n==9==T0: FakeStack created: 0x7df1ef6f7000 -- 0x7df1f0200000 stack_size_log: 20; mmapped 11300K, noreserve=0 \n==9==T0: stack [0x7ffe57851000,0x7ffe58051000) size 0x800000; local=0x7ffe5804e3b4\n==9==AddressSanitizer Init done\n==9==LeakSanitizer: checking for leaks==10==Could not attach to thread 9 (errno 1).\n==10==Failed suspending threads.\n==9==LeakSanitizer has encountered a fatal error.\n==9==HINT: For debugging, try setting environment variable LSAN_OPTIONS=verbosity=1:log_threads=1\n==9==HINT: LeakSanitizer does not work under ptrace (strace, gdb, etc)\n"
+    },
+    {
+      "detect_leaks": "0",
+      "returncode": 0,
+      "stderr": ""
+    }
+  ],
+  "clang_function_type_diagnostic": "Clang 20 ASan+UBSan function-type check rejected the mapped native pointer ABI boundary:\nplugin.c:566:13: runtime error: call to function rmd_try_alloc through pointer to incorrect function type 'void *(*)(void *, unsigned long, unsigned long)'\nsrc/core.c:157: rmd_try_alloc uses RmdContext *.\nGenerated RMD C erases native data pointer types to void *. The RMD ABI maps all data pointers to one native pointer category. The proof uses GCC address+undefined sanitizers; it does not claim Clang function-type sanitizer coverage.\n",
+  "replay": "benchmarks/source-order/proof/build.py reconstructs artifacts; verify.py and measure.py accept RMD_PROOF_DIR. Historic hashes describe the measured inputs, not rebuilt files."
+}

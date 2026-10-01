@@ -244,18 +244,15 @@ record RmdUnit {
     next: *RmdUnit;
 }
 
-record RmdMetaInput {
-    next: *RmdMetaInput;
-    loc: RmdLoc;
-    path: *u8;
-    native: bool;
+record RmdAction {
+    declaration: *RmdDecl;
+    statement: *RmdStmt;
+    end: usize;
 }
 
-record RmdMeta {
-    host_unit: *RmdUnit;
-    inputs: *RmdMetaInput;
-    target_begin: usize;
-    loc: RmdLoc;
+record RmdRootScope {
+    locals: RmdMap;
+    scope: *RmdSymbol;
 }
 
 record RmdContext {
@@ -288,12 +285,16 @@ extern fn rmd_try_map_set(ctx: *RmdContext, map: *RmdMap, key: usize, value: *u8
 extern fn rmd_map_get(map: *RmdMap, key: usize) -> *u8 = "rmd_map_get";
 extern fn rmd_read(ctx: *RmdContext, source: *RmdSource, result: **RmdUnit) -> bool = "rmd_read";
 extern fn rmd_read_range(ctx: *RmdContext, source: *RmdSource, begin: usize, end: usize, result: **RmdUnit) -> bool = "rmd_read_range";
-extern fn rmd_read_meta(ctx: *RmdContext, source: *RmdSource, result: *RmdMeta) -> bool = "rmd_read_meta";
+extern fn rmd_read_one(ctx: *RmdContext, source: *RmdSource, begin: usize, end: usize, result: *RmdAction) -> bool = "rmd_read_one";
 extern fn rmd_bind(ctx: *RmdContext, name: *RmdName, declaration: *RmdDecl) -> bool = "rmd_bind";
 extern fn rmd_collect(ctx: *RmdContext) -> bool = "rmd_collect";
 extern fn rmd_resolve(ctx: *RmdContext) -> bool = "rmd_resolve";
 extern fn rmd_check_body(ctx: *RmdContext, function: *RmdDecl) -> bool = "rmd_check_body";
 extern fn rmd_check(ctx: *RmdContext) -> bool = "rmd_check";
+extern fn rmd_collect_unit(ctx: *RmdContext, unit_value: *RmdUnit) -> bool = "rmd_collect_unit";
+extern fn rmd_resolve_unit(ctx: *RmdContext, unit_value: *RmdUnit) -> bool = "rmd_resolve_unit";
+extern fn rmd_check_unit(ctx: *RmdContext, unit_value: *RmdUnit) -> bool = "rmd_check_unit";
+extern fn rmd_check_root(ctx: *RmdContext, scope: *RmdRootScope, statement: *RmdStmt) -> bool = "rmd_check_root";
 extern fn rmd_try_resolve_type(ctx: *RmdContext, syntax: *RmdTypeSyntax) -> *RmdType = "rmd_try_resolve_type";
 extern fn rmd_type_equal(a: *RmdType, b: *RmdType) -> bool = "rmd_type_equal";
 extern fn rmd_type_integer(type: *RmdType) -> bool = "rmd_type_integer";

@@ -20,6 +20,7 @@ architecture. Use the [language specification](../crust0-spec.md) and
 | [Native host-stage experiment](source-stages.md) | The removed native host-block launcher and its measured preparation cost |
 | [Source-order compilation study](source-order-compilation.md) | Action boundaries, execution choices, and the experiment that led to the current runner |
 | [Resource stage design](resource-metastage.md) | Ownership and cleanup design, implementation evidence, and the separate intrusive observer requirement |
+| [Syntax highlighting](syntax-highlighting.md) | Reader token probe, stage-owned classifications, HTML output, and VS Code interfaces |
 
 Recorded benchmark data remains in [benchmarks](../../benchmarks/).
 Its source names, revisions, and hashes identify the measured inputs.

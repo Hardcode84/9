@@ -248,8 +248,7 @@ fn rs_make(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> 
         var item: *CrustInit = (*source).inits;
         var previous: *CrustInit = null(*CrustInit);
         while item != null(*CrustInit) && !(*stage).failed {
-            var field: *CrustField = (*(*global).source).fields;
-            while field != null(*CrustField) && (*field).name != (*item).name { field = (*field).next; }
+            var field: *CrustField = crust_map_get(&(*global).fields, (*item).name as usize) as *CrustField;
             if field == null(*CrustField) {
                 rs_error(stage, &(*item).loc, "record has no such field");
                 return null(*RsValue);

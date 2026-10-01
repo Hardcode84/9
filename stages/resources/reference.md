@@ -129,7 +129,8 @@ retain the resource stage through body emission. The resource reader alone does
 not add bare prototypes or overload selection.
 
 The stage retains source signatures, storage identities, loans, and cleanup
-plans. It lowers a separate set of target declarations and bodies. Source
+plans. It lowers a separate set of target declarations and bodies. Generated
+drop helpers are checked seed functions with private C linkage. Source
 locations retain offsets in the original complete file. The seed checker
 checks generated types and operations; it does not prove ownership.
 
@@ -159,7 +160,11 @@ function checks serially; the public API does not provide a worker scheduler.
 Cleanup plans share equal suffixes that have the same continuation. Output uses
 C labels and branches. It has no runtime cleanup table, dynamic registration,
 hidden owner header, reference count, or hidden drop flag. A deferred direct
-call stays direct. Arrays use reverse loops, not unrolled drop lists.
+call stays direct. Each owning record type has one generated drop function
+when cleanup needs that type. Parent records call those functions in reverse
+field order. Arrays use reverse loops. Repeated nested record types do not
+expand cleanup code once per stored element. Field names are indexed once
+during collection for constructor and place checks.
 
 Record and array parameters use pointers to caller snapshots. Aggregate results
 use caller-provided storage. The stage retains explicit left-to-right evaluation

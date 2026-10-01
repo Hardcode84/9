@@ -33,8 +33,35 @@ def program(body, declarations="", common=True):
     )
 
 
+def wide_record_source(count=512):
+    fields = "".join(f"field{index}:i32;" for index in range(count))
+    values = ",".join(f"field{index}:{index}i32" for index in reversed(range(count)))
+    checks = "".join(
+        f"if value.field{index}!={index}i32 {{return 1i32;}}" for index in range(count)
+    )
+    return program(
+        f"var value:Wide=make Wide {{{values}}};{checks}",
+        f"record Wide {{{fields}}}",
+        common=False,
+    )
+
+
+def cleanup_tree_source(depth):
+    records = "".join(
+        f"record Tree{level} {{first:Tree{level - 1}; last:Tree{level - 1};}}\n"
+        for level in range(1, depth + 1)
+    )
+    return (
+        "resource Tree0 {value:i32;} drop drop_leaf;\n"
+        "fn drop_leaf(value:mut Tree0)->unit {}\n"
+        + records
+        + f"fn consume(value:Tree{depth})->unit {{}}\n"
+    )
+
+
 def runtime_cases():
     return [
+        ("wide-record-reverse-initializers-and-fields", wide_record_source(), b""),
         (
             "empty-main-and-zero-argument-functions",
             program(
@@ -213,6 +240,20 @@ def runtime_cases():
                 "record Pair { first:Token; last:Token; }",
             ),
             b"AXBC",
+        ),
+        (
+            "shared-record-cleanup-moves-and-reassignment",
+            program(
+                "var value:Tree=tree(65i32); value.first.first=token(69i32); "
+                "var moved:Tree=move value; defer consume(move moved); "
+                "value=tree(70i32); emit(88i32);",
+                "record Pair {first:Token; last:Token;} "
+                "record Tree {first:Pair; last:Pair;} "
+                "fn pair(code:i32)->Pair {return make Pair {first:token(code),last:token(code+1i32)};} "
+                "fn tree(code:i32)->Tree {return make Tree {first:pair(code),last:pair(code+2i32)};} "
+                "fn consume(value:Tree)->unit {}",
+            ),
+            b"AXDCBEIHGF",
         ),
         (
             "nested-block-cleanup",
@@ -447,6 +488,27 @@ def reject_cases():
     observe = "fn observe(value:read Token)->unit {}"
     condition = "fn condition(value:Token)->bool { return true; }"
     return [
+        (
+            "duplicate-record-field",
+            program("", "record Duplicate {value:i32; value:i32;}", common=False),
+            "duplicate record field",
+        ),
+        (
+            "unknown-constructor-field",
+            program(
+                "var value:Pair=make Pair {absent:0i32};", "record Pair {value:i32;}", common=False
+            ),
+            "record has no such field",
+        ),
+        (
+            "unknown-place-field",
+            program(
+                "var value:Pair=make Pair {field:0i32}; value.absent;",
+                "record Pair {field:i32;}",
+                common=False,
+            ),
+            "record has no such field",
+        ),
         (
             "copy-in-initializer",
             program("var a:Token=token(65i32); var b:Token=a;"),
@@ -1000,6 +1062,93 @@ class Suite:
             result = self.command([self.compiler, "--emit-c", "--library", path])
             if not result.stdout or result.stderr:
                 raise Failure(f"empty library did not emit C: {result.stdout!r} {result.stderr!r}")
+        elif name == "cli-shared-record-cleanup-growth":
+            sizes = []
+            for depth in (8, 14):
+                source = self.source(f"{name}-{depth}", cleanup_tree_source(depth))
+                output = source.with_suffix(".c")
+                self.command([self.compiler, "--library", "--emit-c", "-o", output, source])
+                sizes.append(output.stat().st_size)
+            if sizes[1] > 100_000 or sizes[1] > 3 * sizes[0]:
+                raise Failure(f"record cleanup expanded with value size: {sizes}")
+        elif name == "cli-private-cleanup-separate-objects":
+            objects = []
+            for label, code in (("left", 65), ("right", 66)):
+                source = self.source(
+                    f"{name}-{label}",
+                    'extern fn putchar(code:i32)->i32="putchar"; '
+                    f"resource Cell {{code:i32;}} drop drop_{label}; "
+                    f"fn drop_{label}(value:mut Cell)->unit {{unsafe {{putchar(value.code);}}}} "
+                    f"fn run_{label}()->unit {{unsafe {{var value:Cell=make Cell {{code:{code}i32}};}}}}",
+                )
+                output = source.with_suffix(".o")
+                self.command(
+                    [
+                        self.compiler,
+                        "--library",
+                        "--object",
+                        "--cflag=-O0",
+                        "--export",
+                        f"drop_{label}",
+                        "--export",
+                        f"run_{label}",
+                        "-o",
+                        output,
+                        source,
+                    ]
+                )
+                symbols = self.command(["nm", "--defined-only", output]).stdout
+                if not re.search(rb"\bt r_g[0-9]+\b", symbols):
+                    raise Failure(f"cleanup helper has no private function symbol: {symbols!r}")
+                public = self.command(["nm", "-g", "--defined-only", output]).stdout
+                if set(re.findall(rb"\bT (\S+)", public)) != {
+                    f"drop_{label}".encode(),
+                    f"run_{label}".encode(),
+                }:
+                    raise Failure(f"cleanup helper escaped native visibility: {public!r}")
+                objects.append(output)
+            source = self.source(
+                name + "-main",
+                program(
+                    "unsafe {left(); right();}",
+                    'extern fn left()->unit="run_left"; extern fn right()->unit="run_right";',
+                    common=False,
+                ),
+            )
+            output = self.work / name
+            self.command(
+                [
+                    self.compiler,
+                    "-o",
+                    output,
+                    source,
+                    *(f"--ldflag={path}" for path in objects),
+                ]
+            )
+            if self.command([output]).stdout != b"AB":
+                raise Failure("separate private cleanup helpers changed destructor behavior")
+        elif name == "cli-private-cleanup-native-alias":
+            source = self.source(
+                name,
+                "resource Token {id:i32;} drop drop_token;\n"
+                'extern fn putchar(code:i32)->i32="putchar";\n'
+                'extern fn native(value:*Token)->unit="_crust0_u1_d6";\n'
+                "fn drop_token(value:mut Token)->unit {unsafe {putchar(68i32);}}\n"
+                "fn main(argc:i32,argv:**u8)->i32 {\n"
+                "unsafe {var value:Token=make Token{id:1i32}; native(&value);}\n"
+                "return 0i32;}\n",
+            )
+            native = source.with_suffix(".c")
+            native.write_text(
+                "#include <stdio.h>\n"
+                "void _crust0_u1_d6(void *value) {(void)value; putchar(69);}\n"
+            )
+            native_object = native.with_suffix(".o")
+            self.command(["gcc", "-std=c99", "-pedantic-errors", "-c", native, "-o", native_object])
+            output = self.work / name
+            self.command([self.compiler, "-o", output, source, f"--ldflag={native_object}"])
+            if self.command([output]).stdout != b"ED":
+                raise Failure("private cleanup captured an external native symbol")
         elif name == "cli-multiple-sources":
             library = self.source(name + "-library", COMMON)
             application = self.source(
@@ -1095,6 +1244,9 @@ def main():
         ("cli", name, None, None)
         for name in (
             "cli-empty-source",
+            "cli-shared-record-cleanup-growth",
+            "cli-private-cleanup-separate-objects",
+            "cli-private-cleanup-native-alias",
             "cli-multiple-sources",
             "cli-failure-preserves-output",
             "cli-source-root",

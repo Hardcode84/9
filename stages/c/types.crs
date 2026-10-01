@@ -282,9 +282,15 @@ fn c_bind(stage: *CStage, declaration: *CrustDecl, owned: bool) -> *CBinding {
     var binding: *CBinding = c_map_get(&(*stage).declarations, declaration as usize) as *CBinding;
     if binding == null(*CBinding) {
         var name: *u8 = (*declaration).link_name;
-        if name == null(*u8) || *name == 0u8 {
+        if name == null(*u8) {
             c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
                     "C backend declaration has no native link name");
+            return null(*CBinding);
+        }
+        var private: bool = *name == 0u8;
+        if private && (*declaration).kind == CRUST_D_EXTERN {
+            c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
+                    "private C linkage requires a definition in this output");
             return null(*CBinding);
         }
         var index: usize = 0usize;
@@ -301,8 +307,12 @@ fn c_bind(stage: *CStage, declaration: *CrustDecl, owned: bool) -> *CBinding {
                     "native symbol main conflicts with the hosted entry adapter");
             return null(*CBinding);
         }
-        var hash: usize = c_hash(name);
-        var head: *CBinding = c_map_get(&(*stage).native_names, hash) as *CBinding;
+        var hash: usize = 0usize;
+        var head: *CBinding = null(*CBinding);
+        if !private {
+            hash = c_hash(name);
+            head = c_map_get(&(*stage).native_names, hash) as *CBinding;
+        }
         binding = head;
         while binding != null(*CBinding) {
             if c_equal((*(*binding).source).link_name, name) { break; }
@@ -341,7 +351,7 @@ fn c_bind(stage: *CStage, declaration: *CrustDecl, owned: bool) -> *CBinding {
             if (*stage).last_binding == null(*CBinding) { (*stage).first_binding = binding; }
             else { (*(*stage).last_binding).next = binding; }
             (*stage).last_binding = binding;
-            c_map_set(&(*stage).status, &(*stage).native_names, hash, binding as usize);
+            if !private { c_map_set(&(*stage).status, &(*stage).native_names, hash, binding as usize); }
         }
         c_type(stage, (*declaration).type);
         c_map_set(&(*stage).status, &(*stage).declarations, declaration as usize, binding as usize);
@@ -369,13 +379,24 @@ fn c_global(stage: *CStage, declaration: *CrustDecl) -> unit {
     c_text(stage, "r_g"); c_number(stage, (*binding).identity as u64);
 }
 
+fn c_private(binding: *CBinding) -> bool {
+    return (*(*binding).source).link_name[0usize] == 0u8;
+}
+
 fn c_emit_prototypes(stage: *CStage) -> unit {
     var binding: *CBinding = (*stage).first_binding;
     while binding != null(*CBinding) {
         var declaration: *CrustDecl = (*binding).definition;
+        if c_private(binding) && declaration == null(*CrustDecl) {
+            var source: *CrustDecl = (*binding).source;
+            c_error(&(*stage).status, (*source).loc.source, (*source).loc.offset,
+                    "private C linkage requires a definition in this output");
+            return;
+        }
         if declaration == null(*CrustDecl) { declaration = (*binding).source; }
         var input: *CrustType = (*declaration).type;
-        c_text(stage, "extern ");
+        if c_private(binding) { c_text(stage, "static "); }
+        else { c_text(stage, "extern "); }
         if c_function_decl(declaration) { c_type_name(stage, (*input).base); }
         else { c_type_name(stage, input); c_text(stage, " const"); }
         c_text(stage, " r_g"); c_number(stage, (*binding).identity as u64);
@@ -391,6 +412,7 @@ fn c_emit_renames(stage: *CStage) -> unit {
     var buffer: *CBuffer = &(*stage).renames;
     var binding: *CBinding = (*stage).first_binding;
     while binding != null(*CBinding) {
+        if c_private(binding) { binding = (*binding).next; continue; }
         c_buffer_text(buffer, "\"--redefine-sym\"\n\"r_g");
         c_buffer_number(buffer, (*binding).identity as u64);
         c_buffer_text(buffer, "=");

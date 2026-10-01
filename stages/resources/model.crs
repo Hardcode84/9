@@ -16,9 +16,11 @@ record RsGlobal {
     lowered: *CrustDecl;
     syntax: *CrustTypeSyntax;
     resource: *RsResource;
+    fields: CrustMap;
     unsafe_call: bool;
     drop_only: bool;
     drop: *RsGlobal;
+    drop_helper: *CrustDecl;
     next: *RsGlobal;
 }
 
@@ -34,6 +36,9 @@ record RsStage {
     lowered_types: CrustMap;
     ownership: CrustMap;
     functions: CrustMap;
+    helpers: *CrustUnit;
+    last_helper: *CrustDecl;
+    next_helper_identity: u64;
     next_name: usize;
     failed: bool;
 }

@@ -513,6 +513,9 @@ fn c_emit_with_body(stage: *CStage, entry: *CrustDecl,
                 }
             }
             if (*declaration).kind == CRUST_D_CONST {
+                var binding: *CBinding = c_binding(stage, declaration);
+                if binding == null(*CBinding) { return false; }
+                if c_private(binding) { c_text(stage, "static "); }
                 c_type_name(stage, (*declaration).type); c_text(stage, " const ");
                 c_global(stage, declaration); c_text(stage, "="); c_constant(stage, (*declaration).init);
                 c_text(stage, ";\n");

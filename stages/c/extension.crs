@@ -2,6 +2,8 @@
 // and stages/c/api.crs before this consumer interface.
 // Retain valid target types, layouts, signatures, parameter symbols, assigned link
 // names, checked constant initializers, and a valid hosted entry or null.
+// Empty link names select private definitions; external declarations need nonempty names.
+// Select names before the first binding operation and keep them unchanged through emission.
 // A body callback runs after its function signature and emits the complete body.
 // It owns body semantics; declaration.body may be null. Node helpers need checked nodes.
 // Callback code and user storage must remain live through the synchronous call.
@@ -47,7 +49,7 @@ extern fn c_value(stage: *CStage, identity: usize) -> unit = "c_value";
 extern fn c_symbol(stage: *CStage, symbol: *CrustSymbol) -> unit = "c_symbol";
 extern fn c_global(stage: *CStage, declaration: *CrustDecl) -> unit = "c_global";
 extern fn c_type_name(stage: *CStage, source_type: *CrustType) -> unit = "c_type_name";
-// Register a compatible declaration alias. Return null on failure.
+// Register a compatible native alias or a private definition. Return null on failure.
 extern fn c_binding(stage: *CStage, declaration: *CrustDecl) -> *CBinding = "c_binding";
 
 // Start a temporary declaration and return its identity. The caller must finish it.

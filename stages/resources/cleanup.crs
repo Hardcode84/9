@@ -69,8 +69,115 @@ fn rs_cleanup_binary(stage: *RsStage, op: u32, left: *CrustExpr, right: *CrustEx
     return expression;
 }
 
+fn rs_drop_call(stage: *RsStage, name: *CrustName, place: *CrustExpr) -> *CrustStmt {
+    if (*stage).failed { return null(*CrustStmt); }
+    var location: *CrustLoc = &(*place).loc;
+    var call: *CrustExpr = rs_expr_node(stage, CRUST_E_CALL, location);
+    var invoke: *CrustStmt = rs_stmt_node(stage, CRUST_S_EXPR, location);
+    if (*stage).failed { return null(*CrustStmt); }
+    (*call).left = rs_named(stage, name, location);
+    (*call).arg_count = 1usize;
+    (*call).args = rs_alloc(stage, sizeof(*CrustExpr), alignof(*CrustExpr)) as **CrustExpr;
+    if (*stage).failed { return null(*CrustStmt); }
+    (*call).args[0usize] = rs_unary(stage, CRUST_OP_ADDRESS, rs_clone_expr(stage, place), location);
+    (*invoke).expr = call;
+    return invoke;
+}
+
+fn rs_drop_header(stage: *RsStage, global: *RsGlobal) -> *CrustDecl {
+    var context: *CrustContext = (*stage).context;
+    var location: *CrustLoc = &(*(*global).source).loc;
+    if (*stage).next_helper_identity == ~0u64 {
+        rs_error(stage, location, "too many declarations for generated resource cleanup");
+        return null(*CrustDecl);
+    }
+    if (*stage).helpers == null(*CrustUnit) {
+        var helpers: *CrustUnit = rs_alloc(stage, sizeof(CrustUnit), alignof(CrustUnit)) as *CrustUnit;
+        if helpers == null(*CrustUnit) { return null(*CrustDecl); }
+        (*helpers).source = (*(*context).units).source;
+        (*(*context).last_unit).next = helpers;
+        (*context).last_unit = helpers;
+        (*stage).helpers = helpers;
+    }
+    var declaration: *CrustDecl = rs_alloc(stage, sizeof(CrustDecl), alignof(CrustDecl)) as *CrustDecl;
+    var parameter: *CrustParam = rs_alloc(stage, sizeof(CrustParam), alignof(CrustParam)) as *CrustParam;
+    var record_type: *CrustTypeSyntax = rs_type_node(stage, CRUST_T_NAME, location);
+    if (*stage).failed { return null(*CrustDecl); }
+    (*record_type).name = (*(*global).source).name;
+    (*parameter).name = rs_name(stage);
+    (*parameter).loc = *location;
+    (*parameter).syntax_type = rs_pointer(stage, record_type);
+    (*declaration).kind = CRUST_D_FUNCTION;
+    (*declaration).loc = *location;
+    (*declaration).name = rs_name(stage);
+    (*declaration).link_name = "";
+    (*declaration).syntax_type = rs_type_node(stage, CRUST_T_UNIT, location);
+    (*declaration).params = parameter;
+    (*declaration).param_count = 1usize;
+    (*stage).next_helper_identity = (*stage).next_helper_identity + 1u64;
+    (*declaration).identity = (*stage).next_helper_identity;
+    (*declaration).unit_identity = (*(*(*stage).helpers).source).identity;
+    if (*stage).failed { return null(*CrustDecl); }
+    var single: CrustUnit = make CrustUnit {
+        source: (*(*stage).helpers).source, declarations: declaration, next: null(*CrustUnit)
+    };
+    if !crust_collect_unit(context, &single) || !crust_resolve_unit(context, &single) {
+        (*stage).failed = true;
+        return null(*CrustDecl);
+    }
+    if (*stage).last_helper == null(*CrustDecl) { (*(*stage).helpers).declarations = declaration; }
+    else { (*(*stage).last_helper).next = declaration; }
+    (*stage).last_helper = declaration;
+    (*global).drop_helper = declaration;
+    return declaration;
+}
+
+fn rs_drop_helper(stage: *RsStage, global: *RsGlobal) -> *CrustDecl {
+    if (*global).drop_helper != null(*CrustDecl) { return (*global).drop_helper; }
+    var declaration: *CrustDecl = rs_drop_header(stage, global);
+    var function: *RsFunction = rs_alloc(stage, sizeof(RsFunction), alignof(RsFunction)) as *RsFunction;
+    if (*stage).failed { return null(*CrustDecl); }
+    (*function).stage = stage;
+    rs_scope(function);
+    var location: *CrustLoc = &(*declaration).loc;
+    var place: *CrustExpr = rs_unary(stage, CRUST_OP_DEREF,
+        rs_named(stage, (*(*declaration).params).name, location), location);
+    var output: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    if (*global).resource != null(*RsResource) {
+        rs_append(&output, rs_drop_call(stage, (*(*(*global).drop).lowered).name, place));
+    }
+    var fields: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    var field: *CrustField = (*(*global).source).fields;
+    while field != null(*CrustField) && !(*stage).failed {
+        if rs_owns(stage, (*field).syntax_type) {
+            var field_place: *CrustExpr = rs_expr_node(stage, CRUST_E_FIELD, location);
+            if field_place == null(*CrustExpr) { return null(*CrustDecl); }
+            (*field_place).left = rs_clone_expr(stage, place);
+            (*field_place).field_name = (*field).name;
+            var drop: *CrustStmt = rs_drop_tree(function, (*field).syntax_type, field_place);
+            if (*stage).failed { return null(*CrustDecl); }
+            (*drop).next = fields.first;
+            fields.first = drop;
+            if fields.last == null(*CrustStmt) { fields.last = drop; }
+        }
+        field = (*field).next;
+    }
+    if (*stage).failed { return null(*CrustDecl); }
+    if fields.first != null(*CrustStmt) {
+        if output.last == null(*CrustStmt) { output.first = fields.first; }
+        else { (*output.last).next = fields.first; }
+        output.last = fields.last;
+    }
+    var body: RsStatements = make RsStatements {
+        first: (*function).declarations, last: (*function).last_declaration
+    };
+    rs_append(&body, rs_block(stage, &output, location));
+    (*declaration).body = rs_block(stage, &body, location);
+    return declaration;
+}
+
 // Require a resolved owning source type and an owner place without side effects.
-// Return one unchecked seed block. Destroy the record before its owned fields.
+// Return one unchecked seed statement. Destroy the record before its owned fields.
 fn rs_drop_tree(function: *RsFunction, syntax: *CrustTypeSyntax, place: *CrustExpr) -> *CrustStmt {
     var stage: *RsStage = (*function).stage;
     if (*stage).failed { return null(*CrustStmt); }
@@ -103,41 +210,9 @@ fn rs_drop_tree(function: *RsFunction, syntax: *CrustTypeSyntax, place: *CrustEx
         return rs_block(stage, &output, location);
     }
     var global: *RsGlobal = rs_global(stage, (*syntax).name);
-    if (*global).resource != null(*RsResource) {
-        var call: *CrustExpr = rs_expr_node(stage, CRUST_E_CALL, location);
-        if call == null(*CrustExpr) { return null(*CrustStmt); }
-        (*call).left = rs_named(stage, (*(*(*global).drop).lowered).name, location);
-        (*call).arg_count = 1usize;
-        (*call).args = rs_alloc(stage, sizeof(*CrustExpr), alignof(*CrustExpr)) as **CrustExpr;
-        if (*stage).failed { return null(*CrustStmt); }
-        (*call).args[0usize] = rs_unary(stage, CRUST_OP_ADDRESS, rs_clone_expr(stage, place), location);
-        var invoke: *CrustStmt = rs_stmt_node(stage, CRUST_S_EXPR, location);
-        if invoke == null(*CrustStmt) { return null(*CrustStmt); }
-        (*invoke).expr = call;
-        rs_append(&output, invoke);
-    }
-    var fields: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
-    var field: *CrustField = (*(*global).source).fields;
-    while field != null(*CrustField) && !(*stage).failed {
-        if rs_owns(stage, (*field).syntax_type) {
-            var field_place: *CrustExpr = rs_expr_node(stage, CRUST_E_FIELD, location);
-            if field_place == null(*CrustExpr) { return null(*CrustStmt); }
-            (*field_place).left = rs_clone_expr(stage, place);
-            (*field_place).field_name = (*field).name;
-            var drop: *CrustStmt = rs_drop_tree(function, (*field).syntax_type, field_place);
-            if drop == null(*CrustStmt) { return null(*CrustStmt); }
-            (*drop).next = fields.first;
-            fields.first = drop;
-            if fields.last == null(*CrustStmt) { fields.last = drop; }
-        }
-        field = (*field).next;
-    }
-    if fields.first != null(*CrustStmt) {
-        if output.last == null(*CrustStmt) { output.first = fields.first; }
-        else { (*output.last).next = fields.first; }
-        output.last = fields.last;
-    }
-    return rs_block(stage, &output, location);
+    var helper: *CrustDecl = rs_drop_helper(stage, global);
+    if (*stage).failed { return null(*CrustStmt); }
+    return rs_drop_call(stage, (*helper).name, place);
 }
 
 // Attach one action to the function's seed-check validation list once.

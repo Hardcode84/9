@@ -10,11 +10,8 @@ fn rs_field_info(stage: *RsStage, syntax: *CrustTypeSyntax, name: *CrustName,
         rs_error(stage, location, "field access requires a declared record");
         return null(*CrustField);
     }
-    var field: *CrustField = (*(*global).source).fields;
-    while field != null(*CrustField) {
-        if (*field).name == name { return field; }
-        field = (*field).next;
-    }
+    var field: *CrustField = crust_map_get(&(*global).fields, name as usize) as *CrustField;
+    if field != null(*CrustField) { return field; }
     rs_error(stage, location, "record has no such field");
     return null(*CrustField);
 }

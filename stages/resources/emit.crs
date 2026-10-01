@@ -77,7 +77,11 @@ fn rs_c_statement(stage:*CStage, function:*RsFunction, statement:*CrustStmt)->un
 fn rs_c_body(stage:*CStage, declaration:*CrustDecl, user:*u8)->bool {
     var resources:*RsStage = user as *RsStage;
     var function:*RsFunction = crust_map_get(&(*resources).functions, declaration as usize) as *RsFunction;
-    if function == null(*RsFunction) { trap; }
+    if function == null(*RsFunction) {
+        // Generated drop helpers have complete seed bodies and private linkage.
+        c_statement(stage, (*declaration).body);
+        return !(*stage).status.failed;
+    }
     c_text(stage, "{\n");
     var storage:*CrustStmt = (*function).declarations;
     if storage != null(*CrustStmt) {

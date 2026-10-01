@@ -61,14 +61,17 @@ fn main(argc:i32, argv:**u8)->i32 {
     if argc != 2i32 { return 1i32; }
     var context:CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
-    var text:*u8 = "fn helper(x:i32)->i32 { var result:i32=x+1i32; return result; } fn entry(argc:i32,argv:**u8)->i32 { return helper(argc)-2i32; }";
+    var text:*u8 = "fn helper(x:i32)->i32 { var result:i32=x+increment; return result; } fn entry(argc:i32,argv:**u8)->i32 { return helper(argc)-2i32; } const increment:i32=1i32; extern fn absent()->unit=\"body_absent\";";
     var source:CrustSource = make CrustSource {identity:1u64, path:"body-input", bytes:text, size:body_test_length(text)};
     var parsed:*CrustUnit = null(*CrustUnit);
     if !crust_read(&context, &source, &parsed) || !crust_collect(&context) ||
        !crust_resolve(&context) || !crust_check(&context) { return 2i32; }
     var helper:*CrustDecl = (*parsed).declarations;
     var entry:*CrustDecl = (*helper).next;
-    (*helper).link_name = "body_helper";
+    var constant:*CrustDecl = (*entry).next;
+    var external:*CrustDecl = (*constant).next;
+    (*helper).link_name = "";
+    (*constant).link_name = "";
     (*entry).link_name = "body_entry";
     var state:BodyTest = make BodyTest {
         helper:helper, helper_body:(*helper).body, entry_body:(*entry).body,
@@ -101,9 +104,21 @@ fn main(argc:i32, argv:**u8)->i32 {
     context.error[0usize] = 0u8;
     state.mode = 0u32;
     state.calls = 0usize;
+    (*external).link_name = "";
+    c_stage_init(&stage, &context);
+    if c_emit_with_body(&stage, entry, body_test_emit, &state as *u8) ||
+       !stage.status.failed || state.calls != 0usize || context.error_count != 1usize ||
+       !body_test_equal(&context.error[0usize], "private C linkage requires a definition in this output") {
+        return 7i32;
+    }
+    c_stage_destroy(&stage);
+    (*external).link_name = "body_absent";
+    context.error_count = 0usize;
+    context.error[0usize] = 0u8;
+    var flags:[*u8;1] = make [*u8;1] {"-O0"};
     var options:CBackendOptions = make CBackendOptions {
         mode:0u32, output:argv[1usize], symbols:null(*u8),
-        cflags:null(**u8), cflag_count:0usize, ldflags:null(**u8), ldflag_count:0usize
+        cflags:&flags[0usize], cflag_count:1usize, ldflags:null(**u8), ldflag_count:0usize
     };
     var result:i32 = c_backend_build_with_body(&context, entry, &options, body_test_emit, &state as *u8);
     if result == 0i32 && (state.calls != 2usize || (*helper).body != null(*CrustStmt) ||

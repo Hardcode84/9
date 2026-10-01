@@ -1,6 +1,7 @@
 """Check an external C body emitter and its failure contract."""
 
 import argparse
+import re
 import shlex
 import shutil
 import subprocess
@@ -50,7 +51,21 @@ def main():
         result = subprocess.run([str(output)], cwd=ROOT, check=False)
         if result.returncode != 42:
             raise RuntimeError(f"external body returned {result.returncode}, expected 42")
-    print("C body extension: native result, absent seed bodies, and three failure paths passed")
+        symbols = subprocess.run(
+            ["nm", "--defined-only", str(output)], check=True, capture_output=True
+        ).stdout
+        if not re.search(rb"\bt r_g[0-9]+\b", symbols) or not re.search(
+            rb"\br r_g[0-9]+\b", symbols
+        ):
+            raise RuntimeError(f"private function and constant symbols are missing: {symbols!r}")
+        public = subprocess.run(
+            ["nm", "-g", "--defined-only", str(output)], check=True, capture_output=True
+        ).stdout
+        if re.search(rb"\br_g[0-9]+\b", public) or b"body_entry" not in public:
+            raise RuntimeError(f"private symbols escaped native visibility: {public!r}")
+    print(
+        "C body extension: native result, absent seed bodies, private linkage, and four failure paths passed"
+    )
 
 
 if __name__ == "__main__":

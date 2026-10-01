@@ -173,7 +173,7 @@ Read the implementation in this order:
 | [state.crs](state.crs) | Access checks, loan state, rollback, and cleanup chain construction |
 | [expr.crs](expr.crs) | Move and call checking, capture order, temporary lifetimes, and defer |
 | [control.crs](control.crs) | Branch joins, loop edges, return capture, and `rs_prepare` |
-| [cleanup.crs](cleanup.crs) | Drop operations for resources, record fields, and array elements |
+| [cleanup.crs](cleanup.crs) | Shared record drop functions and reverse array loops |
 | [emit.crs](emit.crs) | `rs_c_body` emits function bodies with cleanup branches |
 
 The reader extends ordinary identifier tokens with library rules. For
@@ -235,6 +235,19 @@ A return captures its result before cleanup. Record drops run before the
 record's owned fields; fields and array elements then drop in reverse order.
 Array cleanup uses a loop, so a large array does not create one emitted
 statement per element.
+
+Each owning record type gets one private drop helper when cleanup first needs
+it. A parent record calls its children's helpers. A record with two fields
+of the same type does not copy the child's cleanup code twice. Calls still
+run separately for the two values. This keeps generated code proportional
+to the used record definitions. The exit plan still selects which whole
+bindings are live; a helper never decides whether a moved binding is live.
+An owning field assignment calls only that field's helper before the store.
+
+The helpers are ordinary checked seed functions. Their empty C link names
+select private definitions, so separately compiled files cannot export or
+capture one another's helpers. The stage keeps their declaration identities
+separate from the source declarations.
 
 ### Retain the plan through emission
 

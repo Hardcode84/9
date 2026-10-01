@@ -152,7 +152,19 @@ fn rs_collect(stage: *RsStage) -> bool {
             var global: *RsGlobal = rs_alloc(stage, sizeof(RsGlobal), alignof(RsGlobal)) as *RsGlobal;
             if global == null(*RsGlobal) { return false; }
             (*global).source = declaration;
+            if (*declaration).identity > (*stage).next_helper_identity {
+                (*stage).next_helper_identity = (*declaration).identity;
+            }
             (*global).syntax = (*declaration).syntax_type;
+            var field: *CrustField = (*declaration).fields;
+            while field != null(*CrustField) && !(*stage).failed {
+                if crust_map_get(&(*global).fields, (*field).name as usize) != null(*u8) {
+                    rs_error(stage, &(*field).loc, "duplicate record field");
+                    return false;
+                }
+                rs_put(stage, &(*global).fields, (*field).name as usize, field as *u8);
+                field = (*field).next;
+            }
             if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_EXTERN {
                 (*global).syntax = rs_signature(stage, declaration);
                 (*global).unsafe_call = ((*declaration).kind == CRUST_D_EXTERN &&

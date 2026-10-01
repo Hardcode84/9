@@ -53,16 +53,10 @@ fn rs_constant_source(stage: *RsStage, expression: *CrustExpr, expected: *CrustT
     }
     if kind == CRUST_E_RECORD {
         var global: *RsGlobal = rs_global(stage, (*expected).name);
-        var fields: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
-        var field: *CrustField = (*(*global).source).fields;
-        while field != null(*CrustField) && !(*stage).failed {
-            rs_put(stage, &fields, (*field).name as usize, (*field).syntax_type as *u8);
-            field = (*field).next;
-        }
         var item: *CrustInit = (*expression).inits;
         while item != null(*CrustInit) && !(*stage).failed {
-            var syntax: *CrustTypeSyntax = crust_map_get(&fields, (*item).name as usize) as *CrustTypeSyntax;
-            rs_constant_source(stage, (*item).value, syntax);
+            var field: *CrustField = crust_map_get(&(*global).fields, (*item).name as usize) as *CrustField;
+            rs_constant_source(stage, (*item).value, (*field).syntax_type);
             item = (*item).next;
         }
         return;

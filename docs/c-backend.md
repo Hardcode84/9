@@ -136,6 +136,14 @@ in the output. Supplied provider facts remain read-only. Type and symbol
 identities do not depend on allocation addresses. Equal native names are
 combined before C emission, and incompatible declarations are rejected.
 
+The C stage treats an empty `link_name` as a private definition. It emits C
+`static` linkage and does not give that definition a native rename. Private
+functions and constants have separate bindings, even when their empty names
+match. They cannot capture a named external declaration. A null `link_name`
+is still an error. An external declaration cannot use an empty name. Select
+linkage before the first binding operation and keep it unchanged during
+emission. This is a C-stage contract, not a seed language feature.
+
 The stage owns a separate arena with 64 KiB blocks. Output and map growth use
 that arena. Destruction releases all blocks, including blocks retained after
 failure. Allocation and output-size overflow set a diagnostic. The first
@@ -163,7 +171,9 @@ ordinary checked-seed-body emitter. The ordinary emitter has no per-expression
 callback cost.
 
 The [external body test](../tests/c_body.crs) uses null seed bodies, emits labels
-and branches, runs the output, and checks three callback failure paths. It links
+and branches, runs the output, and checks three callback failure paths. It also
+checks private function and constant linkage and rejects a private external
+declaration. It links
 the public interfaces against a copied ordinary backend library. The
 [resource stage](../stages/resources/README.md) uses the same interface for its
 shared cleanup blocks. No ownership operation occurs in this backend API.

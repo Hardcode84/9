@@ -126,6 +126,19 @@ static void output_number(OutputBuffer *buffer, uint64_t value, unsigned base, u
     output_append(buffer, cursor, (size_t)(end - cursor));
 }
 
+static inline void output_byte(OutputBuffer *buffer, char byte)
+{
+    buffer->bytes[buffer->size++] = byte;
+    if (buffer->size == sizeof(buffer->bytes))
+        output_flush(buffer);
+}
+
+static void output_cstring(OutputBuffer *buffer, const char *text)
+{
+    while (*text)
+        output_byte(buffer, *text++);
+}
+
 static void output_format(CrustX64Emitter *emitter, const char *format, ...)
 {
     OutputBuffer buffer;
@@ -138,9 +151,7 @@ static void output_format(CrustX64Emitter *emitter, const char *format, ...)
     while (*format) {
         unsigned width = 0;
         if (*format != '%') {
-            buffer.bytes[buffer.size++] = *format++;
-            if (buffer.size == sizeof(buffer.bytes))
-                output_flush(&buffer);
+            output_byte(&buffer, *format++);
             continue;
         }
         ++format;
@@ -150,17 +161,11 @@ static void output_format(CrustX64Emitter *emitter, const char *format, ...)
                 width = width * 10 + (unsigned)(*format++ - '0');
         }
         if (*format == '%') {
-            buffer.bytes[buffer.size++] = '%';
-            if (buffer.size == sizeof(buffer.bytes))
-                output_flush(&buffer);
+            output_byte(&buffer, '%');
             ++format;
         } else if (*format == 's') {
             const char *text = va_arg(arguments, const char *);
-            while (*text) {
-                buffer.bytes[buffer.size++] = *text++;
-                if (buffer.size == sizeof(buffer.bytes))
-                    output_flush(&buffer);
-            }
+            output_cstring(&buffer, text);
             ++format;
         } else if (*format == 'c') {
             char byte = (char)va_arg(arguments, int);
@@ -296,15 +301,9 @@ static bool function_symbol(CrustDecl *declaration)
     return declaration->kind == CRUST_D_FUNCTION || declaration->kind == CRUST_D_EXTERN;
 }
 
-static void prepare_alias(CrustX64Program *program, CrustDecl *declaration, bool definition)
+static CrustName *prepare_link_name(CrustX64Program *program, CrustDecl *declaration)
 {
     const unsigned char *cursor;
-    CrustX64Alias *alias;
-    CrustName *name;
-    CrustX64Alias *previous;
-    alias = crust_map_get(&program->alias_map, (uintptr_t)declaration);
-    if (alias && (!definition || alias->definition))
-        return;
     if (!declaration->link_name || !declaration->link_name[0])
         crust_fail(program->context, declaration->loc,
                    "backend declaration has no nonempty link name");
@@ -314,8 +313,19 @@ static void prepare_alias(CrustX64Program *program, CrustDecl *declaration, bool
     if (program->entry && strcmp(declaration->link_name, "main") == 0)
         crust_fail(program->context, declaration->loc,
                    "native symbol main conflicts with the hosted entry adapter");
-    name = crust_intern(program->context, (const unsigned char *)declaration->link_name,
+    return crust_intern(program->context, (const unsigned char *)declaration->link_name,
                         (size_t)(cursor - (const unsigned char *)declaration->link_name));
+}
+
+static void prepare_alias(CrustX64Program *program, CrustDecl *declaration, bool definition)
+{
+    CrustX64Alias *alias;
+    CrustName *name;
+    CrustX64Alias *previous;
+    alias = crust_map_get(&program->alias_map, (uintptr_t)declaration);
+    if (alias && (!definition || alias->definition))
+        return;
+    name = prepare_link_name(program, declaration);
     previous = crust_map_get(&program->native_symbols, (uintptr_t)name);
     if (previous) {
         if (function_symbol(previous->declaration) != function_symbol(declaration) ||
@@ -394,6 +404,34 @@ static CrustX64Expr *prepare_storage(CrustX64Program *program, CrustX64Function 
     return plan;
 }
 
+static void prepare_expression_storage(CrustX64Program *program, CrustX64Function *function,
+                                       CrustExpr *expression, bool place)
+{
+    bool scratch = expression->kind == CRUST_E_CALL || expression->kind == CRUST_E_INDEX ||
+                   (expression->kind == CRUST_E_BINARY && expression->op != CRUST_OP_AND &&
+                    expression->op != CRUST_OP_OR);
+    bool value =
+        !place && !crust_type_scalar(expression->type) && expression->type->kind != CRUST_T_UNIT;
+    if (scratch || value) {
+        CrustX64Expr *plan = prepare_storage(program, function, expression, value, scratch);
+        if (expression->kind == CRUST_E_CALL && expression->arg_count && !plan->arguments.size) {
+            if (expression->arg_count > (uint64_t)INT64_MAX / 8)
+                crust_fail(program->context, expression->loc, "too many backend call arguments");
+            plan->arguments =
+                crust_x64_reserve(program->context, function, (uint64_t)expression->arg_count * 8,
+                                  8, expression->loc);
+        }
+    }
+}
+
+static bool expression_left_place(CrustExpr *expression, bool place)
+{
+    return (expression->kind == CRUST_E_GROUP && place) ||
+           (expression->kind == CRUST_E_UNARY && expression->op == CRUST_OP_ADDRESS) ||
+           ((expression->kind == CRUST_E_FIELD || expression->kind == CRUST_E_INDEX) &&
+            expression->left->place && expression->left->type->kind != CRUST_T_POINTER);
+}
+
 static void prepare_expression(CrustX64Program *program, CrustX64Function *function,
                                CrustExpr *expression, bool place)
 {
@@ -408,29 +446,9 @@ static void prepare_expression(CrustX64Program *program, CrustX64Function *funct
         (expression->symbol->kind == CRUST_SYM_FUNCTION ||
          expression->symbol->kind == CRUST_SYM_CONST))
         prepare_alias(program, expression->symbol->decl, false);
-    if (function) {
-        bool scratch = expression->kind == CRUST_E_CALL || expression->kind == CRUST_E_INDEX ||
-                       (expression->kind == CRUST_E_BINARY && expression->op != CRUST_OP_AND &&
-                        expression->op != CRUST_OP_OR);
-        bool value = !place && !crust_type_scalar(expression->type) &&
-                     expression->type->kind != CRUST_T_UNIT;
-        if (scratch || value) {
-            CrustX64Expr *plan = prepare_storage(program, function, expression, value, scratch);
-            if (expression->kind == CRUST_E_CALL && expression->arg_count &&
-                !plan->arguments.size) {
-                if (expression->arg_count > (uint64_t)INT64_MAX / 8)
-                    crust_fail(program->context, expression->loc,
-                               "too many backend call arguments");
-                plan->arguments =
-                    crust_x64_reserve(program->context, function,
-                                      (uint64_t)expression->arg_count * 8, 8, expression->loc);
-            }
-        }
-    }
-    left_place = (expression->kind == CRUST_E_GROUP && place) ||
-                 (expression->kind == CRUST_E_UNARY && expression->op == CRUST_OP_ADDRESS) ||
-                 ((expression->kind == CRUST_E_FIELD || expression->kind == CRUST_E_INDEX) &&
-                  expression->left->place && expression->left->type->kind != CRUST_T_POINTER);
+    if (function)
+        prepare_expression_storage(program, function, expression, place);
+    left_place = expression_left_place(expression, place);
     prepare_expression(program, function, expression->left, left_place);
     prepare_expression(program, function, expression->right, false);
     for (index = 0; index < expression->arg_count; ++index)
@@ -779,29 +797,75 @@ static void emit_call(CrustX64Emitter *emitter, CrustExpr *expression)
         normalize(emitter, expression->type);
 }
 
-static void emit_binary(CrustX64Emitter *emitter, CrustExpr *expression)
+static void emit_division(CrustX64Emitter *emitter, CrustExpr *expression, bool signed_type)
 {
-    CrustX64Expr *plan;
-    const char *condition;
-    bool signed_type = crust_type_signed(expression->left->type);
-    emit_expression(emitter, expression->left);
-    if (expression->op == CRUST_OP_AND || expression->op == CRUST_OP_OR) {
-        uint64_t end = emitter->next_label++;
-        output_text(emitter, "\ttestq %rax, %rax\n");
-        emit_jump(emitter, expression->op == CRUST_OP_AND ? "je" : "jne", end);
-        emit_expression(emitter, expression->right);
-        emit_label(emitter, end);
-        return;
+    uint64_t nonzero = emitter->next_label++;
+    output_text(emitter, "\ttestq %rcx, %rcx\n");
+    emit_jump(emitter, "jne", nonzero);
+    output_text(emitter, "\tud2\n");
+    emit_label(emitter, nonzero);
+    if (signed_type) {
+        unsigned bits = crust_type_bits(expression->type);
+        uint64_t valid = emitter->next_label++;
+        uint64_t minimum = UINT64_MAX << (bits - 1);
+        output_text(emitter, "\tcmpq $-1, %rcx\n");
+        emit_jump(emitter, "jne", valid);
+        output_format(emitter, "\tmovabsq $0x%016" PRIx64 ", %%r10\n\tcmpq %%r10, %%rax\n",
+                      minimum);
+        emit_jump(emitter, "jne", valid);
+        output_text(emitter, "\tud2\n");
+        emit_label(emitter, valid);
+        output_text(emitter, "\tcqto\n\tidivq %rcx\n");
+    } else {
+        output_text(emitter, "\txorl %edx, %edx\n\tdivq %rcx\n");
     }
-    plan = expression_plan(emitter, expression);
-    save_slot64(emitter, plan->scratch.offset);
-    emit_expression(emitter, expression->right);
-    output_text(emitter, "\tmovq %rax, %rcx\n");
-    load_slot64(emitter, plan->scratch.offset, "rax");
-    if (expression->left->type->kind == CRUST_T_POINTER &&
-        (expression->op == CRUST_OP_ADD || expression->op == CRUST_OP_SUB))
-        output_format(emitter, "\tmovabsq $%" PRIu64 ", %%r10\n\timulq %%r10, %%rcx\n",
-                      expression->left->type->base->size);
+    if (expression->op == CRUST_OP_REM)
+        output_text(emitter, "\tmovq %rdx, %rax\n");
+}
+
+static void emit_shift(CrustX64Emitter *emitter, CrustExpr *expression, bool signed_type)
+{
+    uint64_t valid = emitter->next_label++;
+    output_format(emitter, "\tcmpq $%u, %%rcx\n", crust_type_bits(expression->type));
+    emit_jump(emitter, "jb", valid);
+    output_text(emitter, "\tud2\n");
+    emit_label(emitter, valid);
+    output_format(emitter, "\t%s %%cl, %%rax\n",
+                  expression->op == CRUST_OP_SHL ? "shlq"
+                  : signed_type                  ? "sarq"
+                                                 : "shrq");
+}
+
+static void emit_comparison(CrustX64Emitter *emitter, CrustExpr *expression, bool signed_type)
+{
+    const char *condition;
+    switch (expression->op) {
+    case CRUST_OP_EQ:
+        condition = "e";
+        break;
+    case CRUST_OP_NE:
+        condition = "ne";
+        break;
+    case CRUST_OP_LT:
+        condition = signed_type ? "l" : "b";
+        break;
+    case CRUST_OP_LE:
+        condition = signed_type ? "le" : "be";
+        break;
+    case CRUST_OP_GT:
+        condition = signed_type ? "g" : "a";
+        break;
+    case CRUST_OP_GE:
+        condition = signed_type ? "ge" : "ae";
+        break;
+    default:
+        abort();
+    }
+    output_format(emitter, "\tcmpq %%rcx, %%rax\n\tset%s %%al\n\tmovzbq %%al, %%rax\n", condition);
+}
+
+static void emit_binary_operation(CrustX64Emitter *emitter, CrustExpr *expression, bool signed_type)
+{
     switch (expression->op) {
     case CRUST_OP_ADD:
         output_text(emitter, "\taddq %rcx, %rax\n");
@@ -822,72 +886,85 @@ static void emit_binary(CrustX64Emitter *emitter, CrustExpr *expression)
         output_text(emitter, "\txorq %rcx, %rax\n");
         break;
     case CRUST_OP_DIV:
-    case CRUST_OP_REM: {
-        uint64_t nonzero = emitter->next_label++;
-        output_text(emitter, "\ttestq %rcx, %rcx\n");
-        emit_jump(emitter, "jne", nonzero);
-        output_text(emitter, "\tud2\n");
-        emit_label(emitter, nonzero);
-        if (signed_type) {
-            unsigned bits = crust_type_bits(expression->type);
-            uint64_t valid = emitter->next_label++;
-            uint64_t minimum = UINT64_MAX << (bits - 1);
-            output_text(emitter, "\tcmpq $-1, %rcx\n");
-            emit_jump(emitter, "jne", valid);
-            output_format(emitter, "\tmovabsq $0x%016" PRIx64 ", %%r10\n\tcmpq %%r10, %%rax\n",
-                          minimum);
-            emit_jump(emitter, "jne", valid);
-            output_text(emitter, "\tud2\n");
-            emit_label(emitter, valid);
-            output_text(emitter, "\tcqto\n\tidivq %rcx\n");
-        } else {
-            output_text(emitter, "\txorl %edx, %edx\n\tdivq %rcx\n");
-        }
-        if (expression->op == CRUST_OP_REM)
-            output_text(emitter, "\tmovq %rdx, %rax\n");
+    case CRUST_OP_REM:
+        emit_division(emitter, expression, signed_type);
         break;
-    }
     case CRUST_OP_SHL:
-    case CRUST_OP_SHR: {
-        uint64_t valid = emitter->next_label++;
-        output_format(emitter, "\tcmpq $%u, %%rcx\n", crust_type_bits(expression->type));
-        emit_jump(emitter, "jb", valid);
-        output_text(emitter, "\tud2\n");
-        emit_label(emitter, valid);
-        output_format(emitter, "\t%s %%cl, %%rax\n",
-                      expression->op == CRUST_OP_SHL ? "shlq"
-                      : signed_type                  ? "sarq"
-                                                     : "shrq");
+    case CRUST_OP_SHR:
+        emit_shift(emitter, expression, signed_type);
         break;
-    }
-    case CRUST_OP_EQ:
-        condition = "e";
-        goto compare;
-    case CRUST_OP_NE:
-        condition = "ne";
-        goto compare;
-    case CRUST_OP_LT:
-        condition = signed_type ? "l" : "b";
-        goto compare;
-    case CRUST_OP_LE:
-        condition = signed_type ? "le" : "be";
-        goto compare;
-    case CRUST_OP_GT:
-        condition = signed_type ? "g" : "a";
-        goto compare;
-    case CRUST_OP_GE:
-        condition = signed_type ? "ge" : "ae";
-        goto compare;
     default:
-        abort();
+        emit_comparison(emitter, expression, signed_type);
+        return;
     }
     normalize(emitter, expression->type);
-    return;
-compare:
-    output_format(emitter, "\tcmpq %%rcx, %%rax\n\tset%s %%al\n\tmovzbq %%al, %%rax\n", condition);
 }
 
-void crust_x64_emit_expression(CrustX64Emitter *emitter, CrustExpr *expression)
+static void emit_binary(CrustX64Emitter *emitter, CrustExpr *expression)
+{
+    CrustX64Expr *plan;
+    bool signed_type = crust_type_signed(expression->left->type);
+    emit_expression(emitter, expression->left);
+    if (expression->op == CRUST_OP_AND || expression->op == CRUST_OP_OR) {
+        uint64_t end = emitter->next_label++;
+        output_text(emitter, "\ttestq %rax, %rax\n");
+        emit_jump(emitter, expression->op == CRUST_OP_AND ? "je" : "jne", end);
+        emit_expression(emitter, expression->right);
+        emit_label(emitter, end);
+        return;
+    }
+    plan = expression_plan(emitter, expression);
+    save_slot64(emitter, plan->scratch.offset);
+    emit_expression(emitter, expression->right);
+    output_text(emitter, "\tmovq %rax, %rcx\n");
+    load_slot64(emitter, plan->scratch.offset, "rax");
+    if (expression->left->type->kind == CRUST_T_POINTER &&
+        (expression->op == CRUST_OP_ADD || expression->op == CRUST_OP_SUB))
+        output_format(emitter, "\tmovabsq $%" PRIu64 ", %%r10\n\timulq %%r10, %%rcx\n",
+                      expression->left->type->base->size);
+    emit_binary_operation(emitter, expression, signed_type);
+}
+
+static void emit_name(CrustX64Emitter *emitter, CrustExpr *expression)
+{
+    if (expression->symbol->kind == CRUST_SYM_FUNCTION) {
+        symbol_address(emitter, expression->symbol->decl);
+        return;
+    }
+    if (expression->symbol->kind != CRUST_SYM_CONST && crust_type_scalar(expression->type) &&
+        (!emitter->operations || !emitter->operations->place)) {
+        CrustX64Slot *slot =
+            crust_map_get(&emitter->function->symbols, (uintptr_t)expression->symbol);
+        load_scalar_slot(emitter, expression->type, slot->offset);
+        return;
+    }
+    emit_place(emitter, expression);
+    load_value(emitter, expression->type);
+}
+
+static void emit_unary(CrustX64Emitter *emitter, CrustExpr *expression)
+{
+    if (expression->op == CRUST_OP_ADDRESS) {
+        emit_place(emitter, expression->left);
+        return;
+    }
+    if (expression->op == CRUST_OP_DEREF) {
+        emit_place(emitter, expression);
+        load_value(emitter, expression->type);
+        return;
+    }
+    emit_expression(emitter, expression->left);
+    if (expression->op == CRUST_OP_NEG)
+        output_text(emitter, "\tnegq %rax\n");
+    else if (expression->op == CRUST_OP_BIT_NOT)
+        output_text(emitter, "\tnotq %rax\n");
+    else if (expression->op == CRUST_OP_NOT)
+        output_text(emitter, "\txorq $1, %rax\n");
+    if (crust_type_scalar(expression->type))
+        normalize(emitter, expression->type);
+}
+
+static void emit_literal_expression(CrustX64Emitter *emitter, CrustExpr *expression)
 {
     switch (expression->kind) {
     case CRUST_E_INTEGER:
@@ -908,20 +985,16 @@ void crust_x64_emit_expression(CrustX64Emitter *emitter, CrustExpr *expression)
                       emitter->program->label_prefix, string->identity);
         break;
     }
+    default:
+        abort();
+    }
+}
+
+void crust_x64_emit_expression(CrustX64Emitter *emitter, CrustExpr *expression)
+{
+    switch (expression->kind) {
     case CRUST_E_NAME:
-        if (expression->symbol->kind == CRUST_SYM_FUNCTION) {
-            symbol_address(emitter, expression->symbol->decl);
-            break;
-        }
-        if (expression->symbol->kind != CRUST_SYM_CONST && crust_type_scalar(expression->type) &&
-            (!emitter->operations || !emitter->operations->place)) {
-            CrustX64Slot *slot =
-                crust_map_get(&emitter->function->symbols, (uintptr_t)expression->symbol);
-            load_scalar_slot(emitter, expression->type, slot->offset);
-            break;
-        }
-        emit_place(emitter, expression);
-        load_value(emitter, expression->type);
+        emit_name(emitter, expression);
         break;
     case CRUST_E_GROUP:
         emit_expression(emitter, expression->left);
@@ -932,24 +1005,7 @@ void crust_x64_emit_expression(CrustX64Emitter *emitter, CrustExpr *expression)
         load_value(emitter, expression->type);
         break;
     case CRUST_E_UNARY:
-        if (expression->op == CRUST_OP_ADDRESS) {
-            emit_place(emitter, expression->left);
-            break;
-        }
-        if (expression->op == CRUST_OP_DEREF) {
-            emit_place(emitter, expression);
-            load_value(emitter, expression->type);
-            break;
-        }
-        emit_expression(emitter, expression->left);
-        if (expression->op == CRUST_OP_NEG)
-            output_text(emitter, "\tnegq %rax\n");
-        else if (expression->op == CRUST_OP_BIT_NOT)
-            output_text(emitter, "\tnotq %rax\n");
-        else if (expression->op == CRUST_OP_NOT)
-            output_text(emitter, "\txorq $1, %rax\n");
-        if (crust_type_scalar(expression->type))
-            normalize(emitter, expression->type);
+        emit_unary(emitter, expression);
         break;
     case CRUST_E_CAST:
         emit_expression(emitter, expression->left);
@@ -989,7 +1045,8 @@ void crust_x64_emit_expression(CrustX64Emitter *emitter, CrustExpr *expression)
         return;
     }
     default:
-        abort();
+        emit_literal_expression(emitter, expression);
+        break;
     }
     finish_value(emitter, expression);
 }
@@ -1196,11 +1253,40 @@ void crust_x64_emit_function(CrustX64Emitter *emitter, CrustX64Function *functio
                   function->identity);
 }
 
-void crust_x64_emit_constant_value(CrustX64Emitter *emitter, CrustExpr *expression)
+static void emit_scalar_constant(CrustX64Emitter *emitter, CrustExpr *expression)
 {
     CrustType *type = expression->type;
     uint64_t value;
     const char *directive;
+    switch (expression->kind) {
+    case CRUST_E_NULL:
+        value = 0;
+        break;
+    case CRUST_E_UNARY:
+        value = (uint64_t)0 - expression->left->integer;
+        break;
+    case CRUST_E_INTEGER:
+    case CRUST_E_BOOL:
+    case CRUST_E_SIZEOF:
+    case CRUST_E_ALIGNOF:
+    case CRUST_E_OFFSETOF:
+        value = expression->integer;
+        break;
+    default:
+        abort();
+    }
+    if (type->size < 8)
+        value &= (UINT64_C(1) << (type->size * 8)) - 1;
+    directive = type->size == 1   ? "byte"
+                : type->size == 2 ? "short"
+                : type->size == 4 ? "long"
+                                  : "quad";
+    output_format(emitter, "\t.%s 0x%016" PRIx64 "\n", directive, value);
+}
+
+void crust_x64_emit_constant_value(CrustX64Emitter *emitter, CrustExpr *expression)
+{
+    CrustType *type = expression->type;
     switch (expression->kind) {
     case CRUST_E_GROUP:
         crust_x64_emit_constant_value(emitter, expression->left);
@@ -1244,29 +1330,10 @@ void crust_x64_emit_constant_value(CrustX64Emitter *emitter, CrustExpr *expressi
                       alias->identity);
         return;
     }
-    case CRUST_E_NULL:
-        value = 0;
-        break;
-    case CRUST_E_UNARY:
-        value = (uint64_t)0 - expression->left->integer;
-        break;
-    case CRUST_E_INTEGER:
-    case CRUST_E_BOOL:
-    case CRUST_E_SIZEOF:
-    case CRUST_E_ALIGNOF:
-    case CRUST_E_OFFSETOF:
-        value = expression->integer;
-        break;
     default:
-        abort();
+        emit_scalar_constant(emitter, expression);
+        return;
     }
-    if (type->size < 8)
-        value &= (UINT64_C(1) << (type->size * 8)) - 1;
-    directive = type->size == 1   ? "byte"
-                : type->size == 2 ? "short"
-                : type->size == 4 ? "long"
-                                  : "quad";
-    output_format(emitter, "\t.%s 0x%016" PRIx64 "\n", directive, value);
 }
 
 static bool constant_has_address(CrustExpr *expression)

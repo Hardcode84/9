@@ -88,3 +88,4 @@ pre-commit run --all-files
 The hooks check text and configuration files, format C and Python, lint Python,
 and check the generated Crust APIs. Recorded benchmark inputs and reports are
 excluded from formatters because their hashes identify the measured bytes.
+Lizard limits functions in `src/`, `include/`, and `runtime/` to CCN 15.

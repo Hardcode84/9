@@ -220,30 +220,58 @@ bool crust_run_execute(CrustRun *run, void *data)
     return true;
 }
 
+static bool read_action(CrustRun *run, bool (*reader)(CrustRun *, void **), void **action)
+{
+    CrustSource *source = run->source;
+    size_t begin = run->cursor;
+    if (!reader(run, action)) {
+        if (run->context->error_count == 0)
+            run_error(run, "root reader failed without a diagnostic");
+        return false;
+    }
+    if (run->context->error_count != 0)
+        return false;
+    if (run->source != source) {
+        run->source = source;
+        return run_error(run, "reader changed the source");
+    }
+    if (run->cursor < begin || run->cursor > source->size)
+        return run_error(run, "reader changed the source or returned an invalid cursor");
+    return true;
+}
+
+static bool execute_action(CrustRun *run, bool (*execute)(CrustRun *, void *), void *action)
+{
+    CrustSource *source = run->source;
+    size_t consumed = run->cursor;
+    if (!execute(run, action)) {
+        if (run->context->error_count == 0)
+            run_error(run, "root executor failed without a diagnostic");
+        return false;
+    }
+    if (run->context->error_count != 0)
+        return false;
+    if (run->source != source) {
+        run->source = source;
+        return run_error(run, "executor changed the source");
+    }
+    if (run->cursor < consumed || run->cursor > source->size)
+        return run_error(run, "executor changed the source or returned an invalid cursor");
+    return true;
+}
+
 bool crust_run_loop(CrustRun *run)
 {
     while (!run->returned) {
         CrustSource *source = run->source;
         size_t begin = run->cursor;
-        size_t consumed;
         bool (*reader)(CrustRun *, void **) = run->read;
         bool (*execute)(CrustRun *, void *) = run->execute;
         void *action = NULL;
         if (reader == NULL || execute == NULL)
             return run_error(run, "root reader and executor must be callable");
-        if (!reader(run, &action)) {
-            if (run->context->error_count == 0)
-                run_error(run, "root reader failed without a diagnostic");
+        if (!read_action(run, reader, &action))
             return false;
-        }
-        if (run->context->error_count != 0)
-            return false;
-        if (run->source != source) {
-            run->source = source;
-            return run_error(run, "reader changed the source");
-        }
-        if (run->cursor < begin || run->cursor > source->size)
-            return run_error(run, "reader changed the source or returned an invalid cursor");
         if (run->returned)
             break;
         if (action == NULL) {
@@ -253,20 +281,8 @@ bool crust_run_loop(CrustRun *run)
         }
         if (run->cursor == begin)
             return run_error(run, "reader returned an action without input progress");
-        consumed = run->cursor;
-        if (!execute(run, action)) {
-            if (run->context->error_count == 0)
-                run_error(run, "root executor failed without a diagnostic");
+        if (!execute_action(run, execute, action))
             return false;
-        }
-        if (run->context->error_count != 0)
-            return false;
-        if (run->source != source) {
-            run->source = source;
-            return run_error(run, "executor changed the source");
-        }
-        if (run->cursor < consumed || run->cursor > source->size)
-            return run_error(run, "executor changed the source or returned an invalid cursor");
     }
     if (run->status < 0 || run->status > 255)
         return run_error(run, "root status must be between zero and 255");

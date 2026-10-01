@@ -85,13 +85,44 @@ static int flush_output(int status)
     return status;
 }
 
+static bool prepare_installed_program(CrustRun *run)
+{
+    CrustContext *context = run->context;
+    CrustUnit *unit;
+    for (unit = context->units; unit != NULL; unit = unit->next) {
+        CrustDecl *declaration;
+        for (declaration = unit->declarations; declaration != NULL;
+             declaration = declaration->next) {
+            if (!crust_eval_prepare(run->eval, declaration))
+                return false;
+        }
+    }
+    return true;
+}
+
+static bool read_root(CrustContext *context, CrustSource *source, const char *path,
+                      unsigned char **bytes)
+{
+    source->path = root_path(context, path);
+    if (source->path == NULL)
+        return false;
+    if (crust0_host_read_file(source->path, bytes, &source->size) != 0) {
+        char message[512];
+        (void)snprintf(message, sizeof(message),
+                       "cannot read root '%s' (input or allocation failure)", path);
+        crust_set_error(context, NULL, 0, message);
+        return false;
+    }
+    source->bytes = *bytes;
+    return true;
+}
+
 int main(int argc, char **argv)
 {
     CrustContext context;
     CrustSource source_input;
     CrustRun run;
     CrustRun *run_pointer = &run;
-    CrustUnit *unit;
     unsigned char *bytes = NULL;
     bool initialized = false;
     int status = 1;
@@ -111,30 +142,15 @@ int main(int argc, char **argv)
     crust_context_init(&context, NULL);
     memset(&source_input, 0, sizeof(source_input));
     source_input.identity = sizeof(installed_sources) / sizeof(installed_sources[0]) + 1;
-    source_input.path = root_path(&context, argv[1]);
-    if (source_input.path == NULL)
+    if (!read_root(&context, &source_input, argv[1], &bytes))
         goto done;
-    if (crust0_host_read_file(source_input.path, &bytes, &source_input.size) != 0) {
-        char message[512];
-        (void)snprintf(message, sizeof(message),
-                       "cannot read root '%s' (input or allocation failure)", argv[1]);
-        crust_set_error(&context, NULL, 0, message);
-        goto done;
-    }
-    source_input.bytes = bytes;
     if (!installed_program(&context))
         goto done;
     initialized = true;
     if (!crust_run_init(&run, &context, &source_input, argc - 2, argv + 2))
         goto done;
-    for (unit = context.units; unit != NULL; unit = unit->next) {
-        CrustDecl *declaration;
-        for (declaration = unit->declarations; declaration != NULL;
-             declaration = declaration->next) {
-            if (!crust_eval_prepare(run.eval, declaration))
-                goto done;
-        }
-    }
+    if (!prepare_installed_program(&run))
+        goto done;
     if (!bind_run(&run, &run_pointer) || !crust_run_loop(&run))
         goto done;
     status = run.status;

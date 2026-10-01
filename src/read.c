@@ -151,6 +151,23 @@ static unsigned char escape_byte(unsigned char c)
     }
 }
 
+static size_t scan_string_escape(Reader *reader, size_t end)
+{
+    const unsigned char *source = reader->source->bytes;
+    size_t size = reader->end;
+    if (end == size)
+        crust_fail(reader->ctx, reader->token.loc, "unterminated string escape");
+    unsigned char c = source[end++];
+    if (c == 'x') {
+        if (size - end < 2 || hex_digit(source[end]) < 0 || hex_digit(source[end + 1]) < 0)
+            crust_fail(reader->ctx, reader->token.loc, "expected two hexadecimal escape digits");
+        end += 2;
+    } else if (c != '\\' && c != '"' && c != 'n' && c != 'r' && c != 't' && c != '0') {
+        crust_fail(reader->ctx, reader->token.loc, "unknown string escape");
+    }
+    return end;
+}
+
 static void read_string(Reader *reader)
 {
     const unsigned char *source = reader->source->bytes;
@@ -165,17 +182,7 @@ static void read_string(Reader *reader)
         if (c == 0 || c == '\n' || c == '\r')
             crust_fail(reader->ctx, reader->token.loc, "invalid byte in string literal");
         if (c == '\\') {
-            if (end == size)
-                crust_fail(reader->ctx, reader->token.loc, "unterminated string escape");
-            c = source[end++];
-            if (c == 'x') {
-                if (size - end < 2 || hex_digit(source[end]) < 0 || hex_digit(source[end + 1]) < 0)
-                    crust_fail(reader->ctx, reader->token.loc,
-                               "expected two hexadecimal escape digits");
-                end += 2;
-            } else if (c != '\\' && c != '"' && c != 'n' && c != 'r' && c != 't' && c != '0') {
-                crust_fail(reader->ctx, reader->token.loc, "unknown string escape");
-            }
+            end = scan_string_escape(reader, end);
         }
         ++decoded;
     }
@@ -205,6 +212,17 @@ static void read_string(Reader *reader)
     reader->offset = end + 1;
 }
 
+static void read_integer_suffix(Reader *reader, size_t start, size_t end)
+{
+    const unsigned char *source = reader->source->bytes;
+    const Keyword *suffix;
+    suffix = keyword(source + start, end - start);
+    if (suffix == NULL || suffix->token != TOK_TYPE || suffix->type > CRUST_T_USIZE)
+        crust_fail(reader->ctx, reader->token.loc, "invalid integer type suffix");
+    reader->token.kind = TOK_INTEGER;
+    reader->token.integer_type = suffix->type;
+}
+
 static void read_number(Reader *reader)
 {
     const unsigned char *source = reader->source->bytes;
@@ -214,7 +232,6 @@ static void read_number(Reader *reader)
     size_t digits;
     unsigned base = 10;
     uint64_t value = 0;
-    const Keyword *suffix;
     while (end < size && name_continue(source[end]))
         ++end;
     if (end - start >= 2 && source[start] == '0' && source[start + 1] == 'x') {
@@ -236,11 +253,7 @@ static void read_number(Reader *reader)
     if (start == end && base == 10) {
         reader->token.kind = TOK_COUNT;
     } else {
-        suffix = keyword(source + start, end - start);
-        if (suffix == NULL || suffix->token != TOK_TYPE || suffix->type > CRUST_T_USIZE)
-            crust_fail(reader->ctx, reader->token.loc, "invalid integer type suffix");
-        reader->token.kind = TOK_INTEGER;
-        reader->token.integer_type = suffix->type;
+        read_integer_suffix(reader, start, end);
     }
     reader->token.integer = value;
     reader->offset = end;
@@ -272,6 +285,40 @@ static inline void skip_trivia(Reader *reader)
             ++reader->offset;
         }
     }
+}
+
+static int compound_token(unsigned char first, unsigned char second)
+{
+    if (second == '=') {
+        switch (first) {
+        case '=':
+            return TOK_EQ;
+        case '!':
+            return TOK_NE;
+        case '<':
+            return TOK_LE;
+        case '>':
+            return TOK_GE;
+        default:
+            break;
+        }
+    } else if (first == second) {
+        switch (first) {
+        case '<':
+            return TOK_SHL;
+        case '>':
+            return TOK_SHR;
+        case '&':
+            return TOK_AND;
+        case '|':
+            return TOK_OR;
+        default:
+            break;
+        }
+    } else if (first == '-' && second == '>') {
+        return TOK_ARROW;
+    }
+    return first;
 }
 
 static void next_token(Reader *reader)
@@ -318,25 +365,7 @@ static void next_token(Reader *reader)
     if (c == ';' || c == '}')
         return;
     if (reader->offset < size) {
-        unsigned char second = source[reader->offset];
-        if (c == '-' && second == '>')
-            reader->token.kind = TOK_ARROW;
-        else if (c == '=' && second == '=')
-            reader->token.kind = TOK_EQ;
-        else if (c == '!' && second == '=')
-            reader->token.kind = TOK_NE;
-        else if (c == '<' && second == '=')
-            reader->token.kind = TOK_LE;
-        else if (c == '>' && second == '=')
-            reader->token.kind = TOK_GE;
-        else if (c == '<' && second == '<')
-            reader->token.kind = TOK_SHL;
-        else if (c == '>' && second == '>')
-            reader->token.kind = TOK_SHR;
-        else if (c == '&' && second == '&')
-            reader->token.kind = TOK_AND;
-        else if (c == '|' && second == '|')
-            reader->token.kind = TOK_OR;
+        reader->token.kind = compound_token(c, source[reader->offset]);
         if (reader->token.kind != c) {
             ++reader->offset;
             return;
@@ -649,6 +678,35 @@ static CrustExpr *read_cast(Reader *reader)
     return expr;
 }
 
+static unsigned arithmetic_operator(int token, CrustOp *op)
+{
+    switch (token) {
+    case TOK_SHL:
+        *op = CRUST_OP_SHL;
+        return 8;
+    case TOK_SHR:
+        *op = CRUST_OP_SHR;
+        return 8;
+    case '+':
+        *op = CRUST_OP_ADD;
+        return 9;
+    case '-':
+        *op = CRUST_OP_SUB;
+        return 9;
+    case '*':
+        *op = CRUST_OP_MUL;
+        return 10;
+    case '/':
+        *op = CRUST_OP_DIV;
+        return 10;
+    case '%':
+        *op = CRUST_OP_REM;
+        return 10;
+    default:
+        return 0;
+    }
+}
+
 static unsigned binary_operator(int token, CrustOp *op)
 {
     switch (token) {
@@ -685,29 +743,8 @@ static unsigned binary_operator(int token, CrustOp *op)
     case TOK_GE:
         *op = CRUST_OP_GE;
         return 7;
-    case TOK_SHL:
-        *op = CRUST_OP_SHL;
-        return 8;
-    case TOK_SHR:
-        *op = CRUST_OP_SHR;
-        return 8;
-    case '+':
-        *op = CRUST_OP_ADD;
-        return 9;
-    case '-':
-        *op = CRUST_OP_SUB;
-        return 9;
-    case '*':
-        *op = CRUST_OP_MUL;
-        return 10;
-    case '/':
-        *op = CRUST_OP_DIV;
-        return 10;
-    case '%':
-        *op = CRUST_OP_REM;
-        return 10;
     default:
-        return 0;
+        return arithmetic_operator(token, op);
     }
 }
 
@@ -840,6 +877,52 @@ static CrustStmt *read_block(Reader *reader)
     return block;
 }
 
+static void read_function_declaration(Reader *reader, CrustDecl *decl, int kind)
+{
+    CrustParam **tail = &decl->params;
+    decl->kind = kind == TOK_FN ? CRUST_D_FUNCTION : CRUST_D_EXTERN;
+    next_token(reader);
+    if (decl->kind == CRUST_D_EXTERN)
+        expect(reader, TOK_FN, "'fn'");
+    decl->name = read_name(reader);
+    expect(reader, '(', "'('");
+    if (reader->token.kind != ')') {
+        for (;;) {
+            CrustParam *param = NEW(reader, CrustParam);
+            param->loc = reader->token.loc;
+            param->name = read_name(reader);
+            expect(reader, ':', "':'");
+            param->syntax_type = read_type(reader);
+            *tail = param;
+            tail = &param->next;
+            ++decl->param_count;
+            if (!take(reader, ',') || reader->token.kind == ')')
+                break;
+        }
+    }
+    expect(reader, ')', "')'");
+    expect(reader, TOK_ARROW, "'->'");
+    decl->syntax_type = read_type(reader);
+    if (decl->kind == CRUST_D_FUNCTION) {
+        decl->body = read_block_contents(reader);
+    } else {
+        size_t i;
+        expect(reader, '=', "'='");
+        if (reader->token.kind != TOK_STRING)
+            crust_fail(reader->ctx, reader->token.loc, "expected a native symbol string");
+        if (reader->token.byte_count == 1)
+            crust_fail(reader->ctx, reader->token.loc, "native symbol name must not be empty");
+        for (i = 0; i + 1 < reader->token.byte_count; ++i) {
+            if (reader->token.bytes[i] == 0 || reader->token.bytes[i] >= 128)
+                crust_fail(reader->ctx, reader->token.loc,
+                           "native symbol name must be ASCII without zero bytes");
+        }
+        decl->link_name = (const char *)reader->token.bytes;
+        next_token(reader);
+        expect_current(reader, ';', "';'");
+    }
+}
+
 static CrustDecl *read_declaration(Reader *reader)
 {
     Token token = reader->token;
@@ -862,48 +945,7 @@ static CrustDecl *read_declaration(Reader *reader)
             tail = &field->next;
         } while (reader->token.kind != '}');
     } else if (token.kind == TOK_FN || token.kind == TOK_EXTERN) {
-        CrustParam **tail = &decl->params;
-        decl->kind = token.kind == TOK_FN ? CRUST_D_FUNCTION : CRUST_D_EXTERN;
-        next_token(reader);
-        if (decl->kind == CRUST_D_EXTERN)
-            expect(reader, TOK_FN, "'fn'");
-        decl->name = read_name(reader);
-        expect(reader, '(', "'('");
-        if (reader->token.kind != ')') {
-            for (;;) {
-                CrustParam *param = NEW(reader, CrustParam);
-                param->loc = reader->token.loc;
-                param->name = read_name(reader);
-                expect(reader, ':', "':'");
-                param->syntax_type = read_type(reader);
-                *tail = param;
-                tail = &param->next;
-                ++decl->param_count;
-                if (!take(reader, ',') || reader->token.kind == ')')
-                    break;
-            }
-        }
-        expect(reader, ')', "')'");
-        expect(reader, TOK_ARROW, "'->'");
-        decl->syntax_type = read_type(reader);
-        if (decl->kind == CRUST_D_FUNCTION) {
-            decl->body = read_block_contents(reader);
-        } else {
-            size_t i;
-            expect(reader, '=', "'='");
-            if (reader->token.kind != TOK_STRING)
-                crust_fail(reader->ctx, reader->token.loc, "expected a native symbol string");
-            if (reader->token.byte_count == 1)
-                crust_fail(reader->ctx, reader->token.loc, "native symbol name must not be empty");
-            for (i = 0; i + 1 < reader->token.byte_count; ++i) {
-                if (reader->token.bytes[i] == 0 || reader->token.bytes[i] >= 128)
-                    crust_fail(reader->ctx, reader->token.loc,
-                               "native symbol name must be ASCII without zero bytes");
-            }
-            decl->link_name = (const char *)reader->token.bytes;
-            next_token(reader);
-            expect_current(reader, ';', "';'");
-        }
+        read_function_declaration(reader, decl, token.kind);
     } else if (take(reader, TOK_CONST)) {
         decl->kind = CRUST_D_CONST;
         decl->name = read_name(reader);

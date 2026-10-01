@@ -54,6 +54,14 @@ repos:
 
   - repo: local
     hooks:
+      - id: lizard
+        name: cyclomatic complexity (CCN <= 15)
+        language: python
+        additional_dependencies: [lizard==1.21.6]
+        entry: lizard
+        args: [src/, include/, runtime/, -l, c, --CCN, '15', -w]
+        files: ^(src/.*\.c|runtime/.*\.c|include/.*\.h|\.pre-commit-config\.yaml)$
+        pass_filenames: false
       - id: crust-api
         name: check generated Crust APIs
         language: python

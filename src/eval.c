@@ -313,63 +313,85 @@ void crust_eval_destroy(CrustEval *eval)
     }
 }
 
-bool crust_eval_prepare(CrustEval *eval, CrustDecl *declaration)
+static bool check_evaluable_body(CrustEval *eval, CrustDecl *declaration)
 {
-    EvalDecl *prepared;
-    EvalDecl *same;
-    EvalNative *native = NULL;
-    CrustName *name = NULL;
-    const unsigned char *cursor;
-    uintptr_t key;
-    if (declaration == NULL || declaration->type == NULL)
-        return error_at(eval, no_location(), "evaluation requires a checked declaration");
-    if (find_declaration(eval, declaration) != NULL)
-        return true;
-    if (declaration->kind == CRUST_D_RECORD)
-        return true;
     if (declaration->kind == CRUST_D_FUNCTION && !declaration->checked)
         return error_at(eval, declaration->loc, "evaluation requires a checked function body");
     if (declaration->kind == CRUST_D_CONST && !declaration->checked)
         return error_at(eval, declaration->loc, "evaluation requires a checked constant");
-    key = identity_key(declaration);
+    return true;
+}
+
+static EvalDecl *find_identity(CrustEval *eval, CrustDecl *declaration, uintptr_t key)
+{
+    EvalDecl *same;
     if (declaration->identity != 0) {
         for (same = crust_map_get(&eval->identities, key); same != NULL;
              same = same->identity_next) {
             if (same->declaration->identity == declaration->identity &&
                 same->declaration->unit_identity == declaration->unit_identity)
-                return crust_try_map_set(eval->context, &eval->declarations, (uintptr_t)declaration,
-                                         same);
+                return same;
         }
     }
-    if (declaration->kind == CRUST_D_EXTERN && declaration->link_name == NULL)
-        return error_at(eval, declaration->loc, "external function has no native link name");
-    if (declaration->link_name != NULL) {
-        cursor = (const unsigned char *)declaration->link_name;
-        if (*cursor == 0)
-            return error_at(eval, declaration->loc, "native link name is empty");
-        while (*cursor != 0) {
-            if (*cursor > 127)
-                return error_at(eval, declaration->loc, "native link name is not ASCII");
-            ++cursor;
+    return NULL;
+}
+
+static CrustName *native_link_name(CrustEval *eval, CrustDecl *declaration)
+{
+    const unsigned char *cursor;
+    cursor = (const unsigned char *)declaration->link_name;
+    if (*cursor == 0) {
+        (void)error_at(eval, declaration->loc, "native link name is empty");
+        return NULL;
+    }
+    while (*cursor != 0) {
+        if (*cursor > 127) {
+            (void)error_at(eval, declaration->loc, "native link name is not ASCII");
+            return NULL;
         }
-        name = crust_try_intern(eval->context, (const unsigned char *)declaration->link_name,
-                                (size_t)(cursor - (const unsigned char *)declaration->link_name));
-        if (name == NULL)
+        ++cursor;
+    }
+    return crust_try_intern(eval->context, (const unsigned char *)declaration->link_name,
+                            (size_t)(cursor - (const unsigned char *)declaration->link_name));
+}
+
+static bool check_native_declaration(CrustEval *eval, CrustDecl *declaration, EvalNative *native)
+{
+    if (is_function(native->prototype) != is_function(declaration) ||
+        (is_function(declaration) ? !native_type_equal(native->prototype->type, declaration->type)
+                                  : !crust_type_equal(native->prototype->type, declaration->type)))
+        return error_at(eval, declaration->loc, "conflicting native ABI for symbol");
+    if (declaration->kind != CRUST_D_EXTERN && native->definition != NULL)
+        return error_at(eval, declaration->loc, "duplicate native definition for symbol");
+    if (declaration->kind != CRUST_D_EXTERN && native->published)
+        return error_at(eval, declaration->loc, "native callable identity was already published");
+    return true;
+}
+
+static bool register_declaration(CrustEval *eval, EvalDecl *prepared, uintptr_t key)
+{
+    CrustDecl *declaration = prepared->declaration;
+    EvalNative *native = prepared->native;
+    if (declaration->identity != 0) {
+        prepared->identity_next = crust_map_get(&eval->identities, key);
+        if (!crust_try_map_set(eval->context, &eval->identities, key, prepared)) {
+            if (native != NULL && native->definition == prepared)
+                native->definition = NULL;
             return false;
-        native = crust_map_get(&eval->natives, (uintptr_t)name);
-        if (native != NULL) {
-            if (is_function(native->prototype) != is_function(declaration) ||
-                (is_function(declaration)
-                     ? !native_type_equal(native->prototype->type, declaration->type)
-                     : !crust_type_equal(native->prototype->type, declaration->type)))
-                return error_at(eval, declaration->loc, "conflicting native ABI for symbol");
-            if (declaration->kind != CRUST_D_EXTERN && native->definition != NULL)
-                return error_at(eval, declaration->loc, "duplicate native definition for symbol");
-            if (declaration->kind != CRUST_D_EXTERN && native->published)
-                return error_at(eval, declaration->loc,
-                                "native callable identity was already published");
         }
     }
+    if (!crust_try_map_set(eval->context, &eval->declarations, (uintptr_t)declaration, prepared)) {
+        if (declaration->identity == 0 && native != NULL && native->definition == prepared)
+            native->definition = NULL;
+        return false;
+    }
+    return true;
+}
+
+static bool prepare_declaration(CrustEval *eval, CrustDecl *declaration, CrustName *name,
+                                EvalNative *native, uintptr_t key)
+{
+    EvalDecl *prepared;
     prepared = allocate(eval, sizeof(*prepared), CRUST_ALIGNOF(EvalDecl));
     if (prepared == NULL)
         return false;
@@ -388,20 +410,38 @@ bool crust_eval_prepare(CrustEval *eval, CrustDecl *declaration)
     eval->first = prepared;
     if (native != NULL && declaration->kind != CRUST_D_EXTERN)
         native->definition = prepared;
-    if (declaration->identity != 0) {
-        prepared->identity_next = crust_map_get(&eval->identities, key);
-        if (!crust_try_map_set(eval->context, &eval->identities, key, prepared)) {
-            if (native != NULL && native->definition == prepared)
-                native->definition = NULL;
-            return false;
-        }
-    }
-    if (!crust_try_map_set(eval->context, &eval->declarations, (uintptr_t)declaration, prepared)) {
-        if (declaration->identity == 0 && native != NULL && native->definition == prepared)
-            native->definition = NULL;
+    return register_declaration(eval, prepared, key);
+}
+
+bool crust_eval_prepare(CrustEval *eval, CrustDecl *declaration)
+{
+    EvalDecl *same;
+    EvalNative *native = NULL;
+    CrustName *name = NULL;
+    uintptr_t key;
+    if (declaration == NULL || declaration->type == NULL)
+        return error_at(eval, no_location(), "evaluation requires a checked declaration");
+    if (find_declaration(eval, declaration) != NULL)
+        return true;
+    if (declaration->kind == CRUST_D_RECORD)
+        return true;
+    if (!check_evaluable_body(eval, declaration))
         return false;
+    key = identity_key(declaration);
+    same = find_identity(eval, declaration, key);
+    if (same != NULL)
+        return crust_try_map_set(eval->context, &eval->declarations, (uintptr_t)declaration, same);
+    if (declaration->kind == CRUST_D_EXTERN && declaration->link_name == NULL)
+        return error_at(eval, declaration->loc, "external function has no native link name");
+    if (declaration->link_name != NULL) {
+        name = native_link_name(eval, declaration);
+        if (name == NULL)
+            return false;
+        native = crust_map_get(&eval->natives, (uintptr_t)name);
+        if (native != NULL && !check_native_declaration(eval, declaration, native))
+            return false;
     }
-    return true;
+    return prepare_declaration(eval, declaration, name, native, key);
 }
 
 static EvalDecl *get_declaration(CrustEval *eval, CrustDecl *declaration)
@@ -434,32 +474,37 @@ static bool prepare_symbol(CrustEval *eval, EvalPlan *plan, CrustSymbol *symbol)
     return crust_try_map_set(eval->context, &plan->symbols, (uintptr_t)symbol, slot);
 }
 
-static bool prepare_expression(CrustEval *eval, EvalPlan *plan, CrustExpr *expression)
+static bool prepare_expression_storage(CrustEval *eval, EvalPlan *plan, CrustExpr *expression)
 {
     EvalExpr *prepared;
+    prepared = allocate(eval, sizeof(*prepared), CRUST_ALIGNOF(EvalExpr));
+    if (prepared == NULL)
+        return false;
+    if (aggregate_type(expression->type) &&
+        !reserve_slot(eval, plan, (size_t)expression->type->size, expression->type->align,
+                      expression->loc, &prepared->value))
+        return false;
+    if (expression->kind == CRUST_E_CALL) {
+        if (expression->arg_count > SIZE_MAX / sizeof(uint64_t) ||
+            expression->arg_count > SIZE_MAX / sizeof(void *))
+            return error_at(eval, expression->loc, "evaluation argument storage overflow");
+        if (!reserve_slot(eval, plan, expression->arg_count * sizeof(uint64_t),
+                          CRUST_ALIGNOF(uint64_t), expression->loc, &prepared->arguments) ||
+            !reserve_slot(eval, plan, expression->arg_count * sizeof(void *), CRUST_ALIGNOF(void *),
+                          expression->loc, &prepared->pointers))
+            return false;
+    }
+    return crust_try_map_set(eval->context, &plan->expressions, (uintptr_t)expression, prepared);
+}
+
+static bool prepare_expression(CrustEval *eval, EvalPlan *plan, CrustExpr *expression)
+{
     CrustInit *init;
     size_t index;
     if (expression == NULL)
         return true;
     if (aggregate_type(expression->type) || expression->kind == CRUST_E_CALL) {
-        prepared = allocate(eval, sizeof(*prepared), CRUST_ALIGNOF(EvalExpr));
-        if (prepared == NULL)
-            return false;
-        if (aggregate_type(expression->type) &&
-            !reserve_slot(eval, plan, (size_t)expression->type->size, expression->type->align,
-                          expression->loc, &prepared->value))
-            return false;
-        if (expression->kind == CRUST_E_CALL) {
-            if (expression->arg_count > SIZE_MAX / sizeof(uint64_t) ||
-                expression->arg_count > SIZE_MAX / sizeof(void *))
-                return error_at(eval, expression->loc, "evaluation argument storage overflow");
-            if (!reserve_slot(eval, plan, expression->arg_count * sizeof(uint64_t),
-                              CRUST_ALIGNOF(uint64_t), expression->loc, &prepared->arguments) ||
-                !reserve_slot(eval, plan, expression->arg_count * sizeof(void *),
-                              CRUST_ALIGNOF(void *), expression->loc, &prepared->pointers))
-                return false;
-        }
-        if (!crust_try_map_set(eval->context, &plan->expressions, (uintptr_t)expression, prepared))
+        if (!prepare_expression_storage(eval, plan, expression))
             return false;
     }
     if (!prepare_expression(eval, plan, expression->left) ||
@@ -579,10 +624,34 @@ static bool constant_address(CrustEval *eval, EvalDecl *declaration, void **resu
     return true;
 }
 
-static bool eval_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression, void **result)
+static bool eval_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression, void **result);
+
+static bool index_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression, void **result)
 {
     EvalValue value;
     EvalValue index;
+    void *address;
+    if (expression->left->type->kind == CRUST_T_POINTER) {
+        if (!eval_expression(eval, frame, expression->left, &value))
+            return false;
+        address = (void *)(uintptr_t)value.bits;
+    } else if (expression->left->place) {
+        if (!eval_place(eval, frame, expression->left, &address))
+            return false;
+    } else {
+        if (!eval_expression(eval, frame, expression->left, &value))
+            return false;
+        address = value.aggregate;
+    }
+    if (!eval_expression(eval, frame, expression->right, &index))
+        return false;
+    *result = (void *)((uintptr_t)address + (uintptr_t)(index.bits * expression->type->size));
+    return true;
+}
+
+static bool eval_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression, void **result)
+{
+    EvalValue value;
     void *address;
     EvalDecl *declaration;
     switch (expression->kind) {
@@ -614,22 +683,7 @@ static bool eval_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
         *result = (void *)((uintptr_t)address + (uintptr_t)expression->field->offset);
         return true;
     case CRUST_E_INDEX:
-        if (expression->left->type->kind == CRUST_T_POINTER) {
-            if (!eval_expression(eval, frame, expression->left, &value))
-                return false;
-            address = (void *)(uintptr_t)value.bits;
-        } else if (expression->left->place) {
-            if (!eval_place(eval, frame, expression->left, &address))
-                return false;
-        } else {
-            if (!eval_expression(eval, frame, expression->left, &value))
-                return false;
-            address = value.aggregate;
-        }
-        if (!eval_expression(eval, frame, expression->right, &index))
-            return false;
-        *result = (void *)((uintptr_t)address + (uintptr_t)(index.bits * expression->type->size));
-        return true;
+        return index_place(eval, frame, expression, result);
     default:
         abort();
     }
@@ -675,6 +729,94 @@ static uint64_t divide_bits(CrustEval *eval, CrustExpr *expression, uint64_t lef
     return value & mask;
 }
 
+static uint64_t shift_bits(CrustEval *eval, CrustExpr *expression, uint64_t a, uint64_t b)
+{
+    CrustType *type = expression->left->type;
+    unsigned bits = (unsigned)(type->size * 8);
+    uint64_t value;
+    if (b >= bits)
+        required_trap(eval, expression->loc);
+    if (expression->op == CRUST_OP_SHL)
+        value = a << (unsigned)b;
+    else {
+        value = a >> (unsigned)b;
+        if (b != 0 && crust_type_signed(type) && (a & (UINT64_C(1) << (bits - 1))) != 0)
+            value |= mask_bits(bits) ^ mask_bits(bits - (unsigned)b);
+    }
+    return value;
+}
+
+static uint64_t compare_bits(CrustExpr *expression, uint64_t a, uint64_t b)
+{
+    CrustType *type = expression->left->type;
+    uint64_t sign;
+    unsigned bits = (unsigned)(type->size * 8);
+    switch (expression->op) {
+    case CRUST_OP_EQ:
+        return a == b;
+    case CRUST_OP_NE:
+        return a != b;
+    case CRUST_OP_LT:
+    case CRUST_OP_LE:
+    case CRUST_OP_GT:
+    case CRUST_OP_GE:
+        if (crust_type_signed(type)) {
+            sign = UINT64_C(1) << (bits - 1);
+            a ^= sign;
+            b ^= sign;
+        }
+        if (expression->op == CRUST_OP_LT)
+            return a < b;
+        else if (expression->op == CRUST_OP_LE)
+            return a <= b;
+        else if (expression->op == CRUST_OP_GT)
+            return a > b;
+        else
+            return a >= b;
+    case CRUST_OP_AND:
+    case CRUST_OP_OR:
+        return b != 0;
+    default:
+        abort();
+    }
+}
+
+static uint64_t binary_bits(CrustEval *eval, CrustExpr *expression, uint64_t a, uint64_t b)
+{
+    uint64_t value;
+    switch (expression->op) {
+    case CRUST_OP_ADD:
+        value = a + b;
+        break;
+    case CRUST_OP_SUB:
+        value = a - b;
+        break;
+    case CRUST_OP_MUL:
+        value = a * b;
+        break;
+    case CRUST_OP_DIV:
+    case CRUST_OP_REM:
+        value = divide_bits(eval, expression, a, b);
+        break;
+    case CRUST_OP_SHL:
+    case CRUST_OP_SHR:
+        value = shift_bits(eval, expression, a, b);
+        break;
+    case CRUST_OP_BIT_AND:
+        value = a & b;
+        break;
+    case CRUST_OP_BIT_OR:
+        value = a | b;
+        break;
+    case CRUST_OP_BIT_XOR:
+        value = a ^ b;
+        break;
+    default:
+        return compare_bits(expression, a, b);
+    }
+    return value & type_mask(expression->type);
+}
+
 static bool binary_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
                               EvalValue *result)
 {
@@ -683,8 +825,6 @@ static bool binary_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expr
     CrustType *type = expression->left->type;
     uint64_t a;
     uint64_t b;
-    uint64_t sign;
-    unsigned bits = (unsigned)(type->size * 8);
     if (!eval_expression(eval, frame, expression->left, &left))
         return false;
     if (expression->op == CRUST_OP_AND && left.bits == 0) {
@@ -705,73 +845,7 @@ static bool binary_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expr
         result->bits = expression->op == CRUST_OP_ADD ? a + b : a - b;
         return true;
     }
-    switch (expression->op) {
-    case CRUST_OP_ADD:
-        result->bits = a + b;
-        break;
-    case CRUST_OP_SUB:
-        result->bits = a - b;
-        break;
-    case CRUST_OP_MUL:
-        result->bits = a * b;
-        break;
-    case CRUST_OP_DIV:
-    case CRUST_OP_REM:
-        result->bits = divide_bits(eval, expression, a, b);
-        break;
-    case CRUST_OP_SHL:
-    case CRUST_OP_SHR:
-        if (b >= bits)
-            required_trap(eval, expression->loc);
-        if (expression->op == CRUST_OP_SHL)
-            result->bits = a << (unsigned)b;
-        else {
-            result->bits = a >> (unsigned)b;
-            if (b != 0 && crust_type_signed(type) && (a & (UINT64_C(1) << (bits - 1))) != 0)
-                result->bits |= mask_bits(bits) ^ mask_bits(bits - (unsigned)b);
-        }
-        break;
-    case CRUST_OP_BIT_AND:
-        result->bits = a & b;
-        break;
-    case CRUST_OP_BIT_OR:
-        result->bits = a | b;
-        break;
-    case CRUST_OP_BIT_XOR:
-        result->bits = a ^ b;
-        break;
-    case CRUST_OP_EQ:
-        result->bits = a == b;
-        return true;
-    case CRUST_OP_NE:
-        result->bits = a != b;
-        return true;
-    case CRUST_OP_LT:
-    case CRUST_OP_LE:
-    case CRUST_OP_GT:
-    case CRUST_OP_GE:
-        if (crust_type_signed(type)) {
-            sign = UINT64_C(1) << (bits - 1);
-            a ^= sign;
-            b ^= sign;
-        }
-        if (expression->op == CRUST_OP_LT)
-            result->bits = a < b;
-        else if (expression->op == CRUST_OP_LE)
-            result->bits = a <= b;
-        else if (expression->op == CRUST_OP_GT)
-            result->bits = a > b;
-        else
-            result->bits = a >= b;
-        return true;
-    case CRUST_OP_AND:
-    case CRUST_OP_OR:
-        result->bits = b != 0;
-        return true;
-    default:
-        abort();
-    }
-    result->bits &= type_mask(expression->type);
+    result->bits = binary_bits(eval, expression, a, b);
     return true;
 }
 
@@ -789,6 +863,20 @@ static bool call_native(CrustEval *eval, EvalAbi *abi, void *address, void *cons
     return true;
 }
 
+static bool evaluate_arguments(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
+                               uint64_t *values, void **arguments)
+{
+    size_t index;
+    EvalValue value;
+    for (index = 0; index < expression->arg_count; ++index) {
+        if (!eval_expression(eval, frame, expression->args[index], &value))
+            return false;
+        values[index] = value.bits;
+        arguments[index] = &values[index];
+    }
+    return true;
+}
+
 static bool call_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
                             EvalValue *result)
 {
@@ -799,7 +887,6 @@ static bool call_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expres
     void *address = NULL;
     void **arguments = (void **)(void *)(frame->storage + prepared->pointers);
     uint64_t *values = (uint64_t *)(void *)(frame->storage + prepared->arguments);
-    size_t index;
     while (callee->kind == CRUST_E_GROUP)
         callee = callee->left;
     if (callee->kind == CRUST_E_NAME && callee->symbol->kind == CRUST_SYM_FUNCTION) {
@@ -817,12 +904,8 @@ static bool call_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expres
         address = (void *)(uintptr_t)value.bits;
         declaration = crust_map_get(&eval->functions, (uintptr_t)address);
     }
-    for (index = 0; index < expression->arg_count; ++index) {
-        if (!eval_expression(eval, frame, expression->args[index], &value))
-            return false;
-        values[index] = value.bits;
-        arguments[index] = &values[index];
-    }
+    if (!evaluate_arguments(eval, frame, expression, values, arguments))
+        return false;
     if (declaration != NULL && declaration->declaration->kind == CRUST_D_FUNCTION)
         return call_declaration(eval, declaration, arguments, result);
     if (prepared->abi == NULL) {
@@ -833,58 +916,118 @@ static bool call_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expres
     return call_native(eval, prepared->abi, address, arguments, result);
 }
 
-static bool eval_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
+static bool name_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
                             EvalValue *result)
 {
-    EvalValue value;
     EvalDecl *declaration;
     void *address;
-    CrustInit *init;
-    size_t index;
-    result->bits = 0;
-    result->aggregate = NULL;
-    switch (expression->kind) {
-    case CRUST_E_NAME:
-        if (expression->symbol->kind != CRUST_SYM_FUNCTION)
-            return read_place(eval, frame, expression, result);
-        declaration = get_declaration(eval, expression->symbol->decl);
-        if (declaration == NULL || !function_address(eval, declaration, &address))
+    if (expression->symbol->kind != CRUST_SYM_FUNCTION)
+        return read_place(eval, frame, expression, result);
+    declaration = get_declaration(eval, expression->symbol->decl);
+    if (declaration == NULL || !function_address(eval, declaration, &address))
+        return false;
+    result->bits = (uint64_t)(uintptr_t)address;
+    return true;
+}
+
+static bool unary_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
+                             EvalValue *result)
+{
+    EvalValue value;
+    void *address;
+    if (expression->op == CRUST_OP_DEREF)
+        return read_place(eval, frame, expression, result);
+    if (expression->op == CRUST_OP_ADDRESS) {
+        if (!eval_place(eval, frame, expression->left, &address))
             return false;
         result->bits = (uint64_t)(uintptr_t)address;
         return true;
+    }
+    if (!eval_expression(eval, frame, expression->left, &value))
+        return false;
+    if (expression->op == CRUST_OP_NEG)
+        result->bits = UINT64_C(0) - value.bits;
+    else if (expression->op == CRUST_OP_NOT)
+        result->bits = value.bits == 0;
+    else
+        result->bits = ~value.bits;
+    result->bits &= type_mask(expression->type);
+    return true;
+}
+
+static bool cast_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
+                            EvalValue *result)
+{
+    EvalValue value;
+    if (!eval_expression(eval, frame, expression->left, &value))
+        return false;
+    if (expression->type->kind == CRUST_T_BOOL)
+        result->bits = value.bits != 0;
+    else
+        result->bits =
+            extended_bits(value.bits, expression->left->type) & type_mask(expression->type);
+    return true;
+}
+
+static bool record_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
+                              EvalValue *result)
+{
+    EvalValue value;
+    CrustInit *init;
+    result->aggregate = expression_storage(frame, expression);
+    for (init = expression->inits; init != NULL; init = init->next) {
+        if (!eval_expression(eval, frame, init->value, &value))
+            return false;
+        store_value(result->aggregate + init->field->offset, init->field->type, value);
+    }
+    return true;
+}
+
+static bool array_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
+                             EvalValue *result)
+{
+    EvalValue value;
+    size_t index;
+    result->aggregate = expression_storage(frame, expression);
+    for (index = 0; index < expression->arg_count; ++index) {
+        if (!eval_expression(eval, frame, expression->args[index], &value))
+            return false;
+        store_value(result->aggregate + index * expression->type->base->size,
+                    expression->type->base, value);
+    }
+    return true;
+}
+
+static uint64_t literal_bits(CrustExpr *expression)
+{
+    switch (expression->kind) {
     case CRUST_E_INTEGER:
     case CRUST_E_BOOL:
     case CRUST_E_SIZEOF:
     case CRUST_E_ALIGNOF:
     case CRUST_E_OFFSETOF:
-        result->bits = expression->integer;
-        return true;
+        return expression->integer;
     case CRUST_E_STRING:
-        result->bits = (uint64_t)(uintptr_t)expression->bytes;
-        return true;
+        return (uint64_t)(uintptr_t)expression->bytes;
     case CRUST_E_NULL:
-        return true;
+        return 0;
+    default:
+        abort();
+    }
+}
+
+static bool eval_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
+                            EvalValue *result)
+{
+    result->bits = 0;
+    result->aggregate = NULL;
+    switch (expression->kind) {
+    case CRUST_E_NAME:
+        return name_expression(eval, frame, expression, result);
     case CRUST_E_GROUP:
         return eval_expression(eval, frame, expression->left, result);
     case CRUST_E_UNARY:
-        if (expression->op == CRUST_OP_DEREF)
-            return read_place(eval, frame, expression, result);
-        if (expression->op == CRUST_OP_ADDRESS) {
-            if (!eval_place(eval, frame, expression->left, &address))
-                return false;
-            result->bits = (uint64_t)(uintptr_t)address;
-            return true;
-        }
-        if (!eval_expression(eval, frame, expression->left, &value))
-            return false;
-        if (expression->op == CRUST_OP_NEG)
-            result->bits = UINT64_C(0) - value.bits;
-        else if (expression->op == CRUST_OP_NOT)
-            result->bits = value.bits == 0;
-        else
-            result->bits = ~value.bits;
-        result->bits &= type_mask(expression->type);
-        return true;
+        return unary_expression(eval, frame, expression, result);
     case CRUST_E_BINARY:
         return binary_expression(eval, frame, expression, result);
     case CRUST_E_CALL:
@@ -893,33 +1036,73 @@ static bool eval_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expres
     case CRUST_E_FIELD:
         return read_place(eval, frame, expression, result);
     case CRUST_E_CAST:
-        if (!eval_expression(eval, frame, expression->left, &value))
-            return false;
-        if (expression->type->kind == CRUST_T_BOOL)
-            result->bits = value.bits != 0;
-        else
-            result->bits =
-                extended_bits(value.bits, expression->left->type) & type_mask(expression->type);
-        return true;
+        return cast_expression(eval, frame, expression, result);
     case CRUST_E_RECORD:
-        result->aggregate = expression_storage(frame, expression);
-        for (init = expression->inits; init != NULL; init = init->next) {
-            if (!eval_expression(eval, frame, init->value, &value))
-                return false;
-            store_value(result->aggregate + init->field->offset, init->field->type, value);
-        }
-        return true;
+        return record_expression(eval, frame, expression, result);
     case CRUST_E_ARRAY:
-        result->aggregate = expression_storage(frame, expression);
-        for (index = 0; index < expression->arg_count; ++index) {
-            if (!eval_expression(eval, frame, expression->args[index], &value))
-                return false;
-            store_value(result->aggregate + index * expression->type->base->size,
-                        expression->type->base, value);
-        }
-        return true;
+        return array_expression(eval, frame, expression, result);
     default:
-        abort();
+        result->bits = literal_bits(expression);
+        return true;
+    }
+}
+
+static bool eval_block(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, EvalFlow *flow,
+                       EvalValue *result)
+{
+    CrustStmt *child;
+    for (child = statement->body; child != NULL; child = child->next) {
+        if (!eval_statement(eval, frame, child, flow, result))
+            return false;
+        if (*flow != EVAL_NEXT)
+            break;
+    }
+    return true;
+}
+
+static bool eval_variable(CrustEval *eval, EvalFrame *frame, CrustStmt *statement)
+{
+    EvalValue value;
+    void *address;
+    if (statement->uninitialized)
+        return true;
+    if (!eval_expression(eval, frame, statement->value, &value))
+        return false;
+    address = symbol_address(eval, frame, statement->symbol);
+    assert(address != NULL);
+    store_value(address, statement->symbol->type, value);
+    return true;
+}
+
+static bool eval_if(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, EvalFlow *flow,
+                    EvalValue *result)
+{
+    EvalValue value;
+    CrustStmt *child;
+    if (!eval_expression(eval, frame, statement->expr, &value))
+        return false;
+    child = value.bits != 0 ? statement->body : statement->otherwise;
+    return child == NULL || eval_statement(eval, frame, child, flow, result);
+}
+
+static bool eval_while(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, EvalFlow *flow,
+                       EvalValue *result)
+{
+    EvalValue value;
+    for (;;) {
+        if (!eval_expression(eval, frame, statement->expr, &value))
+            return false;
+        if (value.bits == 0)
+            return true;
+        if (!eval_statement(eval, frame, statement->body, flow, result))
+            return false;
+        if (*flow == EVAL_RETURN)
+            return true;
+        if (*flow == EVAL_BREAK) {
+            *flow = EVAL_NEXT;
+            return true;
+        }
+        *flow = EVAL_NEXT;
     }
 }
 
@@ -928,47 +1111,16 @@ static bool eval_statement(CrustEval *eval, EvalFrame *frame, CrustStmt *stateme
 {
     EvalValue value;
     void *address;
-    CrustStmt *child;
     *flow = EVAL_NEXT;
     switch (statement->kind) {
     case CRUST_S_BLOCK:
-        for (child = statement->body; child != NULL; child = child->next) {
-            if (!eval_statement(eval, frame, child, flow, result))
-                return false;
-            if (*flow != EVAL_NEXT)
-                break;
-        }
-        return true;
+        return eval_block(eval, frame, statement, flow, result);
     case CRUST_S_VAR:
-        if (statement->uninitialized)
-            return true;
-        if (!eval_expression(eval, frame, statement->value, &value))
-            return false;
-        address = symbol_address(eval, frame, statement->symbol);
-        assert(address != NULL);
-        store_value(address, statement->symbol->type, value);
-        return true;
+        return eval_variable(eval, frame, statement);
     case CRUST_S_IF:
-        if (!eval_expression(eval, frame, statement->expr, &value))
-            return false;
-        child = value.bits != 0 ? statement->body : statement->otherwise;
-        return child == NULL || eval_statement(eval, frame, child, flow, result);
+        return eval_if(eval, frame, statement, flow, result);
     case CRUST_S_WHILE:
-        for (;;) {
-            if (!eval_expression(eval, frame, statement->expr, &value))
-                return false;
-            if (value.bits == 0)
-                return true;
-            if (!eval_statement(eval, frame, statement->body, flow, result))
-                return false;
-            if (*flow == EVAL_RETURN)
-                return true;
-            if (*flow == EVAL_BREAK) {
-                *flow = EVAL_NEXT;
-                return true;
-            }
-            *flow = EVAL_NEXT;
-        }
+        return eval_while(eval, frame, statement, flow, result);
     case CRUST_S_BREAK:
         *flow = EVAL_BREAK;
         return true;
@@ -1048,10 +1200,33 @@ static void native_callback(ffi_cif *cif, void *returned, void **arguments, void
     }
 }
 
+static bool resolve_native_address(CrustEval *eval, EvalDecl *declaration, void **result)
+{
+    size_t errors;
+    void *address;
+    if (eval->options.resolve == NULL)
+        return error_at(eval, declaration->declaration->loc,
+                        "no native symbol resolver was supplied");
+    errors = eval->context->error_count;
+    address = NULL;
+    if (!eval->options.resolve(eval->options.user, declaration->declaration, &address)) {
+        if (eval->context->error_count == errors)
+            (void)error_at(eval, declaration->declaration->loc,
+                           "native symbol resolver failed without a diagnostic");
+        return false;
+    }
+    if (address == NULL)
+        return error_at(eval, declaration->declaration->loc,
+                        "native symbol resolver returned a null address");
+    declaration->native->address = address;
+    declaration->native->published = true;
+    *result = address;
+    return true;
+}
+
 static bool function_address(CrustEval *eval, EvalDecl *declaration, void **result)
 {
     EvalAbi *abi;
-    size_t errors;
     void *address;
     if (declaration->native != NULL && declaration->native->definition != NULL)
         declaration = declaration->native->definition;
@@ -1060,24 +1235,7 @@ static bool function_address(CrustEval *eval, EvalDecl *declaration, void **resu
         return true;
     }
     if (declaration->declaration->kind == CRUST_D_EXTERN) {
-        if (eval->options.resolve == NULL)
-            return error_at(eval, declaration->declaration->loc,
-                            "no native symbol resolver was supplied");
-        errors = eval->context->error_count;
-        address = NULL;
-        if (!eval->options.resolve(eval->options.user, declaration->declaration, &address)) {
-            if (eval->context->error_count == errors)
-                (void)error_at(eval, declaration->declaration->loc,
-                               "native symbol resolver failed without a diagnostic");
-            return false;
-        }
-        if (address == NULL)
-            return error_at(eval, declaration->declaration->loc,
-                            "native symbol resolver returned a null address");
-        declaration->native->address = address;
-        declaration->native->published = true;
-        *result = address;
-        return true;
+        return resolve_native_address(eval, declaration, result);
     }
     if (declaration->code != NULL) {
         *result = declaration->code;

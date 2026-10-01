@@ -168,18 +168,20 @@ declarations given to it. Host declarations do not become target definitions.
 | --- | --- |
 | `context`, `source` | Borrowed host context and immutable root snapshot |
 | `cursor` | Byte offset of the next unread root region |
-| `read` | `fn(*CrustRun, **u8) -> bool`; produces an opaque action |
-| `execute` | `fn(*CrustRun, *u8) -> bool`; consumes that action |
-| `user` | Caller-selected state for these operations |
+| `read` | `fn(*CrustRun, *u8, **u8) -> bool`; receives selected user state and produces an opaque action |
+| `execute` | `fn(*CrustRun, *u8, *u8) -> bool`; receives the same user state and consumes that action |
+| `user` | State pointer selected with the operations for the next action |
 | `eval`, `scope` | Default host evaluator and persistent local bindings |
 | `next_identity` | Identity used by the ordinary host-source helper |
 | `argc`, `argv` | Borrowed root arguments |
 | `returned`, `status` | Root completion and process result |
 | `state` | Native resources owned by `crust_run_init` and `crust_run_destroy` |
 
-The loop captures both operation pointers before calling the reader. The
-returned action uses that captured executor. A change during reading or
-execution selects operations for a subsequent action.
+The loop captures both operation pointers and `user` before calling the reader.
+Both callbacks receive that captured user pointer as their second argument.
+The returned action uses the captured executor. Changes to `read`, `execute`,
+or `user` select operations and state for a subsequent action. Thus a reader
+can install the next stage without changing its current executor's state.
 
 A successful reader advances `cursor` and returns a non-null action. It can
 instead return null at source EOF. Returning an action without progress,
@@ -187,10 +189,11 @@ moving outside the source, moving backwards, replacing the source, or claiming
 EOF with unread bytes produces a diagnostic. Execution can consume additional
 input, but cannot move before the end committed by the reader.
 
-The default operations are `crust_run_read` and `crust_run_execute`. Their payload
-is a public `CrustAction`. A custom pair can use any representation. Assign its
-functions to `run.read` and `run.execute` with ordinary function values. There
-is no grammar registry or mandatory intermediate representation. A custom
+The default operations are `crust_run_read` and `crust_run_execute`. They ignore
+the user argument. Their payload is a public `CrustAction`. A custom pair can
+use any representation. Assign its functions to `run.read` and `run.execute`
+with ordinary function values. There is no grammar registry or mandatory
+intermediate representation. A custom
 executor can call a different checker or evaluator.
 
 Keep callback code, its state, and action storage live through all consumers.

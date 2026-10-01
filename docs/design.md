@@ -59,7 +59,7 @@ The root file runs from its first action. The launcher supplies
 `run: *CrustRun`, an immutable source snapshot, compiler interfaces, and
 ordinary host helpers. The default runner then repeats:
 
-1. Capture the current reader and executor as a pair.
+1. Capture the current reader, executor, and user state pointer.
 2. Read one complete action and commit its end offset.
 3. Check and execute that action with the default executor, or call the
    selected replacement executor.
@@ -213,8 +213,9 @@ The Crust reader library is separate from the seed reader. Its four hooks
 extend target syntax without adding keywords to the C99 parser. Replacing
 the root reader and executor can replace the entire grammar of unread root
 bytes. Install both operations in one action, and keep their code, action
-data, and user state live through execution. The captured pair always
-finishes its current action before a new pair takes effect.
+data, and user state live through execution. The callbacks receive the captured
+user pointer as an explicit argument. A change to `run.user` selects state for
+the next action. The captured operations and state finish the current action.
 
 Check a source rule before lowering discards the facts that express it.
 For example, overload selection must distinguish `read T` from `mut T`

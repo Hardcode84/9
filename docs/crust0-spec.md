@@ -627,8 +627,10 @@ exclude the executable and root path. The installed prelude supplies ordinary
 host loading helpers and version-matched public compiler declarations.
 
 Read, check, and execute each complete action before reading the next one.
-Capture its reader and executor as a pair. A successful non-EOF read must
-advance within the source. Commit that end before execution. The action can
+Capture its reader, executor, and user state pointer together. Pass that state
+pointer to both callbacks. Updates select operations and state for the next
+action. A successful non-EOF read must advance within the source. Commit that
+end before execution. The action can
 consume more input, but cannot rewind the cursor. A new reader owns every byte
 after the consumed delimiter, including whitespace and comments. EOF must
 account for all remaining bytes under that reader's rules.

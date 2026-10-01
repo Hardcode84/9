@@ -103,10 +103,11 @@ bool crust_run_check_unit(CrustRun *run, CrustUnit *unit)
     return true;
 }
 
-bool crust_run_read(CrustRun *run, void **result)
+bool crust_run_read(CrustRun *run, void *user, void **result)
 {
     CrustAction action;
     CrustAction *stored;
+    (void)user;
     *result = NULL;
     if (!crust_read_one(run->context, run->source, run->cursor, run->source->size, &action))
         return false;
@@ -121,11 +122,12 @@ bool crust_run_read(CrustRun *run, void **result)
     return true;
 }
 
-bool crust_run_execute(CrustRun *run, void *data)
+bool crust_run_execute(CrustRun *run, void *user, void *data)
 {
     CrustAction *action = data;
     bool returned;
     int32_t status;
+    (void)user;
     if ((action->declaration == NULL) == (action->statement == NULL))
         return run_error(run, "CRUST action must contain one declaration or statement");
     if (action->declaration != NULL) {
@@ -152,11 +154,12 @@ bool crust_run_execute(CrustRun *run, void *data)
     return true;
 }
 
-static bool read_action(CrustRun *run, bool (*reader)(CrustRun *, void **), void **action)
+static bool read_action(CrustRun *run, bool (*reader)(CrustRun *, void *, void **), void *user,
+                        void **action)
 {
     CrustSource *source = run->source;
     size_t begin = run->cursor;
-    if (!reader(run, action)) {
+    if (!reader(run, user, action)) {
         if (run->context->error_count == 0)
             run_error(run, "root reader failed without a diagnostic");
         return false;
@@ -172,11 +175,12 @@ static bool read_action(CrustRun *run, bool (*reader)(CrustRun *, void **), void
     return true;
 }
 
-static bool execute_action(CrustRun *run, bool (*execute)(CrustRun *, void *), void *action)
+static bool execute_action(CrustRun *run, bool (*execute)(CrustRun *, void *, void *), void *user,
+                           void *action)
 {
     CrustSource *source = run->source;
     size_t consumed = run->cursor;
-    if (!execute(run, action)) {
+    if (!execute(run, user, action)) {
         if (run->context->error_count == 0)
             run_error(run, "root executor failed without a diagnostic");
         return false;
@@ -197,12 +201,13 @@ bool crust_run_loop(CrustRun *run)
     while (!run->returned) {
         CrustSource *source = run->source;
         size_t begin = run->cursor;
-        bool (*reader)(CrustRun *, void **) = run->read;
-        bool (*execute)(CrustRun *, void *) = run->execute;
+        bool (*reader)(CrustRun *, void *, void **) = run->read;
+        bool (*execute)(CrustRun *, void *, void *) = run->execute;
+        void *user = run->user;
         void *action = NULL;
         if (reader == NULL || execute == NULL)
             return run_error(run, "root reader and executor must be callable");
-        if (!read_action(run, reader, &action))
+        if (!read_action(run, reader, user, &action))
             return false;
         if (run->returned)
             break;
@@ -213,7 +218,7 @@ bool crust_run_loop(CrustRun *run)
         }
         if (run->cursor == begin)
             return run_error(run, "reader returned an action without input progress");
-        if (!execute_action(run, execute, action))
+        if (!execute_action(run, execute, user, action))
             return false;
     }
     if (run->status < 0 || run->status > 255)

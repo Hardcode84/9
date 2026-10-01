@@ -23,4 +23,7 @@ An invalid prefix produces a diagnostic at its original source position.
 
 Both callback assignments belong in one action. Installing the reader in a
 separate earlier action would give it the executor assignment as input.
-The source bytes and callback state remain live until root completion.
+The loop captures both callbacks and `run.user` before each read. Both callbacks
+receive that user pointer as their second argument. Changes to the fields select
+the next action's operations and state. The source bytes and callback state
+remain live until root completion.

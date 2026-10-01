@@ -220,12 +220,12 @@ return 0i32;
         """
 fn consume_next(current:*CrustRun)->bool {
     var action:*u8=null(*u8);
-    if !crust_run_read(current,&action) { return false; }
+    if !crust_run_read(current,null(*u8),&action) { return false; }
     if action==null(*u8) {
         crust_set_error((*current).context,(*current).source,(*current).cursor,"expected nested action");
         return false;
     }
-    return crust_run_execute(current,action);
+    return crust_run_execute(current,null(*u8),action);
 }
 (*run).status=37i32;
 consume_next(run);
@@ -376,12 +376,12 @@ def check_runtime(suite):
 READER_PREFIX = """
 record ReaderState { reads:usize; executions:usize; boundary:usize; }
 record ReaderPayload { byte:u8; }
-fn wrong_executor(current:*CrustRun, payload:*u8)->bool {
+fn wrong_executor(current:*CrustRun,user:*u8, payload:*u8)->bool {
     crust_set_error((*current).context,(*current).source,(*current).cursor,"wrong executor selected");
     return false;
 }
-fn selected_reader(current:*CrustRun, output:**u8)->bool {
-    var state:*ReaderState = (*current).user as *ReaderState;
+fn selected_reader(current:*CrustRun,user:*u8, output:**u8)->bool {
+    var state:*ReaderState = user as *ReaderState;
     (*state).reads = (*state).reads + 1usize;
     if (*current).cursor == (*(*current).source).size {
         if (*state).reads != 2usize || (*state).executions != 1usize {
@@ -408,8 +408,8 @@ fn selected_reader(current:*CrustRun, output:**u8)->bool {
     *output = payload as *u8;
     return true;
 }
-fn selected_executor(current:*CrustRun, opaque:*u8)->bool {
-    var state:*ReaderState = (*current).user as *ReaderState;
+fn selected_executor(current:*CrustRun,user:*u8, opaque:*u8)->bool {
+    var state:*ReaderState = user as *ReaderState;
     var payload:*ReaderPayload = opaque as *ReaderPayload;
     (*state).executions = (*state).executions + 1usize;
     if (*payload).byte != 65u8 { return false; }
@@ -425,12 +425,82 @@ var reader_state:ReaderState = make ReaderState {reads:0usize,executions:0usize,
 install_reader(run,&reader_state);"""
 
 
+def check_reader_state(suite):
+    state = "record StageState {byte:u8; next:*StageState;}\n"
+    operations = """
+fn next_reader(current:*CrustRun,user:*u8,output:**u8)->bool {
+    (*current).cursor=(*(*current).source).size;
+    *output=current as *u8;
+    return true;
+}
+fn next_executor(current:*CrustRun,user:*u8,action:*u8)->bool {
+    var selected:*StageState=user as *StageState;
+    (*current).returned=true;
+    return crust0_host_write_stream(1u32,&(*selected).byte,1usize)==0i32;
+}
+fn first_reader(current:*CrustRun,user:*u8,output:**u8)->bool {
+    var selected:*StageState=user as *StageState;
+    (*current).read=next_reader;
+    (*current).execute=next_executor;
+    (*current).user=(*selected).next as *u8;
+    (*current).cursor=(*current).cursor+1usize;
+    *output=current as *u8;
+    return true;
+}
+fn first_executor(current:*CrustRun,user:*u8,action:*u8)->bool {
+    var selected:*StageState=user as *StageState;
+    return crust0_host_write_stream(1u32,&(*selected).byte,1usize)==0i32;
+}
+"""
+    setup = """
+var after:StageState=make StageState {byte:66u8,next:null(*StageState)};
+var before:StageState=make StageState {byte:65u8,next:&after};
+{ (*run).read=first_reader; (*run).execute=first_executor; (*run).user=&before as *u8; };
+This input belongs to the selected stages.
+"""
+    suite.root("reader-state-interpreted", state + operations + setup, stdout=b"AB")
+    source = suite.write("reader-state-native.crs", state + operations)
+    obj = source.with_suffix(".o")
+    library = source.with_suffix(".plugin")
+    suite.command(
+        [
+            suite.build / "crust-c",
+            "--library",
+            "--object",
+            "--export",
+            "first_reader",
+            "--export",
+            "first_executor",
+            "--cflag=-fPIC",
+            *[item for flag in suite.cflags for item in ("--cflag", flag)],
+            "-o",
+            obj,
+            ROOT / "api/crust0.crs",
+            ROOT / "api/crust0_host.crs",
+            ROOT / "api/crust0_eval.crs",
+            ROOT / "api/crust0_run.crs",
+            source,
+        ]
+    )
+    suite.command([*suite.cc, "-shared", obj, *suite.ldflags, "-o", library])
+    declarations = """
+extern fn first_reader(current:*CrustRun,user:*u8,output:**u8)->bool="first_reader";
+extern fn first_executor(current:*CrustRun,user:*u8,action:*u8)->bool="first_executor";
+"""
+    suite.root(
+        "reader-state-native",
+        f"host_link(run,{string(library)});\n" + state + declarations + setup,
+        stdout=b"AB",
+    )
+
+
 def check_readers(suite):
+    check_reader_state(suite)
     suite.root("interpreted-reader-transfer", READER_PREFIX.encode() + b"\0A", stdout=b"A")
     suite.root(
         "reader-reentry-explicit-return",
         b"""
-fn nested_reader(current:*CrustRun,output:**u8)->bool {
+fn nested_reader(current:*CrustRun,user:*u8,output:**u8)->bool {
     (*current).read=crust_run_read;
     var completed:bool=crust_run_loop(current);
     *output=null(*u8);
@@ -467,7 +537,7 @@ fn nested_reader(current:*CrustRun,output:**u8)->bool {
     }
     for name, (body, diagnostic) in cases.items():
         code = (
-            f"fn reader(current:*CrustRun,output:**u8)->bool{{{body}}}\n(*run).read=reader;".encode()
+            f"fn reader(current:*CrustRun,user:*u8,output:**u8)->bool{{{body}}}\n(*run).read=reader;".encode()
             + b"\0"
         )
         suite.root(name, code, expected=1, diagnostic=diagnostic)
@@ -477,7 +547,7 @@ fn nested_reader(current:*CrustRun,output:**u8)->bool {
             "*output=null(*u8); return true;"
         )
         code = (
-            f"fn reader(current:*CrustRun,output:**u8)->bool{{{body}}}\n(*run).read=reader;".encode()
+            f"fn reader(current:*CrustRun,user:*u8,output:**u8)->bool{{{body}}}\n(*run).read=reader;".encode()
             + b"\0"
         )
         suite.root(

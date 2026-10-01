@@ -9,15 +9,15 @@ typedef struct CrustRunState CrustRunState;
 
 /* A runner borrows its source and context through destruction. Readers advance
    cursor and return a non-null action, return null at source EOF, or set returned
-   to finish the runner. Each action
-   uses the executor selected before its reader was called. Input-consuming
-   execution can advance cursor further. Source storage remains immutable. */
+   to finish the runner. Each action uses the reader, executor, and user pointer
+   selected before its reader was called. Input-consuming execution can advance
+   cursor further. Source storage remains immutable. */
 struct CrustRun {
     CrustContext *context;
     CrustSource *source;
     size_t cursor;
-    bool (*read)(CrustRun *run, void **action);
-    bool (*execute)(CrustRun *run, void *action);
+    bool (*read)(CrustRun *run, void *user, void **action);
+    bool (*execute)(CrustRun *run, void *user, void *action);
     void *user;
     CrustEval *eval;
     CrustRootScope scope;
@@ -39,10 +39,12 @@ bool crust_run_destroy(CrustRun *run);
 /* Execute in source order through EOF or explicit return. Retain a diagnostic
    on failure. The returned program status must be between zero and 255. */
 bool crust_run_loop(CrustRun *run);
-/* Read one CRUST action without interpreting bytes after its delimiter. */
-bool crust_run_read(CrustRun *run, void **action);
-/* Check and execute an action from crust_run_read. Root locals persist. */
-bool crust_run_execute(CrustRun *run, void *action);
+/* Read one CRUST action without interpreting bytes after its delimiter.
+   The default reader ignores user. */
+bool crust_run_read(CrustRun *run, void *user, void **action);
+/* Check and execute an action from crust_run_read. Root locals persist.
+   The default executor ignores user. */
+bool crust_run_execute(CrustRun *run, void *user, void *action);
 /* Check only this owned unit and prepare its host declarations. The unit must
    already be linked into context. Reject root-local name conflicts. */
 bool crust_run_check_unit(CrustRun *run, CrustUnit *unit_value);

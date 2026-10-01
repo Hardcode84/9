@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Crust core and compiler design
 
 Crust keeps a small language core and exposes the compiler as libraries.

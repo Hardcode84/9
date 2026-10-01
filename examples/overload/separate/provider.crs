@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 extern fn native_write(descriptor:i32, bytes:*u8, size:usize)->isize = "write";
 
 fn write_all(output:*Output, bytes:*u8, size:usize)->i32 {

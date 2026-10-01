@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Replace the root reader
 
 Run from the repository root after `make all`:

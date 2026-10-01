@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 const HL_KEYWORD:u32 = 0u32;
 const HL_COMMENT:u32 = 1u32;
 const HL_STRING:u32 = 2u32;

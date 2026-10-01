@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Check an external overload library with ordinary CRUST reader and type hooks."""
 
 import argparse

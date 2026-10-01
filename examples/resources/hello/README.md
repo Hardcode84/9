@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Tutorial: own a descriptor and defer a call
 
 This example writes through an owned file descriptor. A move transfers the

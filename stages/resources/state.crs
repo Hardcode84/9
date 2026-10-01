@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn rs_note(function: *RsFunction, local: *RsLocal) -> unit {
     var change: *RsChange = rs_alloc((*function).stage, sizeof(RsChange), alignof(RsChange)) as *RsChange;
     if change == null(*RsChange) { return; }

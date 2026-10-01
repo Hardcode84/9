@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Tutorial: select a function by type
 
 This example uses one source name for two operations: print a string, or

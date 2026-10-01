@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Compile, link, and execute the CRUST0 semantic and native interface cases."""
 
 import argparse

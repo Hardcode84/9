@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Examples
 
 Run the commands below from the repository root. Build the tools once:

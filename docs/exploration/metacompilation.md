@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Metacompilation and a small language core
 
 Date: 2026-09-30. Updated: 2026-10-01. Status: source study and a proposed experiment.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Include api/crust0.crs and stages/overload/model.crs before this interface.
 // Keep the context, stage, hooks, ABI domain, and source storage live through use.
 // Use a different ABI domain when type encodings, contracts, or calling rules differ.

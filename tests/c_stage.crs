@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // The Linux x86-64 oom mode checks host allocation failure and writes no output.
 fn c_test_oom() -> i32 {
     var context: CrustContext = uninit;

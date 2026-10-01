@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 extern fn alloc(size: usize, alignment: usize) -> *u8 = "crust0_host_alloc";
 extern fn free(data: *u8) -> unit = "crust0_host_free";
 extern fn write(stream: u32, data: *u8, size: usize) -> i32 = "crust0_host_write_stream";

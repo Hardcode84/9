@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn rs_c_label_name(stage:*CStage, chain:*RsChain)->unit {
     if chain == null(*RsChain) { trap; }
     c_text(stage, "rs_exit_");

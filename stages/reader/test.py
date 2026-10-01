@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Build the CRUST reader and compare its syntax with the seed reader."""
 
 import argparse

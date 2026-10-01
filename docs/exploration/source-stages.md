@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Native host-stage experiment
 
 Date: 2026-10-01. This document preserves the interface and measurements at

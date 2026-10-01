@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn resource_driver_build(cli:*CCli)->i32 {
     var driver:*CDriver = &(*cli).driver;
     var context:*CrustContext = (*cli).stage.status.context;

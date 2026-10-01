@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 host_source(run, "../../stages/reader/model.crs");
 host_source(run, "../../stages/reader/lex.crs");
 host_source(run, "../../stages/highlight/model.crs");

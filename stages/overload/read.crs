@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Consume a function definition, native extern, or source ABI import header.
 fn ov_function(reader:*CrustReader)->*CrustDecl {
     var declaration:*CrustDecl = rr_function_header(reader);

@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 #ifndef CRUST_CORE_INTERNAL_H
 #define CRUST_CORE_INTERNAL_H
 

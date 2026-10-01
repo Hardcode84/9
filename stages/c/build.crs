@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Compile a captured target from begin through EOF. Arguments belong to
 // c_program. Complete all target work before returning its process status.
 fn c_build(target: *CrustSource, begin: usize, argument_count: i32, arguments: **u8) -> i32 {

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Fail each arena allocation during complete resource reading and preparation."""
 
 import argparse

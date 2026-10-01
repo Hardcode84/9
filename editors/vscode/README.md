@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Crust for VS Code
 
 This extension gets source classifications from a program written in Crust.

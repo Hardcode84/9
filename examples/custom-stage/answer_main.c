@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 #include <stdint.h>
 
 extern int32_t crust_stage_answer(void);

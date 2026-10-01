@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Single-byte punctuation uses its ASCII value. Other token kinds start at 256.
 const RR_EOF:u32=256u32;
 const RR_NAME:u32=257u32;

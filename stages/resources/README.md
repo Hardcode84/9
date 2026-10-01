@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Tutorial: ownership, RAII, and defer as a source stage
 
 An owned descriptor must close exactly once on normal control flow. A move

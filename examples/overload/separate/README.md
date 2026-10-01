@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Separate objects
 
 This example checks the boundary that a single-file overload example cannot:

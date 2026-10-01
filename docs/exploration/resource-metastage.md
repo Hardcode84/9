@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Ownership and cleanup in a Crust stage
 
 The linked measurements retain the source names and hashes from the recorded

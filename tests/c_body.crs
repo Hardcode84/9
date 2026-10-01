@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 record BodyTest {
     helper: *CrustDecl;
     helper_body: *CrustStmt;

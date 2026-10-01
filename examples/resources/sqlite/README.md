@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Resource-stage SQLite reader
 
 This application uses owned database and statement values, automatic cleanup,

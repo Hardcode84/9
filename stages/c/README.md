@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Tutorial: a C backend written in Crust
 
 The C backend turns checked Crust operations into C text. GCC compiles that

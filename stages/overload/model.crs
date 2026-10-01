@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 record OvText { data:*u8; size:usize; capacity:usize; }
 
 record OvHooks {

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Relative paths use the root source directory. Returned storage belongs to run.context.
 fn host_path(run: *CrustRun, path: *u8) -> *u8 {
     if path == null(*u8) || path[0usize] == 0u8 {

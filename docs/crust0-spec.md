@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Crust0 language specification
 
 Version 0.1. Date: 2026-10-01. Status: normative design draft.

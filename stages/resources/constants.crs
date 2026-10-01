@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn rs_constant_syntax(stage: *RsStage, expression: *CrustExpr) -> unit {
     if expression == null(*CrustExpr) || (*stage).failed { return; }
     if (*expression).syntax_type != null(*CrustTypeSyntax) {

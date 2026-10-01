@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn rs_global(stage: *RsStage, name: *CrustName) -> *RsGlobal {
     return crust_map_get(&(*stage).globals, name as usize) as *RsGlobal;
 }

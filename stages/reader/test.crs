@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn rt_text(left:*u8,right:*u8)->bool {
     if left==null(*u8) || right==null(*u8) { return left==right; }
     var index:usize=0usize;

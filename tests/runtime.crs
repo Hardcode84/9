@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 extern fn native_i8(value: i8) -> i8 = "native_i8";
 extern fn native_u8(value: u8) -> u8 = "native_u8";
 extern fn native_i16(value: i16) -> i16 = "native_i16";

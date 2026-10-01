@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Crust reader library
 
 This library reads the Crust0 declaration grammar. All lexer and parser code is

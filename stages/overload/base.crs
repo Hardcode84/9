@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn ov_init(stage:*OvStage, context:*CrustContext, abi:*u8, hooks:*OvHooks)->unit {
     (*stage).context = context;
     (*stage).abi = abi;

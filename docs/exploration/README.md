@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Language and compiler exploration
 
 These notes preserve the research and experiments that informed Crust.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn rs_read_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
     var stage: *RsStage = user as *RsStage;
     if rr_is_name(reader, "resource") {

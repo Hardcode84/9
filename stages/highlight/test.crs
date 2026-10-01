@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 record HlTestAllocator { calls:usize; fail_at:usize; live:usize; }
 
 fn ht_allocate(user:*u8, size:usize)->*u8 {

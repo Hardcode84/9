@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn rr_enter(reader:*CrustReader)->bool {
     if (*reader).failed { return false; }
     if (*reader).depth>=256u32 {

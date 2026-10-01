@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn ov_encode_type(stage:*OvStage, syntax:*CrustTypeSyntax, buffer:*OvText, depth:usize)->unit {
     if (*stage).failed { return; }
     if depth == 256usize {

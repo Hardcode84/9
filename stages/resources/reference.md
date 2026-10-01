@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Resource compiler stage
 
 This ordinary Crust library implements ownership, local loans, RAII, and `defer`.

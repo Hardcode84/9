@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 #ifndef CRUST_DRIVER_PLATFORM_H
 #define CRUST_DRIVER_PLATFORM_H
 

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Public compiler stages and a C compiler witness
 
 Date: 2026-10-01. Status: proposed interfaces and a bounded experiment.

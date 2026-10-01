@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 #include "core_internal.h"
 #include "crust0_x64.h"
 

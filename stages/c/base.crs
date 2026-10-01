@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // The stage owns all arena blocks. Context and input strings are borrowed.
 // Keep the stage at one address from initialization through destruction.
 fn c_stage_init(stage: *CStage, ctx: *CrustContext) -> unit {

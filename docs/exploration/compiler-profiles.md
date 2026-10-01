@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Measured frontend compilation costs
 
 Date: 2026-09-30. These are local measurements of installed compilers.

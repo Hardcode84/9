@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # C backend stage
 
 The linked measurements retain the source names and hashes from the recorded

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 const rr_keywords:[CrustReaderKeyword;33]=make [CrustReaderKeyword;33] {
     make CrustReaderKeyword {text:"record",size:6usize,kind:262u32,type:11u32},
     make CrustReaderKeyword {text:"fn",size:2usize,kind:263u32,type:11u32},

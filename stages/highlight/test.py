@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Check highlighting through the native tool, source runner, and user services."""
 
 import argparse

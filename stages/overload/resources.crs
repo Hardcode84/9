@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn ov_resources_type_key(stage: *OvStage, syntax: *CrustTypeSyntax,
                          text: *OvText, depth: usize, user: *u8) -> bool {
     if (*syntax).kind != RS_READ && (*syntax).kind != RS_MUT { return false; }

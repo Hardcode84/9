@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 #include "crust0.h"
 #include "crust0_host.h"
 #include "driver_platform.h"

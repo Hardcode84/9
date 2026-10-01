@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Tutorial: Hello World in one file
 
 This example contains two programs in [main.crs](main.crs). The first program

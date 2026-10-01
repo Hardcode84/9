@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Crust
 
 Crust is a systems programming language built around three priorities:
@@ -54,3 +56,7 @@ the third runs it.
 
 [Joseph Huber (@jhuber6)](https://github.com/jhuber6) is Crust's spiritual
 leader and the author of its name.
+
+## License
+
+Crust uses the [Apache License 2.0](LICENSE).

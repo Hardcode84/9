@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Fail each arena backing allocation in plain and resource overload preparation."""
 
 import argparse

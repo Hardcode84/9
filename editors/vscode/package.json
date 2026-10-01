@@ -3,6 +3,7 @@
   "displayName": "Crust",
   "description": "Crust source highlighting through language services written in Crust.",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "publisher": "crust-lang",
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Programming Languages"],

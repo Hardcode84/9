@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Return the length of a valid UTF-8 scalar, or zero for an invalid byte sequence.
 fn hl_utf8(bytes:*u8, begin:usize, end:usize)->usize {
     var first:u8 = bytes[begin];

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Check resource source programs, generated output, and ownership diagnostics."""
 
 import argparse

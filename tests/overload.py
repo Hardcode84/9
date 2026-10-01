@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Check exact overload selection and the native source ABI boundary."""
 
 import argparse

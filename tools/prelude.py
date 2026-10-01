@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Embed the installed root interfaces and helper source in the launcher."""
 
 import argparse
@@ -17,7 +19,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
-    lines = []
+    lines = ["/* SPDX-License-Identifier: Apache-2.0 */", ""]
     for index, name in enumerate(INPUTS):
         data = (ROOT / name).read_bytes()
         lines.append(f"static const unsigned char prelude_{index}[] = {{")

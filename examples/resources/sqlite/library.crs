@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 const SQL_OK: i32 = 0i32;
 const SQL_NOMEM: i32 = 7i32;
 const SQL_IOERR: i32 = 10i32;

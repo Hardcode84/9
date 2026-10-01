@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 extern fn c_test_reset(fail_at:usize)->unit = "crust_test_allocation_reset";
 extern fn c_test_calls()->usize = "crust_test_allocation_calls";
 extern fn c_test_live()->usize = "crust_test_allocation_live";

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Package the local Linux x86-64 highlighter without a JavaScript build tool."""
 
 import argparse
@@ -32,6 +34,7 @@ def main():
     ET.SubElement(metadata, "DisplayName").text = package["displayName"]
     ET.SubElement(metadata, "Description").text = package["description"]
     ET.SubElement(metadata, "Categories").text = "Programming Languages"
+    ET.SubElement(metadata, "License").text = "extension/LICENSE"
     properties = ET.SubElement(metadata, "Properties")
     for name, value in (
         ("Microsoft.VisualStudio.Code.Engine", package["engines"]["vscode"]),
@@ -62,6 +65,12 @@ def main():
     ET.SubElement(
         types,
         "Override",
+        PartName="/extension/LICENSE",
+        ContentType="text/plain",
+    )
+    ET.SubElement(
+        types,
+        "Override",
         PartName="/extension/bin/crust-highlight",
         ContentType="application/octet-stream",
     )
@@ -77,6 +86,7 @@ def main():
             "README.md",
         ):
             archive.write(directory / name, "extension/" + name)
+        archive.write(directory.parents[1] / "LICENSE", "extension/LICENSE")
         archive.write(args.binary, "extension/bin/crust-highlight")
     print(args.output)
 

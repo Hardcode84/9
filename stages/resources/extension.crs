@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Include api/crust0.crs, stages/c/model.crs, and stages/resources/model.crs
 // before this consumer interface. Use stages/c/extension.crs for backend services.
 

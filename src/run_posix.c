@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 #define _XOPEN_SOURCE 700
 #include "run_platform.h"
 

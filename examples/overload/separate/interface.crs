@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 record Output { descriptor:i32; }
 fn format(output:*Output, value:u64)->i32;
 fn format(output:*Output, text:*u8)->i32;

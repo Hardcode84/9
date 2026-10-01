@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // This reader accepts one decimal exit status and an optional final line feed.
 // Supply api/crust0.crs, api/crust0_host.crs, and api/crust0_x64.crs to build it.
 

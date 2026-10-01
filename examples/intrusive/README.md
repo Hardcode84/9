@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Intrusive list
 
 Run from the repository root after `make all c-stage`:

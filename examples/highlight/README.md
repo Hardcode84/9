@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Highlight source with a Crust program
 
 Follow the [highlighting tutorial](../../stages/highlight/README.md) for the

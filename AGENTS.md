@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Crust
 
 Crust is a small systems language with a C99 bootstrap compiler. Compilation
@@ -87,6 +89,9 @@ Do not add a feature before a concrete program requires it.
   `include/`, and `runtime/`. Split functions by responsibility. Do not bypass
   Lizard with exclusions or altered counting rules.
 - Never install Node.js or npm on this machine.
+- Use a single `SPDX-License-Identifier: Apache-2.0` comment at the start of
+  source, configuration, and documentation files, after any shebang. Keep
+  generated headers in their generators. Preserve archived benchmark bytes.
 
 ## Engineering discipline
 

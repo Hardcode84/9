@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import { test, expect, mock } from 'bun:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';

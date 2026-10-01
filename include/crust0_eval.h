@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 #ifndef CRUST0_EVAL_H
 #define CRUST0_EVAL_H
 

@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Crust0 bootstrap compiler
 
 The linked measurements retain the source names and hashes from the recorded
@@ -312,7 +314,14 @@ pre-commit run --all-files
 ```
 
 The hooks check text and configuration files, format C and Python, lint Python,
-and check the generated Crust APIs. Lizard limits functions in `src/`,
+and check the generated Crust APIs and Apache 2.0 SPDX headers. Source,
+configuration, and documentation files start with one
+`SPDX-License-Identifier: Apache-2.0` comment, after any shebang. Update the
+generator for a generated file. The header check excludes `benchmarks/` to
+preserve archived bytes. JSON files and raw test inputs use the repository
+[license](../LICENSE) without an inserted comment.
+
+Lizard limits functions in `src/`,
 `include/`, and `runtime/` to CCN 15. Recorded benchmark inputs and reports are
 excluded from formatters because their hashes identify the measured bytes.
 

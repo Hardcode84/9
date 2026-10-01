@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn ov_is_function(declaration:*CrustDecl)->bool {
     return (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_EXTERN;
 }

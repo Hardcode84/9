@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 const RS_READ: u32 = 100u32;
 const RS_MUT: u32 = 101u32;
 const RS_MOVE: u32 = 102u32;

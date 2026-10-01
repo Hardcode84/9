@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 CC ?= cc
 AR ?= ar
 AS ?= as

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn ov_scope(walk:*OvWalk)->unit {
     var scope:*OvScope=ov_alloc((*walk).stage,sizeof(OvScope),alignof(OvScope)) as *OvScope;
     if scope!=null(*OvScope) { (*scope).parent=(*walk).scope; (*walk).scope=scope; }

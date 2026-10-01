@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Tutorial: a highlighter written in Crust
 
 This tutorial builds HTML output and editor tokens from the same source

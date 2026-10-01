@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn rs_match_state(function: *RsFunction, a: *RsChange, b: *RsChange, location: *CrustLoc) -> unit {
     var initialized: bool = (*(*a).local).initialized;
     var readers: usize = (*(*a).local).readers;

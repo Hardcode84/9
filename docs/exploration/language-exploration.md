@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Crust: exploration of a small systems language
 
 Date: 2026-09-30. Updated: 2026-10-01. Status: research and a proposed experiment.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Execute CRUST host programs and source-selected compiler stages."""
 import argparse
 import importlib.util

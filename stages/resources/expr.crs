@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn rs_require_value(function: *RsFunction, value: *RsValue, expected: *CrustTypeSyntax, location: *CrustLoc) -> bool {
     var stage: *RsStage = (*function).stage;
     if (*stage).failed || value == null(*RsValue) { return false; }

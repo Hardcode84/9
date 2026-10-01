@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Source-defined metastages: Zig and Jai review
 
 Date: 2026-10-01. Status: design review before implementation. The

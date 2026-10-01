@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn c_signed(input: *CrustType) -> bool {
     var kind: u32 = (*input).kind;
     return kind == CRUST_T_I8 || kind == CRUST_T_I16 || kind == CRUST_T_I32 ||

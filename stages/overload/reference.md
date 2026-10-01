@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Function overload stage
 
 This optional stage is a Crust program. The seed has one function per name.

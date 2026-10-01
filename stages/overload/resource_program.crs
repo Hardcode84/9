@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn ov_resources_check(stage:*OvStage)->bool {
     if !ov_resources_prepare(stage) { return false; }
     return rs_prepare((*(*stage).hooks).user as *RsStage);

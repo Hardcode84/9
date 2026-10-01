@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // This host interface applies to the Linux x86-64 LP64 profile.
 record CDriverStat {
     device: u64;

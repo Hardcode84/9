@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn hl_stderr(message:*u8)->unit {
     if crust0_host_write_stream(2u32, message, hl_length(message)) != 0i32 { trap; }
 }

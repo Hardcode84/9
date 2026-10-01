@@ -1,3 +1,5 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Syntax highlighting through user stages
 
 Date: 2026-10-01.

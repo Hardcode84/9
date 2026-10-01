@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn hl_length(text:*u8)->usize {
     var size:usize = 0usize;
     while text[size] != 0u8 { size = size+1usize; }

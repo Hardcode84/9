@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 fn c_native_kind(input: *CrustType) -> u32 {
     if (*input).kind == CRUST_T_ISIZE { return CRUST_T_I64; }
     if (*input).kind == CRUST_T_USIZE { return CRUST_T_U64; }

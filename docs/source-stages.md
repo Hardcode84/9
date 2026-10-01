@@ -5,6 +5,12 @@ by the RMD0 launcher. The [language specification](rmd0-spec.md) defines the
 ordinary declarations and execution rules. The [Zig and Jai review](source-metastages.md)
 records the evidence used to choose this interface.
 
+The [source-order proposal](source-order-compilation.md) investigates replacing
+this source form with `rmd main.rmd`, where root execution controls compilation
+and can select the reader for subsequent actions. That proposal retains host
+and target separation and the code and data lifetime requirements here. It
+does not change the current syntax.
+
 The implementation proves the complete source-to-executable interface. Fresh
 native host preparation does not pass the cold speed gate. The cost section
 separates this preparation from target frontend work. Do not use the working

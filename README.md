@@ -46,6 +46,12 @@ Forth, staged language extensions, a public compiler pipeline, and caching.
 Read the [source metastage review](docs/source-metastages.md) for the Zig and
 Jai comparison and the phase contract used by the source-stage design.
 
+Read the [source-order compilation proposal](docs/source-order-compilation.md)
+for the intended `rmd main.rmd` interface. The root program selects stages,
+loads other files, and can change the reader for its remaining input. This
+proposal includes the execution contract and the required speed experiment.
+It is not yet the implemented source syntax.
+
 Read the [compiler extension experiment](docs/compiler-extension-experiment.md)
 for a small seed, ownership and unsafe stages, complete syntax replacement,
 backend metastages, and a C compiler benchmark.

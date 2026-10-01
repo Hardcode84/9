@@ -1,8 +1,8 @@
 #include "crust0_eval.h"
+#include "eval_native.h"
+#include "eval_storage.h"
 
 #include <assert.h>
-#include <ffi.h>
-#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,7 +11,6 @@ typedef struct EvalDecl EvalDecl;
 typedef struct EvalNative EvalNative;
 typedef struct EvalPlan EvalPlan;
 typedef struct EvalFrame EvalFrame;
-typedef struct EvalAbi EvalAbi;
 
 typedef struct {
     uint64_t bits;
@@ -26,14 +25,8 @@ typedef struct {
     size_t value;
     size_t arguments;
     size_t pointers;
-    EvalAbi *abi;
+    CrustEvalAbi *abi;
 } EvalExpr;
-
-struct EvalAbi {
-    ffi_cif cif;
-    ffi_type **arguments;
-    CrustType *type;
-};
 
 struct EvalFrame {
     EvalPlan *plan;
@@ -61,7 +54,7 @@ struct EvalDecl {
     EvalNative *native;
     EvalPlan *plan;
     unsigned char *constant;
-    ffi_closure *closure;
+    CrustEvalClosure *closure;
     void *code;
     EvalDecl *identity_next;
     EvalDecl *next;
@@ -137,6 +130,14 @@ static void *allocate(CrustEval *eval, size_t size, size_t alignment)
     return crust_try_alloc(eval->context, size, alignment);
 }
 
+static void *allocate_storage(CrustEval *eval, size_t size, size_t alignment, CrustLoc location)
+{
+    void *storage = crust_arena_alloc(&eval->context->arena, size, alignment);
+    if (storage == NULL)
+        (void)error_at(eval, location, "evaluation storage allocation failed");
+    return storage;
+}
+
 static bool aggregate_type(CrustType *type)
 {
     return type->kind == CRUST_T_RECORD || type->kind == CRUST_T_ARRAY;
@@ -159,14 +160,6 @@ static uint64_t extended_bits(uint64_t value, CrustType *type)
     return value;
 }
 
-static uint64_t load_bits(const void *address, CrustType *type)
-{
-    uint64_t value = 0;
-    if (type->kind != CRUST_T_UNIT)
-        memcpy(&value, address, (size_t)type->size);
-    return value;
-}
-
 static void store_value(void *address, CrustType *type, EvalValue value)
 {
     if (type->kind == CRUST_T_UNIT)
@@ -174,33 +167,7 @@ static void store_value(void *address, CrustType *type, EvalValue value)
     if (aggregate_type(type))
         memmove(address, value.aggregate, (size_t)type->size);
     else
-        memcpy(address, &value.bits, (size_t)type->size);
-}
-
-static CrustTypeKind native_kind(CrustType *type)
-{
-    if (type->kind == CRUST_T_ISIZE)
-        return CRUST_T_I64;
-    if (type->kind == CRUST_T_USIZE)
-        return CRUST_T_U64;
-    return type->kind;
-}
-
-static bool native_type_equal(CrustType *left, CrustType *right)
-{
-    size_t index;
-    if (left == right)
-        return true;
-    if (native_kind(left) != native_kind(right))
-        return false;
-    if (left->kind != CRUST_T_FUNCTION)
-        return !aggregate_type(left);
-    if (left->param_count != right->param_count || !native_type_equal(left->base, right->base))
-        return false;
-    for (index = 0; index < left->param_count; ++index)
-        if (!native_type_equal(left->params[index], right->params[index]))
-            return false;
-    return true;
+        crust_eval_store_bits(address, type, value.bits);
 }
 
 static bool is_function(CrustDecl *declaration)
@@ -222,66 +189,13 @@ static EvalDecl *find_declaration(CrustEval *eval, CrustDecl *declaration)
     return crust_map_get(&eval->declarations, (uintptr_t)declaration);
 }
 
-static ffi_type *ffi_value_type(CrustType *type)
+static CrustEvalAbi *prepare_abi(CrustEval *eval, CrustType *type, CrustLoc location)
 {
-    switch (type->kind) {
-    case CRUST_T_I8:
-        return &ffi_type_sint8;
-    case CRUST_T_U8:
-    case CRUST_T_BOOL:
-        return &ffi_type_uint8;
-    case CRUST_T_I16:
-        return &ffi_type_sint16;
-    case CRUST_T_U16:
-        return &ffi_type_uint16;
-    case CRUST_T_I32:
-        return &ffi_type_sint32;
-    case CRUST_T_U32:
-        return &ffi_type_uint32;
-    case CRUST_T_I64:
-    case CRUST_T_ISIZE:
-        return &ffi_type_sint64;
-    case CRUST_T_U64:
-    case CRUST_T_USIZE:
-        return &ffi_type_uint64;
-    case CRUST_T_UNIT:
-        return &ffi_type_void;
-    case CRUST_T_POINTER:
-    case CRUST_T_FUNCTION:
-        return &ffi_type_pointer;
-    default:
-        abort();
-    }
-}
-
-static EvalAbi *prepare_abi(CrustEval *eval, CrustType *type, CrustLoc location)
-{
-    EvalAbi *abi = crust_map_get(&eval->abis, (uintptr_t)type);
-    size_t index;
+    CrustEvalAbi *abi = crust_map_get(&eval->abis, (uintptr_t)type);
     if (abi != NULL)
         return abi;
-    if (type->param_count > UINT_MAX || type->param_count > SIZE_MAX / sizeof(ffi_type *)) {
-        (void)error_at(eval, location, "native parameter count exceeds the libffi limit");
-        return NULL;
-    }
-    abi = allocate(eval, sizeof(*abi), CRUST_ALIGNOF(EvalAbi));
-    if (abi == NULL)
-        return NULL;
-    abi->type = type;
-    if (type->param_count != 0) {
-        abi->arguments =
-            allocate(eval, type->param_count * sizeof(*abi->arguments), CRUST_ALIGNOF(ffi_type *));
-        if (abi->arguments == NULL)
-            return NULL;
-    }
-    for (index = 0; index < type->param_count; ++index)
-        abi->arguments[index] = ffi_value_type(type->params[index]);
-    if (ffi_prep_cif(&abi->cif, FFI_DEFAULT_ABI, (unsigned)type->param_count,
-                     ffi_value_type(type->base), abi->arguments) != FFI_OK) {
-        (void)error_at(eval, location, "libffi rejected the native function signature");
-        return NULL;
-    }
-    if (!crust_try_map_set(eval->context, &eval->abis, (uintptr_t)type, abi))
+    abi = crust_eval_native_abi(eval->context, type, location);
+    if (abi == NULL || !crust_try_map_set(eval->context, &eval->abis, (uintptr_t)type, abi))
         return NULL;
     return abi;
 }
@@ -307,7 +221,7 @@ void crust_eval_destroy(CrustEval *eval)
         return;
     for (declaration = eval->first; declaration != NULL; declaration = declaration->next) {
         if (declaration->closure != NULL) {
-            ffi_closure_free(declaration->closure);
+            crust_eval_native_closure_free(declaration->closure);
             declaration->closure = NULL;
         }
     }
@@ -358,8 +272,9 @@ static CrustName *native_link_name(CrustEval *eval, CrustDecl *declaration)
 static bool check_native_declaration(CrustEval *eval, CrustDecl *declaration, EvalNative *native)
 {
     if (is_function(native->prototype) != is_function(declaration) ||
-        (is_function(declaration) ? !native_type_equal(native->prototype->type, declaration->type)
-                                  : !crust_type_equal(native->prototype->type, declaration->type)))
+        (is_function(declaration)
+             ? !crust_eval_native_type_equal(native->prototype->type, declaration->type)
+             : !crust_type_equal(native->prototype->type, declaration->type)))
         return error_at(eval, declaration->loc, "conflicting native ABI for symbol");
     if (declaration->kind != CRUST_D_EXTERN && native->definition != NULL)
         return error_at(eval, declaration->loc, "duplicate native definition for symbol");
@@ -529,8 +444,8 @@ static bool prepare_statement(CrustEval *eval, EvalPlan *plan, CrustStmt *statem
         if (persistent) {
             void *storage = crust_map_get(&eval->roots, (uintptr_t)statement->symbol);
             if (storage == NULL) {
-                storage = allocate(eval, (size_t)statement->symbol->type->size,
-                                   statement->symbol->type->align);
+                storage = allocate_storage(eval, (size_t)statement->symbol->type->size,
+                                           statement->symbol->type->align, statement->loc);
                 if (storage == NULL || !crust_try_map_set(eval->context, &eval->roots,
                                                           (uintptr_t)statement->symbol, storage))
                     return false;
@@ -579,12 +494,10 @@ static EvalFrame *acquire_frame(CrustEval *eval, EvalPlan *plan)
     if (frame == NULL)
         return NULL;
     frame->plan = plan;
-    frame->storage = crust_arena_alloc(&eval->context->arena, plan->size == 0 ? 1 : plan->size,
-                                       CRUST_ALIGNOF(uint64_t));
-    if (frame->storage == NULL) {
-        (void)error_at(eval, no_location(), "evaluation frame allocation failed");
+    frame->storage = allocate_storage(eval, plan->size == 0 ? 1 : plan->size,
+                                      CRUST_ALIGNOF(uint64_t), no_location());
+    if (frame->storage == NULL)
         return NULL;
-    }
     return frame;
 }
 
@@ -698,7 +611,7 @@ static bool read_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
         result->aggregate = expression_storage(frame, expression);
         memcpy(result->aggregate, address, (size_t)expression->type->size);
     } else
-        result->bits = load_bits(address, expression->type);
+        result->bits = crust_eval_load_bits(address, expression->type);
     return true;
 }
 
@@ -849,20 +762,6 @@ static bool binary_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expr
     return true;
 }
 
-static bool call_native(CrustEval *eval, EvalAbi *abi, void *address, void *const *arguments,
-                        EvalValue *result)
-{
-    void (*function)(void);
-    ffi_arg returned = 0;
-    (void)eval;
-    memcpy(&function, &address, sizeof(function));
-    ffi_call(&abi->cif, function, &returned, (void **)arguments);
-    result->bits = (uint64_t)returned;
-    if (abi->type->base->kind != CRUST_T_UNIT)
-        result->bits &= type_mask(abi->type->base);
-    return true;
-}
-
 static bool evaluate_arguments(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
                                uint64_t *values, void **arguments)
 {
@@ -871,7 +770,7 @@ static bool evaluate_arguments(CrustEval *eval, EvalFrame *frame, CrustExpr *exp
     for (index = 0; index < expression->arg_count; ++index) {
         if (!eval_expression(eval, frame, expression->args[index], &value))
             return false;
-        values[index] = value.bits;
+        crust_eval_argument_bits(&values[index], value.bits);
         arguments[index] = &values[index];
     }
     return true;
@@ -913,7 +812,8 @@ static bool call_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expres
         if (prepared->abi == NULL)
             return false;
     }
-    return call_native(eval, prepared->abi, address, arguments, result);
+    result->bits = crust_eval_native_call(prepared->abi, address, arguments);
+    return true;
 }
 
 static bool name_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
@@ -1158,14 +1058,17 @@ static bool call_declaration(CrustEval *eval, EvalDecl *declaration, void *const
     size_t index = 0;
     bool success;
     void *address;
-    EvalAbi *abi;
+    CrustEvalAbi *abi;
     if (declaration->native != NULL && declaration->native->definition != NULL)
         declaration = declaration->native->definition;
     if (declaration->declaration->kind == CRUST_D_EXTERN) {
         if (!function_address(eval, declaration, &address))
             return false;
         abi = prepare_abi(eval, declaration->declaration->type, declaration->declaration->loc);
-        return abi != NULL && call_native(eval, abi, address, arguments, result);
+        if (abi == NULL)
+            return false;
+        result->bits = crust_eval_native_call(abi, address, arguments);
+        return true;
     }
     plan = function_plan(eval, declaration);
     if (plan == NULL)
@@ -1185,19 +1088,13 @@ static bool call_declaration(CrustEval *eval, EvalDecl *declaration, void *const
     return success;
 }
 
-static void native_callback(ffi_cif *cif, void *returned, void **arguments, void *user)
+static uint64_t native_callback(void *user, void **arguments)
 {
     EvalDecl *declaration = user;
     EvalValue result;
-    CrustType *type = declaration->declaration->type->base;
-    ffi_arg bits;
-    (void)cif;
     if (!call_declaration(declaration->eval, declaration, arguments, &result))
         fatal_error(declaration->eval);
-    if (type->kind != CRUST_T_UNIT) {
-        bits = (ffi_arg)extended_bits(result.bits, type);
-        memcpy(returned, &bits, sizeof(bits));
-    }
+    return result.bits;
 }
 
 static bool resolve_native_address(CrustEval *eval, EvalDecl *declaration, void **result)
@@ -1226,7 +1123,7 @@ static bool resolve_native_address(CrustEval *eval, EvalDecl *declaration, void 
 
 static bool function_address(CrustEval *eval, EvalDecl *declaration, void **result)
 {
-    EvalAbi *abi;
+    CrustEvalAbi *abi;
     void *address;
     if (declaration->native != NULL && declaration->native->definition != NULL)
         declaration = declaration->native->definition;
@@ -1244,17 +1141,12 @@ static bool function_address(CrustEval *eval, EvalDecl *declaration, void **resu
     abi = prepare_abi(eval, declaration->declaration->type, declaration->declaration->loc);
     if (abi == NULL)
         return false;
-    declaration->closure = ffi_closure_alloc(sizeof(ffi_closure), &address);
+    declaration->closure = crust_eval_native_closure(
+        eval->context, abi, native_callback, declaration, declaration->declaration->loc, &address);
     if (declaration->closure == NULL)
-        return error_at(eval, declaration->declaration->loc, "native callback allocation failed");
-    if (ffi_prep_closure_loc(declaration->closure, &abi->cif, native_callback, declaration,
-                             address) != FFI_OK) {
-        ffi_closure_free(declaration->closure);
-        declaration->closure = NULL;
-        return error_at(eval, declaration->declaration->loc, "libffi rejected the native callback");
-    }
+        return false;
     if (!crust_try_map_set(eval->context, &eval->functions, (uintptr_t)address, declaration)) {
-        ffi_closure_free(declaration->closure);
+        crust_eval_native_closure_free(declaration->closure);
         declaration->closure = NULL;
         return false;
     }
@@ -1355,7 +1247,7 @@ bool crust_eval_statement(CrustEval *eval, CrustStmt *statement, bool *returned,
     success = eval_statement(eval, frame, statement, &flow, &value);
     if (success && flow == EVAL_RETURN) {
         *returned = true;
-        memcpy(status, &value.bits, sizeof(*status));
+        *status = crust_eval_status_bits(value.bits);
     }
     release_frame(frame);
     return success;

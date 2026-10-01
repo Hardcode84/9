@@ -1,18 +1,11 @@
-#define _XOPEN_SOURCE 700
 #include "crust0_run.h"
+#include "run_platform.h"
 
-#include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>
 
-typedef struct NativeModule NativeModule;
-struct NativeModule {
-    void *handle;
-    NativeModule *next;
-};
-
 struct CrustRunState {
-    NativeModule *modules;
+    CrustNativeModule *modules;
     CrustEval *initial_eval;
 };
 
@@ -46,62 +39,12 @@ static bool run_error(CrustRun *run, const char *message)
 static bool resolve_native(void *user, CrustDecl *declaration, void **result)
 {
     CrustRun *run = user;
-    NativeModule *module;
-    void *address;
-    char message[512];
-    const char *name = declaration->link_name;
-    dlerror();
-    address = dlsym(RTLD_DEFAULT, name);
-    if (dlerror() != NULL)
-        address = NULL;
-    for (module = run->state->modules; module != NULL; module = module->next) {
-        void *candidate;
-        dlerror();
-        candidate = dlsym(module->handle, name);
-        if (dlerror() != NULL)
-            continue;
-        if (candidate != NULL && address != NULL && candidate != address) {
-            (void)snprintf(message, sizeof(message), "ambiguous native symbol '%s'", name);
-            crust_set_error(run->context, declaration->loc.source, declaration->loc.offset,
-                            message);
-            return false;
-        }
-        if (candidate != NULL)
-            address = candidate;
-    }
-    if (address == NULL) {
-        (void)snprintf(message, sizeof(message), "unresolved native symbol '%s'", name);
-        crust_set_error(run->context, declaration->loc.source, declaration->loc.offset, message);
-        return false;
-    }
-    *result = address;
-    return true;
+    return crust_run_native_resolve(run, run->state->modules, declaration, result);
 }
 
 bool crust_run_link(CrustRun *run, const char *path)
 {
-    NativeModule *module;
-    void *handle;
-    char message[512];
-    if (path == NULL || path[0] == '\0')
-        return run_error(run, "native path is empty");
-    if (strchr(path, '/') == NULL)
-        return run_error(run,
-                         "native path must contain '/' (use './' for a current-directory file)");
-    module = crust_try_alloc(run->context, sizeof(*module), CRUST_ALIGNOF(NativeModule));
-    if (module == NULL)
-        return false;
-    handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
-    if (handle == NULL) {
-        const char *error = dlerror();
-        (void)snprintf(message, sizeof(message), "cannot load native input '%s': %s", path,
-                       error == NULL ? "loader failure" : error);
-        return run_error(run, message);
-    }
-    module->handle = handle;
-    module->next = run->state->modules;
-    run->state->modules = module;
-    return true;
+    return crust_run_native_link(run, &run->state->modules, path);
 }
 
 bool crust_run_init(CrustRun *run, CrustContext *context, CrustSource *source, int32_t argc,
@@ -130,23 +73,12 @@ bool crust_run_init(CrustRun *run, CrustContext *context, CrustSource *source, i
 
 bool crust_run_destroy(CrustRun *run)
 {
-    NativeModule *module;
-    bool success = true;
+    bool success;
     if (run->state == NULL)
         return true;
     if (run->state->initial_eval != NULL)
         crust_eval_destroy(run->state->initial_eval);
-    for (module = run->state->modules; module != NULL; module = module->next) {
-        if (dlclose(module->handle) != 0) {
-            const char *error = dlerror();
-            char message[512];
-            (void)snprintf(message, sizeof(message), "cannot unload native input: %s",
-                           error == NULL ? "loader failure" : error);
-            (void)run_error(run, message);
-            crust_run_diagnostic(run->context);
-            success = false;
-        }
-    }
+    success = crust_run_native_destroy(run, run->state->modules);
     run->state = NULL;
     return success;
 }

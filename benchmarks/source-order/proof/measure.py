@@ -94,9 +94,14 @@ paths += interfaces + [
         "benchmarks/bootstrap/measure.py",
     )
 ]
-paths += [BUILD / p for p in ("core.o", "read.o", "check.o", "host.o")]
+paths += [
+    BUILD / p
+    for p in ("core.o", "read.o", "check.o", "profile_linux_x64.o", "host.o", "host_posix.o")
+]
 paths += (
-    sorted((ROOT / "src").glob("*.c"))
+    sorted((ROOT / "src").rglob("*.c"))
+    + sorted((ROOT / "src").rglob("*.h"))
+    + sorted((ROOT / "runtime").glob("*.c"))
     + sorted((ROOT / "include").glob("*.h"))
     + sorted((ROOT / "stages/c").glob("*.crs"))
 )

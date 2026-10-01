@@ -362,6 +362,55 @@ done:
     crust_context_destroy(&first);
 }
 
+static void function_constant_case(const char *text, bool accepted, const char *message)
+{
+    CrustContext first;
+    CrustContext second;
+    CrustContext consumer;
+    CrustSource a = source_text("const left:fn()->u8=first;"
+                                "extern fn first()->u8=\"same\";"
+                                "extern fn second()->u8=\"same\";",
+                                51);
+    CrustSource b = source_text(text, 51);
+    CrustUnit *ua;
+    CrustUnit *ub;
+    bool bound;
+    crust_context_init(&first, NULL);
+    crust_context_init(&second, NULL);
+    crust_context_init(&consumer, NULL);
+    if (!check_source(&first, &a, &ua) || !check_source(&second, &b, &ub)) {
+        check(false, "function constant providers resolve");
+        goto done;
+    }
+    ua->declarations->link_name = "shared_callback";
+    ub->declarations->link_name = "shared_callback";
+    check(crust_bind(&consumer, ua->declarations->name, ua->declarations),
+          "function constant facts bind");
+    bound = crust_bind(&consumer, ub->declarations->name, ub->declarations);
+    check(bound == accepted && (accepted || strstr(consumer.error, "conflicting facts") != NULL),
+          message);
+done:
+    crust_context_destroy(&consumer);
+    crust_context_destroy(&second);
+    crust_context_destroy(&first);
+}
+
+static void test_function_constant_facts(void)
+{
+    function_constant_case("const right:fn()->u8=second;"
+                           "extern fn first()->u8=\"same\";"
+                           "extern fn second()->u8=\"same\";",
+                           true, "native aliases are equal function constant values");
+    function_constant_case("const right:fn()->u8=second;"
+                           "extern fn first()->u8=\"same\";"
+                           "extern fn second()->u8=\"different\";",
+                           false, "different native symbols are unequal function constant values");
+    function_constant_case("const right:fn()->u16=second;"
+                           "extern fn first()->u8=\"same\";"
+                           "extern fn second()->u16=\"same\";",
+                           false, "native aliases cannot change the constant function signature");
+}
+
 static void test_invalid_bound_layout(void)
 {
     CrustContext consumer;
@@ -627,6 +676,7 @@ int main(void)
     test_resource_bounds();
     test_identity_facts();
     test_constant_facts();
+    test_function_constant_facts();
     test_invalid_bound_layout();
     test_root_checks();
     test_unit_checks();

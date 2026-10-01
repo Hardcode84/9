@@ -29,7 +29,9 @@ def main():
         "core.o",
         "read.o",
         "check.o",
+        "profile_linux_x64.o",
         "host.o",
+        "host_posix.o",
         "libcrust0_host.a",
     ):
         if not (build / name).is_file():
@@ -192,7 +194,17 @@ def main():
             *strict,
             "-Iinclude",
             work / "runner.c",
-            *[build / item for item in ("core.o", "read.o", "check.o", "host.o")],
+            *[
+                build / item
+                for item in (
+                    "core.o",
+                    "read.o",
+                    "check.o",
+                    "profile_linux_x64.o",
+                    "host.o",
+                    "host_posix.o",
+                )
+            ],
             "-rdynamic",
             "-ldl",
             "-lffi",
@@ -217,7 +229,9 @@ def main():
             "src/core.c",
             "src/read.c",
             "src/check.c",
+            "src/profile_linux_x64.c",
             "runtime/host.c",
+            "runtime/host_posix.c",
             "-rdynamic",
             "-ldl",
             "-lffi",

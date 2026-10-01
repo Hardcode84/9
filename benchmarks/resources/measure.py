@@ -228,7 +228,9 @@ def main():
     runner = Path("build/crust")
     dso = Path("build/crust-resource-library.so")
     inputs = [
-        *Path("src").glob("*.c"),
+        *Path("src").rglob("*.c"),
+        *Path("src").rglob("*.h"),
+        *Path("runtime").glob("*.c"),
         *Path("include").glob("*.h"),
         *Path("stages/resources").glob("*.crs"),
         *Path("stages/reader").glob("*.crs"),

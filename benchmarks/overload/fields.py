@@ -73,7 +73,9 @@ def main():
         *sorted(Path("stages/overload").glob("*.crs")),
         *sorted(Path("stages/reader").glob("*.crs")),
         *sorted(Path("stages/c").glob("*.crs")),
-        *sorted(Path("src").glob("*.c")),
+        *sorted(Path("src").rglob("*.c")),
+        *sorted(Path("src").rglob("*.h")),
+        *sorted(Path("runtime").glob("*.c")),
         *sorted(Path("include").glob("*.h")),
         *sorted(Path("api").glob("*.crs")),
     ]

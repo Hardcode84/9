@@ -166,8 +166,13 @@ def measure(command):
 
 def compiler_sources():
     paths = [Path("Makefile")]
-    for directory, pattern in (("src", "*.c"), ("include", "*.h"), ("runtime", "*.c")):
-        paths.extend(sorted(Path(directory).glob(pattern)))
+    for directory, pattern in (
+        ("src", "*.c"),
+        ("src", "*.h"),
+        ("include", "*.h"),
+        ("runtime", "*.c"),
+    ):
+        paths.extend(sorted(Path(directory).rglob(pattern)))
     return {str(path): sha256(path) for path in paths}
 
 

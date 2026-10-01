@@ -40,10 +40,11 @@ def compilation_root(target, library, allocator_checks=False):
     release = ""
     if allocator_checks:
         prefix += """
+extern fn target_malloc(size:usize)->*u8 = "malloc";
 record AllocationCount { allocated:usize; released:usize; }
 fn target_allocate(user:*u8, size:usize)->*u8 {
     var counts:*AllocationCount = user as *AllocationCount;
-    var result:*u8 = crust0_host_alloc(size, 8usize);
+    var result:*u8 = target_malloc(size);
     if result != null(*u8) { (*counts).allocated = (*counts).allocated + 1usize; }
     return result;
 }

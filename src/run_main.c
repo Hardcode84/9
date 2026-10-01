@@ -1,43 +1,13 @@
-#define _XOPEN_SOURCE 700
 #include "crust0_host.h"
 #include "crust0_run.h"
+#include "run_platform.h"
 
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #include "prelude.inc"
-
-static char *root_path(CrustContext *context, const char *path)
-{
-    char *directory;
-    char *result;
-    size_t prefix;
-    size_t suffix = strlen(path);
-    if (path[0] == '/')
-        return crust_try_copy_string(context, (const unsigned char *)path, suffix);
-    directory = getcwd(NULL, 0);
-    if (directory == NULL) {
-        crust_set_error(context, NULL, 0, "cannot read working directory");
-        return NULL;
-    }
-    prefix = strlen(directory);
-    if (suffix > SIZE_MAX - prefix - 2) {
-        free(directory);
-        crust_set_error(context, NULL, 0, "root path is too long");
-        return NULL;
-    }
-    result = crust_try_alloc(context, prefix + suffix + 2, 1);
-    if (result != NULL) {
-        memcpy(result, directory, prefix);
-        result[prefix] = '/';
-        memcpy(result + prefix + 1, path, suffix + 1);
-    }
-    free(directory);
-    return result;
-}
 
 static bool installed_program(CrustContext *context)
 {
@@ -103,7 +73,7 @@ static bool prepare_installed_program(CrustRun *run)
 static bool read_root(CrustContext *context, CrustSource *source, const char *path,
                       unsigned char **bytes)
 {
-    source->path = root_path(context, path);
+    source->path = crust_run_root_path(context, path);
     if (source->path == NULL)
         return false;
     if (crust0_host_read_file(source->path, bytes, &source->size) != 0) {

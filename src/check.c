@@ -229,10 +229,9 @@ static bool constant_equal(CrustContext *ctx, CrustExpr *a, CrustExpr *b, unsign
 
 static bool constant_function_equal(CrustExpr *a, CrustExpr *b)
 {
-    return a->symbol != NULL && b->symbol != NULL &&
-           a->symbol->decl->unit_identity == b->symbol->decl->unit_identity &&
-           a->symbol->decl->identity == b->symbol->decl->identity &&
-           a->symbol->decl->link_name != NULL && b->symbol->decl->link_name != NULL &&
+    /* Native aliases denote the same callable value. */
+    return a->symbol != NULL && b->symbol != NULL && a->symbol->decl->link_name != NULL &&
+           b->symbol->decl->link_name != NULL &&
            strcmp(a->symbol->decl->link_name, b->symbol->decl->link_name) == 0;
 }
 

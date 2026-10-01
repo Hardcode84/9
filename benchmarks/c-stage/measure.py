@@ -84,7 +84,7 @@ def sources():
         ("api", "*.crs"),
         ("stages/c", "*.crs"),
     ):
-        paths.extend(sorted(Path(directory).glob(pattern)))
+        paths.extend(sorted(Path(directory).rglob(pattern)))
     return {str(path): BASE.sha256(path) for path in paths}
 
 

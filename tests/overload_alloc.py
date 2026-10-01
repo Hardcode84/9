@@ -175,7 +175,9 @@ def main():
                 "src/core.c",
                 "src/read.c",
                 "src/check.c",
+                "src/profile_linux_x64.c",
                 "runtime/host.c",
+                "runtime/host_posix.c",
                 "-o",
                 executable,
             ]

@@ -75,19 +75,21 @@ The C implementation uses `-std=c99 -pedantic-errors` and treats warnings as
 errors. Its host operations use the POSIX library; it does not use GNU C syntax.
 The build checks the selected host representation. It rejects other hosts.
 
-The implementation has 6,621 physical C and header lines, including comments
-and blank lines. The reader, checker, storage code, and core header use 3,165
-lines. The assembly backend and its header use 1,446 lines. The evaluator and
-its header use 1,096 lines. The root runner and its header use 446 lines. The
-standalone driver and host interfaces use 468 lines.
-Use `wc -l src/*.c include/*.h runtime/*.c` to repeat the count.
+Count the current implementation with
+`git ls-files src include runtime | xargs wc -l`. This includes comments, blank
+lines, and private platform headers. Tests, examples, generated files, and external
+libraries are separate. The prelude generator embeds the installed API and
+host helper sources. The native bridge links libffi; ordinary target programs
+do not need that library.
 
-Tests, examples, and generated files are separate. The installed Crust host
-helpers use 72 lines. The 31-line prelude generator makes a 474-line C byte
-table from installed API and helper sources. The native bridge links the
-external libffi library; the tested version is 3.4.6. Its implementation is
-not included in the 6,621-line count. No libffi dependency enters ordinary
-target programs.
+The Makefile selects the `linux_x64` profile and rejects other profile names.
+`src/profile_linux_x64.c` checks the required host representation.
+`src/driver_posix.c` publishes output files. `src/run_posix.c` captures root
+paths and manages loaded native code. `src/eval_ffi_linux_x64.c` implements
+native calls and callbacks. `runtime/host_posix.c` provides aligned allocation.
+The build selects `src/linux_x64/eval_storage.h` for scalar memory access without
+an extra call on each access. These private interfaces use portable C99 types.
+Compiler policy and evaluation do not include OS or libffi headers.
 
 Each compiler context owns an arena. Arena blocks are normally 64 KiB. A larger
 request receives a separate larger block. Allocation sizes and alignment
@@ -307,7 +309,10 @@ replacement-stage programs. The integer expectations use Python mathematical
 integers. Trap tests require abnormal process termination. Allocation tests
 fail every arena allocation point in a complete compilation and check release.
 
-The C suites pass 21,904 checks under GCC AddressSanitizer and
+The following counts describe the recorded revisions, not the current checkout.
+Run the commands above to check the current sources.
+
+The recorded C suites pass 21,904 checks under GCC AddressSanitizer and
 UndefinedBehaviorSanitizer. The assembly integration suite passes 398 process
 checks. The C backend passes 348. The integration cases include
 10,220 integer comparisons, 65 required traps, 260 public API layout comparisons,
@@ -342,7 +347,7 @@ UBSAN_OPTIONS=halt_on_error=1 make CC=gcc BUILD=build/sanitize \
   LDFLAGS='-fsanitize=address,undefined' all c-stage check-stage
 ```
 
-LeakSanitizer cannot run under the tracing environment used for these runs.
+LeakSanitizer could not run under the tracing environment used for those runs.
 The allocation-failure tests separately count live arena blocks. This is not
 a general replacement for leak detection. The parallel witness also runs under
 ThreadSanitizer. The
@@ -351,9 +356,11 @@ records the exact command, source hashes, and 75 passing checks with no report.
 
 The [source-runner results](source-runner.md#parallel-work-reuse-and-measurements)
 include root capture and execution through complete C and symbol output.
-All three inputs pass the C-speed gate. Final target GCC compilation and
-linking are excluded. The backend shared library is an explicit prepared
-input. The report records its separate rebuild cost.
+All three inputs pass that report's prepared-stage comparison against GCC.
+Final target GCC compilation and linking are excluded. The backend shared
+library is an explicit prepared input. The report records one separate rebuild
+observation. These historical results do not establish the full specification
+performance gate or the speed of the current checkout.
 
 The assembly measurements below precede the source-order runner. Their source
 hashes identify that implementation. The

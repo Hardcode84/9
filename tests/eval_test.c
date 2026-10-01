@@ -70,6 +70,14 @@ static void test_release(void *user, void *allocation)
     free(allocation);
 }
 
+static void *poison_allocate(void *user, size_t size)
+{
+    void *allocation = test_allocate(user, size);
+    if (allocation != NULL)
+        memset(allocation, 0xa5, size);
+    return allocation;
+}
+
 static bool resolve_native(void *user, CrustDecl *declaration, void **address)
 {
     Resolver *resolver = user;
@@ -424,6 +432,69 @@ static void test_root(void)
     }
     crust_eval_destroy(eval);
     crust_context_destroy(&context);
+}
+
+static void test_root_storage(void)
+{
+    const char *text = "var bytes:[u8;1024]=uninit;&bytes;";
+    CrustSource source = source_text(text);
+    CrustContext context;
+    CrustRootScope scope = {{NULL, 0, 0}, NULL};
+    CrustAction action;
+    AllocatorState state = {false, 0, 0, 0};
+    CrustAllocator allocator = {&state, poison_allocate, test_release};
+    CrustEval *eval;
+    unsigned char *storage = NULL;
+    size_t begin;
+    size_t index;
+    bool unchanged = true;
+    bool returned = false;
+    int32_t status = 0;
+    crust_context_init(&context, &allocator);
+    eval = crust_eval_create(&context, NULL);
+    if (eval == NULL || !crust_read_one(&context, &source, 0, source.size, &action) ||
+        !crust_check_root(&context, &scope, action.statement) ||
+        !crust_eval_statement(eval, action.statement, &returned, &status))
+        abort();
+    begin = action.end;
+    if (!crust_read_one(&context, &source, begin, source.size, &action) ||
+        !crust_check_root(&context, &scope, action.statement) ||
+        !crust_eval_expression(eval, action.statement->expr, &storage))
+        abort();
+    for (index = 0; index < 1024; ++index)
+        unchanged = unchanged && storage[index] == 0xa5;
+    check(unchanged, "root uninit storage does not overwrite allocator bytes");
+    crust_eval_destroy(eval);
+    crust_context_destroy(&context);
+    check(state.live == 0, "root uninit storage is released with its context");
+}
+
+static void test_root_storage_failure(void)
+{
+    CrustSource source = source_text("var bytes:[u8;1000000]=uninit;");
+    CrustContext context;
+    CrustRootScope scope = {{NULL, 0, 0}, NULL};
+    CrustAction action;
+    AllocatorState state = {false, 0, 0, 0};
+    CrustAllocator allocator = {&state, test_allocate, test_release};
+    CrustEval *eval;
+    bool returned = false;
+    int32_t status = 0;
+    crust_context_init(&context, &allocator);
+    eval = crust_eval_create(&context, NULL);
+    if (eval == NULL || !crust_read_one(&context, &source, 0, source.size, &action) ||
+        !crust_check_root(&context, &scope, action.statement))
+        abort();
+    state.fail = true;
+    check(!crust_eval_statement(eval, action.statement, &returned, &status) &&
+              strstr(context.error, "allocation") != NULL && context.failure == NULL,
+          "root storage allocation failure retains a diagnostic");
+    state.fail = false;
+    check(crust_eval_statement(eval, action.statement, &returned, &status),
+          "root storage allocation can retry after resource recovery");
+    crust_eval_destroy(eval);
+    crust_context_destroy(&context);
+    check(state.live == 0, "failed root storage preparation releases all arena blocks");
 }
 
 static uint64_t width_mask(unsigned width)
@@ -787,6 +858,8 @@ int main(void)
     test_native_identity();
     test_callback_types();
     test_root();
+    test_root_storage();
+    test_root_storage_failure();
     test_arithmetic();
     test_conversions_and_comparisons();
     test_registration_failures();

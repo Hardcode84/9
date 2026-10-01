@@ -105,7 +105,7 @@ def source_hashes():
         ("stages", "*.crs"),
         ("stages/c", "*.crs"),
     ):
-        paths.extend(sorted((ROOT / directory).glob(pattern)))
+        paths.extend(sorted((ROOT / directory).rglob(pattern)))
     return {str(path.relative_to(ROOT)): BASE.sha256(path) for path in paths}
 
 

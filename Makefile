@@ -6,9 +6,14 @@ CFLAGS ?= -O2 -g
 CPPFLAGS += -Iinclude
 STRICT = -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla
 BUILD ?= build
-CORE = $(BUILD)/core.o $(BUILD)/read.o $(BUILD)/check.o
+PROFILE ?= linux_x64
+ifneq ($(PROFILE),linux_x64)
+$(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64)
+endif
+CORE = $(BUILD)/core.o $(BUILD)/read.o $(BUILD)/check.o $(BUILD)/profile_$(PROFILE).o
 BACKEND = $(BUILD)/x64.o
-RUNNER = $(BUILD)/eval.o $(BUILD)/run.o
+RUNNER = $(BUILD)/eval.o $(BUILD)/eval_ffi_$(PROFILE).o $(BUILD)/run.o $(BUILD)/run_posix.o
+HOST = $(BUILD)/host.o $(BUILD)/host_posix.o
 PRELUDE = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/host.crs
 C_LIBRARY = api/crust0.crs api/crust0_host.crs api/crust0_stage.crs stages/c/model.crs stages/c/base.crs stages/c/types.crs stages/c/emit.crs stages/c/driver.crs stages/c/program.crs
 C_STAGE = $(C_LIBRARY) stages/c/main.crs
@@ -33,10 +38,10 @@ $(BUILD):
 $(BUILD)/%.o: src/%.c include/crust0.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@
 
-$(BUILD)/host.o: runtime/host.c include/crust0_host.h | $(BUILD)
+$(HOST): $(BUILD)/%.o: runtime/%.c include/crust0_host.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@
 
-$(BUILD)/crust0: $(CORE) $(BACKEND) $(BUILD)/driver.o $(BUILD)/host.o
+$(BUILD)/crust0: $(CORE) $(BACKEND) $(BUILD)/driver.o $(BUILD)/driver_posix.o $(HOST)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
 $(BUILD)/prelude.inc: tools/prelude.py $(PRELUDE) | $(BUILD)
@@ -44,8 +49,9 @@ $(BUILD)/prelude.inc: tools/prelude.py $(PRELUDE) | $(BUILD)
 
 $(BUILD)/run_main.o: CPPFLAGS += -I$(BUILD)
 $(BUILD)/run_main.o: $(BUILD)/prelude.inc
+$(BUILD)/eval.o: CPPFLAGS += -Isrc/$(PROFILE)
 
-$(BUILD)/crust: $(CORE) $(BACKEND) $(RUNNER) $(BUILD)/run_main.o $(BUILD)/host.o
+$(BUILD)/crust: $(CORE) $(BACKEND) $(RUNNER) $(BUILD)/run_main.o $(HOST)
 	$(CC) $(CFLAGS) $^ -rdynamic $(LDFLAGS) -ldl -lffi -o $@
 
 $(BUILD)/libcrust0_run.a: $(RUNNER)
@@ -54,7 +60,7 @@ $(BUILD)/libcrust0_run.a: $(RUNNER)
 $(BUILD)/libcrust0.a: $(CORE) $(BACKEND)
 	$(AR) rcs $@ $^
 
-$(BUILD)/libcrust0_host.a: $(BUILD)/host.o
+$(BUILD)/libcrust0_host.a: $(HOST)
 	$(AR) rcs $@ $^
 
 $(BUILD)/crust-c-seed.s: $(BUILD)/crust0 $(C_STAGE)
@@ -88,8 +94,8 @@ check-highlight: all highlight-stage
 vscode: highlight-stage
 	python3 editors/vscode/package.py --binary $(BUILD)/crust-highlight --output $(BUILD)/crust-vscode.vsix
 
-check-vscode: highlight-stage
-	CRUST_HIGHLIGHT=$(abspath $(BUILD))/crust-highlight bun test editors/vscode
+check-vscode: highlight-stage $(BUILD)/crust
+	CRUST_HIGHLIGHT=$(abspath $(BUILD))/crust-highlight CRUST_LAUNCHER=$(abspath $(BUILD))/crust bun test ./editors/vscode
 
 $(BUILD)/crust-resource: $(BUILD)/crust-c $(RESOURCE_LIBRARY) stages/resources/main.crs
 	$< -o $@ $(RESOURCE_LIBRARY) stages/resources/main.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
@@ -141,7 +147,7 @@ witness: $(BUILD)/intrusive $(BUILD)/intrusive-c
 $(BUILD)/%_test: tests/%_test.c $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -pthread -o $@
 
-$(BUILD)/eval_test: tests/eval_test.c tests/native.c $(BUILD)/eval.o $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
+$(BUILD)/eval_test: tests/eval_test.c tests/native.c $(BUILD)/eval.o $(BUILD)/eval_ffi_$(PROFILE).o $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ -rdynamic $(LDFLAGS) -ldl -lffi -o $@
 
 api:

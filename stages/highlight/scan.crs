@@ -1,0 +1,165 @@
+// Return the length of a valid UTF-8 scalar, or zero for an invalid byte sequence.
+fn hl_utf8(bytes:*u8, begin:usize, end:usize)->usize {
+    var first:u8 = bytes[begin];
+    if first < 128u8 { return 1usize; }
+    var size:usize = 0usize;
+    if first >= 194u8 && first <= 223u8 { size = 2usize; }
+    if first >= 224u8 && first <= 239u8 { size = 3usize; }
+    if first >= 240u8 && first <= 244u8 { size = 4usize; }
+    if size == 0usize || size > end-begin { return 0usize; }
+    var index:usize = 1usize;
+    while index < size {
+        if bytes[begin+index] < 128u8 || bytes[begin+index] > 191u8 { return 0usize; }
+        index = index+1usize;
+    }
+    var second:u8 = bytes[begin+1usize];
+    if first == 224u8 && second < 160u8 { return 0usize; }
+    if first == 237u8 && second > 159u8 { return 0usize; }
+    if first == 240u8 && second < 144u8 { return 0usize; }
+    if first == 244u8 && second > 143u8 { return 0usize; }
+    return size;
+}
+
+fn hl_space(byte:u8)->bool {
+    return byte == 32u8 || byte == 9u8 || byte == 10u8 || byte == 13u8;
+}
+
+fn hl_string(lexer:*HlLexer)->unit {
+    var valid:bool = true;
+    while (*lexer).cursor < (*lexer).end {
+        var byte:u8 = (*lexer).bytes[(*lexer).cursor];
+        if byte == 10u8 || byte == 13u8 { break; }
+        (*lexer).cursor = (*lexer).cursor+1usize;
+        if byte == 34u8 {
+            if valid { (*lexer).span.kind = HL_STRING; }
+            return;
+        }
+        if byte == 0u8 { valid = false; }
+        if byte == 92u8 {
+            if (*lexer).cursor == (*lexer).end { break; }
+            byte = (*lexer).bytes[(*lexer).cursor];
+            if byte == 10u8 || byte == 13u8 { break; }
+            (*lexer).cursor = (*lexer).cursor+1usize;
+            if byte == 120u8 {
+                if (*lexer).end-(*lexer).cursor >= 2usize &&
+                   rr_hex((*lexer).bytes[(*lexer).cursor]) >= 0i32 &&
+                   rr_hex((*lexer).bytes[(*lexer).cursor+1usize]) >= 0i32 {
+                    (*lexer).cursor = (*lexer).cursor+2usize;
+                } else { valid = false; }
+            } else {
+                if byte != 92u8 && byte != 34u8 && byte != 110u8 && byte != 114u8 &&
+                   byte != 116u8 && byte != 48u8 { valid = false; }
+            }
+        }
+    }
+}
+
+fn hl_number_valid(bytes:*u8, begin:usize, end:usize)->bool {
+    var base:u64 = 10u64;
+    if end-begin >= 2usize && bytes[begin] == 48u8 && bytes[begin+1usize] == 120u8 {
+        base = 16u64; begin = begin+2usize;
+    }
+    var cursor:usize = begin;
+    var value:u64 = 0u64;
+    while cursor < end {
+        var digit:i32 = rr_hex(bytes[cursor]);
+        if digit < 0i32 || digit as u64 >= base { break; }
+        if value > ((~0u64)-digit as u64)/base { return false; }
+        value = value*base+digit as u64;
+        cursor = cursor+1usize;
+    }
+    if cursor == begin { return false; }
+    if cursor == end && base == 10u64 { return true; }
+    var suffix:*CrustReaderKeyword = rr_keyword(bytes+cursor as isize, end-cursor);
+    return suffix != null(*CrustReaderKeyword) && (*suffix).kind == RR_TYPE && (*suffix).type <= CRUST_T_USIZE;
+}
+
+fn hl_name(lexer:*HlLexer)->unit {
+    while (*lexer).cursor < (*lexer).end && rr_name_continue((*lexer).bytes[(*lexer).cursor]) {
+        (*lexer).cursor = (*lexer).cursor+1usize;
+    }
+    var word:*CrustReaderKeyword = rr_keyword((*lexer).bytes+(*lexer).span.begin as isize,
+                                             (*lexer).cursor-(*lexer).span.begin);
+    (*lexer).token = RR_NAME;
+    (*lexer).span.kind = HL_VARIABLE;
+    if word != null(*CrustReaderKeyword) {
+        (*lexer).token = (*word).kind;
+        (*lexer).span.kind = HL_KEYWORD;
+        if (*word).kind == RR_TYPE { (*lexer).span.kind = HL_TYPE; }
+        return;
+    }
+    if (*lexer).previous == RR_FN { (*lexer).span.kind = HL_FUNCTION; }
+    if (*lexer).previous == RR_RECORD { (*lexer).span.kind = HL_STRUCT; }
+    if (*lexer).previous == 46u32 { (*lexer).span.kind = HL_PROPERTY; }
+    if (*lexer).previous == RR_FN || (*lexer).previous == RR_RECORD ||
+       (*lexer).previous == RR_VAR || (*lexer).previous == RR_CONST {
+        (*lexer).span.modifiers = HL_DECLARATION;
+    }
+    if (*lexer).previous == RR_CONST {
+        (*lexer).span.modifiers = (*lexer).span.modifiers | HL_READONLY;
+    }
+}
+
+fn hl_punctuation(lexer:*HlLexer, byte:u8)->unit {
+    var punctuation:*u8 = "{}()[]:;,.=+-*/%&|^!~<>";
+    var index:usize = 0usize;
+    while punctuation[index] != 0u8 {
+        if punctuation[index] == byte { (*lexer).span.kind = HL_OPERATOR; break; }
+        index = index+1usize;
+    }
+    if (*lexer).cursor == (*lexer).end { return; }
+    var second:u8 = (*lexer).bytes[(*lexer).cursor];
+    if (byte == 45u8 && second == 62u8) ||
+       ((byte == 61u8 || byte == 33u8 || byte == 60u8 || byte == 62u8) && second == 61u8) ||
+       ((byte == 60u8 || byte == 62u8 || byte == 38u8 || byte == 124u8) && second == byte) {
+        (*lexer).cursor = (*lexer).cursor+1usize;
+    }
+}
+
+fn hl_token(lexer:*HlLexer)->unit {
+    var byte:u8 = (*lexer).bytes[(*lexer).cursor];
+    (*lexer).cursor = (*lexer).cursor+1usize;
+    (*lexer).token = byte as u32;
+    if rr_name_start(byte) { hl_name(lexer); return; }
+    if byte >= 48u8 && byte <= 57u8 {
+        while (*lexer).cursor < (*lexer).end && rr_name_continue((*lexer).bytes[(*lexer).cursor]) {
+            (*lexer).cursor = (*lexer).cursor+1usize;
+        }
+        if hl_number_valid((*lexer).bytes, (*lexer).span.begin, (*lexer).cursor) { (*lexer).span.kind = HL_NUMBER; }
+        return;
+    }
+    if byte == 34u8 { hl_string(lexer); return; }
+    if byte == 47u8 && (*lexer).cursor < (*lexer).end && (*lexer).bytes[(*lexer).cursor] == 47u8 {
+        (*lexer).span.kind = HL_COMMENT;
+        while (*lexer).cursor < (*lexer).end && (*lexer).bytes[(*lexer).cursor] != 10u8 {
+            if (*lexer).bytes[(*lexer).cursor] == 0u8 { (*lexer).span.kind = HL_INVALID; }
+            (*lexer).cursor = (*lexer).cursor+1usize;
+        }
+        (*lexer).token = (*lexer).previous;
+        return;
+    }
+    if byte >= 128u8 {
+        var size:usize = hl_utf8((*lexer).bytes, (*lexer).span.begin, (*lexer).end);
+        if size != 0usize { (*lexer).cursor = (*lexer).span.begin+size; }
+        return;
+    }
+    hl_punctuation(lexer, byte);
+}
+
+// Classify seed syntax. Invalid tokens recover at their end or the next line.
+fn hl_seed(result:*HlResult, begin:usize, end:usize, user:*u8)->bool {
+    var lexer:HlLexer = make HlLexer {
+        bytes:(*(*result).source).bytes, cursor:begin, end:end, previous:RR_EOF,
+        token:RR_EOF, span:make HlSpan {begin:begin,end:begin,kind:HL_INVALID,modifiers:0u32}
+    };
+    while lexer.cursor < end {
+        if hl_space(lexer.bytes[lexer.cursor]) { lexer.cursor = lexer.cursor+1usize; }
+        else {
+            lexer.span = make HlSpan {begin:lexer.cursor,end:lexer.cursor,kind:HL_INVALID,modifiers:0u32};
+            hl_token(&lexer);
+            if !hl_add(result, lexer.span.begin, lexer.cursor, lexer.span.kind, lexer.span.modifiers) { return false; }
+            lexer.previous = lexer.token;
+        }
+    }
+    return true;
+}

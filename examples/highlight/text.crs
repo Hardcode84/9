@@ -1,0 +1,34 @@
+// Classify the line language used by the reader-switch example.
+fn text_highlight(result:*HlResult, begin:usize, end:usize, user:*u8)->bool {
+    var bytes:*u8 = (*(*result).source).bytes;
+    while begin < end {
+        if bytes[begin] == 10u8 { begin = begin+1usize; }
+        else {
+            var finish:usize = begin;
+            while finish < end && bytes[finish] != 10u8 { finish = finish+1usize; }
+            if finish-begin >= 2usize && bytes[begin] == 62u8 && bytes[begin+1usize] == 32u8 {
+                if !hl_add(result, begin, begin+1usize, HL_OPERATOR, 0u32) { return false; }
+                if finish > begin+2usize && !hl_add(result, begin+2usize, finish, HL_STRING, 0u32) { return false; }
+            } else {
+                if !hl_add(result, begin, finish, HL_INVALID, 0u32) { return false; }
+            }
+            begin = finish;
+        }
+    }
+    return true;
+}
+
+// This profile requires the text section to start at the first line with '> '.
+fn reader_switch_highlight(result:*HlResult, begin:usize, end:usize, user:*u8)->bool {
+    var bytes:*u8 = (*(*result).source).bytes;
+    var split:usize = begin;
+    while split < end {
+        if end-split >= 2usize && bytes[split] == 62u8 && bytes[split+1usize] == 32u8 {
+            return hl_region(result, begin, split, hl_seed, null(*u8)) &&
+                   hl_region(result, split, end, text_highlight, null(*u8));
+        }
+        while split < end && bytes[split] != 10u8 { split = split+1usize; }
+        if split < end { split = split+1usize; }
+    }
+    return hl_region(result, begin, end, null(fn(*HlResult,usize,usize,*u8)->bool), null(*u8));
+}

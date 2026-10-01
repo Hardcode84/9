@@ -1,0 +1,120 @@
+record HlTestAllocator { calls:usize; fail_at:usize; live:usize; }
+
+fn ht_allocate(user:*u8, size:usize)->*u8 {
+    var state:*HlTestAllocator = user as *HlTestAllocator;
+    (*state).calls = (*state).calls+1usize;
+    if (*state).calls == (*state).fail_at { return null(*u8); }
+    var memory:*u8 = crust0_host_alloc(size, 16usize);
+    if memory != null(*u8) { (*state).live = (*state).live+1usize; }
+    return memory;
+}
+
+fn ht_release(user:*u8, memory:*u8)->unit {
+    var state:*HlTestAllocator = user as *HlTestAllocator;
+    if (*state).live == 0usize { trap; }
+    (*state).live = (*state).live-1usize;
+    crust0_host_free(memory);
+}
+
+fn ht_allocation(source:*CrustSource, fail_at:usize, calls:*usize)->bool {
+    var state:HlTestAllocator = make HlTestAllocator {calls:0usize,fail_at:fail_at,live:0usize};
+    var allocator:CrustAllocator = make CrustAllocator {user:&state as *u8,allocate:ht_allocate,release:ht_release};
+    var context:CrustContext = uninit;
+    crust_context_init(&context, &allocator);
+    var result:HlResult = uninit;
+    hl_init(&result, &context, source);
+    var text:HlText = make HlText {bytes:null(*u8),size:0usize,capacity:0usize};
+    var success:bool = hl_region(&result, 0usize, (*source).size, hl_seed, null(*u8));
+    if success { success = hl_html(&result, &text) && hl_json(&result, &text); }
+    var valid:bool = success && fail_at == 0usize && !result.failed;
+    if fail_at != 0usize { valid = !success && result.failed && context.error_count != 0usize; }
+    *calls = state.calls;
+    crust_context_destroy(&context);
+    return valid && state.live == 0usize;
+}
+
+fn ht_escaped_service(result:*HlResult, begin:usize, end:usize, user:*u8)->bool {
+    return hl_add(result, 0usize, 1usize, HL_STRING, 0u32);
+}
+
+fn ht_failed_service(result:*HlResult, begin:usize, end:usize, user:*u8)->bool {
+    return false;
+}
+
+fn ht_contract(mode:u32, source:*CrustSource)->bool {
+    var context:CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var result:HlResult = uninit;
+    hl_init(&result, &context, source);
+    var accepted:bool = true;
+    if mode == 0u32 { accepted = hl_add(&result, 0usize, 0usize, HL_STRING, 0u32); }
+    if mode == 1u32 { accepted = hl_add(&result, 0usize, (*source).size+1usize, HL_STRING, 0u32); }
+    if mode == 2u32 { accepted = hl_add(&result, 0usize, 1usize, 12u32, 0u32); }
+    if mode == 3u32 { accepted = hl_add(&result, 0usize, 1usize, HL_STRING, 4u32); }
+    if mode == 4u32 {
+        hl_add(&result, 1usize, 3usize, HL_STRING, 0u32);
+        accepted = hl_add(&result, 2usize, 4usize, HL_STRING, 0u32);
+    }
+    if mode == 5u32 {
+        accepted = hl_region(&result, 2usize, 4usize, ht_escaped_service, null(*u8));
+    }
+    if mode == 6u32 {
+        accepted = hl_region(&result, 0usize, (*source).size, ht_failed_service, null(*u8));
+    }
+    if mode == 7u32 { accepted = hl_region(&result, 2usize, 1usize, hl_seed, null(*u8)); }
+    if mode == 8u32 { accepted = hl_region(&result, 0usize, (*source).size+1usize, hl_seed, null(*u8)); }
+    var valid:bool = !accepted && result.failed && context.error_count == 1usize;
+    var count:usize = result.count;
+    valid = valid && !hl_add(&result, 4usize, 5usize, HL_STRING, 0u32) && result.count == count;
+    crust_context_destroy(&context);
+    return valid;
+}
+
+fn ht_compare(source:*CrustSource)->bool {
+    var context:CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var result:HlResult = uninit;
+    hl_init(&result, &context, source);
+    var valid:bool = hl_region(&result, 0usize, (*source).size, hl_seed, null(*u8));
+    var reader:CrustReader = uninit;
+    valid = valid && rr_init(&reader, &context, source, 0usize, (*source).size, null(*CrustReaderHooks));
+    var index:usize = 0usize;
+    while valid && reader.token.kind != RR_EOF {
+        while index < result.count && result.spans[index].kind == HL_COMMENT { index = index+1usize; }
+        if index == result.count { valid = false; break; }
+        var span:*HlSpan = &result.spans[index];
+        valid = (*span).begin == reader.token.offset && (*span).end-(*span).begin == reader.token.length && (*span).kind != HL_INVALID;
+        index = index+1usize;
+        valid = valid && rr_next(&reader);
+    }
+    while index < result.count && result.spans[index].kind == HL_COMMENT { index = index+1usize; }
+    valid = valid && index == result.count;
+    crust_context_destroy(&context);
+    return valid;
+}
+
+fn main(argc:i32, argv:**u8)->i32 {
+    var index:i32 = 1i32;
+    while index < argc {
+        var source:CrustSource = make CrustSource {path:argv[index as usize],bytes:null(*u8),size:0usize,identity:1u64};
+        if crust0_host_read_file(source.path, &source.bytes, &source.size) != 0i32 { return 1i32; }
+        var valid:bool = ht_compare(&source);
+        if !valid { hl_stderr("strict lexer comparison failed: "); hl_stderr(source.path); hl_stderr("\n"); }
+        if index == 1i32 {
+            var mode:u32 = 0u32;
+            while mode < 9u32 { valid = ht_contract(mode, &source) && valid; mode = mode+1u32; }
+            var calls:usize = 0usize;
+            valid = ht_allocation(&source, 0usize, &calls) && valid;
+            var fail_at:usize = 1usize;
+            while fail_at <= calls {
+                var ignored:usize = 0usize;
+                valid = ht_allocation(&source, fail_at, &ignored) && valid;
+                fail_at = fail_at+1usize;
+            }
+        }
+        crust0_host_free(source.bytes);
+        if !valid { hl_stderr("highlight library contract failed\n"); return 1i32; }
+        index = index+1i32;
+    }
+    return 0i32;
+}

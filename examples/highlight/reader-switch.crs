@@ -1,0 +1,9 @@
+host_source(run, "../../stages/reader/model.crs");
+host_source(run, "../../stages/reader/lex.crs");
+host_source(run, "../../stages/highlight/model.crs");
+host_source(run, "../../stages/highlight/scan.crs");
+host_source(run, "../../stages/highlight/output.crs");
+host_source(run, "../../stages/highlight/program.crs");
+host_source(run, "text.crs");
+
+return hl_program((*run).argc, (*run).argv, reader_switch_highlight, null(*u8));

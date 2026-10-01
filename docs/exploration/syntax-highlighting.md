@@ -6,6 +6,10 @@ Status: design study. The reader probe below uses the implemented API at
 revision `39b70ae`. The highlighting interface and editor adapter are proposals.
 This document does not add a compiler contract.
 
+The [highlighting tutorial](../../stages/highlight/README.md) describes the
+implemented seed service, custom reader example, HTML output, and VS Code
+adapter. The proposals below retain the original investigation scope.
+
 ## Decision
 
 A normal Crust program can read a source file and produce highlighted HTML.

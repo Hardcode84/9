@@ -207,6 +207,7 @@ data your stage needs to change.
 | Change one assembly operation | `CrustX64Ops.expression`, `place`, or `statement` | [Custom assembly operation](../examples/custom-stage/README.md) |
 | Supply complete C function bodies | `c_emit_with_body` or `c_backend_build_with_body` | [Resource body emitter](../stages/resources/emit.crs) |
 | Replace the backend | A library that consumes its chosen representation and produces output | [C backend](../stages/c/README.md) |
+| Classify source for display | User services append source spans; consumers render HTML or editor tokens | [Highlighting tutorial](../stages/highlight/README.md) |
 
 The Crust reader library is separate from the seed reader. Its four hooks
 extend target syntax without adding keywords to the C99 parser. Replacing

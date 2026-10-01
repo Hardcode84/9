@@ -1,0 +1,110 @@
+const HL_KEYWORD:u32 = 0u32;
+const HL_COMMENT:u32 = 1u32;
+const HL_STRING:u32 = 2u32;
+const HL_NUMBER:u32 = 3u32;
+const HL_OPERATOR:u32 = 4u32;
+const HL_TYPE:u32 = 5u32;
+const HL_VARIABLE:u32 = 6u32;
+const HL_FUNCTION:u32 = 7u32;
+const HL_STRUCT:u32 = 8u32;
+const HL_PROPERTY:u32 = 9u32;
+const HL_INVALID:u32 = 10u32;
+const HL_UNRESOLVED:u32 = 11u32;
+const HL_DECLARATION:u32 = 1u32;
+const HL_READONLY:u32 = 2u32;
+
+const hl_kinds:[*u8;12] = make [*u8;12] {
+    "keyword", "comment", "string", "number", "operator", "type",
+    "variable", "function", "struct", "property", "invalid", "unresolved"
+};
+
+record HlSpan { begin:usize; end:usize; kind:u32; modifiers:u32; }
+record HlResult {
+    context:*CrustContext;
+    source:*CrustSource;
+    spans:*HlSpan;
+    count:usize;
+    capacity:usize;
+    failed:bool;
+}
+record HlText { bytes:*u8; size:usize; capacity:usize; }
+record HlLexer {
+    bytes:*u8;
+    cursor:usize;
+    end:usize;
+    previous:u32;
+    token:u32;
+    span:HlSpan;
+}
+
+// Borrow source through the last use of this result. Storage belongs to context.
+fn hl_init(result:*HlResult, context:*CrustContext, source:*CrustSource)->unit {
+    *result = make HlResult {
+        context:context, source:source, spans:null(*HlSpan), count:0usize,
+        capacity:0usize, failed:false
+    };
+}
+
+fn hl_error(result:*HlResult, message:*u8)->unit {
+    if (*result).failed { return; }
+    (*result).failed = true;
+    crust_set_error((*result).context, (*result).source, 0usize, message);
+}
+
+fn hl_alloc(result:*HlResult, size:usize, alignment:usize)->*u8 {
+    if (*result).failed { return null(*u8); }
+    var memory:*u8 = crust_try_alloc((*result).context, size, alignment);
+    if memory == null(*u8) { (*result).failed = true; }
+    return memory;
+}
+
+// Append an ordered, disjoint range inside source. Reject invalid classifications.
+fn hl_add(result:*HlResult, begin:usize, end:usize, kind:u32, modifiers:u32)->bool {
+    if (*result).failed { return false; }
+    if begin >= end || end > (*(*result).source).size || kind >= 12u32 || modifiers > 3u32 {
+        hl_error(result, "invalid highlight span"); return false;
+    }
+    if (*result).count != 0usize && begin < (*result).spans[(*result).count-1usize].end {
+        hl_error(result, "highlight spans overlap or are out of order"); return false;
+    }
+    if (*result).count == (*result).capacity {
+        var capacity:usize = 256usize;
+        if (*result).capacity != 0usize { capacity = (*result).capacity * 2usize; }
+        if capacity < (*result).capacity || capacity > (~0usize) / sizeof(HlSpan) {
+            hl_error(result, "too many highlight spans"); return false;
+        }
+        var spans:*HlSpan = hl_alloc(result, capacity * sizeof(HlSpan), alignof(HlSpan)) as *HlSpan;
+        if spans == null(*HlSpan) { return false; }
+        if (*result).count != 0usize {
+            crust0_host_move_bytes(spans as *u8, (*result).spans as *u8, (*result).count * sizeof(HlSpan));
+        }
+        (*result).spans = spans;
+        (*result).capacity = capacity;
+    }
+    (*result).spans[(*result).count] = make HlSpan {begin:begin,end:end,kind:kind,modifiers:modifiers};
+    (*result).count = (*result).count + 1usize;
+    return true;
+}
+
+// Classify this range with an explicit service. A missing service marks it unresolved.
+fn hl_region(result:*HlResult, begin:usize, end:usize,
+             service:fn(*HlResult,usize,usize,*u8)->bool, user:*u8)->bool {
+    if (*result).failed { return false; }
+    if begin > end || end > (*(*result).source).size {
+        hl_error(result, "invalid highlight region"); return false;
+    }
+    if begin == end { return true; }
+    if service == null(fn(*HlResult,usize,usize,*u8)->bool) {
+        return hl_add(result, begin, end, HL_UNRESOLVED, 0u32);
+    }
+    var first:usize = (*result).count;
+    if !service(result, begin, end, user) {
+        hl_error(result, "highlight service failed"); return false;
+    }
+    if (*result).failed { return false; }
+    if (*result).count > first && ((*result).spans[first].begin < begin ||
+                                  (*result).spans[(*result).count-1usize].end > end) {
+        hl_error(result, "highlight service wrote outside its region"); return false;
+    }
+    return true;
+}

@@ -1,0 +1,37 @@
+// This measurement uses glibc clock_t and CLOCKS_PER_SEC on Linux x86-64.
+extern fn profile_clock()->i64 = "clock";
+
+fn main(argc:i32, argv:**u8)->i32 {
+    if argc != 2i32 { return 2i32; }
+    var source:CrustSource = make CrustSource {path:argv[1usize],bytes:null(*u8),size:0usize,identity:1u64};
+    if crust0_host_read_file(source.path, &source.bytes, &source.size) != 0i32 { return 1i32; }
+    var context:CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var result:HlResult = uninit;
+    hl_init(&result, &context, &source);
+    var html:HlText = make HlText {bytes:null(*u8),size:0usize,capacity:0usize};
+    var json:HlText = make HlText {bytes:null(*u8),size:0usize,capacity:0usize};
+    var start:i64 = profile_clock();
+    var success:bool = hl_region(&result, 0usize, source.size, hl_seed, null(*u8));
+    var scanned:i64 = profile_clock();
+    if success { success = hl_html(&result, &html); }
+    var rendered:i64 = profile_clock();
+    if success { success = hl_json(&result, &json); }
+    var encoded:i64 = profile_clock();
+    success = success && start >= 0i64 && scanned >= start && rendered >= scanned && encoded >= rendered;
+    if success {
+        var report:HlText = make HlText {bytes:null(*u8),size:0usize,capacity:0usize};
+        hl_text(&result, &report, "{\"scan_us\":");
+        hl_number(&result, &report, (scanned-start) as usize);
+        hl_text(&result, &report, ",\"html_us\":");
+        hl_number(&result, &report, (rendered-scanned) as usize);
+        hl_text(&result, &report, ",\"json_us\":");
+        hl_number(&result, &report, (encoded-rendered) as usize);
+        hl_text(&result, &report, "}\n");
+        success = !result.failed && crust0_host_write_stream(1u32, report.bytes, report.size) == 0i32;
+    }
+    crust_context_destroy(&context);
+    crust0_host_free(source.bytes);
+    if !success { return 1i32; }
+    return 0i32;
+}

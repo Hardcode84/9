@@ -1,0 +1,330 @@
+{
+  "schema_version": 1,
+  "performance_samples": false,
+  "sqlite_version": "3.50.4",
+  "sqlite_archive_url": "https://sqlite.org/2025/sqlite-amalgamation-3500400.zip",
+  "sqlite_archive_sha256": "1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032",
+  "sqlite_source_sha256": {
+    "sqlite3.c": "e3f5d6901e7492af4a1fc8c4d745cae84c264942524c3fbfc02b82a5ca8818c8",
+    "sqlite3.h": "abd1514e0351f79393d1be882830afdb40a8099e8257f311f0bfdf8486f11bea"
+  },
+  "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "commands": [
+    {
+      "command": [
+        "gcc",
+        "-O2",
+        "-g0",
+        "-c",
+        ".profile-cache/sources/sqlite3.c",
+        "-o",
+        ".profile-cache/resources-baseline/sqlite3.o"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wstrict-prototypes",
+        "-Wmissing-prototypes",
+        "-Wshadow",
+        "-Wvla",
+        "-O2",
+        "-g0",
+        "-I.profile-cache/sources",
+        "benchmarks/resources/direct.c",
+        ".profile-cache/resources-baseline/sqlite3.o",
+        "-ldl",
+        "-lm",
+        "-pthread",
+        "-o",
+        ".profile-cache/resources-baseline/direct"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wstrict-prototypes",
+        "-Wmissing-prototypes",
+        "-Wshadow",
+        "-Wvla",
+        "-O2",
+        "-g0",
+        "-I.profile-cache/sources",
+        "benchmarks/resources/callbacks.c",
+        ".profile-cache/resources-baseline/sqlite3.o",
+        "-ldl",
+        "-lm",
+        "-pthread",
+        "-o",
+        ".profile-cache/resources-baseline/callbacks"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-Wall",
+        "-Wextra",
+        "-Werror",
+        "-Wstrict-prototypes",
+        "-Wmissing-prototypes",
+        "-Wshadow",
+        "-Wvla",
+        "-O2",
+        "-g0",
+        "-I.profile-cache/sources",
+        "benchmarks/resources/contracts.c",
+        ".profile-cache/resources-baseline/sqlite3.o",
+        "-ldl",
+        "-lm",
+        "-pthread",
+        "-o",
+        ".profile-cache/resources-baseline/contracts"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/direct",
+        ".profile-cache/resources-baseline/normal.db"
+      ],
+      "status": 0,
+      "stdout": "B 00ff\nT 48690078\nN\nB \nT \nI 3432\nR 312e35\nT c3a9\nrows 8\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/callbacks",
+        ".profile-cache/resources-baseline/normal.db"
+      ],
+      "status": 0,
+      "stdout": "B 00ff\nT 48690078\nN\nB \nT \nI 3432\nR 312e35\nT c3a9\nrows 8\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/direct",
+        ".profile-cache/resources-baseline/empty.db"
+      ],
+      "status": 0,
+      "stdout": "rows 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/callbacks",
+        ".profile-cache/resources-baseline/empty.db"
+      ],
+      "status": 0,
+      "stdout": "rows 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/direct",
+        ".profile-cache/resources-baseline/missing-parent/input.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 14 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/callbacks",
+        ".profile-cache/resources-baseline/missing-parent/input.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 14 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/direct",
+        ".profile-cache/resources-baseline/missing-table.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/callbacks",
+        ".profile-cache/resources-baseline/missing-table.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/direct",
+        ".profile-cache/resources-baseline/step-failure.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 1 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/callbacks",
+        ".profile-cache/resources-baseline/step-failure.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 1 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/direct"
+      ],
+      "status": 2,
+      "stdout": "",
+      "stderr": "usage: sqlite-reader DATABASE\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/callbacks"
+      ],
+      "status": 2,
+      "stdout": "",
+      "stderr": "usage: sqlite-reader DATABASE\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/direct",
+        ".profile-cache/resources-baseline/normal.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 10 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/callbacks",
+        ".profile-cache/resources-baseline/normal.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 10 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-baseline/contracts",
+        ".profile-cache/resources-baseline/missing-parent/input.db"
+      ],
+      "status": 0,
+      "stdout": "SQLite contracts: 30 checks passed\n",
+      "stderr": ""
+    }
+  ],
+  "cases": [
+    {
+      "name": "values",
+      "status": 0,
+      "stdout": "B 00ff\nT 48690078\nN\nB \nT \nI 3432\nR 312e35\nT c3a9\nrows 8\n",
+      "stderr": "",
+      "implementations": [
+        "direct",
+        "callbacks"
+      ]
+    },
+    {
+      "name": "empty-table",
+      "status": 0,
+      "stdout": "rows 0\n",
+      "stderr": "",
+      "implementations": [
+        "direct",
+        "callbacks"
+      ]
+    },
+    {
+      "name": "open-failure",
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 14 0 0\n",
+      "implementations": [
+        "direct",
+        "callbacks"
+      ]
+    },
+    {
+      "name": "prepare-failure",
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 0 0\n",
+      "implementations": [
+        "direct",
+        "callbacks"
+      ]
+    },
+    {
+      "name": "step-and-finalize-failure",
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 1 0\n",
+      "implementations": [
+        "direct",
+        "callbacks"
+      ]
+    },
+    {
+      "name": "usage",
+      "status": 2,
+      "stdout": "",
+      "stderr": "usage: sqlite-reader DATABASE\n",
+      "implementations": [
+        "direct",
+        "callbacks"
+      ]
+    },
+    {
+      "name": "output-failure",
+      "status": 1,
+      "stdout_device": "/dev/full",
+      "stderr": "error 10 0 0\n",
+      "implementations": [
+        "direct",
+        "callbacks"
+      ]
+    }
+  ],
+  "contract_result": "SQLite contracts: 30 checks passed",
+  "application_process_checks": 14,
+  "source_sha256": {
+    "benchmarks/resources/callbacks.c": "22d06a8909f3365c63856baad5aa8eecefdf499759b1901132f253f4c2e34e00",
+    "benchmarks/resources/common.h": "6e1792a0d9866121fc931a5fca47168875a2d421b1f689036b42203165777be8",
+    "benchmarks/resources/contracts.c": "a5edb7d93bca003d089479b3680928a6ed315ca219210b5f991061f638d2d5d9",
+    "benchmarks/resources/direct.c": "040f2fdcf13e923f245f88b1dfcadb8956d367ccb062c3c8cefb065969bde96a",
+    "benchmarks/resources/verify.py": "cba5d5cbd23e2c5b61d015e4b2c74375a1ef9dcb19e7536d6f77e280347b3c04"
+  },
+  "binary_sha256": {
+    ".profile-cache/resources-baseline/direct": "90fc2d47023049c10019134d31d561ce2533037f89d62db946cf5d8a8e77f189",
+    ".profile-cache/resources-baseline/callbacks": "54c01e467d443a8e9da21220e2d578f578f29adf3e232e4ea82e70cdeb91852c",
+    ".profile-cache/resources-baseline/contracts": "a910e50969993aac380e05649d8601d82ca639384e0d142830429b7f70d8405c",
+    ".profile-cache/resources-baseline/sqlite3.o": "2b08621fc6739249effcf17fba638ec468a83bb799d4828d4c8e9b6725222305"
+  },
+  "complete": true
+}

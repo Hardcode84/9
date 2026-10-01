@@ -420,7 +420,9 @@ fn c_constant(stage: *CStage, input: *RmdExpr) -> unit {
     trap;
 }
 
-fn c_function(stage: *CStage, declaration: *RmdDecl) -> unit {
+// Require a valid function signature and its parameter symbols.
+// Start the definition. The caller must emit its complete body.
+fn c_function_header(stage: *CStage, declaration: *RmdDecl) -> unit {
     (*stage).next_temp = 1usize;
     c_type_name(stage, (*(*declaration).type).base); c_text(stage, " ");
     c_global(stage, declaration); c_text(stage, "(");
@@ -432,6 +434,10 @@ fn c_function(stage: *CStage, declaration: *RmdDecl) -> unit {
         if parameter != null(*RmdParam) { c_text(stage, ","); }
     }
     c_text(stage, ")\n");
+}
+
+fn c_function(stage: *CStage, declaration: *RmdDecl) -> unit {
+    c_function_header(stage, declaration);
     c_statement(stage, (*declaration).body);
 }
 
@@ -454,6 +460,19 @@ fn c_prelude(stage: *CStage) -> unit {
 // Use a newly initialized stage for each emission.
 // The caller owns the input. Output buffers remain live until stage destruction.
 fn c_emit(stage: *CStage, entry: *RmdDecl) -> bool {
+    return c_emit_with_body(stage, entry, null(fn(*CStage,*RmdDecl,*u8)->bool), null(*u8));
+}
+
+// Require a fresh stage, valid target types, layouts, signatures, parameter symbols,
+// assigned link names, checked constant initializers, and a valid hosted entry or null.
+// The callback emits a complete function body, including braces, after its signature.
+// A selected callback owns body semantics; declaration.body may be null.
+// Node helpers require checked nodes. Name, type, and text helpers remain available.
+// Calls are synchronous. Keep callback code and user storage live through this call.
+// Null requires checked seed bodies and selects the default emitter.
+// False or a new diagnostic stops emission. False without a diagnostic records one.
+fn c_emit_with_body(stage: *CStage, entry: *RmdDecl,
+                    body: fn(*CStage,*RmdDecl,*u8)->bool, user: *u8) -> bool {
     (*stage).entry = entry;
     (*stage).sink = &(*stage).body;
     var context: *RmdContext = (*stage).status.context;
@@ -473,7 +492,26 @@ fn c_emit(stage: *CStage, entry: *RmdDecl) -> bool {
     while parsed != null(*RmdUnit) {
         var declaration: *RmdDecl = (*parsed).declarations;
         while declaration != null(*RmdDecl) {
-            if (*declaration).kind == RMD_D_FUNCTION { c_function(stage, declaration); }
+            if (*declaration).kind == RMD_D_FUNCTION {
+                if body == null(fn(*CStage,*RmdDecl,*u8)->bool) {
+                    c_function(stage, declaration);
+                } else {
+                    c_function_header(stage, declaration);
+                    if (*stage).status.failed { return false; }
+                    var errors: usize = (*context).error_count;
+                    var success: bool = body(stage, declaration, user);
+                    if (*stage).status.failed { return false; }
+                    if (*context).error_count != errors {
+                        (*stage).status.failed = true;
+                        return false;
+                    }
+                    if !success {
+                        c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
+                                "C function body callback failed");
+                        return false;
+                    }
+                }
+            }
             if (*declaration).kind == RMD_D_CONST {
                 c_type_name(stage, (*declaration).type); c_text(stage, " const ");
                 c_global(stage, declaration); c_text(stage, "="); c_constant(stage, (*declaration).init);

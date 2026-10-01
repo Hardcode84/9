@@ -1,0 +1,332 @@
+const rr_keywords:[RmdReaderKeyword;33]=make [RmdReaderKeyword;33] {
+    make RmdReaderKeyword {text:"record",size:6usize,kind:262u32,type:11u32},
+    make RmdReaderKeyword {text:"fn",size:2usize,kind:263u32,type:11u32},
+    make RmdReaderKeyword {text:"extern",size:6usize,kind:264u32,type:11u32},
+    make RmdReaderKeyword {text:"const",size:5usize,kind:265u32,type:11u32},
+    make RmdReaderKeyword {text:"var",size:3usize,kind:266u32,type:11u32},
+    make RmdReaderKeyword {text:"uninit",size:6usize,kind:267u32,type:11u32},
+    make RmdReaderKeyword {text:"if",size:2usize,kind:268u32,type:11u32},
+    make RmdReaderKeyword {text:"else",size:4usize,kind:269u32,type:11u32},
+    make RmdReaderKeyword {text:"while",size:5usize,kind:270u32,type:11u32},
+    make RmdReaderKeyword {text:"break",size:5usize,kind:271u32,type:11u32},
+    make RmdReaderKeyword {text:"continue",size:8usize,kind:272u32,type:11u32},
+    make RmdReaderKeyword {text:"return",size:6usize,kind:273u32,type:11u32},
+    make RmdReaderKeyword {text:"trap",size:4usize,kind:274u32,type:11u32},
+    make RmdReaderKeyword {text:"as",size:2usize,kind:275u32,type:11u32},
+    make RmdReaderKeyword {text:"make",size:4usize,kind:276u32,type:11u32},
+    make RmdReaderKeyword {text:"null",size:4usize,kind:277u32,type:11u32},
+    make RmdReaderKeyword {text:"sizeof",size:6usize,kind:278u32,type:11u32},
+    make RmdReaderKeyword {text:"alignof",size:7usize,kind:279u32,type:11u32},
+    make RmdReaderKeyword {text:"offsetof",size:8usize,kind:280u32,type:11u32},
+    make RmdReaderKeyword {text:"true",size:4usize,kind:281u32,type:11u32},
+    make RmdReaderKeyword {text:"false",size:5usize,kind:282u32,type:11u32},
+    make RmdReaderKeyword {text:"i8",size:2usize,kind:261u32,type:0u32},
+    make RmdReaderKeyword {text:"u8",size:2usize,kind:261u32,type:1u32},
+    make RmdReaderKeyword {text:"i16",size:3usize,kind:261u32,type:2u32},
+    make RmdReaderKeyword {text:"u16",size:3usize,kind:261u32,type:3u32},
+    make RmdReaderKeyword {text:"i32",size:3usize,kind:261u32,type:4u32},
+    make RmdReaderKeyword {text:"u32",size:3usize,kind:261u32,type:5u32},
+    make RmdReaderKeyword {text:"i64",size:3usize,kind:261u32,type:6u32},
+    make RmdReaderKeyword {text:"u64",size:3usize,kind:261u32,type:7u32},
+    make RmdReaderKeyword {text:"isize",size:5usize,kind:261u32,type:8u32},
+    make RmdReaderKeyword {text:"usize",size:5usize,kind:261u32,type:9u32},
+    make RmdReaderKeyword {text:"bool",size:4usize,kind:261u32,type:10u32},
+    make RmdReaderKeyword {text:"unit",size:4usize,kind:261u32,type:11u32}
+};
+
+// Retain the first reader diagnostic at its original source offset.
+fn rr_error(reader:*RmdReader, offset:usize, message:*u8)->unit {
+    if (*reader).failed { return; }
+    (*reader).failed=true;
+    rmd_set_error((*reader).context,(*reader).source,offset,message);
+}
+
+fn rr_allocation_failed(reader:*RmdReader)->unit {
+    (*reader).failed=true;
+    (*(*reader).context).error_loc=make RmdLoc {
+        source:(*reader).source,offset:(*reader).token.offset
+    };
+}
+
+// Return zeroed context-owned storage. A nonzero failed request sets failed.
+fn rr_alloc(reader:*RmdReader,size:usize,alignment:usize)->*u8 {
+    if (*reader).failed { return null(*u8); }
+    var result:*u8=rmd_try_alloc((*reader).context,size,alignment);
+    if result==null(*u8) && size!=0usize { rr_allocation_failed(reader); }
+    return result;
+}
+
+fn rr_name_start(byte:u8)->bool {
+    return (byte>=97u8 && byte<=122u8)||(byte>=65u8 && byte<=90u8)||byte==95u8;
+}
+
+fn rr_name_continue(byte:u8)->bool {
+    return rr_name_start(byte)||(byte>=48u8 && byte<=57u8);
+}
+
+fn rr_hex(byte:u8)->i32 {
+    if byte>=48u8 && byte<=57u8 { return (byte-48u8) as i32; }
+    if byte>=97u8 && byte<=102u8 { return (byte-97u8+10u8) as i32; }
+    if byte>=65u8 && byte<=70u8 { return (byte-65u8+10u8) as i32; }
+    return -1i32;
+}
+
+fn rr_keyword(text:*u8,size:usize)->*RmdReaderKeyword {
+    var index:usize=0usize;
+    while index<33usize {
+        var word:*RmdReaderKeyword=&rr_keywords[index];
+        if (*word).size==size {
+            var matched:usize=0usize;
+            while matched<size && (*word).text[matched]==text[matched] { matched=matched+1usize; }
+            if matched==size { return word; }
+        }
+        index=index+1usize;
+    }
+    return null(*RmdReaderKeyword);
+}
+
+fn rr_escape(byte:u8)->u8 {
+    if byte==110u8 { return 10u8; }
+    if byte==114u8 { return 13u8; }
+    if byte==116u8 { return 9u8; }
+    if byte==48u8 { return 0u8; }
+    return byte;
+}
+
+fn rr_string(reader:*RmdReader)->bool {
+    var source:*u8=(*(*reader).source).bytes;
+    var start:usize=(*reader).offset+1usize;
+    var finish:usize=start;
+    var decoded:usize=0usize;
+    while finish<(*reader).end && source[finish]!=34u8 {
+        var byte:u8=source[finish];
+        finish=finish+1usize;
+        if byte==0u8 || byte==10u8 || byte==13u8 {
+            rr_error(reader,(*reader).token.offset,"invalid byte in string literal");return false;
+        }
+        if byte==92u8 {
+            if finish==(*reader).end {
+                rr_error(reader,(*reader).token.offset,"unterminated string escape");return false;
+            }
+            byte=source[finish];finish=finish+1usize;
+            if byte==120u8 {
+                if (*reader).end-finish<2usize || rr_hex(source[finish])<0i32 || rr_hex(source[finish+1usize])<0i32 {
+                    rr_error(reader,(*reader).token.offset,"expected two hexadecimal escape digits");return false;
+                }
+                finish=finish+2usize;
+            } else {
+                if byte!=92u8 && byte!=34u8 && byte!=110u8 && byte!=114u8 && byte!=116u8 && byte!=48u8 {
+                    rr_error(reader,(*reader).token.offset,"unknown string escape");return false;
+                }
+            }
+        }
+        decoded=decoded+1usize;
+    }
+    if finish==(*reader).end {
+        rr_error(reader,(*reader).token.offset,"unterminated string literal");return false;
+    }
+    if decoded==~0usize {
+        rr_error(reader,(*reader).token.offset,"string literal is too large");return false;
+    }
+    var bytes:*u8=rr_alloc(reader,decoded+1usize,1usize);
+    if bytes==null(*u8) { return false; }
+    var index:usize=0usize;
+    while start<finish {
+        var byte:u8=source[start];start=start+1usize;
+        if byte==92u8 {
+            byte=source[start];start=start+1usize;
+            if byte==120u8 {
+                byte=(rr_hex(source[start])*16i32+rr_hex(source[start+1usize])) as u8;
+                start=start+2usize;
+            } else { byte=rr_escape(byte); }
+        }
+        bytes[index]=byte;index=index+1usize;
+    }
+    bytes[decoded]=0u8;
+    (*reader).token.kind=RR_STRING;
+    (*reader).token.bytes=bytes;
+    (*reader).token.byte_count=decoded+1usize;
+    (*reader).offset=finish+1usize;
+    return true;
+}
+
+fn rr_number(reader:*RmdReader)->bool {
+    var source:*u8=(*(*reader).source).bytes;
+    var start:usize=(*reader).offset;
+    var finish:usize=start;
+    while finish<(*reader).end && rr_name_continue(source[finish]) { finish=finish+1usize; }
+    var base:u64=10u64;
+    if finish-start>=2usize && source[start]==48u8 && source[start+1usize]==120u8 {
+        base=16u64;start=start+2usize;
+    }
+    var digits:usize=start;
+    var value:u64=0u64;
+    while start<finish {
+        var digit:i32=rr_hex(source[start]);
+        if digit<0i32 || digit as u64>=base { break; }
+        if value>((~0u64)-digit as u64)/base {
+            rr_error(reader,(*reader).token.offset,"integer token exceeds 64 bits");return false;
+        }
+        value=value*base+digit as u64;
+        start=start+1usize;
+    }
+    if start==digits {
+        rr_error(reader,(*reader).token.offset,"integer token has no digits");return false;
+    }
+    if start==finish && base==10u64 { (*reader).token.kind=RR_COUNT; }
+    else {
+        var suffix:*RmdReaderKeyword=rr_keyword(source+start as isize,finish-start);
+        if suffix==null(*RmdReaderKeyword) || (*suffix).kind!=RR_TYPE || (*suffix).type>RMD_T_USIZE {
+            rr_error(reader,(*reader).token.offset,"invalid integer type suffix");return false;
+        }
+        (*reader).token.kind=RR_INTEGER;
+        (*reader).token.integer_type=(*suffix).type;
+    }
+    (*reader).token.integer=value;
+    (*reader).offset=finish;
+    return true;
+}
+
+fn rr_skip(reader:*RmdReader)->bool {
+    var source:*u8=(*(*reader).source).bytes;
+    while true {
+        while (*reader).offset<(*reader).end {
+            var byte:u8=source[(*reader).offset];
+            if byte!=32u8 && byte!=9u8 && byte!=13u8 && byte!=10u8 { break; }
+            (*reader).offset=(*reader).offset+1usize;
+        }
+        if (*reader).end-(*reader).offset<2usize || source[(*reader).offset]!=47u8 || source[(*reader).offset+1usize]!=47u8 {
+            return true;
+        }
+        (*reader).offset=(*reader).offset+2usize;
+        while (*reader).offset<(*reader).end && source[(*reader).offset]!=10u8 {
+            if source[(*reader).offset]==0u8 {
+                rr_error(reader,(*reader).offset,"zero byte in source");return false;
+            }
+            (*reader).offset=(*reader).offset+1usize;
+        }
+    }
+    return false;
+}
+
+fn rr_lex(reader:*RmdReader)->bool {
+    if !rr_skip(reader) { return false; }
+    var start:usize=(*reader).offset;
+    var source:*u8=(*(*reader).source).bytes;
+    (*reader).token=make RmdReaderToken {
+        kind:RR_EOF,offset:start,length:0usize,text:source+start as isize,
+        name:null(*RmdName),integer:0u64,integer_type:0u32,bytes:null(*u8),byte_count:0usize
+    };
+    if start==(*reader).end { return true; }
+    var byte:u8=source[start];
+    if rr_name_start(byte) {
+        (*reader).offset=start+1usize;
+        while (*reader).offset<(*reader).end && rr_name_continue(source[(*reader).offset]) {
+            (*reader).offset=(*reader).offset+1usize;
+        }
+        var word:*RmdReaderKeyword=rr_keyword(source+start as isize,(*reader).offset-start);
+        if word!=null(*RmdReaderKeyword) {
+            (*reader).token.kind=(*word).kind;(*reader).token.integer_type=(*word).type;
+        } else {
+            (*reader).token.kind=RR_NAME;
+            (*reader).token.name=rmd_try_intern((*reader).context,source+start as isize,(*reader).offset-start);
+            if (*reader).token.name==null(*RmdName) { rr_allocation_failed(reader);return false; }
+        }
+        return true;
+    }
+    if byte>=48u8 && byte<=57u8 { return rr_number(reader); }
+    if byte==34u8 { return rr_string(reader); }
+    (*reader).token.kind=byte as u32;
+    (*reader).offset=start+1usize;
+    if (*reader).offset<(*reader).end {
+        var second:u8=source[(*reader).offset];
+        if byte==45u8 && second==62u8 { (*reader).token.kind=RR_ARROW; }
+        if byte==61u8 && second==61u8 { (*reader).token.kind=RR_EQ; }
+        if byte==33u8 && second==61u8 { (*reader).token.kind=RR_NE; }
+        if byte==60u8 && second==61u8 { (*reader).token.kind=RR_LE; }
+        if byte==62u8 && second==61u8 { (*reader).token.kind=RR_GE; }
+        if byte==60u8 && second==60u8 { (*reader).token.kind=RR_SHL; }
+        if byte==62u8 && second==62u8 { (*reader).token.kind=RR_SHR; }
+        if byte==38u8 && second==38u8 { (*reader).token.kind=RR_AND; }
+        if byte==124u8 && second==124u8 { (*reader).token.kind=RR_OR; }
+        if (*reader).token.kind!=byte as u32 {
+            (*reader).offset=(*reader).offset+1usize;return true;
+        }
+    }
+    var punctuation:*u8="{}()[]:;,.=+-*/%&|^!~<>";
+    var index:usize=0usize;
+    while punctuation[index]!=0u8 {
+        if punctuation[index]==byte { return true; }
+        index=index+1usize;
+    }
+    var message:[u8;25]=uninit;
+    var template:*u8="invalid source byte 0x00";
+    index=0usize;
+    while index<25usize { message[index]=template[index];index=index+1usize; }
+    var hex:*u8="0123456789abcdef";
+    message[22usize]=hex[(byte>>4u8) as usize];
+    message[23usize]=hex[(byte&15u8) as usize];
+    rr_error(reader,start,&message[0usize]);
+    return false;
+}
+
+// Read the next token. The range and token budget are fixed by rr_init.
+fn rr_next(reader:*RmdReader)->bool {
+    if (*reader).failed { return false; }
+    if (*reader).token_count==(*reader).token_limit {
+        rr_error(reader,(*reader).offset,"reader token limit exceeded");return false;
+    }
+    (*reader).token_count=(*reader).token_count+1usize;
+    if !rr_lex(reader) { return false; }
+    (*reader).token.length=(*reader).offset-(*reader).token.offset;
+    return true;
+}
+
+// Initialize a reader over [begin,end), then read its first token.
+fn rr_init(reader:*RmdReader,context:*RmdContext,source:*RmdSource,begin:usize,end:usize,hooks:*RmdReaderHooks)->bool {
+    (*reader)=make RmdReader {
+        context:context,source:source,offset:begin,end:end,depth:0u32,
+        token_count:0usize,token_limit:0usize,failed:false,hooks:hooks,
+        token:make RmdReaderToken {kind:RR_EOF,offset:begin,length:0usize,text:null(*u8),
+            name:null(*RmdName),integer:0u64,integer_type:0u32,bytes:null(*u8),byte_count:0usize}
+    };
+    if begin>end || end>(*source).size {
+        var location:usize=begin;
+        if location>(*source).size { location=(*source).size; }
+        rr_error(reader,location,"source range must satisfy begin <= end <= source size");return false;
+    }
+    if end-begin==~0usize {
+        rr_error(reader,begin,"source range exceeds the token count limit");return false;
+    }
+    (*reader).token_limit=end-begin+1usize;
+    return rr_next(reader);
+}
+
+// Return false without consumption on a mismatch. Check failed to distinguish an error.
+fn rr_take(reader:*RmdReader,kind:u32)->bool {
+    if (*reader).failed || (*reader).token.kind!=kind { return false; }
+    return rr_next(reader);
+}
+
+// message is the complete diagnostic for a mismatch.
+fn rr_expect(reader:*RmdReader,kind:u32,message:*u8)->bool {
+    if rr_take(reader,kind) { return true; }
+    rr_error(reader,(*reader).token.offset,message);return false;
+}
+
+fn rr_name(reader:*RmdReader)->*RmdName {
+    var result:*RmdName=(*reader).token.name;
+    if !rr_expect(reader,RR_NAME,"expected an identifier") { return null(*RmdName); }
+    return result;
+}
+
+// Match an identifier against a zero-terminated word without consuming it.
+fn rr_is_name(reader:*RmdReader,word:*u8)->bool {
+    if (*reader).failed || (*reader).token.kind!=RR_NAME { return false; }
+    var index:usize=0usize;
+    while index<(*reader).token.length {
+        if word[index]==0u8 || word[index]!=(*reader).token.text[index] { return false; }
+        index=index+1usize;
+    }
+    return word[index]==0u8;
+}

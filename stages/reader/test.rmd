@@ -1,0 +1,246 @@
+fn rt_text(left:*u8,right:*u8)->bool {
+    if left==null(*u8) || right==null(*u8) { return left==right; }
+    var index:usize=0usize;
+    while left[index]!=0u8 {
+        if left[index]!=right[index] { return false; }
+        index=index+1usize;
+    }
+    return right[index]==0u8;
+}
+
+fn rt_name(left:*RmdName,right:*RmdName)->bool {
+    if left==null(*RmdName) || right==null(*RmdName) { return left==right; }
+    return (*left).size==(*right).size && rt_text((*left).text,(*right).text);
+}
+
+fn rt_type(left:*RmdTypeSyntax,right:*RmdTypeSyntax)->bool {
+    if left==null(*RmdTypeSyntax) || right==null(*RmdTypeSyntax) { return left==right; }
+    if (*left).kind!=(*right).kind || (*left).loc.offset!=(*right).loc.offset ||
+       (*left).count!=(*right).count || (*left).param_count!=(*right).param_count ||
+       !rt_name((*left).name,(*right).name) || !rt_type((*left).base,(*right).base) { return false; }
+    var index:usize=0usize;
+    while index<(*left).param_count {
+        if !rt_type((*left).params[index],(*right).params[index]) { return false; }
+        index=index+1usize;
+    }
+    return true;
+}
+
+fn rt_expr(left:*RmdExpr,right:*RmdExpr)->bool {
+    if left==null(*RmdExpr) || right==null(*RmdExpr) { return left==right; }
+    if (*left).kind!=(*right).kind || (*left).op!=(*right).op || (*left).loc.offset!=(*right).loc.offset ||
+       (*left).integer!=(*right).integer || (*left).literal_type!=(*right).literal_type ||
+       (*left).arg_count!=(*right).arg_count || (*left).byte_count!=(*right).byte_count ||
+       !rt_name((*left).name,(*right).name) || !rt_name((*left).field_name,(*right).field_name) ||
+       !rt_type((*left).syntax_type,(*right).syntax_type) ||
+       !rt_expr((*left).left,(*right).left) || !rt_expr((*left).right,(*right).right) { return false; }
+    var index:usize=0usize;
+    while index<(*left).arg_count {
+        if !rt_expr((*left).args[index],(*right).args[index]) { return false; }
+        index=index+1usize;
+    }
+    index=0usize;
+    while index<(*left).byte_count {
+        if (*left).bytes[index]!=(*right).bytes[index] { return false; }
+        index=index+1usize;
+    }
+    var a:*RmdInit=(*left).inits;
+    var b:*RmdInit=(*right).inits;
+    while a!=null(*RmdInit) && b!=null(*RmdInit) {
+        if (*a).loc.offset!=(*b).loc.offset || !rt_name((*a).name,(*b).name) || !rt_expr((*a).value,(*b).value) { return false; }
+        a=(*a).next;b=(*b).next;
+    }
+    return a==null(*RmdInit) && b==null(*RmdInit);
+}
+
+fn rt_stmt(left:*RmdStmt,right:*RmdStmt)->bool {
+    while left!=null(*RmdStmt) && right!=null(*RmdStmt) {
+        if (*left).kind!=(*right).kind || (*left).loc.offset!=(*right).loc.offset ||
+           (*left).uninitialized!=(*right).uninitialized || !rt_name((*left).name,(*right).name) ||
+           !rt_type((*left).syntax_type,(*right).syntax_type) || !rt_expr((*left).expr,(*right).expr) ||
+           !rt_expr((*left).value,(*right).value) || !rt_stmt((*left).body,(*right).body) ||
+           !rt_stmt((*left).otherwise,(*right).otherwise) { return false; }
+        left=(*left).next;right=(*right).next;
+    }
+    return left==null(*RmdStmt) && right==null(*RmdStmt);
+}
+
+fn rt_decls(left:*RmdDecl,right:*RmdDecl)->bool {
+    while left!=null(*RmdDecl) && right!=null(*RmdDecl) {
+        if (*left).kind!=(*right).kind || (*left).loc.offset!=(*right).loc.offset ||
+           (*left).unit_identity!=(*right).unit_identity || (*left).identity!=(*right).identity ||
+           (*left).field_count!=(*right).field_count || (*left).param_count!=(*right).param_count ||
+           !rt_name((*left).name,(*right).name) || !rt_text((*left).link_name,(*right).link_name) ||
+           !rt_type((*left).syntax_type,(*right).syntax_type) || !rt_stmt((*left).body,(*right).body) ||
+           !rt_expr((*left).init,(*right).init) { return false; }
+        var a:*RmdField=(*left).fields;
+        var b:*RmdField=(*right).fields;
+        while a!=null(*RmdField) && b!=null(*RmdField) {
+            if (*a).loc.offset!=(*b).loc.offset || (*a).index!=(*b).index ||
+               !rt_name((*a).name,(*b).name) || !rt_type((*a).syntax_type,(*b).syntax_type) { return false; }
+            a=(*a).next;b=(*b).next;
+        }
+        if a!=null(*RmdField) || b!=null(*RmdField) { return false; }
+        var p:*RmdParam=(*left).params;
+        var q:*RmdParam=(*right).params;
+        while p!=null(*RmdParam) && q!=null(*RmdParam) {
+            if (*p).loc.offset!=(*q).loc.offset || !rt_name((*p).name,(*q).name) ||
+               !rt_type((*p).syntax_type,(*q).syntax_type) { return false; }
+            p=(*p).next;q=(*q).next;
+        }
+        if p!=null(*RmdParam) || q!=null(*RmdParam) { return false; }
+        left=(*left).next;right=(*right).next;
+    }
+    return left==null(*RmdDecl) && right==null(*RmdDecl);
+}
+
+fn rt_length(text:*u8)->usize {
+    var size:usize=0usize;
+    while text[size]!=0u8 { size=size+1usize; }
+    return size;
+}
+
+fn rt_print(text:*u8)->unit {
+    if rmd0_host_write_stream(2u32,text,rt_length(text))!=0i32 { trap; }
+}
+
+fn rt_compare(source:*RmdSource,begin:usize,end:usize)->bool {
+    var seed:RmdContext=uninit;
+    var stage:RmdContext=uninit;
+    rmd_context_init(&seed,null(*RmdAllocator));rmd_context_init(&stage,null(*RmdAllocator));
+    var a:*RmdUnit=null(*RmdUnit);
+    var accepted:bool=rmd_read_range(&seed,source,begin,end,&a);
+    var b:*RmdUnit=rr_read(&stage,source,begin,end,null(*RmdReaderHooks));
+    var equal:bool=accepted==(b!=null(*RmdUnit));
+    if accepted && b!=null(*RmdUnit) { equal=rt_decls((*a).declarations,(*b).declarations); }
+    if !accepted && b==null(*RmdUnit) {
+        equal=rt_text(&seed.error[0usize],&stage.error[0usize]) && seed.error_loc.offset==stage.error_loc.offset &&
+            stage.units==null(*RmdUnit) && stage.last_unit==null(*RmdUnit) && stage.error_count==1usize;
+    }
+    if !equal {
+        rt_print((*source).path);rt_print("\nseed: ");rt_print(&seed.error[0usize]);
+        rt_print("\nstage: ");rt_print(&stage.error[0usize]);rt_print("\n");
+    }
+    rmd_context_destroy(&seed);rmd_context_destroy(&stage);
+    return equal;
+}
+
+record ReaderTestHooks { declarations:usize; statements:usize; prefixes:usize; types:usize; }
+
+fn rt_declaration_hook(reader:*RmdReader,user:*u8)->*RmdDecl {
+    if !rr_is_name(reader,"shape") { return null(*RmdDecl); }
+    var state:*ReaderTestHooks=user as *ReaderTestHooks;
+    (*state).declarations=(*state).declarations+1usize;
+    (*reader).token.kind=RR_RECORD;
+    return rr_record(reader);
+}
+
+fn rt_statement_hook(reader:*RmdReader,user:*u8)->*RmdStmt {
+    if !rr_is_name(reader,"then") { return null(*RmdStmt); }
+    var state:*ReaderTestHooks=user as *ReaderTestHooks;
+    (*state).statements=(*state).statements+1usize;
+    if !rr_next(reader) { return null(*RmdStmt); }
+    return rr_statement(reader);
+}
+
+fn rt_prefix_hook(reader:*RmdReader,user:*u8)->*RmdExpr {
+    if !rr_is_name(reader,"same") { return null(*RmdExpr); }
+    var state:*ReaderTestHooks=user as *ReaderTestHooks;
+    (*state).prefixes=(*state).prefixes+1usize;
+    if !rr_next(reader) { return null(*RmdExpr); }
+    return rr_prefix(reader);
+}
+
+fn rt_type_hook(reader:*RmdReader,user:*u8)->*RmdTypeSyntax {
+    if !rr_is_name(reader,"word") { return null(*RmdTypeSyntax); }
+    var state:*ReaderTestHooks=user as *ReaderTestHooks;
+    (*state).types=(*state).types+1usize;
+    (*reader).token.kind=RR_TYPE;(*reader).token.integer_type=RMD_T_U64;
+    return rr_standard_type(reader);
+}
+
+fn rt_bad_hook(reader:*RmdReader,user:*u8)->*RmdDecl {
+    var mode:usize=*(user as *usize);
+    if mode==0usize { rr_next(reader);return null(*RmdDecl); }
+    if mode==1usize { return rr_new_decl(reader,RMD_D_RECORD,(*reader).token.offset); }
+    if mode==3usize {
+        rmd_set_error((*reader).context,(*reader).source,(*reader).token.offset,"direct hook failure");return null(*RmdDecl);
+    }
+    if mode==4usize { (*reader).offset=(*reader).offset+1usize;return null(*RmdDecl); }
+    (*reader).failed=true;return null(*RmdDecl);
+}
+
+fn rt_hooks()->bool {
+    var text:*u8="shape Box {value:word;} fn answer()->word {then return same 42u64;}";
+    var source:RmdSource=make RmdSource {path:"reader-hook-test",bytes:text,size:rt_length(text),identity:1u64};
+    var context:RmdContext=uninit;rmd_context_init(&context,null(*RmdAllocator));
+    var state:ReaderTestHooks=make ReaderTestHooks {declarations:0usize,statements:0usize,prefixes:0usize,types:0usize};
+    var hooks:RmdReaderHooks=make RmdReaderHooks {
+        user:&state as *u8,declaration:rt_declaration_hook,statement:rt_statement_hook,prefix:rt_prefix_hook,type_syntax:rt_type_hook
+    };
+    var parsed:*RmdUnit=rr_read(&context,&source,0usize,source.size,&hooks);
+    var equal:bool=parsed!=null(*RmdUnit) && state.declarations==1usize && state.statements==1usize &&
+        state.prefixes==1usize && state.types==2usize;
+    var eval:*u8=null(*u8);
+    if equal { equal=rmd_collect(&context) && rmd_resolve(&context) && rmd_check(&context); }
+    if equal {
+        eval=rmd_eval_create(&context,null(*RmdEvalOptions));
+        var value:u64=0u64;
+        equal=eval!=null(*u8) && rmd_eval_call(eval,(*(*parsed).declarations).next,null(**u8),0usize,&value as *u8) && value==42u64;
+    }
+    if !equal { rt_print("hook result: ");rt_print(&context.error[0usize]);rt_print("\n"); }
+    rmd_eval_destroy(eval);rmd_context_destroy(&context);
+    var mode:usize=0usize;
+    while mode<5usize {
+        rmd_context_init(&context,null(*RmdAllocator));
+        hooks=make RmdReaderHooks {
+            user:&mode as *u8,declaration:rt_bad_hook,statement:null(fn(*RmdReader,*u8)->*RmdStmt),
+            prefix:null(fn(*RmdReader,*u8)->*RmdExpr),type_syntax:null(fn(*RmdReader,*u8)->*RmdTypeSyntax)
+        };
+        parsed=rr_read(&context,&source,0usize,source.size,&hooks);
+        if parsed!=null(*RmdUnit) || context.error_count!=1usize || context.error_loc.offset!=0usize || context.units!=null(*RmdUnit) {
+            equal=false;
+        }
+        rmd_context_destroy(&context);mode=mode+1usize;
+    }
+    rmd_context_init(&context,null(*RmdAllocator));
+    var reader:RmdReader=uninit;
+    if !rr_init(&reader,&context,&source,0usize,source.size,null(*RmdReaderHooks)) { equal=false; }
+    reader.token_limit=reader.token_count;
+    if rr_next(&reader) || !reader.failed || context.error_count!=1usize { equal=false; }
+    rmd_context_destroy(&context);
+    return equal;
+}
+
+fn rt_no_memory(user:*u8,size:usize)->*u8 { return null(*u8); }
+fn rt_release(user:*u8,allocation:*u8)->unit { trap; }
+
+fn rt_allocation()->bool {
+    var allocator:RmdAllocator=make RmdAllocator {user:null(*u8),allocate:rt_no_memory,release:rt_release};
+    var context:RmdContext=uninit;rmd_context_init(&context,&allocator);
+    var source:RmdSource=make RmdSource {path:"reader-allocation",bytes:"",size:0usize,identity:1u64};
+    var parsed:*RmdUnit=rr_read(&context,&source,0usize,0usize,null(*RmdReaderHooks));
+    var equal:bool=parsed==null(*RmdUnit) && context.error_count==1usize && context.units==null(*RmdUnit) && context.error_loc.source==&source;
+    rmd_context_destroy(&context);return equal;
+}
+
+fn main(argc:i32,argv:**u8)->i32 {
+    if !rt_hooks() || !rt_allocation() { return 2i32; }
+    var argument:i32=1i32;
+    while argument<argc {
+        var bytes:*u8=null(*u8);
+        var size:usize=0usize;
+        if rmd0_host_read_file(argv[argument as usize],&bytes,&size)!=0i32 {
+            rt_print("cannot read test input: ");rt_print(argv[argument as usize]);rt_print("\n");return 3i32;
+        }
+        var source:RmdSource=make RmdSource {path:argv[argument as usize],bytes:bytes,size:size,identity:1u64};
+        var equal:bool=rt_compare(&source,0usize,size);
+        rmd0_host_free(bytes);
+        if !equal { return 1i32; }
+        argument=argument+1i32;
+    }
+    var range_text:*u8="@fn f()->unit{}@";
+    var ranged:RmdSource=make RmdSource {path:"reader-range",bytes:range_text,size:rt_length(range_text),identity:1u64};
+    if !rt_compare(&ranged,1usize,ranged.size-1usize) || !rt_compare(&ranged,ranged.size+1usize,ranged.size) { return 4i32; }
+    return 0i32;
+}

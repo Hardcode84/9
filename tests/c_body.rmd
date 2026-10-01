@@ -1,0 +1,113 @@
+record BodyTest {
+    helper: *RmdDecl;
+    helper_body: *RmdStmt;
+    entry_body: *RmdStmt;
+    calls: usize;
+    mode: u32;
+}
+
+fn body_test_length(text:*u8)->usize {
+    var size:usize = 0usize;
+    while text[size] != 0u8 { size = size + 1usize; }
+    return size;
+}
+
+fn body_test_equal(left:*u8, right:*u8)->bool {
+    var index:usize = 0usize;
+    while left[index] == right[index] {
+        if left[index] == 0u8 { return true; }
+        index = index + 1usize;
+    }
+    return false;
+}
+
+fn body_test_emit(stage:*CStage, declaration:*RmdDecl, opaque:*u8)->bool {
+    var state:*BodyTest = opaque as *BodyTest;
+    (*state).calls = (*state).calls + 1usize;
+    if (*declaration).body != null(*RmdStmt) { return false; }
+    if (*state).mode == 1u32 { return false; }
+    if (*state).mode == 2u32 {
+        c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset, "selected body failure");
+        return false;
+    }
+    if (*state).mode == 3u32 {
+        rmd_set_error((*stage).status.context, (*declaration).loc.source,
+                      (*declaration).loc.offset, "selected context failure");
+        return true;
+    }
+    var body:*RmdStmt = (*state).entry_body;
+    if declaration == (*state).helper { body = (*state).helper_body; }
+    c_text(stage, "{\n");
+    var statement:*RmdStmt = (*body).body;
+    while statement != null(*RmdStmt) {
+        if (*statement).kind == RMD_S_RETURN {
+            var value:usize = c_expression(stage, (*statement).expr);
+            c_text(stage, "goto extension_exit;\nextension_exit:\nreturn ");
+            if declaration == (*state).helper { c_value(stage, value); }
+            else {
+                c_text(stage, "r_i32((uint32_t)((uint64_t)");
+                c_value(stage, value);
+                c_text(stage, "+UINT64_C(42)))");
+            }
+            c_text(stage, ";\n");
+        } else { c_statement(stage, statement); }
+        statement = (*statement).next;
+    }
+    c_text(stage, "}\n");
+    return !(*stage).status.failed;
+}
+
+fn main(argc:i32, argv:**u8)->i32 {
+    if argc != 2i32 { return 1i32; }
+    var context:RmdContext = uninit;
+    rmd_context_init(&context, null(*RmdAllocator));
+    var text:*u8 = "fn helper(x:i32)->i32 { var result:i32=x+1i32; return result; } fn entry(argc:i32,argv:**u8)->i32 { return helper(argc)-2i32; }";
+    var source:RmdSource = make RmdSource {identity:1u64, path:"body-input", bytes:text, size:body_test_length(text)};
+    var parsed:*RmdUnit = null(*RmdUnit);
+    if !rmd_read(&context, &source, &parsed) || !rmd_collect(&context) ||
+       !rmd_resolve(&context) || !rmd_check(&context) { return 2i32; }
+    var helper:*RmdDecl = (*parsed).declarations;
+    var entry:*RmdDecl = (*helper).next;
+    (*helper).link_name = "body_helper";
+    (*entry).link_name = "body_entry";
+    var state:BodyTest = make BodyTest {
+        helper:helper, helper_body:(*helper).body, entry_body:(*entry).body,
+        calls:0usize, mode:0u32
+    };
+    (*helper).body = null(*RmdStmt);
+    (*entry).body = null(*RmdStmt);
+    var stage:CStage = uninit;
+    state.mode = 1u32;
+    while state.mode <= 3u32 {
+        context.error_count = 0usize;
+        context.error[0usize] = 0u8;
+        state.calls = 0usize;
+        c_stage_init(&stage, &context);
+        if c_emit_with_body(&stage, entry, body_test_emit, &state as *u8) ||
+           !stage.status.failed || state.calls != 1usize || context.error_count != 1usize {
+            return 3i32;
+        }
+        var expected:*u8 = "C function body callback failed";
+        if state.mode == 2u32 { expected = "selected body failure"; }
+        if state.mode == 3u32 { expected = "selected context failure"; }
+        if !body_test_equal(&context.error[0usize], expected) || context.error_loc.source != &source {
+            return 4i32;
+        }
+        c_stage_destroy(&stage);
+        if stage.status.blocks != null(*CBlock) { return 5i32; }
+        state.mode = state.mode + 1u32;
+    }
+    context.error_count = 0usize;
+    context.error[0usize] = 0u8;
+    state.mode = 0u32;
+    state.calls = 0usize;
+    var options:CBackendOptions = make CBackendOptions {
+        mode:0u32, output:argv[1usize], symbols:null(*u8),
+        cflags:null(**u8), cflag_count:0usize, ldflags:null(**u8), ldflag_count:0usize
+    };
+    var result:i32 = c_backend_build_with_body(&context, entry, &options, body_test_emit, &state as *u8);
+    if result == 0i32 && (state.calls != 2usize || (*helper).body != null(*RmdStmt) ||
+                         (*entry).body != null(*RmdStmt)) { result = 6i32; }
+    rmd_context_destroy(&context);
+    return result;
+}

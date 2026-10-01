@@ -1,0 +1,649 @@
+{
+  "schema_version": 1,
+  "performance_samples": false,
+  "baseline": "benchmarks/resources/baseline.json",
+  "baseline_sha256": "90e9bd7197bd9ea8e08dfb302a47dc80ffdbbeb7e43798a0b751e20ecbbf44f8",
+  "commands": [
+    {
+      "command": [
+        "build/rmd-resource",
+        "--check",
+        "examples/resources/sqlite/library.rmd",
+        "examples/resources/sqlite/program.rmd"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "build/rmd-resource",
+        "--cflag=-O2",
+        "-o",
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        "examples/resources/sqlite/library.rmd",
+        "examples/resources/sqlite/program.rmd",
+        "--ldflag",
+        ".profile-cache/resources-baseline/sqlite3.o",
+        "--ldflag=-ldl",
+        "--ldflag=-lm",
+        "--ldflag=-pthread"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "build/rmd",
+        "examples/resources/sqlite/main.rmd"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "build/rmd",
+        "examples/resources/sqlite/main.rmd",
+        "--check"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "build/rmd-resource",
+        "--cflag=-O1",
+        "--cflag=-g",
+        "--cflag=-fsanitize=address,undefined",
+        "--cflag=-fno-omit-frame-pointer",
+        "-o",
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize",
+        "examples/resources/sqlite/library.rmd",
+        "examples/resources/sqlite/program.rmd",
+        "--ldflag",
+        ".profile-cache/resources-baseline/sqlite3.o",
+        "--ldflag=-ldl",
+        "--ldflag=-lm",
+        "--ldflag=-pthread",
+        "--ldflag=-fsanitize=address,undefined"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        ".profile-cache/resources-baseline/normal.db"
+      ],
+      "status": 0,
+      "stdout": "B 00ff\nT 48690078\nN\nB \nT \nI 3432\nR 312e35\nT c3a9\nrows 8\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "build/sqlite-resource",
+        ".profile-cache/resources-baseline/normal.db"
+      ],
+      "status": 0,
+      "stdout": "B 00ff\nT 48690078\nN\nB \nT \nI 3432\nR 312e35\nT c3a9\nrows 8\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize",
+        ".profile-cache/resources-baseline/normal.db"
+      ],
+      "status": 0,
+      "stdout": "B 00ff\nT 48690078\nN\nB \nT \nI 3432\nR 312e35\nT c3a9\nrows 8\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        ".profile-cache/resources-baseline/empty.db"
+      ],
+      "status": 0,
+      "stdout": "rows 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "build/sqlite-resource",
+        ".profile-cache/resources-baseline/empty.db"
+      ],
+      "status": 0,
+      "stdout": "rows 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize",
+        ".profile-cache/resources-baseline/empty.db"
+      ],
+      "status": 0,
+      "stdout": "rows 0\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        ".profile-cache/resources-baseline/missing-parent/input.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 14 0 0\n"
+    },
+    {
+      "command": [
+        "build/sqlite-resource",
+        ".profile-cache/resources-baseline/missing-parent/input.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 14 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize",
+        ".profile-cache/resources-baseline/missing-parent/input.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 14 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        ".profile-cache/resources-baseline/missing-table.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 0 0\n"
+    },
+    {
+      "command": [
+        "build/sqlite-resource",
+        ".profile-cache/resources-baseline/missing-table.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize",
+        ".profile-cache/resources-baseline/missing-table.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        ".profile-cache/resources-baseline/step-failure.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 1 0\n"
+    },
+    {
+      "command": [
+        "build/sqlite-resource",
+        ".profile-cache/resources-baseline/step-failure.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 1 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize",
+        ".profile-cache/resources-baseline/step-failure.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 1 1 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli"
+      ],
+      "status": 2,
+      "stdout": "",
+      "stderr": "usage: sqlite-reader DATABASE\n"
+    },
+    {
+      "command": [
+        "build/sqlite-resource"
+      ],
+      "status": 2,
+      "stdout": "",
+      "stderr": "usage: sqlite-reader DATABASE\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize"
+      ],
+      "status": 2,
+      "stdout": "",
+      "stderr": "usage: sqlite-reader DATABASE\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        ".profile-cache/resources-baseline/normal.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 10 0 0\n"
+    },
+    {
+      "command": [
+        "build/sqlite-resource",
+        ".profile-cache/resources-baseline/normal.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 10 0 0\n"
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize",
+        ".profile-cache/resources-baseline/normal.db"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": "error 10 0 0\n"
+    },
+    {
+      "command": [
+        "build/rmd-resource",
+        "--library",
+        "--check",
+        "examples/resources/sqlite/library.rmd",
+        ".profile-cache/resources-sqlite/copy-borrowed-bytes.rmd"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": ".profile-cache/resources-sqlite/copy-borrowed-bytes.rmd:1:35: error: copy of a resource requires an explicit move\n"
+    },
+    {
+      "command": [
+        "build/rmd-resource",
+        "--library",
+        "--check",
+        "examples/resources/sqlite/library.rmd",
+        ".profile-cache/resources-sqlite/move-borrowed-bytes.rmd"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": ".profile-cache/resources-sqlite/move-borrowed-bytes.rmd:1:42: error: move requires a whole local owner\n"
+    },
+    {
+      "command": [
+        "build/rmd-resource",
+        "--library",
+        "--check",
+        "examples/resources/sqlite/library.rmd",
+        ".profile-cache/resources-sqlite/store-loan.rmd"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": ".profile-cache/resources-sqlite/store-loan.rmd:1:14: error: borrowed views cannot be record fields\n"
+    },
+    {
+      "command": [
+        "build/rmd-resource",
+        "--library",
+        "--check",
+        "examples/resources/sqlite/library.rmd",
+        ".profile-cache/resources-sqlite/step-borrowed-statement.rmd"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": ".profile-cache/resources-sqlite/step-borrowed-statement.rmd:1:98: error: access conflicts with an active borrow\n"
+    },
+    {
+      "command": [
+        "build/rmd-resource",
+        "--library",
+        "--check",
+        "examples/resources/sqlite/library.rmd",
+        ".profile-cache/resources-sqlite/close-borrowed-database.rmd"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": ".profile-cache/resources-sqlite/close-borrowed-database.rmd:1:78: error: access conflicts with an active borrow\n"
+    },
+    {
+      "command": [
+        "build/rmd-resource",
+        "--library",
+        "--check",
+        "examples/resources/sqlite/library.rmd",
+        ".profile-cache/resources-sqlite/callback-mode.rmd"
+      ],
+      "status": 1,
+      "stdout": "",
+      "stderr": ".profile-cache/resources-sqlite/callback-mode.rmd:1:180: error: source value has an incompatible type or borrow mode\n"
+    },
+    {
+      "command": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O2",
+        "-g0",
+        "-Ibenchmarks/resources",
+        "-I.profile-cache/sources",
+        ".profile-cache/resources-sqlite/format.c",
+        ".profile-cache/resources-baseline/sqlite3.o",
+        "-ldl",
+        "-lm",
+        "-pthread",
+        "-o",
+        ".profile-cache/resources-sqlite/format-c"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "build/rmd-resource",
+        "--cflag=-O2",
+        "-o",
+        ".profile-cache/resources-sqlite/format-resource",
+        "examples/resources/sqlite/library.rmd",
+        ".profile-cache/resources-sqlite/format.rmd",
+        "--ldflag",
+        ".profile-cache/resources-baseline/sqlite3.o",
+        "--ldflag=-ldl",
+        "--ldflag=-lm",
+        "--ldflag=-pthread"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "build/rmd-resource",
+        "--cflag=-O1",
+        "--cflag=-g",
+        "--cflag=-fsanitize=address,undefined",
+        "--cflag=-fno-omit-frame-pointer",
+        "-o",
+        ".profile-cache/resources-sqlite/format-resource-sanitize",
+        "examples/resources/sqlite/library.rmd",
+        ".profile-cache/resources-sqlite/format.rmd",
+        "--ldflag",
+        ".profile-cache/resources-baseline/sqlite3.o",
+        "--ldflag=-ldl",
+        "--ldflag=-lm",
+        "--ldflag=-pthread",
+        "--ldflag=-fsanitize=address,undefined"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/format-c"
+      ],
+      "status": 0,
+      "stdout": "0 9 10 18446744073709551615\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/format-resource"
+      ],
+      "status": 0,
+      "stdout": "0 9 10 18446744073709551615\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        ".profile-cache/resources-sqlite/format-resource-sanitize"
+      ],
+      "status": 0,
+      "stdout": "0 9 10 18446744073709551615\n",
+      "stderr": ""
+    },
+    {
+      "command": [
+        "nm",
+        "-g",
+        ".profile-cache/resources-sqlite/sqlite-resource-cli"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": "",
+      "stdout_sha256": "6b8497ebc6b3ea70f90383ff0a2d75ecbbb777ea834c43d62e23cbfbc16603e2",
+      "symbol_lines": 380
+    },
+    {
+      "command": [
+        "nm",
+        "-g",
+        "build/sqlite-resource"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": "",
+      "stdout_sha256": "62a66b462964673adf6b7aa5d2d8b70b4900b02ae178fc0db4e4e96629ce93bf",
+      "symbol_lines": 380
+    },
+    {
+      "command": [
+        "nm",
+        "-g",
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize"
+      ],
+      "status": 0,
+      "stdout": "",
+      "stderr": "",
+      "stdout_sha256": "b236620f2fbfcf8a13141ccd2931b391f9e138b744927ec447e8276ab530965b",
+      "symbol_lines": 412
+    },
+    {
+      "command": [
+        "objdump",
+        "-d",
+        "--disassemble=_rmd0_u1_d26",
+        ".profile-cache/resources-sqlite/sqlite-resource-cli"
+      ],
+      "status": 0,
+      "stdout": "\n.profile-cache/resources-sqlite/sqlite-resource-cli:     file format elf64-x86-64\n\n\nDisassembly of section .init:\n\nDisassembly of section .plt:\n\nDisassembly of section .plt.sec:\n\nDisassembly of section .text:\n\n0000000000402ac0 <_rmd0_u1_d26>:\n  402ac0:\tf3 0f 1e fa          \tendbr64\n  402ac4:\t48 83 ec 28          \tsub    $0x28,%rsp\n  402ac8:\t41 89 fa             \tmov    %edi,%r10d\n  402acb:\t48 89 f1             \tmov    %rsi,%rcx\n  402ace:\t41 b8 14 00 00 00    \tmov    $0x14,%r8d\n  402ad4:\t64 48 8b 04 25 28 00 \tmov    %fs:0x28,%rax\n  402adb:\t00 00 \n  402add:\t48 89 44 24 18       \tmov    %rax,0x18(%rsp)\n  402ae2:\t31 c0                \txor    %eax,%eax\n  402ae4:\t49 89 e1             \tmov    %rsp,%r9\n  402ae7:\t49 bb cd cc cc cc cc \tmovabs $0xcccccccccccccccd,%r11\n  402aee:\tcc cc cc \n  402af1:\t0f 1f 80 00 00 00 00 \tnopl   0x0(%rax)\n  402af8:\t48 89 c8             \tmov    %rcx,%rax\n  402afb:\t49 83 e8 01          \tsub    $0x1,%r8\n  402aff:\t49 f7 e3             \tmul    %r11\n  402b02:\t48 89 c8             \tmov    %rcx,%rax\n  402b05:\t4b 8d 34 08          \tlea    (%r8,%r9,1),%rsi\n  402b09:\t48 c1 ea 03          \tshr    $0x3,%rdx\n  402b0d:\t48 8d 3c 92          \tlea    (%rdx,%rdx,4),%rdi\n  402b11:\t48 01 ff             \tadd    %rdi,%rdi\n  402b14:\t48 29 f8             \tsub    %rdi,%rax\n  402b17:\t83 c0 30             \tadd    $0x30,%eax\n  402b1a:\t88 06                \tmov    %al,(%rsi)\n  402b1c:\t48 89 c8             \tmov    %rcx,%rax\n  402b1f:\t48 89 d1             \tmov    %rdx,%rcx\n  402b22:\t48 83 f8 09          \tcmp    $0x9,%rax\n  402b26:\t77 d0                \tja     402af8 <_rmd0_u1_d26+0x38>\n  402b28:\tba 14 00 00 00       \tmov    $0x14,%edx\n  402b2d:\t44 89 d7             \tmov    %r10d,%edi\n  402b30:\t4c 29 c2             \tsub    %r8,%rdx\n  402b33:\te8 78 fd ff ff       \tcall   4028b0 <_rmd0_u1_d25>\n  402b38:\t48 8b 54 24 18       \tmov    0x18(%rsp),%rdx\n  402b3d:\t64 48 2b 14 25 28 00 \tsub    %fs:0x28,%rdx\n  402b44:\t00 00 \n  402b46:\t75 05                \tjne    402b4d <_rmd0_u1_d26+0x8d>\n  402b48:\t48 83 c4 28          \tadd    $0x28,%rsp\n  402b4c:\tc3                   \tret\n  402b4d:\te8 3e f8 ff ff       \tcall   402390 <__stack_chk_fail@plt>\n\nDisassembly of section .fini:\n",
+      "stderr": ""
+    }
+  ],
+  "cases": [
+    {
+      "name": "values",
+      "status": 0,
+      "implementations": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        "build/sqlite-resource",
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize"
+      ]
+    },
+    {
+      "name": "empty-table",
+      "status": 0,
+      "implementations": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        "build/sqlite-resource",
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize"
+      ]
+    },
+    {
+      "name": "open-failure",
+      "status": 1,
+      "implementations": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        "build/sqlite-resource",
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize"
+      ]
+    },
+    {
+      "name": "prepare-failure",
+      "status": 1,
+      "implementations": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        "build/sqlite-resource",
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize"
+      ]
+    },
+    {
+      "name": "step-and-finalize-failure",
+      "status": 1,
+      "implementations": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        "build/sqlite-resource",
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize"
+      ]
+    },
+    {
+      "name": "usage",
+      "status": 2,
+      "implementations": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        "build/sqlite-resource",
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize"
+      ]
+    },
+    {
+      "name": "output-failure",
+      "status": 1,
+      "implementations": [
+        ".profile-cache/resources-sqlite/sqlite-resource-cli",
+        "build/sqlite-resource",
+        ".profile-cache/resources-sqlite/sqlite-resource-sanitize"
+      ]
+    }
+  ],
+  "rejections": [
+    {
+      "name": "copy-borrowed-bytes",
+      "diagnostic": ".profile-cache/resources-sqlite/copy-borrowed-bytes.rmd:1:35: error: copy of a resource requires an explicit move\n",
+      "source": "fn bad(value:read Bytes)->Bytes { return value; }",
+      "source_sha256": "c104e58c11cd822ec87af7744f4ce11fa99f63ecace296d59612be33b0000088"
+    },
+    {
+      "name": "move-borrowed-bytes",
+      "diagnostic": ".profile-cache/resources-sqlite/move-borrowed-bytes.rmd:1:42: error: move requires a whole local owner\n",
+      "source": "fn bad(value:read Bytes)->Bytes { return move value; }",
+      "source_sha256": "6942bacc6da32f9dbca5a0ba72562bab0fd9dd6a4bc6047d159916d8595e5be4"
+    },
+    {
+      "name": "store-loan",
+      "diagnostic": ".profile-cache/resources-sqlite/store-loan.rmd:1:14: error: borrowed views cannot be record fields\n",
+      "source": "record Bad { value:read Bytes; }",
+      "source_sha256": "bb474b0b3b1e8e1af5d3b68ec3a300735bc6fe57f37354b22f2e76179843ddb4"
+    },
+    {
+      "name": "step-borrowed-statement",
+      "diagnostic": ".profile-cache/resources-sqlite/step-borrowed-statement.rmd:1:98: error: access conflicts with an active borrow\n",
+      "source": "fn bad(value:mut Statement)->i32 { var loan:read Statement=read value; return statement_step(mut value); }",
+      "source_sha256": "6819dd888b166c8a8ed3b57982e91fdb00f5e228eaf6fc2ee9dd4e183a3437c7"
+    },
+    {
+      "name": "close-borrowed-database",
+      "diagnostic": ".profile-cache/resources-sqlite/close-borrowed-database.rmd:1:78: error: access conflicts with an active borrow\n",
+      "source": "fn bad(value:mut Db)->i32 { var loan:read Db=read value; return db_close(mut value); }",
+      "source_sha256": "f75e3698d6d274b7730295e7588083253248bee6ae82f1e72052af0b2d991aea"
+    },
+    {
+      "name": "callback-mode",
+      "diagnostic": ".profile-cache/resources-sqlite/callback-mode.rmd:1:180: error: source value has an incompatible type or borrow mode\n",
+      "source": "fn wrong(value:mut Bytes, context:mut QueryContext)->i32 { return 0i32; } fn bad(value:mut Statement, context:mut QueryContext)->i32 { return with_blob(mut value,0i32,mut context,wrong); }",
+      "source_sha256": "dddb7c1ad05530e02c25d39e42c7e7e8c4a6696f491f73357dc3ae18cf83546e"
+    }
+  ],
+  "gcc": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "sanitizers": {
+    "instrumented": "resource target generated C",
+    "sqlite_object_instrumented": false,
+    "ASAN_OPTIONS": "detect_leaks=0:detect_stack_use_after_return=1:abort_on_error=1",
+    "UBSAN_OPTIONS": "halt_on_error=1",
+    "leak_check_reason": "LeakSanitizer fails under the execution environment's ptrace monitor."
+  },
+  "format_checks": 3,
+  "application_process_checks": 21,
+  "compile_rejection_checks": 6,
+  "target_compiler_symbols_absent": [
+    "resource_build",
+    "resource_program",
+    "rmd_context_init",
+    "rmd_read",
+    "rmd_run_main",
+    "rs_prepare"
+  ],
+  "initialization": {
+    "number_buffer_bytes": 20,
+    "resource_source": "raw pointer writes initialize only the emitted decimal suffix",
+    "c_baseline_source": "only the emitted decimal suffix is initialized",
+    "storage_contract": "u64 needs one to twenty decimal digits; each byte in the output suffix is written before the synchronous write call",
+    "disassembly": ".profile-cache/resources-sqlite/write-number.asm",
+    "disassembly_sha256": "a9cc897cc26d04c2ecbd090be5e7cd7b3c92fada264be1c467f6acce49b5a7d5",
+    "native_symbol": "_rmd0_u1_d26",
+    "observed_instructions": []
+  },
+  "source_sha256": {
+    "examples/resources/sqlite/library.rmd": "d03f1750e888295ff3ee921e7d5143834a20eba1f3cf5df6d4b7a81f2668bf54",
+    "examples/resources/sqlite/main.rmd": "645f343a35a798975fdcff310669d128bc0d40ca79748a52b16780bca8c87658",
+    "examples/resources/sqlite/program.rmd": "e271c72cd37b850b9eac32d6bd3b84bfd1c22288c2df277f21e3efa46c65098a",
+    "examples/resources/sqlite/verify.py": "9b2398c7b1c7fdf61f0e52a19b154ce7049a75ad6d4766d0b9655397ed2eb634",
+    "stages/resources/api.rmd": "88edd6d6d4b05ebbea57934df6172fc8cf8dce49346608abf5876b1613556d6e",
+    "stages/resources/base.rmd": "426f03b51a95f239339929b3055e94510423ea8b88f696a0ac3307ee47cf58b3",
+    "stages/resources/build.rmd": "5a615b76712d1e1a8216ae15e7107c27b9a7062ff1c8f9c2126f1ce134466694",
+    "stages/resources/cleanup.rmd": "7222824c1502ddbcbd9dd8a3732dc0f9dd5b12b562f27ef9b8f77da4b771d87c",
+    "stages/resources/constants.rmd": "360f33cc907b92d3fe611a5aff55608b8db169f11fed5b817fa368df0eb16ef9",
+    "stages/resources/control.rmd": "3a063b8bbc77d542ddaeac74f3730560404a46af1824ac4444b321382d98b49e",
+    "stages/resources/emit.rmd": "7d5567d4379ba60a36be9e6d6aae730e9983f957b2ba76219582d2e4fc9f57ca",
+    "stages/resources/expr.rmd": "5ff7dd0894413868157997cd259828986cff65e4130d015d61675ee23387c3d5",
+    "stages/resources/extension.rmd": "9eb6acc764f9585aa60c4fb31a01668bc20cb3d268fcd2b65d42f2f70a234a98",
+    "stages/resources/main.rmd": "14129cbf4324a17d792c449ca00f1fd9161814f0e9976daf98c412a4aae45f32",
+    "stages/resources/model.rmd": "11890de6ac53705e122fc15e19dc21b960ba9acdcac1cc65529285a050edeeab",
+    "stages/resources/places.rmd": "53f9ea485146ddd94bcf66f809f5880602523650e84347e7d642a992727f9628",
+    "stages/resources/program.rmd": "3de0e835106b55e5831e6638d29e18377064456005096e28081d089d6cc37811",
+    "stages/resources/read.rmd": "8fbf29e7f8e81f28b64566fb110cc4985a33af696c723e69fed501bc5d2c9c5f",
+    "stages/resources/state.rmd": "c4ea476b0d5efef08064d8d77a9a3296c152a372df3ec25757a92ce463e59a79",
+    "stages/resources/types.rmd": "79606523102e2f3c30abcd892394d251e6f4ab3dfed6595cc528a2bb0a5d050f",
+    "stages/reader/lex.rmd": "abbdbfa747dbebd70db2fd088965976c7b7d316c756382ade8a647767570e64b",
+    "stages/reader/model.rmd": "6db792e43655ba601d5cd40fc104f5fe123320c1c1f90520f9f404ab109b940c",
+    "stages/reader/parse.rmd": "a22ef678b8545c51311820324ae11322b943dccd76e77031bb8afe3049b9187a",
+    "stages/reader/test.rmd": "b01c4869f108cc0b73ffbbf0bf9b876b13c1e0f4b44795e4cc6e383c78478396",
+    "stages/c/api.rmd": "9b75d3cbb5241026243cb85d1f6e71802c05f012cea47d9a3636063b8f713157",
+    "stages/c/base.rmd": "e6f24dcb72c6d1b9bfdac9f1d715ea3c922e2d4d917b44aa4b33e203574cb77f",
+    "stages/c/build.rmd": "e7bfa808426a341c51a5aee1da63073a09484d297533584fadb0ab6ccda6b678",
+    "stages/c/driver.rmd": "284bc6cdc781456c0f4d4c4a7c622d9d3dc7c436dae3bee62c0bf0cc61f334da",
+    "stages/c/emit.rmd": "e4139947ab2b6391ee92a18fca258fa37defc3dc67b5735be34a4306193c9807",
+    "stages/c/extension.rmd": "9defa951c0516dd5cfdaec208de05a4ea61607b7056f2a061b22a098a38b4c3e",
+    "stages/c/main.rmd": "124d6842dfc6d362a5a4a2642354ebd42f2bb79d8ada58b3d431229233cfc5ef",
+    "stages/c/model.rmd": "ee8d8f9106e61455223129988233c0a8414af00e37b5274243de649e9ce94a37",
+    "stages/c/program.rmd": "b8ce9a7f3ca40bd864d07e086b753c955353e0145a126fb0dc3942168a484490",
+    "stages/c/types.rmd": "495c6955545918814b38657b325090aee0a86b0e248c8fdac778ac0518ba8c8e"
+  },
+  "binary_sha256": {
+    "build/rmd-resource": "e387bab645c4f5227dfa2862e0a1b1633cc14423cc9e33ebb0fe5218bf229372",
+    "build/rmd": "d045e61c6151561532cc711a91fe09473de44603ffda026ca5ba897b7d3402b6",
+    "build/rmd-resource-library.so": "f8bf276e81d085b08ba7c048a1755763d56dd6798af05a3de7f6f7f5265fe3e4",
+    ".profile-cache/resources-baseline/sqlite3.o": "2b08621fc6739249effcf17fba638ec468a83bb799d4828d4c8e9b6725222305",
+    ".profile-cache/resources-sqlite/sqlite-resource-cli": "3d7b8cb475cf4998fed6fe197db8a19cce271e389cc46ab5aa71b7351a2ab37f",
+    "build/sqlite-resource": "324ed0ab981e7b82c7050baa619abe314e05c11d98789771e171f2d0aac8d5f2",
+    ".profile-cache/resources-sqlite/sqlite-resource-sanitize": "9ab3ec1bd1421d09674c6f20037d0863dccc4e6c03d0264602cb35fc2c7d80ed",
+    ".profile-cache/resources-sqlite/format-c": "0a1bbd96bd8108aa1e034c5720665cd35f7341294393ac36bc7fe4f00c4ab7f2",
+    ".profile-cache/resources-sqlite/format-resource": "7c6b6435efdd8528f6fc1406785934e5d6db14d601b168a062762b00354511b4",
+    ".profile-cache/resources-sqlite/format-resource-sanitize": "ff2b06297e591d937a00d90476357a81708456567fe9faa79c1e2d2b57fd44a4"
+  },
+  "complete": true
+}

@@ -12,8 +12,13 @@ RUNNER = $(BUILD)/eval.o $(BUILD)/run.o
 PRELUDE = api/rmd0.rmd api/rmd0_host.rmd api/rmd0_eval.rmd api/rmd0_run.rmd stages/host.rmd
 C_LIBRARY = api/rmd0.rmd api/rmd0_host.rmd api/rmd0_stage.rmd stages/c/model.rmd stages/c/base.rmd stages/c/types.rmd stages/c/emit.rmd stages/c/driver.rmd stages/c/program.rmd
 C_STAGE = $(C_LIBRARY) stages/c/main.rmd
+C_EXPORTS = c_backend_build c_program c_backend_build_with_body c_stage_init c_stage_destroy c_emit c_emit_with_body c_error c_alloc c_map_get c_map_set c_text c_number c_quote c_expression c_place c_statement c_value c_symbol c_global c_type_name c_binding c_temp c_address_temp
+READER = stages/reader/model.rmd stages/reader/lex.rmd stages/reader/parse.rmd
+RESOURCE = stages/resources/model.rmd stages/resources/base.rmd stages/resources/read.rmd stages/resources/types.rmd stages/resources/constants.rmd stages/resources/state.rmd stages/resources/cleanup.rmd stages/resources/places.rmd stages/resources/expr.rmd stages/resources/control.rmd stages/resources/emit.rmd stages/resources/program.rmd stages/resources/build.rmd
+RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(RESOURCE)
+RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_c_body
 
-.PHONY: all clean check witness api c-stage check-c check-stage check-examples
+.PHONY: all clean check witness api c-stage resource-stage check-c check-stage check-examples check-resources check-resource-alloc check-reader
 all: $(BUILD)/rmd $(BUILD)/rmd0 $(BUILD)/librmd0.a $(BUILD)/librmd0_host.a $(BUILD)/librmd0_run.a
 
 $(BUILD):
@@ -58,13 +63,24 @@ $(BUILD)/rmd-c-seed: $(BUILD)/rmd-c-seed.o $(BUILD)/librmd0.a $(BUILD)/librmd0_h
 $(BUILD)/rmd-c: $(BUILD)/rmd-c-seed
 	$< -o $@ $(C_STAGE) $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/librmd0.a --ldflag $(BUILD)/librmd0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-$(BUILD)/rmd-c-library.o: $(BUILD)/rmd-c $(C_LIBRARY)
-	$< --library --object --export c_backend_build --export c_program --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(C_LIBRARY)
+$(BUILD)/rmd-c-library.o: $(BUILD)/rmd-c $(C_LIBRARY) Makefile
+	$< --library --object $(foreach name,$(C_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(C_LIBRARY)
 
 $(BUILD)/rmd-c-library.so: $(BUILD)/rmd-c-library.o
 	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
 
 c-stage: $(BUILD)/rmd-c $(BUILD)/rmd-c-library.so
+
+$(BUILD)/rmd-resource: $(BUILD)/rmd-c $(RESOURCE_LIBRARY) stages/resources/main.rmd
+	$< -o $@ $(RESOURCE_LIBRARY) stages/resources/main.rmd $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/librmd0.a --ldflag $(BUILD)/librmd0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+$(BUILD)/rmd-resource-library.o: $(BUILD)/rmd-c $(RESOURCE_LIBRARY) Makefile
+	$< --library --object $(foreach name,$(RESOURCE_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(RESOURCE_LIBRARY)
+
+$(BUILD)/rmd-resource-library.so: $(BUILD)/rmd-resource-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
+
+resource-stage: $(BUILD)/rmd-resource $(BUILD)/rmd-resource-library.so
 
 $(BUILD)/intrusive.s: $(BUILD)/rmd0 examples/intrusive/program.rmd
 	$(BUILD)/rmd0 -S -o $@ examples/intrusive/program.rmd
@@ -104,6 +120,16 @@ check: all $(BUILD)/core_test $(BUILD)/read_test $(BUILD)/check_test $(BUILD)/ho
 
 check-c: c-stage
 	python3 tests/run.py --backend c --compiler $(BUILD)/rmd-c --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+	python3 tests/c_body.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+
+check-reader: all c-stage
+	python3 stages/reader/test.py --build $(BUILD) --cc '$(CC)' --ldflags='$(LDFLAGS)'
+
+check-resources: all resource-stage
+	python3 tests/resources.py --build $(BUILD)
+
+check-resource-alloc: all c-stage
+	python3 tests/resources_alloc.py --build $(BUILD) --cc '$(CC)'
 
 check-stage: all c-stage
 	python3 tests/source_order.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'

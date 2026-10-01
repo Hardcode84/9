@@ -1,14 +1,17 @@
 # Ownership and cleanup in an RMD stage
 
-Date: 2026-10-01. Status: implementation proposal and API audit.
+Date: 2026-10-01. Status: design record with an implemented resource stage.
 
 Implement ownership, RAII, and `defer` in an ordinary RMD compiler library.
 The root program selects that library. Keep these rules out of the C99 seed.
 RAII means that an initialized resource gets automatic scope cleanup.
 
-The current runner can select and execute this library. The library does not
-exist yet. The current reader, checker, and C backend do not implement these
-resource rules. This proposal adds no safety or performance result.
+The [resource library](../stages/resources/README.md) now implements the bounded
+component described here. Its reader, ownership checker, cleanup lowering, and
+body emitter are RMD code. The C99 seed has no resource-specific change.
+The [SQLite witness](../examples/resources/sqlite/README.md) and
+[measurement record](../benchmarks/resources/README.md) give executable evidence.
+This does not establish the persistent intrusive-list observer contract below.
 
 This document makes the [resource rules](language-exploration.md#62-ownership-and-cleanup)
 and [language-stage boundary](compiler-extension-experiment.md#ownership-and-unsafe-are-language-stages)
@@ -25,8 +28,8 @@ It can also read separate target files. No launcher option or special package
 name is required.
 
 The stage owns reading, resource checks, cleanup lowering, and the call to the
-selected backend. Its build function has the same role as `c_build`; its exact
-API and resource declaration syntax are not selected by this document.
+selected backend. Its `resource_build` function has the same role as `c_build`.
+The implemented syntax and API are specified in the resource library README.
 Do not add new seed keywords to select it.
 
 A stage can instead replace `RmdRun.read` and `RmdRun.execute` for later root
@@ -195,7 +198,9 @@ Neither form establishes the validity of stored list links.
 
 ## 4. What the current APIs permit
 
-This audit used the source at revision `5bd88f0`.
+This audit records the input APIs at revision `5bd88f0`, before implementation.
+The generic RMD reader and C body callback described after the table remove
+the corresponding extension barriers. The seed scalar ABI remains unchanged.
 
 | Current component | Consequence for the resource stage |
 |---|---|
@@ -207,6 +212,12 @@ This audit used the source at revision `5bd88f0`.
 | Structured `RmdStmtKind` without labels or basic blocks | Account for the cost of copying cleanup into several exits. |
 | [C backend API](../stages/c/api.rmd) accepting checked seed input | Call `c_backend_build` after lowering and checking that input. |
 | `c_program` owning its read/check/build sequence | Use a resource driver. This function has no resource-pass insertion point. |
+
+The implementation adds a [generic reader library](../stages/reader/README.md)
+with four syntax hooks and a [generic complete-body callback](c-backend.md#custom-function-bodies).
+Both are ordinary RMD libraries. The resource driver uses those interfaces.
+The C backend's public callback does not require a seed function body and has
+no resource-specific operation.
 
 The scalar call restriction applies to all seed functions, not only C imports.
 Local records already work. A library can lower source record parameters to
@@ -237,12 +248,10 @@ representation and an RMD C emitter can express these blocks as C labels
 and branches. The seed needs no resource keyword or general `goto` feature
 for such an emitter.
 
-That library representation and emitter do not exist today. First measure the
-bounded application's structured lowering and an exit-count stress case.
-If cleanup copies dominate growth, establish shared cleanup blocks in that
-same experiment before adding more language features. Record their construction
-and serialization costs. Sharing does not prove a linear bound for all source
-control flow.
+The implemented representation interns equal cleanup suffixes with the same
+continuation. Its body emitter writes C labels and branches. The bounded
+application and exit-count stress case measure its construction and output.
+Sharing does not prove a linear bound for all source control flow.
 
 ## 5. Trust and direct intrusive lists
 

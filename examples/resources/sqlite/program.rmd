@@ -1,0 +1,27 @@
+fn main(argc:i32, argv:**u8)->i32 {
+    if argc != 2i32 {
+        unsafe { write_bytes(2i32, "usage: sqlite-reader DATABASE\n", 30usize); }
+        return 2i32;
+    }
+    var database:Db = db_empty();
+    var context:QueryContext = make QueryContext {
+        rows:0u64, operation:0i32, finalized:0i32, closed:0i32
+    };
+    unsafe { database = db_acquire(argv[1usize], mut context); }
+    if context.operation == SQL_OK {
+        unsafe {
+            var result:i32 = with_statement(mut database,
+                "SELECT value FROM input ORDER BY seq", mut context, query_rows);
+            context.operation = result;
+        }
+    }
+    context.closed = db_close(mut database);
+    if context.operation == SQL_OK && context.finalized == SQL_OK && context.closed == SQL_OK {
+        context.operation = write_summary(read context);
+    }
+    if context.operation != SQL_OK || context.finalized != SQL_OK || context.closed != SQL_OK {
+        write_errors(read context);
+        return 1i32;
+    }
+    return 0i32;
+}

@@ -1,0 +1,25 @@
+// Include api/rmd0.rmd, stages/c/model.rmd, and stages/resources/model.rmd
+// before this consumer interface. Use stages/c/extension.rmd for backend services.
+
+// Initialize at a stable address with an empty target context.
+// Retain the stage and context through preparation and all resource body emission.
+// Source trees, lowered trees, and cleanup plans belong to the context arena.
+extern fn rs_init(stage: *RsStage, context: *RmdContext) -> unit = "rs_init";
+
+// Read a complete declaration range before preparation. Locations retain full-source offsets.
+// Retain each source descriptor and its bytes until context destruction.
+// On failure, return false and retain the diagnostic in stage.context.
+extern fn rs_read(stage: *RsStage, source: *RmdSource, begin: usize, end: usize) -> bool = "rs_read";
+
+// Prepare once after all source units have been read successfully.
+// On success, context.units contains typed operations; the stage retains cleanup plans.
+// Emit with rs_c_body or another consumer of both operations and plans. Ordinary seed
+// evaluation or emission alone does not run the planned exit cleanup.
+// Assign native link names before emission. Preserve the stage until emission ends.
+// On failure, return false and retain the diagnostic in stage.context.
+extern fn rs_prepare(stage: *RsStage) -> bool = "rs_prepare";
+
+// Pass as the C backend body callback with the prepared RsStage address as user.
+// Require declarations from that stage and checked target nodes with assigned link names.
+// Emit a complete body. Allocation or output failure sets the C stage status.
+extern fn rs_c_body(stage: *CStage, declaration: *RmdDecl, user: *u8) -> bool = "rs_c_body";

@@ -40,9 +40,11 @@ belong to compiled libraries. The seed has no import or module syntax.
 Read the [language exploration](docs/language-exploration.md) for the research,
 candidate checked-language rules, systems requirements, and acceptance tests.
 
-Read the [resource stage proposal](docs/resource-metastage.md) for ownership,
-RAII, and `defer` in an RMD library, the current API constraints, and the first
-implementation experiment.
+The optional [resource stage](stages/resources/README.md) implements ownership,
+local loans, RAII, and `defer` entirely in RMD. It uses a generic RMD reader and
+a generic C function-body callback. Run `make resource-stage` to build it.
+The [design record](docs/resource-metastage.md) explains its contracts and
+bounded SQLite application test.
 
 Read the [compiler profiles](docs/compiler-profiles.md) for measured C, C++, and
 Rust frontend costs, profiler overhead, and repeatable commands.

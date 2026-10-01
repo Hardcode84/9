@@ -1,0 +1,106 @@
+fn rs_c_label_name(stage:*CStage, chain:*RsChain)->unit {
+    if chain == null(*RsChain) { trap; }
+    c_text(stage, "rs_exit_");
+    c_number(stage, (*chain).identity as u64);
+}
+
+fn rs_c_label(stage:*CStage, chain:*RsChain)->unit {
+    rs_c_label_name(stage, chain);
+    c_text(stage, ":;\n");
+}
+
+fn rs_c_goto(stage:*CStage, chain:*RsChain)->unit {
+    c_text(stage, "goto ");
+    rs_c_label_name(stage, chain);
+    c_text(stage, ";\n");
+}
+
+fn rs_c_statement(stage:*CStage, function:*RsFunction, statement:*RmdStmt)->unit {
+    if (*stage).status.failed { return; }
+    if rmd_map_get(&(*function).seed_blocks, statement as usize) != null(*u8) {
+        c_statement(stage, statement);
+        return;
+    }
+    var kind:u32 = (*statement).kind;
+    if kind == RMD_S_BLOCK {
+        c_text(stage, "{\n");
+        var child:*RmdStmt = (*statement).body;
+        while child != null(*RmdStmt) {
+            rs_c_statement(stage, function, child);
+            child = (*child).next;
+        }
+        var exit:*RsExit = rmd_map_get(&(*function).exits, statement as usize) as *RsExit;
+        if exit != null(*RsExit) {
+            if (*exit).chain != (*exit).continuation { rs_c_goto(stage, (*exit).chain); }
+            rs_c_label(stage, (*exit).continuation);
+        }
+        c_text(stage, "}\n");
+        return;
+    }
+    if kind == RMD_S_RETURN || kind == RMD_S_BREAK || kind == RMD_S_CONTINUE {
+        var exit:*RsExit = rmd_map_get(&(*function).exits, statement as usize) as *RsExit;
+        if exit == null(*RsExit) { trap; }
+        rs_c_goto(stage, (*exit).chain);
+        return;
+    }
+    if kind == RMD_S_IF {
+        var condition:usize = c_expression(stage, (*statement).expr);
+        c_text(stage, "if(");
+        c_value(stage, condition);
+        c_text(stage, ")");
+        rs_c_statement(stage, function, (*statement).body);
+        if (*statement).otherwise != null(*RmdStmt) {
+            c_text(stage, "else ");
+            rs_c_statement(stage, function, (*statement).otherwise);
+        }
+        return;
+    }
+    if kind == RMD_S_WHILE {
+        var loop:*RsLoop = rmd_map_get(&(*function).loop_targets, statement as usize) as *RsLoop;
+        if loop == null(*RsLoop) { trap; }
+        rs_c_label(stage, (*loop).continue_target);
+        var condition:usize = c_expression(stage, (*statement).expr);
+        c_text(stage, "if(!");
+        c_value(stage, condition);
+        c_text(stage, ")");
+        rs_c_goto(stage, (*loop).break_target);
+        rs_c_statement(stage, function, (*statement).body);
+        rs_c_goto(stage, (*loop).continue_target);
+        rs_c_label(stage, (*loop).break_target);
+        return;
+    }
+    c_statement(stage, statement);
+}
+
+// Require complete resource exit plans and checked target nodes.
+// Emit one function body without changing its input facts or cleanup plan.
+fn rs_c_body(stage:*CStage, declaration:*RmdDecl, user:*u8)->bool {
+    var resources:*RsStage = user as *RsStage;
+    var function:*RsFunction = rmd_map_get(&(*resources).functions, declaration as usize) as *RsFunction;
+    if function == null(*RsFunction) { trap; }
+    c_text(stage, "{\n");
+    var storage:*RmdStmt = (*function).declarations;
+    if storage != null(*RmdStmt) {
+        while true {
+            c_statement(stage, storage);
+            if storage == (*function).last_declaration { break; }
+            storage = (*storage).next;
+            if storage == null(*RmdStmt) { trap; }
+        }
+    }
+    rs_c_statement(stage, function, (*function).body);
+    rs_c_goto(stage, (*function).returned);
+    var chain:*RsChain = (*function).chains;
+    while chain != null(*RsChain) {
+        if (*chain).action != null(*RsAction) {
+            rs_c_label(stage, chain);
+            c_statement(stage, (*(*chain).action).statement);
+            rs_c_goto(stage, (*chain).next);
+        }
+        chain = (*chain).all_next;
+    }
+    rs_c_label(stage, (*function).returned);
+    c_statement(stage, (*function).epilogue);
+    c_text(stage, "}\n");
+    return !(*stage).status.failed;
+}

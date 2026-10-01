@@ -407,6 +407,18 @@ fn c_driver_validate(driver: *CDriver) -> bool {
 // Retain input trees and names unchanged. Record failures in the caller's context.
 // Return 0 on success, a failed tool's status, or 1 for another failure.
 fn c_backend_build(context: *RmdContext, entry: *RmdDecl, options: *CBackendOptions) -> i32 {
+    return c_backend_build_with_body(context, entry, options,
+                                    null(fn(*CStage,*RmdDecl,*u8)->bool), null(*u8));
+}
+
+// Require valid target types, layouts, signatures, parameter symbols, assigned link
+// names, checked constant initializers, and a valid hosted entry or null.
+// The callback owns each complete body; declaration.body may be null.
+// Keep callback code and user storage live until this synchronous call returns.
+// Null requires checked seed bodies and selects the default emitter.
+// A false callback result or a new diagnostic fails the build.
+fn c_backend_build_with_body(context: *RmdContext, entry: *RmdDecl, options: *CBackendOptions,
+                            body: fn(*CStage,*RmdDecl,*u8)->bool, user: *u8) -> i32 {
     var stage: CStage = uninit;
     c_stage_init(&stage, context);
     var driver: CDriver = make CDriver {
@@ -414,7 +426,7 @@ fn c_backend_build(context: *RmdContext, entry: *RmdDecl, options: *CBackendOpti
         temporary: null(*CDriverTemp), process_status: 0i32
     };
     var success: bool = c_driver_validate(&driver);
-    if success { success = c_emit(&stage, entry); }
+    if success { success = c_emit_with_body(&stage, entry, body, user); }
     if success {
         c_buffer_bytes(&stage.header, stage.body.data, stage.body.size);
         success = !stage.status.failed;

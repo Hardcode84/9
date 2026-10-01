@@ -16,8 +16,12 @@ Each example has its own directory. Start with [hello](hello/main.rmd).
 | [intrusive](intrusive/README.md) | Build a direct intrusive list | `intrusive: ok` |
 | [reader-switch](reader-switch/README.md) | Replace the reader and executor from the root | Two lines read with a new grammar |
 | [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
+| [resources/hello](resources/hello/README.md) | Select ownership, RAII, and defer in the same source file | `Hello, resources!` |
+| [resources/sqlite](resources/sqlite/README.md) | Own SQLite connections and statements; borrow column bytes | Typed rows and separate error codes |
 
-The root files select the repository's `build/rmd-c-library.so` explicitly.
+The root files select their compiler libraries explicitly. Resource examples
+require `make resource-stage`. The SQLite example also needs its pinned native
+SQLite input; its README gives the command.
 Paths passed to `host_source`, `host_input`, and `host_path` are relative to the
 root file. A raw `-o` argument passed to the C backend is relative to the working
 directory. Each example states its output path. A root builds an executable;
@@ -31,6 +35,9 @@ unchanged source files and selected libraries into a path with spaces. It runs
 them from a separate working directory, executes their outputs, and checks
 reader and inline-target errors. `make check` and `make check-c` also check the
 custom assembly stage.
+
+Run `make check-resources` for the resource hello and resource language tests.
+The SQLite verifier checks the native application against its frozen C baseline.
 
 Recorded benchmark JSON files retain the source paths and hashes from their
 original revisions. The live measurement scripts use the current example paths.

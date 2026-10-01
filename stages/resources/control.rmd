@@ -1,0 +1,369 @@
+fn rs_match_state(function: *RsFunction, a: *RsChange, b: *RsChange, location: *RmdLoc) -> unit {
+    var initialized: bool = (*(*a).local).initialized;
+    var readers: usize = (*(*a).local).readers;
+    var exclusive: bool = (*(*a).local).exclusive;
+    if b != null(*RsChange) { initialized = (*b).initialized; readers = (*b).readers; exclusive = (*b).exclusive; }
+    if (*a).initialized != initialized || (*a).readers != readers || (*a).exclusive != exclusive {
+        rs_error((*function).stage, location, "continuing paths must agree on initialization and ownership");
+    }
+}
+
+fn rs_join(function: *RsFunction, a: *RsChange, b: *RsChange, location: *RmdLoc) -> unit {
+    var stage: *RsStage = (*function).stage;
+    var left: RmdMap = make RmdMap { entries: null(*RmdMapEntry), count: 0usize, capacity: 0usize };
+    var right: RmdMap = make RmdMap { entries: null(*RmdMapEntry), count: 0usize, capacity: 0usize };
+    var entry: *RsChange = a;
+    while entry != null(*RsChange) && !(*stage).failed {
+        rs_put(stage, &left, (*entry).local as usize, entry as *u8);
+        entry = (*entry).next;
+    }
+    entry = b;
+    while entry != null(*RsChange) && !(*stage).failed {
+        rs_put(stage, &right, (*entry).local as usize, entry as *u8);
+        entry = (*entry).next;
+    }
+    entry = a;
+    while entry != null(*RsChange) && !(*stage).failed {
+        rs_match_state(function, entry, rmd_map_get(&right, (*entry).local as usize) as *RsChange, location);
+        entry = (*entry).next;
+    }
+    entry = b;
+    while entry != null(*RsChange) && !(*stage).failed {
+        if rmd_map_get(&left, (*entry).local as usize) == null(*u8) { rs_match_state(function, entry, null(*RsChange), location); }
+        entry = (*entry).next;
+    }
+}
+
+fn rs_loop_state(function: *RsFunction, loop: *RsLoop, location: *RmdLoc) -> unit {
+    var stage: *RsStage = (*function).stage;
+    var marker: *RsChange = (*function).changes;
+    var scope: *RsScope = (*function).scope;
+    while scope != (*loop).scope && !(*stage).failed { rs_release_scope(function, scope); scope = (*scope).parent; }
+    var entries: RmdMap = make RmdMap { entries: null(*RmdMapEntry), count: 0usize, capacity: 0usize };
+    var change: *RsChange = (*function).changes;
+    while change != (*loop).entry && !(*stage).failed {
+        if rs_outer((*change).local, (*loop).scope) { rs_put(stage, &entries, (*change).local as usize, change as *u8); }
+        change = (*change).next;
+    }
+    var index: usize = 0usize;
+    while index < entries.capacity && !(*stage).failed {
+        if entries.entries[index].key != 0usize {
+            change = entries.entries[index].value as *RsChange;
+            var local: *RsLocal = (*change).local;
+            if (*local).initialized != (*change).initialized || (*local).readers != (*change).readers ||
+               (*local).exclusive != (*change).exclusive {
+                rs_error(stage, location, "loop edges must restore outer initialization and ownership states");
+            }
+        }
+        index = index + 1usize;
+    }
+    rs_restore(function, marker);
+}
+
+fn rs_condition(function: *RsFunction, expression: *RmdExpr, output: *RsStatements) -> *RsValue {
+    rs_scope(function);
+    var effects: RsStatements = make RsStatements { first: null(*RmdStmt), last: null(*RmdStmt) };
+    var value: *RsValue = rs_expr(function, expression, &effects);
+    var expected: *RmdTypeSyntax = rs_type_node((*function).stage, RMD_T_BOOL, &(*expression).loc);
+    if !rs_require_value(function, value, expected, &(*expression).loc) { return null(*RsValue); }
+    rs_append(output, rs_expression_scope(function, &effects, &(*expression).loc));
+    return value;
+}
+
+fn rs_initialize(function: *RsFunction, local: *RsLocal, value: *RsValue,
+                 syntax: *RmdTypeSyntax, output: *RsStatements, location: *RmdLoc) -> unit {
+    if !rs_require_value(function, value, syntax, location) { return; }
+    var stage: *RsStage = (*function).stage;
+    if (*local).mode == RS_READ || (*local).mode == RS_MUT {
+        var parent: *RsLocal = (*(*value).local).parent_loan;
+        if parent != null(*RsLocal) && !rs_outer(parent, (*local).scope) {
+            rs_error(stage, location, "borrow would outlive its source storage");
+            return;
+        }
+        (*local).parent_loan = parent;
+        rs_live(function, (*value).local, false);
+    }
+    rs_assign(function, output, rs_named(stage, (*local).storage, location), (*value).expression, location);
+    rs_transfer(function, value);
+    rs_live(function, local, true);
+}
+
+fn rs_lower_block(function: *RsFunction, source: *RmdStmt, output: *RsStatements) -> bool {
+    var stage: *RsStage = (*function).stage;
+    rs_scope(function);
+    var body: RsStatements = make RsStatements { first: null(*RmdStmt), last: null(*RmdStmt) };
+    var current: *RmdStmt = (*source).body;
+    var falls: bool = true;
+    while current != null(*RmdStmt) && !(*stage).failed {
+        if !falls {
+            rs_error(stage, &(*current).loc, "statement is unreachable");
+            return false;
+        }
+        falls = rs_lower_statement(function, current, &body);
+        current = (*current).next;
+    }
+    if (*stage).failed { return false; }
+    var block: *RmdStmt = rs_block(stage, &body, &(*source).loc);
+    if block == null(*RmdStmt) { return false; }
+    if falls {
+        var continuation: *RsChain = rs_terminal(function);
+        if continuation == null(*RsChain) { return false; }
+        rs_exit(function, block, (*(*function).scope).parent, continuation, continuation);
+    }
+    rs_leave_scope(function);
+    rs_append(output, block);
+    return falls;
+}
+
+fn rs_lower_statement(function: *RsFunction, source: *RmdStmt, output: *RsStatements) -> bool {
+    var stage: *RsStage = (*function).stage;
+    if (*stage).failed { return false; }
+    var kind: u32 = (*source).kind;
+    var location: *RmdLoc = &(*source).loc;
+    if kind == RMD_S_BLOCK { return rs_lower_block(function, source, output); }
+    if kind == RS_UNSAFE {
+        (*function).unsafe_depth = (*function).unsafe_depth + 1usize;
+        var falls: bool = rs_lower_block(function, (*source).body, output);
+        (*function).unsafe_depth = (*function).unsafe_depth - 1usize;
+        return falls;
+    }
+    if kind == RMD_S_IF {
+        var condition: *RsValue = rs_condition(function, (*source).expr, output);
+        if (*stage).failed { return false; }
+        var conditional: *RmdStmt = rs_stmt_node(stage, RMD_S_IF, location);
+        if conditional == null(*RmdStmt) { return false; }
+        (*conditional).expr = (*condition).expression;
+        var marker: *RsChange = (*function).changes;
+        var parent: *RsScope = (*function).scope;
+        var body: RsStatements = make RsStatements { first: null(*RmdStmt), last: null(*RmdStmt) };
+        var left_falls: bool = rs_lower_statement(function, (*source).body, &body);
+        var left: *RsChange = rs_snapshot(function, marker, parent);
+        rs_restore(function, marker);
+        (*conditional).body = rs_block(stage, &body, location);
+        body = make RsStatements { first: null(*RmdStmt), last: null(*RmdStmt) };
+        var right_falls: bool = true;
+        if (*source).otherwise != null(*RmdStmt) {
+            right_falls = rs_lower_statement(function, (*source).otherwise, &body);
+            (*conditional).otherwise = rs_block(stage, &body, location);
+        }
+        var right: *RsChange = rs_snapshot(function, marker, parent);
+        rs_restore(function, marker);
+        if left_falls && right_falls { rs_join(function, left, right, location); }
+        if left_falls { rs_apply(function, left); }
+        else { if right_falls { rs_apply(function, right); } }
+        rs_append(output, conditional);
+        return left_falls || right_falls;
+    }
+    if kind == RMD_S_WHILE {
+        var loop: *RsLoop = rs_alloc(stage, sizeof(RsLoop), alignof(RsLoop)) as *RsLoop;
+        var target: *RmdStmt = rs_stmt_node(stage, RMD_S_WHILE, location);
+        if (*stage).failed { return false; }
+        (*loop).parent = (*function).loop;
+        (*loop).scope = (*function).scope;
+        (*loop).entry = (*function).changes;
+        (*loop).break_target = rs_terminal(function);
+        (*loop).continue_target = rs_terminal(function);
+        (*function).loop = loop;
+        rs_put(stage, &(*function).loop_targets, target as usize, loop as *u8);
+        (*target).expr = rs_expr_node(stage, RMD_E_BOOL, location);
+        if (*stage).failed { return false; }
+        (*(*target).expr).integer = 1u64;
+        var body: RsStatements = make RsStatements { first: null(*RmdStmt), last: null(*RmdStmt) };
+        var condition: *RsValue = rs_condition(function, (*source).expr, &body);
+        if (*stage).failed { return false; }
+        rs_loop_state(function, loop, location);
+        var test: *RmdStmt = rs_stmt_node(stage, RMD_S_IF, location);
+        var finish: *RmdStmt = rs_stmt_node(stage, RMD_S_BREAK, location);
+        if (*stage).failed { return false; }
+        (*test).expr = rs_unary(stage, RMD_OP_NOT, (*condition).expression, location);
+        (*test).body = finish;
+        rs_exit(function, finish, (*loop).scope, (*loop).break_target, null(*RsChain));
+        rs_append(&body, test);
+        var falls: bool = rs_lower_statement(function, (*source).body, &body);
+        if falls { rs_loop_state(function, loop, location); }
+        rs_restore(function, (*loop).entry);
+        (*target).body = rs_block(stage, &body, location);
+        (*function).loop = (*loop).parent;
+        rs_append(output, target);
+        var forever: bool = (*(*source).expr).kind == RMD_E_BOOL && (*(*source).expr).integer != 0u64;
+        return !forever || (*loop).has_break;
+    }
+    if kind == RMD_S_BREAK || kind == RMD_S_CONTINUE {
+        var loop: *RsLoop = (*function).loop;
+        if loop == null(*RsLoop) { rs_error(stage, location, "loop exit outside a loop"); return false; }
+        rs_loop_state(function, loop, location);
+        var target: *RmdStmt = rs_stmt_node(stage, kind, location);
+        if target == null(*RmdStmt) { return false; }
+        var destination: *RsChain = (*loop).continue_target;
+        if kind == RMD_S_BREAK { destination = (*loop).break_target; (*loop).has_break = true; }
+        rs_exit(function, target, (*loop).scope, destination, null(*RsChain));
+        rs_append(output, target);
+        return false;
+    }
+    if kind == RMD_S_TRAP {
+        rs_append(output, rs_stmt_node(stage, RMD_S_TRAP, location));
+        return false;
+    }
+    if kind == RMD_S_VAR {
+        var local: *RsLocal = rs_local(function, (*source).name, (*source).syntax_type, null(*RmdParam), location);
+        if local == null(*RsLocal) { return false; }
+        if (*source).uninitialized {
+            if (*local).mode != 0u32 { rs_error(stage, location, "borrowed bindings require an initializer"); }
+            return true;
+        }
+        rs_scope(function);
+        var effects: RsStatements = make RsStatements { first: null(*RmdStmt), last: null(*RmdStmt) };
+        var value: *RsValue = rs_expr(function, (*source).value, &effects);
+        if (*stage).failed { return false; }
+        rs_initialize(function, local, value, (*source).syntax_type, &effects, location);
+        if (*stage).failed { return false; }
+        rs_append(output, rs_expression_scope(function, &effects, location));
+        return true;
+    }
+    var enclosing: *RsScope = (*function).scope;
+    rs_scope(function);
+    var effects: RsStatements = make RsStatements { first: null(*RmdStmt), last: null(*RmdStmt) };
+    if kind == RMD_S_RETURN {
+        var result_type: *RmdTypeSyntax = (*(*(*function).global).syntax).base;
+        if (*result_type).kind == RMD_T_UNIT {
+            if (*source).expr != null(*RmdExpr) { rs_error(stage, location, "unit return must have no expression"); return false; }
+        } else {
+            if (*source).expr == null(*RmdExpr) { rs_error(stage, location, "return requires a value"); return false; }
+            var value: *RsValue = rs_expr(function, (*source).expr, &effects);
+            if !rs_require_value(function, value, result_type, location) { return false; }
+            var destination: *RmdExpr = null(*RmdExpr);
+            if (*function).output != null(*RmdName) {
+                destination = rs_unary(stage, RMD_OP_DEREF, rs_named(stage, (*function).output, location), location);
+            } else { destination = rs_named(stage, (*(*function).result).storage, location); }
+            rs_assign(function, &effects, destination, (*value).expression, location);
+            rs_transfer(function, value);
+        }
+        var returning: *RmdStmt = rs_stmt_node(stage, RMD_S_RETURN, location);
+        if returning == null(*RmdStmt) { return false; }
+        if (*function).output != null(*RmdName) { (*returning).expr = rs_named(stage, (*function).output, location); }
+        else { if (*function).result != null(*RsLocal) { (*returning).expr = rs_named(stage, (*(*function).result).storage, location); } }
+        rs_exit(function, returning, null(*RsScope), (*function).returned, null(*RsChain));
+        rs_append(&effects, returning);
+        rs_leave_scope(function);
+        rs_append(output, rs_block(stage, &effects, location));
+        return false;
+    }
+    if kind == RS_DEFER {
+        var call: *RmdExpr = (*source).expr;
+        while (*call).kind == RMD_E_GROUP { call = (*call).left; }
+        if (*call).kind != RMD_E_CALL { rs_error(stage, location, "defer requires a call expression"); return false; }
+        rs_call(function, call, &effects, enclosing);
+    } else { if kind == RS_FORGET {
+        if (*function).unsafe_depth == 0usize { rs_error(stage, location, "forget requires an unsafe region"); return false; }
+        var value: *RsValue = rs_expr(function, (*source).expr, &effects);
+        if (*stage).failed { return false; }
+        if !(*value).owned { rs_error(stage, location, "forget requires an owned value"); return false; }
+        rs_transfer(function, value);
+    } else { if kind == RMD_S_EXPR {
+        var value: *RsValue = rs_expr(function, (*source).expr, &effects);
+        if (*stage).failed { return false; }
+        if (*value).unsafe_call { rs_error(stage, location, "unsafe functions can only be called directly"); }
+    } else { if kind == RMD_S_ASSIGN {
+        var place: *RsValue = rs_place(function, (*source).expr, &effects, true, true);
+        if (*stage).failed { return false; }
+        var value: *RsValue = rs_expr(function, (*source).value, &effects);
+        if !rs_require_value(function, value, (*place).syntax, location) { return false; }
+        var lhs: *RmdExpr = (*source).expr;
+        while (*lhs).kind == RMD_E_GROUP { lhs = (*lhs).left; }
+        var whole: bool = (*lhs).kind == RMD_E_NAME;
+        if (*place).local != null(*RsLocal) {
+            var local: *RsLocal = (*place).local;
+            if !whole || (*local).initialized { rs_access(function, local, true, location); }
+            else { if (*local).exclusive || (*local).readers != 0usize { rs_error(stage, location, "assignment conflicts with an active borrow"); } }
+        }
+        if rs_owns(stage, (*place).syntax) {
+            if (*place).local == null(*RsLocal) { rs_error(stage, location, "resource assignment requires a checked owner or borrowed place"); return false; }
+            if !whole || (*(*place).local).initialized {
+                var drop: *RmdStmt = rs_drop_tree(function, (*place).syntax, (*place).expression);
+                if drop == null(*RmdStmt) { return false; }
+                rs_put(stage, &(*function).seed_blocks, drop as usize, drop as *u8);
+                rs_append(&effects, drop);
+            }
+        }
+        rs_assign(function, &effects, (*place).expression, (*value).expression, location);
+        rs_transfer(function, value);
+        if whole && (*place).local != null(*RsLocal) { rs_live(function, (*place).local, true); }
+    } else { rs_error(stage, location, "unsupported source statement"); return false; } } } }
+    if (*stage).failed { return false; }
+    rs_append(output, rs_expression_scope(function, &effects, location));
+    return true;
+}
+
+fn rs_function(stage: *RsStage, global: *RsGlobal) -> bool {
+    var source: *RmdDecl = (*global).source;
+    var target: *RmdDecl = (*global).lowered;
+    var function: *RsFunction = rs_alloc(stage, sizeof(RsFunction), alignof(RsFunction)) as *RsFunction;
+    if function == null(*RsFunction) { return false; }
+    (*function).stage = stage;
+    (*function).global = global;
+    (*function).next_label = 1usize;
+    (*function).returned = rs_terminal(function);
+    if (*global).unsafe_call { (*function).unsafe_depth = 1usize; }
+    rs_scope(function);
+    rs_put(stage, &(*stage).functions, target as usize, function as *u8);
+    var source_param: *RmdParam = (*source).params;
+    var parameter: *RmdParam = (*target).params;
+    while source_param != null(*RmdParam) && !(*stage).failed {
+        rs_local(function, (*source_param).name, (*source_param).syntax_type, parameter, &(*source_param).loc);
+        source_param = (*source_param).next;
+        parameter = (*parameter).next;
+    }
+    var result_type: *RmdTypeSyntax = (*source).syntax_type;
+    if rs_indirect(result_type) { (*function).output = (*parameter).name; }
+    else { if (*result_type).kind != RMD_T_UNIT {
+        (*function).result = rs_local(function, null(*RmdName), result_type, null(*RmdParam), &(*source).loc);
+    } }
+    if (*stage).failed { return false; }
+    var body: RsStatements = make RsStatements { first: null(*RmdStmt), last: null(*RmdStmt) };
+    var falls: bool = rs_lower_block(function, (*source).body, &body);
+    if (*stage).failed { return false; }
+    if falls {
+        if (*result_type).kind != RMD_T_UNIT {
+            rs_error(stage, &(*source).loc, "non-unit function can reach the end of its body");
+            return false;
+        }
+        var returning: *RmdStmt = rs_stmt_node(stage, RMD_S_RETURN, &(*source).loc);
+        if returning == null(*RmdStmt) { return false; }
+        rs_exit(function, returning, null(*RsScope), (*function).returned, null(*RsChain));
+        rs_append(&body, returning);
+    }
+    (*function).body = rs_block(stage, &body, &(*source).loc);
+    (*function).epilogue = rs_stmt_node(stage, RMD_S_RETURN, &(*source).loc);
+    if (*stage).failed { return false; }
+    if (*function).output != null(*RmdName) { (*(*function).epilogue).expr = rs_named(stage, (*function).output, &(*source).loc); }
+    else { if (*function).result != null(*RsLocal) {
+        (*(*function).epilogue).expr = rs_named(stage, (*(*function).result).storage, &(*source).loc);
+    } }
+    var validation: *RmdStmt = rs_stmt_node(stage, RMD_S_IF, &(*source).loc);
+    if validation == null(*RmdStmt) { return false; }
+    (*validation).expr = rs_expr_node(stage, RMD_E_BOOL, &(*source).loc);
+    var checks: RsStatements = make RsStatements { first: (*function).validation, last: (*function).last_validation };
+    (*validation).body = rs_block(stage, &checks, &(*source).loc);
+    var all: RsStatements = make RsStatements { first: (*function).declarations, last: (*function).last_declaration };
+    rs_append(&all, validation);
+    rs_append(&all, (*function).body);
+    rs_append(&all, (*function).epilogue);
+    (*target).body = rs_block(stage, &all, &(*source).loc);
+    return !(*stage).failed;
+}
+
+// Publish interfaces, check resource operations, and produce checked target trees.
+// Require complete source units and retain all source bytes through context use.
+fn rs_prepare(stage: *RsStage) -> bool {
+    if !rs_collect(stage) || !rs_publish(stage) { return false; }
+    var global: *RsGlobal = (*stage).first_global;
+    while global != null(*RsGlobal) && !(*stage).failed {
+        if (*(*global).source).kind == RMD_D_FUNCTION {
+            if !rs_function(stage, global) { return false; }
+        }
+        global = (*global).next;
+    }
+    if (*stage).failed { return false; }
+    if !rmd_check((*stage).context) { (*stage).failed = true; return false; }
+    return rs_check_constants(stage);
+}

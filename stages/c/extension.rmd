@@ -1,0 +1,55 @@
+// Include api/rmd0.rmd, api/rmd0_stage.rmd, stages/c/model.rmd,
+// and stages/c/api.rmd before this consumer interface.
+// Retain valid target types, layouts, signatures, parameter symbols, assigned link
+// names, checked constant initializers, and a valid hosted entry or null.
+// A body callback runs after its function signature and emits the complete body.
+// It owns body semantics; declaration.body may be null. Node helpers need checked nodes.
+// Callback code and user storage must remain live through the synchronous call.
+// Null requires checked seed bodies and selects the default body emitter.
+// False or a new diagnostic stops the build. False without a diagnostic records one.
+extern fn c_backend_build_with_body(context: *RmdContext, entry: *RmdDecl, options: *CBackendOptions,
+                                   body: fn(*CStage,*RmdDecl,*u8)->bool, user: *u8) -> i32 = "c_backend_build_with_body";
+
+// Initialize at a stable address. Destroy after the last output-buffer use.
+extern fn c_stage_init(stage: *CStage, context: *RmdContext) -> unit = "c_stage_init";
+extern fn c_stage_destroy(stage: *CStage) -> unit = "c_stage_destroy";
+
+// Require a newly initialized stage and the same input facts as the build functions.
+// Retain input and callback storage through return.
+// Output buffers remain live until stage destruction. Failure sets stage.status.
+extern fn c_emit(stage: *CStage, entry: *RmdDecl) -> bool = "c_emit";
+extern fn c_emit_with_body(stage: *CStage, entry: *RmdDecl,
+                         body: fn(*CStage,*RmdDecl,*u8)->bool, user: *u8) -> bool = "c_emit_with_body";
+
+// Record only the first failure. Message must be a terminated string.
+extern fn c_error(status: *CStatus, source: *RmdSource, offset: usize, message: *u8) -> unit = "c_error";
+
+// Return uninitialized storage, live until stage destruction, or null on failure.
+// Failures set status. Require alignment 1, 2, 4, or 8. Zero size returns null.
+extern fn c_alloc(status: *CStatus, size: usize, alignment: usize) -> *u8 = "c_alloc";
+// Initialize a map with zero fields. Keys are nonzero; zero from get means absent.
+extern fn c_map_get(map: *CMap, key: usize) -> usize = "c_map_get";
+extern fn c_map_set(status: *CStatus, map: *CMap, key: usize, value: usize) -> unit = "c_map_set";
+
+// Append to the selected stage buffer. Allocation failures set stage.status.
+extern fn c_text(stage: *CStage, text: *u8) -> unit = "c_text";
+extern fn c_number(stage: *CStage, value: u64) -> unit = "c_number";
+extern fn c_quote(stage: *CStage, bytes: *u8, count: usize) -> unit = "c_quote";
+
+// Emit checked nodes inside the current function. Results name complete value snapshots.
+// A place result names an address. Zero means unit or a failed stage, as applicable.
+extern fn c_expression(stage: *CStage, expression: *RmdExpr) -> usize = "c_expression";
+extern fn c_place(stage: *CStage, expression: *RmdExpr) -> usize = "c_place";
+extern fn c_statement(stage: *CStage, statement: *RmdStmt) -> unit = "c_statement";
+
+// Emit a generated name or type into the selected buffer.
+extern fn c_value(stage: *CStage, identity: usize) -> unit = "c_value";
+extern fn c_symbol(stage: *CStage, symbol: *RmdSymbol) -> unit = "c_symbol";
+extern fn c_global(stage: *CStage, declaration: *RmdDecl) -> unit = "c_global";
+extern fn c_type_name(stage: *CStage, source_type: *RmdType) -> unit = "c_type_name";
+// Register a compatible declaration alias. Return null on failure.
+extern fn c_binding(stage: *CStage, declaration: *RmdDecl) -> *CBinding = "c_binding";
+
+// Start a temporary declaration and return its identity. The caller must finish it.
+extern fn c_temp(stage: *CStage, source_type: *RmdType) -> usize = "c_temp";
+extern fn c_address_temp(stage: *CStage) -> usize = "c_address_temp";

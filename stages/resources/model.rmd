@@ -1,0 +1,136 @@
+const RS_READ: u32 = 100u32;
+const RS_MUT: u32 = 101u32;
+const RS_MOVE: u32 = 102u32;
+const RS_DEFER: u32 = 103u32;
+const RS_UNSAFE: u32 = 104u32;
+const RS_FORGET: u32 = 105u32;
+
+record RsResource {
+    declaration: *RmdDecl;
+    drop_name: *RmdName;
+    next: *RsResource;
+}
+
+record RsGlobal {
+    source: *RmdDecl;
+    lowered: *RmdDecl;
+    syntax: *RmdTypeSyntax;
+    resource: *RsResource;
+    unsafe_call: bool;
+    drop_only: bool;
+    drop: *RsGlobal;
+    next: *RsGlobal;
+}
+
+record RsStage {
+    context: *RmdContext;
+    sources: *RmdUnit;
+    resources: *RsResource;
+    globals: RmdMap;
+    first_global: *RsGlobal;
+    last_global: *RsGlobal;
+    unsafe_functions: RmdMap;
+    lowered_types: RmdMap;
+    ownership: RmdMap;
+    functions: RmdMap;
+    next_name: usize;
+    failed: bool;
+}
+
+record RsScope {
+    parent: *RsScope;
+    first: *RsLocal;
+    first_action: *RsAction;
+    last_action: *RsAction;
+}
+
+record RsLocal {
+    name: *RmdName;
+    syntax: *RmdTypeSyntax;
+    storage: *RmdName;
+    indirect: bool;
+    initialized: bool;
+    owning: bool;
+    mode: u32;
+    readers: usize;
+    exclusive: bool;
+    parent_loan: *RsLocal;
+    stamp: usize;
+    scope: *RsScope;
+    next: *RsLocal;
+}
+
+record RsValue {
+    syntax: *RmdTypeSyntax;
+    expression: *RmdExpr;
+    local: *RsLocal;
+    mode: u32;
+    owned: bool;
+    unsafe_call: bool;
+}
+
+record RsAction {
+    owner: *RsLocal;
+    statement: *RmdStmt;
+    validated: bool;
+    next: *RsAction;
+}
+
+record RsChain {
+    action: *RsAction;
+    next: *RsChain;
+    identity: usize;
+    hash_next: *RsChain;
+    all_next: *RsChain;
+}
+
+record RsExit {
+    chain: *RsChain;
+    continuation: *RsChain;
+}
+
+record RsChange {
+    local: *RsLocal;
+    initialized: bool;
+    readers: usize;
+    exclusive: bool;
+    next: *RsChange;
+}
+
+record RsLoop {
+    parent: *RsLoop;
+    scope: *RsScope;
+    break_target: *RsChain;
+    continue_target: *RsChain;
+    entry: *RsChange;
+    has_break: bool;
+}
+
+record RsFunction {
+    stage: *RsStage;
+    global: *RsGlobal;
+    locals: RmdMap;
+    scope: *RsScope;
+    loop: *RsLoop;
+    changes: *RsChange;
+    declarations: *RmdStmt;
+    last_declaration: *RmdStmt;
+    validation: *RmdStmt;
+    last_validation: *RmdStmt;
+    exits: RmdMap;
+    loop_targets: RmdMap;
+    seed_blocks: RmdMap;
+    chain_map: RmdMap;
+    chains: *RsChain;
+    next_label: usize;
+    result: *RsLocal;
+    output: *RmdName;
+    returned: *RsChain;
+    body: *RmdStmt;
+    epilogue: *RmdStmt;
+    unsafe_depth: usize;
+    stamp: usize;
+    expression_depth: u32;
+}
+
+record RsStatements { first: *RmdStmt; last: *RmdStmt; }

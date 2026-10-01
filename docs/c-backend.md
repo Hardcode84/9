@@ -35,17 +35,16 @@ then reuses storage while the list remains live.
 `build/rmd-c-seed`. That program compiles the same RMD0 files through C and GCC
 to produce `build/rmd-c`. Both programs use the same C99 frontend library.
 It also builds `build/rmd-c-library.so` with the same compiler. That library
-exports `c_program` and `c_backend_build` and omits the standalone `main`.
+exports `c_program`, `c_backend_build`, and the public body-emission services.
+It omits the standalone `main`.
 Its build uses `-fno-semantic-interposition` with `-Bsymbolic`. Both options
 keep internal calls bound to this library's definitions. The compiler option
 also permits the same inlining as the standalone backend.
 This is self-compilation of the backend and driver. The reader and checker
 remain C99. The default `make` target does not build this optional backend.
 
-The stage has 2,126 physical RMD0 lines, including the 14-line root helper,
-comments, and blank lines. The C99 seed has 6,621 C and header lines.
-Tests and generated API
-declarations are separate. Use `wc -l stages/c/*.rmd` to repeat the stage count.
+Use `wc -l stages/c/*.rmd` to count the stage, public interfaces, and root helper.
+Tests and generated seed API declarations are separate.
 
 | Option | Result |
 |---|---|
@@ -95,6 +94,7 @@ The source files have these responsibilities:
 | `program.rmd` | Source input, frontend calls, names, options, and `c_program` |
 | `main.rmd` | Standalone command-line entry |
 | `api.rmd` | Consumer declarations for the two public calls and output options |
+| `extension.rmd` | Complete body callbacks and public emission services |
 | `build.rmd` | Optional root helper that owns one target context through the call |
 
 An external consumer includes `api/rmd0.rmd`, `api/rmd0_stage.rmd`, and
@@ -139,6 +139,31 @@ failure. Allocation and output-size overflow set a diagnostic. The first
 stage error is retained. A caller must discard output from a failed stage.
 Independent contexts and stage objects can run on separate workers. The
 command-line driver is sequential and adds no scheduler to the core.
+
+### Custom function bodies
+
+Include `stages/c/model.rmd` and `stages/c/extension.rmd` to use
+`c_backend_build_with_body` or `c_emit_with_body`. Supply a callback with type
+`fn(*CStage, *RmdDecl, *u8) -> bool` and caller-owned data. The callback runs
+after each defined function's signature. It emits that function's complete
+body, including braces. Its declaration body can be null.
+
+Types, layouts, signatures, parameter symbols, native names, and constant
+initializers must be valid before emission. The callback owns body semantics.
+The expression and statement helpers require checked nodes. Keep the context,
+callback code, and caller data live through the synchronous build.
+
+False or a new diagnostic stops the build. False without a diagnostic records
+`C function body callback failed` at the declaration. The backend preserves
+the first error and releases its temporary arena. A null callback selects the
+ordinary checked-seed-body emitter. The ordinary emitter has no per-expression
+callback cost.
+
+The [external body test](../tests/c_body.rmd) uses null seed bodies, emits labels
+and branches, runs the output, and checks three callback failure paths. It links
+the public interfaces against a copied ordinary backend library. The
+[resource stage](../stages/resources/README.md) uses the same interface for its
+shared cleanup blocks. No ownership operation occurs in this backend API.
 
 ## C execution rules
 

@@ -1,0 +1,228 @@
+const SQL_OK: i32 = 0i32;
+const SQL_NOMEM: i32 = 7i32;
+const SQL_IOERR: i32 = 10i32;
+const SQL_MISUSE: i32 = 21i32;
+const SQL_RANGE: i32 = 25i32;
+const SQL_ROW: i32 = 100i32;
+const SQL_DONE: i32 = 101i32;
+const SQL_NULL: i32 = 5i32;
+
+extern fn sql_open(path:*u8, result:**u8, flags:i32, vfs:*u8)->i32 = "sqlite3_open_v2";
+extern fn sql_close(database:*u8)->i32 = "sqlite3_close";
+extern fn sql_prepare(database:*u8, sql:*u8, size:i32, result:**u8, tail:**u8)->i32 = "sqlite3_prepare_v2";
+extern fn sql_step(statement:*u8)->i32 = "sqlite3_step";
+extern fn sql_finalize(statement:*u8)->i32 = "sqlite3_finalize";
+extern fn sql_columns(statement:*u8)->i32 = "sqlite3_column_count";
+extern fn sql_kind(statement:*u8, column:i32)->i32 = "sqlite3_column_type";
+extern fn sql_blob(statement:*u8, column:i32)->*u8 = "sqlite3_column_blob";
+extern fn sql_bytes(statement:*u8, column:i32)->i32 = "sqlite3_column_bytes";
+extern fn sql_error(database:*u8)->i32 = "sqlite3_errcode";
+extern fn native_write(stream:i32, bytes:*u8, size:usize)->isize = "write";
+extern fn native_exit(status:i32)->unit = "_Exit";
+
+resource Db { raw:*u8; } drop db_drop;
+resource Statement { raw:*u8; database:*u8; at_row:bool; } drop statement_drop;
+resource Bytes { data:*u8; size:usize; kind:i32; } drop bytes_drop;
+record QueryContext { rows:u64; operation:i32; finalized:i32; closed:i32; }
+
+// Require readable bytes for size bytes. A nonzero result reports failed output.
+unsafe fn write_bytes(stream:i32, bytes:*u8, size:usize)->i32 {
+    unsafe {
+        var offset:usize = 0usize;
+        while offset < size {
+            var count:isize = native_write(stream, bytes + (offset as isize), size - offset);
+            if count <= 0isize { return SQL_IOERR; }
+            offset = offset + (count as usize);
+        }
+        return SQL_OK;
+    }
+}
+
+fn write_number(stream:i32, value:u64)->i32 {
+    var bytes:[u8;20] = uninit;
+    unsafe {
+        var storage:*u8 = (&bytes) as *u8;
+        var begin:usize = 20usize;
+        while true {
+            begin = begin - 1usize;
+            storage[begin] = 48u8 + ((value % 10u64) as u8);
+            value = value / 10u64;
+            if value == 0u64 { break; }
+        }
+        return write_bytes(stream, storage + (begin as isize), 20usize - begin);
+    }
+}
+
+fn db_empty()->Db {
+    unsafe {
+        var result:Db = make Db { raw:null(*u8) };
+        return move result;
+    }
+}
+
+// Require a zero-terminated path. The owner retains any handle returned on error.
+unsafe fn db_open(database:mut Db, path:*u8)->i32 {
+    unsafe {
+        if database.raw != null(*u8) { return SQL_MISUSE; }
+        return sql_open(path, &database.raw, 1i32, null(*u8));
+    }
+}
+
+// The result owns the handle on both success and open failure.
+unsafe fn db_acquire(path:*u8, context:mut QueryContext)->Db {
+    var result:Db = db_empty();
+    unsafe { context.operation = db_open(mut result, path); }
+    return move result;
+}
+
+// Success leaves an empty owner. Failure leaves the database owned and open.
+fn db_close(database:mut Db)->i32 {
+    unsafe {
+        if database.raw == null(*u8) { return SQL_OK; }
+        var result:i32 = sql_close(database.raw);
+        if result == SQL_OK { database.raw = null(*u8); }
+        return result;
+    }
+}
+
+fn db_drop(database:mut Db)->unit {
+    if db_close(mut database) != SQL_OK {
+        unsafe {
+            write_bytes(2i32, "fatal close\n", 12usize);
+            native_exit(2i32);
+            trap;
+        }
+    }
+}
+
+// The statement is consumed even when finalization reports an evaluation error.
+fn statement_finalize(statement:mut Statement)->i32 {
+    unsafe {
+        if statement.raw == null(*u8) { return SQL_OK; }
+        var raw:*u8 = statement.raw;
+        statement.raw = null(*u8);
+        statement.at_row = false;
+        return sql_finalize(raw);
+    }
+}
+
+fn statement_drop(statement:mut Statement)->unit {
+    if statement_finalize(mut statement) != SQL_OK {
+        unsafe {
+            write_bytes(2i32, "fatal finalize\n", 15usize);
+            native_exit(2i32);
+            trap;
+        }
+    }
+}
+
+fn bytes_drop(view:mut Bytes)->unit {}
+
+// The SQL text must remain valid through preparation. The callback is synchronous.
+unsafe fn with_statement(database:mut Db, sql:*u8, context:mut QueryContext,
+                         body:fn(mut Statement, mut QueryContext)->i32)->i32 {
+    unsafe {
+        if database.raw == null(*u8) { return SQL_MISUSE; }
+        var statement:Statement = make Statement {
+            raw:null(*u8), database:database.raw, at_row:false
+        };
+        var result:i32 = sql_prepare(database.raw, sql, -1i32, &statement.raw, null(**u8));
+        if result == SQL_OK && statement.raw != null(*u8) {
+            result = body(mut statement, mut context);
+        }
+        context.finalized = statement_finalize(mut statement);
+        return result;
+    }
+}
+
+fn statement_step(statement:mut Statement)->i32 {
+    unsafe {
+        if statement.raw == null(*u8) { return SQL_MISUSE; }
+        var result:i32 = sql_step(statement.raw);
+        statement.at_row = result == SQL_ROW;
+        return result;
+    }
+}
+
+// The view is valid only during the synchronous callback.
+fn with_blob(statement:mut Statement, column:i32, context:mut QueryContext,
+             body:fn(read Bytes, mut QueryContext)->i32)->i32 {
+    unsafe {
+        if statement.raw == null(*u8) || !statement.at_row { return SQL_MISUSE; }
+        if column < 0i32 || column >= sql_columns(statement.raw) { return SQL_RANGE; }
+        var view:Bytes = make Bytes {
+            data:null(*u8), size:0usize, kind:sql_kind(statement.raw, column)
+        };
+        if view.kind != SQL_NULL {
+            view.data = sql_blob(statement.raw, column);
+            if view.data == null(*u8) && sql_error(statement.database) == SQL_NOMEM {
+                return SQL_NOMEM;
+            }
+            var size:i32 = sql_bytes(statement.raw, column);
+            if size == 0i32 && sql_error(statement.database) == SQL_NOMEM {
+                return SQL_NOMEM;
+            }
+            view.size = size as usize;
+        }
+        return body(read view, mut context);
+    }
+}
+
+fn output_bytes(view:read Bytes, context:mut QueryContext)->i32 {
+    unsafe {
+        var marker:u8 = 82u8;
+        if view.kind == SQL_NULL { marker = 78u8; }
+        if view.kind == 4i32 { marker = 66u8; }
+        if view.kind == 3i32 { marker = 84u8; }
+        if view.kind == 1i32 { marker = 73u8; }
+        var result:i32 = write_bytes(1i32, &marker, 1usize);
+        if result == SQL_OK && view.kind != SQL_NULL {
+            result = write_bytes(1i32, " ", 1usize);
+        }
+        var digits:*u8 = "0123456789abcdef";
+        var index:usize = 0usize;
+        while result == SQL_OK && index < view.size {
+            var byte:u8 = view.data[index];
+            var pair:[u8;2] = make [u8;2] {
+                digits[(byte >> 4u8) as usize], digits[(byte & 15u8) as usize]
+            };
+            result = write_bytes(1i32, &pair[0usize], 2usize);
+            index = index + 1usize;
+        }
+        if result == SQL_OK { result = write_bytes(1i32, "\n", 1usize); }
+        if result == SQL_OK { context.rows = context.rows + 1u64; }
+        return result;
+    }
+}
+
+fn query_rows(statement:mut Statement, context:mut QueryContext)->i32 {
+    while true {
+        var result:i32 = statement_step(mut statement);
+        if result == SQL_DONE { return SQL_OK; }
+        if result != SQL_ROW { return result; }
+        result = with_blob(mut statement, 0i32, mut context, output_bytes);
+        if result != SQL_OK { return result; }
+    }
+}
+
+fn write_summary(context:read QueryContext)->i32 {
+    unsafe {
+        var result:i32 = write_bytes(1i32, "rows ", 5usize);
+        if result == SQL_OK { result = write_number(1i32, context.rows); }
+        if result == SQL_OK { result = write_bytes(1i32, "\n", 1usize); }
+        return result;
+    }
+}
+
+fn write_errors(context:read QueryContext)->i32 {
+    unsafe {
+        var result:i32 = write_bytes(2i32, "error ", 6usize);
+        if result == SQL_OK { result = write_number(2i32, context.operation as u64); }
+        if result == SQL_OK { result = write_bytes(2i32, " ", 1usize); }
+        if result == SQL_OK { result = write_number(2i32, context.finalized as u64); }
+        if result == SQL_OK { result = write_bytes(2i32, " ", 1usize); }
+        if result == SQL_OK { result = write_number(2i32, context.closed as u64); }
+        if result == SQL_OK { result = write_bytes(2i32, "\n", 1usize); }
+        return result;
+    }
+}

@@ -1,0 +1,13 @@
+// Compile a retained source from begin through EOF. Arguments select compiler options.
+// Print a diagnostic on failure and release the target context before returning its status.
+fn resource_build(source:*RmdSource, begin:usize, argc:i32, argv:**u8)->i32 {
+    var context:RmdContext = uninit;
+    rmd_context_init(&context, null(*RmdAllocator));
+    var request:RmdBuild = make RmdBuild {
+        context:&context, source:source, target_begin:begin, argc:argc, argv:argv
+    };
+    var result:i32 = resource_program(&request);
+    if context.error_count != 0usize { c_driver_diagnostic(&context); }
+    rmd_context_destroy(&context);
+    return result;
+}

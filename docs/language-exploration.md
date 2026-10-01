@@ -24,6 +24,9 @@ language features implemented as libraries, full access to compiler stages,
 and explicit cache and stage dependencies.
 The [compiler extension experiment](compiler-extension-experiment.md) defines
 complete language replacement, backend metastages, and a C frontend benchmark.
+The [resource stage proposal](resource-metastage.md) maps the ownership, RAII,
+and defer rules to the current compiler APIs. It adds a proposed rule for the
+cleanup position of a local that is initialized again.
 
 ## 1. Recommendation
 

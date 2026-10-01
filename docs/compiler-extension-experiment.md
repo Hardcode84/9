@@ -58,6 +58,10 @@ required for this experiment.
 
 ### Ownership and unsafe are language stages
 
+The [resource stage proposal](resource-metastage.md) applies this boundary to
+the current runner, checker, and backend APIs. It specifies cleanup slots,
+retained ownership facts, and the first implementation experiment.
+
 Keep three layers distinct:
 
 | Layer | Contents |

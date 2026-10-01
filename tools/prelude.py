@@ -24,7 +24,7 @@ def main():
         for offset in range(0, len(data), 32):
             lines.append("    " + ",".join(str(byte) for byte in data[offset : offset + 32]) + ",")
         lines.append("};")
-    lines.append("static CrustSource installed_sources[] = {")
+    lines.append("static const CrustSource installed_sources[] = {")
     for index, name in enumerate(INPUTS):
         lines.append(
             f'    {{"<installed {name}>", prelude_{index}, sizeof(prelude_{index}), {index + 1}}},'

@@ -11,10 +11,15 @@
 
 static bool installed_program(CrustContext *context)
 {
+    CrustSource *sources =
+        crust_try_alloc(context, sizeof(installed_sources), CRUST_ALIGNOF(CrustSource));
     size_t index;
+    if (sources == NULL)
+        return false;
+    memcpy(sources, installed_sources, sizeof(installed_sources));
     for (index = 0; index < sizeof(installed_sources) / sizeof(installed_sources[0]); ++index) {
         CrustUnit *unit;
-        if (!crust_read(context, &installed_sources[index], &unit))
+        if (!crust_read(context, &sources[index], &unit))
             return false;
     }
     return crust_collect(context) && crust_resolve(context) && crust_check(context);

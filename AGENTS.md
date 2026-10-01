@@ -76,8 +76,11 @@ Do not add a feature before a concrete program requires it.
   Allocate arena blocks through the context allocator. Do not allocate and
   free individual compiler objects. Give external buffers and native
   resources an explicit owner and release path.
-- Do not add mutable globals or function-local static state to the compiler.
-  Separate contexts must remain safe to use from separate threads.
+- No global state in the language C99 core. Keep mutable compiler state in
+  explicit contexts or caller-owned objects. Do not use mutable file-scope
+  variables, mutable function-local statics, or thread-local storage. Immutable
+  constant tables are allowed. Separate contexts must remain safe to use
+  from separate threads.
 - Bound recursion on source-controlled input. Enforce the depth bound or use
   iteration. Do not rely on the host stack size.
 - Keep function cyclomatic complexity at CCN 15 or less in `src/`,

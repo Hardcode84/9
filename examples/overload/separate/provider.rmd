@@ -1,0 +1,30 @@
+extern fn native_write(descriptor:i32, bytes:*u8, size:usize)->isize = "write";
+
+fn write_all(output:*Output, bytes:*u8, size:usize)->i32 {
+    var offset:usize = 0usize;
+    while offset < size {
+        var count:isize = native_write((*output).descriptor, bytes + (offset as isize), size - offset);
+        if count <= 0isize { return 1i32; }
+        offset = offset + (count as usize);
+    }
+    return 0i32;
+}
+
+fn format(output:*Output, value:u64)->i32 {
+    var digits:[u8;20] = uninit;
+    var index:usize = 20usize;
+    var number:u64 = value;
+    while true {
+        index = index - 1usize;
+        digits[index] = (number % 10u64) as u8 + 48u8;
+        number = number / 10u64;
+        if number == 0u64 { break; }
+    }
+    return write_all(output, &digits[index], 20usize - index);
+}
+
+fn format(output:*Output, text:*u8)->i32 {
+    var size:usize = 0usize;
+    while text[size] != 0u8 { size = size + 1usize; }
+    return write_all(output, text, size);
+}

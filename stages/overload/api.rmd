@@ -1,0 +1,5 @@
+// Include api/rmd0.rmd and api/rmd0_stage.rmd before this interface.
+// Keep request sources live through context destruction. Return the compiler status.
+extern fn overload_program(request:*RmdBuild)->i32 = "overload_program";
+// Compile the retained source range, print failures, and release its target context.
+extern fn overload_build(source:*RmdSource, begin:usize, argc:i32, argv:**u8)->i32 = "overload_build";

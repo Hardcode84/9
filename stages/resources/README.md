@@ -108,6 +108,26 @@ package name, destructor name, or foreign API recognized by the seed.
 4. Assign native link names and pass `rs_c_body` to the C backend's body callback.
 5. Destroy the context after output is complete.
 
+An earlier source stage can publish a source ABI import. It supplies an external
+declaration with the complete source signature and native link name, then calls
+`rs_source_import` before `rs_prepare`. This marker permits source aggregates and
+borrow modes. It does not apply to a native C declaration. Unmarked `extern fn`
+declarations still require scalar foreign signatures and unsafe calls.
+
+Caller and provider must use the same source ABI, record definitions, resource
+drop clauses, and unsafe function contracts. A source import is safe unless its
+declaration has the source stage's unsafe marker. A safe source import can supply
+a resource's drop function. It has the same exclusive-borrow signature and
+explicit-call restrictions as a local drop definition.
+
+The optional [overload adapter](../overload/resources.rmd) reads bare function
+prototypes, selects calls with source borrow modes, and assigns structural native
+names. Initialize `RsStage`, then call `ov_resources_init`, `ov_resources_read`
+for each source, and `ov_resources_prepare`. Call `rs_prepare` after that sequence.
+Retain the two stages and the adapter hooks through overload preparation, and
+retain the resource stage through body emission. The resource reader alone does
+not add bare prototypes or overload selection.
+
 The stage retains source signatures, storage identities, loans, and cleanup
 plans. It lowers a separate set of target declarations and bodies. Source
 locations retain offsets in the original complete file. The seed checker

@@ -1,0 +1,55 @@
+record OvText { data:*u8; size:usize; capacity:usize; }
+
+record OvHooks {
+    user:*u8;
+    type_key:fn(*OvStage,*RmdTypeSyntax,*OvText,usize,*u8)->bool;
+    binding_type:fn(*OvStage,*RmdTypeSyntax,*u8)->*RmdTypeSyntax;
+    expression:fn(*OvWalk,*RmdExpr,*RmdTypeSyntax,*u8)->*RmdTypeSyntax;
+    statement:fn(*OvWalk,*RmdStmt,*u8)->bool;
+    contract:fn(*OvStage,*RmdDecl,*u8)->*RmdName;
+}
+
+record OvGlobal {
+    name:*RmdName;
+    declaration:*RmdDecl;
+    first:*OvFunction;
+    count:usize;
+    signatures:RmdMap;
+    fields:RmdMap;
+    next:*OvGlobal;
+}
+
+record OvFunction {
+    declaration:*RmdDecl;
+    group:*OvGlobal;
+    syntax:*RmdTypeSyntax;
+    parameters:*RmdName;
+    contract:*RmdName;
+    internal_name:*RmdName;
+    native_name:*u8;
+    source_import:bool;
+    next:*OvFunction;
+    all_next:*OvFunction;
+}
+
+record OvStage {
+    context:*RmdContext;
+    abi:*u8;
+    hooks:*OvHooks;
+    globals:RmdMap;
+    declarations:RmdMap;
+    type_keys:RmdMap;
+    first_global:*OvGlobal;
+    first_function:*OvFunction;
+    scratch:OvText;
+    failed:bool;
+}
+
+record OvLocal { syntax:*RmdTypeSyntax; }
+record OvScope { parent:*OvScope; bindings:RmdMap; }
+record OvWalk {
+    stage:*OvStage;
+    scope:*OvScope;
+    result:*RmdTypeSyntax;
+    depth:usize;
+}

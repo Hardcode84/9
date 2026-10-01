@@ -1,0 +1,43 @@
+--- a/stages/overload/model.rmd
++++ b/stages/overload/model.rmd
+@@ -15,5 +15,6 @@
+     first:*OvFunction;
+     count:usize;
+     signatures:RmdMap;
++    fields:RmdMap;
+     next:*OvGlobal;
+ }
+--- a/stages/overload/collect.rmd
++++ b/stages/overload/collect.rmd
+@@ -118,6 +118,15 @@
+                 (*group).next = (*stage).first_global;
+                 (*stage).first_global = group;
+                 ov_put(stage, &(*stage).globals, (*group).name as usize, group as *u8);
++                var field:*RmdField = (*declaration).fields;
++                while field != null(*RmdField) && !(*stage).failed {
++                    if rmd_map_get(&(*group).fields, (*field).name as usize) != null(*u8) {
++                        ov_error(stage, &(*field).loc, "duplicate record field");
++                        return false;
++                    }
++                    ov_put(stage, &(*group).fields, (*field).name as usize, field as *u8);
++                    field = (*field).next;
++                }
+             } else {
+                 if !ov_is_function(declaration) || !ov_is_function((*group).declaration) {
+                     ov_error(stage, &(*declaration).loc, "duplicate source declaration");
+--- a/stages/overload/resolve.rmd
++++ b/stages/overload/resolve.rmd
+@@ -60,11 +60,8 @@
+         ov_error(stage,location,"field access requires a declared record");
+         return null(*RmdTypeSyntax);
+     }
+-    var field:*RmdField=(*(*global).declaration).fields;
+-    while field!=null(*RmdField) {
+-        if (*field).name==name { return (*field).syntax_type; }
+-        field=(*field).next;
+-    }
++    var field:*RmdField=rmd_map_get(&(*global).fields,name as usize) as *RmdField;
++    if field!=null(*RmdField) { return (*field).syntax_type; }
+     ov_error(stage,location,"record has no such field");
+     return null(*RmdTypeSyntax);
+ }

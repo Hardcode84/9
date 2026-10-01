@@ -11,6 +11,13 @@ extern fn rs_init(stage: *RsStage, context: *RmdContext) -> unit = "rs_init";
 // On failure, return false and retain the diagnostic in stage.context.
 extern fn rs_read(stage: *RsStage, source: *RmdSource, begin: usize, end: usize) -> bool = "rs_read";
 
+// Mark an external declaration as a source ABI import before preparation.
+// Require a native link name and the provider's same complete source interface.
+// The declaration can use source aggregates and borrow modes. A native C extern
+// must not receive this marker. Unsafe source imports retain their unsafe marker.
+// Return false on allocation failure and retain the context diagnostic.
+extern fn rs_source_import(stage: *RsStage, declaration: *RmdDecl) -> bool = "rs_source_import";
+
 // Prepare once after all source units have been read successfully.
 // On success, context.units contains typed operations; the stage retains cleanup plans.
 // Emit with rs_c_body or another consumer of both operations and plans. Ordinary seed

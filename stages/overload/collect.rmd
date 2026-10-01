@@ -1,0 +1,197 @@
+fn ov_is_function(declaration:*RmdDecl)->bool {
+    return (*declaration).kind == RMD_D_FUNCTION || (*declaration).kind == RMD_D_EXTERN;
+}
+
+fn ov_reserved(name:*u8)->bool {
+    var prefix:*u8 = "rmd_ov1_";
+    var index:usize = 0usize;
+    while prefix[index] != 0u8 {
+        if name[index] != prefix[index] { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn ov_names(stage:*OvStage, function:*OvFunction)->unit {
+    var result_key:*RmdName = ov_type_key(stage, (*(*function).syntax).base);
+    if (*stage).failed { return; }
+    var buffer:*OvText = &(*stage).scratch;
+    (*buffer).size = 0usize;
+    ov_text(stage, buffer, "rmd_ov1_d");
+    ov_part(stage, buffer, (*stage).abi, c_length((*stage).abi));
+    ov_text(stage, buffer, "n");
+    var name:*RmdName = (*(*function).group).name;
+    ov_part(stage, buffer, (*name).text, (*name).size);
+    var parameters:*RmdName = (*function).parameters;
+    ov_bytes(stage, buffer, (*parameters).text, (*parameters).size);
+    ov_text(stage, buffer, "r");
+    ov_bytes(stage, buffer, (*result_key).text, (*result_key).size);
+    ov_text(stage, buffer, "c");
+    var contract:*RmdName = (*function).contract;
+    ov_part(stage, buffer, (*contract).text, (*contract).size);
+    var native:*RmdName = ov_intern(stage, (*buffer).data, (*buffer).size);
+    if native == null(*RmdName) { return; }
+    (*function).native_name = (*native).text;
+    (*buffer).size = 0usize;
+    ov_text(stage, buffer, "$");
+    ov_bytes(stage, buffer, (*native).text, (*native).size);
+    (*function).internal_name = ov_intern(stage, (*buffer).data, (*buffer).size);
+}
+
+fn ov_add_function(stage:*OvStage, group:*OvGlobal, declaration:*RmdDecl)->unit {
+    var syntax:*RmdTypeSyntax = ov_function_syntax(stage, declaration);
+    if (*stage).failed { return; }
+    var parameters:*RmdName = ov_parameters(stage, syntax);
+    var contract:*RmdName = null(*RmdName);
+    var hooks:*OvHooks = (*stage).hooks;
+    if hooks != null(*OvHooks) && (*hooks).contract != null(fn(*OvStage,*RmdDecl,*u8)->*RmdName) {
+        var errors:usize = (*(*stage).context).error_count;
+        contract = (*hooks).contract(stage, declaration, (*hooks).user);
+        if (*(*stage).context).error_count != errors { (*stage).failed = true; }
+    } else { contract = ov_intern(stage, "s", 1usize); }
+    if (*stage).failed { return; }
+    if contract == null(*RmdName) {
+        ov_error(stage, &(*declaration).loc, "overload contract callback returned no contract");
+        return;
+    }
+    var function:*OvFunction = rmd_map_get(&(*group).signatures, parameters as usize) as *OvFunction;
+    if function != null(*OvFunction) {
+        var previous:*RmdDecl = (*function).declaration;
+        if !ov_same(stage, (*(*function).syntax).base, (*syntax).base) {
+            ov_error(stage, &(*declaration).loc, "overloads cannot differ only by result type");
+            return;
+        }
+        if (*function).contract != contract {
+            ov_error(stage, &(*declaration).loc, "matching overload declarations have different contracts");
+            return;
+        }
+        if ((*previous).kind == RMD_D_EXTERN) != ((*declaration).kind == RMD_D_EXTERN) {
+            ov_error(stage, &(*declaration).loc, "matching overload declarations use different source and native ABIs");
+            return;
+        }
+        if (*declaration).kind == RMD_D_EXTERN && !c_equal((*previous).link_name, (*declaration).link_name) {
+            ov_error(stage, &(*declaration).loc, "matching native overload declarations have different symbols");
+            return;
+        }
+        if (*previous).body != null(*RmdStmt) && (*declaration).body != null(*RmdStmt) {
+            ov_error(stage, &(*declaration).loc, "duplicate overload definition");
+            return;
+        }
+        if (*declaration).body != null(*RmdStmt) {
+            (*function).declaration = declaration;
+            (*function).syntax = syntax;
+            (*function).source_import = false;
+        }
+    } else {
+        function = ov_alloc(stage, sizeof(OvFunction), alignof(OvFunction)) as *OvFunction;
+        if function == null(*OvFunction) { return; }
+        (*function).declaration = declaration;
+        (*function).group = group;
+        (*function).syntax = syntax;
+        (*function).parameters = parameters;
+        (*function).contract = contract;
+        (*function).source_import = (*declaration).kind == RMD_D_FUNCTION && (*declaration).body == null(*RmdStmt);
+        (*function).next = (*group).first;
+        (*group).first = function;
+        (*group).count = (*group).count + 1usize;
+        (*function).all_next = (*stage).first_function;
+        (*stage).first_function = function;
+        ov_put(stage, &(*group).signatures, parameters as usize, function as *u8);
+        ov_names(stage, function);
+    }
+    ov_put(stage, &(*stage).declarations, declaration as usize, function as *u8);
+}
+
+// Require parsed source units and an initialized stage. Call once before resolution.
+// Retain original source names and publish complete function signatures.
+fn ov_collect(stage:*OvStage)->bool {
+    var unit_value:*RmdUnit = (*(*stage).context).units;
+    while unit_value != null(*RmdUnit) && !(*stage).failed {
+        var declaration:*RmdDecl = (*unit_value).declarations;
+        while declaration != null(*RmdDecl) && !(*stage).failed {
+            var group:*OvGlobal = ov_global(stage, (*declaration).name);
+            if group == null(*OvGlobal) {
+                group = ov_alloc(stage, sizeof(OvGlobal), alignof(OvGlobal)) as *OvGlobal;
+                if group == null(*OvGlobal) { return false; }
+                (*group).name = (*declaration).name;
+                (*group).declaration = declaration;
+                (*group).next = (*stage).first_global;
+                (*stage).first_global = group;
+                ov_put(stage, &(*stage).globals, (*group).name as usize, group as *u8);
+                var field:*RmdField = (*declaration).fields;
+                while field != null(*RmdField) && !(*stage).failed {
+                    if rmd_map_get(&(*group).fields, (*field).name as usize) != null(*u8) {
+                        ov_error(stage, &(*field).loc, "duplicate record field");
+                        return false;
+                    }
+                    ov_put(stage, &(*group).fields, (*field).name as usize, field as *u8);
+                    field = (*field).next;
+                }
+            } else {
+                if !ov_is_function(declaration) || !ov_is_function((*group).declaration) {
+                    ov_error(stage, &(*declaration).loc, "duplicate source declaration");
+                    return false;
+                }
+            }
+            if ov_is_function(declaration) {
+                if (*declaration).kind == RMD_D_EXTERN && ov_reserved((*declaration).link_name) {
+                    ov_error(stage, &(*declaration).loc, "native extern uses the reserved overload symbol prefix; use a source import");
+                    return false;
+                }
+                ov_add_function(stage, group, declaration);
+            }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    unit_value = (*(*stage).context).units;
+    while unit_value != null(*RmdUnit) && !(*stage).failed {
+        var declaration:*RmdDecl = (*unit_value).declarations;
+        while declaration != null(*RmdDecl) && !(*stage).failed {
+            var names:RmdMap = make RmdMap { entries:null(*RmdMapEntry), count:0usize, capacity:0usize };
+            var parameter:*RmdParam = (*declaration).params;
+            while parameter != null(*RmdParam) && !(*stage).failed {
+                if ov_global(stage, (*parameter).name) != null(*OvGlobal) ||
+                   rmd_map_get(&names, (*parameter).name as usize) != null(*u8) {
+                    ov_error(stage, &(*parameter).loc, "parameter shadows a visible source name");
+                    return false;
+                }
+                ov_put(stage, &names, (*parameter).name as usize, parameter as *u8);
+                parameter = (*parameter).next;
+            }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    return !(*stage).failed;
+}
+
+// Require successful collection and resolution. Publish unique seed names once.
+// Preserve explicit native symbols. Source imports use generated source ABI symbols.
+fn ov_mangle(stage:*OvStage)->bool {
+    if (*stage).failed { return false; }
+    var unit_value:*RmdUnit = (*(*stage).context).units;
+    while unit_value != null(*RmdUnit) {
+        var cursor:**RmdDecl = &(*unit_value).declarations;
+        while *cursor != null(*RmdDecl) {
+            var declaration:*RmdDecl = *cursor;
+            if ov_is_function(declaration) {
+                var function:*OvFunction = rmd_map_get(&(*stage).declarations, declaration as usize) as *OvFunction;
+                if (*function).declaration != declaration {
+                    *cursor = (*declaration).next;
+                    continue;
+                }
+                (*declaration).name = (*function).internal_name;
+                if (*declaration).kind == RMD_D_FUNCTION { (*declaration).link_name = (*function).native_name; }
+                if (*function).source_import { (*declaration).kind = RMD_D_EXTERN; }
+            }
+            cursor = &(*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    return true;
+}
+
+fn ov_prepare(stage:*OvStage)->bool {
+    return ov_collect(stage) && ov_resolve(stage) && ov_mangle(stage);
+}

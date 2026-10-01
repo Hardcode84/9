@@ -30,6 +30,7 @@ record RsStage {
     first_global: *RsGlobal;
     last_global: *RsGlobal;
     unsafe_functions: RmdMap;
+    source_imports: RmdMap;
     lowered_types: RmdMap;
     ownership: RmdMap;
     functions: RmdMap;

@@ -33,9 +33,16 @@ The `rr_standard_declaration`, `rr_standard_statement`, `rr_standard_prefix`,
 and `rr_standard_type` functions bypass the hook for that production. Nested
 productions still use their hooks. `rr_record` consumes `RR_RECORD`, the name,
 the fields, and the closing brace. `rr_function` consumes a complete ordinary
-or extern function. `rr_block` consumes both braces. `rr_expression` reads a
-full expression; `rr_prefix` reads one complete unary operand. Each helper
-leaves the next token current.
+or extern function. `rr_function_header` consumes `fn` or `extern fn`, the
+name, the parameters, and the result type. It returns a declaration without a
+body or native symbol and leaves the next token current. A hook can inspect
+this token and consume its own suffix. To use the standard suffix, pass a
+successful header result to `rr_function_end`: it consumes the function body
+or the extern `= "native";` suffix. `rr_function` calls both helpers.
+
+`rr_block` consumes both braces. `rr_expression` reads a full expression;
+`rr_prefix` reads one complete unary operand. Each helper leaves the next
+token current.
 
 `rr_alloc` returns zeroed context storage. `rr_new_expr`, `rr_new_stmt`,
 `rr_new_type`, and `rr_new_decl` take a kind and original offset. These helpers

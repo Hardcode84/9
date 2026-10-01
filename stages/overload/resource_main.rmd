@@ -1,0 +1,12 @@
+fn main(argc:i32, argv:**u8)->i32 {
+    var context:RmdContext = uninit;
+    rmd_context_init(&context, null(*RmdAllocator));
+    var request:RmdBuild = make RmdBuild {
+        context:&context, source:null(*RmdSource), target_begin:0usize,
+        argc:argc - 1i32, argv:argv + 1isize
+    };
+    var result:i32 = overload_resource_program(&request);
+    if context.error_count != 0usize { c_driver_diagnostic(&context); }
+    rmd_context_destroy(&context);
+    return result;
+}

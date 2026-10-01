@@ -1,0 +1,178 @@
+record OaAllocator {
+    calls: usize;
+    fail_at: usize;
+    live: usize;
+    rejected: bool;
+    host_failed: bool;
+    phase: u32;
+    rejected_phase: u32;
+}
+
+fn oa_text(stream:u32, text:*u8)->bool {
+    var size:usize = 0usize;
+    while text[size] != 0u8 { size = size + 1usize; }
+    return rmd0_host_write_stream(stream, text, size) == 0i32;
+}
+
+fn oa_number(stream:u32, value:usize)->bool {
+    var digits:[u8;20] = uninit;
+    var begin:usize = 20usize;
+    while true {
+        begin = begin - 1usize;
+        digits[begin] = ((value % 10usize) as u8) + 48u8;
+        value = value / 10usize;
+        if value == 0usize { break; }
+    }
+    return rmd0_host_write_stream(stream, &digits[begin], 20usize - begin) == 0i32;
+}
+
+fn oa_allocate(user:*u8, size:usize)->*u8 {
+    var state:*OaAllocator = user as *OaAllocator;
+    (*state).calls = (*state).calls + 1usize;
+    if (*state).calls >= (*state).fail_at {
+        if !(*state).rejected { (*state).rejected_phase = (*state).phase; }
+        (*state).rejected = true;
+        return null(*u8);
+    }
+    var result:*u8 = rmd0_host_alloc(size, 16usize);
+    if result == null(*u8) { (*state).host_failed = true; }
+    else { (*state).live = (*state).live + 1usize; }
+    return result;
+}
+
+fn oa_release(user:*u8, allocation:*u8)->unit {
+    var state:*OaAllocator = user as *OaAllocator;
+    if allocation == null(*u8) || (*state).live == 0usize { trap; }
+    (*state).live = (*state).live - 1usize;
+    rmd0_host_free(allocation);
+}
+
+fn oa_report(fail_at:usize, message:*u8, context:*RmdContext)->unit {
+    oa_text(2u32, "allocation attempt ");
+    oa_number(2u32, fail_at);
+    oa_text(2u32, ": ");
+    oa_text(2u32, message);
+    if (*context).error_count != 0usize {
+        oa_text(2u32, ": ");
+        oa_text(2u32, &(*context).error[0usize]);
+    }
+    oa_text(2u32, "\n");
+}
+
+fn oa_check(sources:*RmdSource, count:usize, composed:bool)->i32 {
+    var fail_at:usize = 1usize;
+    var failed_read:usize = 0usize;
+    var failed_overload:usize = 0usize;
+    var failed_final:usize = 0usize;
+    while true {
+        var state:OaAllocator = make OaAllocator {
+            calls:0usize, fail_at:fail_at, live:0usize, rejected:false, host_failed:false,
+            phase:0u32, rejected_phase:0u32
+        };
+        var allocator:RmdAllocator = make RmdAllocator {
+            user:&state as *u8, allocate:oa_allocate, release:oa_release
+        };
+        var context:RmdContext = uninit;
+        rmd_context_init(&context, &allocator);
+        var resources:RsStage = uninit;
+        rs_init(&resources, &context);
+        var stage:OvStage = uninit;
+        var hooks:OvHooks = uninit;
+        if composed { ov_resources_init(&stage, &resources, "resources_x64_v1", &hooks); }
+        else { ov_init(&stage, &context, "rmd0_x64_v1", null(*OvHooks)); }
+        var success:bool = true;
+        var index:usize = 0usize;
+        while index < count && success {
+            if composed {
+                success = ov_resources_read(&stage, &sources[index], 0usize, sources[index].size);
+            } else { success = ov_read(&stage, &sources[index], 0usize, sources[index].size); }
+            index = index + 1usize;
+        }
+        if success {
+            state.phase = 1u32;
+            if composed { success = ov_resources_prepare(&stage); }
+            else { success = ov_prepare(&stage); }
+        }
+        var stage_complete:bool = success;
+        if success {
+            state.phase = 2u32;
+            if composed { success = rs_prepare(&resources); }
+            else { success = rmd_collect(&context) && rmd_resolve(&context) && rmd_check(&context); }
+        }
+        var valid:bool = !state.host_failed && context.failure == null(*u8);
+        if success {
+            valid = valid && !state.rejected && !stage.failed && !resources.failed && context.error_count == 0usize;
+        } else {
+            valid = valid && state.rejected && context.error_count != 0usize && context.error[0usize] != 0u8;
+            if !stage_complete { valid = valid && stage.failed; }
+            if composed { valid = valid && resources.failed; }
+        }
+        if !valid { oa_report(fail_at, "invalid failure state or invalid test input", &context); }
+        rmd_context_destroy(&context);
+        if state.live != 0usize || context.arena.blocks != null(*u8) || context.arena.bytes_reserved != 0usize {
+            oa_report(fail_at, "context destruction retained allocations", &context);
+            valid = false;
+        }
+        if !valid { return 1i32; }
+        if success {
+            if !oa_text(1u32, "overload allocation: ") || !oa_number(1u32, fail_at - 1usize) ||
+               !oa_text(1u32, " failure points checked (read ") || !oa_number(1u32, failed_read) ||
+               !oa_text(1u32, ", overload ") || !oa_number(1u32, failed_overload) ||
+               !oa_text(1u32, ", final ") || !oa_number(1u32, failed_final) ||
+               !oa_text(1u32, ")\n") { return 1i32; }
+            return 0i32;
+        }
+        if state.rejected_phase == 0u32 { failed_read = failed_read + 1usize; }
+        else {
+            if state.rejected_phase == 1u32 { failed_overload = failed_overload + 1usize; }
+            else { failed_final = failed_final + 1usize; }
+        }
+        fail_at = fail_at + 1usize;
+    }
+    trap;
+}
+
+fn main(argc:i32, argv:**u8)->i32 {
+    if argc < 3i32 {
+        oa_text(2u32, "usage: overload-alloc plain|resources SOURCE...\n");
+        return 2i32;
+    }
+    var composed:bool = c_equal(argv[1usize], "resources");
+    if !composed && !c_equal(argv[1usize], "plain") {
+        oa_text(2u32, "expected plain or resources mode\n");
+        return 2i32;
+    }
+    var count:usize = (argc - 2i32) as usize;
+    var sources:*RmdSource = rmd0_host_alloc(count * sizeof(RmdSource), alignof(RmdSource)) as *RmdSource;
+    if sources == null(*RmdSource) {
+        oa_text(2u32, "cannot allocate test source descriptors\n");
+        return 1i32;
+    }
+    var index:usize = 0usize;
+    while index < count {
+        sources[index] = make RmdSource {
+            path:argv[index + 2usize], bytes:null(*u8), size:0usize, identity:index as u64 + 1u64
+        };
+        index = index + 1usize;
+    }
+    var result:i32 = 0i32;
+    index = 0usize;
+    while index < count {
+        if rmd0_host_read_file(sources[index].path, &sources[index].bytes, &sources[index].size) != 0i32 {
+            oa_text(2u32, "cannot read test source: ");
+            oa_text(2u32, sources[index].path);
+            oa_text(2u32, "\n");
+            result = 1i32;
+            break;
+        }
+        index = index + 1usize;
+    }
+    if result == 0i32 { result = oa_check(sources, count, composed); }
+    index = 0usize;
+    while index < count {
+        rmd0_host_free(sources[index].bytes);
+        index = index + 1usize;
+    }
+    rmd0_host_free(sources as *u8);
+    return result;
+}

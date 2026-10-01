@@ -528,8 +528,9 @@ fn rr_record(reader:*RmdReader)->*RmdDecl {
     return result;
 }
 
-// Consume a complete ordinary or extern function, including its final delimiter.
-fn rr_function(reader:*RmdReader)->*RmdDecl {
+// Consume an ordinary or extern function header through its result type.
+// Leave the next token current. The result has no body or native symbol.
+fn rr_function_header(reader:*RmdReader)->*RmdDecl {
     var kind:u32=RMD_D_FUNCTION;
     var token:u32=(*reader).token.kind;
     if token==RR_EXTERN { kind=RMD_D_EXTERN; }
@@ -556,7 +557,14 @@ fn rr_function(reader:*RmdReader)->*RmdDecl {
     }
     if !rr_expect(reader,41u32,"expected ')'") || !rr_expect(reader,RR_ARROW,"expected '->'") { return null(*RmdDecl); }
     (*result).syntax_type=rr_type(reader);
-    if kind==RMD_D_FUNCTION { (*result).body=rr_block(reader); }
+    if (*reader).failed { return null(*RmdDecl); }
+    return result;
+}
+
+// Require a successful function header. Consume its standard body or extern suffix.
+fn rr_function_end(reader:*RmdReader,result:*RmdDecl)->*RmdDecl {
+    if (*reader).failed { return null(*RmdDecl); }
+    if (*result).kind==RMD_D_FUNCTION { (*result).body=rr_block(reader); }
     else {
         if !rr_expect(reader,61u32,"expected '='") { return null(*RmdDecl); }
         if (*reader).token.kind!=RR_STRING {
@@ -578,6 +586,13 @@ fn rr_function(reader:*RmdReader)->*RmdDecl {
     }
     if (*reader).failed { return null(*RmdDecl); }
     return result;
+}
+
+// Consume a complete ordinary or extern function, including its final delimiter.
+fn rr_function(reader:*RmdReader)->*RmdDecl {
+    var result:*RmdDecl=rr_function_header(reader);
+    if result==null(*RmdDecl) { return result; }
+    return rr_function_end(reader,result);
 }
 
 fn rr_standard_declaration(reader:*RmdReader)->*RmdDecl {

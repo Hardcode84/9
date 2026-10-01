@@ -16,9 +16,14 @@ C_EXPORTS = c_backend_build c_program c_backend_build_with_body c_stage_init c_s
 READER = stages/reader/model.rmd stages/reader/lex.rmd stages/reader/parse.rmd
 RESOURCE = stages/resources/model.rmd stages/resources/base.rmd stages/resources/read.rmd stages/resources/types.rmd stages/resources/constants.rmd stages/resources/state.rmd stages/resources/cleanup.rmd stages/resources/places.rmd stages/resources/expr.rmd stages/resources/control.rmd stages/resources/emit.rmd stages/resources/program.rmd stages/resources/build.rmd
 RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(RESOURCE)
-RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_c_body
+RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_c_body rs_source_import
+OVERLOAD = stages/overload/model.rmd stages/overload/base.rmd stages/overload/types.rmd stages/overload/collect.rmd stages/overload/resolve.rmd stages/overload/read.rmd stages/overload/program.rmd
+OVERLOAD_LIBRARY = $(C_LIBRARY) $(READER) $(OVERLOAD)
+OVERLOAD_EXPORTS = overload_build overload_program ov_init ov_read ov_prepare ov_collect ov_resolve ov_mangle ov_alloc ov_error ov_put ov_type ov_intern ov_global ov_function_syntax ov_select ov_same ov_encode_type ov_text ov_bytes ov_number ov_part ov_expression ov_statement ov_standard_expression ov_standard_statement ov_scope ov_leave_scope ov_lookup ov_bind ov_block ov_field_type ov_driver_build ov_check
+OVERLOAD_RESOURCE_LIBRARY = $(RESOURCE_LIBRARY) $(OVERLOAD) stages/overload/resources.rmd stages/overload/resource_program.rmd
+OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_resource_build overload_resource_program ov_resources_init ov_resources_read ov_resources_prepare ov_resources_check
 
-.PHONY: all clean check witness api c-stage resource-stage check-c check-stage check-examples check-resources check-resource-alloc check-reader
+.PHONY: all clean check witness api c-stage resource-stage overload-stage check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader
 all: $(BUILD)/rmd $(BUILD)/rmd0 $(BUILD)/librmd0.a $(BUILD)/librmd0_host.a $(BUILD)/librmd0_run.a
 
 $(BUILD):
@@ -82,6 +87,26 @@ $(BUILD)/rmd-resource-library.so: $(BUILD)/rmd-resource-library.o
 
 resource-stage: $(BUILD)/rmd-resource $(BUILD)/rmd-resource-library.so
 
+$(BUILD)/rmd-overload: $(BUILD)/rmd-c $(OVERLOAD_LIBRARY) stages/overload/main.rmd
+	$< -o $@ $(OVERLOAD_LIBRARY) stages/overload/main.rmd $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/librmd0.a --ldflag $(BUILD)/librmd0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+$(BUILD)/rmd-overload-library.o: $(BUILD)/rmd-c $(OVERLOAD_LIBRARY) Makefile
+	$< --library --object $(foreach name,$(OVERLOAD_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(OVERLOAD_LIBRARY)
+
+$(BUILD)/rmd-overload-library.so: $(BUILD)/rmd-overload-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
+
+$(BUILD)/rmd-overload-resource: $(BUILD)/rmd-c $(OVERLOAD_RESOURCE_LIBRARY) stages/overload/resource_main.rmd
+	$< -o $@ $(OVERLOAD_RESOURCE_LIBRARY) stages/overload/resource_main.rmd $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/librmd0.a --ldflag $(BUILD)/librmd0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+$(BUILD)/rmd-overload-resource-library.o: $(BUILD)/rmd-c $(OVERLOAD_RESOURCE_LIBRARY) Makefile
+	$< --library --object $(foreach name,$(OVERLOAD_RESOURCE_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(OVERLOAD_RESOURCE_LIBRARY)
+
+$(BUILD)/rmd-overload-resource-library.so: $(BUILD)/rmd-overload-resource-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
+
+overload-stage: $(BUILD)/rmd-overload $(BUILD)/rmd-overload-library.so $(BUILD)/rmd-overload-resource $(BUILD)/rmd-overload-resource-library.so
+
 $(BUILD)/intrusive.s: $(BUILD)/rmd0 examples/intrusive/program.rmd
 	$(BUILD)/rmd0 -S -o $@ examples/intrusive/program.rmd
 
@@ -127,6 +152,14 @@ check-reader: all c-stage
 
 check-resources: all resource-stage
 	python3 tests/resources.py --build $(BUILD)
+
+check-overload: all overload-stage
+	python3 tests/overload.py --build $(BUILD)
+	python3 tests/overload_resources.py --build $(BUILD)
+	python3 tests/overload_hooks.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+
+check-overload-alloc: all c-stage
+	python3 tests/overload_alloc.py --build $(BUILD) --cc '$(CC)'
 
 check-resource-alloc: all c-stage
 	python3 tests/resources_alloc.py --build $(BUILD) --cc '$(CC)'

@@ -17,6 +17,14 @@ fn rs_put(stage: *RsStage, table: *RmdMap, key: usize, value: *u8) -> unit {
     if !rmd_try_map_set((*stage).context, table, key, value) { (*stage).failed = true; }
 }
 
+// Mark an external declaration with this stage's complete source ABI contract.
+// Call before preparation. Retain the declaration and its source types through stage use.
+// The caller must provide a native name and the provider's same source interface.
+fn rs_source_import(stage: *RsStage, declaration: *RmdDecl) -> bool {
+    rs_put(stage, &(*stage).source_imports, declaration as usize, declaration as *u8);
+    return !(*stage).failed;
+}
+
 fn rs_name(stage: *RsStage) -> *RmdName {
     var bytes: [u8; 32] = uninit;
     var end: usize = 32usize;

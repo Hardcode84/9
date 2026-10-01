@@ -155,7 +155,8 @@ fn rs_collect(stage: *RsStage) -> bool {
             (*global).syntax = (*declaration).syntax_type;
             if (*declaration).kind == RMD_D_FUNCTION || (*declaration).kind == RMD_D_EXTERN {
                 (*global).syntax = rs_signature(stage, declaration);
-                (*global).unsafe_call = (*declaration).kind == RMD_D_EXTERN ||
+                (*global).unsafe_call = ((*declaration).kind == RMD_D_EXTERN &&
+                    rmd_map_get(&(*stage).source_imports, declaration as usize) == null(*u8)) ||
                     rmd_map_get(&(*stage).unsafe_functions, declaration as usize) != null(*u8);
             }
             rs_put(stage, &(*stage).globals, (*declaration).name as usize, global as *u8);
@@ -172,8 +173,10 @@ fn rs_collect(stage: *RsStage) -> bool {
         (*global).resource = resource;
         (*global).drop = rs_global(stage, (*resource).drop_name);
         var drop: *RsGlobal = (*global).drop;
-        if drop == null(*RsGlobal) || (*(*drop).source).kind != RMD_D_FUNCTION || (*drop).unsafe_call {
-            rs_error(stage, &(*(*resource).declaration).loc, "resource drop must name a safe defined function");
+        if drop == null(*RsGlobal) || (*drop).unsafe_call ||
+           ((*(*drop).source).kind != RMD_D_FUNCTION &&
+            rmd_map_get(&(*stage).source_imports, (*drop).source as usize) == null(*u8)) {
+            rs_error(stage, &(*(*resource).declaration).loc, "resource drop must name a safe defined function or source ABI import");
             return false;
         }
         var signature: *RmdTypeSyntax = (*drop).syntax;
@@ -260,7 +263,8 @@ fn rs_publish(stage: *RsStage) -> bool {
                     last_param = parameter;
                     index = index + 1usize;
                 }
-                if (*source).kind == RMD_D_EXTERN {
+                if (*source).kind == RMD_D_EXTERN &&
+                   rmd_map_get(&(*stage).source_imports, source as usize) == null(*u8) {
                     index = 0usize;
                     while index < (*(*global).syntax).param_count {
                         var parameter: *RmdTypeSyntax = (*(*global).syntax).params[index];

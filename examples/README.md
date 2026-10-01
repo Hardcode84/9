@@ -18,10 +18,14 @@ Each example has its own directory. Start with [hello](hello/main.rmd).
 | [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
 | [resources/hello](resources/hello/README.md) | Select ownership, RAII, and defer in the same source file | `Hello, resources!` |
 | [resources/sqlite](resources/sqlite/README.md) | Own SQLite connections and statements; borrow column bytes | Typed rows and separate error codes |
+| [overload/hello](overload/hello/README.md) | Select overloads and a typed function value in the same file | Two greeting lines |
+| [overload/separate](overload/separate/README.md) | Link overloaded functions from a separate native object | `types: 42` |
+| [overload/resources](overload/resources/README.md) | Combine overloads, ownership, overloaded drops, and defer | Owned and deferred output |
 
 The root files select their compiler libraries explicitly. Resource examples
 require `make resource-stage`. The SQLite example also needs its pinned native
 SQLite input; its README gives the command.
+Overload examples require `make overload-stage`.
 Paths passed to `host_source`, `host_input`, and `host_path` are relative to the
 root file. A raw `-o` argument passed to the C backend is relative to the working
 directory. Each example states its output path. A root builds an executable;
@@ -38,6 +42,8 @@ custom assembly stage.
 
 Run `make check-resources` for the resource hello and resource language tests.
 The SQLite verifier checks the native application against its frozen C baseline.
+Run `make check-overload` for the overload examples, native symbols, separate
+objects, and resource composition tests.
 
 Recorded benchmark JSON files retain the source paths and hashes from their
 original revisions. The live measurement scripts use the current example paths.

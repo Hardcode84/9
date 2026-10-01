@@ -46,6 +46,13 @@ a generic C function-body callback. Run `make resource-stage` to build it.
 The [design record](docs/resource-metastage.md) explains its contracts and
 bounded SQLite application test.
 
+The optional [overload stage](stages/overload/README.md) selects functions by
+exact parameter types and assigns stable native names. It is also written in
+RMD. The root can select it alone or compose it with the resource stage.
+Run `make overload-stage`, then try the
+[same-file example](examples/overload/hello/main.rmd) or the
+[separate-object example](examples/overload/separate/main.rmd).
+
 Read the [compiler profiles](docs/compiler-profiles.md) for measured C, C++, and
 Rust frontend costs, profiler overhead, and repeatable commands.
 

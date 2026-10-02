@@ -325,6 +325,12 @@ fn c_expression(stage: *CStage, input: *CrustExpr) -> usize {
     return result;
 }
 
+fn c_braced_statement(stage: *CStage, input: *CrustStmt) -> unit {
+    if (*input).kind != CRUST_S_BLOCK { c_text(stage, "{\n"); }
+    c_statement(stage, input);
+    if (*input).kind != CRUST_S_BLOCK { c_text(stage, "}\n"); }
+}
+
 fn c_statement(stage: *CStage, input: *CrustStmt) -> unit {
     if (*stage).status.failed { return; }
     var kind: u32 = (*input).kind;
@@ -366,8 +372,8 @@ fn c_statement(stage: *CStage, input: *CrustStmt) -> unit {
     if kind == CRUST_S_IF {
         var condition: usize = c_expression(stage, (*input).expr);
         c_text(stage, "if("); c_value(stage, condition); c_text(stage, ")");
-        c_statement(stage, (*input).body);
-        if (*input).otherwise != null(*CrustStmt) { c_text(stage, "else "); c_statement(stage, (*input).otherwise); }
+        c_braced_statement(stage, (*input).body);
+        if (*input).otherwise != null(*CrustStmt) { c_text(stage, "else "); c_braced_statement(stage, (*input).otherwise); }
         return;
     }
     if kind == CRUST_S_WHILE {
@@ -440,7 +446,7 @@ fn c_function_header(stage: *CStage, declaration: *CrustDecl) -> unit {
 
 fn c_function(stage: *CStage, declaration: *CrustDecl) -> unit {
     c_function_header(stage, declaration);
-    c_statement(stage, (*declaration).body);
+    c_braced_statement(stage, (*declaration).body);
 }
 
 fn c_prelude(stage: *CStage) -> unit {

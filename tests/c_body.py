@@ -50,10 +50,15 @@ def main():
             check=True,
         )
         dag_output = work / "type-dag"
+        statement_output = work / "statements"
         subprocess.run(
-            [str(harness), str(output), str(dag_output)], cwd=ROOT, check=True, timeout=30
+            [str(harness), str(output), str(dag_output), str(statement_output)],
+            cwd=ROOT,
+            check=True,
+            timeout=30,
         )
         subprocess.run([str(dag_output)], cwd=ROOT, check=True, timeout=10)
+        subprocess.run([str(statement_output)], cwd=ROOT, check=True, timeout=10)
         result = subprocess.run([str(output)], cwd=ROOT, check=False)
         if result.returncode != 42:
             raise RuntimeError(f"external body returned {result.returncode}, expected 42")
@@ -70,7 +75,7 @@ def main():
         if re.search(rb"\br_g[0-9]+\b", public) or b"body_entry" not in public:
             raise RuntimeError(f"private symbols escaped native visibility: {public!r}")
     print(
-        "C body extension: native results, shared type DAGs, private linkage, and failure paths passed"
+        "C body extension: native results, non-block statements, shared type DAGs, private linkage, and failure paths passed"
     )
 
 

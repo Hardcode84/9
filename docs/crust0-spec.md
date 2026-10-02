@@ -748,6 +748,22 @@ next generation of Crust stage libraries and drivers. The C99 seed remains
 available; it is not translated to Crust0. No generation requires its own
 unavailable output.
 
+The intended root startup is explicit: execute a small setup prefix with the
+seed, prepare the selected backend through an available compiler configuration,
+then install the stage that executes subsequent compilation code. A backend
+can compile its next generation after its first usable generation exists.
+Bootstrap and execution selection belong to ordinary Crust stages. Keeping
+the seed evaluator small takes priority over optimizing it for sustained
+execution of compiler libraries.
+
+Native library loading does not itself replace action execution. Select the
+reader, executor, and user state through the public runner fields. The action
+which selects them completes under the previously captured operations; the
+new operations receive the next unread action. Completed effects are not
+replayed. Earlier storage and published callables retain their lifetime and
+identity contracts. A selected execution stage chooses compilation units
+under the source-order and unread-input rules above.
+
 Host execution and target description are separate. `sizeof` in a running
 stage describes that stage program's execution profile. A cross-compiler gets
 target layout from its target description. It must not serialize a host address

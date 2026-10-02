@@ -204,6 +204,21 @@ payload contract. Changing the `eval` field does not transfer ownership of a
 replacement evaluator to the default runner. Its creator must bind required
 root values and destroy it after its final use.
 
+The intended startup policy uses this boundary to leave seed interpretation
+early. An ordinary root action prepares the selected backend through an
+available compiler configuration, then installs the execution stage for
+subsequent compilation code. The backend can compile its next generation
+explicitly. Bootstrap policy stays in Crust code.
+
+`host_link` only loads native code. It does not select a new root executor.
+A complete bootstrap must also install the operations that execute later
+code, with explicit state and code lifetimes. The action performing the
+handoff finishes under its captured operations. Later actions use the new
+selection without replaying the setup prefix. Native execution must preserve
+the source-order boundaries; it cannot parse unread bytes across a pending
+reader change. This complete native continuation still needs an executable
+witness. The reader-switch example proves operation replacement alone.
+
 ## Files and native inputs
 
 The installed Crust helper library provides four operations:
@@ -397,15 +412,24 @@ tool hashes, dependency checks, output checks, and intervals.
 A separate cycle profile puts about 82% of interpreter samples in
 `eval_expression`, `eval_place`, `read_place`, and `eval_statement`. These
 operations traverse checked syntax on each execution. Map lookup accounts
-for another 6%. A faster execution plan must remove that repeated work and
-retain the existing evaluation order, traps, callback, and storage contracts.
-Native stage preparation must also fit the request if that route is selected.
-Caching a prepared library does not repair this cold-source result.
+for another 6%. This profile measures sustained interpretation of the full C
+backend. The intended startup policy instead prepares native stage code
+early and hands subsequent compilation code to the selected execution stage.
+It does not require a larger or faster interpreter in the C99 seed.
 
-This fails the single-worker prerequisite in specification section 14.
-Parallel scheduler and language expansion stop at this gate. The next
-execution change must pass the same source-supplied witness before those
-parts grow. The full performance issue remains open.
+These results do not establish that complete handoff: the compiled-source
+route prepares a native target backend but retains the seed root executor.
+The next witness must prepare the backend explicitly and execute subsequent
+compilation code through the selected stage, with unchanged effects and
+storage lifetimes. Measure bootstrap preparation, execution after handoff,
+and final target toolchain work separately. Retain total cold-request cost;
+caching a prepared library does not erase the recorded preparation cost.
+
+The recorded configurations fail the single-worker prerequisite in section
+14. Keep those results. Sustained seed interpretation is a comparison route,
+not a required execution mode for the intended design. Assess the explicit
+bootstrap and handoff route before choosing an execution change or expanding
+dependent stages. The full performance issue remains open.
 
 To repeat the measurement with a new report path:
 

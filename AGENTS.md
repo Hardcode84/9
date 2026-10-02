@@ -16,6 +16,10 @@ Do not add a feature before a concrete program requires it.
   Research documents contain proposals, not additional implemented features.
 - Source files use `.crs`. The command is `crust main.crs`. The root program
   selects inputs, stages, and outputs through ordinary calls.
+- Keep the seed evaluator simple. An early explicit root action prepares the
+  selected backend and hands subsequent compilation code to its execution
+  stage. Keep bootstrap and execution policy in Crust stages. Prove this
+  handoff before expanding the C99 evaluator for stage execution speed.
 - Keep module management, ownership, cleanup, overloads, syntax extensions,
   and backend adapters in user stages. Compiler interfaces must be general.
   Do not add special cases for a stage name, source path, or example.

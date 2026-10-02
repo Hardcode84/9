@@ -145,6 +145,24 @@ must already be available before a call uses it; preparing that code is an
 explicit build dependency. A root can also define and execute stage functions
 directly, as the [reader switch](../examples/reader-switch/README.md) does.
 
+The intended startup policy keeps the seed evaluator small. An early root
+action selects a backend, prepares its native code with an available compiler
+configuration, and installs the execution stage for subsequent compilation
+code. A backend can then compile its next generation explicitly. ASM and C
+are the available emission paths; LLVM requires a separate adapter stage.
+
+This handoff uses `CrustRun.read`, `execute`, and `user`. Loading a library
+with `host_link` alone leaves the default root executor in place. The selected
+stage must take responsibility for later code execution as well as emission.
+The current runner supplies the handoff interface; a native continuation from
+a source-bootstrapped backend still needs an executable witness.
+
+Keep this policy in Crust code. The seed must not identify a backend by its
+name or source path. Preserve completed effects, persistent storage, and
+published callable identities across the handoff. Compile complete functions
+or explicitly selected units. Their boundaries must preserve source-order
+effects and ownership of unread bytes.
+
 There is no required `meta` block, separate build script, or backend-specific
 launcher option. Arguments after the root path are data for the root to
 interpret. Earlier effects remain if a later action fails. EOF performs no

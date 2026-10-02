@@ -79,8 +79,10 @@ is passed directly to a process. The driver does not use a shell.
 
 For C output, an omitted `-o`, or `-o -`, selects standard output. Object and
 executable modes require a regular output file path. A failed compilation or
-link keeps the old output file. Temporary files have unique names in the
-output directory. The driver checks process status and file operations and
+link keeps the old output file. Temporary files use short names with 16 random
+bytes from the host in the output directory. The output name does not affect
+their length. Failure to obtain random bytes fails the output operation.
+The driver checks process status and file operations and
 removes temporary files.
 
 C text and symbol text are separate output files. For new outputs, the driver

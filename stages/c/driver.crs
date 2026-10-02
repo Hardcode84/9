@@ -26,7 +26,7 @@ extern fn c_driver_lstat(path: *u8, info: *CDriverStat) -> i32 = "lstat";
 extern fn c_driver_errno() -> *i32 = "__errno_location";
 extern fn c_driver_strerror(number: i32) -> *u8 = "strerror";
 extern fn c_driver_open(path: *u8, flags: i32, mode: u32) -> i32 = "open";
-extern fn c_driver_getpid() -> i32 = "getpid";
+extern fn c_driver_entropy(bytes: *u8, count: usize) -> i32 = "getentropy";
 extern fn c_driver_chmod(path: *u8, mode: u32) -> i32 = "chmod";
 extern fn c_driver_umask(mask: u32) -> u32 = "umask";
 extern fn c_driver_close(descriptor: i32) -> i32 = "close";
@@ -95,14 +95,32 @@ fn c_driver_io_error(driver: *CDriver, action: *u8, path: *u8, number: i32) -> b
     return false;
 }
 
-fn c_driver_temporary_name(driver: *CDriver, destination: *u8, attempt: usize) -> *u8 {
+fn c_driver_temporary_name(driver: *CDriver, destination: *u8) -> *u8 {
+    var random: [u8; 16] = uninit;
+    if c_driver_entropy(&random[0usize], 16usize) != 0i32 {
+        c_driver_io_error(driver, "cannot obtain temporary randomness", destination, *c_driver_errno());
+        return null(*u8);
+    }
+    var directory: usize = 0usize;
+    var index: usize = 0usize;
+    while destination[index] != 0u8 {
+        if destination[index] == 47u8 { directory = index + 1usize; }
+        index = index + 1usize;
+    }
     var buffer: CBuffer = uninit;
     c_driver_buffer(&(*(*driver).stage).status, &buffer);
-    c_buffer_text(&buffer, destination);
-    c_buffer_text(&buffer, ".tmp.");
-    c_buffer_number(&buffer, c_driver_getpid() as u64);
-    c_buffer_text(&buffer, ".");
-    c_buffer_number(&buffer, attempt as u64);
+    if destination[0usize] != 47u8 && !(destination[0usize] == 46u8 && destination[1usize] == 47u8) {
+        c_buffer_text(&buffer, "./");
+    }
+    c_buffer_bytes(&buffer, destination, directory);
+    c_buffer_text(&buffer, ".crust-");
+    var digits: *u8 = "0123456789abcdef";
+    index = 0usize;
+    while index < 16usize {
+        c_buffer_bytes(&buffer, &digits[(random[index] >> 4u8) as usize], 1usize);
+        c_buffer_bytes(&buffer, &digits[(random[index] & 15u8) as usize], 1usize);
+        index = index + 1usize;
+    }
     return c_buffer_end(&buffer);
 }
 
@@ -123,15 +141,11 @@ fn c_driver_output_mode(driver: *CDriver, path: *u8) -> u32 {
 
 fn c_driver_temporary(driver: *CDriver, destination: *u8, mode: u32) -> *u8 {
     if mode == 0u32 { return null(*u8); }
-    if destination[0usize] != 47u8 {
-        destination = c_driver_join(&(*(*driver).stage).status, "./", destination);
-        if destination == null(*u8) { return null(*u8); }
-    }
     var item: *CDriverTemp = c_alloc(&(*(*driver).stage).status, sizeof(CDriverTemp), alignof(CDriverTemp)) as *CDriverTemp;
     if item == null(*CDriverTemp) { return null(*u8); }
     var attempt: usize = 0usize;
     while attempt < 128usize {
-        var path: *u8 = c_driver_temporary_name(driver, destination, attempt);
+        var path: *u8 = c_driver_temporary_name(driver, destination);
         if path == null(*u8) { return null(*u8); }
         // Linux O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC.
         var descriptor: i32 = c_driver_open(path, 524481i32, mode & 438u32);
@@ -151,12 +165,6 @@ fn c_driver_temporary(driver: *CDriver, destination: *u8, mode: u32) -> *u8 {
     }
     c_driver_io_error(driver, "cannot create temporary for", destination, 17i32);
     return null(*u8);
-}
-
-fn c_driver_derived(driver: *CDriver, base: *u8, suffix: *u8, mode: u32) -> *u8 {
-    var path: *u8 = c_driver_join(&(*(*driver).stage).status, base, suffix);
-    if path == null(*u8) { return null(*u8); }
-    return c_driver_temporary(driver, path, mode);
 }
 
 fn c_driver_cleanup(driver: *CDriver, keep: *u8) -> bool {
@@ -268,13 +276,12 @@ fn c_driver_compile(driver: *CDriver) -> bool {
     var stage: *CStage = (*driver).stage;
     var mode: u32 = c_driver_output_mode(driver, (*(*driver).options).output);
     if mode == 0u32 { return false; }
-    var base: *u8 = c_driver_temporary(driver, (*(*driver).options).output, 384u32);
-    if base == null(*u8) { return false; }
-    var source: *u8 = c_driver_derived(driver, base, ".c", 384u32);
-    var response: *u8 = c_driver_derived(driver, base, ".rsp", 384u32);
-    var original: *u8 = c_driver_derived(driver, base, ".input.o", mode);
-    var object: *u8 = c_driver_derived(driver, base, ".o", mode);
-    var binary: *u8 = c_driver_derived(driver, base, ".bin", mode);
+    var destination: *u8 = (*(*driver).options).output;
+    var source: *u8 = c_driver_temporary(driver, destination, 384u32);
+    var response: *u8 = c_driver_temporary(driver, destination, 384u32);
+    var original: *u8 = c_driver_temporary(driver, destination, mode);
+    var object: *u8 = c_driver_temporary(driver, destination, mode);
+    var binary: *u8 = c_driver_temporary(driver, destination, mode);
     var response_argument: *u8 = c_driver_join(&(*stage).status, "@", response);
     if (*stage).status.failed { return false; }
     if !c_driver_write(driver, source, &(*stage).header) ||

@@ -85,6 +85,35 @@ def integer_cases(kind, bits, signed):
     return cases
 
 
+def check_temporary_errors(command, compiler, backend, work, cc):
+    shim = work / "driver-entropy.so"
+    command([*cc, *STRICT, "-fPIC", "-shared", ROOT / "tests/driver_entropy.c", "-o", shim])
+    linked = command(["ldd", compiler]).stdout.decode()
+    sanitizer = re.findall(r"^\s*libasan\S* => (\S+)", linked, re.M)
+    environment = {**os.environ, "LD_PRELOAD": ":".join([*sanitizer, str(shim)])}
+    source = work / "permissions.crs"
+    output, victim = work / "entropy-output", work / "entropy-victim"
+    occupied = work / (".crust-" + "00" * 16)
+    victim.write_text("retained victim\n")
+    variants = [["--emit-c"], ["--object"]] if backend == "c" else [[]]
+    for options in variants:
+        for mode in ("fail", "collision"):
+            environment["CRUST_TEST_ENTROPY"] = mode
+            output.write_text("retained output\n")
+            if mode == "collision":
+                occupied.symlink_to(victim)
+            result = command(
+                [compiler, *options, "-o", output, source], expected=1, env=environment
+            )
+            assert b"temporary" in result.stderr or b"cannot create output" in result.stderr
+            assert output.read_text() == "retained output\n"
+            assert victim.read_text() == "retained victim\n"
+            if mode == "collision":
+                assert occupied.is_symlink() and occupied.readlink() == victim
+                occupied.unlink()
+            assert not list(work.glob(".crust-*"))
+
+
 def check_output_permissions(command, compiler, backend, work, tool_flags):
     source = work / "permissions.crs"
     source.write_text(
@@ -123,7 +152,7 @@ def check_output_permissions(command, compiler, backend, work, tool_flags):
                 assert stat.S_IMODE(symbols.stat().st_mode) == 0o640
 
     output = work / "temporary-collision"
-    for occupied, status in ((2, 0), (128, 1)):
+    for occupied in (2, 128):
         output.write_text("retained destination\n")
         output.chmod(0o640)
 
@@ -136,15 +165,8 @@ def check_output_permissions(command, compiler, backend, work, tool_flags):
                     path.write_text("retained temporary\n")
 
         options = ["--emit-c"] if backend == "c" else []
-        result = command(
-            [compiler, *options, "-o", output, source], expected=status, preexec_fn=occupy
-        )
-        if status:
-            assert (
-                b"cannot create temporary" in result.stderr
-                or b"cannot create output" in result.stderr
-            )
-            assert output.read_text() == "retained destination\n"
+        command([compiler, *options, "-o", output, source], preexec_fn=occupy)
+        assert output.read_text() != "retained destination\n"
         assert stat.S_IMODE(output.stat().st_mode) == 0o640
         candidates = list(work.glob("temporary-collision.tmp.*"))
         assert len(candidates) == occupied
@@ -154,6 +176,16 @@ def check_output_permissions(command, compiler, backend, work, tool_flags):
             else:
                 assert path.read_text() == "retained temporary\n"
             path.unlink()
+
+    for name, options, creation in modes:
+        output = work / (name[0] * os.pathconf(work, "PC_NAME_MAX"))
+        output.unlink(missing_ok=True)
+        flags = options + (tool_flags if name in ("object", "executable") else [])
+        command([compiler, *flags, "-o", output, source], umask=0o027)
+        assert stat.S_IMODE(output.stat().st_mode) == creation & ~0o027
+        if name == "executable":
+            command([output])
+        output.unlink()
 
     if backend == "c":
         tools = work / "permission-tools"
@@ -168,8 +200,8 @@ def check_output_permissions(command, compiler, backend, work, tool_flags):
             f"#!{sys.executable}\n"
             "import subprocess, sys\nfrom pathlib import Path\n"
             "def check():\n"
-            f"    paths = list(Path({str(work)!r}).glob('private-output.tmp.*'))\n"
-            "    assert len(paths) == 6, paths\n"
+            f"    paths = list(Path({str(work)!r}).glob('.crust-*'))\n"
+            "    assert len(paths) == 5, paths\n"
             "    for path in paths:\n        assert path.stat().st_mode & 0o077 == 0, path\n"
             "check()\n"
             f"result = subprocess.run([{shutil.which('gcc')!r}, *sys.argv[1:]])\n"
@@ -182,6 +214,7 @@ def check_output_permissions(command, compiler, backend, work, tool_flags):
         command([compiler, *tool_flags, "-o", output, source], env=environment, umask=0o002)
         assert probe.read_text() == "checked\nchecked\n"
         assert stat.S_IMODE(output.stat().st_mode) == 0o600
+    assert not list(work.glob(".crust-*")), "driver left temporary files"
 
 
 def main():
@@ -773,6 +806,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     )
     invalid.write_bytes(b"fn\x00")
     check_output_permissions(command, compiler, args.backend, work, [*c_options, *c_link_options])
+    check_temporary_errors(command, compiler, args.backend, work, cc)
     output.write_text("retained output\n")
     output.chmod(0o640)
     command([compiler, *dump_options, "-o", output, invalid], expected=1)
@@ -934,7 +968,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
             command([compiler, "-o", name, *c_options, *c_link_options, valid], cwd=work)
             command([work / name])
         assert not list(
-            work.glob("*.tmp.*")
+            work.glob(".crust-*")
         ), "driver left temporary files after a completed command"
 
         library_source, library_object = work / "library.crs", work / "library.o"

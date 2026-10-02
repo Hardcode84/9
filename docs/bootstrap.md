@@ -78,6 +78,9 @@ New regular files use mode `0666` with the caller's umask. Replacement files
 retain the previous read, write, and execute permission bits (`0777`).
 Set-user-ID, set-group-ID, and sticky bits are not copied. Temporary creation
 is exclusive; an occupied temporary path is never overwritten.
+Temporary names use 16 random bytes from the host in a short name in the
+destination directory. They do not include the destination's file name.
+Failure to obtain random bytes fails the output operation.
 Replacement temporaries do not grant access beyond the destination's access
 bits and the caller's umask.
 Source or emission failure leaves the old regular file in place. A symbolic

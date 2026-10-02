@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/random.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -28,16 +29,25 @@ static bool emit_stream_file(CrustX64Program *program, const char *path)
     return success;
 }
 
-static int create_temporary(char *temporary, size_t capacity, const char *path, mode_t mode)
+static int create_temporary(char *temporary, const char *path, mode_t mode)
 {
+    static const char digits[] = "0123456789abcdef";
+    const char *slash = strrchr(path, '/');
+    size_t directory = slash == NULL ? 0 : (size_t)(slash - path) + 1;
     unsigned attempt;
+    memcpy(temporary, path, directory);
+    memcpy(temporary + directory, ".crust-", 7);
     for (attempt = 0; attempt < 128; ++attempt) {
+        unsigned char random[16];
+        size_t index;
         int descriptor;
-        int count = snprintf(temporary, capacity, "%s.tmp.%ld.%u", path, (long)getpid(), attempt);
-        if (count < 0 || (size_t)count >= capacity) {
-            errno = ENAMETOOLONG;
+        if (getentropy(random, sizeof(random)) != 0)
             return -1;
+        for (index = 0; index < sizeof(random); ++index) {
+            temporary[directory + 7 + index * 2] = digits[random[index] >> 4];
+            temporary[directory + 8 + index * 2] = digits[random[index] & 15];
         }
+        temporary[directory + 39] = '\0';
         descriptor = open(temporary, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, mode);
         if (descriptor >= 0 || errno != EEXIST)
             return descriptor;
@@ -67,17 +77,17 @@ static bool emit_atomic_file(CrustX64Program *program, const char *path,
     int descriptor;
     bool success;
     length = strlen(path);
-    if (length > SIZE_MAX - 64) {
+    if (length > SIZE_MAX - 40) {
         fputs("crust0: output path is too long\n", stderr);
         return false;
     }
-    temporary = malloc(length + 64);
+    temporary = malloc(length + 40);
     if (temporary == NULL) {
         fputs("crust0: cannot allocate output path\n", stderr);
         return false;
     }
-    descriptor = create_temporary(temporary, length + 64, path,
-                                  previous != NULL ? previous->st_mode & 0666 : 0666);
+    descriptor =
+        create_temporary(temporary, path, previous != NULL ? previous->st_mode & 0666 : 0666);
     if (descriptor < 0) {
         fprintf(stderr, "crust0: cannot create output %s: %s\n", path, strerror(errno));
         free(temporary);

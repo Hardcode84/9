@@ -25,7 +25,10 @@ record CDriverStat {
 extern fn c_driver_lstat(path: *u8, info: *CDriverStat) -> i32 = "lstat";
 extern fn c_driver_errno() -> *i32 = "__errno_location";
 extern fn c_driver_strerror(number: i32) -> *u8 = "strerror";
-extern fn c_driver_mkstemp(path: *u8) -> i32 = "mkstemp";
+extern fn c_driver_open(path: *u8, flags: i32, mode: u32) -> i32 = "open";
+extern fn c_driver_getpid() -> i32 = "getpid";
+extern fn c_driver_chmod(path: *u8, mode: u32) -> i32 = "chmod";
+extern fn c_driver_umask(mask: u32) -> u32 = "umask";
 extern fn c_driver_close(descriptor: i32) -> i32 = "close";
 extern fn c_driver_unlink(path: *u8) -> i32 = "unlink";
 extern fn c_driver_rename(source: *u8, destination: *u8) -> i32 = "rename";
@@ -92,32 +95,68 @@ fn c_driver_io_error(driver: *CDriver, action: *u8, path: *u8, number: i32) -> b
     return false;
 }
 
-fn c_driver_temporary(driver: *CDriver, destination: *u8) -> *u8 {
+fn c_driver_temporary_name(driver: *CDriver, destination: *u8, attempt: usize) -> *u8 {
+    var buffer: CBuffer = uninit;
+    c_driver_buffer(&(*(*driver).stage).status, &buffer);
+    c_buffer_text(&buffer, destination);
+    c_buffer_text(&buffer, ".tmp.");
+    c_buffer_number(&buffer, c_driver_getpid() as u64);
+    c_buffer_text(&buffer, ".");
+    c_buffer_number(&buffer, attempt as u64);
+    return c_buffer_end(&buffer);
+}
+
+fn c_driver_output_mode(driver: *CDriver, path: *u8) -> u32 {
+    var info: CDriverStat = uninit;
+    if c_driver_lstat(path, &info) == 0i32 {
+        if (info.mode & 61440u32) != 32768u32 {
+            c_driver_error(driver, "output changed to a nonregular file");
+            return 0u32;
+        }
+        // The toolchain must read and write the temporary before publication.
+        return (info.mode & 511u32) | 384u32;
+    }
+    if *c_driver_errno() == 2i32 { return 511u32; }
+    c_driver_io_error(driver, "cannot inspect output permissions", path, *c_driver_errno());
+    return 0u32;
+}
+
+fn c_driver_temporary(driver: *CDriver, destination: *u8, mode: u32) -> *u8 {
+    if mode == 0u32 { return null(*u8); }
     if destination[0usize] != 47u8 {
         destination = c_driver_join(&(*(*driver).stage).status, "./", destination);
         if destination == null(*u8) { return null(*u8); }
     }
-    var path: *u8 = c_driver_join(&(*(*driver).stage).status, destination, ".tmp.XXXXXX");
     var item: *CDriverTemp = c_alloc(&(*(*driver).stage).status, sizeof(CDriverTemp), alignof(CDriverTemp)) as *CDriverTemp;
-    if path == null(*u8) || item == null(*CDriverTemp) { return null(*u8); }
-    var descriptor: i32 = c_driver_mkstemp(path);
-    if descriptor < 0i32 {
-        c_driver_io_error(driver, "cannot create temporary for", destination, *c_driver_errno());
-        return null(*u8);
+    if item == null(*CDriverTemp) { return null(*u8); }
+    var attempt: usize = 0usize;
+    while attempt < 128usize {
+        var path: *u8 = c_driver_temporary_name(driver, destination, attempt);
+        if path == null(*u8) { return null(*u8); }
+        // Linux O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC.
+        var descriptor: i32 = c_driver_open(path, 524481i32, mode & 438u32);
+        if descriptor >= 0i32 {
+            *item = make CDriverTemp { path: path, next: (*driver).temporary };
+            (*driver).temporary = item;
+            if c_driver_close(descriptor) == 0i32 { return path; }
+            c_driver_io_error(driver, "cannot close temporary", path, *c_driver_errno());
+            return null(*u8);
+        }
+        var error: i32 = *c_driver_errno();
+        if error != 17i32 {
+            c_driver_io_error(driver, "cannot create temporary for", destination, error);
+            return null(*u8);
+        }
+        attempt = attempt + 1usize;
     }
-    *item = make CDriverTemp { path: path, next: (*driver).temporary };
-    (*driver).temporary = item;
-    if c_driver_close(descriptor) != 0i32 {
-        c_driver_io_error(driver, "cannot close temporary", path, *c_driver_errno());
-        return null(*u8);
-    }
-    return path;
+    c_driver_io_error(driver, "cannot create temporary for", destination, 17i32);
+    return null(*u8);
 }
 
-fn c_driver_derived(driver: *CDriver, base: *u8, suffix: *u8) -> *u8 {
+fn c_driver_derived(driver: *CDriver, base: *u8, suffix: *u8, mode: u32) -> *u8 {
     var path: *u8 = c_driver_join(&(*(*driver).stage).status, base, suffix);
     if path == null(*u8) { return null(*u8); }
-    return c_driver_temporary(driver, path);
+    return c_driver_temporary(driver, path, mode);
 }
 
 fn c_driver_cleanup(driver: *CDriver, keep: *u8) -> bool {
@@ -160,19 +199,35 @@ fn c_driver_write(driver: *CDriver, path: *u8, buffer: *CBuffer) -> bool {
 }
 
 fn c_driver_publish(driver: *CDriver, temporary: *u8, output: *u8) -> bool {
+    var info: CDriverStat = uninit;
+    if c_driver_lstat(output, &info) == 0i32 {
+        if (info.mode & 61440u32) != 32768u32 {
+            return c_driver_error(driver, "output changed to a nonregular file");
+        }
+        if c_driver_chmod(temporary, info.mode & 511u32) != 0i32 {
+            return c_driver_io_error(driver, "cannot set output permissions", output, *c_driver_errno());
+        }
+    } else {
+        if *c_driver_errno() != 2i32 {
+            return c_driver_io_error(driver, "cannot inspect output permissions", output, *c_driver_errno());
+        }
+    }
     if c_driver_rename(temporary, output) != 0i32 {
         return c_driver_io_error(driver, "cannot publish output", output, *c_driver_errno());
     }
     return true;
 }
 
-fn c_driver_run(driver: *CDriver, count: usize) -> bool {
+fn c_driver_run(driver: *CDriver, count: usize, mode: u32) -> bool {
     (*driver).command[count] = null(*u8);
     var pid: i32 = c_driver_fork();
     if pid < 0i32 {
         return c_driver_io_error(driver, "cannot start", (*driver).command[0usize], *c_driver_errno());
     }
     if pid == 0i32 {
+        // Change only the child mask. Linkers add execute bits before publication.
+        var inherited_mask: u32 = c_driver_umask(0u32);
+        c_driver_umask(inherited_mask | ((~mode) & 511u32));
         c_driver_execvp((*driver).command[0usize], (*driver).command);
         var prefix: *u8 = "crust-c: cannot execute ";
         crust0_host_write_stream(2u32, prefix, c_length(prefix));
@@ -211,13 +266,15 @@ fn c_driver_compile(driver: *CDriver) -> bool {
         return c_driver_error(driver, "object and executable outputs require a regular file path");
     }
     var stage: *CStage = (*driver).stage;
-    var base: *u8 = c_driver_temporary(driver, (*(*driver).options).output);
+    var mode: u32 = c_driver_output_mode(driver, (*(*driver).options).output);
+    if mode == 0u32 { return false; }
+    var base: *u8 = c_driver_temporary(driver, (*(*driver).options).output, 384u32);
     if base == null(*u8) { return false; }
-    var source: *u8 = c_driver_derived(driver, base, ".c");
-    var response: *u8 = c_driver_derived(driver, base, ".rsp");
-    var original: *u8 = c_driver_derived(driver, base, ".input.o");
-    var object: *u8 = c_driver_derived(driver, base, ".o");
-    var binary: *u8 = c_driver_derived(driver, base, ".bin");
+    var source: *u8 = c_driver_derived(driver, base, ".c", 384u32);
+    var response: *u8 = c_driver_derived(driver, base, ".rsp", 384u32);
+    var original: *u8 = c_driver_derived(driver, base, ".input.o", mode);
+    var object: *u8 = c_driver_derived(driver, base, ".o", mode);
+    var binary: *u8 = c_driver_derived(driver, base, ".bin", mode);
     var response_argument: *u8 = c_driver_join(&(*stage).status, "@", response);
     if (*stage).status.failed { return false; }
     if !c_driver_write(driver, source, &(*stage).header) ||
@@ -243,12 +300,12 @@ fn c_driver_compile(driver: *CDriver) -> bool {
     arguments[count + 3usize] = source;
     arguments[count + 4usize] = "-o";
     arguments[count + 5usize] = original;
-    if !c_driver_run(driver, count + 6usize) { return false; }
+    if !c_driver_run(driver, count + 6usize, mode) { return false; }
     arguments[0usize] = "objcopy";
     arguments[1usize] = response_argument;
     arguments[2usize] = original;
     arguments[3usize] = object;
-    if !c_driver_run(driver, 4usize) { return false; }
+    if !c_driver_run(driver, 4usize, mode) { return false; }
     var result: *u8 = object;
     if (*(*driver).options).mode == 0u32 {
         arguments[0usize] = "gcc";
@@ -263,7 +320,7 @@ fn c_driver_compile(driver: *CDriver) -> bool {
         }
         arguments[count] = "-o";
         arguments[count + 1usize] = binary;
-        if !c_driver_run(driver, count + 2usize) { return false; }
+        if !c_driver_run(driver, count + 2usize, mode) { return false; }
         result = binary;
     }
     if !c_driver_cleanup(driver, result) { return c_driver_error(driver, "temporary cleanup failed"); }
@@ -281,7 +338,7 @@ fn c_driver_dump(driver: *CDriver) -> bool {
         var kind: i32 = c_driver_output_kind(driver, output);
         if kind < 0i32 { return false; }
         if kind != 2i32 {
-            output_temporary = c_driver_temporary(driver, output);
+            output_temporary = c_driver_temporary(driver, output, c_driver_output_mode(driver, output));
             if output_temporary == null(*u8) || !c_driver_write(driver, output_temporary, &(*stage).header) { return false; }
         }
     }
@@ -289,7 +346,7 @@ fn c_driver_dump(driver: *CDriver) -> bool {
         var kind: i32 = c_driver_output_kind(driver, symbols);
         if kind < 0i32 { return false; }
         if kind != 2i32 {
-            symbols_temporary = c_driver_temporary(driver, symbols);
+            symbols_temporary = c_driver_temporary(driver, symbols, c_driver_output_mode(driver, symbols));
             if symbols_temporary == null(*u8) || !c_driver_write(driver, symbols_temporary, &(*stage).renames) { return false; }
         }
     }

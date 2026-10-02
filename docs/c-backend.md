@@ -83,9 +83,19 @@ link keeps the old output file. Temporary files have unique names in the
 output directory. The driver checks process status and file operations and
 removes temporary files.
 
-C text and symbol text are separate files. The driver writes both temporary
-files before it publishes either regular file. It publishes the symbol file
-first and the C file last. These two renames are not one atomic transaction.
+C text and symbol text are separate output files. For new outputs, the driver
+creates both temporary files with mode `0666` and the caller's umask. New object
+files use the same mode. The linker adds execute permission for new executables,
+subject to that umask. Replacements retain the destination's read, write, and
+execute permission bits (`0777`). Set-user-ID, set-group-ID, and sticky bits are
+not copied.
+Temporary creation is exclusive and does not overwrite an occupied path.
+Replacement temporaries retain the destination's group and other access
+restrictions. The owner can read and write them during compilation. Temporary
+C and symbol inputs use private mode `0600` with the caller's umask.
+The driver finishes both temporary files before it publishes either regular
+file. It publishes the symbol file first and the C file last. These two renames
+are not one atomic transaction.
 A text output path that names a device or symbolic link is opened as a stream;
 a failed stream write can leave a prefix.
 Paired outputs must resolve to separate paths and separate existing files.

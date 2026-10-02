@@ -8,6 +8,7 @@ import random
 import re
 import resource
 import shlex
+import shutil
 import signal
 import stat
 import subprocess
@@ -82,6 +83,105 @@ def integer_cases(kind, bits, signed):
         for target, (width, sign) in TYPES.items():
             cases.append((f"({literal(a)}) as {target}", f"{wrapped(a, width, sign)}{target}"))
     return cases
+
+
+def check_output_permissions(command, compiler, backend, work, tool_flags):
+    source = work / "permissions.crs"
+    source.write_text(
+        'extern fn imported()->unit="permission_probe"; fn main(argc:i32,argv:**u8)->i32{return 0i32;}'
+    )
+    modes = [("assembly", [], 0o666)]
+    if backend == "c":
+        modes = [
+            ("text", ["--emit-c"], 0o666),
+            ("object", ["--object"], 0o666),
+            ("executable", [], 0o777),
+        ]
+    for mask in (0o002, 0o027):
+        for name, options, creation in modes:
+            output = work / f"permissions-{name}-{mask}"
+            symbols = output.with_suffix(".rsp")
+            output.unlink(missing_ok=True)
+            symbols.unlink(missing_ok=True)
+            flags = options + (["--symbols", symbols] if name == "text" else [])
+            if name in ("object", "executable"):
+                flags += tool_flags
+            argv = [compiler, *flags, "-o", output, source]
+            command(argv, umask=mask)
+            assert stat.S_IMODE(output.stat().st_mode) == creation & ~mask
+            if name == "executable":
+                command([output])
+            previous = 0o7751 if name == "executable" else 0o7604
+            output.chmod(previous)
+            assert stat.S_IMODE(output.stat().st_mode) == previous
+            if name == "text":
+                assert stat.S_IMODE(symbols.stat().st_mode) == 0o666 & ~mask
+                symbols.chmod(0o7640)
+            command(argv, umask=mask)
+            assert stat.S_IMODE(output.stat().st_mode) == (0o751 if name == "executable" else 0o604)
+            if name == "text":
+                assert stat.S_IMODE(symbols.stat().st_mode) == 0o640
+
+    output = work / "temporary-collision"
+    for occupied, status in ((2, 0), (128, 1)):
+        output.write_text("retained destination\n")
+        output.chmod(0o640)
+
+        def occupy(occupied=occupied):
+            for index in range(occupied):
+                path = Path(f"{output}.tmp.{os.getpid()}.{index}")
+                if index == 1:
+                    path.symlink_to(output)
+                else:
+                    path.write_text("retained temporary\n")
+
+        options = ["--emit-c"] if backend == "c" else []
+        result = command(
+            [compiler, *options, "-o", output, source], expected=status, preexec_fn=occupy
+        )
+        if status:
+            assert (
+                b"cannot create temporary" in result.stderr
+                or b"cannot create output" in result.stderr
+            )
+            assert output.read_text() == "retained destination\n"
+        assert stat.S_IMODE(output.stat().st_mode) == 0o640
+        candidates = list(work.glob("temporary-collision.tmp.*"))
+        assert len(candidates) == occupied
+        for path in candidates:
+            if path.is_symlink():
+                assert path.readlink() == output
+            else:
+                assert path.read_text() == "retained temporary\n"
+            path.unlink()
+
+    if backend == "c":
+        tools = work / "permission-tools"
+        tools.mkdir(exist_ok=True)
+        output = work / "private-output"
+        output.write_text("private destination\n")
+        output.chmod(0o600)
+        probe = tools / "checked"
+        probe.unlink(missing_ok=True)
+        wrapper = tools / "gcc"
+        wrapper.write_text(
+            f"#!{sys.executable}\n"
+            "import subprocess, sys\nfrom pathlib import Path\n"
+            "def check():\n"
+            f"    paths = list(Path({str(work)!r}).glob('private-output.tmp.*'))\n"
+            "    assert len(paths) == 6, paths\n"
+            "    for path in paths:\n        assert path.stat().st_mode & 0o077 == 0, path\n"
+            "check()\n"
+            f"result = subprocess.run([{shutil.which('gcc')!r}, *sys.argv[1:]])\n"
+            "if result.returncode: sys.exit(result.returncode)\n"
+            "check()\n"
+            f"with open({str(probe)!r}, 'a') as stream: stream.write('checked\\n')\n"
+        )
+        wrapper.chmod(0o755)
+        environment = {**os.environ, "PATH": str(tools) + os.pathsep + os.environ["PATH"]}
+        command([compiler, *tool_flags, "-o", output, source], env=environment, umask=0o002)
+        assert probe.read_text() == "checked\nchecked\n"
+        assert stat.S_IMODE(output.stat().st_mode) == 0o600
 
 
 def main():
@@ -659,9 +759,12 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         'extern fn native()->unit="validation_native"; fn main(argc:i32,argv:**u8)->i32{return 0i32;}'
     )
     invalid.write_bytes(b"fn\x00")
+    check_output_permissions(command, compiler, args.backend, work, [*c_options, *c_link_options])
     output.write_text("retained output\n")
+    output.chmod(0o640)
     command([compiler, *dump_options, "-o", output, invalid], expected=1)
     assert output.read_text() == "retained output\n"
+    assert stat.S_IMODE(output.stat().st_mode) == 0o640
     command(
         [compiler, *dump_options, "-o", work / "absent-directory" / "output", valid], expected=1
     )

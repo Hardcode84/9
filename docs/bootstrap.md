@@ -74,6 +74,12 @@ and output. The launcher has no backend selector. It reads and executes one
 complete action at a time and does not invoke an assembler or linker for it.
 
 The driver publishes a regular output file through a temporary file and rename.
+New regular files use mode `0666` with the caller's umask. Replacement files
+retain the previous read, write, and execute permission bits (`0777`).
+Set-user-ID, set-group-ID, and sticky bits are not copied. Temporary creation
+is exclusive; an occupied temporary path is never overwritten.
+Replacement temporaries do not grant access beyond the destination's access
+bits and the caller's umask.
 Source or emission failure leaves the old regular file in place. A symbolic
 link or a device is opened as a stream. A stream failure can leave a written
 prefix and returns a failure status. Output to `-` uses standard output.

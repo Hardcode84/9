@@ -1424,6 +1424,33 @@ void crust_x64_emit_constant(CrustX64Emitter *emitter, CrustDecl *declaration)
     definition_binding(emitter, declaration, "data", identity);
 }
 
+static void emit_string(CrustX64Emitter *emitter, const CrustExpr *expression)
+{
+    OutputBuffer buffer;
+    size_t index;
+    buffer.emitter = emitter;
+    buffer.size = 0;
+    buffer.error = 0;
+    buffer.failed = false;
+    for (index = 0; index < expression->byte_count; ++index) {
+        unsigned byte = expression->bytes[index];
+        if (index % 128 == 0)
+            output_cstring(&buffer, "\t.ascii \"");
+        if (byte >= 32 && byte <= 126 && byte != '"' && byte != '\\') {
+            output_byte(&buffer, (char)byte);
+        } else {
+            output_byte(&buffer, '\\');
+            output_number(&buffer, byte, 8, 3);
+        }
+        if (index % 128 == 127 || index + 1 == expression->byte_count)
+            output_cstring(&buffer, "\"\n");
+    }
+    output_flush(&buffer);
+    if (buffer.failed)
+        crust_fail(context(emitter), no_location(), "assembly output failed: %s",
+                   strerror(buffer.error));
+}
+
 bool crust_x64_emit_program_with_ops(CrustX64Program *program, FILE *output,
                                      const CrustX64Ops *operations)
 {
@@ -1463,10 +1490,8 @@ bool crust_x64_emit_program_with_ops(CrustX64Program *program, FILE *output,
     }
     output_text(&emitter, "\t.section .rodata\n");
     for (string = program->strings; string; string = string->next) {
-        size_t index;
         output_format(&emitter, "%sstring_%" PRIu64 ":\n", program->label_prefix, string->identity);
-        for (index = 0; index < string->expression->byte_count; ++index)
-            output_format(&emitter, "\t.byte %u\n", (unsigned)string->expression->bytes[index]);
+        emit_string(&emitter, string->expression);
     }
     for (function = program->functions; function; function = function->next)
         crust_x64_emit_function(&emitter, function);

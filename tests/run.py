@@ -356,6 +356,19 @@ fn main(argc:i32,argv:**u8)->i32 {
     long_string = 'fn main(argc:i32,argv:**u8)->i32{var text:*u8="' + "x" * 5000 + '";'
     long_string += "if text[0usize]!=120u8 || text[4999usize]!=120u8 || text[5000usize]!=0u8{return 1i32;}return 0i32;}"
     command([executable("long-string", long_string)])
+    byte_string = "".join(f"\\x{byte:02x}" for byte in range(256))
+    command(
+        [
+            executable(
+                "all-string-bytes",
+                'fn main(argc:i32,argv:**u8)->i32{var empty:*u8="";'
+                f'var text:*u8="{byte_string}";var index:usize=0usize;'
+                "while index<256usize {if text[index]!=index as u8 {return 1i32;}"
+                "index=index+1usize;}"
+                "if text[256usize]!=0u8 || empty[0usize]!=0u8 {return 2i32;}return 0i32;}",
+            )
+        ]
+    )
 
     allocation_wrapper = work / "c-stage-alloc.o"
     command(

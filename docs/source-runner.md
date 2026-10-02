@@ -370,23 +370,23 @@ A historical prepared-stage result cannot establish current checkout speed or
 the full specification performance gate. The complete gate remains
 unestablished; these benchmark tools cover only part of its required matrix.
 
-### Source-supplied backend gate
+### Compiled-backend application gate
 
-[gate.py](../benchmarks/source-order/gate.py) compares installed backend code,
-source interpretation, and source compilation followed by loading. Each
-endpoint must produce the same complete C and native-symbol bytes. The list
-witness must also compile and run outside the timed interval.
+[gate.py](../benchmarks/source-order/gate.py) starts a fresh root with a
+compiled native backend. It measures semantic checking separately from complete
+C and native-symbol output. The generated program must match the C reference
+when compiled and executed outside the timed interval.
 
-A compiled-source route must include compilation and linking of its selected
-stage before the stage can run. That preparation belongs inside the cold
-measurement. Final target GCC compilation and linking remain outside every
-frontend endpoint. Reusing a prepared stage is a different configuration.
+Compare checks with the fastest measured GCC or Clang syntax check. Compare
+handoff with Clang frontend IR emission with LLVM passes disabled. Both
+handoff measurements include text serialization. The test verifies that
+Clang emits every requested function body.
 
-Sustained seed interpretation is a comparison route. The intended startup
-policy prepares native stage code early and hands subsequent compilation code
-to the selected execution stage. Do not expand the C99 evaluator merely to
-make it a fast execution engine for a large compiler stage. Measure the complete
-[native handoff](../examples/native/README.md) first.
+Backend interpretation, construction, and automatic cache validation are
+separate measurements. Loading the selected compiled library remains in the
+application endpoint. If a project changes a source stage, include that stage's
+preparation in a separate configuration. Final target GCC compilation and
+linking remain outside all frontend endpoints.
 
 ```sh
 python3 benchmarks/source-order/gate.py --build build --cpu 0 --rounds 20 \
@@ -401,8 +401,11 @@ the timing rounds. Flat sample attribution is not elapsed time per stage.
 
 [native/measure.py](../benchmarks/native/measure.py) separates stage preparation,
 continuation compilation, native target frontend work, C emission, and the final
-target toolchain. It also records the complete cold endpoint. Report any prepared
-assembly library as an input. The source-only cache harness measures a different
+target toolchain. It also records the complete cold endpoint. Its assembly
+library is a prepared input. The main application gate uses
+[`source-order/gate.py`](../benchmarks/source-order/gate.py) with a compiled
+C backend. Bootstrap and automatic cache validation are separate measurements.
+The source-only cache harness measures a different
 bootstrap boundary, as described in the [cache measurements](../benchmarks/backend-cache/README.md).
 
 ```sh
@@ -415,18 +418,19 @@ State whether filesystem caches are warm. Check output bytes and the final
 list executable before interpreting a timing result. Separate phase medians
 need not sum to the median of the complete request.
 
-Cold native execution must be compared with source interpretation, installed
-backend execution, and eligible C compilers. Improvement over interpretation
-does not establish C-speed compilation. Account for any extra backend generation
-or cache preparation before adding parallel-work claims.
+Compare source bootstrap with prepared backend execution. Record extra backend
+generations and cache preparation in that configuration. Improvement over
+interpretation does not establish the compiled-backend application gate.
 
 ### Compare cold native builds
 
 [The comparison tool](../benchmarks/native/cold.py) measures a frozen checkout
 and the current build against GCC and Clang. It uses randomized paired rounds,
 fresh processes, empty stage result caches, and warm OS file caches. Stage
-bootstrap and continuation compilation remain inside the cold endpoint. Final
-target GCC compilation and linking stay outside it.
+bootstrap and continuation compilation remain inside this separate bootstrap
+endpoint. The default constructs the assembly stage from source. Use
+`--backend prepared` to load the identified assembly library instead. Final
+target GCC compilation and linking stay outside both configurations.
 
 Create a frozen baseline before an optimization. Both builds must use the same
 C compiler and build flags. Run from the repository root and select a CPU
@@ -447,9 +451,11 @@ must retain the same C and symbol bytes. The list program must also compile
 and run with the same output as its C equivalent. Sources and tools must stay
 unchanged during the measurement.
 
-Exit status 2 means the cold speed gate failed. A failed one-worker case
-blocks parallel scheduler expansion. These inputs do not cover the full
-matrix in specification section 14. The optional `--perf` argument selects a
+Exit status 2 means a bootstrap configuration exceeds its C comparison.
+This result does not block the main compiled-backend application gate. That
+gate must pass with one worker before parallel scheduler expansion. These
+inputs do not cover the full matrix in specification section 14. The optional
+`--perf` argument selects a
 native Linux perf executable for a separate symbol profile. This profile uses
 a prepared assembly-built C driver; it does not measure cold stage preparation.
 Keep generated reports and profiles in the ignored build directory.

@@ -20,10 +20,18 @@ python3 benchmarks/native/measure.py --cpu 0 \
 ```
 
 `measure.py` compares an installed stage with the prepared backend and original
-C input. `gate.py` also compares source interpretation and source compilation
-followed by loading. `native/measure.py` measures bootstrap and continuation
-compilation before native target work. Each script checks output equivalence
+C input. `gate.py` uses a compiled backend and a fresh root process for each
+sample. It compares checks with GCC and Clang syntax checks. It compares
+complete C emission with Clang frontend IR emission with LLVM passes disabled.
+Both handoff measurements include text serialization. `native/measure.py`
+measures bootstrap and continuation compilation before native target work.
+Each script checks output equivalence
 before using the timing result. Target executables run outside the timed interval.
+
+The application gate covers the direct list, increasing function counts,
+array operations, one large function with many branches, and repeated record
+types and calls. It checks every requested body on both sides and records
+complete emitted files. It does not establish a checked list lifetime policy.
 
 Keep source and binary hashes fixed during each set of paired rounds. An
 installed stage is an explicit prepared input. A stage that must be built in
@@ -32,9 +40,11 @@ measurements must state whether the artifact exists at request start.
 
 ## Controlled changes
 
-Freeze the baseline before an optimization. Use the
+Freeze the baseline before an optimization. Use `gate.py` for the main
+application gate. Use the
 [cold-build comparison](../../docs/source-runner.md#compare-cold-native-builds)
-for current builds. Use [the plain compiler comparison](../bootstrap/compare.py)
+to study backend bootstrap separately. Use
+[the plain compiler comparison](../bootstrap/compare.py)
 to compare prepared assembly emitters without root execution.
 
 The earlier source-order study identified two concrete mechanisms. A shared

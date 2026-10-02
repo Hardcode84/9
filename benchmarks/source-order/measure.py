@@ -153,6 +153,7 @@ def workloads_in(directory, native_library):
         {
             "name": "intrusive",
             "library": False,
+            "expected_stdout": "intrusive: ok\n",
             "functions": len(re.findall(r"^fn ", intrusive.read_text(), re.M)),
             "paths": {"crust": intrusive, "c": ROOT / "benchmarks/bootstrap/intrusive.c"},
         }
@@ -223,10 +224,10 @@ def preflight(workload, binaries, directory, build):
     checked(syntax_command(c_path))
     witness = None
     if not workload["library"]:
-        raw = directory / "intrusive-raw.o"
-        renamed = directory / "intrusive.o"
-        executable = directory / "intrusive-source-order"
-        reference = directory / "intrusive-c-reference"
+        raw = directory / (name + "-raw.o")
+        renamed = directory / (name + ".o")
+        executable = directory / (name + "-source-order")
+        reference = directory / (name + "-c-reference")
         witness_commands = [
             ["gcc", *C_FLAGS, "-c", str(c_path), "-o", str(raw)],
             ["objcopy", "@" + str(response), str(raw), str(renamed)],
@@ -252,8 +253,8 @@ def preflight(workload, binaries, directory, build):
         for command in witness_commands:
             checked(command)
         for path in (executable, reference):
-            if checked([str(path)]) != b"intrusive: ok\n":
-                raise RuntimeError(f"Intrusive executable witness failed: {path}")
+            if checked([str(path)]) != workload["expected_stdout"].encode():
+                raise RuntimeError(f"Executable witness failed: {path}")
         symbols = checked(["nm", str(executable)])
         forbidden = re.findall(rb"\b(?:crust_[A-Za-z0-9_]*|c_program|c_backend_build)\b", symbols)
         if forbidden:
@@ -264,7 +265,7 @@ def preflight(workload, binaries, directory, build):
             raise RuntimeError("The target executable depends on a compiler library")
         witness = {
             "commands": witness_commands,
-            "source_order_and_reference_stdout": "intrusive: ok\n",
+            "source_order_and_reference_stdout": workload["expected_stdout"],
             "target_executable": artifact_info(executable),
             "reference_executable": artifact_info(reference),
             "host_compiler_symbols": [],

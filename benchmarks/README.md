@@ -27,8 +27,9 @@ removed during cleanup also has an unchanged local copy under
 Run correctness checks before timing. Compare the same work at each endpoint.
 Separate checking, lowering, emission, stage preparation, and target toolchain
 costs. Exclude target GCC compilation and linking from frontend measurements.
-Include required stage preparation in a cold request. A cache hit does not
-replace that cold measurement.
+Use an identified compiled backend for the main application gate. Record
+backend construction and automatic cache validation separately. Include
+project stage preparation when that is part of the stated request.
 
 Run timed processes serially on an allowed CPU. Preserve paired samples and
 report confidence intervals. Collect instrumented profiles separately because

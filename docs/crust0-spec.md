@@ -832,7 +832,10 @@ cache must account for stage and helper code, representations, source and bindin
 facts, target settings, options, and every external input that can affect output.
 It must handle absent files and side effects as specified in the
 [cache contract](exploration/metacompilation.md#7-caching-without-changing-program-meaning).
-A cache cannot hide stage preparation in the cold-build result. The optional
+Treat a compiled backend as a toolchain input to the application speed gate.
+Measure backend construction and automatic cache validation separately. A
+request that builds a changed project stage still includes that work in its
+stated endpoint. The optional
 [artifact cache](../stages/cache/README.md) reuses complete files from explicit
 input snapshots and a user build function. It does not store compiler contexts
 or replay root effects. The root loads the selected artifact and installs its
@@ -953,15 +956,19 @@ Use the established [check and handoff boundaries](exploration/language-explorat
 Count source input, lookup, interface construction, all selected language checks,
 stage preparation, generated-input processing, target ABI lowering, and complete
 backend IR construction when they are needed to reach the measured endpoint.
-Project-stage native compilation is preparation cost even when the final
-application's backend is outside that endpoint. Report an installed stage
-separately from a stage supplied as source.
+The main gate starts with a compiled backend, a fresh process, and no saved
+application result. Include root execution, interface checks, native library
+loading, and all requested target work. Backend source interpretation and
+construction are separate bootstrap measurements. Report automatic backend
+cache validation separately too. If a request must compile a changed project
+stage, identify that configuration and include its preparation cost.
 
 For each frozen comparable workload, use at least 20 randomized paired samples
 against the fastest eligible C baseline. Require a median candidate/C ratio
 at most 1.00 and a 95% bootstrap confidence upper bound at most 1.00. Apply this
-rule to one-worker builds as well as matched parallel builds. A warm-cache or
-many-worker result cannot excuse failure in the one-worker cold case. Retain
+rule to one-worker builds as well as matched parallel builds. Application
+result reuse or more workers cannot excuse failure in the one-worker case
+with the same compiled backend. Retain
 the exact configurations and intervals required by the
 [measurement rule](exploration/language-exploration.md#104-test-matrix-and-pass-rule).
 

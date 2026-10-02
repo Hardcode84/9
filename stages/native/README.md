@@ -174,7 +174,9 @@ Use [cold.py](../../benchmarks/native/cold.py) to compare a frozen checkout
 with the current build, GCC, and Clang. The
 [measurement instructions](../../docs/source-runner.md#compare-cold-native-builds)
 give the command and output contract. Keep all stage preparation in the cold
-total. A failed one-worker gate blocks parallel scheduler expansion.
+total for that bootstrap measurement. The main application gate uses a
+compiled backend and measures fresh application work. Bootstrap misses and
+automatic cache validation have separate results.
 
 For the source-only bootstrap and cache endpoints, use the
 [new measurement tool](../../benchmarks/backend-cache/README.md). It records

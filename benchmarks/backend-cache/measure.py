@@ -9,7 +9,9 @@ import os
 import random
 import shutil
 import statistics
+import struct
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -18,6 +20,40 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def timed_cache(source):
+    source = source.replace(
+        "record BuildState",
+        "record CacheClock { seconds:i64; nanoseconds:i64; }\n"
+        'extern fn cache_clock(id:i32,time:*CacheClock)->i32="clock_gettime";\n'
+        "record BuildState",
+    )
+    source = source.replace(
+        "    var inputs: CacheInputs",
+        "    var capture_start:CacheClock=uninit;\n"
+        "    var capture_end:CacheClock=uninit;\n"
+        "    var lookup_end:CacheClock=uninit;\n"
+        "    if cache_clock(1i32,&capture_start)!=0i32 {return 90i32;}\n"
+        "    var inputs: CacheInputs",
+    )
+    old = """    if !cache_artifact(ctx, directory, &request, &artifact) ||
+       !crust_run_link(run, artifact.path) { return 1i32; }"""
+    if source.count(old) != 1:
+        raise RuntimeError("Cache tutorial lookup boundary changed")
+    return source.replace(
+        old,
+        """    if cache_clock(1i32,&capture_end)!=0i32 {return 90i32;}
+    if !cache_artifact(ctx,directory,&request,&artifact) {return 1i32;}
+    if cache_clock(1i32,&lookup_end)!=0i32 {return 90i32;}
+    var durations:[i64;3]=make [i64;3]{
+        (capture_end.seconds-capture_start.seconds)*1000000000i64+capture_end.nanoseconds-capture_start.nanoseconds,
+        (lookup_end.seconds-capture_end.seconds)*1000000000i64+lookup_end.nanoseconds-capture_end.nanoseconds,
+        artifact.hit as i64
+    };
+    if crust0_host_write_stream(2u32,&durations as *u8,sizeof([i64;3]))!=0i32 {return 91i32;}
+    if !crust_run_link(run,artifact.path) {return 1i32;}""",
+    )
 
 
 def main():
@@ -35,8 +71,7 @@ def main():
     if args.cpu is not None:
         os.sched_setaffinity(0, {args.cpu})
     build = args.build.resolve()
-    work = build / "backend-cache-measure"
-    work.mkdir(exist_ok=True)
+    work = Path(tempfile.mkdtemp(prefix="backend-cache-measure-", dir=build))
     rng = random.Random(722)
     report = {"rounds": args.rounds, "cpu": args.cpu, "cases": {}, "hashes": {}}
     template = (ROOT / "examples/cached-backend/main.crs").read_text()
@@ -45,6 +80,13 @@ def main():
     template = template.replace(
         '"build.crs"', json.dumps(str(ROOT / "examples/cached-backend/build.crs"))
     )
+    template = timed_cache(template)
+    report["phases"] = {
+        "input_capture": "Source snapshots, loaded sources and native images, assembler/linker binaries and their dependencies. Includes the tutorial's input-provider calls.",
+        "lookup_or_build": "Cache manifest, key hashing, artifact lookup and checksum verification. A miss includes complete backend construction and publication.",
+        "hit_validation": "Input capture plus lookup on a verified hit. Excludes native library loading, continuation preparation and target frontend work.",
+        "implementation": "The tutorial's interpreted cache prefix and source-bootstrap recipe. Compiled-backend application timings are a separate configuration.",
+    }
     inputs = {"intrusive": (ROOT / "examples/intrusive/program.crs").read_text()}
     for count in (1000, 8000):
         inputs[str(count)] = (
@@ -55,22 +97,42 @@ def main():
             + "\nfn main(argc:i32,argv:**u8)->i32{return f0(0u64) as i32;}\n"
         )
 
-    def run(command):
+    def run(command, cache=False):
         start = time.perf_counter_ns()
         result = subprocess.run(list(map(str, command)), cwd=ROOT, capture_output=True, timeout=60)
         elapsed = time.perf_counter_ns() - start
         assert result.returncode == 0, (command, result)
-        return elapsed, result.stdout
+        phases = None
+        if cache:
+            if len(result.stderr) != 24:
+                raise RuntimeError((command, result.stderr))
+            capture, lookup, hit = struct.unpack("<qqq", result.stderr)
+            if capture < 0 or lookup < 0 or hit not in (0, 1):
+                raise RuntimeError("Invalid cache phase sample")
+            phases = {"input_capture_ns": capture, "lookup_or_build_ns": lookup, "hit": bool(hit)}
+        elif result.stderr:
+            raise RuntimeError((command, result.stderr))
+        return elapsed, result.stdout, phases
 
     tracked = [
         *ROOT.glob("src/*.c"),
         *ROOT.glob("include/*.h"),
         *ROOT.glob("api/*.crs"),
+        *ROOT.glob("runtime/*.c"),
         *ROOT.glob("stages/**/*.crs"),
         *ROOT.glob("examples/cached-backend/*.crs"),
+        ROOT / "Makefile",
+        Path(__file__),
         build / "crust",
         build / "crust0",
         build / "crust-c",
+        build / "crust-c-library.so",
+        build / "crust-asm-library.so",
+        build / "libcrust0_host.a",
+        *[
+            Path(shutil.which(name)).resolve()
+            for name in ("gcc", "as", "ld", "objcopy", "sha256sum", "ldd")
+        ],
     ]
     original_hashes = {str(path): digest(path) for path in tracked}
     for name, source in inputs.items():
@@ -121,8 +183,9 @@ def main():
                 "-Iinclude",
                 ROOT / "benchmarks/bootstrap/intrusive.c",
             ]
-        run(commands["hit"])
+        run(commands["hit"], cache=True)
         samples = {key: [] for key in commands}
+        phases = {key: [] for key in ("hit", "miss")}
         for _ in range(args.rounds):
             order = list(commands)
             rng.shuffle(order)
@@ -130,9 +193,12 @@ def main():
                 if mode == "miss":
                     if (case / "miss-cache").exists():
                         shutil.rmtree(case / "miss-cache")
-                elapsed, _ = run(commands[mode])
+                elapsed, _, phase = run(commands[mode], cache=mode in phases)
                 samples[mode].append(elapsed)
                 if mode in ("hit", "miss"):
+                    if phase["hit"] != (mode == "hit"):
+                        raise RuntimeError("Measured cache state differs from requested state")
+                    phases[mode].append(phase)
                     assert not list((case / (mode + "-cache")).glob(".build-*"))
             for suffix in (".c", ".rsp"):
                 expected = (case / ("prepared_c" + suffix)).read_bytes()
@@ -175,6 +241,11 @@ def main():
             "commands": {key: list(map(str, values)) for key, values in commands.items()},
             "samples_ns": samples,
             "median_ns": medians,
+            "cache_samples": phases,
+            "hit_validation_median_ns": statistics.median(
+                sample["input_capture_ns"] + sample["lookup_or_build_ns"]
+                for sample in phases["hit"]
+            ),
             "paired_hit_miss_ratio": statistics.median(ratios),
             "paired_hit_miss_95_percent": [intervals[75], intervals[2924]],
             "input": source,
@@ -209,7 +280,7 @@ def main():
             *before.glob("src/*.c"),
             *before.glob("include/*.h"),
         ]
-    report["hashes"] = {str(path): digest(path) for path in paths}
+    report["hashes"] = {**original_hashes, **{str(path): digest(path) for path in paths}}
     variables = subprocess.run(
         ["make", "-pn"], cwd=ROOT, capture_output=True, text=True, check=True
     ).stdout

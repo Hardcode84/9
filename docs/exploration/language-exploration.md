@@ -1323,8 +1323,10 @@ allocation, and object emission. If LLVM IR is the handoff, building that IR is
 included. Moving a pass into a file named “backend” does not exclude it.
 The [backend adapter is a public metastage](compiler-extension-experiment.md#3-the-backend-adapter-is-a-metastage).
 Its package name does not change this timing boundary. Include native code
-generation and linking needed to prepare a project stage before that stage
-can run. Report compiler construction separately from application compilation.
+generation and linking if the measured request prepares a changed project
+stage. The main application gate uses a compiled backend as a toolchain input.
+Report backend bootstrap and automatic cache validation separately from that
+gate. Include native library loading and ordinary root execution.
 
 Clang's `-fsyntax-only` stops after syntax and semantic checks. It is useful for
 the check measurement, not the complete handoff measurement. LLVM-emission
@@ -1370,9 +1372,10 @@ bytes, and emitted IR size. Lines per second alone are not comparable.
 
 Record compiler revisions, build flags, target, CPU, memory, OS, worker count,
 cache state, and all commands. Use optimized compiler binaries. Exclude compiler
-build time. Measure fresh compiler processes with compiler caches empty, then
-report cached and incremental runs separately. Distinguish filesystem cache
-state from compiler cache state.
+build time. Measure fresh compiler processes with no saved application
+results and an identified compiled backend. Report backend construction,
+automatic backend cache validation, and incremental target results separately.
+Distinguish filesystem caches, backend artifacts, and application results.
 
 Use at least 20 paired timing samples after setup checks. Randomize run order.
 Report medians, variation, total CPU time, and peak memory. For each frozen

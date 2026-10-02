@@ -266,6 +266,12 @@ not disappear from the walk. See [extension.crs](extension.crs) and the
 
 ## 6. Check costs and lifetimes
 
+The function reader hook uses one level of the reader's 256-level traversal
+budget. A function can contain 252 nested blocks around either a return or a
+scalar assignment. Composition with resource lowering reduces these values to
+250 and 249. These are the exact source shapes in the
+[stage limit table](../reader/README.md); other syntax can consume more levels.
+
 Keep the context, source bytes, stage, and hooks live through their uses.
 One context shares an arena and a key buffer, so its operations are serial.
 Independent builds use independent contexts. The pass collects signatures

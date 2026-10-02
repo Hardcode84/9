@@ -50,8 +50,30 @@ token current.
 `rr_new_type`, and `rr_new_decl` take a kind and original offset. These helpers
 do not impose extension syntax or semantic policy.
 
-The nesting limit is 256. The default token budget is the range size plus one.
-Every lexical step uses one token from that budget. Failed readers are sticky.
+The reader has a traversal budget of 256 levels. Recursive productions and
+active hooks use that budget. It does not permit 256 arbitrary nested blocks.
+The seed checker has a separate 256-level traversal budget. A stage that adds
+syntax nodes must also satisfy that check.
+
+For `main(argc:i32,argv:**u8)->i32`, the following limits count blocks inside
+the function body. The return fixture contains only `return 0i32;` in its
+innermost block. The assignment fixture contains `argc=argc+1i32;` there,
+then `return 0i32;` after the nested blocks.
+
+| Driver | Return fixture | Assignment fixture |
+|---|---:|---:|
+| `crust0`, `crust-c` | 253 | 252 |
+| `crust-overload` | 252 | 252 |
+| `crust-resource`, `crust-overload-resource` | 250 | 249 |
+
+The overload declaration hook uses one reader level while it reads a function.
+Resource lowering adds levels to the checked tree. Other expressions and hooks
+can use more levels. Each stage rejects exhausted traversal with a diagnostic.
+[The boundary test](../../tests/nesting.py) checks each listed limit and the
+first rejected depth. `make check-overload` runs this test for all five drivers.
+
+The default token budget is the range size plus one. Every lexical step uses
+one token from that budget. Failed readers are sticky.
 
 Run the differential tests with:
 

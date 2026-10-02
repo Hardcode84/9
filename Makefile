@@ -176,10 +176,11 @@ check-reader: all c-stage
 check-resources: all resource-stage
 	python3 tests/resources.py --build $(BUILD)
 
-check-overload: all overload-stage
+check-overload: all overload-stage resource-stage
 	python3 tests/overload.py --build $(BUILD)
 	python3 tests/overload_resources.py --build $(BUILD)
 	python3 tests/overload_hooks.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+	python3 tests/nesting.py --build $(BUILD)
 
 check-overload-alloc: all c-stage
 	python3 tests/overload_alloc.py --build $(BUILD) --cc '$(CC)'

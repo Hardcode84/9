@@ -271,6 +271,12 @@ stage yourself.
 
 ## 6. Check the proof and cost boundaries
 
+Resource lowering adds levels to the tree passed to the seed checker. For the
+exact fixtures in the [stage limit table](../reader/README.md), 250 nested blocks
+around a return pass; 249 around a scalar assignment pass. The next depth fails
+with a diagnostic. Overload composition has the same bounds. The 256-level
+traversal budget is not a promise to accept 256 nested source blocks.
+
 The emitted program has no runtime cleanup table, dynamic registration,
 reference count, owner header, or hidden drop flag. It does execute the
 required drop calls. Captured values, aggregate ABI storage, bounds checks,

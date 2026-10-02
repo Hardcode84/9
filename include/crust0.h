@@ -206,6 +206,8 @@ typedef enum {
     CRUST_S_ASSIGN
 } CrustStmtKind;
 
+/* Branch and loop bodies introduce lexical scopes even when their root is not
+   CRUST_S_BLOCK. A function body can also be any statement kind. */
 struct CrustStmt {
     CrustStmtKind kind;
     CrustLoc loc;

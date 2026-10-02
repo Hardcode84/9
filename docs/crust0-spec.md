@@ -234,7 +234,9 @@ its names to explicit bindings through the public compiler API. It need not
 generate combined source text or make the seed scan files again.
 
 Parameters and local variables form lexical scopes. All parameters are visible
-at body entry. A local binding becomes visible after its initializer. A parameter
+at body entry. Each block, `if` branch, and `while` body introduces a scope.
+This also applies to user-constructed trees with a non-block branch or loop body.
+A local binding becomes visible after its initializer. A parameter
 or local name must not duplicate a currently visible local, parameter, top-level
 declaration, or supplied binding. Disjoint completed scopes can reuse a local
 name. Field names belong only to their record and must be unique within it.

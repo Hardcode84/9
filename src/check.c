@@ -1594,6 +1594,14 @@ static bool check_block(Checker *checker, CrustStmt *stmt)
     return falls;
 }
 
+static bool check_scoped_stmt(Checker *checker, CrustStmt *stmt)
+{
+    CrustSymbol *saved = checker->scope;
+    bool falls = check_stmt(checker, stmt);
+    pop_scope(checker, saved);
+    return falls;
+}
+
 static bool check_return(Checker *checker, CrustStmt *stmt)
 {
     CrustContext *ctx = checker->ctx;
@@ -1630,8 +1638,8 @@ static bool check_if(Checker *checker, CrustStmt *stmt)
     type = check_expr(checker, stmt->expr);
     if (type->kind != CRUST_T_BOOL)
         crust_fail(ctx, stmt->expr->loc, "if condition must have type bool");
-    falls = check_stmt(checker, stmt->body);
-    branch = stmt->otherwise == NULL ? true : check_stmt(checker, stmt->otherwise);
+    falls = check_scoped_stmt(checker, stmt->body);
+    branch = stmt->otherwise == NULL ? true : check_scoped_stmt(checker, stmt->otherwise);
     return falls || branch;
 }
 
@@ -1656,7 +1664,7 @@ static bool check_stmt_impl(Checker *checker, CrustStmt *stmt)
         if (type->kind != CRUST_T_BOOL)
             crust_fail(ctx, stmt->expr->loc, "while condition must have type bool");
         ++checker->loop_depth;
-        (void)check_stmt(checker, stmt->body);
+        (void)check_scoped_stmt(checker, stmt->body);
         --checker->loop_depth;
         return true;
     case CRUST_S_BREAK:

@@ -78,6 +78,35 @@ static void test_witness_rules(void)
                 "type mismatch");
 }
 
+static void generated_scope_case(const char *text, bool expected)
+{
+    CrustContext ctx;
+    CrustSource source = source_text(text, 1);
+    CrustUnit *unit;
+    CrustStmt *branch;
+    bool accepted;
+    crust_context_init(&ctx, NULL);
+    if (!crust_read(&ctx, &source, &unit) || !crust_collect(&ctx) || !crust_resolve(&ctx))
+        abort();
+    branch = unit->declarations->body->body;
+    branch->body = branch->body->body;
+    if (branch->otherwise != NULL)
+        branch->otherwise = branch->otherwise->body;
+    accepted = crust_check(&ctx);
+    check(accepted == expected && (expected || strstr(ctx.error, "unknown name") != NULL),
+          "generated branch and loop bodies retain their lexical scope");
+    crust_context_destroy(&ctx);
+}
+
+static void test_generated_scopes(void)
+{
+    generated_scope_case("fn f()->unit{if true {var x:u8=1u8;}else{var x:u8=2u8;}}", true);
+    generated_scope_case("fn f()->u8{if true {var x:u8=1u8;}return x;}", false);
+    generated_scope_case("fn f()->u8{if true {var x:u8=1u8;}else{return x;}return 0u8;}", false);
+    generated_scope_case("fn f()->u8{while false {var x:u8=1u8;}return x;}", false);
+    generated_scope_case("fn f()->unit{while false {var x:u8=1u8;}var x:u8=2u8;}", true);
+}
+
 static void test_shared_bindings(void)
 {
     CrustContext provider;
@@ -911,6 +940,7 @@ done:
 int main(void)
 {
     test_witness_rules();
+    test_generated_scopes();
     test_shared_bindings();
     test_complete_forms();
     test_resource_bounds();

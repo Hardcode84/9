@@ -377,7 +377,7 @@ void *crust_map_get(const CrustMap *map, uintptr_t key)
     return NULL;
 }
 
-void crust_map_reserve(CrustContext *ctx, CrustMap *map, size_t count)
+CRUST_STATIC void crust_map_reserve(CrustContext *ctx, CrustMap *map, size_t count)
 {
     size_t capacity = map->capacity == 0 ? 8 : map->capacity;
     CrustMapEntry *entries;

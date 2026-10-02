@@ -9,10 +9,17 @@ CPPFLAGS += -Iinclude
 STRICT = -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla
 BUILD ?= build
 PROFILE ?= linux_x64
+AMALGAMATION ?= 1
 ifneq ($(PROFILE),linux_x64)
 $(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64)
 endif
+ifeq ($(AMALGAMATION),1)
+CORE = $(BUILD)/crust0_amalg.o $(BUILD)/profile_$(PROFILE).o
+else ifeq ($(AMALGAMATION),0)
 CORE = $(BUILD)/core.o $(BUILD)/read.o $(BUILD)/check.o $(BUILD)/profile_$(PROFILE).o
+else
+$(error Unsupported AMALGAMATION '$(AMALGAMATION)'; expected 0 or 1)
+endif
 RUNNER = $(BUILD)/eval.o $(BUILD)/eval_ffi_$(PROFILE).o $(BUILD)/run.o $(BUILD)/run_posix.o
 HOST = $(BUILD)/host.o $(BUILD)/host_posix.o
 PRELUDE = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/host.crs
@@ -32,6 +39,7 @@ OVERLOAD_RESOURCE_LIBRARY = $(RESOURCE_LIBRARY) $(OVERLOAD) stages/overload/reso
 OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_resource_build overload_resource_program ov_resources_init ov_resources_read ov_resources_prepare ov_resources_check
 
 .PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight ccn-stage check-ccn vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native check-asm check-cache
+.PHONY: amalgamate check-amalgamation FORCE
 all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a $(BUILD)/crust-asm-library.so
 
 $(BUILD):
@@ -40,11 +48,27 @@ $(BUILD):
 $(BUILD)/%.o: src/%.c include/crust0.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@
 
+crust0_amalg.c: tools/amalgamate.py src/core.c src/read.c src/check.c
+	python3 tools/amalgamate.py
+
+amalgamate:
+	python3 tools/amalgamate.py
+
+$(BUILD)/crust0_amalg.o: crust0_amalg.c | $(BUILD)
+	$(CC) $(CPPFLAGS) -Isrc $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@
+
+# A mode change must relink even when the other mode's objects already exist.
+$(BUILD)/core-mode: FORCE | $(BUILD)
+	@printf '%s\n' '$(AMALGAMATION)' > $@.tmp
+	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; fi
+
+$(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a: $(BUILD)/core-mode
+
 $(HOST): $(BUILD)/%.o: runtime/%.c include/crust0_host.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@
 
 $(BUILD)/crust0: $(BUILD)/crust-asm-library.o $(CORE) $(BUILD)/driver.o $(BUILD)/driver_posix.o $(HOST)
-	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
+	$(CC) $(CFLAGS) $(filter-out $(BUILD)/core-mode,$^) $(LDFLAGS) -o $@
 
 $(BUILD)/prelude.inc: tools/prelude.py $(PRELUDE) | $(BUILD)
 	python3 tools/prelude.py $@
@@ -54,7 +78,7 @@ $(BUILD)/run_main.o: $(BUILD)/prelude.inc
 $(BUILD)/eval.o: CPPFLAGS += -Isrc/$(PROFILE)
 
 $(BUILD)/crust: $(CORE) $(RUNNER) $(BUILD)/run_main.o $(HOST)
-	$(CC) $(CFLAGS) $^ -rdynamic $(LDFLAGS) -ldl -lffi -o $@
+	$(CC) $(CFLAGS) $(filter-out $(BUILD)/core-mode,$^) -rdynamic $(LDFLAGS) -ldl -lffi -o $@
 
 $(BUILD)/libcrust0_run.a: $(RUNNER)
 	$(AR) rcs $@ $^
@@ -181,6 +205,9 @@ $(BUILD)/eval_test: tests/eval_test.c tests/native.c $(BUILD)/eval.o $(BUILD)/ev
 api:
 	python3 tools/api.py
 
+check-amalgamation:
+	python3 tools/check_amalgamation.py --cc '$(CC)' --cflags='$(CFLAGS) $(STRICT)'
+
 check: all $(BUILD)/core_test $(BUILD)/arena_test $(BUILD)/read_test $(BUILD)/check_test $(BUILD)/host_test $(BUILD)/parallel_test $(BUILD)/x64_test $(BUILD)/eval_test
 	$(BUILD)/core_test
 	$(BUILD)/arena_test
@@ -210,10 +237,10 @@ check-overload: all overload-stage resource-stage
 	python3 tests/nesting.py --build $(BUILD)
 
 check-overload-alloc: all c-stage
-	python3 tests/overload_alloc.py --build $(BUILD) --cc '$(CC)'
+	python3 tests/overload_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION)
 
 check-resource-alloc: all c-stage
-	python3 tests/resources_alloc.py --build $(BUILD) --cc '$(CC)'
+	python3 tests/resources_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION)
 
 check-stage: all c-stage
 	python3 tests/source_order.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'

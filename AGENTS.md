@@ -63,6 +63,14 @@ Do not add a feature before a concrete program requires it.
 
 ## C code and platform boundaries
 
+- Edit the maintained files in `src/`, not `crust0_amalg.c`. Run `make
+  amalgamate` after a core source change. The pre-commit hook also regenerates
+  this file; inspect and stage the result. Use `CRUST_STATIC` for private
+  helpers shared within the amalgamation. Helpers used by separate platform
+  or runner files must retain external linkage.
+- The default build amalgamates the core, reader, and checker. Keep
+  `AMALGAMATION=0` builds working. Keep the runner and platform adapters
+  separate. Check both modes after a core or build-system change.
 - Use pedantic ISO C99. The build uses `-std=c99 -pedantic-errors -Wall
   -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla`.
   Do not weaken these checks.

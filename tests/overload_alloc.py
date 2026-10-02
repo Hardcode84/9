@@ -103,6 +103,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=ROOT / "build")
     parser.add_argument("--cc", default="gcc")
+    parser.add_argument("--amalgamation", type=int, choices=(0, 1), default=1)
     parser.add_argument("--case", action="append", default=[])
     parser.add_argument("--no-sanitize", action="store_true")
     parser.add_argument("--work", type=Path)
@@ -173,11 +174,14 @@ def main():
                 *flags,
                 *strict,
                 "-Iinclude",
+                "-Isrc",
                 "-no-pie",
                 work / "fixture.o",
-                "src/core.c",
-                "src/read.c",
-                "src/check.c",
+                *(
+                    ["crust0_amalg.c"]
+                    if args.amalgamation
+                    else ["src/core.c", "src/read.c", "src/check.c"]
+                ),
                 "src/profile_linux_x64.c",
                 "runtime/host.c",
                 "runtime/host_posix.c",

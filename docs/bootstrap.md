@@ -27,13 +27,34 @@ seed and sources and retains the resulting native library for later runs.
 A C99 compiler, the system C library, Make, Python 3, and libffi development
 headers and library build the default tools. GNU assembler and the system
 linker build the native examples. Python 3 also runs tests and measurements.
-The build downloads no dependencies. The standalone `build/crust0` target does
-not need libffi.
+The build downloads no dependencies. The standalone `build/crust0` executable
+does not link libffi. Its source bootstrap uses the seed and libffi to build
+the external assembly stage.
 
 The build uses `CC` for C code and linking, and `AS` for generated assembly.
 The default assembly command is `as --64`. Clang builds also use GNU assembler.
 The LLVM integrated assembler rejects some exact external symbol names that
 this target profile accepts.
+
+The default build compiles `crust0_amalg.c` as one translation unit. This
+generated file joins `src/core.c`, `src/read.c`, and `src/check.c`. Headers,
+platform adapters, the runner, host functions, and command-line entry points
+remain separate. A core-only program does not acquire runner or libffi
+dependencies.
+
+Use `make AMALGAMATION=0 BUILD=build/split` to compile the three core source
+files separately. Both modes provide the same public C API. A mode change in
+one build directory replaces the core archive and relinks its consumers.
+
+Edit the source files, then run `make amalgamate`. The build and pre-commit
+hook also regenerate the file. Do not edit or format the generated file
+directly. Its `#line` directives retain source paths in compiler diagnostics.
+Headers are not copied into the generated file; they remain build inputs.
+`CRUST_STATIC` gives private cross-file helpers internal linkage in the
+amalgamated build and external linkage in the split build. The allocator and
+native ABI bridge helpers keep external linkage because their callers cross
+translation-unit boundaries. `make check-amalgamation` checks generation and
+the exported symbols in both modes.
 
 ```sh
 make

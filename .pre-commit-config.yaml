@@ -39,6 +39,7 @@ repos:
     hooks:
       - id: clang-format
         types_or: [c, c++]
+        files: ^(?!crust0_amalg\.c$)
         exclude: *recorded_inputs
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -56,6 +57,18 @@ repos:
 
   - repo: local
     hooks:
+      - id: crust-amalgamate
+        name: regenerate crust0_amalg.c
+        language: python
+        entry: python tools/amalgamate.py
+        files: ^(src/.*\.[ch]|crust0_amalg\.c|tools/amalgamate\.py|\.pre-commit-config\.yaml)$
+        pass_filenames: false
+      - id: crust-amalgamation-exports
+        name: check split and amalgamated core linkage
+        language: system
+        entry: make --no-print-directory -s check-amalgamation
+        files: ^((src|include)/.*\.[ch]|crust0_amalg\.c|tools/(amalgamate|check_amalgamation)\.py|Makefile|\.pre-commit-config\.yaml)$
+        pass_filenames: false
       - id: spdx
         name: check Apache 2.0 SPDX headers
         language: python

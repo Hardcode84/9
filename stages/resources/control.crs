@@ -187,7 +187,9 @@ fn rs_lower_statement(function: *RsFunction, source: *CrustStmt, output: *RsStat
         (*target).body = rs_block(stage, &body, location);
         (*function).loop = (*loop).parent;
         rs_append(output, target);
-        var forever: bool = (*(*source).expr).kind == CRUST_E_BOOL && (*(*source).expr).integer != 0u64;
+        var test_expr: *CrustExpr = (*source).expr;
+        while (*test_expr).kind == CRUST_E_GROUP { test_expr = (*test_expr).left; }
+        var forever: bool = (*test_expr).kind == CRUST_E_BOOL && (*test_expr).integer != 0u64;
         return !forever || (*loop).has_break;
     }
     if kind == CRUST_S_BREAK || kind == CRUST_S_CONTINUE {

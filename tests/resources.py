@@ -195,6 +195,15 @@ def runtime_cases():
             b"BB",
         ),
         (
+            "parenthesized-infinite-loop-return",
+            program(
+                "if run_loop()!=7i32 {return 1i32;}",
+                "fn run_loop()->i32 {while (((true))) {"
+                "var value:Token=token(65i32); while (true) {break;} return 7i32;}}",
+            ),
+            b"A",
+        ),
+        (
             "loop-deferred-loans-release",
             program(
                 "var code:i32=65i32; var index:i32=0i32; while index<2i32 { "
@@ -843,6 +852,16 @@ def reject_cases():
             "different-initialization-at-join",
             program("var value:Token=uninit; if argc>0i32 {value=token(65i32);}"),
             "continuing paths must agree",
+        ),
+        (
+            "parenthesized-loop-break-needs-return",
+            program("", "fn run_loop()->i32 {while ((true)) {break;}}"),
+            "non-unit function can reach the end",
+        ),
+        (
+            "parenthesized-false-loop-needs-return",
+            program("", "fn run_loop()->i32 {while ((false)) {return 7i32;}}"),
+            "non-unit function can reach the end",
         ),
         (
             "loop-missing-owner-restoration",

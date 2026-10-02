@@ -69,6 +69,10 @@ resource fields and elements. Other values retain Crust0 copy semantics.
 - Continuing branches must agree on outer initialization and ownership states.
   Loop conditions and loop edges must restore those entry states. The checker
   rejects disagreement instead of adding runtime drop flags.
+- A `while true` loop with no `break` that exits it cannot reach the next
+  statement. Parentheses around `true` do not change this rule. Other loop
+  conditions can reach the next statement; the checker does not evaluate
+  constant expressions for this decision.
 
 Only whole bindings have initialization facts. A partially initialized record
 or array cannot be read through a checked place. An unsafe raw address can name

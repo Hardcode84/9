@@ -260,6 +260,17 @@ check-cache: $(BUILD)/crust
 check-native: all
 	python3 tests/native.py --build $(BUILD)
 
+PARALLEL = api/crust0.crs stages/parallel/model.crs stages/parallel/linux_x64.crs
+
+$(BUILD)/crust-parallel-library.so: $(BUILD)/crust-c $(PARALLEL)
+	$< --library --export parallel_run --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag=-shared --ldflag=-pthread --ldflag=-Wl,-Bsymbolic,-z,text,-z,relro,-z,now $(foreach flag,$(LDFLAGS),--ldflag $(flag)) -o $@ $(PARALLEL)
+
+.PHONY: parallel-stage check-parallel
+parallel-stage: $(BUILD)/crust-parallel-library.so
+
+check-parallel: all c-stage parallel-stage
+	python3 tests/parallel.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+
 clean:
 	rm -rf $(BUILD)
 

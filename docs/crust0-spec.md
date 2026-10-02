@@ -827,6 +827,13 @@ source position, and diagnostic category. A module library chooses its source
 order before scheduling. Backend contexts must obey the backend's own threading
 contract. One-worker execution remains a required performance case.
 
+The optional [native job library](../stages/parallel/README.md) runs independent
+jobs and joins its workers before returning. The calling Crust program selects
+dependencies, immutable inputs, and diagnostic order. Its
+[module graph driver](../benchmarks/parallel/README.md) checks these contracts
+with consumers that borrow checked provider declarations. It adds no scheduler
+to the seed.
+
 No cache is needed for correctness or the first speed result. A persistent
 cache must account for stage and helper code, representations, source and binding
 facts, target settings, options, and every external input that can affect output.

@@ -175,6 +175,7 @@ Build with `make all`. Use the checks that cover the change:
 | Overloads and resource composition | `make check-overload check-overload-alloc` |
 | Compilation program examples | `make check-examples` |
 | Module selection, bindings, and exports | `make check-modules` |
+| Independent native stage jobs | `make check-parallel` |
 | Highlighting and editor integration | `make check-highlight check-vscode` |
 | Crust cyclomatic complexity stage | `make check-ccn` |
 

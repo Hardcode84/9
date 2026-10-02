@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record ParallelWorker {
+    jobs: *ParallelJob;
+    count: usize;
+    index: usize;
+    stride: usize;
+    thread: usize;
+}
+
+// Linux x86-64 pthread_t is an unsigned long. All callbacks must be native.
+extern fn parallel_create(thread:*usize, attributes:*u8, entry:fn(*u8)->*u8, data:*u8)->i32="pthread_create";
+extern fn parallel_join(thread:usize, result:**u8)->i32="pthread_join";
+
+fn parallel_execute(data:*u8)->*u8 {
+    var worker:*ParallelWorker=data as *ParallelWorker;
+    var index:usize=(*worker).index;
+    while index<(*worker).count {
+        var job:*ParallelJob=&(*worker).jobs[index];
+        (*job).execute((*job).user);
+        if (*worker).count-index<=(*worker).stride {break;}
+        index=index+(*worker).stride;
+    }
+    return null(*u8);
+}
+
+// Run independent native jobs and join every started thread before return.
+// Each job owns its mutable state. Shared inputs and callback code stay live.
+// A failed start does not undo jobs already run. Context is caller-owned.
+fn parallel_run(context:*CrustContext,jobs:*ParallelJob,count:usize,workers:usize)->bool {
+    if workers==0usize {
+        crust_set_error(context,null(*CrustSource),0usize,"parallel worker count must be positive");
+        return false;
+    }
+    if count==0usize {return true;}
+    if workers>count {workers=count;}
+    if workers==1usize {
+        var work:ParallelWorker=make ParallelWorker{jobs:jobs,count:count,index:0usize,stride:1usize,thread:0usize};
+        parallel_execute(&work as *u8);
+        return true;
+    }
+    if workers>~0usize/sizeof(ParallelWorker) {
+        crust_set_error(context,null(*CrustSource),0usize,"too many parallel workers");
+        return false;
+    }
+    var work:*ParallelWorker=crust_try_alloc(context,workers*sizeof(ParallelWorker),alignof(ParallelWorker)) as *ParallelWorker;
+    if work==null(*ParallelWorker) {return false;}
+    var started:usize=0usize;
+    while started<workers {
+        work[started]=make ParallelWorker{jobs:jobs,count:count,index:started,stride:workers,thread:0usize};
+        if parallel_create(&work[started].thread,null(*u8),parallel_execute,&work[started] as *u8)!=0i32 {break;}
+        started=started+1usize;
+    }
+    var index:usize=0usize;
+    while index<started {
+        // A successful create supplies a joinable thread owned by this call.
+        if parallel_join(work[index].thread,null(**u8))!=0i32 {trap;}
+        index=index+1usize;
+    }
+    if started!=workers {
+        crust_set_error(context,null(*CrustSource),0usize,"cannot start parallel worker");
+        return false;
+    }
+    return true;
+}

@@ -1,0 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record ParallelJob {
+    execute: fn(*u8) -> unit;
+    user: *u8;
+}

@@ -1,0 +1,92 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record CompileJob {
+    module: CrustModule;
+    provider: *CrustModule;
+    previous: *CompileJob;
+    source: *u8;
+    output: *u8;
+    symbols: *u8;
+    name: *u8;
+    identity: u64;
+    check: bool;
+    success: bool;
+}
+
+fn compile_job(data:*u8)->unit {
+    var job:*CompileJob=data as *CompileJob;
+    var module:*CrustModule=&(*job).module;
+    var provider:*CrustModule=(*job).provider;
+    var previous:*CompileJob=(*job).previous;
+    if previous!=null(*CompileJob) {
+        if !(*previous).success || !module_import(module,&(*previous).module,(*previous).name,(*previous).name) {return;}
+    }
+    if !module_import(module,provider,"Hook","Hook") ||
+       !module_import(module,provider,"init","init") ||
+       !module_import(module,provider,"insert_after","insert_after") ||
+       !module_import(module,provider,"unlink","unlink") ||
+       !module_read(module,(*job).source,(*job).identity) || !module_check(module) ||
+       !module_export(module,(*job).name,(*job).name) {return;}
+    if (*job).check {(*job).success=true;return;}
+    var options:CBackendOptions=make CBackendOptions {
+        mode:2u32, output:(*job).output, symbols:(*job).symbols,
+        cflags:null(**u8),cflag_count:0usize,ldflags:null(**u8),ldflag_count:0usize
+    };
+    (*job).success=c_backend_build(&(*module).context,null(*CrustDecl),&options)==0i32;
+}
+
+fn compile_provider(provider:*CrustModule,source:*u8,output:*u8,symbols:*u8,check:bool)->bool {
+    if !module_read(provider,source,1u64) || !module_check(provider) ||
+       !module_export(provider,"Hook","") || !module_export(provider,"init","bench_init") ||
+       !module_export(provider,"insert_after","bench_insert") ||
+       !module_export(provider,"unlink","bench_unlink") {return false;}
+    if check {return true;}
+    var options:CBackendOptions=make CBackendOptions {
+        mode:2u32, output:output, symbols:symbols,
+        cflags:null(**u8),cflag_count:0usize,ldflags:null(**u8),ldflag_count:0usize
+    };
+    return c_backend_build(&(*provider).context,null(*CrustDecl),&options)==0i32;
+}
+
+fn compile_consumers(ctx:*CrustContext,provider:*CrustModule,workers:usize,count:usize,arguments:**u8,check:bool,deep:bool)->bool {
+    if count==0usize {return true;}
+    var jobs:*ParallelJob=crust_try_grow_array(ctx,null(*u8),0usize,count,sizeof(ParallelJob),alignof(ParallelJob)) as *ParallelJob;
+    var values:*CompileJob=crust_try_grow_array(ctx,null(*u8),0usize,count,sizeof(CompileJob),alignof(CompileJob)) as *CompileJob;
+    if jobs==null(*ParallelJob) || values==null(*CompileJob) {return false;}
+    var index:usize=0usize;
+    while index<count {
+        var job:*CompileJob=&values[index];
+        module_init(&(*job).module,null(*CrustAllocator));
+        (*job).provider=provider;(*job).identity=index as u64+2u64;(*job).check=check;
+        (*job).source=arguments[index*4usize];(*job).output=arguments[index*4usize+1usize];
+        (*job).symbols=arguments[index*4usize+2usize];(*job).name=arguments[index*4usize+3usize];
+        if deep && index!=0usize {(*job).previous=&values[index-1usize];}
+        jobs[index]=make ParallelJob{execute:compile_job,user:job as *u8};
+        index=index+1usize;
+    }
+    var success:bool=true;
+    if deep {
+        index=0usize;
+        while index<count {compile_job(&values[index] as *u8);index=index+1usize;}
+    } else {success=parallel_run(ctx,jobs,count,workers);}
+    index=0usize;
+    while index<count {
+        if !values[index].success {success=false;}
+        if values[index].module.context.error_count!=0usize {crust_run_diagnostic(&values[index].module.context);}
+        index=index+1usize;
+    }
+    while index!=0usize {index=index-1usize;module_destroy(&values[index].module);}
+    return success;
+}
+
+// Provider facts stay live and unchanged until all consumers have finished.
+fn compile_graph(ctx:*CrustContext,workers:usize,count:usize,arguments:**u8,check:bool,deep:bool)->i32 {
+    var provider:CrustModule=uninit;
+    module_init(&provider,null(*CrustAllocator));
+    var success:bool=compile_provider(&provider,arguments[0usize],arguments[1usize],arguments[2usize],check);
+    if success {success=compile_consumers(ctx,&provider,workers,count,arguments+3isize,check,deep);}
+    if provider.context.error_count!=0usize {crust_run_diagnostic(&provider.context);}
+    module_destroy(&provider);
+    if success {return 0i32;}
+    return 1i32;
+}

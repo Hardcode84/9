@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Include model.crs. Jobs contain native non-null functions with independent
+// mutable state. Retain their code and shared immutable inputs until return.
+// The caller owns context. A failed start can leave some jobs complete;
+// all started jobs finish before return. Zero workers is an error.
+extern fn parallel_run(context:*CrustContext,jobs:*ParallelJob,count:usize,workers:usize)->bool="parallel_run";

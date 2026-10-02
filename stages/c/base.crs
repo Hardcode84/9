@@ -113,11 +113,7 @@ fn c_alloc(status: *CStatus, size: usize, alignment: usize) -> *u8 {
     return (block as *u8) + sizeof(CBlock) as isize;
 }
 
-fn c_length(text: *u8) -> usize {
-    var count: usize = 0usize;
-    while text[count] != 0u8 { count = count + 1usize; }
-    return count;
-}
+extern fn c_length(text: *u8) -> usize = "strlen";
 
 fn c_equal(a: *u8, b: *u8) -> bool {
     if a == b { return true; }

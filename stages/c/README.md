@@ -10,7 +10,8 @@ This provides a small path from the bootstrap compiler to native programs.
 Type mapping, expression lowering, text buffers, and driver policy live in
 `.crs` files. The C99 seed still supplies compiler services, including its
 reader and checker. Native host calls supply allocation, files, and process
-execution. The backend does not call a hidden C emitter.
+execution. Standard library calls supply string length and byte movement.
+The backend does not call a hidden C emitter.
 
 Start with [Hello World](../../examples/hello/README.md). This tutorial then
 follows a call from source to C, builds that output by hand, and shows where

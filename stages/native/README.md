@@ -167,3 +167,9 @@ The [recorded results](../../docs/source-runner.md#native-continuation-measureme
 show the cold total and each phase. Native execution reduces the large-input
 cost relative to interpretation. The measured cold route still exceeds the
 matched GCC syntax-check time.
+
+Use [cold.py](../../benchmarks/native/cold.py) to compare a frozen checkout
+with the current build, GCC, and Clang. The
+[measurement instructions](../../docs/source-runner.md#compare-cold-native-builds)
+give the command and output contract. Keep all stage preparation in the cold
+total. A failed one-worker gate blocks parallel scheduler expansion.

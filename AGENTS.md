@@ -138,6 +138,9 @@ Do not add a feature before a concrete program requires it.
 - Preserve recorded benchmark inputs and reports. Their hashes identify the
   measured bytes. Write new evidence separately when the implementation
   changes.
+- Do not commit binary files or archives. Keep new raw performance results
+  in the ignored build directory. Commit benchmark tools and measurement
+  instructions, not machine-specific timing numbers in documentation.
 
 ## Validation
 

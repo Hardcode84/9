@@ -486,3 +486,37 @@ emitted by the seed assembly backend; the installed comparison backend uses
 GCC optimization. A complete performance result must account for any next
 backend generation or cache preparation, then repeat the cold comparison
 before adding matched parallel work. The C99 evaluator is unchanged.
+
+### Compare cold native builds
+
+[The comparison tool](../benchmarks/native/cold.py) measures a frozen checkout
+and the current build against GCC and Clang. It uses randomized paired rounds,
+fresh processes, empty stage result caches, and warm OS file caches. Stage
+bootstrap and continuation compilation remain inside the cold endpoint. Final
+target GCC compilation and linking stay outside it.
+
+Create a frozen baseline before an optimization. Both builds must use the same
+C compiler and build flags. Run from the repository root and select a CPU
+allowed by the host. Use a new output path for each run.
+
+```sh
+mkdir -p build/native-before
+git archive HEAD | tar -x -C build/native-before
+make -C build/native-before all c-stage
+# Make the source change, then build and compare it.
+make all c-stage
+python3 benchmarks/native/cold.py --before build/native-before --cpu 0 --rounds 20 --output build/native-cold.json
+```
+
+The report contains raw samples, phase times, paired confidence intervals,
+commands, and source, tool, header, and artifact hashes. Every timed output
+must retain the same C and symbol bytes. The list program must also compile
+and run with the same output as its C equivalent. Sources and tools must stay
+unchanged during the measurement.
+
+Exit status 2 means the cold speed gate failed. A failed one-worker case
+blocks parallel scheduler expansion. These inputs do not cover the full
+matrix in specification section 14. The optional `--perf` argument selects a
+native Linux perf executable for a separate symbol profile. This profile uses
+a prepared assembly-built C driver; it does not measure cold stage preparation.
+Keep generated reports and profiles in the ignored build directory.

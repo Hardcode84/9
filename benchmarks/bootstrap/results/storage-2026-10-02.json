@@ -1,0 +1,3683 @@
+{
+  "environment": {
+    "utc": "2026-10-02T13:52:59Z",
+    "cpu_model": "AMD Ryzen Threadripper PRO 7995WX 96-Cores",
+    "logical_cpus": 192,
+    "pinned_cpu": 0,
+    "smt_siblings": {
+      "value": "0,96"
+    },
+    "governor": {
+      "value": "performance"
+    },
+    "kernel": "7.0.0-28-generic",
+    "machine": "x86_64",
+    "os_release": "PRETTY_NAME=\"Ubuntu 24.04.2 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.2 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+    "memory_kib": 527581144,
+    "load_start": [
+      "0.14",
+      "0.20",
+      "0.23"
+    ],
+    "cpu_reserved": false,
+    "frequency_control": "governor recorded; frequency and turbo are not fixed",
+    "python": "3.12.11",
+    "child_environment": {
+      "LC_ALL": "C",
+      "LANG": "C",
+      "TZ": "UTC",
+      "PATH": "inherited for executable lookup; all other variables omitted"
+    }
+  },
+  "compiler_sources": {
+    "Makefile": "5e555fe109ef9e68e2c066a9c40637e1389f6805aca43b195453455ee3ec155a",
+    "src/check.c": "01f58b91ee671f48f428f3492d787b2b8c7a5fd6222ce383a966f1b05fb56932",
+    "src/core.c": "50746833949582c512cfc46c2bae46682c24cfab8653b88f9e701e5a5e5aec1d",
+    "src/driver.c": "7585867cef3d9ae1270e946fe6ff47d4dd8e34bd78fe5bfe6eead8853841fcbe",
+    "src/driver_posix.c": "a81c30c32b59cff7875a42f5f8487b221c40876d2f79b1e6c454b5a97a55695b",
+    "src/eval.c": "3c967c69703daa7960485d477a64eb037c4f3c3fa0ffca16aab721b6ee521241",
+    "src/eval_ffi_linux_x64.c": "790e289892874094e902b219c6f25f994a606e606ebfba01f6badb4970a8ab50",
+    "src/profile_linux_x64.c": "89d880a681fc9c5432a0d716de10f264bbe534b9da43d0e4b7b2a85498ef50bc",
+    "src/read.c": "a1e5cb2e89f065ea5de2084954fca1e97c6d409a9ea062005a486af2a71df088",
+    "src/run.c": "12d432242c7e4fc852bec660a42bae5c8aae52697a39830f863fccf3e13026b1",
+    "src/run_main.c": "1f78b16bb3f1af45e35c3c08ca58945dad67ca42ec481898b976e11262a5093e",
+    "src/run_posix.c": "2f4573a26dd0e71b65ede363cda3b3a4d1109a389cf4e0419eb1ee28137f19e4",
+    "src/x64.c": "6a46c5ea70442acea1260367563ab83be0b23af9626f9b5051afeb87a6e5a934",
+    "src/core_internal.h": "00610d932a726ca48fa7231a65b3d906eef831967dba0281e3f5104b6e4d8a7f",
+    "src/driver_platform.h": "b402f463191ed2bce6275f3c008037610a26d4acc9d9c97acdadacaadc94859a",
+    "src/eval_native.h": "5023366d05afe620965a1bd6dab85781a642aeaf559c3c1fd000b290df71ac7b",
+    "src/linux_x64/eval_storage.h": "c5d2fa3ca24fc7a2469b2c18f55314b6038507f36af6f4b841fde2226ba2f8dc",
+    "src/run_platform.h": "2672927062a89c2d3ea25f9a65113e734dfff03931427e3611e8077120382601",
+    "include/crust0.h": "0dfe4893b91ac36dabb66f8589c9df7ec7e77e0cc1c9f8e38c19ca3dcf05a729",
+    "include/crust0_eval.h": "1f5e20297267a722c1d9748ee66a64bd4485041cfbb5b882e241f7c31da34c34",
+    "include/crust0_host.h": "229bcebfb5356d662381d8fb385fb496e660d366b4837bb7b893d083e76c7fb1",
+    "include/crust0_run.h": "3a07adeed17d8a46ed5d74b8b8501b3c66f15f05f540050c28bf52d06cc28757",
+    "include/crust0_stage.h": "18d50e83016adb123c73a8d32ff24e00bf31e606498d7c4640a30d3d654710c3",
+    "include/crust0_x64.h": "784bea020ce3259190df4abf014dc77d9db92cf705c70d34912eed02e630ffc3",
+    "runtime/host.c": "ee6f9bdd6b9e2934e76bb2323c16ba2527dfbdd192782e4fb501d74fbf1cc251",
+    "runtime/host_posix.c": "b21859f68c6ca4d753693d98d565250f0a01ca259460f193f0b101b6ea14e4da"
+  },
+  "generator_sha256": "93bfd4960c1a83c0d8c84038ad3249af563d3bf42e38dc671480438e8ec6d790",
+  "runner_sha256": "88ffaf40e8324d76df15afc295cf561f54d65873ed77d8ec8b6e7fd271921128",
+  "binaries": {
+    "before": {
+      "crust0": {
+        "file_name": "crust0",
+        "bytes": 396776,
+        "sha256": "c3bc5b1b53936bc5e5069828300e946cd8c3cc44733f7b52325013516e6abe22"
+      },
+      "crust-c": {
+        "file_name": "crust-c",
+        "bytes": 1098400,
+        "sha256": "a619fbe2e9d1959f97a1d091ce1e1ba068546ee4bbd905260cdc32afb710f44c"
+      }
+    },
+    "after": {
+      "crust0": {
+        "file_name": "crust0",
+        "bytes": 396784,
+        "sha256": "a8e2fd9818eddcc9f38e5ef38455bbe48deb9e0a135db4549e8accde9113f6ed"
+      },
+      "crust-c": {
+        "file_name": "crust-c",
+        "bytes": 1098360,
+        "sha256": "30b75a444ed88fb01dad8b1ec78e71902985c19584ad2809d8010d8be67d771b"
+      }
+    }
+  },
+  "samples": [
+    {
+      "functions": 8000,
+      "endpoint": "check",
+      "commands": {
+        "before": [
+          "build/bead-fixes/hre/before/crust0",
+          "--library",
+          "--check",
+          "build/bead-fixes/hre/ordinary-8000.crs"
+        ],
+        "after": [
+          "build/crust0",
+          "--library",
+          "--check",
+          "build/bead-fixes/hre/ordinary-8000.crs"
+        ]
+      },
+      "input_sha256": "3484923d9b0048f4d3053d2987371d18417794d2e8bc506c69cb18893803dec2",
+      "values": [
+        {
+          "pair": 0,
+          "label": "before",
+          "wall_ns": 51016078,
+          "rss_kib": 69120,
+          "minor_faults": 17332,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 0,
+          "label": "after",
+          "wall_ns": 49033824,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 1,
+          "label": "after",
+          "wall_ns": 48644349,
+          "rss_kib": 62976,
+          "minor_faults": 16112,
+          "user_s": 0.01,
+          "system_s": 0.03
+        },
+        {
+          "pair": 1,
+          "label": "before",
+          "wall_ns": 51965643,
+          "rss_kib": 69120,
+          "minor_faults": 17331,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 2,
+          "label": "before",
+          "wall_ns": 52496760,
+          "rss_kib": 69120,
+          "minor_faults": 17331,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 2,
+          "label": "after",
+          "wall_ns": 52867616,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 3,
+          "label": "before",
+          "wall_ns": 51476038,
+          "rss_kib": 69120,
+          "minor_faults": 17332,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 3,
+          "label": "after",
+          "wall_ns": 49816338,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 4,
+          "label": "after",
+          "wall_ns": 49285181,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.01,
+          "system_s": 0.02
+        },
+        {
+          "pair": 4,
+          "label": "before",
+          "wall_ns": 51946965,
+          "rss_kib": 69120,
+          "minor_faults": 17331,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 5,
+          "label": "before",
+          "wall_ns": 53381317,
+          "rss_kib": 69120,
+          "minor_faults": 17332,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 5,
+          "label": "after",
+          "wall_ns": 50974216,
+          "rss_kib": 62976,
+          "minor_faults": 16109,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 6,
+          "label": "before",
+          "wall_ns": 51087656,
+          "rss_kib": 69120,
+          "minor_faults": 17331,
+          "user_s": 0.01,
+          "system_s": 0.02
+        },
+        {
+          "pair": 6,
+          "label": "after",
+          "wall_ns": 49028366,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 7,
+          "label": "after",
+          "wall_ns": 48459642,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 7,
+          "label": "before",
+          "wall_ns": 51071421,
+          "rss_kib": 69120,
+          "minor_faults": 17332,
+          "user_s": 0.01,
+          "system_s": 0.03
+        },
+        {
+          "pair": 8,
+          "label": "before",
+          "wall_ns": 51327736,
+          "rss_kib": 69120,
+          "minor_faults": 17332,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 8,
+          "label": "after",
+          "wall_ns": 50007104,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.01,
+          "system_s": 0.02
+        },
+        {
+          "pair": 9,
+          "label": "after",
+          "wall_ns": 48530348,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.01,
+          "system_s": 0.02
+        },
+        {
+          "pair": 9,
+          "label": "before",
+          "wall_ns": 51410410,
+          "rss_kib": 69120,
+          "minor_faults": 17331,
+          "user_s": 0.01,
+          "system_s": 0.03
+        },
+        {
+          "pair": 10,
+          "label": "before",
+          "wall_ns": 51375648,
+          "rss_kib": 69120,
+          "minor_faults": 17333,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 10,
+          "label": "after",
+          "wall_ns": 49539152,
+          "rss_kib": 62976,
+          "minor_faults": 16111,
+          "user_s": 0.01,
+          "system_s": 0.03
+        },
+        {
+          "pair": 11,
+          "label": "before",
+          "wall_ns": 51784942,
+          "rss_kib": 69120,
+          "minor_faults": 17332,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 11,
+          "label": "after",
+          "wall_ns": 49800494,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 12,
+          "label": "after",
+          "wall_ns": 49501515,
+          "rss_kib": 62976,
+          "minor_faults": 16109,
+          "user_s": 0.01,
+          "system_s": 0.02
+        },
+        {
+          "pair": 12,
+          "label": "before",
+          "wall_ns": 51651091,
+          "rss_kib": 69120,
+          "minor_faults": 17331,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 13,
+          "label": "after",
+          "wall_ns": 49218091,
+          "rss_kib": 62976,
+          "minor_faults": 16109,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 13,
+          "label": "before",
+          "wall_ns": 51661797,
+          "rss_kib": 69120,
+          "minor_faults": 17332,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 14,
+          "label": "before",
+          "wall_ns": 51378431,
+          "rss_kib": 69120,
+          "minor_faults": 17331,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 14,
+          "label": "after",
+          "wall_ns": 49172632,
+          "rss_kib": 62976,
+          "minor_faults": 16112,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 15,
+          "label": "after",
+          "wall_ns": 49078290,
+          "rss_kib": 62976,
+          "minor_faults": 16111,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 15,
+          "label": "before",
+          "wall_ns": 51471451,
+          "rss_kib": 69120,
+          "minor_faults": 17333,
+          "user_s": 0.01,
+          "system_s": 0.03
+        },
+        {
+          "pair": 16,
+          "label": "before",
+          "wall_ns": 51154205,
+          "rss_kib": 69120,
+          "minor_faults": 17333,
+          "user_s": 0.01,
+          "system_s": 0.02
+        },
+        {
+          "pair": 16,
+          "label": "after",
+          "wall_ns": 49259502,
+          "rss_kib": 62976,
+          "minor_faults": 16109,
+          "user_s": 0.01,
+          "system_s": 0.03
+        },
+        {
+          "pair": 17,
+          "label": "after",
+          "wall_ns": 49102907,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.01,
+          "system_s": 0.02
+        },
+        {
+          "pair": 17,
+          "label": "before",
+          "wall_ns": 51600695,
+          "rss_kib": 69120,
+          "minor_faults": 17332,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 18,
+          "label": "after",
+          "wall_ns": 49324931,
+          "rss_kib": 62976,
+          "minor_faults": 16109,
+          "user_s": 0.01,
+          "system_s": 0.02
+        },
+        {
+          "pair": 18,
+          "label": "before",
+          "wall_ns": 51170690,
+          "rss_kib": 69120,
+          "minor_faults": 17332,
+          "user_s": 0.01,
+          "system_s": 0.03
+        },
+        {
+          "pair": 19,
+          "label": "after",
+          "wall_ns": 49405942,
+          "rss_kib": 62976,
+          "minor_faults": 16110,
+          "user_s": 0.02,
+          "system_s": 0.02
+        },
+        {
+          "pair": 19,
+          "label": "before",
+          "wall_ns": 51369288,
+          "rss_kib": 69120,
+          "minor_faults": 17331,
+          "user_s": 0.02,
+          "system_s": 0.02
+        }
+      ]
+    },
+    {
+      "functions": 8000,
+      "endpoint": "assembly",
+      "commands": {
+        "before": [
+          "build/bead-fixes/hre/before/crust0",
+          "--library",
+          "-S",
+          "build/bead-fixes/hre/ordinary-8000.crs"
+        ],
+        "after": [
+          "build/crust0",
+          "--library",
+          "-S",
+          "build/bead-fixes/hre/ordinary-8000.crs"
+        ]
+      },
+      "input_sha256": "3484923d9b0048f4d3053d2987371d18417794d2e8bc506c69cb18893803dec2",
+      "values": [
+        {
+          "pair": 0,
+          "label": "after",
+          "wall_ns": 90870378,
+          "rss_kib": 81464,
+          "minor_faults": 20193,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 0,
+          "label": "before",
+          "wall_ns": 94085092,
+          "rss_kib": 86072,
+          "minor_faults": 21415,
+          "user_s": 0.06,
+          "system_s": 0.03
+        },
+        {
+          "pair": 1,
+          "label": "after",
+          "wall_ns": 91035075,
+          "rss_kib": 81460,
+          "minor_faults": 20194,
+          "user_s": 0.06,
+          "system_s": 0.02
+        },
+        {
+          "pair": 1,
+          "label": "before",
+          "wall_ns": 93750900,
+          "rss_kib": 86072,
+          "minor_faults": 21415,
+          "user_s": 0.05,
+          "system_s": 0.04
+        },
+        {
+          "pair": 2,
+          "label": "before",
+          "wall_ns": 94356229,
+          "rss_kib": 86072,
+          "minor_faults": 21416,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 2,
+          "label": "after",
+          "wall_ns": 91219251,
+          "rss_kib": 81464,
+          "minor_faults": 20193,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 3,
+          "label": "before",
+          "wall_ns": 94188286,
+          "rss_kib": 86072,
+          "minor_faults": 21414,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 3,
+          "label": "after",
+          "wall_ns": 91184279,
+          "rss_kib": 81464,
+          "minor_faults": 20193,
+          "user_s": 0.06,
+          "system_s": 0.02
+        },
+        {
+          "pair": 4,
+          "label": "after",
+          "wall_ns": 90609907,
+          "rss_kib": 81464,
+          "minor_faults": 20193,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 4,
+          "label": "before",
+          "wall_ns": 94454877,
+          "rss_kib": 86072,
+          "minor_faults": 21414,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 5,
+          "label": "before",
+          "wall_ns": 93988557,
+          "rss_kib": 86072,
+          "minor_faults": 21415,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 5,
+          "label": "after",
+          "wall_ns": 90908525,
+          "rss_kib": 81464,
+          "minor_faults": 20196,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 6,
+          "label": "before",
+          "wall_ns": 93999123,
+          "rss_kib": 86072,
+          "minor_faults": 21416,
+          "user_s": 0.05,
+          "system_s": 0.04
+        },
+        {
+          "pair": 6,
+          "label": "after",
+          "wall_ns": 90678009,
+          "rss_kib": 81464,
+          "minor_faults": 20193,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 7,
+          "label": "after",
+          "wall_ns": 90676858,
+          "rss_kib": 81460,
+          "minor_faults": 20193,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 7,
+          "label": "before",
+          "wall_ns": 94868717,
+          "rss_kib": 86072,
+          "minor_faults": 21414,
+          "user_s": 0.06,
+          "system_s": 0.02
+        },
+        {
+          "pair": 8,
+          "label": "before",
+          "wall_ns": 93906724,
+          "rss_kib": 86072,
+          "minor_faults": 21414,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 8,
+          "label": "after",
+          "wall_ns": 90807924,
+          "rss_kib": 81464,
+          "minor_faults": 20194,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 9,
+          "label": "after",
+          "wall_ns": 90938741,
+          "rss_kib": 81460,
+          "minor_faults": 20192,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 9,
+          "label": "before",
+          "wall_ns": 94543359,
+          "rss_kib": 86072,
+          "minor_faults": 21414,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 10,
+          "label": "after",
+          "wall_ns": 90781615,
+          "rss_kib": 81464,
+          "minor_faults": 20193,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 10,
+          "label": "before",
+          "wall_ns": 94388867,
+          "rss_kib": 86072,
+          "minor_faults": 21415,
+          "user_s": 0.06,
+          "system_s": 0.03
+        },
+        {
+          "pair": 11,
+          "label": "after",
+          "wall_ns": 90775175,
+          "rss_kib": 81464,
+          "minor_faults": 20194,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 11,
+          "label": "before",
+          "wall_ns": 94063219,
+          "rss_kib": 86072,
+          "minor_faults": 21415,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 12,
+          "label": "after",
+          "wall_ns": 92521475,
+          "rss_kib": 81464,
+          "minor_faults": 20193,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 12,
+          "label": "before",
+          "wall_ns": 94094566,
+          "rss_kib": 86072,
+          "minor_faults": 21414,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 13,
+          "label": "before",
+          "wall_ns": 93714877,
+          "rss_kib": 86072,
+          "minor_faults": 21414,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 13,
+          "label": "after",
+          "wall_ns": 90728915,
+          "rss_kib": 81460,
+          "minor_faults": 20192,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 14,
+          "label": "after",
+          "wall_ns": 90561805,
+          "rss_kib": 81464,
+          "minor_faults": 20194,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 14,
+          "label": "before",
+          "wall_ns": 94289458,
+          "rss_kib": 86072,
+          "minor_faults": 21415,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 15,
+          "label": "before",
+          "wall_ns": 94255357,
+          "rss_kib": 86072,
+          "minor_faults": 21414,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 15,
+          "label": "after",
+          "wall_ns": 90807353,
+          "rss_kib": 81464,
+          "minor_faults": 20193,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 16,
+          "label": "after",
+          "wall_ns": 90627043,
+          "rss_kib": 81464,
+          "minor_faults": 20194,
+          "user_s": 0.05,
+          "system_s": 0.02
+        },
+        {
+          "pair": 16,
+          "label": "before",
+          "wall_ns": 93422578,
+          "rss_kib": 86072,
+          "minor_faults": 21414,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 17,
+          "label": "after",
+          "wall_ns": 90386022,
+          "rss_kib": 81464,
+          "minor_faults": 20194,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 17,
+          "label": "before",
+          "wall_ns": 94047536,
+          "rss_kib": 86072,
+          "minor_faults": 21415,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 18,
+          "label": "before",
+          "wall_ns": 93863600,
+          "rss_kib": 86072,
+          "minor_faults": 21414,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 18,
+          "label": "after",
+          "wall_ns": 91236778,
+          "rss_kib": 81464,
+          "minor_faults": 20193,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 19,
+          "label": "after",
+          "wall_ns": 90890398,
+          "rss_kib": 81464,
+          "minor_faults": 20194,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 19,
+          "label": "before",
+          "wall_ns": 93812082,
+          "rss_kib": 86072,
+          "minor_faults": 21415,
+          "user_s": 0.05,
+          "system_s": 0.03
+        }
+      ]
+    },
+    {
+      "functions": 8000,
+      "endpoint": "c-prepare",
+      "commands": {
+        "before": [
+          "build/bead-fixes/hre/before/crust-c",
+          "--library",
+          "--prepare",
+          "build/bead-fixes/hre/ordinary-8000.crs"
+        ],
+        "after": [
+          "build/crust-c",
+          "--library",
+          "--prepare",
+          "build/bead-fixes/hre/ordinary-8000.crs"
+        ]
+      },
+      "input_sha256": "3484923d9b0048f4d3053d2987371d18417794d2e8bc506c69cb18893803dec2",
+      "values": [
+        {
+          "pair": 0,
+          "label": "before",
+          "wall_ns": 90404920,
+          "rss_kib": 99840,
+          "minor_faults": 25840,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 0,
+          "label": "after",
+          "wall_ns": 88185440,
+          "rss_kib": 95232,
+          "minor_faults": 24617,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 1,
+          "label": "after",
+          "wall_ns": 86929685,
+          "rss_kib": 95232,
+          "minor_faults": 24618,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 1,
+          "label": "before",
+          "wall_ns": 91654315,
+          "rss_kib": 99840,
+          "minor_faults": 25841,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 2,
+          "label": "after",
+          "wall_ns": 87803877,
+          "rss_kib": 95232,
+          "minor_faults": 24618,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 2,
+          "label": "before",
+          "wall_ns": 91536006,
+          "rss_kib": 99840,
+          "minor_faults": 25842,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 3,
+          "label": "after",
+          "wall_ns": 86855224,
+          "rss_kib": 95232,
+          "minor_faults": 24617,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 3,
+          "label": "before",
+          "wall_ns": 90806292,
+          "rss_kib": 99840,
+          "minor_faults": 25841,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 4,
+          "label": "before",
+          "wall_ns": 91733373,
+          "rss_kib": 99840,
+          "minor_faults": 25838,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 4,
+          "label": "after",
+          "wall_ns": 87775224,
+          "rss_kib": 95232,
+          "minor_faults": 24618,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 5,
+          "label": "after",
+          "wall_ns": 88211048,
+          "rss_kib": 95232,
+          "minor_faults": 24617,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 5,
+          "label": "before",
+          "wall_ns": 91256337,
+          "rss_kib": 99840,
+          "minor_faults": 25840,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 6,
+          "label": "after",
+          "wall_ns": 88385940,
+          "rss_kib": 95232,
+          "minor_faults": 24616,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 6,
+          "label": "before",
+          "wall_ns": 91591680,
+          "rss_kib": 99840,
+          "minor_faults": 25839,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 7,
+          "label": "before",
+          "wall_ns": 90401825,
+          "rss_kib": 99840,
+          "minor_faults": 25839,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 7,
+          "label": "after",
+          "wall_ns": 88444358,
+          "rss_kib": 95232,
+          "minor_faults": 24617,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 8,
+          "label": "before",
+          "wall_ns": 91131931,
+          "rss_kib": 99840,
+          "minor_faults": 25841,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 8,
+          "label": "after",
+          "wall_ns": 89041874,
+          "rss_kib": 95232,
+          "minor_faults": 24616,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 9,
+          "label": "after",
+          "wall_ns": 87890607,
+          "rss_kib": 95232,
+          "minor_faults": 24618,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 9,
+          "label": "before",
+          "wall_ns": 92386583,
+          "rss_kib": 99840,
+          "minor_faults": 25839,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 10,
+          "label": "after",
+          "wall_ns": 88686230,
+          "rss_kib": 95232,
+          "minor_faults": 24617,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 10,
+          "label": "before",
+          "wall_ns": 91398180,
+          "rss_kib": 99840,
+          "minor_faults": 25839,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 11,
+          "label": "after",
+          "wall_ns": 88594594,
+          "rss_kib": 95232,
+          "minor_faults": 24617,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 11,
+          "label": "before",
+          "wall_ns": 91759703,
+          "rss_kib": 99840,
+          "minor_faults": 25839,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 12,
+          "label": "before",
+          "wall_ns": 91443448,
+          "rss_kib": 99840,
+          "minor_faults": 25838,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 12,
+          "label": "after",
+          "wall_ns": 87904257,
+          "rss_kib": 95232,
+          "minor_faults": 24619,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 13,
+          "label": "after",
+          "wall_ns": 87800842,
+          "rss_kib": 95232,
+          "minor_faults": 24618,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 13,
+          "label": "before",
+          "wall_ns": 91273213,
+          "rss_kib": 99840,
+          "minor_faults": 25840,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 14,
+          "label": "after",
+          "wall_ns": 87243516,
+          "rss_kib": 95232,
+          "minor_faults": 24617,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 14,
+          "label": "before",
+          "wall_ns": 91372992,
+          "rss_kib": 99840,
+          "minor_faults": 25840,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 15,
+          "label": "after",
+          "wall_ns": 88503636,
+          "rss_kib": 95232,
+          "minor_faults": 24618,
+          "user_s": 0.04,
+          "system_s": 0.03
+        },
+        {
+          "pair": 15,
+          "label": "before",
+          "wall_ns": 96697822,
+          "rss_kib": 99840,
+          "minor_faults": 25840,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 16,
+          "label": "before",
+          "wall_ns": 91059932,
+          "rss_kib": 99840,
+          "minor_faults": 25841,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 16,
+          "label": "after",
+          "wall_ns": 87369815,
+          "rss_kib": 95232,
+          "minor_faults": 24618,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 17,
+          "label": "before",
+          "wall_ns": 90194384,
+          "rss_kib": 99840,
+          "minor_faults": 25839,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 17,
+          "label": "after",
+          "wall_ns": 88196356,
+          "rss_kib": 95232,
+          "minor_faults": 24618,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 18,
+          "label": "after",
+          "wall_ns": 87768223,
+          "rss_kib": 95232,
+          "minor_faults": 24619,
+          "user_s": 0.04,
+          "system_s": 0.04
+        },
+        {
+          "pair": 18,
+          "label": "before",
+          "wall_ns": 91529747,
+          "rss_kib": 99840,
+          "minor_faults": 25840,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 19,
+          "label": "before",
+          "wall_ns": 90603077,
+          "rss_kib": 99840,
+          "minor_faults": 25840,
+          "user_s": 0.05,
+          "system_s": 0.03
+        },
+        {
+          "pair": 19,
+          "label": "after",
+          "wall_ns": 87455434,
+          "rss_kib": 95232,
+          "minor_faults": 24617,
+          "user_s": 0.05,
+          "system_s": 0.03
+        }
+      ]
+    },
+    {
+      "functions": 32000,
+      "endpoint": "check",
+      "commands": {
+        "before": [
+          "build/bead-fixes/hre/before/crust0",
+          "--library",
+          "--check",
+          "build/bead-fixes/hre/ordinary-32000.crs"
+        ],
+        "after": [
+          "build/crust0",
+          "--library",
+          "--check",
+          "build/bead-fixes/hre/ordinary-32000.crs"
+        ]
+      },
+      "input_sha256": "df04bfd83ab41ef2023e53934ce59635dad0d31cc72f5dcad50af696b23957a0",
+      "values": [
+        {
+          "pair": 0,
+          "label": "before",
+          "wall_ns": 204419455,
+          "rss_kib": 274944,
+          "minor_faults": 69075,
+          "user_s": 0.09,
+          "system_s": 0.11
+        },
+        {
+          "pair": 0,
+          "label": "after",
+          "wall_ns": 193534332,
+          "rss_kib": 256512,
+          "minor_faults": 64183,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 1,
+          "label": "after",
+          "wall_ns": 192187431,
+          "rss_kib": 256512,
+          "minor_faults": 64180,
+          "user_s": 0.09,
+          "system_s": 0.09
+        },
+        {
+          "pair": 1,
+          "label": "before",
+          "wall_ns": 200517710,
+          "rss_kib": 274944,
+          "minor_faults": 69076,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 2,
+          "label": "after",
+          "wall_ns": 191187000,
+          "rss_kib": 256512,
+          "minor_faults": 64182,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 2,
+          "label": "before",
+          "wall_ns": 199426683,
+          "rss_kib": 274944,
+          "minor_faults": 69076,
+          "user_s": 0.09,
+          "system_s": 0.1
+        },
+        {
+          "pair": 3,
+          "label": "after",
+          "wall_ns": 191957506,
+          "rss_kib": 256512,
+          "minor_faults": 64181,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 3,
+          "label": "before",
+          "wall_ns": 200379483,
+          "rss_kib": 274944,
+          "minor_faults": 69076,
+          "user_s": 0.09,
+          "system_s": 0.1
+        },
+        {
+          "pair": 4,
+          "label": "before",
+          "wall_ns": 199388075,
+          "rss_kib": 274944,
+          "minor_faults": 69076,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 4,
+          "label": "after",
+          "wall_ns": 191573059,
+          "rss_kib": 256512,
+          "minor_faults": 64180,
+          "user_s": 0.07,
+          "system_s": 0.11
+        },
+        {
+          "pair": 5,
+          "label": "after",
+          "wall_ns": 191219328,
+          "rss_kib": 256512,
+          "minor_faults": 64179,
+          "user_s": 0.07,
+          "system_s": 0.11
+        },
+        {
+          "pair": 5,
+          "label": "before",
+          "wall_ns": 202278603,
+          "rss_kib": 274944,
+          "minor_faults": 69076,
+          "user_s": 0.08,
+          "system_s": 0.11
+        },
+        {
+          "pair": 6,
+          "label": "before",
+          "wall_ns": 202121797,
+          "rss_kib": 274944,
+          "minor_faults": 69075,
+          "user_s": 0.1,
+          "system_s": 0.09
+        },
+        {
+          "pair": 6,
+          "label": "after",
+          "wall_ns": 191884306,
+          "rss_kib": 256512,
+          "minor_faults": 64180,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 7,
+          "label": "after",
+          "wall_ns": 190768342,
+          "rss_kib": 256512,
+          "minor_faults": 64181,
+          "user_s": 0.07,
+          "system_s": 0.11
+        },
+        {
+          "pair": 7,
+          "label": "before",
+          "wall_ns": 199865793,
+          "rss_kib": 274944,
+          "minor_faults": 69075,
+          "user_s": 0.09,
+          "system_s": 0.09
+        },
+        {
+          "pair": 8,
+          "label": "after",
+          "wall_ns": 191301873,
+          "rss_kib": 256512,
+          "minor_faults": 64181,
+          "user_s": 0.07,
+          "system_s": 0.11
+        },
+        {
+          "pair": 8,
+          "label": "before",
+          "wall_ns": 200627085,
+          "rss_kib": 274944,
+          "minor_faults": 69075,
+          "user_s": 0.09,
+          "system_s": 0.09
+        },
+        {
+          "pair": 9,
+          "label": "before",
+          "wall_ns": 199532202,
+          "rss_kib": 274944,
+          "minor_faults": 69076,
+          "user_s": 0.09,
+          "system_s": 0.1
+        },
+        {
+          "pair": 9,
+          "label": "after",
+          "wall_ns": 191568482,
+          "rss_kib": 256512,
+          "minor_faults": 64180,
+          "user_s": 0.07,
+          "system_s": 0.11
+        },
+        {
+          "pair": 10,
+          "label": "after",
+          "wall_ns": 194000461,
+          "rss_kib": 256512,
+          "minor_faults": 64179,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 10,
+          "label": "before",
+          "wall_ns": 200941687,
+          "rss_kib": 274944,
+          "minor_faults": 69074,
+          "user_s": 0.08,
+          "system_s": 0.11
+        },
+        {
+          "pair": 11,
+          "label": "after",
+          "wall_ns": 191232348,
+          "rss_kib": 256512,
+          "minor_faults": 64182,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 11,
+          "label": "before",
+          "wall_ns": 200463239,
+          "rss_kib": 274944,
+          "minor_faults": 69077,
+          "user_s": 0.08,
+          "system_s": 0.11
+        },
+        {
+          "pair": 12,
+          "label": "before",
+          "wall_ns": 199712122,
+          "rss_kib": 274944,
+          "minor_faults": 69075,
+          "user_s": 0.07,
+          "system_s": 0.11
+        },
+        {
+          "pair": 12,
+          "label": "after",
+          "wall_ns": 191726570,
+          "rss_kib": 256512,
+          "minor_faults": 64181,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 13,
+          "label": "after",
+          "wall_ns": 193088242,
+          "rss_kib": 256512,
+          "minor_faults": 64181,
+          "user_s": 0.09,
+          "system_s": 0.09
+        },
+        {
+          "pair": 13,
+          "label": "before",
+          "wall_ns": 201306374,
+          "rss_kib": 274944,
+          "minor_faults": 69075,
+          "user_s": 0.1,
+          "system_s": 0.09
+        },
+        {
+          "pair": 14,
+          "label": "after",
+          "wall_ns": 191637386,
+          "rss_kib": 256512,
+          "minor_faults": 64180,
+          "user_s": 0.1,
+          "system_s": 0.08
+        },
+        {
+          "pair": 14,
+          "label": "before",
+          "wall_ns": 200762838,
+          "rss_kib": 274944,
+          "minor_faults": 69076,
+          "user_s": 0.07,
+          "system_s": 0.12
+        },
+        {
+          "pair": 15,
+          "label": "before",
+          "wall_ns": 201217130,
+          "rss_kib": 274944,
+          "minor_faults": 69076,
+          "user_s": 0.08,
+          "system_s": 0.11
+        },
+        {
+          "pair": 15,
+          "label": "after",
+          "wall_ns": 191714762,
+          "rss_kib": 256512,
+          "minor_faults": 64181,
+          "user_s": 0.1,
+          "system_s": 0.08
+        },
+        {
+          "pair": 16,
+          "label": "before",
+          "wall_ns": 201084441,
+          "rss_kib": 274944,
+          "minor_faults": 69076,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 16,
+          "label": "after",
+          "wall_ns": 191698007,
+          "rss_kib": 256512,
+          "minor_faults": 64179,
+          "user_s": 0.08,
+          "system_s": 0.09
+        },
+        {
+          "pair": 17,
+          "label": "before",
+          "wall_ns": 198624880,
+          "rss_kib": 274944,
+          "minor_faults": 69075,
+          "user_s": 0.09,
+          "system_s": 0.1
+        },
+        {
+          "pair": 17,
+          "label": "after",
+          "wall_ns": 190825267,
+          "rss_kib": 256512,
+          "minor_faults": 64180,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 18,
+          "label": "after",
+          "wall_ns": 191062733,
+          "rss_kib": 256512,
+          "minor_faults": 64179,
+          "user_s": 0.08,
+          "system_s": 0.1
+        },
+        {
+          "pair": 18,
+          "label": "before",
+          "wall_ns": 200942137,
+          "rss_kib": 274944,
+          "minor_faults": 69077,
+          "user_s": 0.08,
+          "system_s": 0.11
+        },
+        {
+          "pair": 19,
+          "label": "before",
+          "wall_ns": 200930159,
+          "rss_kib": 274944,
+          "minor_faults": 69074,
+          "user_s": 0.08,
+          "system_s": 0.11
+        },
+        {
+          "pair": 19,
+          "label": "after",
+          "wall_ns": 190957636,
+          "rss_kib": 256512,
+          "minor_faults": 64181,
+          "user_s": 0.09,
+          "system_s": 0.09
+        }
+      ]
+    },
+    {
+      "functions": 32000,
+      "endpoint": "assembly",
+      "commands": {
+        "before": [
+          "build/bead-fixes/hre/before/crust0",
+          "--library",
+          "-S",
+          "build/bead-fixes/hre/ordinary-32000.crs"
+        ],
+        "after": [
+          "build/crust0",
+          "--library",
+          "-S",
+          "build/bead-fixes/hre/ordinary-32000.crs"
+        ]
+      },
+      "input_sha256": "df04bfd83ab41ef2023e53934ce59635dad0d31cc72f5dcad50af696b23957a0",
+      "values": [
+        {
+          "pair": 0,
+          "label": "after",
+          "wall_ns": 366161373,
+          "rss_kib": 322616,
+          "minor_faults": 80492,
+          "user_s": 0.22,
+          "system_s": 0.13
+        },
+        {
+          "pair": 0,
+          "label": "before",
+          "wall_ns": 383172257,
+          "rss_kib": 342584,
+          "minor_faults": 85388,
+          "user_s": 0.24,
+          "system_s": 0.13
+        },
+        {
+          "pair": 1,
+          "label": "after",
+          "wall_ns": 366129125,
+          "rss_kib": 322616,
+          "minor_faults": 80491,
+          "user_s": 0.23,
+          "system_s": 0.12
+        },
+        {
+          "pair": 1,
+          "label": "before",
+          "wall_ns": 380442872,
+          "rss_kib": 342584,
+          "minor_faults": 85388,
+          "user_s": 0.24,
+          "system_s": 0.13
+        },
+        {
+          "pair": 2,
+          "label": "after",
+          "wall_ns": 366054503,
+          "rss_kib": 322616,
+          "minor_faults": 80491,
+          "user_s": 0.21,
+          "system_s": 0.14
+        },
+        {
+          "pair": 2,
+          "label": "before",
+          "wall_ns": 379480809,
+          "rss_kib": 342584,
+          "minor_faults": 85387,
+          "user_s": 0.23,
+          "system_s": 0.13
+        },
+        {
+          "pair": 3,
+          "label": "before",
+          "wall_ns": 380943734,
+          "rss_kib": 342584,
+          "minor_faults": 85390,
+          "user_s": 0.23,
+          "system_s": 0.14
+        },
+        {
+          "pair": 3,
+          "label": "after",
+          "wall_ns": 367144278,
+          "rss_kib": 322616,
+          "minor_faults": 80492,
+          "user_s": 0.23,
+          "system_s": 0.13
+        },
+        {
+          "pair": 4,
+          "label": "after",
+          "wall_ns": 366247031,
+          "rss_kib": 322616,
+          "minor_faults": 80492,
+          "user_s": 0.22,
+          "system_s": 0.14
+        },
+        {
+          "pair": 4,
+          "label": "before",
+          "wall_ns": 380331155,
+          "rss_kib": 342584,
+          "minor_faults": 85388,
+          "user_s": 0.23,
+          "system_s": 0.14
+        },
+        {
+          "pair": 5,
+          "label": "before",
+          "wall_ns": 380305656,
+          "rss_kib": 342584,
+          "minor_faults": 85387,
+          "user_s": 0.23,
+          "system_s": 0.14
+        },
+        {
+          "pair": 5,
+          "label": "after",
+          "wall_ns": 369744690,
+          "rss_kib": 322616,
+          "minor_faults": 80492,
+          "user_s": 0.24,
+          "system_s": 0.11
+        },
+        {
+          "pair": 6,
+          "label": "after",
+          "wall_ns": 366049084,
+          "rss_kib": 322616,
+          "minor_faults": 80491,
+          "user_s": 0.22,
+          "system_s": 0.13
+        },
+        {
+          "pair": 6,
+          "label": "before",
+          "wall_ns": 381483604,
+          "rss_kib": 342584,
+          "minor_faults": 85387,
+          "user_s": 0.24,
+          "system_s": 0.13
+        },
+        {
+          "pair": 7,
+          "label": "after",
+          "wall_ns": 366203326,
+          "rss_kib": 322616,
+          "minor_faults": 80492,
+          "user_s": 0.22,
+          "system_s": 0.13
+        },
+        {
+          "pair": 7,
+          "label": "before",
+          "wall_ns": 381739468,
+          "rss_kib": 342584,
+          "minor_faults": 85386,
+          "user_s": 0.2,
+          "system_s": 0.16
+        },
+        {
+          "pair": 8,
+          "label": "after",
+          "wall_ns": 373053245,
+          "rss_kib": 322616,
+          "minor_faults": 80491,
+          "user_s": 0.22,
+          "system_s": 0.14
+        },
+        {
+          "pair": 8,
+          "label": "before",
+          "wall_ns": 381052006,
+          "rss_kib": 342584,
+          "minor_faults": 85388,
+          "user_s": 0.23,
+          "system_s": 0.14
+        },
+        {
+          "pair": 9,
+          "label": "after",
+          "wall_ns": 366178839,
+          "rss_kib": 322616,
+          "minor_faults": 80492,
+          "user_s": 0.22,
+          "system_s": 0.13
+        },
+        {
+          "pair": 9,
+          "label": "before",
+          "wall_ns": 379476893,
+          "rss_kib": 342584,
+          "minor_faults": 85387,
+          "user_s": 0.23,
+          "system_s": 0.13
+        },
+        {
+          "pair": 10,
+          "label": "before",
+          "wall_ns": 380156322,
+          "rss_kib": 342584,
+          "minor_faults": 85388,
+          "user_s": 0.23,
+          "system_s": 0.14
+        },
+        {
+          "pair": 10,
+          "label": "after",
+          "wall_ns": 365739190,
+          "rss_kib": 322616,
+          "minor_faults": 80492,
+          "user_s": 0.23,
+          "system_s": 0.12
+        },
+        {
+          "pair": 11,
+          "label": "after",
+          "wall_ns": 367340473,
+          "rss_kib": 322612,
+          "minor_faults": 80491,
+          "user_s": 0.23,
+          "system_s": 0.13
+        },
+        {
+          "pair": 11,
+          "label": "before",
+          "wall_ns": 381760610,
+          "rss_kib": 342584,
+          "minor_faults": 85388,
+          "user_s": 0.22,
+          "system_s": 0.15
+        },
+        {
+          "pair": 12,
+          "label": "after",
+          "wall_ns": 368070728,
+          "rss_kib": 322616,
+          "minor_faults": 80493,
+          "user_s": 0.25,
+          "system_s": 0.11
+        },
+        {
+          "pair": 12,
+          "label": "before",
+          "wall_ns": 382255712,
+          "rss_kib": 342584,
+          "minor_faults": 85389,
+          "user_s": 0.23,
+          "system_s": 0.14
+        },
+        {
+          "pair": 13,
+          "label": "after",
+          "wall_ns": 372207185,
+          "rss_kib": 322616,
+          "minor_faults": 80493,
+          "user_s": 0.24,
+          "system_s": 0.12
+        },
+        {
+          "pair": 13,
+          "label": "before",
+          "wall_ns": 384096475,
+          "rss_kib": 342584,
+          "minor_faults": 85387,
+          "user_s": 0.23,
+          "system_s": 0.14
+        },
+        {
+          "pair": 14,
+          "label": "after",
+          "wall_ns": 365924388,
+          "rss_kib": 322616,
+          "minor_faults": 80494,
+          "user_s": 0.23,
+          "system_s": 0.12
+        },
+        {
+          "pair": 14,
+          "label": "before",
+          "wall_ns": 382113319,
+          "rss_kib": 342584,
+          "minor_faults": 85389,
+          "user_s": 0.24,
+          "system_s": 0.13
+        },
+        {
+          "pair": 15,
+          "label": "after",
+          "wall_ns": 365840151,
+          "rss_kib": 322616,
+          "minor_faults": 80493,
+          "user_s": 0.21,
+          "system_s": 0.14
+        },
+        {
+          "pair": 15,
+          "label": "before",
+          "wall_ns": 381760369,
+          "rss_kib": 342584,
+          "minor_faults": 85386,
+          "user_s": 0.24,
+          "system_s": 0.13
+        },
+        {
+          "pair": 16,
+          "label": "before",
+          "wall_ns": 380874560,
+          "rss_kib": 342584,
+          "minor_faults": 85387,
+          "user_s": 0.25,
+          "system_s": 0.12
+        },
+        {
+          "pair": 16,
+          "label": "after",
+          "wall_ns": 365518358,
+          "rss_kib": 322616,
+          "minor_faults": 80492,
+          "user_s": 0.22,
+          "system_s": 0.13
+        },
+        {
+          "pair": 17,
+          "label": "after",
+          "wall_ns": 364410467,
+          "rss_kib": 322616,
+          "minor_faults": 80494,
+          "user_s": 0.22,
+          "system_s": 0.13
+        },
+        {
+          "pair": 17,
+          "label": "before",
+          "wall_ns": 380419387,
+          "rss_kib": 342584,
+          "minor_faults": 85387,
+          "user_s": 0.23,
+          "system_s": 0.14
+        },
+        {
+          "pair": 18,
+          "label": "after",
+          "wall_ns": 365450506,
+          "rss_kib": 322616,
+          "minor_faults": 80492,
+          "user_s": 0.23,
+          "system_s": 0.13
+        },
+        {
+          "pair": 18,
+          "label": "before",
+          "wall_ns": 380617794,
+          "rss_kib": 342584,
+          "minor_faults": 85387,
+          "user_s": 0.23,
+          "system_s": 0.14
+        },
+        {
+          "pair": 19,
+          "label": "before",
+          "wall_ns": 380365206,
+          "rss_kib": 342584,
+          "minor_faults": 85388,
+          "user_s": 0.22,
+          "system_s": 0.15
+        },
+        {
+          "pair": 19,
+          "label": "after",
+          "wall_ns": 372914486,
+          "rss_kib": 322616,
+          "minor_faults": 80492,
+          "user_s": 0.22,
+          "system_s": 0.14
+        }
+      ]
+    },
+    {
+      "functions": 32000,
+      "endpoint": "c-prepare",
+      "commands": {
+        "before": [
+          "build/bead-fixes/hre/before/crust-c",
+          "--library",
+          "--prepare",
+          "build/bead-fixes/hre/ordinary-32000.crs"
+        ],
+        "after": [
+          "build/crust-c",
+          "--library",
+          "--prepare",
+          "build/bead-fixes/hre/ordinary-32000.crs"
+        ]
+      },
+      "input_sha256": "df04bfd83ab41ef2023e53934ce59635dad0d31cc72f5dcad50af696b23957a0",
+      "values": [
+        {
+          "pair": 0,
+          "label": "before",
+          "wall_ns": 364667102,
+          "rss_kib": 404252,
+          "minor_faults": 103135,
+          "user_s": 0.2,
+          "system_s": 0.15
+        },
+        {
+          "pair": 0,
+          "label": "after",
+          "wall_ns": 354328238,
+          "rss_kib": 384800,
+          "minor_faults": 98238,
+          "user_s": 0.19,
+          "system_s": 0.15
+        },
+        {
+          "pair": 1,
+          "label": "after",
+          "wall_ns": 348445802,
+          "rss_kib": 384804,
+          "minor_faults": 98239,
+          "user_s": 0.17,
+          "system_s": 0.16
+        },
+        {
+          "pair": 1,
+          "label": "before",
+          "wall_ns": 364761443,
+          "rss_kib": 403232,
+          "minor_faults": 103135,
+          "user_s": 0.19,
+          "system_s": 0.16
+        },
+        {
+          "pair": 2,
+          "label": "before",
+          "wall_ns": 361546599,
+          "rss_kib": 403232,
+          "minor_faults": 103135,
+          "user_s": 0.18,
+          "system_s": 0.16
+        },
+        {
+          "pair": 2,
+          "label": "after",
+          "wall_ns": 349423138,
+          "rss_kib": 384288,
+          "minor_faults": 98238,
+          "user_s": 0.18,
+          "system_s": 0.16
+        },
+        {
+          "pair": 3,
+          "label": "before",
+          "wall_ns": 367924789,
+          "rss_kib": 404256,
+          "minor_faults": 103135,
+          "user_s": 0.19,
+          "system_s": 0.16
+        },
+        {
+          "pair": 3,
+          "label": "after",
+          "wall_ns": 354113406,
+          "rss_kib": 384804,
+          "minor_faults": 98238,
+          "user_s": 0.18,
+          "system_s": 0.16
+        },
+        {
+          "pair": 4,
+          "label": "after",
+          "wall_ns": 351065682,
+          "rss_kib": 384804,
+          "minor_faults": 98238,
+          "user_s": 0.17,
+          "system_s": 0.16
+        },
+        {
+          "pair": 4,
+          "label": "before",
+          "wall_ns": 371108746,
+          "rss_kib": 403236,
+          "minor_faults": 103135,
+          "user_s": 0.21,
+          "system_s": 0.15
+        },
+        {
+          "pair": 5,
+          "label": "after",
+          "wall_ns": 349089567,
+          "rss_kib": 384288,
+          "minor_faults": 98239,
+          "user_s": 0.18,
+          "system_s": 0.15
+        },
+        {
+          "pair": 5,
+          "label": "before",
+          "wall_ns": 362945328,
+          "rss_kib": 404252,
+          "minor_faults": 103134,
+          "user_s": 0.19,
+          "system_s": 0.17
+        },
+        {
+          "pair": 6,
+          "label": "after",
+          "wall_ns": 348290979,
+          "rss_kib": 384804,
+          "minor_faults": 98238,
+          "user_s": 0.19,
+          "system_s": 0.15
+        },
+        {
+          "pair": 6,
+          "label": "before",
+          "wall_ns": 365583827,
+          "rss_kib": 404208,
+          "minor_faults": 103135,
+          "user_s": 0.2,
+          "system_s": 0.15
+        },
+        {
+          "pair": 7,
+          "label": "after",
+          "wall_ns": 357906647,
+          "rss_kib": 384240,
+          "minor_faults": 98237,
+          "user_s": 0.19,
+          "system_s": 0.15
+        },
+        {
+          "pair": 7,
+          "label": "before",
+          "wall_ns": 366785830,
+          "rss_kib": 403232,
+          "minor_faults": 103137,
+          "user_s": 0.19,
+          "system_s": 0.16
+        },
+        {
+          "pair": 8,
+          "label": "before",
+          "wall_ns": 365260652,
+          "rss_kib": 404208,
+          "minor_faults": 103133,
+          "user_s": 0.2,
+          "system_s": 0.15
+        },
+        {
+          "pair": 8,
+          "label": "after",
+          "wall_ns": 351600926,
+          "rss_kib": 384804,
+          "minor_faults": 98238,
+          "user_s": 0.19,
+          "system_s": 0.15
+        },
+        {
+          "pair": 9,
+          "label": "before",
+          "wall_ns": 364896365,
+          "rss_kib": 403232,
+          "minor_faults": 103135,
+          "user_s": 0.2,
+          "system_s": 0.15
+        },
+        {
+          "pair": 9,
+          "label": "after",
+          "wall_ns": 352272504,
+          "rss_kib": 384804,
+          "minor_faults": 98239,
+          "user_s": 0.18,
+          "system_s": 0.16
+        },
+        {
+          "pair": 10,
+          "label": "after",
+          "wall_ns": 353530561,
+          "rss_kib": 384800,
+          "minor_faults": 98238,
+          "user_s": 0.18,
+          "system_s": 0.16
+        },
+        {
+          "pair": 10,
+          "label": "before",
+          "wall_ns": 364920231,
+          "rss_kib": 403236,
+          "minor_faults": 103136,
+          "user_s": 0.19,
+          "system_s": 0.17
+        },
+        {
+          "pair": 11,
+          "label": "before",
+          "wall_ns": 363619660,
+          "rss_kib": 404252,
+          "minor_faults": 103134,
+          "user_s": 0.19,
+          "system_s": 0.16
+        },
+        {
+          "pair": 11,
+          "label": "after",
+          "wall_ns": 352538663,
+          "rss_kib": 384240,
+          "minor_faults": 98237,
+          "user_s": 0.17,
+          "system_s": 0.17
+        },
+        {
+          "pair": 12,
+          "label": "after",
+          "wall_ns": 350277069,
+          "rss_kib": 384284,
+          "minor_faults": 98237,
+          "user_s": 0.2,
+          "system_s": 0.14
+        },
+        {
+          "pair": 12,
+          "label": "before",
+          "wall_ns": 365599831,
+          "rss_kib": 404256,
+          "minor_faults": 103136,
+          "user_s": 0.19,
+          "system_s": 0.16
+        },
+        {
+          "pair": 13,
+          "label": "after",
+          "wall_ns": 351644231,
+          "rss_kib": 384800,
+          "minor_faults": 98237,
+          "user_s": 0.19,
+          "system_s": 0.15
+        },
+        {
+          "pair": 13,
+          "label": "before",
+          "wall_ns": 366263997,
+          "rss_kib": 404208,
+          "minor_faults": 103134,
+          "user_s": 0.2,
+          "system_s": 0.15
+        },
+        {
+          "pair": 14,
+          "label": "after",
+          "wall_ns": 350594706,
+          "rss_kib": 384284,
+          "minor_faults": 98237,
+          "user_s": 0.19,
+          "system_s": 0.15
+        },
+        {
+          "pair": 14,
+          "label": "before",
+          "wall_ns": 364722805,
+          "rss_kib": 403232,
+          "minor_faults": 103135,
+          "user_s": 0.18,
+          "system_s": 0.17
+        },
+        {
+          "pair": 15,
+          "label": "before",
+          "wall_ns": 364899540,
+          "rss_kib": 403232,
+          "minor_faults": 103135,
+          "user_s": 0.2,
+          "system_s": 0.15
+        },
+        {
+          "pair": 15,
+          "label": "after",
+          "wall_ns": 353685523,
+          "rss_kib": 384240,
+          "minor_faults": 98237,
+          "user_s": 0.2,
+          "system_s": 0.14
+        },
+        {
+          "pair": 16,
+          "label": "before",
+          "wall_ns": 363635453,
+          "rss_kib": 404212,
+          "minor_faults": 103134,
+          "user_s": 0.18,
+          "system_s": 0.17
+        },
+        {
+          "pair": 16,
+          "label": "after",
+          "wall_ns": 350487235,
+          "rss_kib": 384288,
+          "minor_faults": 98239,
+          "user_s": 0.2,
+          "system_s": 0.14
+        },
+        {
+          "pair": 17,
+          "label": "before",
+          "wall_ns": 364469334,
+          "rss_kib": 404212,
+          "minor_faults": 103135,
+          "user_s": 0.2,
+          "system_s": 0.16
+        },
+        {
+          "pair": 17,
+          "label": "after",
+          "wall_ns": 350005582,
+          "rss_kib": 384804,
+          "minor_faults": 98238,
+          "user_s": 0.19,
+          "system_s": 0.14
+        },
+        {
+          "pair": 18,
+          "label": "after",
+          "wall_ns": 352172092,
+          "rss_kib": 384804,
+          "minor_faults": 98238,
+          "user_s": 0.18,
+          "system_s": 0.16
+        },
+        {
+          "pair": 18,
+          "label": "before",
+          "wall_ns": 368380273,
+          "rss_kib": 404208,
+          "minor_faults": 103135,
+          "user_s": 0.21,
+          "system_s": 0.15
+        },
+        {
+          "pair": 19,
+          "label": "after",
+          "wall_ns": 353335869,
+          "rss_kib": 384244,
+          "minor_faults": 98239,
+          "user_s": 0.19,
+          "system_s": 0.15
+        },
+        {
+          "pair": 19,
+          "label": "before",
+          "wall_ns": 364878699,
+          "rss_kib": 404256,
+          "minor_faults": 103135,
+          "user_s": 0.2,
+          "system_s": 0.16
+        }
+      ]
+    },
+    {
+      "functions": 64000,
+      "endpoint": "check",
+      "commands": {
+        "before": [
+          "build/bead-fixes/hre/before/crust0",
+          "--library",
+          "--check",
+          "build/bead-fixes/hre/ordinary-64000.crs"
+        ],
+        "after": [
+          "build/crust0",
+          "--library",
+          "--check",
+          "build/bead-fixes/hre/ordinary-64000.crs"
+        ]
+      },
+      "input_sha256": "4820a3f8eaaa949e5f06f620ea087c1528637df8a2139109b010f7c24d4fae85",
+      "values": [
+        {
+          "pair": 0,
+          "label": "before",
+          "wall_ns": 410713552,
+          "rss_kib": 551424,
+          "minor_faults": 138059,
+          "user_s": 0.18,
+          "system_s": 0.22
+        },
+        {
+          "pair": 0,
+          "label": "after",
+          "wall_ns": 403240519,
+          "rss_kib": 511488,
+          "minor_faults": 128268,
+          "user_s": 0.17,
+          "system_s": 0.22
+        },
+        {
+          "pair": 1,
+          "label": "after",
+          "wall_ns": 392390289,
+          "rss_kib": 511488,
+          "minor_faults": 128269,
+          "user_s": 0.17,
+          "system_s": 0.21
+        },
+        {
+          "pair": 1,
+          "label": "before",
+          "wall_ns": 412796878,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.16,
+          "system_s": 0.24
+        },
+        {
+          "pair": 2,
+          "label": "after",
+          "wall_ns": 393058021,
+          "rss_kib": 511488,
+          "minor_faults": 128267,
+          "user_s": 0.16,
+          "system_s": 0.22
+        },
+        {
+          "pair": 2,
+          "label": "before",
+          "wall_ns": 412991330,
+          "rss_kib": 551424,
+          "minor_faults": 138056,
+          "user_s": 0.17,
+          "system_s": 0.23
+        },
+        {
+          "pair": 3,
+          "label": "after",
+          "wall_ns": 393991652,
+          "rss_kib": 511488,
+          "minor_faults": 128268,
+          "user_s": 0.17,
+          "system_s": 0.21
+        },
+        {
+          "pair": 3,
+          "label": "before",
+          "wall_ns": 419531994,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.17,
+          "system_s": 0.24
+        },
+        {
+          "pair": 4,
+          "label": "after",
+          "wall_ns": 399884574,
+          "rss_kib": 511488,
+          "minor_faults": 128268,
+          "user_s": 0.17,
+          "system_s": 0.22
+        },
+        {
+          "pair": 4,
+          "label": "before",
+          "wall_ns": 413702267,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.18,
+          "system_s": 0.22
+        },
+        {
+          "pair": 5,
+          "label": "before",
+          "wall_ns": 415573815,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.16,
+          "system_s": 0.25
+        },
+        {
+          "pair": 5,
+          "label": "after",
+          "wall_ns": 394186243,
+          "rss_kib": 511488,
+          "minor_faults": 128268,
+          "user_s": 0.16,
+          "system_s": 0.22
+        },
+        {
+          "pair": 6,
+          "label": "before",
+          "wall_ns": 410893443,
+          "rss_kib": 551424,
+          "minor_faults": 138056,
+          "user_s": 0.18,
+          "system_s": 0.22
+        },
+        {
+          "pair": 6,
+          "label": "after",
+          "wall_ns": 394485452,
+          "rss_kib": 511488,
+          "minor_faults": 128269,
+          "user_s": 0.18,
+          "system_s": 0.21
+        },
+        {
+          "pair": 7,
+          "label": "after",
+          "wall_ns": 392528727,
+          "rss_kib": 511488,
+          "minor_faults": 128269,
+          "user_s": 0.15,
+          "system_s": 0.23
+        },
+        {
+          "pair": 7,
+          "label": "before",
+          "wall_ns": 413405451,
+          "rss_kib": 551424,
+          "minor_faults": 138058,
+          "user_s": 0.17,
+          "system_s": 0.23
+        },
+        {
+          "pair": 8,
+          "label": "after",
+          "wall_ns": 392834866,
+          "rss_kib": 511488,
+          "minor_faults": 128268,
+          "user_s": 0.17,
+          "system_s": 0.21
+        },
+        {
+          "pair": 8,
+          "label": "before",
+          "wall_ns": 410506452,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.17,
+          "system_s": 0.23
+        },
+        {
+          "pair": 9,
+          "label": "before",
+          "wall_ns": 408433451,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.18,
+          "system_s": 0.22
+        },
+        {
+          "pair": 9,
+          "label": "after",
+          "wall_ns": 392174545,
+          "rss_kib": 511488,
+          "minor_faults": 128268,
+          "user_s": 0.15,
+          "system_s": 0.22
+        },
+        {
+          "pair": 10,
+          "label": "before",
+          "wall_ns": 412790359,
+          "rss_kib": 551424,
+          "minor_faults": 138059,
+          "user_s": 0.18,
+          "system_s": 0.22
+        },
+        {
+          "pair": 10,
+          "label": "after",
+          "wall_ns": 395522398,
+          "rss_kib": 511488,
+          "minor_faults": 128268,
+          "user_s": 0.17,
+          "system_s": 0.21
+        },
+        {
+          "pair": 11,
+          "label": "after",
+          "wall_ns": 393869859,
+          "rss_kib": 511488,
+          "minor_faults": 128270,
+          "user_s": 0.17,
+          "system_s": 0.21
+        },
+        {
+          "pair": 11,
+          "label": "before",
+          "wall_ns": 412567214,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.17,
+          "system_s": 0.23
+        },
+        {
+          "pair": 12,
+          "label": "before",
+          "wall_ns": 410099151,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.18,
+          "system_s": 0.22
+        },
+        {
+          "pair": 12,
+          "label": "after",
+          "wall_ns": 396008748,
+          "rss_kib": 511488,
+          "minor_faults": 128267,
+          "user_s": 0.19,
+          "system_s": 0.19
+        },
+        {
+          "pair": 13,
+          "label": "after",
+          "wall_ns": 394155457,
+          "rss_kib": 511488,
+          "minor_faults": 128269,
+          "user_s": 0.16,
+          "system_s": 0.22
+        },
+        {
+          "pair": 13,
+          "label": "before",
+          "wall_ns": 412423598,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.17,
+          "system_s": 0.23
+        },
+        {
+          "pair": 14,
+          "label": "after",
+          "wall_ns": 392406814,
+          "rss_kib": 511488,
+          "minor_faults": 128270,
+          "user_s": 0.17,
+          "system_s": 0.21
+        },
+        {
+          "pair": 14,
+          "label": "before",
+          "wall_ns": 413483609,
+          "rss_kib": 551424,
+          "minor_faults": 138058,
+          "user_s": 0.18,
+          "system_s": 0.23
+        },
+        {
+          "pair": 15,
+          "label": "after",
+          "wall_ns": 394478101,
+          "rss_kib": 511488,
+          "minor_faults": 128269,
+          "user_s": 0.17,
+          "system_s": 0.21
+        },
+        {
+          "pair": 15,
+          "label": "before",
+          "wall_ns": 413609858,
+          "rss_kib": 551424,
+          "minor_faults": 138056,
+          "user_s": 0.18,
+          "system_s": 0.22
+        },
+        {
+          "pair": 16,
+          "label": "before",
+          "wall_ns": 408835404,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.16,
+          "system_s": 0.23
+        },
+        {
+          "pair": 16,
+          "label": "after",
+          "wall_ns": 396729820,
+          "rss_kib": 511488,
+          "minor_faults": 128268,
+          "user_s": 0.16,
+          "system_s": 0.22
+        },
+        {
+          "pair": 17,
+          "label": "after",
+          "wall_ns": 394110130,
+          "rss_kib": 511488,
+          "minor_faults": 128268,
+          "user_s": 0.17,
+          "system_s": 0.21
+        },
+        {
+          "pair": 17,
+          "label": "before",
+          "wall_ns": 414543960,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.17,
+          "system_s": 0.23
+        },
+        {
+          "pair": 18,
+          "label": "before",
+          "wall_ns": 412565461,
+          "rss_kib": 551424,
+          "minor_faults": 138059,
+          "user_s": 0.17,
+          "system_s": 0.23
+        },
+        {
+          "pair": 18,
+          "label": "after",
+          "wall_ns": 393674666,
+          "rss_kib": 511488,
+          "minor_faults": 128268,
+          "user_s": 0.17,
+          "system_s": 0.21
+        },
+        {
+          "pair": 19,
+          "label": "before",
+          "wall_ns": 409166101,
+          "rss_kib": 551424,
+          "minor_faults": 138057,
+          "user_s": 0.17,
+          "system_s": 0.23
+        },
+        {
+          "pair": 19,
+          "label": "after",
+          "wall_ns": 394977301,
+          "rss_kib": 511488,
+          "minor_faults": 128269,
+          "user_s": 0.17,
+          "system_s": 0.21
+        }
+      ]
+    },
+    {
+      "functions": 64000,
+      "endpoint": "assembly",
+      "commands": {
+        "before": [
+          "build/bead-fixes/hre/before/crust0",
+          "--library",
+          "-S",
+          "build/bead-fixes/hre/ordinary-64000.crs"
+        ],
+        "after": [
+          "build/crust0",
+          "--library",
+          "-S",
+          "build/bead-fixes/hre/ordinary-64000.crs"
+        ]
+      },
+      "input_sha256": "4820a3f8eaaa949e5f06f620ea087c1528637df8a2139109b010f7c24d4fae85",
+      "values": [
+        {
+          "pair": 0,
+          "label": "before",
+          "wall_ns": 781456090,
+          "rss_kib": 683576,
+          "minor_faults": 170671,
+          "user_s": 0.47,
+          "system_s": 0.3
+        },
+        {
+          "pair": 0,
+          "label": "after",
+          "wall_ns": 747058217,
+          "rss_kib": 643640,
+          "minor_faults": 160882,
+          "user_s": 0.44,
+          "system_s": 0.29
+        },
+        {
+          "pair": 1,
+          "label": "before",
+          "wall_ns": 775485011,
+          "rss_kib": 683576,
+          "minor_faults": 170670,
+          "user_s": 0.49,
+          "system_s": 0.27
+        },
+        {
+          "pair": 1,
+          "label": "after",
+          "wall_ns": 748634682,
+          "rss_kib": 643640,
+          "minor_faults": 160881,
+          "user_s": 0.46,
+          "system_s": 0.28
+        },
+        {
+          "pair": 2,
+          "label": "before",
+          "wall_ns": 807035851,
+          "rss_kib": 683576,
+          "minor_faults": 170671,
+          "user_s": 0.5,
+          "system_s": 0.3
+        },
+        {
+          "pair": 2,
+          "label": "after",
+          "wall_ns": 758371212,
+          "rss_kib": 643640,
+          "minor_faults": 160881,
+          "user_s": 0.46,
+          "system_s": 0.29
+        },
+        {
+          "pair": 3,
+          "label": "before",
+          "wall_ns": 776949548,
+          "rss_kib": 683576,
+          "minor_faults": 170672,
+          "user_s": 0.47,
+          "system_s": 0.29
+        },
+        {
+          "pair": 3,
+          "label": "after",
+          "wall_ns": 747168062,
+          "rss_kib": 643640,
+          "minor_faults": 160882,
+          "user_s": 0.47,
+          "system_s": 0.26
+        },
+        {
+          "pair": 4,
+          "label": "before",
+          "wall_ns": 774290598,
+          "rss_kib": 683576,
+          "minor_faults": 170671,
+          "user_s": 0.47,
+          "system_s": 0.29
+        },
+        {
+          "pair": 4,
+          "label": "after",
+          "wall_ns": 759283080,
+          "rss_kib": 643640,
+          "minor_faults": 160882,
+          "user_s": 0.46,
+          "system_s": 0.29
+        },
+        {
+          "pair": 5,
+          "label": "before",
+          "wall_ns": 787870304,
+          "rss_kib": 683572,
+          "minor_faults": 170672,
+          "user_s": 0.49,
+          "system_s": 0.28
+        },
+        {
+          "pair": 5,
+          "label": "after",
+          "wall_ns": 750338859,
+          "rss_kib": 643640,
+          "minor_faults": 160881,
+          "user_s": 0.45,
+          "system_s": 0.29
+        },
+        {
+          "pair": 6,
+          "label": "before",
+          "wall_ns": 774240923,
+          "rss_kib": 683576,
+          "minor_faults": 170670,
+          "user_s": 0.45,
+          "system_s": 0.31
+        },
+        {
+          "pair": 6,
+          "label": "after",
+          "wall_ns": 747008352,
+          "rss_kib": 643640,
+          "minor_faults": 160881,
+          "user_s": 0.49,
+          "system_s": 0.25
+        },
+        {
+          "pair": 7,
+          "label": "before",
+          "wall_ns": 776467714,
+          "rss_kib": 683576,
+          "minor_faults": 170671,
+          "user_s": 0.46,
+          "system_s": 0.3
+        },
+        {
+          "pair": 7,
+          "label": "after",
+          "wall_ns": 748346120,
+          "rss_kib": 643640,
+          "minor_faults": 160881,
+          "user_s": 0.47,
+          "system_s": 0.26
+        },
+        {
+          "pair": 8,
+          "label": "after",
+          "wall_ns": 748746490,
+          "rss_kib": 643640,
+          "minor_faults": 160883,
+          "user_s": 0.45,
+          "system_s": 0.29
+        },
+        {
+          "pair": 8,
+          "label": "before",
+          "wall_ns": 774056927,
+          "rss_kib": 683576,
+          "minor_faults": 170670,
+          "user_s": 0.47,
+          "system_s": 0.29
+        },
+        {
+          "pair": 9,
+          "label": "before",
+          "wall_ns": 776222347,
+          "rss_kib": 683576,
+          "minor_faults": 170670,
+          "user_s": 0.48,
+          "system_s": 0.29
+        },
+        {
+          "pair": 9,
+          "label": "after",
+          "wall_ns": 756087325,
+          "rss_kib": 643640,
+          "minor_faults": 160883,
+          "user_s": 0.43,
+          "system_s": 0.31
+        },
+        {
+          "pair": 10,
+          "label": "before",
+          "wall_ns": 776398501,
+          "rss_kib": 683576,
+          "minor_faults": 170670,
+          "user_s": 0.46,
+          "system_s": 0.3
+        },
+        {
+          "pair": 10,
+          "label": "after",
+          "wall_ns": 746480520,
+          "rss_kib": 643640,
+          "minor_faults": 160882,
+          "user_s": 0.48,
+          "system_s": 0.25
+        },
+        {
+          "pair": 11,
+          "label": "after",
+          "wall_ns": 753063507,
+          "rss_kib": 643640,
+          "minor_faults": 160882,
+          "user_s": 0.47,
+          "system_s": 0.27
+        },
+        {
+          "pair": 11,
+          "label": "before",
+          "wall_ns": 774380383,
+          "rss_kib": 683576,
+          "minor_faults": 170670,
+          "user_s": 0.46,
+          "system_s": 0.3
+        },
+        {
+          "pair": 12,
+          "label": "after",
+          "wall_ns": 747343585,
+          "rss_kib": 643640,
+          "minor_faults": 160881,
+          "user_s": 0.47,
+          "system_s": 0.26
+        },
+        {
+          "pair": 12,
+          "label": "before",
+          "wall_ns": 776617680,
+          "rss_kib": 683576,
+          "minor_faults": 170672,
+          "user_s": 0.46,
+          "system_s": 0.3
+        },
+        {
+          "pair": 13,
+          "label": "before",
+          "wall_ns": 773759141,
+          "rss_kib": 683568,
+          "minor_faults": 170670,
+          "user_s": 0.48,
+          "system_s": 0.28
+        },
+        {
+          "pair": 13,
+          "label": "after",
+          "wall_ns": 748863776,
+          "rss_kib": 643640,
+          "minor_faults": 160881,
+          "user_s": 0.47,
+          "system_s": 0.27
+        },
+        {
+          "pair": 14,
+          "label": "after",
+          "wall_ns": 746782884,
+          "rss_kib": 643636,
+          "minor_faults": 160880,
+          "user_s": 0.45,
+          "system_s": 0.28
+        },
+        {
+          "pair": 14,
+          "label": "before",
+          "wall_ns": 775114785,
+          "rss_kib": 683576,
+          "minor_faults": 170671,
+          "user_s": 0.48,
+          "system_s": 0.28
+        },
+        {
+          "pair": 15,
+          "label": "after",
+          "wall_ns": 748058448,
+          "rss_kib": 643640,
+          "minor_faults": 160882,
+          "user_s": 0.46,
+          "system_s": 0.28
+        },
+        {
+          "pair": 15,
+          "label": "before",
+          "wall_ns": 775037970,
+          "rss_kib": 683576,
+          "minor_faults": 170670,
+          "user_s": 0.46,
+          "system_s": 0.3
+        },
+        {
+          "pair": 16,
+          "label": "after",
+          "wall_ns": 746340580,
+          "rss_kib": 643640,
+          "minor_faults": 160884,
+          "user_s": 0.45,
+          "system_s": 0.29
+        },
+        {
+          "pair": 16,
+          "label": "before",
+          "wall_ns": 775617679,
+          "rss_kib": 683576,
+          "minor_faults": 170671,
+          "user_s": 0.48,
+          "system_s": 0.28
+        },
+        {
+          "pair": 17,
+          "label": "after",
+          "wall_ns": 745904215,
+          "rss_kib": 643640,
+          "minor_faults": 160881,
+          "user_s": 0.46,
+          "system_s": 0.27
+        },
+        {
+          "pair": 17,
+          "label": "before",
+          "wall_ns": 775518791,
+          "rss_kib": 683576,
+          "minor_faults": 170671,
+          "user_s": 0.46,
+          "system_s": 0.3
+        },
+        {
+          "pair": 18,
+          "label": "after",
+          "wall_ns": 746780770,
+          "rss_kib": 643640,
+          "minor_faults": 160883,
+          "user_s": 0.47,
+          "system_s": 0.26
+        },
+        {
+          "pair": 18,
+          "label": "before",
+          "wall_ns": 776681826,
+          "rss_kib": 683576,
+          "minor_faults": 170672,
+          "user_s": 0.5,
+          "system_s": 0.27
+        },
+        {
+          "pair": 19,
+          "label": "after",
+          "wall_ns": 746293049,
+          "rss_kib": 643640,
+          "minor_faults": 160883,
+          "user_s": 0.46,
+          "system_s": 0.27
+        },
+        {
+          "pair": 19,
+          "label": "before",
+          "wall_ns": 779061747,
+          "rss_kib": 683576,
+          "minor_faults": 170672,
+          "user_s": 0.48,
+          "system_s": 0.29
+        }
+      ]
+    },
+    {
+      "functions": 64000,
+      "endpoint": "c-prepare",
+      "commands": {
+        "before": [
+          "build/bead-fixes/hre/before/crust-c",
+          "--library",
+          "--prepare",
+          "build/bead-fixes/hre/ordinary-64000.crs"
+        ],
+        "after": [
+          "build/crust-c",
+          "--library",
+          "--prepare",
+          "build/bead-fixes/hre/ordinary-64000.crs"
+        ]
+      },
+      "input_sha256": "4820a3f8eaaa949e5f06f620ea087c1528637df8a2139109b010f7c24d4fae85",
+      "values": [
+        {
+          "pair": 0,
+          "label": "before",
+          "wall_ns": 746984856,
+          "rss_kib": 808340,
+          "minor_faults": 206322,
+          "user_s": 0.39,
+          "system_s": 0.34
+        },
+        {
+          "pair": 0,
+          "label": "after",
+          "wall_ns": 732342286,
+          "rss_kib": 769840,
+          "minor_faults": 196534,
+          "user_s": 0.41,
+          "system_s": 0.31
+        },
+        {
+          "pair": 1,
+          "label": "before",
+          "wall_ns": 752524920,
+          "rss_kib": 808340,
+          "minor_faults": 206322,
+          "user_s": 0.4,
+          "system_s": 0.34
+        },
+        {
+          "pair": 1,
+          "label": "after",
+          "wall_ns": 725377295,
+          "rss_kib": 769676,
+          "minor_faults": 196533,
+          "user_s": 0.39,
+          "system_s": 0.32
+        },
+        {
+          "pair": 2,
+          "label": "after",
+          "wall_ns": 731872421,
+          "rss_kib": 769944,
+          "minor_faults": 196534,
+          "user_s": 0.4,
+          "system_s": 0.32
+        },
+        {
+          "pair": 2,
+          "label": "before",
+          "wall_ns": 747985278,
+          "rss_kib": 808236,
+          "minor_faults": 206322,
+          "user_s": 0.4,
+          "system_s": 0.34
+        },
+        {
+          "pair": 3,
+          "label": "before",
+          "wall_ns": 750249034,
+          "rss_kib": 809368,
+          "minor_faults": 206323,
+          "user_s": 0.41,
+          "system_s": 0.33
+        },
+        {
+          "pair": 3,
+          "label": "after",
+          "wall_ns": 726134311,
+          "rss_kib": 769840,
+          "minor_faults": 196533,
+          "user_s": 0.42,
+          "system_s": 0.29
+        },
+        {
+          "pair": 4,
+          "label": "before",
+          "wall_ns": 756466934,
+          "rss_kib": 808340,
+          "minor_faults": 206323,
+          "user_s": 0.41,
+          "system_s": 0.34
+        },
+        {
+          "pair": 4,
+          "label": "after",
+          "wall_ns": 726201762,
+          "rss_kib": 769840,
+          "minor_faults": 196535,
+          "user_s": 0.37,
+          "system_s": 0.34
+        },
+        {
+          "pair": 5,
+          "label": "after",
+          "wall_ns": 717986585,
+          "rss_kib": 769944,
+          "minor_faults": 196533,
+          "user_s": 0.39,
+          "system_s": 0.31
+        },
+        {
+          "pair": 5,
+          "label": "before",
+          "wall_ns": 758057901,
+          "rss_kib": 809612,
+          "minor_faults": 206323,
+          "user_s": 0.42,
+          "system_s": 0.33
+        },
+        {
+          "pair": 6,
+          "label": "before",
+          "wall_ns": 758823300,
+          "rss_kib": 808340,
+          "minor_faults": 206322,
+          "user_s": 0.39,
+          "system_s": 0.35
+        },
+        {
+          "pair": 6,
+          "label": "after",
+          "wall_ns": 723664515,
+          "rss_kib": 769432,
+          "minor_faults": 196533,
+          "user_s": 0.4,
+          "system_s": 0.31
+        },
+        {
+          "pair": 7,
+          "label": "before",
+          "wall_ns": 756388076,
+          "rss_kib": 808236,
+          "minor_faults": 206322,
+          "user_s": 0.41,
+          "system_s": 0.33
+        },
+        {
+          "pair": 7,
+          "label": "after",
+          "wall_ns": 724200339,
+          "rss_kib": 769940,
+          "minor_faults": 196533,
+          "user_s": 0.4,
+          "system_s": 0.31
+        },
+        {
+          "pair": 8,
+          "label": "before",
+          "wall_ns": 751773302,
+          "rss_kib": 808340,
+          "minor_faults": 206323,
+          "user_s": 0.41,
+          "system_s": 0.33
+        },
+        {
+          "pair": 8,
+          "label": "after",
+          "wall_ns": 728390556,
+          "rss_kib": 769944,
+          "minor_faults": 196532,
+          "user_s": 0.41,
+          "system_s": 0.31
+        },
+        {
+          "pair": 9,
+          "label": "after",
+          "wall_ns": 724444666,
+          "rss_kib": 769940,
+          "minor_faults": 196533,
+          "user_s": 0.38,
+          "system_s": 0.33
+        },
+        {
+          "pair": 9,
+          "label": "before",
+          "wall_ns": 754594235,
+          "rss_kib": 808344,
+          "minor_faults": 206323,
+          "user_s": 0.4,
+          "system_s": 0.34
+        },
+        {
+          "pair": 10,
+          "label": "before",
+          "wall_ns": 761896531,
+          "rss_kib": 808340,
+          "minor_faults": 206323,
+          "user_s": 0.42,
+          "system_s": 0.33
+        },
+        {
+          "pair": 10,
+          "label": "after",
+          "wall_ns": 733419512,
+          "rss_kib": 769836,
+          "minor_faults": 196532,
+          "user_s": 0.41,
+          "system_s": 0.31
+        },
+        {
+          "pair": 11,
+          "label": "before",
+          "wall_ns": 754050429,
+          "rss_kib": 808340,
+          "minor_faults": 206322,
+          "user_s": 0.41,
+          "system_s": 0.34
+        },
+        {
+          "pair": 11,
+          "label": "after",
+          "wall_ns": 733505372,
+          "rss_kib": 769836,
+          "minor_faults": 196533,
+          "user_s": 0.41,
+          "system_s": 0.31
+        },
+        {
+          "pair": 12,
+          "label": "after",
+          "wall_ns": 729732791,
+          "rss_kib": 769840,
+          "minor_faults": 196534,
+          "user_s": 0.38,
+          "system_s": 0.33
+        },
+        {
+          "pair": 12,
+          "label": "before",
+          "wall_ns": 754009597,
+          "rss_kib": 808340,
+          "minor_faults": 206323,
+          "user_s": 0.4,
+          "system_s": 0.34
+        },
+        {
+          "pair": 13,
+          "label": "before",
+          "wall_ns": 750951588,
+          "rss_kib": 808344,
+          "minor_faults": 206323,
+          "user_s": 0.39,
+          "system_s": 0.35
+        },
+        {
+          "pair": 13,
+          "label": "after",
+          "wall_ns": 727266770,
+          "rss_kib": 769940,
+          "minor_faults": 196533,
+          "user_s": 0.39,
+          "system_s": 0.32
+        },
+        {
+          "pair": 14,
+          "label": "after",
+          "wall_ns": 735411551,
+          "rss_kib": 769840,
+          "minor_faults": 196533,
+          "user_s": 0.4,
+          "system_s": 0.32
+        },
+        {
+          "pair": 14,
+          "label": "before",
+          "wall_ns": 759952614,
+          "rss_kib": 808340,
+          "minor_faults": 206323,
+          "user_s": 0.4,
+          "system_s": 0.34
+        },
+        {
+          "pair": 15,
+          "label": "after",
+          "wall_ns": 724000089,
+          "rss_kib": 769532,
+          "minor_faults": 196532,
+          "user_s": 0.39,
+          "system_s": 0.32
+        },
+        {
+          "pair": 15,
+          "label": "before",
+          "wall_ns": 753080853,
+          "rss_kib": 809484,
+          "minor_faults": 206324,
+          "user_s": 0.4,
+          "system_s": 0.34
+        },
+        {
+          "pair": 16,
+          "label": "after",
+          "wall_ns": 738566035,
+          "rss_kib": 769940,
+          "minor_faults": 196534,
+          "user_s": 0.41,
+          "system_s": 0.31
+        },
+        {
+          "pair": 16,
+          "label": "before",
+          "wall_ns": 753666523,
+          "rss_kib": 808240,
+          "minor_faults": 206323,
+          "user_s": 0.4,
+          "system_s": 0.34
+        },
+        {
+          "pair": 17,
+          "label": "after",
+          "wall_ns": 731343347,
+          "rss_kib": 769940,
+          "minor_faults": 196533,
+          "user_s": 0.4,
+          "system_s": 0.31
+        },
+        {
+          "pair": 17,
+          "label": "before",
+          "wall_ns": 753697489,
+          "rss_kib": 808340,
+          "minor_faults": 206323,
+          "user_s": 0.42,
+          "system_s": 0.32
+        },
+        {
+          "pair": 18,
+          "label": "before",
+          "wall_ns": 753768505,
+          "rss_kib": 808240,
+          "minor_faults": 206324,
+          "user_s": 0.39,
+          "system_s": 0.34
+        },
+        {
+          "pair": 18,
+          "label": "after",
+          "wall_ns": 729858950,
+          "rss_kib": 769940,
+          "minor_faults": 196533,
+          "user_s": 0.4,
+          "system_s": 0.32
+        },
+        {
+          "pair": 19,
+          "label": "after",
+          "wall_ns": 731230748,
+          "rss_kib": 769944,
+          "minor_faults": 196533,
+          "user_s": 0.41,
+          "system_s": 0.31
+        },
+        {
+          "pair": 19,
+          "label": "before",
+          "wall_ns": 756537130,
+          "rss_kib": 808344,
+          "minor_faults": 206323,
+          "user_s": 0.39,
+          "system_s": 0.35
+        }
+      ]
+    }
+  ],
+  "medians": [
+    {
+      "functions": 8000,
+      "endpoint": "check",
+      "before": {
+        "wall_ns": 51440930.5,
+        "rss_kib": 69120.0,
+        "minor_faults": 17332.0,
+        "user_s": 0.02,
+        "system_s": 0.02
+      },
+      "after": {
+        "wall_ns": 49272341.5,
+        "rss_kib": 62976.0,
+        "minor_faults": 16110.0,
+        "user_s": 0.02,
+        "system_s": 0.02
+      }
+    },
+    {
+      "functions": 8000,
+      "endpoint": "assembly",
+      "before": {
+        "wall_ns": 94074155.5,
+        "rss_kib": 86072.0,
+        "minor_faults": 21414.5,
+        "user_s": 0.05,
+        "system_s": 0.03
+      },
+      "after": {
+        "wall_ns": 90807638.5,
+        "rss_kib": 81464.0,
+        "minor_faults": 20193.0,
+        "user_s": 0.05,
+        "system_s": 0.03
+      }
+    },
+    {
+      "functions": 8000,
+      "endpoint": "c-prepare",
+      "before": {
+        "wall_ns": 91385586.0,
+        "rss_kib": 99840.0,
+        "minor_faults": 25840.0,
+        "user_s": 0.04,
+        "system_s": 0.04
+      },
+      "after": {
+        "wall_ns": 87897432.0,
+        "rss_kib": 95232.0,
+        "minor_faults": 24617.5,
+        "user_s": 0.04,
+        "system_s": 0.03
+      }
+    },
+    {
+      "functions": 32000,
+      "endpoint": "check",
+      "before": {
+        "wall_ns": 200694961.5,
+        "rss_kib": 274944.0,
+        "minor_faults": 69076.0,
+        "user_s": 0.08,
+        "system_s": 0.1
+      },
+      "after": {
+        "wall_ns": 191605222.5,
+        "rss_kib": 256512.0,
+        "minor_faults": 64180.5,
+        "user_s": 0.08,
+        "system_s": 0.1
+      }
+    },
+    {
+      "functions": 32000,
+      "endpoint": "assembly",
+      "before": {
+        "wall_ns": 380909147.0,
+        "rss_kib": 342584.0,
+        "minor_faults": 85387.5,
+        "user_s": 0.23,
+        "system_s": 0.14
+      },
+      "after": {
+        "wall_ns": 366170106.0,
+        "rss_kib": 322616.0,
+        "minor_faults": 80492.0,
+        "user_s": 0.22,
+        "system_s": 0.13
+      }
+    },
+    {
+      "functions": 32000,
+      "endpoint": "c-prepare",
+      "before": {
+        "wall_ns": 364897952.5,
+        "rss_kib": 404208.0,
+        "minor_faults": 103135.0,
+        "user_s": 0.195,
+        "system_s": 0.16
+      },
+      "after": {
+        "wall_ns": 351622578.5,
+        "rss_kib": 384800.0,
+        "minor_faults": 98238.0,
+        "user_s": 0.19,
+        "system_s": 0.15
+      }
+    },
+    {
+      "functions": 64000,
+      "endpoint": "check",
+      "before": {
+        "wall_ns": 412678786.5,
+        "rss_kib": 551424.0,
+        "minor_faults": 138057.0,
+        "user_s": 0.17,
+        "system_s": 0.23
+      },
+      "after": {
+        "wall_ns": 394132793.5,
+        "rss_kib": 511488.0,
+        "minor_faults": 128268.0,
+        "user_s": 0.17,
+        "system_s": 0.21
+      }
+    },
+    {
+      "functions": 64000,
+      "endpoint": "assembly",
+      "before": {
+        "wall_ns": 775920013.0,
+        "rss_kib": 683576.0,
+        "minor_faults": 170671.0,
+        "user_s": 0.47,
+        "system_s": 0.29
+      },
+      "after": {
+        "wall_ns": 747701016.5,
+        "rss_kib": 643640.0,
+        "minor_faults": 160882.0,
+        "user_s": 0.46,
+        "system_s": 0.275
+      }
+    },
+    {
+      "functions": 64000,
+      "endpoint": "c-prepare",
+      "before": {
+        "wall_ns": 753889051.0,
+        "rss_kib": 808340.0,
+        "minor_faults": 206323.0,
+        "user_s": 0.4,
+        "system_s": 0.34
+      },
+      "after": {
+        "wall_ns": 729061673.5,
+        "rss_kib": 769890.0,
+        "minor_faults": 196533.0,
+        "user_s": 0.4,
+        "system_s": 0.31
+      }
+    }
+  ]
+}

@@ -155,9 +155,7 @@ record CrustInit {
 }
 
 record CrustExpr {
-    kind: u32;
     loc: CrustLoc;
-    op: u32;
     left: *CrustExpr;
     right: *CrustExpr;
     args: **CrustExpr;
@@ -166,13 +164,15 @@ record CrustExpr {
     name: *CrustName;
     field_name: *CrustName;
     syntax_type: *CrustTypeSyntax;
-    literal_type: u32;
     integer: u64;
     bytes: *u8;
     byte_count: usize;
     type: *CrustType;
     symbol: *CrustSymbol;
     field: *CrustField;
+    kind: u32;
+    op: u32;
+    literal_type: u32;
     place: bool;
     writable: bool;
 }

@@ -171,9 +171,7 @@ struct CrustInit {
 };
 
 struct CrustExpr {
-    CrustExprKind kind;
     CrustLoc loc;
-    CrustOp op;
     CrustExpr *left;
     CrustExpr *right;
     CrustExpr **args;
@@ -182,13 +180,15 @@ struct CrustExpr {
     CrustName *name;
     CrustName *field_name;
     CrustTypeSyntax *syntax_type;
-    CrustTypeKind literal_type;
     uint64_t integer;
     const unsigned char *bytes;
     size_t byte_count;
     CrustType *type;
     CrustSymbol *symbol;
     CrustField *field;
+    CrustExprKind kind;
+    CrustOp op;
+    CrustTypeKind literal_type;
     bool place;
     bool writable;
 };

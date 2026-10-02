@@ -456,3 +456,39 @@ Use a new output path to repeat the measurement:
 ```sh
 python3 benchmarks/bootstrap/measure.py --cpu 4 --output build/frontend-repeat.json
 ```
+
+## Expression storage measurement
+
+The expression record orders fields from largest to smallest. On the Linux
+x86-64 profile this removes 16 bytes of padding: the record changes from
+160 to 144 bytes. Stages still construct the same named fields in one record.
+The generated API must match the C header.
+
+The [storage comparison](../benchmarks/bootstrap/results/storage-size-order-2026-10-02.json)
+uses commit `c391707` as the baseline. Both tools use GCC 13.3.0, the Makefile's
+strict C99 flags, and `-O2 -g`. Each endpoint has two warmups and 20 shuffled
+pairs of fresh processes on CPU 0. The child environment omits allocator tuning.
+The report contains commands, binary and source hashes, raw samples, peak RSS,
+and minor page faults. Elapsed time includes the GNU time process used to
+collect resource use. Target assembly, C compilation, and linking are excluded.
+
+| Functions | Check RSS before / after (MiB) | Assembly RSS before / after (MiB) | C preparation RSS before / after (MiB) | Assembly time before / after (ms) |
+|---|---:|---:|---:|---:|
+| 8,000 | 67.5 / 61.5 | 84.1 / 79.6 | 97.5 / 93.0 | 93.9 / 93.7 |
+| 32,000 | 268.5 / 250.5 | 334.6 / 315.1 | 394.7 / 375.8 | 380.5 / 380.3 |
+| 64,000 | 538.5 / 499.5 | 667.6 / 628.6 | 789.4 / 751.9 | 771.1 / 768.5 |
+
+All values are medians. The change passes this experiment's rule: lower peak
+RSS and no higher assembly median at each size. The small elapsed-time changes
+do not establish a speed improvement. This comparison does not test the
+specification's GCC and Clang performance gate. An
+[earlier field-order sample](../benchmarks/bootstrap/results/storage-2026-10-02.json)
+uses the same record size with small fields first; it is not the retained layout.
+
+To repeat, build the baseline and candidate in separate directories with the
+same flags. Each directory must contain `crust0` and `crust-c`. Then run:
+
+```sh
+python3 benchmarks/bootstrap/storage.py --before build/before --after build/after \
+  --work build/storage-inputs --cpu 0 --output build/storage-repeat.json
+```

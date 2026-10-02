@@ -76,6 +76,8 @@ Do not add a feature before a concrete program requires it.
 - Use the existing Makefile. Add only the platform operations that a current
   implementation needs. Do not build a portability framework for hypothetical
   ports.
+- Always order members of project-defined structs and records by decreasing
+  size. Records that mirror a foreign ABI must match that ABI's member order.
 - Use arenas for compiler-owned nodes, types, names, and temporary tables.
   Allocate arena blocks through the context allocator. Do not allocate and
   free individual compiler objects. Give external buffers and native

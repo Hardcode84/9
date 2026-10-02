@@ -342,32 +342,19 @@ replacement-stage programs. The integer expectations use Python mathematical
 integers. Trap tests require abnormal process termination. Allocation tests
 fail every arena allocation point in a complete compilation and check release.
 
-The following counts describe the recorded revisions, not the current checkout.
-Run the commands above to check the current sources.
+The parallel test compares serial and concurrent consumers while shared
+provider facts remain unchanged. The source-order suite checks interpreted
+root actions, source snapshots, native callbacks, reader replacement, phase
+isolation, backend reuse, paths, and failure cases. Run the test commands to
+get counts for the current checkout.
 
-The recorded C suites pass 21,904 checks under GCC AddressSanitizer and
-UndefinedBehaviorSanitizer. The assembly integration suite passes 398 process
-checks. The C backend passes 348. The integration cases include
-10,220 integer comparisons, 65 required traps, 260 public API layout comparisons,
-and 20 native file-status layout comparisons. The allocation sweep covers
-19 failure points. The parallel
-test checks six consumers in serial order and two concurrent orders, with
-shared provider facts unchanged. Both complete specification examples run.
-The source-order suite adds 154 process checks. Its root evaluator, source
-snapshots, native callbacks, reader replacement, phase isolation, backend
-reuse, paths, and failure cases pass with the C core and Crust C backend under
-GCC AddressSanitizer and UndefinedBehaviorSanitizer. Stack-use-after-return
-detection is enabled. The evaluator suite also passes 10,829 checks under
-Clang 20 AddressSanitizer and UndefinedBehaviorSanitizer.
 The [runner validation record](../benchmarks/source-order/validation.json)
 contains the GCC commands, source hashes, and complete sanitizer logs from
 revision `b1a6196`, before the example directories were added. That run passes
 141 root and 348 C-backend process checks, including buffer overlap and growth
-with a one-byte append. The 13 added example checks run unchanged source files
-from a copied layout. They cover inline targets, arguments, multiple files,
-reader replacement, original error locations, and output failure.
-The updated target and example groups also pass 13 process checks each with
-the instrumented GCC build and stack-use-after-return detection enabled.
+with a one-byte append. The example checks run unchanged source files from a
+copied layout. They cover inline targets, arguments, multiple files, reader
+replacement, original error locations, and output failure.
 
 Use these commands for a second strict compiler and address/undefined-behavior
 instrumentation:

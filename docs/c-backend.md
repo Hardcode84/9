@@ -285,13 +285,12 @@ output, and uses it to compile and run the intrusive-list program. It also
 checks native names, allocation-size failures, output failures, and the
 absence of C backend helper calls.
 
-The current seed run passes 21,904 C API checks and 398 integration process
-checks. The C backend run passes 348 integration process checks. Each common
-suite includes 10,220 integer comparisons, 65 trap processes, 260 public API
-layout comparisons, and 20 native file-status layout comparisons.
+The common suites check integer results, required traps, public API layouts,
+and native file-status layouts. Run `make check` and `make check-c` for current
+results and counts.
 The source-order suite checks interpreted root actions and the loaded backend.
-The [bootstrap guide](bootstrap.md#validation-and-measurements) records its
-current checks and AddressSanitizer and UndefinedBehaviorSanitizer results.
+The [bootstrap guide](bootstrap.md#validation-and-measurements) describes its
+checks and recorded AddressSanitizer and UndefinedBehaviorSanitizer results.
 The exact generated backend C passes Clang 20 with strict C99 syntax checks;
 the layout probes use named structures in `offsetof`.
 

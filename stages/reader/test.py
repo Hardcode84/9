@@ -116,7 +116,7 @@ def main():
         f"{len(production)} production files; exact AST/diagnostic comparisons passed"
     )
     print(
-        "CRUST hooks: four production hooks, five contract errors, token limit, "
+        "CRUST hooks: four production hooks, thirteen contract errors, token limit, "
         "allocation failure, and two source ranges passed"
     )
 

@@ -169,7 +169,19 @@ fn rt_bad_hook(reader:*CrustReader,user:*u8)->*CrustDecl {
         crust_set_error((*reader).context,(*reader).source,(*reader).token.offset,"direct hook failure");return null(*CrustDecl);
     }
     if mode==4usize { (*reader).offset=(*reader).offset+1usize;return null(*CrustDecl); }
+    if mode==5usize { (*reader).token.length=(*reader).token.length+1usize;return null(*CrustDecl); }
+    if mode==6usize { (*reader).token.text=(*reader).token.text+1isize;return null(*CrustDecl); }
+    if mode==7usize { (*reader).token.name=crust_try_intern((*reader).context,"changed",7usize);return null(*CrustDecl); }
+    if mode==8usize { (*reader).token.integer=(*reader).token.integer+1u64;return null(*CrustDecl); }
+    if mode==9usize { (*reader).token.integer_type=(*reader).token.integer_type+1u32;return null(*CrustDecl); }
+    if mode==10usize { (*reader).token.bytes=(*reader).token.text;return null(*CrustDecl); }
+    if mode==11usize { (*reader).token.byte_count=(*reader).token.byte_count+1usize;return null(*CrustDecl); }
     (*reader).failed=true;return null(*CrustDecl);
+}
+
+fn rt_bad_prefix(reader:*CrustReader,user:*u8)->*CrustExpr {
+    (*reader).token.integer=(*reader).token.integer+1u64;
+    return null(*CrustExpr);
 }
 
 fn rt_hooks()->bool {
@@ -192,8 +204,10 @@ fn rt_hooks()->bool {
     }
     if !equal { rt_print("hook result: ");rt_print(&context.error[0usize]);rt_print("\n"); }
     crust_eval_destroy(eval);crust_context_destroy(&context);
+    source.bytes="fn answer()->u64{return 42u64;}";
+    source.size=rt_length(source.bytes);
     var mode:usize=0usize;
-    while mode<5usize {
+    while mode<12usize {
         crust_context_init(&context,null(*CrustAllocator));
         hooks=make CrustReaderHooks {
             user:&mode as *u8,declaration:rt_bad_hook,statement:null(fn(*CrustReader,*u8)->*CrustStmt),
@@ -203,8 +217,15 @@ fn rt_hooks()->bool {
         if parsed!=null(*CrustUnit) || context.error_count!=1usize || context.error_loc.offset!=0usize || context.units!=null(*CrustUnit) {
             equal=false;
         }
+        if mode>=5usize && !rt_text(&context.error[0usize],"unhandled reader hook consumed or changed its token") { equal=false; }
         crust_context_destroy(&context);mode=mode+1usize;
     }
+    crust_context_init(&context,null(*CrustAllocator));
+    hooks.declaration=null(fn(*CrustReader,*u8)->*CrustDecl);
+    hooks.prefix=rt_bad_prefix;
+    parsed=rr_read(&context,&source,0usize,source.size,&hooks);
+    if parsed!=null(*CrustUnit) || !rt_text(&context.error[0usize],"unhandled reader hook consumed or changed its token") { equal=false; }
+    crust_context_destroy(&context);
     crust_context_init(&context,null(*CrustAllocator));
     var reader:CrustReader=uninit;
     if !rr_init(&reader,&context,&source,0usize,source.size,null(*CrustReaderHooks)) { equal=false; }

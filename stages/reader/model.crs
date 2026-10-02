@@ -53,7 +53,7 @@ record CrustReaderToken {
 }
 
 // A null callback selects the standard production. A callback returns null
-// without consuming a token when unhandled, or sets reader.failed on failure.
+// without consuming or changing a token when unhandled, or sets reader.failed on failure.
 // A handled callback consumes its complete production and returns its syntax.
 // A new context diagnostic also stops the reader.
 record CrustReaderHooks {

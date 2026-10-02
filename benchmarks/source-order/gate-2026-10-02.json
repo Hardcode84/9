@@ -1,0 +1,2688 @@
+{
+  "revision": "49e6644d0fc08f3891dcabfcd074252592144287",
+  "environment": {
+    "utc": "2026-10-02T15:27:17Z",
+    "cpu_model": "AMD Ryzen Threadripper PRO 7995WX 96-Cores",
+    "logical_cpus": 192,
+    "pinned_cpu": 0,
+    "smt_siblings": {
+      "value": "0,96"
+    },
+    "governor": {
+      "value": "performance"
+    },
+    "kernel": "7.0.0-28-generic",
+    "machine": "x86_64",
+    "os_release": "PRETTY_NAME=\"Ubuntu 24.04.2 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.2 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
+    "memory_kib": 527581144,
+    "load_start": [
+      "0.17",
+      "0.31",
+      "0.26"
+    ],
+    "cpu_reserved": false,
+    "frequency_control": "governor recorded; frequency and turbo are not fixed",
+    "python": "3.12.11",
+    "child_environment": {
+      "LC_ALL": "C",
+      "LANG": "C",
+      "TZ": "UTC",
+      "PATH": "inherited for executable lookup; all other variables omitted"
+    }
+  },
+  "command": [
+    "benchmarks/source-order/gate.py",
+    "--build",
+    "build",
+    "--cpu",
+    "0",
+    "--rounds",
+    "20",
+    "--perf",
+    "/usr/lib/linux-hwe-7.0-tools-7.0.0-28/perf",
+    "--output",
+    "benchmarks/source-order/gate-2026-10-02.json"
+  ],
+  "source_and_binary_hashes": {
+    "Makefile": "50ec33cf990a82814b3cc1cf92b49e347181ac1d9ddadf3ae8153339725063d3",
+    "tools/api.py": "9dab9cb6d1d1e551896bb6d484bde3d213b137d5ff657fa01db08d86ed378478",
+    "tools/prelude.py": "603edbf56a23be27dc961812985d2363247d1146c0354d692d0035fac9d3272d",
+    "benchmarks/bootstrap/measure.py": "93bfd4960c1a83c0d8c84038ad3249af563d3bf42e38dc671480438e8ec6d790",
+    "benchmarks/source-order/measure.py": "710ab24d38763b2802af40c274daf818a4a8c6e19d01231cb6b079cd10272e65",
+    "src/check.c": "01f58b91ee671f48f428f3492d787b2b8c7a5fd6222ce383a966f1b05fb56932",
+    "src/core.c": "7a28f0bda7f8c0582960e1b5724e3396ef56015d0293c4796803eec0b183d474",
+    "src/driver.c": "7585867cef3d9ae1270e946fe6ff47d4dd8e34bd78fe5bfe6eead8853841fcbe",
+    "src/driver_posix.c": "a81c30c32b59cff7875a42f5f8487b221c40876d2f79b1e6c454b5a97a55695b",
+    "src/eval.c": "3c967c69703daa7960485d477a64eb037c4f3c3fa0ffca16aab721b6ee521241",
+    "src/eval_ffi_linux_x64.c": "790e289892874094e902b219c6f25f994a606e606ebfba01f6badb4970a8ab50",
+    "src/profile_linux_x64.c": "17e49ec7147085208b0bbe71f308591945f8d71f95f0ab8aff62253be9059239",
+    "src/read.c": "a1e5cb2e89f065ea5de2084954fca1e97c6d409a9ea062005a486af2a71df088",
+    "src/run.c": "12d432242c7e4fc852bec660a42bae5c8aae52697a39830f863fccf3e13026b1",
+    "src/run_main.c": "1f78b16bb3f1af45e35c3c08ca58945dad67ca42ec481898b976e11262a5093e",
+    "src/run_posix.c": "2f4573a26dd0e71b65ede363cda3b3a4d1109a389cf4e0419eb1ee28137f19e4",
+    "src/x64.c": "6a46c5ea70442acea1260367563ab83be0b23af9626f9b5051afeb87a6e5a934",
+    "src/core_internal.h": "2180f12c98e65df991fe3cff15e9796ad1ef272146118734656a5bf542bc0a84",
+    "src/driver_platform.h": "b402f463191ed2bce6275f3c008037610a26d4acc9d9c97acdadacaadc94859a",
+    "src/eval_native.h": "5023366d05afe620965a1bd6dab85781a642aeaf559c3c1fd000b290df71ac7b",
+    "src/linux_x64/eval_storage.h": "c5d2fa3ca24fc7a2469b2c18f55314b6038507f36af6f4b841fde2226ba2f8dc",
+    "src/run_platform.h": "2672927062a89c2d3ea25f9a65113e734dfff03931427e3611e8077120382601",
+    "include/crust0.h": "e255460a2c2e2f7f559c50ad33873fe9fe5d6282459ea57747b34f37dafc37bf",
+    "include/crust0_eval.h": "1f5e20297267a722c1d9748ee66a64bd4485041cfbb5b882e241f7c31da34c34",
+    "include/crust0_host.h": "229bcebfb5356d662381d8fb385fb496e660d366b4837bb7b893d083e76c7fb1",
+    "include/crust0_run.h": "3a07adeed17d8a46ed5d74b8b8501b3c66f15f05f540050c28bf52d06cc28757",
+    "include/crust0_stage.h": "18d50e83016adb123c73a8d32ff24e00bf31e606498d7c4640a30d3d654710c3",
+    "include/crust0_x64.h": "784bea020ce3259190df4abf014dc77d9db92cf705c70d34912eed02e630ffc3",
+    "runtime/host.c": "ee6f9bdd6b9e2934e76bb2323c16ba2527dfbdd192782e4fb501d74fbf1cc251",
+    "runtime/host_posix.c": "b21859f68c6ca4d753693d98d565250f0a01ca259460f193f0b101b6ea14e4da",
+    "api/crust0.crs": "98aa69b880814e06fec612186e2be6fac452f05e38ef8c8eb2dc2ee467776b20",
+    "api/crust0_eval.crs": "c58deaef54191b336ea2c2eecd3fa740377d4637b1fc5997e0ab9a7d274e6a85",
+    "api/crust0_host.crs": "3b222d8643ee9f5ed0ea15c1d213d46d45ea80cb1a99da7f8e04d695034c0965",
+    "api/crust0_run.crs": "f3cfbe6683269820a380da54fd9606e3bfd288fc61e646887fab433227301beb",
+    "api/crust0_stage.crs": "e7397db1f1aa97481e9aebfb085dba800525b8b3a907322615dc2a3461dec5df",
+    "api/crust0_x64.crs": "f3033ad7921fb75a2c64dcbb3fd1c5ecb362ec70dbe316fb75bb02d53c4759b0",
+    "stages/c/api.crs": "48a7a6d6e6cfb8a7e487d69227202d5a542d0c64bc94e376c136ce7253949f26",
+    "stages/c/base.crs": "5ecfd53a8ed260bdf19fc03560e389686e16cefffb541ab8901c9c168cc23577",
+    "stages/c/build.crs": "c3a0f6f3e3dd515cb86f773f1aa83dd8d7189e7383d4c9908fc3e146f8181dd0",
+    "stages/c/driver.crs": "dbe91c98561603b5a162e3578541ddf101054483cae6b54ce5e1d61c98b61896",
+    "stages/c/emit.crs": "c353f3d2ee3ae2c3ef2f78c9e5efc13825a446fd5bb39e537cbadd99d0455912",
+    "stages/c/extension.crs": "7b4f7c9f8b00f706718b08ea1e393df0ce9357bef46f4898ed6525007be8df45",
+    "stages/c/main.crs": "6cf9d1f957a3d28c14dacd4ec0cf25842537cfce2ed07f3d11befc0b2ed73d51",
+    "stages/c/model.crs": "956c4e2032d328d093c7465ac1f6178a9da39a9359818b88fc1a450d2575b386",
+    "stages/c/program.crs": "89c842dfb34191b5c452fa3b02c1648a9b7e4a0a0b83cc26072f9bf2f1099c76",
+    "stages/c/types.crs": "5c52c4a46ce45869660854b52b33fbff0e3b5db233a5749e8880441efeec4ef5",
+    "stages/highlight/main.crs": "69910569e0986093daf29ff0c6398618f47f1d9863f98c061af46db8f8b5ea7a",
+    "stages/highlight/model.crs": "2a82d7c6e3b1532f99714f424ef93fee28db9ad6bda5d756f11ba765fad20cbf",
+    "stages/highlight/output.crs": "a3ca7ab4ee80c8322a6f7c0d8974dd036e570823430fa9b2b03d54c1b55326a2",
+    "stages/highlight/program.crs": "8f6266a14d2b5b435c63a30301f3764b1dc0008e95a4839faa2ee39b926d5ca1",
+    "stages/highlight/scan.crs": "a79a1fd37cb29f551781ef99d97c2eb058e461b625ee640e1d2cc57cc960605e",
+    "stages/highlight/test.crs": "a65a25b98db8a7e3aa9b6b66c16e55e0e4794a5315c0f6f1b6589c7fb3018f1d",
+    "stages/host.crs": "fe3a7fa2dd56ede6eba8d698f28eace427f375ea099b21ff7f6184c3d490ab03",
+    "stages/modules/exports.crs": "bf1adf2d331cd8cf5d11ea24c5cd795ff960ade3d9df8033e69c2a632b42ec96",
+    "stages/modules/library.crs": "135029585130ecb2b46ee54dcb1dc2e2c45dcd5167090f2f822ee3113ba45122",
+    "stages/overload/api.crs": "56bab38237c93ea1da1a142317595d4a6e8c94f6ca7d0b2e8a8e4c448b5b052c",
+    "stages/overload/base.crs": "0627be8d7a0e544527ee88312ee37d23a1a3bfe1d3466bfac685d2b1676093ca",
+    "stages/overload/collect.crs": "aaeb1ddc3d93e004a12206033a852d67d57045033f735022510a007a78a13586",
+    "stages/overload/extension.crs": "55f3f1f0203aa359fab2fa1b0223d688a9f1754e7f72c823bcf2e502ac3b3af7",
+    "stages/overload/main.crs": "4b019f5d0d40758dbcd8bdea4562f4a9093598386182589f5c0923ad003674ad",
+    "stages/overload/model.crs": "0679a03fef2034bb258bbb0c7a666e9d577aaef075fcddbcb2216e17dedf1832",
+    "stages/overload/program.crs": "ea7689ed4cafebef650b40fe3c97f22d4ad9c9e8a0887fd6183bd391ba6a8f7b",
+    "stages/overload/read.crs": "b4e94e5d0b56ec7fe8ab9e840b850f69cf75b144573548c2697ec2a4f5236128",
+    "stages/overload/resolve.crs": "bf318da534b44709cd0103eeb201899d8eafbba2ca7cd85141a586ccc48b6513",
+    "stages/overload/resource_api.crs": "dd5491900a1f5b7da42af2dc2231f3c66dfdca13d2205682f9abf32a02478969",
+    "stages/overload/resource_main.crs": "bf9c2b212551125c69bcd81e4dea606de4fd3e1f32672962c5af8544eea8844c",
+    "stages/overload/resource_program.crs": "bf24cb1626b492e1b68bc060f2b89d024b34a4c4c10c05d8b401d3465cd04884",
+    "stages/overload/resources.crs": "01fd3d9fae071f134afc26af0d5ca75bf6891641a5400c951df69a4b447b7f2f",
+    "stages/overload/types.crs": "5bae9644115a61ddb2e298fe5d58ca672f4fee89910bea629c8195a6843b48f1",
+    "stages/reader/lex.crs": "c7adf96bac55fc4580f5d5bd5ea0f219bcc5dba62a696eb76d7ddca0c31b01ab",
+    "stages/reader/model.crs": "f679c0f5acee903ef75e780b89b90b2a2af03782e91e63e33866942f404c0d23",
+    "stages/reader/parse.crs": "ee95cbc83bde15b87e9ac58ed48ddb20cee8d80809bba99c4c2d22b8577806ac",
+    "stages/reader/test.crs": "de76c81801bf4d8cad4d242e81f3618894e8ba40277d8446446ec9a054f6446d",
+    "stages/resources/api.crs": "2b50e1247050f9a12496feeb554c2ef0425ce9a708cd3ec7e1171f9c0c9c3d66",
+    "stages/resources/base.crs": "7dd1e9ca0375a427d0f8a49772794761259ff03d9107ad2e39d2f1f3e636b8d2",
+    "stages/resources/build.crs": "e6f85c642ecc2de9ebaad8eb7493addf5a665240cbfbd644b7ca509be032f887",
+    "stages/resources/cleanup.crs": "b93c74dd28da06d8b3051703227676013a614d09d0ece2c7a8bc2f95524a31c8",
+    "stages/resources/constants.crs": "6098a13c4c976fcb37915f9f2eb90f723b20a2f11ff5283acc303d23b98c5f5c",
+    "stages/resources/control.crs": "7930c0b7b781e3024982bfbadbf95e785a02242aa934292cf5083d530633ba04",
+    "stages/resources/emit.crs": "21fd6088e73f7fed0c24d5c98ef0c564b34be26e2e743a1598a6e2646271b83a",
+    "stages/resources/expr.crs": "58ed60e4c48e109453f67451c194c260f9a8ed54772b52325136c82a8f8ce39a",
+    "stages/resources/extension.crs": "e84009a720411a81c772c3e05dbcb8063e8da60c6c12ed9f65e14d899917a97e",
+    "stages/resources/main.crs": "fe3737c4ed96bc19673d42d434c25188c48d7d5fa4dae863110de61fc94c6f4c",
+    "stages/resources/model.crs": "4ba319beaf059584b0d58f74d031c81e1b7947dabc3ba7af1f46f19d2174abf1",
+    "stages/resources/places.crs": "169c98b10e3a359bd9059759aa4083f011fe7f175f8dfe2052cbe911ab736d86",
+    "stages/resources/program.crs": "988de5e0edc7eb0efa6816a3a4003c478ee51562e1d5063c21c07dac90cf6422",
+    "stages/resources/read.crs": "50f522c358066bec285298aedb605b22cc998b9cffad555884599b5c0ecb91ca",
+    "stages/resources/state.crs": "59bb294e4321d0706c303be3dfae100513877e9cb8af9f13a4110259b11bb48e",
+    "stages/resources/types.crs": "a56e469b2afd8b1af9e549eeb4ef5d0dc603b93ee927e7c6d819dfc59db82471",
+    "benchmarks/source-order/gate.py": "bbfdd315228743c4b700293fb3e47d4758e52636f8fcc508d5434dae8a8f4419",
+    "/home/vano/rust-must-die/rmd/build/crust": "851bd9be069ca3d681bb3e534d1c32aba19604ecd32eebdedcb55a12047eb2fd",
+    "/home/vano/rust-must-die/rmd/build/crust-c": "3528b86ca5982d8c1eed2693bc290ef1d7ac543fe7582e84afa97cfbaa7090b6",
+    "/home/vano/rust-must-die/rmd/build/crust-c-library.so": "828418f30ef84e9391f10a17c7aeb3daadac3b4f6c492d3171e5de9a1b1353a8",
+    "/home/vano/rust-must-die/rmd/build/libcrust0_host.a": "0667b535e06517756d4429c5a1067b0d66b4672587c239244c55f1624be5b137",
+    "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1": "5d1679131184e2de4435b426eb264bf13472fe026db8e5c6bc97445814e8e2f4"
+  },
+  "tools": {
+    "gcc": {
+      "file_name": "x86_64-linux-gnu-gcc-13",
+      "bytes": 1023032,
+      "sha256": "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
+      "command": "gcc",
+      "version": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ]
+    },
+    "clang-20": {
+      "file_name": "clang",
+      "bytes": 132448,
+      "sha256": "b1ca2b35b07cb5cb7db47247f329151ed22692a19de2763859b0867e6323e2fe",
+      "command": "clang-20",
+      "version": "Ubuntu clang version 20.1.8 (++20250804090239+87f0227cb601-1~exp1~20250804210352.139)",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libLLVM.so.20.1",
+          "bytes": 143566264,
+          "sha256": "0a79c1caae602e365f736f7badd5a953cc2879f8a9dfe6970b0e82f32d1f6a66"
+        },
+        {
+          "file_name": "libbsd.so.0.12.1",
+          "bytes": 80888,
+          "sha256": "e86cd4f0019f42c2ba5e60602e0edc8694d2948377d98c3654d0f6bddb5254bb"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libclang-cpp.so.20.1",
+          "bytes": 66949408,
+          "sha256": "1da69798fed3e72b445a10580287dc588b1a7bfcd410e27238a818401e0be007"
+        },
+        {
+          "file_name": "libedit.so.2.0.72",
+          "bytes": 220472,
+          "sha256": "195c607216f8581dbf516346ed38f4c73500cac4b84e18eb0a4fd49931e4cd56"
+        },
+        {
+          "file_name": "libffi.so.8.1.4",
+          "bytes": 47672,
+          "sha256": "00f593fe192f2851b8ce23b25cec2488d769beb5a8f63e8c9e563071e1075153"
+        },
+        {
+          "file_name": "libgcc_s.so.1",
+          "bytes": 183024,
+          "sha256": "d93224d2b0dab4247598be683adca02f5cf00586f99c187579cd7e92058fb7cb"
+        },
+        {
+          "file_name": "libicudata.so.74.2",
+          "bytes": 30795392,
+          "sha256": "ddbb3718b8bd9cbd780e5ab08b4503c30a6c4fa0706ebe5d074ed6b596c1714e"
+        },
+        {
+          "file_name": "libicuuc.so.74.2",
+          "bytes": 2140336,
+          "sha256": "7560aadde38e5f4237a47a1ddd5891f9b36768a77a60faae30beee003ac01901"
+        },
+        {
+          "file_name": "liblzma.so.5.4.5",
+          "bytes": 202904,
+          "sha256": "696e868dd0700a19a6d65fc01608ec2d70d3cb91f65710e89180cd2e688f30cb"
+        },
+        {
+          "file_name": "libm.so.6",
+          "bytes": 952616,
+          "sha256": "fce00b6f25f459cf4ae0b7fae4257909a1a8a86f9149e7c029a5d617baf1ccd0"
+        },
+        {
+          "file_name": "libmd.so.0.1.0",
+          "bytes": 55536,
+          "sha256": "423e18586b6ea740f4465afd64f7a9a4cb7264ed979c8e7256f9085af5345fef"
+        },
+        {
+          "file_name": "libstdc++.so.6.0.33",
+          "bytes": 2592224,
+          "sha256": "1fd75fe70354a416d75aef22bcae68c47bd25d20e2d0568c30b1a9838cf62f11"
+        },
+        {
+          "file_name": "libtinfo.so.6.4",
+          "bytes": 208328,
+          "sha256": "e6089d7bb95eee5b545f3770dd69095b0bca47d26701cad145af429561d16306"
+        },
+        {
+          "file_name": "libxml2.so.2.9.14",
+          "bytes": 1967424,
+          "sha256": "ddd3af3f491a9686c82fe1232f1250cec368eb2fbcb1d2725c6ce9401a6dbd3b"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "as": {
+      "file_name": "x86_64-linux-gnu-as",
+      "bytes": 745768,
+      "sha256": "7a2ef948033b05ad0c5dcb0d5be059bc68562b5d45713d91aee21df2b4bf4e92",
+      "command": "as",
+      "version": "GNU assembler (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "ld": {
+      "file_name": "x86_64-linux-gnu-ld.bfd",
+      "bytes": 1359128,
+      "sha256": "e46a122cc3a29feba3b1d0fc2a274b6e46538be016ebe381370c0801bb98b0b8",
+      "command": "ld",
+      "version": "GNU ld (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libctf.so.0.0.0",
+          "bytes": 220384,
+          "sha256": "5708839db0b080ef4dafc44c4adaa6976b55de5078aeed35c81d55ab4d0c7841"
+        },
+        {
+          "file_name": "libjansson.so.4.14.0",
+          "bytes": 64008,
+          "sha256": "c49935a4b3ac599064281b1f257576087806d0dad7ec46f353bd983b052c5e26"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "objcopy": {
+      "file_name": "x86_64-linux-gnu-objcopy",
+      "bytes": 166536,
+      "sha256": "b22f4f909bff115ee2a37cd21ff76f5e0b8c65cd58f98edbce7b59f129980d67",
+      "command": "objcopy",
+      "version": "GNU objcopy (GNU Binutils for Ubuntu) 2.42",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libbfd-2.42-system.so",
+          "bytes": 1479888,
+          "sha256": "edbfd18bfc133c0d77bab7470601e83bd88ed3e578bedce368042f888034e68e"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libsframe.so.1.0.0",
+          "bytes": 35168,
+          "sha256": "d2e00d05f3713bb0d5eb9f1a212cca2b34cd789a0c4cc0c529ee77827237383f"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "/usr/lib/linux-hwe-7.0-tools-7.0.0-28/perf": {
+      "file_name": "perf",
+      "bytes": 25094416,
+      "sha256": "7ec57e470061a32d9368bd760a91649bbef06e147e7e36bbc11a62a3cf3fab10",
+      "command": "/usr/lib/linux-hwe-7.0-tools-7.0.0-28/perf",
+      "version": "perf version 7.0.12",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libLLVM.so.19.1",
+          "bytes": 128938904,
+          "sha256": "7e016cffd3eb077fa338b8ec08a7ab500e43c7460223d4b1f5c6b1bf10274b24"
+        },
+        {
+          "file_name": "libbrotlicommon.so.1.1.0",
+          "bytes": 141640,
+          "sha256": "a91ead095d2c80520c55a89057bbe10b031a075340442e63f44b310f93883a1b"
+        },
+        {
+          "file_name": "libbrotlidec.so.1.1.0",
+          "bytes": 51512,
+          "sha256": "64d8a5019d4c294b89fde1193343ea324bbd8603652554e5545f0a01595fa2c5"
+        },
+        {
+          "file_name": "libbsd.so.0.12.1",
+          "bytes": 80888,
+          "sha256": "e86cd4f0019f42c2ba5e60602e0edc8694d2948377d98c3654d0f6bddb5254bb"
+        },
+        {
+          "file_name": "libbz2.so.1.0.4",
+          "bytes": 78944,
+          "sha256": "cc08c9f50a8009ffd6391e0116a100369b11ca9238fa52392c019e6645b122a1"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libcom_err.so.2.1",
+          "bytes": 18504,
+          "sha256": "022943b3b11c860b049bce41342f1c2594941b7b401d95dfdf235521099fee08"
+        },
+        {
+          "file_name": "libcrypto.so.3",
+          "bytes": 5309400,
+          "sha256": "6866ed711dab8927e1bf82bf1cd30e828bdfc34f3cc1e83b1c9eb01ce6c37d9a"
+        },
+        {
+          "file_name": "libcurl-gnutls.so.4.8.0",
+          "bytes": 765856,
+          "sha256": "d04ccee993de5f87dfadb2c27d58b7117645ceba7f11dc9916999fcaf17d2e55"
+        },
+        {
+          "file_name": "libdebuginfod-0.190.so",
+          "bytes": 35624,
+          "sha256": "ada59231b9ce983951fdd3425ebb4c138fa473b7470d5bc9d9285a3f8687f801"
+        },
+        {
+          "file_name": "libdw-0.190.so",
+          "bytes": 737696,
+          "sha256": "989dc9873f358a5af7d18d6100cf5fd66531d7990dc47d69068b3c6c96588867"
+        },
+        {
+          "file_name": "libedit.so.2.0.72",
+          "bytes": 220472,
+          "sha256": "195c607216f8581dbf516346ed38f4c73500cac4b84e18eb0a4fd49931e4cd56"
+        },
+        {
+          "file_name": "libelf-0.190.so",
+          "bytes": 121560,
+          "sha256": "248c989360783cdc52f3659921de852c2efcc2097253ce58e34443f856412814"
+        },
+        {
+          "file_name": "libexpat.so.1.9.1",
+          "bytes": 186624,
+          "sha256": "286682ecbc5e59a638963b1a4e6351e65eb32fcf4bdcb9cb7569b6a61fe06a8d"
+        },
+        {
+          "file_name": "libffi.so.8.1.4",
+          "bytes": 47672,
+          "sha256": "00f593fe192f2851b8ce23b25cec2488d769beb5a8f63e8c9e563071e1075153"
+        },
+        {
+          "file_name": "libgcc_s.so.1",
+          "bytes": 183024,
+          "sha256": "d93224d2b0dab4247598be683adca02f5cf00586f99c187579cd7e92058fb7cb"
+        },
+        {
+          "file_name": "libgmp.so.10.5.0",
+          "bytes": 534896,
+          "sha256": "0ccdfb6d6f5c039465f6d002cf7e4c072d48ac6a2cffc8dd6c748dec31592804"
+        },
+        {
+          "file_name": "libgnutls.so.30.37.1",
+          "bytes": 2065824,
+          "sha256": "ddbae2995750875c07bc218d12a062d73f8250678f54dedda7e9be5068781c98"
+        },
+        {
+          "file_name": "libgssapi_krb5.so.2.2",
+          "bytes": 338696,
+          "sha256": "8d0b00978cde2a5a9ec76bee1e16a80efd502bc4db8647174a00a61c9d90f989"
+        },
+        {
+          "file_name": "libhogweed.so.6.8",
+          "bytes": 288920,
+          "sha256": "c3c606139d4f7776efa4dbd4a6b62e30c916b07a0cafd8c3ef173d6f093607e3"
+        },
+        {
+          "file_name": "libicudata.so.74.2",
+          "bytes": 30795392,
+          "sha256": "ddbb3718b8bd9cbd780e5ab08b4503c30a6c4fa0706ebe5d074ed6b596c1714e"
+        },
+        {
+          "file_name": "libicuuc.so.74.2",
+          "bytes": 2140336,
+          "sha256": "7560aadde38e5f4237a47a1ddd5891f9b36768a77a60faae30beee003ac01901"
+        },
+        {
+          "file_name": "libidn2.so.0.4.0",
+          "bytes": 133192,
+          "sha256": "6e632fd9a3125db60bbc623719bbc17b0470330321c5b1c57f1ff7190e5551ad"
+        },
+        {
+          "file_name": "libk5crypto.so.3.1",
+          "bytes": 178648,
+          "sha256": "dd8b93b95adf53a638772061dbe81dc0252d2d8857ae1df774aed78c6a79e0c0"
+        },
+        {
+          "file_name": "libkeyutils.so.1.10",
+          "bytes": 22600,
+          "sha256": "f48214417757f18793ed6e180cc14ee1d6f04252a518fc7270e8ca1d0b4260fe"
+        },
+        {
+          "file_name": "libkrb5.so.3.3",
+          "bytes": 823488,
+          "sha256": "8cd11f2aa69efdac7c040a2794f8bf1a737405abff53908b737c721d1c4ba65d"
+        },
+        {
+          "file_name": "libkrb5support.so.0.1",
+          "bytes": 47904,
+          "sha256": "8253bcdf7f39fcf8f25e797757808e671d777efc00b0cd1fbbcd9da61b0e98f7"
+        },
+        {
+          "file_name": "liblber.so.2.0.200",
+          "bytes": 59888,
+          "sha256": "ddf14275b1fb70ba06510094071adcc1462e675f15ae6cdcadbf40c1dabe5a03"
+        },
+        {
+          "file_name": "libldap.so.2.0.200",
+          "bytes": 372400,
+          "sha256": "a9829b999c95452eb0a34cc7b5349427b76dbf3e5d5c8672a5ca69e454c1b151"
+        },
+        {
+          "file_name": "liblzma.so.5.4.5",
+          "bytes": 202904,
+          "sha256": "696e868dd0700a19a6d65fc01608ec2d70d3cb91f65710e89180cd2e688f30cb"
+        },
+        {
+          "file_name": "libm.so.6",
+          "bytes": 952616,
+          "sha256": "fce00b6f25f459cf4ae0b7fae4257909a1a8a86f9149e7c029a5d617baf1ccd0"
+        },
+        {
+          "file_name": "libmd.so.0.1.0",
+          "bytes": 55536,
+          "sha256": "423e18586b6ea740f4465afd64f7a9a4cb7264ed979c8e7256f9085af5345fef"
+        },
+        {
+          "file_name": "libnettle.so.8.8",
+          "bytes": 342280,
+          "sha256": "a245ed916229583d6fe0b07657b3ed945bc148c28cc08b5266295f620d2b91cc"
+        },
+        {
+          "file_name": "libnghttp2.so.14.26.0",
+          "bytes": 170352,
+          "sha256": "46764ab5b6ca7e353a322054f0bee45d9158a27f3e6a82a2fa4447f2ba9ba268"
+        },
+        {
+          "file_name": "libnuma.so.1.0.0",
+          "bytes": 52248,
+          "sha256": "02d7582c5d391e460e56aa67a414360e3183b968206645b9123f9dc7bff5d009"
+        },
+        {
+          "file_name": "libp11-kit.so.0.3.1",
+          "bytes": 1714008,
+          "sha256": "a59efd4792d3343dedea1d26a28f5597abfe3369082deb504c4802a31b014897"
+        },
+        {
+          "file_name": "libpsl.so.5.3.4",
+          "bytes": 75768,
+          "sha256": "ae6c5a9aecc249fc66e03c16ec6c4385d09d7e12e0ea7694bb831ab4fee8133c"
+        },
+        {
+          "file_name": "libpython3.12.so.1.0",
+          "bytes": 9061000,
+          "sha256": "1021f236227334ded6d1bbbc4bb6f5d933f793d8397c969896cfbdf03ce96223"
+        },
+        {
+          "file_name": "libresolv.so.2",
+          "bytes": 64008,
+          "sha256": "1d730ea434da5a5595bc6a961d7a9ace83e03703205df9644044b3dca79c362f"
+        },
+        {
+          "file_name": "librtmp.so.1",
+          "bytes": 121848,
+          "sha256": "15a2a75e8c437b9c99971b5ee10278ab110beef1a56d1d9e5d6759ea140e98ac"
+        },
+        {
+          "file_name": "libsasl2.so.2.0.25",
+          "bytes": 101200,
+          "sha256": "a0f410ad093236856eee59c4ff2838dc04d932ea0993400f23ed77d67d85af34"
+        },
+        {
+          "file_name": "libslang.so.2.3.3",
+          "bytes": 2157592,
+          "sha256": "af564bc54e7c7bc51c21de935846ac6fe5bd551c22ab5af72927ff5e31aaaac4"
+        },
+        {
+          "file_name": "libssh.so.4.9.6",
+          "bytes": 462360,
+          "sha256": "b82bd54edb908605b8142be1a6d242df65501af0e9bb7581cc36ebf4d8a5ecfd"
+        },
+        {
+          "file_name": "libstdc++.so.6.0.33",
+          "bytes": 2592224,
+          "sha256": "1fd75fe70354a416d75aef22bcae68c47bd25d20e2d0568c30b1a9838cf62f11"
+        },
+        {
+          "file_name": "libtasn1.so.6.6.3",
+          "bytes": 88216,
+          "sha256": "59994414d0cdec4f678ef91eaaafc44b26b00bca507e4cc7978caaf79f584173"
+        },
+        {
+          "file_name": "libtinfo.so.6.4",
+          "bytes": 208328,
+          "sha256": "e6089d7bb95eee5b545f3770dd69095b0bca47d26701cad145af429561d16306"
+        },
+        {
+          "file_name": "libtraceevent.so.1.8.2",
+          "bytes": 162696,
+          "sha256": "aaea15e052e86192f90a64fe03779c74ec5b41c59622c6e121d7c89d0d20e63c"
+        },
+        {
+          "file_name": "libunistring.so.5.0.0",
+          "bytes": 1755312,
+          "sha256": "7bcf825cd449892db5105ad2aed91dcf94a27b796426600c765720c584c54dd1"
+        },
+        {
+          "file_name": "libxml2.so.2.9.14",
+          "bytes": 1967424,
+          "sha256": "ddd3af3f491a9686c82fe1232f1250cec368eb2fbcb1d2725c6ce9401a6dbd3b"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    }
+  },
+  "installed_artifacts": {
+    "/home/vano/rust-must-die/rmd/build/crust": {
+      "path": "/home/vano/rust-must-die/rmd/build/crust",
+      "bytes": 531392,
+      "lines": 3461,
+      "sha256": "851bd9be069ca3d681bb3e534d1c32aba19604ecd32eebdedcb55a12047eb2fd",
+      "file_name": "crust",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libffi.so.8.1.4",
+          "bytes": 47672,
+          "sha256": "00f593fe192f2851b8ce23b25cec2488d769beb5a8f63e8c9e563071e1075153"
+        }
+      ]
+    },
+    "/home/vano/rust-must-die/rmd/build/crust-c": {
+      "path": "/home/vano/rust-must-die/rmd/build/crust-c",
+      "bytes": 1100080,
+      "lines": 9374,
+      "sha256": "3528b86ca5982d8c1eed2693bc290ef1d7ac543fe7582e84afa97cfbaa7090b6",
+      "file_name": "crust-c",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ]
+    },
+    "/home/vano/rust-must-die/rmd/build/crust-c-library.so": {
+      "path": "/home/vano/rust-must-die/rmd/build/crust-c-library.so",
+      "bytes": 899624,
+      "lines": 6817,
+      "sha256": "828418f30ef84e9391f10a17c7aeb3daadac3b4f6c492d3171e5de9a1b1353a8",
+      "file_name": "crust-c-library.so",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        }
+      ]
+    },
+    "/home/vano/rust-must-die/rmd/build/libcrust0_host.a": {
+      "path": "/home/vano/rust-must-die/rmd/build/libcrust0_host.a",
+      "bytes": 22736,
+      "lines": 345,
+      "sha256": "0667b535e06517756d4429c5a1067b0d66b4672587c239244c55f1624be5b137",
+      "file_name": "libcrust0_host.a"
+    },
+    "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1": {
+      "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1",
+      "bytes": 30487984,
+      "lines": 112836,
+      "sha256": "5d1679131184e2de4435b426eb264bf13472fe026db8e5c6bc97445814e8e2f4",
+      "file_name": "cc1",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libgmp.so.10.5.0",
+          "bytes": 534896,
+          "sha256": "0ccdfb6d6f5c039465f6d002cf7e4c072d48ac6a2cffc8dd6c748dec31592804"
+        },
+        {
+          "file_name": "libisl.so.23.3.0",
+          "bytes": 1863352,
+          "sha256": "db4f717fd1678b48e5dddea1cbdd2d239594a70b57e96d0923bfd9533351efa8"
+        },
+        {
+          "file_name": "libm.so.6",
+          "bytes": 952616,
+          "sha256": "fce00b6f25f459cf4ae0b7fae4257909a1a8a86f9149e7c029a5d617baf1ccd0"
+        },
+        {
+          "file_name": "libmpc.so.3.3.1",
+          "bytes": 134440,
+          "sha256": "91d2b2b0b794028c733431e01acc227ff39ee289384fdf22869c8b42ad3aaa3b"
+        },
+        {
+          "file_name": "libmpfr.so.6.2.1",
+          "bytes": 760464,
+          "sha256": "2156351fa3dedd04a7381c6ac7a8a26efa2d6fb08b80f8a2d644ccdd653710ae"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    }
+  },
+  "method": {
+    "rounds": 20,
+    "seed": 20261002,
+    "bootstrap_draws": 10000,
+    "starting_state": "Installed crust, crust-c, native C backend, and system tools; fresh root/context each process; one worker; no compilation-result cache; warm OS file cache",
+    "installed": "Root through complete C and symbol output with an installed native C backend",
+    "source-interpreted": "Root checks the complete C backend source and executes it in the evaluator; no prepared backend code is loaded",
+    "source-native": "Root builds the complete C backend source into a new native library, loads it, emits target C and symbols, and removes the library; preparation includes GCC -O2 and linking",
+    "baselines": "Installed GCC and Clang C99 syntax checks on matching original C; fastest median per workload; these tool versions do not claim release-current coverage",
+    "excluded": "Final target GCC compilation/linking, input generation, preflight correctness checks, and construction of installed compilers",
+    "decision": "A failed one-worker case stops scheduler and language expansion; this experiment alone does not complete the full specification matrix"
+  },
+  "inputs": {
+    "ordinary-1000": {
+      "c": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000.c",
+        "bytes": 224832,
+        "lines": 10003,
+        "sha256": "6f973234857b78a793c20a4900bd84b799e047bcf24a8ec4d64bc9e21a87a1f9"
+      },
+      "crust": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000.crs",
+        "bytes": 247781,
+        "lines": 10001,
+        "sha256": "f890ae3d578d951c43fbb77cff3c333aad1dcb80d4e502364485111e6e83c12f"
+      },
+      "staged": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-staged.crs",
+        "bytes": 308,
+        "lines": 6,
+        "sha256": "8bbbb93df749f8c051592dba3c92b6a92dafcf46377a1ae471ecb757990390a8"
+      },
+      "source-interpreted": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-interpreted.crs",
+        "bytes": 333,
+        "lines": 4,
+        "sha256": "799f1b26c312e664fef0d0cf48bcb767b041a8039140f226ce41c1326046728f"
+      },
+      "source-native": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-native.crs",
+        "bytes": 2170,
+        "lines": 19,
+        "sha256": "b2a560a8a6f942c17a17c4f50e2ff73c35fc1fe04b045e6ec88572d48e2bf795"
+      }
+    },
+    "ordinary-8000": {
+      "c": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000.c",
+        "bytes": 1797931,
+        "lines": 80003,
+        "sha256": "22785d8d486ff42c97a6f8e27913136001d0e07d42c8cc7d6f2c5ccc50231726"
+      },
+      "crust": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000.crs",
+        "bytes": 1981880,
+        "lines": 80001,
+        "sha256": "3484923d9b0048f4d3053d2987371d18417794d2e8bc506c69cb18893803dec2"
+      },
+      "staged": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-staged.crs",
+        "bytes": 308,
+        "lines": 6,
+        "sha256": "86df0db821325ee6b0732cf3f4fdd202095da8ed4d93dcedec8d86578eec6b98"
+      },
+      "source-interpreted": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-interpreted.crs",
+        "bytes": 333,
+        "lines": 4,
+        "sha256": "fe0ba2f435e5e02a5ac813c60071d7a39bb68eaf34a492cca450fe7fdebfe681"
+      },
+      "source-native": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-native.crs",
+        "bytes": 2170,
+        "lines": 19,
+        "sha256": "587d605a7de09d84c64648f981c03aeabb77f9e4023b8ecb0591c118e3c48dee"
+      }
+    },
+    "intrusive": {
+      "crust": {
+        "path": "/home/vano/rust-must-die/rmd/examples/intrusive/program.crs",
+        "bytes": 2410,
+        "lines": 93,
+        "sha256": "d987f714374fe4ac1f6870993a11542c9bd4c040e0ecb48ec87d3c2ec0cc1d5e"
+      },
+      "c": {
+        "path": "/home/vano/rust-must-die/rmd/benchmarks/bootstrap/intrusive.c",
+        "bytes": 2355,
+        "lines": 105,
+        "sha256": "6a42a0b21771ef3c50c949cd363465482cfdc43aac9fd5b59e64a28fbd58a0e6"
+      },
+      "staged": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-staged.crs",
+        "bytes": 327,
+        "lines": 6,
+        "sha256": "acde3a6e2681c7d4268d64c359c147d4157df022bbf60577a1c4e312f30d4277"
+      },
+      "source-interpreted": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-interpreted.crs",
+        "bytes": 319,
+        "lines": 4,
+        "sha256": "6a7726f35ce19d77d1c859f33aa815de918726651357c0c5a17e53f6aa7ec743"
+      },
+      "source-native": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-native.crs",
+        "bytes": 2144,
+        "lines": 19,
+        "sha256": "b2513cc1977c0e0bc9c45b0d68d672654e60da4cf55459232ae485edd2bd3496"
+      }
+    }
+  },
+  "commands": {
+    "ordinary-1000": {
+      "installed": [
+        "/home/vano/rust-must-die/rmd/build/crust",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-staged.crs",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ],
+      "gcc": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Wno-overlength-strings",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000.c"
+      ],
+      "clang": [
+        "clang-20",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Wno-overlength-strings",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000.c"
+      ],
+      "source-interpreted": [
+        "/home/vano/rust-must-die/rmd/build/crust",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-interpreted.crs",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ],
+      "source-native": [
+        "/home/vano/rust-must-die/rmd/build/crust",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-native.crs",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ]
+    },
+    "ordinary-8000": {
+      "installed": [
+        "/home/vano/rust-must-die/rmd/build/crust",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-staged.crs",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ],
+      "gcc": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Wno-overlength-strings",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000.c"
+      ],
+      "clang": [
+        "clang-20",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Wno-overlength-strings",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000.c"
+      ],
+      "source-interpreted": [
+        "/home/vano/rust-must-die/rmd/build/crust",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-interpreted.crs",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ],
+      "source-native": [
+        "/home/vano/rust-must-die/rmd/build/crust",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-native.crs",
+        "--library",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ]
+    },
+    "intrusive": {
+      "installed": [
+        "/home/vano/rust-must-die/rmd/build/crust",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-staged.crs",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ],
+      "gcc": [
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Wno-overlength-strings",
+        "-I/home/vano/rust-must-die/rmd/include",
+        "/home/vano/rust-must-die/rmd/benchmarks/bootstrap/intrusive.c"
+      ],
+      "clang": [
+        "clang-20",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O0",
+        "-g0",
+        "-fsyntax-only",
+        "-Wno-overlength-strings",
+        "-I/home/vano/rust-must-die/rmd/include",
+        "/home/vano/rust-must-die/rmd/benchmarks/bootstrap/intrusive.c"
+      ],
+      "source-interpreted": [
+        "/home/vano/rust-must-die/rmd/build/crust",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-interpreted.crs",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ],
+      "source-native": [
+        "/home/vano/rust-must-die/rmd/build/crust",
+        "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-native.crs",
+        "--emit-c",
+        "--symbols",
+        "/dev/null"
+      ]
+    }
+  },
+  "preflight": {
+    "ordinary-1000": {
+      "identical_source_order_and_prepared_bytes": true,
+      "commands": {
+        "source-order": [
+          "/home/vano/rust-must-die/rmd/build/crust",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-staged.crs",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-source-order.rsp"
+        ],
+        "prepared": [
+          "/home/vano/rust-must-die/rmd/build/crust-c",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-prepared.rsp",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000.crs"
+        ]
+      },
+      "c": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-source-order.c",
+        "bytes": 1489963,
+        "lines": 50018,
+        "sha256": "022b39c0af8b1030aa6eb0de6d4755ac111a6ab94fdd475b733b65acc3ca66c6"
+      },
+      "rename_response": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-source-order.rsp",
+        "bytes": 0,
+        "lines": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "function_definitions": 1000,
+      "executable_witness": null,
+      "c_header_dependencies": {
+        "gcc-original-syntax": [
+          {
+            "name": "build/source-gate-my3i2z5h/ordinary-1000.c",
+            "kind": "repository",
+            "bytes": 224832,
+            "sha256": "6f973234857b78a793c20a4900bd84b799e047bcf24a8ec4d64bc9e21a87a1f9"
+          },
+          {
+            "name": "stdc-predef.h",
+            "kind": "system_header",
+            "bytes": 2462,
+            "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+          }
+        ]
+      },
+      "all_routes_identical": true,
+      "clang_headers": [
+        {
+          "name": "build/source-gate-my3i2z5h/ordinary-1000.c",
+          "kind": "repository",
+          "bytes": 224832,
+          "sha256": "6f973234857b78a793c20a4900bd84b799e047bcf24a8ec4d64bc9e21a87a1f9"
+        }
+      ]
+    },
+    "ordinary-8000": {
+      "identical_source_order_and_prepared_bytes": true,
+      "commands": {
+        "source-order": [
+          "/home/vano/rust-must-die/rmd/build/crust",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-staged.crs",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-source-order.rsp"
+        ],
+        "prepared": [
+          "/home/vano/rust-must-die/rmd/build/crust-c",
+          "--library",
+          "--emit-c",
+          "--symbols",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-prepared.rsp",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000.crs"
+        ]
+      },
+      "c": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-source-order.c",
+        "bytes": 12058068,
+        "lines": 400018,
+        "sha256": "02e9aa0a6a3b73d6d137073993ef59791aa953e4af6865e1b1a403333e2e5cc3"
+      },
+      "rename_response": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-source-order.rsp",
+        "bytes": 0,
+        "lines": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "function_definitions": 8000,
+      "executable_witness": null,
+      "c_header_dependencies": {
+        "gcc-original-syntax": [
+          {
+            "name": "build/source-gate-my3i2z5h/ordinary-8000.c",
+            "kind": "repository",
+            "bytes": 1797931,
+            "sha256": "22785d8d486ff42c97a6f8e27913136001d0e07d42c8cc7d6f2c5ccc50231726"
+          },
+          {
+            "name": "stdc-predef.h",
+            "kind": "system_header",
+            "bytes": 2462,
+            "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+          }
+        ]
+      },
+      "all_routes_identical": true,
+      "clang_headers": [
+        {
+          "name": "build/source-gate-my3i2z5h/ordinary-8000.c",
+          "kind": "repository",
+          "bytes": 1797931,
+          "sha256": "22785d8d486ff42c97a6f8e27913136001d0e07d42c8cc7d6f2c5ccc50231726"
+        }
+      ]
+    },
+    "intrusive": {
+      "identical_source_order_and_prepared_bytes": true,
+      "commands": {
+        "source-order": [
+          "/home/vano/rust-must-die/rmd/build/crust",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-staged.crs",
+          "--emit-c",
+          "--symbols",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-source-order.rsp"
+        ],
+        "prepared": [
+          "/home/vano/rust-must-die/rmd/build/crust-c",
+          "--emit-c",
+          "--symbols",
+          "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-prepared.rsp",
+          "/home/vano/rust-must-die/rmd/examples/intrusive/program.crs"
+        ]
+      },
+      "c": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-source-order.c",
+        "bytes": 10539,
+        "lines": 370,
+        "sha256": "87ee4f27764dd571806ae6b9032b97be5fafd9bb10c8fba520ea8560bddb70b3"
+      },
+      "rename_response": {
+        "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-source-order.rsp",
+        "bytes": 132,
+        "lines": 6,
+        "sha256": "9b54383dfacc1a50c842b55ac6427ba34948ecee62b1eb5c90c1cf11eb0adfef"
+      },
+      "function_definitions": 5,
+      "executable_witness": {
+        "commands": [
+          [
+            "gcc",
+            "-std=c99",
+            "-pedantic-errors",
+            "-O2",
+            "-g0",
+            "-fstack-clash-protection",
+            "-Wno-overlength-strings",
+            "-c",
+            "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-source-order.c",
+            "-o",
+            "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-raw.o"
+          ],
+          [
+            "objcopy",
+            "@/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-source-order.rsp",
+            "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-raw.o",
+            "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive.o"
+          ],
+          [
+            "gcc",
+            "-no-pie",
+            "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive.o",
+            "/home/vano/rust-must-die/rmd/build/libcrust0_host.a",
+            "-o",
+            "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-source-order"
+          ],
+          [
+            "gcc",
+            "-std=c99",
+            "-pedantic-errors",
+            "-O2",
+            "-g0",
+            "-fstack-clash-protection",
+            "-Wno-overlength-strings",
+            "-I/home/vano/rust-must-die/rmd/include",
+            "/home/vano/rust-must-die/rmd/benchmarks/bootstrap/intrusive.c",
+            "/home/vano/rust-must-die/rmd/build/libcrust0_host.a",
+            "-no-pie",
+            "-o",
+            "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-c-reference"
+          ]
+        ],
+        "source_order_and_reference_stdout": "intrusive: ok\n",
+        "target_executable": {
+          "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-source-order",
+          "bytes": 25336,
+          "lines": 53,
+          "sha256": "d6361675c191e31666cc8d5c771ba21ad42353bb42bdd77f46c200a2bded3bb2",
+          "file_name": "intrusive-source-order"
+        },
+        "reference_executable": {
+          "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-c-reference",
+          "bytes": 25232,
+          "lines": 54,
+          "sha256": "5c31c20c54a5fb795d1cf8e15f52068760726a772a834351f2bcd58d07e466de",
+          "file_name": "intrusive-c-reference"
+        },
+        "host_compiler_symbols": [],
+        "symbol_table_sha256": "bfcbb9f3b557d26189bfa8a42f97a55ac0d3673f44200051173e25aa924088e5",
+        "target_needed_libraries": [
+          "libc.so.6"
+        ]
+      },
+      "c_header_dependencies": {
+        "gcc-original-syntax": [
+          {
+            "name": "benchmarks/bootstrap/intrusive.c",
+            "kind": "repository",
+            "bytes": 2355,
+            "sha256": "6a42a0b21771ef3c50c949cd363465482cfdc43aac9fd5b59e64a28fbd58a0e6"
+          },
+          {
+            "name": "stdc-predef.h",
+            "kind": "system_header",
+            "bytes": 2462,
+            "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+          },
+          {
+            "name": "include/crust0_host.h",
+            "kind": "repository",
+            "bytes": 564,
+            "sha256": "229bcebfb5356d662381d8fb385fb496e660d366b4837bb7b893d083e76c7fb1"
+          },
+          {
+            "name": "stddef.h",
+            "kind": "system_header",
+            "bytes": 13735,
+            "sha256": "9efc696d6c7eb8bb1831b149c6a92f88a775809cd63e4007312b617915f81188"
+          },
+          {
+            "name": "stdint.h",
+            "kind": "system_header",
+            "bytes": 328,
+            "sha256": "86a7914ab7d6a18465a6fb9a7b54f945cad604fdbf3ca0d10e4e0254e0037911"
+          },
+          {
+            "name": "stdint.h",
+            "kind": "system_header",
+            "bytes": 8155,
+            "sha256": "c26c51b07feadd45ca25e9c95e393b6783d580ab318a567c119828191a80bbed"
+          },
+          {
+            "name": "libc-header-start.h",
+            "kind": "system_header",
+            "bytes": 4286,
+            "sha256": "e86638082f9ce98c82e3022018fa5be175473445c824fe17bd32bf9668582368"
+          },
+          {
+            "name": "features.h",
+            "kind": "system_header",
+            "bytes": 18527,
+            "sha256": "940d486d050fc87420d8ffc008e17f31ffb04467534ad1b039ed25abc52382f9"
+          },
+          {
+            "name": "features-time64.h",
+            "kind": "system_header",
+            "bytes": 1409,
+            "sha256": "345acb98767d04277e413c4951fbb199b0500be23d43cddf17c6cd9fb319a8da"
+          },
+          {
+            "name": "wordsize.h",
+            "kind": "system_header",
+            "bytes": 442,
+            "sha256": "716d8459074e2a082d65a28192b32eddbfd7587348372395b1c283a723ae4c18"
+          },
+          {
+            "name": "timesize.h",
+            "kind": "system_header",
+            "bytes": 1109,
+            "sha256": "8b686ad5fec2c4d6f759a6594d7c216337774d059623677547b7e182cc5269ae"
+          },
+          {
+            "name": "cdefs.h",
+            "kind": "system_header",
+            "bytes": 27011,
+            "sha256": "173afb522c6877dda3be1c93742c2061cd6e748ce395d2b3ae833fb49bfbfc4f"
+          },
+          {
+            "name": "long-double.h",
+            "kind": "system_header",
+            "bytes": 970,
+            "sha256": "40367287cd437d78a05313f6ec52cb0f0a711e1b6711fdcc3699bf2bf28e810f"
+          },
+          {
+            "name": "stubs.h",
+            "kind": "system_header",
+            "bytes": 384,
+            "sha256": "ef444295a0a9e8f5c40918399a00cc91ba0bd79774110cdf6e652baa6cfadb2e"
+          },
+          {
+            "name": "stubs-64.h",
+            "kind": "system_header",
+            "bytes": 481,
+            "sha256": "0b6ab3e2ed3ba79b30fe6ba81a68fc41f57965b8d56662763633431b703c9289"
+          },
+          {
+            "name": "types.h",
+            "kind": "system_header",
+            "bytes": 8806,
+            "sha256": "371847ed3adab1c19db392034f6a22407d321b1dc5f2440563f4b0b8b6c5386b"
+          },
+          {
+            "name": "typesizes.h",
+            "kind": "system_header",
+            "bytes": 3737,
+            "sha256": "047ee5ab17a95364c4b0f14c3eb0750e84e457c408f9a65a6c225ece585e0c14"
+          },
+          {
+            "name": "time64.h",
+            "kind": "system_header",
+            "bytes": 1340,
+            "sha256": "2be9170ce3621ea6062f10edef68bbc2db09bb454ec4397534263dd37b8f1f6a"
+          },
+          {
+            "name": "wchar.h",
+            "kind": "system_header",
+            "bytes": 1906,
+            "sha256": "893fa450527ce645f17922788097d5fe331e2a53012bab4e724d8a1f63e21aa2"
+          },
+          {
+            "name": "stdint-intn.h",
+            "kind": "system_header",
+            "bytes": 1037,
+            "sha256": "94286e42e4970304da5cbef69de6695c84132ff8fbd4b6d72d29aeb7406dc5ff"
+          },
+          {
+            "name": "stdint-uintn.h",
+            "kind": "system_header",
+            "bytes": 1049,
+            "sha256": "aeee224a19434556ef4a9a4afad553736789274656ca12463122300b557ce78c"
+          },
+          {
+            "name": "stdint-least.h",
+            "kind": "system_header",
+            "bytes": 1300,
+            "sha256": "5bf66871bfc18ae6d22c91d03e392c1a4cc5969ca74c5fa31b7510703a496844"
+          }
+        ]
+      },
+      "all_routes_identical": true,
+      "clang_headers": [
+        {
+          "name": "benchmarks/bootstrap/intrusive.c",
+          "kind": "repository",
+          "bytes": 2355,
+          "sha256": "6a42a0b21771ef3c50c949cd363465482cfdc43aac9fd5b59e64a28fbd58a0e6"
+        },
+        {
+          "name": "include/crust0_host.h",
+          "kind": "repository",
+          "bytes": 564,
+          "sha256": "229bcebfb5356d662381d8fb385fb496e660d366b4837bb7b893d083e76c7fb1"
+        },
+        {
+          "name": "stddef.h",
+          "kind": "system_header",
+          "bytes": 5053,
+          "sha256": "b3e62a046ddf28d09eedebe6eb9461cb7060e47cad2c69964b222c4eea10347e"
+        },
+        {
+          "name": "__stddef_header_macro.h",
+          "kind": "system_header",
+          "bytes": 417,
+          "sha256": "4cf46e8fbb809df048eecbbd63686fa741da27afa8db4245bd1f61c1fb1611dc"
+        },
+        {
+          "name": "__stddef_ptrdiff_t.h",
+          "kind": "system_header",
+          "bytes": 717,
+          "sha256": "b4178a57f3711b7013cba747a72a2f178c29fa9364e77d75b2159754072ced43"
+        },
+        {
+          "name": "__stddef_size_t.h",
+          "kind": "system_header",
+          "bytes": 708,
+          "sha256": "d86ddc0238da09b385846ebef814ffc50a44e40cf85d4e3793f485952b7e73ad"
+        },
+        {
+          "name": "__stddef_wchar_t.h",
+          "kind": "system_header",
+          "bytes": 853,
+          "sha256": "1900d4998aef3698b06399ed686db0c21e26509b08638a25734fb97ae89b1001"
+        },
+        {
+          "name": "__stddef_null.h",
+          "kind": "system_header",
+          "bytes": 875,
+          "sha256": "b1d71b08563ab3d2c22a1e4f8ddf4d9a1111c89e9404b859a45c307e8ebc6c69"
+        },
+        {
+          "name": "__stddef_offsetof.h",
+          "kind": "system_header",
+          "bytes": 708,
+          "sha256": "e5f0f4ff8ff5fc6a1cc8b535f5065f1728eadd2bf1e1401f021f803ec7b4222f"
+        },
+        {
+          "name": "stdint.h",
+          "kind": "system_header",
+          "bytes": 31054,
+          "sha256": "655616d8fcb2c92b38c039019685c658c2346b3dd0021aed4ea057b43f621247"
+        },
+        {
+          "name": "stdint.h",
+          "kind": "system_header",
+          "bytes": 8155,
+          "sha256": "c26c51b07feadd45ca25e9c95e393b6783d580ab318a567c119828191a80bbed"
+        },
+        {
+          "name": "libc-header-start.h",
+          "kind": "system_header",
+          "bytes": 4286,
+          "sha256": "e86638082f9ce98c82e3022018fa5be175473445c824fe17bd32bf9668582368"
+        },
+        {
+          "name": "features.h",
+          "kind": "system_header",
+          "bytes": 18527,
+          "sha256": "940d486d050fc87420d8ffc008e17f31ffb04467534ad1b039ed25abc52382f9"
+        },
+        {
+          "name": "features-time64.h",
+          "kind": "system_header",
+          "bytes": 1409,
+          "sha256": "345acb98767d04277e413c4951fbb199b0500be23d43cddf17c6cd9fb319a8da"
+        },
+        {
+          "name": "wordsize.h",
+          "kind": "system_header",
+          "bytes": 442,
+          "sha256": "716d8459074e2a082d65a28192b32eddbfd7587348372395b1c283a723ae4c18"
+        },
+        {
+          "name": "timesize.h",
+          "kind": "system_header",
+          "bytes": 1109,
+          "sha256": "8b686ad5fec2c4d6f759a6594d7c216337774d059623677547b7e182cc5269ae"
+        },
+        {
+          "name": "stdc-predef.h",
+          "kind": "system_header",
+          "bytes": 2462,
+          "sha256": "8db4f65e62cade8ae4d9b77960ee6aee093255acc1b637e3fb37d79179733b15"
+        },
+        {
+          "name": "cdefs.h",
+          "kind": "system_header",
+          "bytes": 27011,
+          "sha256": "173afb522c6877dda3be1c93742c2061cd6e748ce395d2b3ae833fb49bfbfc4f"
+        },
+        {
+          "name": "long-double.h",
+          "kind": "system_header",
+          "bytes": 970,
+          "sha256": "40367287cd437d78a05313f6ec52cb0f0a711e1b6711fdcc3699bf2bf28e810f"
+        },
+        {
+          "name": "stubs.h",
+          "kind": "system_header",
+          "bytes": 384,
+          "sha256": "ef444295a0a9e8f5c40918399a00cc91ba0bd79774110cdf6e652baa6cfadb2e"
+        },
+        {
+          "name": "stubs-64.h",
+          "kind": "system_header",
+          "bytes": 481,
+          "sha256": "0b6ab3e2ed3ba79b30fe6ba81a68fc41f57965b8d56662763633431b703c9289"
+        },
+        {
+          "name": "types.h",
+          "kind": "system_header",
+          "bytes": 8806,
+          "sha256": "371847ed3adab1c19db392034f6a22407d321b1dc5f2440563f4b0b8b6c5386b"
+        },
+        {
+          "name": "typesizes.h",
+          "kind": "system_header",
+          "bytes": 3737,
+          "sha256": "047ee5ab17a95364c4b0f14c3eb0750e84e457c408f9a65a6c225ece585e0c14"
+        },
+        {
+          "name": "time64.h",
+          "kind": "system_header",
+          "bytes": 1340,
+          "sha256": "2be9170ce3621ea6062f10edef68bbc2db09bb454ec4397534263dd37b8f1f6a"
+        },
+        {
+          "name": "wchar.h",
+          "kind": "system_header",
+          "bytes": 1906,
+          "sha256": "893fa450527ce645f17922788097d5fe331e2a53012bab4e724d8a1f63e21aa2"
+        },
+        {
+          "name": "stdint-intn.h",
+          "kind": "system_header",
+          "bytes": 1037,
+          "sha256": "94286e42e4970304da5cbef69de6695c84132ff8fbd4b6d72d29aeb7406dc5ff"
+        },
+        {
+          "name": "stdint-uintn.h",
+          "kind": "system_header",
+          "bytes": 1049,
+          "sha256": "aeee224a19434556ef4a9a4afad553736789274656ca12463122300b557ce78c"
+        },
+        {
+          "name": "stdint-least.h",
+          "kind": "system_header",
+          "bytes": 1300,
+          "sha256": "5bf66871bfc18ae6d22c91d03e392c1a4cc5969ca74c5fa31b7510703a496844"
+        }
+      ]
+    }
+  },
+  "warmup": {
+    "ordinary-1000": {
+      "installed": 10879744,
+      "gcc": 18950775,
+      "clang": 46398519,
+      "source-interpreted": 512553200,
+      "source-native": 468695782
+    },
+    "ordinary-8000": {
+      "installed": 64161142,
+      "gcc": 110784959,
+      "clang": 234390355,
+      "source-interpreted": 4016916924,
+      "source-native": 521603018
+    },
+    "intrusive": {
+      "installed": 2594212,
+      "gcc": 7395747,
+      "clang": 19349974,
+      "source-interpreted": 7703379,
+      "source-native": 461735900
+    }
+  },
+  "samples": [
+    {
+      "round": 0,
+      "workload": "ordinary-8000",
+      "ns": {
+        "installed": 65695644,
+        "source-interpreted": 4052879525,
+        "gcc": 111184348,
+        "clang": 237258679,
+        "source-native": 523668487
+      }
+    },
+    {
+      "round": 0,
+      "workload": "intrusive",
+      "ns": {
+        "source-native": 460990321,
+        "clang": 20842153,
+        "gcc": 7188136,
+        "source-interpreted": 7329277,
+        "installed": 2339701
+      }
+    },
+    {
+      "round": 0,
+      "workload": "ordinary-1000",
+      "ns": {
+        "source-native": 468433279,
+        "gcc": 18553969,
+        "installed": 10124451,
+        "clang": 46741254,
+        "source-interpreted": 503801447
+      }
+    },
+    {
+      "round": 1,
+      "workload": "ordinary-8000",
+      "ns": {
+        "gcc": 111173853,
+        "installed": 71212762,
+        "source-native": 523158943,
+        "source-interpreted": 4133976108,
+        "clang": 237237236
+      }
+    },
+    {
+      "round": 1,
+      "workload": "ordinary-1000",
+      "ns": {
+        "gcc": 18978336,
+        "clang": 46456657,
+        "source-interpreted": 513944116,
+        "installed": 10604782,
+        "source-native": 470803456
+      }
+    },
+    {
+      "round": 1,
+      "workload": "intrusive",
+      "ns": {
+        "clang": 21460110,
+        "source-native": 462128108,
+        "source-interpreted": 7762748,
+        "gcc": 6870088,
+        "installed": 2348964
+      }
+    },
+    {
+      "round": 2,
+      "workload": "ordinary-8000",
+      "ns": {
+        "installed": 65493721,
+        "clang": 237203356,
+        "source-native": 524664062,
+        "source-interpreted": 4074143220,
+        "gcc": 111036196
+      }
+    },
+    {
+      "round": 2,
+      "workload": "ordinary-1000",
+      "ns": {
+        "gcc": 18798406,
+        "installed": 10261106,
+        "source-native": 467900089,
+        "source-interpreted": 509978316,
+        "clang": 45782496
+      }
+    },
+    {
+      "round": 2,
+      "workload": "intrusive",
+      "ns": {
+        "clang": 19850525,
+        "installed": 2463837,
+        "gcc": 6785662,
+        "source-native": 460795679,
+        "source-interpreted": 7446984
+      }
+    },
+    {
+      "round": 3,
+      "workload": "intrusive",
+      "ns": {
+        "source-native": 460222940,
+        "clang": 20978197,
+        "source-interpreted": 7808597,
+        "gcc": 6942036,
+        "installed": 2396085
+      }
+    },
+    {
+      "round": 3,
+      "workload": "ordinary-1000",
+      "ns": {
+        "source-interpreted": 511494411,
+        "gcc": 18543754,
+        "source-native": 468346008,
+        "clang": 46654253,
+        "installed": 10761036
+      }
+    },
+    {
+      "round": 3,
+      "workload": "ordinary-8000",
+      "ns": {
+        "gcc": 111373622,
+        "source-native": 522143380,
+        "source-interpreted": 4105700851,
+        "clang": 233041792,
+        "installed": 64604707
+      }
+    },
+    {
+      "round": 4,
+      "workload": "ordinary-8000",
+      "ns": {
+        "installed": 65206480,
+        "gcc": 111013001,
+        "source-interpreted": 4037859728,
+        "source-native": 525800366,
+        "clang": 234434632
+      }
+    },
+    {
+      "round": 4,
+      "workload": "intrusive",
+      "ns": {
+        "gcc": 7349968,
+        "installed": 2403096,
+        "clang": 20397116,
+        "source-native": 461633997,
+        "source-interpreted": 7623669
+      }
+    },
+    {
+      "round": 4,
+      "workload": "ordinary-1000",
+      "ns": {
+        "gcc": 18556743,
+        "clang": 46211809,
+        "installed": 10718693,
+        "source-native": 466913278,
+        "source-interpreted": 513009514
+      }
+    },
+    {
+      "round": 5,
+      "workload": "ordinary-8000",
+      "ns": {
+        "source-interpreted": 4100258285,
+        "clang": 234608983,
+        "source-native": 529528511,
+        "gcc": 111441424,
+        "installed": 65980862
+      }
+    },
+    {
+      "round": 5,
+      "workload": "ordinary-1000",
+      "ns": {
+        "source-interpreted": 501033995,
+        "clang": 46519661,
+        "installed": 10688067,
+        "source-native": 467995091,
+        "gcc": 18691306
+      }
+    },
+    {
+      "round": 5,
+      "workload": "intrusive",
+      "ns": {
+        "clang": 20621973,
+        "installed": 2564759,
+        "source-native": 461966586,
+        "gcc": 6966883,
+        "source-interpreted": 7568407
+      }
+    },
+    {
+      "round": 6,
+      "workload": "ordinary-1000",
+      "ns": {
+        "source-native": 468521372,
+        "gcc": 18453909,
+        "installed": 10421697,
+        "clang": 46929766,
+        "source-interpreted": 497931370
+      }
+    },
+    {
+      "round": 6,
+      "workload": "intrusive",
+      "ns": {
+        "source-native": 461122009,
+        "installed": 2457558,
+        "clang": 20705809,
+        "gcc": 7288276,
+        "source-interpreted": 7723840
+      }
+    },
+    {
+      "round": 6,
+      "workload": "ordinary-8000",
+      "ns": {
+        "installed": 65624067,
+        "clang": 232364385,
+        "gcc": 111739061,
+        "source-native": 522368026,
+        "source-interpreted": 4115331773
+      }
+    },
+    {
+      "round": 7,
+      "workload": "ordinary-1000",
+      "ns": {
+        "installed": 11100697,
+        "gcc": 19134571,
+        "clang": 46627613,
+        "source-native": 468823174,
+        "source-interpreted": 516955565
+      }
+    },
+    {
+      "round": 7,
+      "workload": "intrusive",
+      "ns": {
+        "gcc": 7344741,
+        "source-native": 459467496,
+        "clang": 21157026,
+        "installed": 2641373,
+        "source-interpreted": 7536849
+      }
+    },
+    {
+      "round": 7,
+      "workload": "ordinary-8000",
+      "ns": {
+        "clang": 233372297,
+        "installed": 65556795,
+        "gcc": 111626181,
+        "source-interpreted": 4111876218,
+        "source-native": 523647426
+      }
+    },
+    {
+      "round": 8,
+      "workload": "intrusive",
+      "ns": {
+        "source-native": 468896855,
+        "installed": 2505900,
+        "clang": 20773039,
+        "gcc": 7257920,
+        "source-interpreted": 7441976
+      }
+    },
+    {
+      "round": 8,
+      "workload": "ordinary-1000",
+      "ns": {
+        "source-native": 466730704,
+        "installed": 10175969,
+        "clang": 45739811,
+        "source-interpreted": 512792399,
+        "gcc": 18495352
+      }
+    },
+    {
+      "round": 8,
+      "workload": "ordinary-8000",
+      "ns": {
+        "source-native": 519573684,
+        "gcc": 111046311,
+        "clang": 232388371,
+        "installed": 64776064,
+        "source-interpreted": 4095259404
+      }
+    },
+    {
+      "round": 9,
+      "workload": "ordinary-8000",
+      "ns": {
+        "clang": 232919559,
+        "gcc": 111223818,
+        "installed": 65266620,
+        "source-native": 521122388,
+        "source-interpreted": 4113329998
+      }
+    },
+    {
+      "round": 9,
+      "workload": "intrusive",
+      "ns": {
+        "source-native": 459957952,
+        "installed": 2574093,
+        "gcc": 6903098,
+        "source-interpreted": 7294585,
+        "clang": 20352097
+      }
+    },
+    {
+      "round": 9,
+      "workload": "ordinary-1000",
+      "ns": {
+        "source-native": 466631265,
+        "gcc": 18275793,
+        "installed": 9937491,
+        "clang": 46441544,
+        "source-interpreted": 493944207
+      }
+    },
+    {
+      "round": 10,
+      "workload": "ordinary-1000",
+      "ns": {
+        "installed": 10658853,
+        "source-interpreted": 494639560,
+        "gcc": 18569824,
+        "clang": 45630727,
+        "source-native": 468433118
+      }
+    },
+    {
+      "round": 10,
+      "workload": "ordinary-8000",
+      "ns": {
+        "gcc": 110428535,
+        "clang": 231774820,
+        "source-native": 523345042,
+        "installed": 65598688,
+        "source-interpreted": 4109481294
+      }
+    },
+    {
+      "round": 10,
+      "workload": "intrusive",
+      "ns": {
+        "gcc": 7314805,
+        "installed": 2378539,
+        "source-interpreted": 7309819,
+        "source-native": 459759425,
+        "clang": 20883535
+      }
+    },
+    {
+      "round": 11,
+      "workload": "ordinary-1000",
+      "ns": {
+        "installed": 10601698,
+        "source-interpreted": 510567049,
+        "gcc": 18564876,
+        "clang": 46612550,
+        "source-native": 473720432
+      }
+    },
+    {
+      "round": 11,
+      "workload": "intrusive",
+      "ns": {
+        "clang": 20864487,
+        "installed": 2611529,
+        "source-interpreted": 7692602,
+        "gcc": 7198491,
+        "source-native": 458814867
+      }
+    },
+    {
+      "round": 11,
+      "workload": "ordinary-8000",
+      "ns": {
+        "installed": 66618639,
+        "source-native": 523712123,
+        "clang": 231845036,
+        "gcc": 111231660,
+        "source-interpreted": 4128318229
+      }
+    },
+    {
+      "round": 12,
+      "workload": "ordinary-1000",
+      "ns": {
+        "installed": 10551402,
+        "source-native": 468075522,
+        "clang": 46846211,
+        "gcc": 18797004,
+        "source-interpreted": 510262513
+      }
+    },
+    {
+      "round": 12,
+      "workload": "intrusive",
+      "ns": {
+        "clang": 20913680,
+        "source-interpreted": 7800494,
+        "gcc": 7001405,
+        "installed": 2352100,
+        "source-native": 458926965
+      }
+    },
+    {
+      "round": 12,
+      "workload": "ordinary-8000",
+      "ns": {
+        "clang": 235197397,
+        "source-interpreted": 4079408821,
+        "gcc": 110732831,
+        "source-native": 522214807,
+        "installed": 65042935
+      }
+    },
+    {
+      "round": 13,
+      "workload": "intrusive",
+      "ns": {
+        "gcc": 7371821,
+        "installed": 2395804,
+        "source-native": 459982969,
+        "clang": 21410336,
+        "source-interpreted": 7788857
+      }
+    },
+    {
+      "round": 13,
+      "workload": "ordinary-8000",
+      "ns": {
+        "installed": 64831708,
+        "gcc": 112389126,
+        "clang": 232498607,
+        "source-interpreted": 4090197909,
+        "source-native": 521095236
+      }
+    },
+    {
+      "round": 13,
+      "workload": "ordinary-1000",
+      "ns": {
+        "installed": 10679173,
+        "source-interpreted": 512645888,
+        "gcc": 18572247,
+        "source-native": 465813298,
+        "clang": 45977477
+      }
+    },
+    {
+      "round": 14,
+      "workload": "ordinary-8000",
+      "ns": {
+        "installed": 66404698,
+        "source-native": 518398440,
+        "gcc": 110279531,
+        "clang": 235134412,
+        "source-interpreted": 4112382147
+      }
+    },
+    {
+      "round": 14,
+      "workload": "ordinary-1000",
+      "ns": {
+        "source-interpreted": 513405118,
+        "gcc": 19064386,
+        "installed": 10305303,
+        "clang": 46046191,
+        "source-native": 466928141
+      }
+    },
+    {
+      "round": 14,
+      "workload": "intrusive",
+      "ns": {
+        "source-native": 458923570,
+        "gcc": 7025772,
+        "source-interpreted": 7457120,
+        "clang": 20698448,
+        "installed": 2564748
+      }
+    },
+    {
+      "round": 15,
+      "workload": "ordinary-1000",
+      "ns": {
+        "installed": 11572444,
+        "gcc": 18238677,
+        "clang": 45786141,
+        "source-native": 473623507,
+        "source-interpreted": 508075942
+      }
+    },
+    {
+      "round": 15,
+      "workload": "intrusive",
+      "ns": {
+        "source-interpreted": 7532492,
+        "installed": 2355464,
+        "source-native": 459690952,
+        "gcc": 6890909,
+        "clang": 20853761
+      }
+    },
+    {
+      "round": 15,
+      "workload": "ordinary-8000",
+      "ns": {
+        "source-interpreted": 4134149418,
+        "clang": 233911046,
+        "gcc": 111234093,
+        "installed": 65181683,
+        "source-native": 522784992
+      }
+    },
+    {
+      "round": 16,
+      "workload": "intrusive",
+      "ns": {
+        "source-native": 459100736,
+        "installed": 2445520,
+        "clang": 20632528,
+        "source-interpreted": 7627525,
+        "gcc": 7025752
+      }
+    },
+    {
+      "round": 16,
+      "workload": "ordinary-8000",
+      "ns": {
+        "source-native": 520308957,
+        "installed": 65539329,
+        "gcc": 110154333,
+        "clang": 231677505,
+        "source-interpreted": 4093974887
+      }
+    },
+    {
+      "round": 16,
+      "workload": "ordinary-1000",
+      "ns": {
+        "source-interpreted": 505621699,
+        "gcc": 18643243,
+        "clang": 46194473,
+        "source-native": 467613979,
+        "installed": 10220646
+      }
+    },
+    {
+      "round": 17,
+      "workload": "intrusive",
+      "ns": {
+        "installed": 2384238,
+        "source-interpreted": 7358881,
+        "gcc": 6793633,
+        "source-native": 459064291,
+        "clang": 20680851
+      }
+    },
+    {
+      "round": 17,
+      "workload": "ordinary-1000",
+      "ns": {
+        "source-interpreted": 516802686,
+        "gcc": 18501410,
+        "source-native": 468180089,
+        "clang": 46120703,
+        "installed": 10528618
+      }
+    },
+    {
+      "round": 17,
+      "workload": "ordinary-8000",
+      "ns": {
+        "source-native": 520857831,
+        "clang": 234792138,
+        "gcc": 111124419,
+        "installed": 65024968,
+        "source-interpreted": 4116272845
+      }
+    },
+    {
+      "round": 18,
+      "workload": "intrusive",
+      "ns": {
+        "clang": 21934882,
+        "installed": 2541092,
+        "source-interpreted": 7739834,
+        "source-native": 460806796,
+        "gcc": 7137049
+      }
+    },
+    {
+      "round": 18,
+      "workload": "ordinary-1000",
+      "ns": {
+        "gcc": 18014731,
+        "source-interpreted": 506211343,
+        "installed": 10413865,
+        "clang": 46274213,
+        "source-native": 467726489
+      }
+    },
+    {
+      "round": 18,
+      "workload": "ordinary-8000",
+      "ns": {
+        "clang": 234789494,
+        "gcc": 110576386,
+        "source-native": 521090850,
+        "source-interpreted": 4071187916,
+        "installed": 64615964
+      }
+    },
+    {
+      "round": 19,
+      "workload": "intrusive",
+      "ns": {
+        "installed": 2617177,
+        "source-interpreted": 7505051,
+        "gcc": 7030258,
+        "source-native": 458919214,
+        "clang": 20964566
+      }
+    },
+    {
+      "round": 19,
+      "workload": "ordinary-8000",
+      "ns": {
+        "gcc": 111009567,
+        "source-interpreted": 4061883816,
+        "source-native": 527724583,
+        "installed": 65749285,
+        "clang": 232745737
+      }
+    },
+    {
+      "round": 19,
+      "workload": "ordinary-1000",
+      "ns": {
+        "source-native": 466493529,
+        "installed": 10111632,
+        "gcc": 18121962,
+        "clang": 46541705,
+        "source-interpreted": 513370035
+      }
+    }
+  ],
+  "generated_hashes": {
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-staged.crs": "acde3a6e2681c7d4268d64c359c147d4157df022bbf60577a1c4e312f30d4277",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-native.crs": "b2a560a8a6f942c17a17c4f50e2ff73c35fc1fe04b045e6ec88572d48e2bf795",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-staged.crs": "8bbbb93df749f8c051592dba3c92b6a92dafcf46377a1ae471ecb757990390a8",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/backend.crs": "d8a35f87b4cce20038c224fcbee0e84c7889b91d92034c251c61718c0429f55e",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000.crs": "f890ae3d578d951c43fbb77cff3c333aad1dcb80d4e502364485111e6e83c12f",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-native.crs": "b2513cc1977c0e0bc9c45b0d68d672654e60da4cf55459232ae485edd2bd3496",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-interpreted.crs": "fe0ba2f435e5e02a5ac813c60071d7a39bb68eaf34a492cca450fe7fdebfe681",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-staged.crs": "86df0db821325ee6b0732cf3f4fdd202095da8ed4d93dcedec8d86578eec6b98",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/entry.crs": "b8a68f5a0837d60a270e47a390b553ab95514841c914beed3ba1f04ed445c329",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-interpreted.crs": "799f1b26c312e664fef0d0cf48bcb767b041a8039140f226ce41c1326046728f",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-interpreted.crs": "6a7726f35ce19d77d1c859f33aa815de918726651357c0c5a17e53f6aa7ec743",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-native.crs": "587d605a7de09d84c64648f981c03aeabb77f9e4023b8ecb0591c118e3c48dee",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000.crs": "3484923d9b0048f4d3053d2987371d18417794d2e8bc506c69cb18893803dec2"
+  },
+  "root_sources": {
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-native.crs": "host_source(run,\"/home/vano/rust-must-die/rmd/api/crust0_stage.crs\");\nhost_source(run,\"/home/vano/rust-must-die/rmd/stages/c/api.crs\");\nhost_source(run,\"/home/vano/rust-must-die/rmd/stages/c/build.crs\");\nhost_link(run,\"/home/vano/rust-must-die/rmd/build/crust-c-library.so\");\nvar stage_source:*CrustSource=host_input(run,\"/home/vano/rust-must-die/rmd/api/crust0.crs\",1u64);\nvar arguments:[*u8;18]=make [*u8;18]{\"--library\",\"--export\",\"project_program\",\"-o\",\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-project.so\",\"--cflag=-fPIC\",\"--cflag=-fno-semantic-interposition\",\"--ldflag=-shared\",\"--ldflag=-Wl,-Bsymbolic,-z,text,-z,relro,-z,now\",\"/home/vano/rust-must-die/rmd/api/crust0_host.crs\",\"/home/vano/rust-must-die/rmd/api/crust0_stage.crs\",\"/home/vano/rust-must-die/rmd/stages/c/model.crs\",\"/home/vano/rust-must-die/rmd/stages/c/base.crs\",\"/home/vano/rust-must-die/rmd/stages/c/types.crs\",\"/home/vano/rust-must-die/rmd/stages/c/emit.crs\",\"/home/vano/rust-must-die/rmd/stages/c/driver.crs\",\"/home/vano/rust-must-die/rmd/stages/c/program.crs\",\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/entry.crs\"};\nvar preparation:i32=c_build(stage_source,0usize,18i32,&arguments[0usize]);\nif preparation!=0i32{return preparation;};\nhost_link(run,\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-project.so\");\nextern fn project_program(request:*CrustBuild)->i32=\"project_program\";\nextern fn remove_project(path:*u8)->i32=\"unlink\";\nvar target:*CrustSource=host_input(run,\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000.crs\",1u64);\nvar context:CrustContext=uninit; crust_context_init(&context,null(*CrustAllocator));\nvar request:CrustBuild=make CrustBuild{context:&context,source:target,target_begin:0usize,argc:(*run).argc,argv:(*run).argv};\nvar status:i32=project_program(&request);\nif context.error_count!=0usize{crust_run_diagnostic(&context);};\ncrust_context_destroy(&context);\nif remove_project(\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-project.so\")!=0i32{crust_set_error((*run).context,(*run).source,0usize,\"cannot remove prepared stage\");return 1i32;};\nreturn status;\n",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-native.crs": "host_source(run,\"/home/vano/rust-must-die/rmd/api/crust0_stage.crs\");\nhost_source(run,\"/home/vano/rust-must-die/rmd/stages/c/api.crs\");\nhost_source(run,\"/home/vano/rust-must-die/rmd/stages/c/build.crs\");\nhost_link(run,\"/home/vano/rust-must-die/rmd/build/crust-c-library.so\");\nvar stage_source:*CrustSource=host_input(run,\"/home/vano/rust-must-die/rmd/api/crust0.crs\",1u64);\nvar arguments:[*u8;18]=make [*u8;18]{\"--library\",\"--export\",\"project_program\",\"-o\",\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-project.so\",\"--cflag=-fPIC\",\"--cflag=-fno-semantic-interposition\",\"--ldflag=-shared\",\"--ldflag=-Wl,-Bsymbolic,-z,text,-z,relro,-z,now\",\"/home/vano/rust-must-die/rmd/api/crust0_host.crs\",\"/home/vano/rust-must-die/rmd/api/crust0_stage.crs\",\"/home/vano/rust-must-die/rmd/stages/c/model.crs\",\"/home/vano/rust-must-die/rmd/stages/c/base.crs\",\"/home/vano/rust-must-die/rmd/stages/c/types.crs\",\"/home/vano/rust-must-die/rmd/stages/c/emit.crs\",\"/home/vano/rust-must-die/rmd/stages/c/driver.crs\",\"/home/vano/rust-must-die/rmd/stages/c/program.crs\",\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/entry.crs\"};\nvar preparation:i32=c_build(stage_source,0usize,18i32,&arguments[0usize]);\nif preparation!=0i32{return preparation;};\nhost_link(run,\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-project.so\");\nextern fn project_program(request:*CrustBuild)->i32=\"project_program\";\nextern fn remove_project(path:*u8)->i32=\"unlink\";\nvar target:*CrustSource=host_input(run,\"/home/vano/rust-must-die/rmd/examples/intrusive/program.crs\",1u64);\nvar context:CrustContext=uninit; crust_context_init(&context,null(*CrustAllocator));\nvar request:CrustBuild=make CrustBuild{context:&context,source:target,target_begin:0usize,argc:(*run).argc,argv:(*run).argv};\nvar status:i32=project_program(&request);\nif context.error_count!=0usize{crust_run_diagnostic(&context);};\ncrust_context_destroy(&context);\nif remove_project(\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-project.so\")!=0i32{crust_set_error((*run).context,(*run).source,0usize,\"cannot remove prepared stage\");return 1i32;};\nreturn status;\n",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-interpreted.crs": "host_source(run,\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/backend.crs\");\nhost_source(run,\"/home/vano/rust-must-die/rmd/stages/c/build.crs\");\nvar target:*CrustSource=host_input(run,\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000.crs\",1u64);\nreturn c_build(target,0usize,(*run).argc,(*run).argv);\n",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000-interpreted.crs": "host_source(run,\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/backend.crs\");\nhost_source(run,\"/home/vano/rust-must-die/rmd/stages/c/build.crs\");\nvar target:*CrustSource=host_input(run,\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-1000.crs\",1u64);\nreturn c_build(target,0usize,(*run).argc,(*run).argv);\n",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/intrusive-interpreted.crs": "host_source(run,\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/backend.crs\");\nhost_source(run,\"/home/vano/rust-must-die/rmd/stages/c/build.crs\");\nvar target:*CrustSource=host_input(run,\"/home/vano/rust-must-die/rmd/examples/intrusive/program.crs\",1u64);\nreturn c_build(target,0usize,(*run).argc,(*run).argv);\n",
+    "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-native.crs": "host_source(run,\"/home/vano/rust-must-die/rmd/api/crust0_stage.crs\");\nhost_source(run,\"/home/vano/rust-must-die/rmd/stages/c/api.crs\");\nhost_source(run,\"/home/vano/rust-must-die/rmd/stages/c/build.crs\");\nhost_link(run,\"/home/vano/rust-must-die/rmd/build/crust-c-library.so\");\nvar stage_source:*CrustSource=host_input(run,\"/home/vano/rust-must-die/rmd/api/crust0.crs\",1u64);\nvar arguments:[*u8;18]=make [*u8;18]{\"--library\",\"--export\",\"project_program\",\"-o\",\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-project.so\",\"--cflag=-fPIC\",\"--cflag=-fno-semantic-interposition\",\"--ldflag=-shared\",\"--ldflag=-Wl,-Bsymbolic,-z,text,-z,relro,-z,now\",\"/home/vano/rust-must-die/rmd/api/crust0_host.crs\",\"/home/vano/rust-must-die/rmd/api/crust0_stage.crs\",\"/home/vano/rust-must-die/rmd/stages/c/model.crs\",\"/home/vano/rust-must-die/rmd/stages/c/base.crs\",\"/home/vano/rust-must-die/rmd/stages/c/types.crs\",\"/home/vano/rust-must-die/rmd/stages/c/emit.crs\",\"/home/vano/rust-must-die/rmd/stages/c/driver.crs\",\"/home/vano/rust-must-die/rmd/stages/c/program.crs\",\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/entry.crs\"};\nvar preparation:i32=c_build(stage_source,0usize,18i32,&arguments[0usize]);\nif preparation!=0i32{return preparation;};\nhost_link(run,\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-project.so\");\nextern fn project_program(request:*CrustBuild)->i32=\"project_program\";\nextern fn remove_project(path:*u8)->i32=\"unlink\";\nvar target:*CrustSource=host_input(run,\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000.crs\",1u64);\nvar context:CrustContext=uninit; crust_context_init(&context,null(*CrustAllocator));\nvar request:CrustBuild=make CrustBuild{context:&context,source:target,target_begin:0usize,argc:(*run).argc,argv:(*run).argv};\nvar status:i32=project_program(&request);\nif context.error_count!=0usize{crust_run_diagnostic(&context);};\ncrust_context_destroy(&context);\nif remove_project(\"/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-project.so\")!=0i32{crust_set_error((*run).context,(*run).source,0usize,\"cannot remove prepared stage\");return 1i32;};\nreturn status;\n"
+  },
+  "summary": {
+    "ordinary-1000": {
+      "median_ms": {
+        "source-native": 468.0353065,
+        "gcc": 18.5608095,
+        "installed": 10.54001,
+        "clang": 46.3578785,
+        "source-interpreted": 510.414781
+      },
+      "baseline": "gcc",
+      "ratios": {
+        "installed": {
+          "median": 0.5669065441097605,
+          "ci95": [
+            0.5540836397326299,
+            0.5744974415996766
+          ],
+          "pass": true
+        },
+        "source-interpreted": {
+          "median": 27.149623465228338,
+          "ci95": [
+            27.053902930802842,
+            27.62412154704542
+          ],
+          "pass": false
+        },
+        "source-native": {
+          "median": 25.23026402722729,
+          "ci95": [
+            25.05963268544988,
+            25.3469181866539
+          ],
+          "pass": false
+        }
+      }
+    },
+    "ordinary-8000": {
+      "median_ms": {
+        "installed": 65.516525,
+        "source-interpreted": 4102.979568,
+        "gcc": 111.149136,
+        "clang": 233.6416715,
+        "source-native": 522.576509
+      },
+      "baseline": "gcc",
+      "ratios": {
+        "installed": {
+          "median": 0.5873815760870136,
+          "ci95": [
+            0.5863954516834842,
+            0.5921762510836239
+          ],
+          "pass": true
+        },
+        "source-interpreted": {
+          "median": 36.85215731776723,
+          "ci95": [
+            36.80541207350881,
+            37.078307997760895
+          ],
+          "pass": false
+        },
+        "source-native": {
+          "median": 4.707037064060621,
+          "ci95": [
+            4.689647389502105,
+            4.7197216192416285
+          ],
+          "pass": false
+        }
+      }
+    },
+    "intrusive": {
+      "median_ms": {
+        "source-native": 459.9704605,
+        "clang": 20.847957,
+        "gcc": 7.028015,
+        "source-interpreted": 7.552628,
+        "installed": 2.451539
+      },
+      "baseline": "gcc",
+      "ratios": {
+        "installed": {
+          "median": 0.3466718366499362,
+          "ci95": [
+            0.3395076397761024,
+            0.3612080945293836
+          ],
+          "pass": true
+        },
+        "source-interpreted": {
+          "median": 1.0680882787768138,
+          "ci95": [
+            1.056641711549157,
+            1.085996472514863
+          ],
+          "pass": false
+        },
+        "source-native": {
+          "median": 65.2988702271866,
+          "ci95": [
+            63.93487718384547,
+            66.30201484935056
+          ],
+          "pass": false
+        }
+      }
+    }
+  },
+  "single_worker_pass": false,
+  "profile": {
+    "tool": {
+      "file_name": "perf",
+      "bytes": 25094416,
+      "sha256": "7ec57e470061a32d9368bd760a91649bbef06e147e7e36bbc11a62a3cf3fab10",
+      "command": "/usr/lib/linux-hwe-7.0-tools-7.0.0-28/perf",
+      "version": "perf version 7.0.12",
+      "shared_libraries": [
+        {
+          "file_name": "ld-linux-x86-64.so.2",
+          "bytes": 236616,
+          "sha256": "c20a2dc8917c755f02b94049356320fe1f62ac7d9f8994731f807d9df39302da"
+        },
+        {
+          "file_name": "libLLVM.so.19.1",
+          "bytes": 128938904,
+          "sha256": "7e016cffd3eb077fa338b8ec08a7ab500e43c7460223d4b1f5c6b1bf10274b24"
+        },
+        {
+          "file_name": "libbrotlicommon.so.1.1.0",
+          "bytes": 141640,
+          "sha256": "a91ead095d2c80520c55a89057bbe10b031a075340442e63f44b310f93883a1b"
+        },
+        {
+          "file_name": "libbrotlidec.so.1.1.0",
+          "bytes": 51512,
+          "sha256": "64d8a5019d4c294b89fde1193343ea324bbd8603652554e5545f0a01595fa2c5"
+        },
+        {
+          "file_name": "libbsd.so.0.12.1",
+          "bytes": 80888,
+          "sha256": "e86cd4f0019f42c2ba5e60602e0edc8694d2948377d98c3654d0f6bddb5254bb"
+        },
+        {
+          "file_name": "libbz2.so.1.0.4",
+          "bytes": 78944,
+          "sha256": "cc08c9f50a8009ffd6391e0116a100369b11ca9238fa52392c019e6645b122a1"
+        },
+        {
+          "file_name": "libc.so.6",
+          "bytes": 2129424,
+          "sha256": "3a15d66867d83762c7f2f1e37359cb8f6c5743edb369c65285cb0b1c4f7498bf"
+        },
+        {
+          "file_name": "libcom_err.so.2.1",
+          "bytes": 18504,
+          "sha256": "022943b3b11c860b049bce41342f1c2594941b7b401d95dfdf235521099fee08"
+        },
+        {
+          "file_name": "libcrypto.so.3",
+          "bytes": 5309400,
+          "sha256": "6866ed711dab8927e1bf82bf1cd30e828bdfc34f3cc1e83b1c9eb01ce6c37d9a"
+        },
+        {
+          "file_name": "libcurl-gnutls.so.4.8.0",
+          "bytes": 765856,
+          "sha256": "d04ccee993de5f87dfadb2c27d58b7117645ceba7f11dc9916999fcaf17d2e55"
+        },
+        {
+          "file_name": "libdebuginfod-0.190.so",
+          "bytes": 35624,
+          "sha256": "ada59231b9ce983951fdd3425ebb4c138fa473b7470d5bc9d9285a3f8687f801"
+        },
+        {
+          "file_name": "libdw-0.190.so",
+          "bytes": 737696,
+          "sha256": "989dc9873f358a5af7d18d6100cf5fd66531d7990dc47d69068b3c6c96588867"
+        },
+        {
+          "file_name": "libedit.so.2.0.72",
+          "bytes": 220472,
+          "sha256": "195c607216f8581dbf516346ed38f4c73500cac4b84e18eb0a4fd49931e4cd56"
+        },
+        {
+          "file_name": "libelf-0.190.so",
+          "bytes": 121560,
+          "sha256": "248c989360783cdc52f3659921de852c2efcc2097253ce58e34443f856412814"
+        },
+        {
+          "file_name": "libexpat.so.1.9.1",
+          "bytes": 186624,
+          "sha256": "286682ecbc5e59a638963b1a4e6351e65eb32fcf4bdcb9cb7569b6a61fe06a8d"
+        },
+        {
+          "file_name": "libffi.so.8.1.4",
+          "bytes": 47672,
+          "sha256": "00f593fe192f2851b8ce23b25cec2488d769beb5a8f63e8c9e563071e1075153"
+        },
+        {
+          "file_name": "libgcc_s.so.1",
+          "bytes": 183024,
+          "sha256": "d93224d2b0dab4247598be683adca02f5cf00586f99c187579cd7e92058fb7cb"
+        },
+        {
+          "file_name": "libgmp.so.10.5.0",
+          "bytes": 534896,
+          "sha256": "0ccdfb6d6f5c039465f6d002cf7e4c072d48ac6a2cffc8dd6c748dec31592804"
+        },
+        {
+          "file_name": "libgnutls.so.30.37.1",
+          "bytes": 2065824,
+          "sha256": "ddbae2995750875c07bc218d12a062d73f8250678f54dedda7e9be5068781c98"
+        },
+        {
+          "file_name": "libgssapi_krb5.so.2.2",
+          "bytes": 338696,
+          "sha256": "8d0b00978cde2a5a9ec76bee1e16a80efd502bc4db8647174a00a61c9d90f989"
+        },
+        {
+          "file_name": "libhogweed.so.6.8",
+          "bytes": 288920,
+          "sha256": "c3c606139d4f7776efa4dbd4a6b62e30c916b07a0cafd8c3ef173d6f093607e3"
+        },
+        {
+          "file_name": "libicudata.so.74.2",
+          "bytes": 30795392,
+          "sha256": "ddbb3718b8bd9cbd780e5ab08b4503c30a6c4fa0706ebe5d074ed6b596c1714e"
+        },
+        {
+          "file_name": "libicuuc.so.74.2",
+          "bytes": 2140336,
+          "sha256": "7560aadde38e5f4237a47a1ddd5891f9b36768a77a60faae30beee003ac01901"
+        },
+        {
+          "file_name": "libidn2.so.0.4.0",
+          "bytes": 133192,
+          "sha256": "6e632fd9a3125db60bbc623719bbc17b0470330321c5b1c57f1ff7190e5551ad"
+        },
+        {
+          "file_name": "libk5crypto.so.3.1",
+          "bytes": 178648,
+          "sha256": "dd8b93b95adf53a638772061dbe81dc0252d2d8857ae1df774aed78c6a79e0c0"
+        },
+        {
+          "file_name": "libkeyutils.so.1.10",
+          "bytes": 22600,
+          "sha256": "f48214417757f18793ed6e180cc14ee1d6f04252a518fc7270e8ca1d0b4260fe"
+        },
+        {
+          "file_name": "libkrb5.so.3.3",
+          "bytes": 823488,
+          "sha256": "8cd11f2aa69efdac7c040a2794f8bf1a737405abff53908b737c721d1c4ba65d"
+        },
+        {
+          "file_name": "libkrb5support.so.0.1",
+          "bytes": 47904,
+          "sha256": "8253bcdf7f39fcf8f25e797757808e671d777efc00b0cd1fbbcd9da61b0e98f7"
+        },
+        {
+          "file_name": "liblber.so.2.0.200",
+          "bytes": 59888,
+          "sha256": "ddf14275b1fb70ba06510094071adcc1462e675f15ae6cdcadbf40c1dabe5a03"
+        },
+        {
+          "file_name": "libldap.so.2.0.200",
+          "bytes": 372400,
+          "sha256": "a9829b999c95452eb0a34cc7b5349427b76dbf3e5d5c8672a5ca69e454c1b151"
+        },
+        {
+          "file_name": "liblzma.so.5.4.5",
+          "bytes": 202904,
+          "sha256": "696e868dd0700a19a6d65fc01608ec2d70d3cb91f65710e89180cd2e688f30cb"
+        },
+        {
+          "file_name": "libm.so.6",
+          "bytes": 952616,
+          "sha256": "fce00b6f25f459cf4ae0b7fae4257909a1a8a86f9149e7c029a5d617baf1ccd0"
+        },
+        {
+          "file_name": "libmd.so.0.1.0",
+          "bytes": 55536,
+          "sha256": "423e18586b6ea740f4465afd64f7a9a4cb7264ed979c8e7256f9085af5345fef"
+        },
+        {
+          "file_name": "libnettle.so.8.8",
+          "bytes": 342280,
+          "sha256": "a245ed916229583d6fe0b07657b3ed945bc148c28cc08b5266295f620d2b91cc"
+        },
+        {
+          "file_name": "libnghttp2.so.14.26.0",
+          "bytes": 170352,
+          "sha256": "46764ab5b6ca7e353a322054f0bee45d9158a27f3e6a82a2fa4447f2ba9ba268"
+        },
+        {
+          "file_name": "libnuma.so.1.0.0",
+          "bytes": 52248,
+          "sha256": "02d7582c5d391e460e56aa67a414360e3183b968206645b9123f9dc7bff5d009"
+        },
+        {
+          "file_name": "libp11-kit.so.0.3.1",
+          "bytes": 1714008,
+          "sha256": "a59efd4792d3343dedea1d26a28f5597abfe3369082deb504c4802a31b014897"
+        },
+        {
+          "file_name": "libpsl.so.5.3.4",
+          "bytes": 75768,
+          "sha256": "ae6c5a9aecc249fc66e03c16ec6c4385d09d7e12e0ea7694bb831ab4fee8133c"
+        },
+        {
+          "file_name": "libpython3.12.so.1.0",
+          "bytes": 9061000,
+          "sha256": "1021f236227334ded6d1bbbc4bb6f5d933f793d8397c969896cfbdf03ce96223"
+        },
+        {
+          "file_name": "libresolv.so.2",
+          "bytes": 64008,
+          "sha256": "1d730ea434da5a5595bc6a961d7a9ace83e03703205df9644044b3dca79c362f"
+        },
+        {
+          "file_name": "librtmp.so.1",
+          "bytes": 121848,
+          "sha256": "15a2a75e8c437b9c99971b5ee10278ab110beef1a56d1d9e5d6759ea140e98ac"
+        },
+        {
+          "file_name": "libsasl2.so.2.0.25",
+          "bytes": 101200,
+          "sha256": "a0f410ad093236856eee59c4ff2838dc04d932ea0993400f23ed77d67d85af34"
+        },
+        {
+          "file_name": "libslang.so.2.3.3",
+          "bytes": 2157592,
+          "sha256": "af564bc54e7c7bc51c21de935846ac6fe5bd551c22ab5af72927ff5e31aaaac4"
+        },
+        {
+          "file_name": "libssh.so.4.9.6",
+          "bytes": 462360,
+          "sha256": "b82bd54edb908605b8142be1a6d242df65501af0e9bb7581cc36ebf4d8a5ecfd"
+        },
+        {
+          "file_name": "libstdc++.so.6.0.33",
+          "bytes": 2592224,
+          "sha256": "1fd75fe70354a416d75aef22bcae68c47bd25d20e2d0568c30b1a9838cf62f11"
+        },
+        {
+          "file_name": "libtasn1.so.6.6.3",
+          "bytes": 88216,
+          "sha256": "59994414d0cdec4f678ef91eaaafc44b26b00bca507e4cc7978caaf79f584173"
+        },
+        {
+          "file_name": "libtinfo.so.6.4",
+          "bytes": 208328,
+          "sha256": "e6089d7bb95eee5b545f3770dd69095b0bca47d26701cad145af429561d16306"
+        },
+        {
+          "file_name": "libtraceevent.so.1.8.2",
+          "bytes": 162696,
+          "sha256": "aaea15e052e86192f90a64fe03779c74ec5b41c59622c6e121d7c89d0d20e63c"
+        },
+        {
+          "file_name": "libunistring.so.5.0.0",
+          "bytes": 1755312,
+          "sha256": "7bcf825cd449892db5105ad2aed91dcf94a27b796426600c765720c584c54dd1"
+        },
+        {
+          "file_name": "libxml2.so.2.9.14",
+          "bytes": 1967424,
+          "sha256": "ddd3af3f491a9686c82fe1232f1250cec368eb2fbcb1d2725c6ce9401a6dbd3b"
+        },
+        {
+          "file_name": "libz.so.1.3",
+          "bytes": 113000,
+          "sha256": "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892"
+        },
+        {
+          "file_name": "libzstd.so.1.5.5",
+          "bytes": 755864,
+          "sha256": "0a2128bc10841fb29e76d08d945864dfb0b6a66da5df6df5d8299197439e54bb"
+        }
+      ]
+    },
+    "command": [
+      "/usr/lib/linux-hwe-7.0-tools-7.0.0-28/perf",
+      "record",
+      "-q",
+      "-e",
+      "cycles:u",
+      "-F",
+      "499",
+      "-o",
+      "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/interpreter.perf",
+      "--",
+      "/home/vano/rust-must-die/rmd/build/crust",
+      "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/ordinary-8000-interpreted.crs",
+      "--library",
+      "--emit-c",
+      "--symbols",
+      "/dev/null"
+    ],
+    "report_command": [
+      "/usr/lib/linux-hwe-7.0-tools-7.0.0-28/perf",
+      "report",
+      "--stdio",
+      "--no-children",
+      "--call-graph",
+      "none",
+      "--percent-limit",
+      "1",
+      "-i",
+      "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/interpreter.perf"
+    ],
+    "report": "# To display the perf.data header info, please use --header/--header-only options.\n#\n#\n# Total Lost Samples: 0\n#\n# Samples: 2K of event 'cycles:u'\n# Event count (approx.): 20900588175\n#\n# Overhead  Command  Shared Object         Symbol                             \n# ........  .......  ....................  ...................................\n#\n    25.66%  crust    crust                 [.] eval_expression\n    25.52%  crust    crust                 [.] eval_place\n    18.66%  crust    crust                 [.] read_place\n    12.33%  crust    crust                 [.] eval_statement\n     6.04%  crust    crust                 [.] crust_map_get\n     3.29%  crust    libc.so.6             [.] __memmove_avx512_unaligned_erms\n     2.41%  crust    crust                 [.] call_declaration_impl\n     1.03%  crust    crust                 [.] crust_eval_prepare\n\n\n#\n# (Cannot load tips.txt file, please install perf!)\n#\n",
+    "data": {
+      "path": "/home/vano/rust-must-die/rmd/build/source-gate-my3i2z5h/interpreter.perf",
+      "bytes": 293072,
+      "lines": 1967,
+      "sha256": "1c1086d5a83577fee8c73e2ef4d5f8c0fedc91b2bd2a02d3fd38f1fd1c31cd27"
+    },
+    "timing": "Separate untimed control after paired samples"
+  }
+}

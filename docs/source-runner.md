@@ -364,3 +364,55 @@ two measured changes that passed. It also records the separate native-library
 preparation observation and its exact compiler flags. The
 [validation record](../benchmarks/source-order/validation.json) contains the
 final sanitizer commands, input hashes, and logs.
+
+### Source-supplied backend gate
+
+The [2026-10-02 run](../benchmarks/source-order/gate-2026-10-02.json) checks
+the current source-selected C backend with 20 randomized paired rounds per
+input. Each sample starts a new process on one CPU. Application and stage
+result caches are empty; OS file caches are warm. GCC 13.3 is faster than
+Clang 20.1.8 on each matched original C input. These are the installed compiler
+versions, not a claim to cover the latest releases.
+
+| Input | Installed backend, ms | Backend source interpreted, ms | Backend source compiled then loaded, ms | GCC check, ms | Clang check, ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Intrusive list | 2.452 | 7.553 | 459.970 | 7.028 | 20.848 |
+| 1,000 functions | 10.540 | 510.415 | 468.035 | 18.561 | 46.358 |
+| 8,000 functions | 65.517 | 4,102.980 | 522.577 | 111.149 | 233.642 |
+
+All routes produce identical C and native-symbol output. The direct-list
+program also runs. Target GCC compilation and linking remain outside every
+timed endpoint. In the compiled-source route, the root must compile and link
+its selected stage before that stage can run. That preparation uses GCC
+`-O2 -g0 -fPIC -fno-semantic-interposition` and is inside the measurement.
+The root removes the new library after each use. No library result is reused.
+
+The installed route passes the median and upper confidence-bound rule on
+all three inputs. Both source-supplied routes fail it. For 8,000 functions,
+the interpreted/GCC median paired ratio is 36.852, with 95% interval
+[36.805, 37.078]. The compiled-source ratio is 4.707, with interval
+[4.690, 4.720]. The JSON retains all samples, commands, roots, source and
+tool hashes, dependency checks, output checks, and intervals.
+
+A separate cycle profile puts about 82% of interpreter samples in
+`eval_expression`, `eval_place`, `read_place`, and `eval_statement`. These
+operations traverse checked syntax on each execution. Map lookup accounts
+for another 6%. A faster execution plan must remove that repeated work and
+retain the existing evaluation order, traps, callback, and storage contracts.
+Native stage preparation must also fit the request if that route is selected.
+Caching a prepared library does not repair this cold-source result.
+
+This fails the single-worker prerequisite in specification section 14.
+Parallel scheduler and language expansion stop at this gate. The next
+execution change must pass the same source-supplied witness before those
+parts grow. The full performance issue remains open.
+
+To repeat the measurement with a new report path:
+
+```sh
+python3 benchmarks/source-order/gate.py --build build --cpu 0 --rounds 20 --output build/source-gate.json
+```
+
+Select a CPU allowed by the host. Exit status 2 means the recorded speed gate
+failed. The optional `--perf` argument selects a native Linux perf executable
+for a separate profile after the timed rounds.

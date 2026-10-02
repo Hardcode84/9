@@ -239,6 +239,44 @@ Required traps and aggregate copies also have costs. Native output must be
 measured before a claim of runtime parity with handwritten C. Raw Crust0 memory
 preconditions still apply; this backend adds no ownership checker.
 
+## Native runtime contract
+
+Generated C can require native runtime functions even when the Crust source
+has no foreign calls. GCC can lower aggregate copies to `memcpy`, and can
+introduce `memmove`, `memset`, or `memcmp`. These names must have their C
+runtime meanings and ABI. This requirement remains with `-ffreestanding`;
+that option does not remove GCC's memory support calls.
+[GCC runtime requirements](https://gcc.gnu.org/onlinedocs/gcc/Standards.html)
+
+For example, an exported no-op `memcpy` can leave a large record assignment
+unchanged. The generated object calls that definition. Symbol renaming cannot
+isolate it from other native calls to the same name. A program can supply its
+own correct runtime implementation; the stage does not prohibit these exports
+or prove their implementations. A private Crust function named `memcpy` does
+not replace the native symbol unless the driver exports it under that name.
+
+GCC configuration and extra `--cflag` arguments can add further dependencies.
+The tested Ubuntu GCC 13.3.0 configuration enables
+`-fstack-protector-strong`, `-fstack-clash-protection`, and
+`-fcf-protection=full`. Stack protection can call `__stack_chk_fail`, which must
+terminate on guard failure. Control-flow protection can emit `endbr64`.
+The driver explicitly requests stack-clash protection and retains the other
+toolchain defaults. Sanitizer or profiling flags can add their own runtime
+calls. These costs belong to the selected GCC configuration.
+[GCC instrumentation options](https://gcc.gnu.org/onlinedocs/gcc-13.3.0/gcc/Instrumentation-Options.html)
+
+Check the selected compiler and emitted object when supplying a runtime:
+
+```sh
+gcc -Q -O2 --help=common
+nm -u build/program.o
+```
+
+`tests/run.py` checks a 16 KiB record copy with hosted and freestanding GCC
+options. Both objects call `memcpy` and, with stack protection requested, refer
+to `__stack_chk_fail`. A Crust-defined `memcpy` supplies the copy in the test;
+the C caller checks every array element and confirms that the runtime was called.
+
 ## Exact native names
 
 C identifiers are generated names. Source identifiers can be C keywords.

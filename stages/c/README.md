@@ -113,8 +113,15 @@ right
 The C file uses generated identifiers such as `r_g1`. The response file
 maps those identifiers to native link names, including `puts`. `objcopy`
 applies that mapping to the object. This avoids conflicts with C keywords,
-GCC builtins, and names used by the emitted support code. Linking the raw
-object before this step leaves the generated external name unresolved.
+GCC builtin declarations, and C support identifiers. Linking the raw object
+before this step leaves the generated external name unresolved.
+
+The mapping does not isolate native runtime names. GCC can turn aggregate
+copies into calls to `memcpy` and can add other library or instrumentation
+calls. A definition exported as `memcpy` must implement that runtime contract;
+a no-op definition can break assignment even when the source never calls it.
+See the [native runtime contract](../../docs/c-backend.md#native-runtime-contract)
+before supplying runtime definitions or selecting toolchain options.
 
 The response file contains quoted arguments for `objcopy`. Treat it as an
 argument file; do not replace it with a line-based symbol map. The backend

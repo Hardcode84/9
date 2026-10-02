@@ -217,6 +217,61 @@ def check_output_permissions(command, compiler, backend, work, tool_flags):
     assert not list(work.glob(".crust-*")), "driver left temporary files"
 
 
+def check_c_runtime(command, compiler, work, cc):
+    source = work / "runtime-copy.crs"
+    source.write_text(
+        "record Big { values:[u64;2048]; }\n" "fn copy_big(dst:*Big,src:*Big)->unit{*dst=*src;}\n"
+    )
+    runtime = work / "runtime-memcpy.crs"
+    runtime.write_text(
+        'extern fn note_copy()->unit="note_copy";\n'
+        "fn memcpy(dst:*u8,src:*u8,count:usize)->*u8{\n"
+        "note_copy(); var i:usize=0usize;\n"
+        "while i<count {dst[i]=src[i]; i=i+1usize;} return dst;}\n"
+    )
+    runtime_object = runtime.with_suffix(".o")
+    command(
+        [compiler, "--library", "--object", "--export", "memcpy", "-o", runtime_object, runtime]
+    )
+    undefined = command(["nm", "-u", runtime_object]).stdout
+    assert not re.search(rb"\bU memcpy\b", undefined), "runtime memcpy calls itself"
+    harness = work / "runtime-copy.c"
+    harness.write_text(
+        "#include <stddef.h>\n#include <stdint.h>\n"
+        "struct Big {uint64_t values[2048];};\n"
+        "void copy_big(struct Big *dst,struct Big *src);\n"
+        "void note_copy(void);\nstatic unsigned calls;\n"
+        "void note_copy(void){++calls;}\n"
+        "int main(void){struct Big src,dst;size_t i;\n"
+        "for(i=0;i<2048;++i){src.values[i]=i*53+1;dst.values[i]=0;}\n"
+        "copy_big(&dst,&src);if(calls==0)return 1;\n"
+        "for(i=0;i<2048;++i){if(dst.values[i]!=src.values[i])return 2;}\n"
+        "return 0;}\n"
+    )
+    for mode, options in (("hosted", []), ("freestanding", ["--cflag=-ffreestanding"])):
+        object_path = work / f"runtime-copy-{mode}.o"
+        command(
+            [
+                compiler,
+                "--library",
+                "--object",
+                "--export",
+                "copy_big",
+                "--cflag=-fstack-protector-all",
+                *options,
+                "-o",
+                object_path,
+                source,
+            ]
+        )
+        undefined = command(["nm", "-u", object_path]).stdout
+        assert re.search(rb"\bU memcpy\b", undefined), undefined
+        assert re.search(rb"\bU __stack_chk_fail\b", undefined), undefined
+        output = work / f"runtime-copy-{mode}"
+        command([*cc, *STRICT, "-O2", harness, object_path, runtime_object, "-o", output])
+        command([output])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", required=True, type=Path)
@@ -971,6 +1026,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
             work.glob(".crust-*")
         ), "driver left temporary files after a completed command"
 
+        check_c_runtime(command, compiler, work, cc)
         library_source, library_object = work / "library.crs", work / "library.o"
         library_source.write_text("fn answer()->i32{return 42i32;}")
         command(

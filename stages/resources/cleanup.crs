@@ -3,7 +3,7 @@
 fn rs_clone_expr_depth(stage: *RsStage, source: *CrustExpr, depth: u32) -> *CrustExpr {
     if source == null(*CrustExpr) || (*stage).failed { return null(*CrustExpr); }
     if depth >= 256u32 {
-        rs_error(stage, &(*source).loc, "semantic nesting limit of 256 exceeded");
+        rs_error(stage, &(*source).loc, "semantic traversal depth limit of 256 exceeded");
         return null(*CrustExpr);
     }
     var target: *CrustExpr = rs_expr_node(stage, (*source).kind, &(*source).loc);

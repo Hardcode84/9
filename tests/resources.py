@@ -965,8 +965,8 @@ def depth_reject_cases():
     records = "".join(f"record R{index} {{ v:R{index + 1}; }}\n" for index in range(count - 1))
     records += f"record R{count - 1} {{ v:i32; }}\nconst x:R0=0i32;\n"
     return [
-        ("flat-constant-semantic-depth", constant, "nesting"),
-        ("cross-record-ownership-depth", records, "nesting"),
+        ("flat-constant-semantic-depth", constant, "semantic traversal depth limit"),
+        ("cross-record-ownership-depth", records, "semantic traversal depth limit"),
     ]
 
 

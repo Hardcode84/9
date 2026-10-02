@@ -64,7 +64,7 @@ static CrustLoc no_location(void)
 static void check_depth(CrustContext *ctx, CrustLoc loc, unsigned depth)
 {
     if (depth >= CHECK_DEPTH_LIMIT)
-        crust_fail(ctx, loc, "semantic nesting limit of %u exceeded", CHECK_DEPTH_LIMIT);
+        crust_fail(ctx, loc, "semantic traversal depth limit of %u exceeded", CHECK_DEPTH_LIMIT);
 }
 
 static bool same_name(const CrustName *a, const CrustName *b)

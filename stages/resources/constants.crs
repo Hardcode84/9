@@ -19,7 +19,7 @@ fn rs_constant_syntax(stage: *RsStage, expression: *CrustExpr) -> unit {
     }
 }
 
-// Copy an initializer within the semantic nesting limit and lower its source types.
+// Copy an initializer within the semantic depth limit and lower its source types.
 // Preserve the source tree. Seed constant checking must follow this operation.
 fn rs_lower_constant(stage: *RsStage, expression: *CrustExpr) -> *CrustExpr {
     var result: *CrustExpr = rs_clone_expr(stage, expression);

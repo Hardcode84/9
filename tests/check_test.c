@@ -246,7 +246,7 @@ static void test_resource_bounds(void)
         size += 6;
     }
     memcpy(source + size, "; }", 4);
-    source_case("flat expression depth is bounded", source, "semantic nesting limit");
+    source_case("flat expression depth is bounded", source, "semantic traversal depth limit");
     size = 0;
     for (i = 0; i < 300; ++i) {
         int count =
@@ -258,7 +258,7 @@ static void test_resource_bounds(void)
         size += (size_t)count;
     }
     memcpy(source + size, "record R300 { x: u8; }", 23);
-    source_case("by-value layout traversal is bounded", source, "semantic nesting limit");
+    source_case("by-value layout traversal is bounded", source, "semantic traversal depth limit");
     size = 0;
     memcpy(source, "record R300 { x: u8; }", 22);
     size = 22;
@@ -272,7 +272,7 @@ static void test_resource_bounds(void)
         size += (size_t)count;
     }
     source_case("layout depth does not depend on declaration order", source,
-                "semantic nesting limit");
+                "semantic traversal depth limit");
 }
 
 static void test_identity_facts(void)
@@ -550,7 +550,7 @@ static void test_shared_type_depth(void)
     root.params = params;
     declaration = supplied_function(&name, 1, &root);
     check(!crust_bind(&ctx, &name, &declaration) &&
-              strstr(ctx.error, "semantic nesting limit") != NULL,
+              strstr(ctx.error, "semantic traversal depth limit") != NULL,
           "a reused type must fit the depth limit at every occurrence");
     check(ctx.identities.count == 0 && ctx.globals.count == 0,
           "a rejected shared type graph publishes nothing");

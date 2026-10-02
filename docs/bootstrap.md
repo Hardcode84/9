@@ -274,12 +274,16 @@ registers. This checks the replacement stage's native calling contract.
 
 This is stage execution through Crust0. The seed compiler remains C99. The
 [C backend stage](c-backend.md) separately implements a complete backend and
-driver in Crust0 and compiles itself through its own output. The reader and
-checker remain C99. Full compiler self-compilation requires their translation
-to Crust0 and a second complete build with the resulting executable.
+driver in Crust0 and compiles itself through its own output. The seed reader,
+checker, evaluator, runner, and assembly backend remain C99. `make c-stage`
+builds the C stage through the seed and then through its own output.
+`make check-c` builds the next generation, compares generated C and native
+symbol response files across all three generations, and uses the final
+generation to build and run the direct-list program. No cache is used.
+These checks establish the stage self-compilation gate.
 The C frontend experiment requires a separate C reader, C semantic rules, and
-an ABI adapter for C operations absent from Crust0. Neither case is established
-by this small replacement-stage witness.
+an ABI adapter for C operations absent from Crust0. The small replacement-stage
+witness does not establish that case.
 
 ## Parallel use
 

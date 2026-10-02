@@ -741,8 +741,10 @@ Dynamic plugins, a resident compiler server, a JIT, and persistent caches are
 not required by the library construction contract. The source runner executes
 checked root actions directly and uses libffi for native calls and callbacks.
 Root execution includes no hidden assembly or native linking step.
-Self-compilation uses the previous compiler executable to build the next one;
-it does not require the next executable before it exists.
+Stage self-compilation uses the previous compiler configuration to build the
+next generation of Crust stage libraries and drivers. The C99 seed remains
+available; it is not translated to Crust0. No generation requires its own
+unavailable output.
 
 Host execution and target description are separate. `sizeof` in a running
 stage describes that stage program's execution profile. A cross-compiler gets
@@ -893,9 +895,9 @@ and source position when one exists. A stated implementation resource limit
 must fail explicitly; it must not omit a check or accept partial output.
 
 The current repository implements seed syntax, execution, and root control.
-Its stage libraries provide bounded construction witnesses. They do not establish
-full compiler self-compilation or the C frontend experiment. The checked direct
-intrusive-list witness is also absent. Passing the seed tests does not complete
+Its stage libraries provide bounded construction witnesses. The C backend passes
+the stage self-compilation case. It does not establish the C frontend experiment.
+The checked direct intrusive-list witness is also absent. Passing the seed tests does not complete
 compiler-construction or checked-language acceptance.
 
 The first implementation must establish these cases before adding language
@@ -910,7 +912,7 @@ facilities:
 | Explicit bindings | Independent bodies use the same declared facts; absent or conflicting facts fail at the input boundary |
 | Module replacement | A library supplies discovery, visibility, and dependency policy without a core module resolver |
 | Public construction | A user driver replaces a reader and one backend lowering through published APIs |
-| Self-compilation | The compiler libraries build through Crust0 with caches disabled and produce the required executable output |
+| Stage self-compilation | Build the Crust backend and driver through the C99 seed, then through two successive generations of their own output, with caches disabled. Compare generated code and native names. Use the final generation to build and run the direct-list program |
 | C frontend extension | The frozen SQLite and chibicc cases satisfy the executable checks in the existing experiment |
 
 The C extension case tests compiler construction, including C rules absent
@@ -952,6 +954,11 @@ contract. It deliberately moves module management, ownership, cleanup, unsafe
 policy, richer syntax, and backend adaptation into ordinary compiled libraries.
 It does not add generics, a macro evaluator, a package manager, a query engine,
 or a permanent plugin ABI to make those libraries possible.
+
+The seed reader, checker, evaluator, runner, and assembly backend remain C99.
+A C99 compiler can always build this seed. Crust stage libraries and drivers
+can compile themselves through their previous generation. This is the
+self-compilation gate; translating the seed is not a requirement.
 
 The [systems source study](exploration/systems-capabilities.md) remains the capability
 target. Linux, GCC, and LLVM cases require explicit storage, layout, callbacks,

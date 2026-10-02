@@ -267,8 +267,11 @@ process calls. Its lowering and C text construction remain Crust code.
 For its first build, `make c-stage` uses `crust0` to compile the C backend
 to assembly. That executable then compiles the same backend through C and
 GCC. The result also builds the shared library loaded by source roots.
-This bootstraps the backend and driver. The seed checker, evaluator, and
-runner are still C99; the C backend still calls the C99 frontend. The
+This bootstraps the backend and driver. `make check-c` builds one more
+generation, compares emitted C and symbol response files across all three,
+and runs a direct-list program built by the final generation. These builds
+use no cache. The seed reader, checker, evaluator, runner, and assembly
+backend remain C99 by design. The C backend calls the C99 frontend. The
 separate Crust reader library is available to stages that select it.
 
 An LLVM adapter belongs at the same library boundary. There is no LLVM

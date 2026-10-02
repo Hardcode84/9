@@ -8,6 +8,8 @@ Do not add a feature before a concrete program requires it.
 
 ## Design
 
+- Keep the seed reader, checker, evaluator, runner, and assembly backend in
+  C99. Test self-compilation across generations of Crust stage libraries.
 - Read the [language specification](docs/crust0-spec.md),
   [bootstrap guide](docs/bootstrap.md), and
   [runner contract](docs/source-runner.md) before changing their contracts.

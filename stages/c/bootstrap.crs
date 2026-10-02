@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "../../api/crust0_stage.crs");
+host_source(run, "model.crs");
+host_source(run, "base.crs");
+host_source(run, "types.crs");
+host_source(run, "emit.crs");
+host_source(run, "driver.crs");
+host_source(run, "program.crs");
+host_source(run, "build.crs");
+
+var input: *CrustSource = host_input(run, "../../api/crust0.crs", 1u64);
+if input == null(*CrustSource) { return 1i32; };
+return c_build(input, 0usize, (*run).argc, (*run).argv);

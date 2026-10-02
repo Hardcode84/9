@@ -25,4 +25,4 @@ build/crust examples/intrusive/main.crs -o build/list --ldflag build/libcrust0_h
 build/list
 ```
 
-Run `make witness` to compare the seed assembly output with the C reference.
+Run `make witness` to compare the Crust assembly stage output with the C reference.

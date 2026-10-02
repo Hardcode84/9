@@ -102,8 +102,8 @@ fn native_cleanup(context: *CrustContext, session: *NativeSession) -> bool {
     return success;
 }
 
-fn native_link_image(context: *CrustContext, image: *NativeImage) -> bool {
-    var count: usize = 0usize;
+fn native_link_image(context: *CrustContext, session: *NativeSession, image: *NativeImage) -> bool {
+    var count: usize = (*session).library_count;
     var dependency: *NativeImage = (*image).next;
     while dependency != null(*NativeImage) { count = count + 1usize; dependency = (*dependency).next; }
     if count > (~0usize / sizeof(*u8)) - 7usize { return native_error(context, "too many native images"); }
@@ -121,6 +121,12 @@ fn native_link_image(context: *CrustContext, image: *NativeImage) -> bool {
         arguments[count] = (*dependency).library;
         count = count + 1usize;
         dependency = (*dependency).next;
+    }
+    var index: usize = 0usize;
+    while index < (*session).library_count {
+        arguments[count] = (*session).libraries[index];
+        count = count + 1usize;
+        index = index + 1usize;
     }
     return native_tool(context, arguments);
 }

@@ -34,7 +34,7 @@ fn allocation_sweep(parent: *CrustRun, path: *u8, temporary: *u8) -> i32 {
         root.context = &storage;
         var session: NativeSession = make NativeSession {
             images: null(*NativeImage), compile: null(fn(*CrustContext,*NativeSession,*NativeImage)->bool),
-            user: null(*u8), temporary: temporary
+            user: null(*u8), temporary: temporary, libraries: null(**u8), library_count: 0usize
         };
         var name: *u8 = "answer";
         var image: *NativeImage = native_image(&storage, &session);

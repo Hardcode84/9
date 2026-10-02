@@ -7,9 +7,9 @@ executor and backend from Crust sources. The executor compiles and calls the
 following functions. The seed does not need to interpret their bodies.
 
 The [same-file example](../../examples/native/main.crs) builds an executable
-from a cold start. Its inputs are the `crust` seed, the listed Crust sources,
-GNU assembler, GCC, and the system libraries. It does not load a prepared C
-backend or invoke the separate `crust0` command.
+with an explicitly loaded assembly stage. Its inputs are the `crust` seed,
+`crust-asm-library.so`, the listed Crust sources, GNU assembler, GCC, and the
+system libraries.
 
 ```sh
 make all
@@ -21,7 +21,9 @@ The output is `Hello from a bootstrapped native stage!`.
 
 ## Follow the compilation
 
-The root loads the seed assembly interface and ordinary stage helper sources.
+The root loads the external assembly library, its interface, and ordinary
+stage helper sources. It selects `session.compile` and the library paths that
+later native images require.
 It creates persistent state, selects source paths and exports, then calls
 `native_bootstrap` inside one root block. That block also checks the state
 after native execution and returns the final status.
@@ -29,7 +31,7 @@ after native execution and returns the final status.
 ```mermaid
 flowchart TD
     A[Seed executes root setup] --> B[Read and check explicit stage sources]
-    B --> C[Seed emits assembly]
+    B --> C[Selected Crust stage emits assembly]
     C --> D[Assembler and linker build stage library]
     D --> E[Load library and call native_start]
     E --> F[Install native executor through CrustRun]
@@ -98,7 +100,7 @@ value with `crust_eval_function`. It does not prepare an interpreted callable
 for that function. The first published callable is therefore the native one.
 
 Each image has a private temporary directory. The entry's exact native name
-includes that directory. The linker receives the preceding images as explicit
+includes that directory. The linker receives `session.libraries` and preceding images as explicit
 dependencies. This allows calls between units with local loader visibility.
 No process-wide symbol promotion is required.
 
@@ -116,20 +118,21 @@ the evaluator, its state, or the runner.
 | [api.crs](api.crs) | Native entry and C compiler declarations |
 | [bootstrap.crs](bootstrap.crs) | Explicit source capture, checks, exports, startup, and cleanup |
 | [execute.crs](execute.crs) | Function actions, signature checks, emission, publication, and calls |
-| [asm.crs](asm.crs) | Seed assembly emission and tool invocation |
+| [asm.crs](asm.crs) | External assembly stage calls and tool invocation |
 | [c.crs](c.crs) | C backend object emission and native linking |
 | [linux.crs](linux.crs) | Linux process, file, and temporary-directory operations |
 
-Initialize a session with an empty image list, a user pointer, and an existing
-absolute temporary directory. Keep it and its user storage live through
+Initialize a session with an empty image list, a selected compiler, user data,
+an existing absolute temporary directory, and explicit library dependencies. Keep it and its user storage live through
 `native_bootstrap`. The source list contains declaration files. The export
 list names defined functions. All paths in the source list are root-relative.
 
-`native_start` first selects `native_asm_image`. A native action can replace
-`session.compile` with `native_c_image` or another compatible function. The
+`native_start` retains the caller's `session.compile`. A native action can
+replace it with `native_c_image` or another compatible function. The
 callback receives checked, named declarations, session state, and a new image.
 It must write and link `image.library`, or return false with a diagnostic.
-`image.next` lists the preceding images. Do not publish a callable before
+`image.next` lists the preceding images. `session.libraries` lists persistent
+external dependencies, including prepared or cached stages. Do not publish a callable before
 its image is complete. The session owns every image's cleanup.
 
 These are library policies. Neither the C99 seed nor the launcher recognizes
@@ -158,8 +161,9 @@ make c-stage
 python3 benchmarks/native/measure.py --output build/native-measurement.json
 ```
 
-The installed library is an input to the comparison route only. The native
-handoff route builds its library on each invocation. The target GCC run is
+The current native handoff route takes the assembly stage as a prepared input
+and builds the selected executor and C stage on each invocation. The archived
+results below used the C99 assembly implementation at their recorded revision. The target GCC run is
 outside frontend timings. Stage preparation and continuation compilation remain
 in the total cold cost.
 

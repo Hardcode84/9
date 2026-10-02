@@ -8,5 +8,5 @@ fn native_c_image(context: *CrustContext, session: *NativeSession, image: *Nativ
         cflags: &flags[0usize], cflag_count: 2usize,
         ldflags: null(**u8), ldflag_count: 0usize
     };
-    return c_backend_build(context, null(*CrustDecl), &options) == 0i32 && native_link_image(context, image);
+    return c_backend_build(context, null(*CrustDecl), &options) == 0i32 && native_link_image(context, session, image);
 }

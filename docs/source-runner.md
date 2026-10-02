@@ -94,8 +94,9 @@ is reused. A root must not load those same declarations a second time.
 
 These interfaces expose syntax, types, bindings, incremental checks,
 evaluation calls, and the root cursor and operation fields. Include
-`api/crust0_x64.crs` to call the optional seed assembly backend. Include a
-library's consumer declarations before calling that library.
+`api/crust0_x64.crs` and load the external assembly stage to call its services.
+The seed has no backend implementation. Include a library's consumer
+declarations before calling that library.
 
 The `host_` names are ordinary functions. Their prefix avoids conflicts with
 common parameter names under the seed's rule against shadowing visible names.
@@ -217,8 +218,10 @@ handoff finishes under its captured operations. Later actions use the new
 selection without replaying the setup prefix. Native execution must preserve
 the source-order boundaries; it cannot parse unread bytes across a pending
 reader change. The [native stage](../stages/native/README.md) implements this
-boundary with complete function actions. Its source bootstrap builds a native
-executor and C backend with seed assembly. It then compiles and calls the next
+boundary with complete function actions. Its bootstrap uses the compiler
+selected in `NativeSession.compile`. `NativeSession.libraries` supplies explicit
+native dependencies. `native_start` retains that compiler selection. The
+executor then compiles and calls the next
 functions, preserves explicit state and callable identities, and builds the
 target from the unread source tail. Its unit rules are ordinary library policy.
 
@@ -339,9 +342,8 @@ facts. Submitted jobs must retain their source, selected stages, state, and
 native code until completion. A library can schedule those jobs and join them
 before releasing their inputs. The seed adds no task scheduler.
 
-No persistent execution-result cache or prepared-root cache is implemented.
-Root effects execute on every invocation. Reusing results requires a complete
-dependency and effect contract, as described in the
+Root effects execute on every invocation. A persistent artifact cache requires
+a complete dependency and effect contract, as described in the
 [metacompilation study](exploration/metacompilation.md#7-caching-without-changing-program-meaning).
 
 The [reader-transfer proof](../benchmarks/source-order/proof.md) established

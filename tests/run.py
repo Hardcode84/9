@@ -766,7 +766,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         stage = executable(
             "stage",
             inputs=[*api_paths, "examples/custom-stage/stage.crs"],
-            libraries=[build / "libcrust0.a"],
+            libraries=[build / "libcrust_asm.a", build / "libcrust0.a"],
         )
         custom_input = work / "answer.txt"
         custom_input.write_text("42\n")

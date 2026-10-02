@@ -1,0 +1,362 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn x64_error(ctx: *CrustContext, location: *CrustLoc, message: *u8) -> bool {
+    crust_set_error(ctx, (*location).source, (*location).offset, message);
+    return false;
+}
+
+fn crust_x64_try_reserve(ctx: *CrustContext, function: *CrustX64Function, size: u64,
+                         alignment: u32, source: *CrustSource, offset: usize,
+                         result: *CrustX64Slot) -> bool {
+    var location: CrustLoc = make CrustLoc { source: source, offset: offset };
+    if alignment == 0u32 || (alignment & (alignment - 1u32)) != 0u32 {
+        return x64_error(ctx, &location, "invalid backend slot alignment");
+    }
+    if size > 9223372036854775807u64 || (*function).frame_size > 9223372036854775807u64 - size {
+        return x64_error(ctx, &location, "backend stack frame exceeds target address space");
+    }
+    var end: u64 = (*function).frame_size + size;
+    var mask: u64 = alignment as u64 - 1u64;
+    if end > 9223372036854775807u64 - mask {
+        return x64_error(ctx, &location, "backend stack frame alignment overflow");
+    }
+    end = (end + mask) & ~mask;
+    *result = make CrustX64Slot { offset: end, size: size, align: alignment };
+    (*function).frame_size = end;
+    return true;
+}
+
+fn x64_reserve(program: *CrustX64Program, function: *CrustX64Function, size: u64,
+               alignment: u32, location: *CrustLoc, result: *CrustX64Slot) -> bool {
+    return crust_x64_try_reserve((*program).context, function, size, alignment,
+                                 (*location).source, (*location).offset, result);
+}
+
+fn x64_prepare_string(program: *CrustX64Program, expression: *CrustExpr) -> bool {
+    if crust_map_get(&(*program).string_map, expression as usize) != null(*u8) { return true; }
+    var string: *CrustX64String = crust_try_alloc((*program).context, sizeof(CrustX64String), alignof(CrustX64String)) as *CrustX64String;
+    if string == null(*CrustX64String) { return false; }
+    (*string).expression = expression;
+    (*string).identity = (*program).next_identity;
+    (*program).next_identity = (*program).next_identity + 1u64;
+    if (*program).last_string == null(*CrustX64String) { (*program).strings = string; }
+    else { (*(*program).last_string).next = string; }
+    (*program).last_string = string;
+    return crust_try_map_set((*program).context, &(*program).string_map, expression as usize, string as *u8);
+}
+
+fn x64_native_kind(type: *CrustType) -> u32 {
+    if (*type).kind == CRUST_T_ISIZE { return CRUST_T_I64; }
+    if (*type).kind == CRUST_T_USIZE { return CRUST_T_U64; }
+    return (*type).kind;
+}
+
+record X64TypePair {
+    left: *CrustType;
+    right: *CrustType;
+    bucket: *X64TypePair;
+    next: *X64TypePair;
+}
+record X64Comparison {
+    seen: CrustMap;
+    first: *X64TypePair;
+    last: *X64TypePair;
+}
+
+fn x64_compare_add(ctx: *CrustContext, work: *X64Comparison, left: *CrustType, right: *CrustType) -> bool {
+    if left == right { return true; }
+    var key: usize = (left as usize >> 3usize) ^ (right as usize << 5usize);
+    if key == 0usize { key = 1usize; }
+    var bucket: *X64TypePair = crust_map_get(&(*work).seen, key) as *X64TypePair;
+    var old: *X64TypePair = bucket;
+    while old != null(*X64TypePair) {
+        if (*old).left == left && (*old).right == right { return true; }
+        old = (*old).bucket;
+    }
+    var pair: *X64TypePair = crust_try_alloc(ctx, sizeof(X64TypePair), alignof(X64TypePair)) as *X64TypePair;
+    if pair == null(*X64TypePair) { return false; }
+    (*pair).left = left; (*pair).right = right; (*pair).bucket = bucket;
+    if (*work).last == null(*X64TypePair) { (*work).first = pair; }
+    else { (*(*work).last).next = pair; }
+    (*work).last = pair;
+    return crust_try_map_set(ctx, &(*work).seen, key, pair as *u8);
+}
+
+fn x64_native_equal(ctx: *CrustContext, left: *CrustType, right: *CrustType, equal: *bool) -> bool {
+    var work: X64Comparison = make X64Comparison {
+        seen: make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize },
+        first: null(*X64TypePair), last: null(*X64TypePair)
+    };
+    *equal = false;
+    if !x64_compare_add(ctx, &work, left, right) { return false; }
+    var pair: *X64TypePair = work.first;
+    while pair != null(*X64TypePair) {
+        left = (*pair).left; right = (*pair).right;
+        if x64_native_kind(left) != x64_native_kind(right) { return true; }
+        if (*left).kind == CRUST_T_RECORD || (*left).kind == CRUST_T_ARRAY { return true; }
+        if (*left).kind == CRUST_T_FUNCTION {
+            if (*left).param_count != (*right).param_count { return true; }
+            if !x64_compare_add(ctx, &work, (*left).base, (*right).base) { return false; }
+            var index: usize = 0usize;
+            while index < (*left).param_count {
+                if !x64_compare_add(ctx, &work, (*left).params[index], (*right).params[index]) { return false; }
+                index = index + 1usize;
+            }
+        }
+        pair = (*pair).next;
+    }
+    *equal = true;
+    return true;
+}
+
+fn x64_function_symbol(declaration: *CrustDecl) -> bool {
+    return (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_EXTERN;
+}
+
+fn x64_link_name(program: *CrustX64Program, declaration: *CrustDecl, definition: bool, name: **CrustName) -> bool {
+    var ctx: *CrustContext = (*program).context;
+    var text: *u8 = (*declaration).link_name;
+    *name = null(*CrustName);
+    if text == null(*u8) { return x64_error(ctx, &(*declaration).loc, "backend declaration has no link name"); }
+    if *text == 0u8 {
+        if !definition || (*declaration).kind == CRUST_D_EXTERN {
+            return x64_error(ctx, &(*declaration).loc, "a private declaration must be an owned definition");
+        }
+        return true;
+    }
+    var count: usize = 0usize;
+    while text[count] != 0u8 {
+        if text[count] > 127u8 { return x64_error(ctx, &(*declaration).loc, "native link name is not ASCII"); }
+        count = count + 1usize;
+    }
+    if (*program).entry != null(*CrustDecl) && x64_strcmp(text, "main") == 0i32 {
+        return x64_error(ctx, &(*declaration).loc, "native symbol main conflicts with the hosted entry adapter");
+    }
+    *name = crust_try_intern(ctx, text, count);
+    return *name != null(*CrustName);
+}
+
+fn x64_check_alias(program: *CrustX64Program, declaration: *CrustDecl,
+                   alias: *CrustX64Alias, previous: *CrustX64Alias, definition: bool) -> bool {
+    var equal: bool = false;
+    var ctx: *CrustContext = (*program).context;
+    var old: *CrustDecl = (*previous).declaration;
+    if x64_function_symbol(old) == x64_function_symbol(declaration) {
+        if x64_function_symbol(declaration) {
+            if !x64_native_equal(ctx, (*old).type, (*declaration).type, &equal) { return false; }
+        } else {
+            if !crust_try_type_equal(ctx, (*old).type, (*declaration).type, &equal) { return false; }
+        }
+    }
+    if !equal { return x64_error_detail(ctx, &(*declaration).loc, "conflicting native ABI for symbol ", (*declaration).link_name); }
+    if previous != alias && (*previous).definition && definition {
+        return x64_error_detail(ctx, &(*declaration).loc, "duplicate native definition for symbol ", (*declaration).link_name);
+    }
+    return true;
+}
+
+fn x64_prepare_alias(program: *CrustX64Program, declaration: *CrustDecl, definition: bool) -> bool {
+    var ctx: *CrustContext = (*program).context;
+    var alias: *CrustX64Alias = crust_map_get(&(*program).alias_map, declaration as usize) as *CrustX64Alias;
+    if alias != null(*CrustX64Alias) && (!definition || (*alias).definition) { return true; }
+    var name: *CrustName = null(*CrustName);
+    if !x64_link_name(program, declaration, definition, &name) { return false; }
+    var previous: *CrustX64Alias = null(*CrustX64Alias);
+    if name != null(*CrustName) { previous = crust_map_get(&(*program).native_symbols, name as usize) as *CrustX64Alias; }
+    if previous != null(*CrustX64Alias) && !x64_check_alias(program, declaration, alias, previous, definition) { return false; }
+    if alias == null(*CrustX64Alias) {
+        alias = crust_try_alloc(ctx, sizeof(CrustX64Alias), alignof(CrustX64Alias)) as *CrustX64Alias;
+        if alias == null(*CrustX64Alias) { return false; }
+        (*alias).declaration = declaration;
+        (*alias).identity = (*program).next_identity;
+        (*program).next_identity = (*program).next_identity + 1u64;
+        (*alias).next = (*program).aliases;
+        (*program).aliases = alias;
+        (*program).alias_count = (*program).alias_count + 1usize;
+        if !crust_try_map_set(ctx, &(*program).alias_map, declaration as usize, alias as *u8) { return false; }
+    }
+    (*alias).definition = definition;
+    if name != null(*CrustName) && (previous == null(*CrustX64Alias) || definition) {
+        return crust_try_map_set(ctx, &(*program).native_symbols, name as usize, alias as *u8);
+    }
+    return true;
+}
+
+fn x64_mark_prefix(name: *u8, used: *u8, count: usize) -> unit {
+    if x64_strncmp(name, ".Lcrust_", 8usize) != 0i32 { return; }
+    var cursor: *u8 = name + 8isize;
+    if *cursor < 48u8 || *cursor > 57u8 { return; }
+    var value: usize = 0usize;
+    while *cursor >= 48u8 && *cursor <= 57u8 {
+        var digit: usize = *cursor as usize - 48usize;
+        if digit > count || value > (count - digit) / 10usize { break; }
+        value = value * 10usize + digit;
+        cursor = cursor + 1isize;
+    }
+    if *cursor == 95u8 && value <= count { used[value] = 1u8; }
+}
+
+fn x64_choose_prefix(program: *CrustX64Program) -> bool {
+    var used: *u8 = crust_try_alloc((*program).context, (*program).alias_count + 1usize, 1usize);
+    if used == null(*u8) { return false; }
+    var alias: *CrustX64Alias = (*program).aliases;
+    while alias != null(*CrustX64Alias) {
+        x64_mark_prefix((*(*alias).declaration).link_name, used, (*program).alias_count);
+        alias = (*alias).next;
+    }
+    var candidate: usize = 0usize;
+    while used[candidate] != 0u8 { candidate = candidate + 1usize; }
+    var digits: [u8; 32] = uninit;
+    var begin: usize = x64_digits(&digits[0usize], candidate as u64, 10u64, 0usize);
+    x64_memcpy(&(*program).label_prefix[0usize], ".Lcrust_", 8usize);
+    x64_memcpy(&(*program).label_prefix[8usize], &digits[begin], 32usize - begin);
+    (*program).label_prefix[40usize - begin] = 95u8;
+    (*program).label_prefix[41usize - begin] = 0u8;
+    return true;
+}
+
+fn x64_prepare_storage(program: *CrustX64Program, function: *CrustX64Function,
+                       expression: *CrustExpr, value: bool, scratch: bool) -> *CrustX64Expr {
+    var ctx: *CrustContext = (*program).context;
+    var plan: *CrustX64Expr = crust_map_get(&(*function).expressions, expression as usize) as *CrustX64Expr;
+    if plan == null(*CrustX64Expr) {
+        plan = crust_try_alloc(ctx, sizeof(CrustX64Expr), alignof(CrustX64Expr)) as *CrustX64Expr;
+        if plan == null(*CrustX64Expr) { return plan; }
+        (*plan).expression = expression;
+        if !crust_try_map_set(ctx, &(*function).expressions, expression as usize, plan as *u8) { return null(*CrustX64Expr); }
+    }
+    if value && (*plan).value.size == 0u64 &&
+       !x64_reserve(program, function, (*(*expression).type).size, (*(*expression).type).align, &(*expression).loc, &(*plan).value) {
+        return null(*CrustX64Expr);
+    }
+    if scratch && (*plan).scratch.size == 0u64 &&
+       !x64_reserve(program, function, 8u64, 8u32, &(*expression).loc, &(*plan).scratch) { return null(*CrustX64Expr); }
+    return plan;
+}
+
+fn x64_expression_storage(program: *CrustX64Program, function: *CrustX64Function, expression: *CrustExpr, place: bool) -> bool {
+    var kind: u32 = (*expression).kind;
+    var scratch: bool = kind == CRUST_E_CALL || kind == CRUST_E_INDEX ||
+        (kind == CRUST_E_BINARY && (*expression).op != CRUST_OP_AND && (*expression).op != CRUST_OP_OR);
+    var value: bool = !place && !crust_type_scalar((*expression).type) && (*(*expression).type).kind != CRUST_T_UNIT;
+    if !scratch && !value { return true; }
+    var plan: *CrustX64Expr = x64_prepare_storage(program, function, expression, value, scratch);
+    if plan == null(*CrustX64Expr) { return false; }
+    if kind == CRUST_E_CALL && (*expression).arg_count != 0usize && (*plan).arguments.size == 0u64 {
+        if (*expression).arg_count > 9223372036854775807usize / 8usize {
+            return x64_error((*program).context, &(*expression).loc, "too many backend call arguments");
+        }
+        return x64_reserve(program, function, (*expression).arg_count as u64 * 8u64, 8u32, &(*expression).loc, &(*plan).arguments);
+    }
+    return true;
+}
+
+fn x64_left_place(expression: *CrustExpr, place: bool) -> bool {
+    return ((*expression).kind == CRUST_E_GROUP && place) ||
+        ((*expression).kind == CRUST_E_UNARY && (*expression).op == CRUST_OP_ADDRESS) ||
+        (((*expression).kind == CRUST_E_FIELD || (*expression).kind == CRUST_E_INDEX) &&
+         (*(*expression).left).place && (*(*(*expression).left).type).kind != CRUST_T_POINTER);
+}
+
+fn x64_prepare_expression(program: *CrustX64Program, function: *CrustX64Function, expression: *CrustExpr, place: bool) -> bool {
+    if expression == null(*CrustExpr) { return true; }
+    if (*expression).kind == CRUST_E_STRING && !x64_prepare_string(program, expression) { return false; }
+    if (*expression).kind == CRUST_E_NAME && (*expression).symbol != null(*CrustSymbol) {
+        var symbol: *CrustSymbol = (*expression).symbol;
+        if ((*symbol).kind == CRUST_SYM_FUNCTION || (*symbol).kind == CRUST_SYM_CONST) &&
+           !x64_prepare_alias(program, (*symbol).decl, false) { return false; }
+    }
+    if function != null(*CrustX64Function) && !x64_expression_storage(program, function, expression, place) { return false; }
+    if !x64_prepare_expression(program, function, (*expression).left, x64_left_place(expression, place)) ||
+       !x64_prepare_expression(program, function, (*expression).right, false) { return false; }
+    return x64_prepare_children(program, function, expression);
+}
+
+fn x64_prepare_children(program: *CrustX64Program, function: *CrustX64Function, expression: *CrustExpr) -> bool {
+    var index: usize = 0usize;
+    while index < (*expression).arg_count {
+        if !x64_prepare_expression(program, function, (*expression).args[index], false) { return false; }
+        index = index + 1usize;
+    }
+    var init: *CrustInit = (*expression).inits;
+    while init != null(*CrustInit) {
+        if !x64_prepare_expression(program, function, (*init).value, false) { return false; }
+        init = (*init).next;
+    }
+    return true;
+}
+
+fn x64_symbol_slot(program: *CrustX64Program, function: *CrustX64Function, symbol: *CrustSymbol, location: *CrustLoc) -> bool {
+    var slot: *CrustX64Slot = crust_try_alloc((*program).context, sizeof(CrustX64Slot), alignof(CrustX64Slot)) as *CrustX64Slot;
+    if slot == null(*CrustX64Slot) { return false; }
+    if !x64_reserve(program, function, (*(*symbol).type).size, (*(*symbol).type).align, location, slot) { return false; }
+    return crust_try_map_set((*program).context, &(*function).symbols, symbol as usize, slot as *u8);
+}
+
+fn x64_prepare_statements(program: *CrustX64Program, function: *CrustX64Function, statement: *CrustStmt) -> bool {
+    while statement != null(*CrustStmt) {
+        if (*statement).kind == CRUST_S_VAR && !x64_symbol_slot(program, function, (*statement).symbol, &(*statement).loc) { return false; }
+        if !x64_prepare_expression(program, function, (*statement).expr, (*statement).kind == CRUST_S_ASSIGN) { return false; }
+        if (*statement).kind == CRUST_S_ASSIGN &&
+           x64_prepare_storage(program, function, (*statement).expr, false, true) == null(*CrustX64Expr) { return false; }
+        if !x64_prepare_expression(program, function, (*statement).value, false) ||
+           !x64_prepare_statements(program, function, (*statement).body) ||
+           !x64_prepare_statements(program, function, (*statement).otherwise) { return false; }
+        statement = (*statement).next;
+    }
+    return true;
+}
+
+fn crust_x64_try_prepare_function(program: *CrustX64Program, function: *CrustX64Function) -> bool {
+    var parameter: *CrustParam = (*(*function).declaration).params;
+    while parameter != null(*CrustParam) {
+        if !x64_symbol_slot(program, function, (*parameter).symbol, &(*parameter).loc) { return false; }
+        parameter = (*parameter).next;
+    }
+    if !x64_prepare_statements(program, function, (*(*function).declaration).body) { return false; }
+    var padding: CrustX64Slot = uninit;
+    return x64_reserve(program, function, 0u64, 16u32, &(*(*function).declaration).loc, &padding);
+}
+
+fn x64_prepare_declaration(program: *CrustX64Program, declaration: *CrustDecl) -> bool {
+    if (*declaration).kind == CRUST_D_CONST { return x64_prepare_expression(program, null(*CrustX64Function), (*declaration).init, false); }
+    if (*declaration).kind != CRUST_D_FUNCTION { return true; }
+    var function: *CrustX64Function = crust_try_alloc((*program).context, sizeof(CrustX64Function), alignof(CrustX64Function)) as *CrustX64Function;
+    if function == null(*CrustX64Function) { return false; }
+    (*function).declaration = declaration;
+    (*function).identity = (*program).next_identity;
+    (*program).next_identity = (*program).next_identity + 1u64;
+    if (*program).last_function == null(*CrustX64Function) { (*program).functions = function; }
+    else { (*(*program).last_function).next = function; }
+    (*program).last_function = function;
+    return crust_x64_try_prepare_function(program, function);
+}
+
+fn x64_prepare_units(program: *CrustX64Program, aliases: bool) -> bool {
+    var unit_value: *CrustUnit = (*(*program).context).units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) {
+            if aliases {
+                if (*declaration).kind != CRUST_D_RECORD && !x64_prepare_alias(program, declaration, (*declaration).kind != CRUST_D_EXTERN) { return false; }
+            } else {
+                if !x64_prepare_declaration(program, declaration) { return false; }
+            }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    return true;
+}
+
+fn crust_x64_prepare(ctx: *CrustContext, result: **CrustX64Program, entry: *CrustDecl) -> bool {
+    *result = null(*CrustX64Program);
+    var program: *CrustX64Program = crust_try_alloc(ctx, sizeof(CrustX64Program), alignof(CrustX64Program)) as *CrustX64Program;
+    if program == null(*CrustX64Program) { return false; }
+    (*program).context = ctx; (*program).entry = entry; (*program).next_identity = 1u64;
+    if !x64_prepare_units(program, true) { return false; }
+    if entry != null(*CrustDecl) && !x64_prepare_alias(program, entry, false) { return false; }
+    if !x64_prepare_units(program, false) || !x64_choose_prefix(program) { return false; }
+    *result = program;
+    return true;
+}

@@ -6,7 +6,7 @@ Run from the repository root after `make all`:
 
 ```sh
 build/crust0 -o build/stage.s api/crust0.crs api/crust0_host.crs api/crust0_x64.crs examples/custom-stage/stage.crs
-gcc -no-pie build/stage.s build/libcrust0.a build/libcrust0_host.a -o build/stage
+gcc -no-pie build/stage.s build/libcrust_asm.a build/libcrust0.a build/libcrust0_host.a -o build/stage
 build/stage examples/custom-stage/answer.txt build/answer.s
 gcc -no-pie build/answer.s examples/custom-stage/answer_main.c -o build/answer
 build/answer

@@ -2,8 +2,8 @@
 
 # Bootstrap native compilation in one file
 
-[main.crs](main.crs) starts with the C99 seed and builds its selected stages from
-Crust sources. It then runs two native compilation functions and builds the
+[main.crs](main.crs) starts with the C99 seed, loads the external assembly
+stage, and builds its selected executor and C stage from Crust sources. It then runs two native compilation functions and builds the
 target program from the unread tail of the same file.
 
 ```sh
@@ -12,8 +12,8 @@ build/crust examples/native/main.crs
 build/native-hello
 ```
 
-The program prints `Hello from a bootstrapped native stage!`. No prepared stage
-library is required. The example uses GNU assembler and GCC for native tools.
+The program prints `Hello from a bootstrapped native stage!`. `make all` builds
+the selected assembly library. The example uses GNU assembler and GCC.
 
 The first function selects the C backend for the second function. Both access
 the same earlier state and callback. The root checks that the state address

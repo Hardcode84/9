@@ -211,7 +211,7 @@ Three current mechanisms need explicit treatment:
    Source re-reading, explicit serialization, or an in-process execution
    mechanism has a real cost and a different ownership contract.
 
-These points are verified in `src/check.c`, `src/x64.c`,
+These points are verified in `src/check.c`, `stages/asm/`,
 `stages/c/emit.crs`, and `stages/c/driver.crs`. They are the work required by
 the source model. New syntax alone would not fix them.
 

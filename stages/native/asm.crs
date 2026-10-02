@@ -10,5 +10,5 @@ fn native_asm_image(context: *CrustContext, session: *NativeSession, image: *Nat
     var arguments: [*u8; 6] = make [*u8; 6] {
         "as", "--64", (*image).assembly, "-o", (*image).object, null(*u8)
     };
-    return native_tool(context, &arguments[0usize]) && native_link_image(context, image);
+    return native_tool(context, &arguments[0usize]) && native_link_image(context, session, image);
 }

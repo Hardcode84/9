@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+host_link(run, "../../build/crust-asm-library.so");
 host_source(run, "../../api/crust0_x64.crs");
 host_source(run, "../../api/crust0_stage.crs");
 host_source(run, "../../stages/c/api.crs");
@@ -27,9 +28,11 @@ var state: BuildState = make BuildState {
     counter: &counter, callback: increment, original: increment,
     first: null(fn(*CrustRun, *u8) -> i32), output: host_path(run, "../../build/native-hello")
 };
+var libraries: [*u8; 1] = make [*u8; 1] { host_path(run, "../../build/crust-asm-library.so") };
 var session: NativeSession = make NativeSession {
-    images: null(*NativeImage), compile: null(fn(*CrustContext, *NativeSession, *NativeImage) -> bool),
-    user: &state as *u8, temporary: host_path(run, "../../build")
+    images: null(*NativeImage), compile: native_asm_image,
+    user: &state as *u8, temporary: host_path(run, "../../build"),
+    libraries: &libraries[0usize], library_count: 1usize
 };
 var sources: [*u8; 17] = make [*u8; 17] {
     "../../api/crust0.crs", "../../api/crust0_host.crs", "../../api/crust0_eval.crs",

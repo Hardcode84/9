@@ -18,6 +18,10 @@ follows a call from source to C, builds that output by hand, and shows where
 another stage can supply its own function bodies. Use the
 [backend reference](../../docs/c-backend.md) for the full API and output contract.
 
+The Make build interprets [bootstrap.crs](bootstrap.crs) to build the first
+native C compiler, then uses that compiler for the next generation. It needs
+no assembly backend in the C99 seed.
+
 ## 1. Select the backend
 
 Run from the repository root on Linux x86-64:

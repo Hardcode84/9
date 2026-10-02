@@ -20,6 +20,9 @@ class NativeSuite:
         self.source = self.example.replace('"../../', f'"{ROOT}/').replace(
             f'"{ROOT}/build"', string(self.work)
         )
+        self.source = self.source.replace(
+            str(ROOT / "build/crust-asm-library.so"), str(self.build / "crust-asm-library.so")
+        )
         self.checks = 0
 
     def command(self, command, expected=0, **options):
@@ -59,10 +62,11 @@ def check_output(suite):
     for directory in ("api", "stages", "examples/native"):
         shutil.copytree(ROOT / directory, copied / directory, dirs_exist_ok=True)
     (copied / "build").mkdir(exist_ok=True)
+    shutil.copyfile(suite.build / "crust-asm-library.so", copied / "build/crust-asm-library.so")
     result = suite.command([suite.build / "crust", copied / "examples/native/main.crs"], cwd="/")
     assert not result.stderr, result
     assert suite.command([copied / "build/native-hello"]).stdout.startswith(b"Hello from")
-    assert not list((copied / "build").glob("crust-*"))
+    assert not [p for p in (copied / "build").glob("crust-*") if p.is_dir()]
 
 
 def check_boundaries(suite):

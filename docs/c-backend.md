@@ -12,9 +12,8 @@ are written in Crust0. No C function emits or formats backend output.
 
 The driver calls the C99 reader and checker at the input boundary. It uses
 native memory, file, and process operations as host services. These calls do
-not select instructions or translate expressions. The assembly backend is
-needed for the first build only. The C-stage executable has no `crust_x64_`
-symbols.
+not select instructions or translate expressions. The seed interprets
+the first C backend build. The C-stage executable has no `crust_x64_` symbols.
 
 The backend also runs as an ordinary external library selected by a
 [root compilation program](source-runner.md). The launcher has no
@@ -36,8 +35,8 @@ build/list
 The program prints `intrusive: ok`. It removes and destroys separate nodes,
 then reuses storage while the list remains live.
 
-`make c-stage` first compiles the stage with the assembly seed. This produces
-`build/crust-c-seed`. That program compiles the same Crust0 files through C and GCC
+`make c-stage` first runs `stages/c/bootstrap.crs` through the backend-free
+seed. This interprets C emission and invokes GCC to produce `build/crust-c-seed`. That program compiles the same Crust0 files through C and GCC
 to produce `build/crust-c`. Both programs use the same C99 frontend library.
 It also builds `build/crust-c-library.so` with the same compiler. That library
 exports `c_program`, `c_backend_build`, and the public body-emission services.
@@ -46,7 +45,8 @@ Its build uses `-fno-semantic-interposition` with `-Bsymbolic`. Both options
 keep internal calls bound to this library's definitions. The compiler option
 also permits the same inlining as the standalone backend.
 This is self-compilation of the backend and driver. The reader and checker
-remain C99. The default `make` target does not build this optional backend.
+remain C99. The default `make` target builds the C driver to compile the
+assembly stage. `make c-stage` also builds the C shared library.
 
 Use `wc -l stages/c/*.crs` to count the stage, public interfaces, and root helper.
 Tests and generated seed API declarations are separate.

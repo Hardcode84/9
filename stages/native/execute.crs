@@ -85,13 +85,12 @@ fn native_execute(root: *CrustRun, user: *u8, data: *u8) -> bool {
     return true;
 }
 
-// Start with assembly compilation. Later actions can replace session.compile.
+// Use the caller-selected compiler. Later actions can replace session.compile.
 // Restore the caller's operations when the nested source loop finishes.
 fn native_start(root: *CrustRun, session: *NativeSession) -> i32 {
     var reader: fn(*CrustRun,*u8,**u8)->bool = (*root).read;
     var executor: fn(*CrustRun,*u8,*u8)->bool = (*root).execute;
     var user: *u8 = (*root).user;
-    (*session).compile = native_asm_image;
     (*root).read = crust_run_read;
     (*root).execute = native_execute;
     (*root).user = session as *u8;

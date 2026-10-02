@@ -1,0 +1,120 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn x64_errno() -> *i32 = "__errno_location";
+extern fn x64_strerror(error: i32) -> *u8 = "strerror";
+extern fn x64_strlen(text: *u8) -> usize = "strlen";
+extern fn x64_strcmp(left: *u8, right: *u8) -> i32 = "strcmp";
+extern fn x64_strncmp(left: *u8, right: *u8, size: usize) -> i32 = "strncmp";
+extern fn x64_memcpy(target: *u8, source: *u8, size: usize) -> *u8 = "memcpy";
+extern fn x64_fwrite(bytes: *u8, size: usize, count: usize, output: *u8) -> usize = "fwrite";
+extern fn x64_fflush(output: *u8) -> i32 = "fflush";
+
+fn x64_context(emitter: *CrustX64Emitter) -> *CrustContext { return (*(*emitter).program).context; }
+
+fn x64_text_if(condition: bool, yes: *u8, no: *u8) -> *u8 {
+    if condition { return yes; }
+    return no;
+}
+
+fn x64_output_bytes(emitter: *CrustX64Emitter, bytes: *u8, size: usize) -> unit {
+    if (*emitter).failed { return; }
+    if x64_fwrite(bytes, 1usize, size, (*emitter).output) != size {
+        (*emitter).failed = true;
+        x64_io_error(x64_context(emitter), "assembly output failed: ");
+    }
+}
+
+fn x64_output_text(emitter: *CrustX64Emitter, text: *u8) -> unit {
+    if !(*emitter).failed { x64_output_bytes(emitter, text, x64_strlen(text)); }
+}
+
+fn x64_output_byte(emitter: *CrustX64Emitter, byte: u8) -> unit { x64_output_bytes(emitter, &byte, 1usize); }
+
+// Write right-aligned digits into a 32-byte buffer. Base is 8, 10, or 16.
+// Width does not exceed 32. Return the first digit's offset.
+fn x64_digits(buffer: *u8, value: u64, base: u64, width: usize) -> usize {
+    var digits: *u8 = "0123456789abcdef";
+    var index: usize = 32usize;
+    while true {
+        index = index - 1usize;
+        buffer[index] = digits[(value % base) as usize];
+        value = value / base;
+        if value == 0u64 { break; }
+    }
+    while 32usize - index < width { index = index - 1usize; buffer[index] = 48u8; }
+    return index;
+}
+
+fn x64_output_number(emitter: *CrustX64Emitter, value: u64, base: u64, width: usize) -> unit {
+    if (*emitter).failed { return; }
+    var digits: [u8; 32] = uninit;
+    var index: usize = x64_digits(&digits[0usize], value, base, width);
+    x64_output_bytes(emitter, &digits[index], 32usize - index);
+}
+
+fn crust_x64_write(emitter: *CrustX64Emitter, text: *u8) -> bool {
+    (*emitter).failed = false;
+    x64_output_text(emitter, text);
+    return !(*emitter).failed;
+}
+
+fn x64_callback_result(emitter: *CrustX64Emitter, success: bool, errors: usize, location: *CrustLoc) -> unit {
+    if success { return; }
+    var ctx: *CrustContext = x64_context(emitter);
+    (*emitter).failed = true;
+    if (*ctx).error_count == errors {
+        x64_error(ctx, location, "custom backend operation failed without a diagnostic");
+    }
+}
+
+fn x64_emit_expression(emitter: *CrustX64Emitter, expression: *CrustExpr) -> unit {
+    if (*emitter).failed { return; }
+    var ops: *CrustX64Ops = (*emitter).operations;
+    if ops == null(*CrustX64Ops) || (*ops).expression == null(fn(*CrustX64Emitter, *CrustExpr) -> bool) {
+        x64_default_expression(emitter, expression);
+    } else {
+        var errors: usize = (*x64_context(emitter)).error_count;
+        x64_callback_result(emitter, (*ops).expression(emitter, expression), errors, &(*expression).loc);
+    }
+}
+
+fn x64_emit_place(emitter: *CrustX64Emitter, expression: *CrustExpr) -> unit {
+    if (*emitter).failed { return; }
+    var ops: *CrustX64Ops = (*emitter).operations;
+    if ops == null(*CrustX64Ops) || (*ops).place == null(fn(*CrustX64Emitter, *CrustExpr) -> bool) {
+        x64_default_place(emitter, expression);
+    } else {
+        var errors: usize = (*x64_context(emitter)).error_count;
+        x64_callback_result(emitter, (*ops).place(emitter, expression), errors, &(*expression).loc);
+    }
+}
+
+fn x64_emit_statement(emitter: *CrustX64Emitter, statement: *CrustStmt) -> unit {
+    if (*emitter).failed { return; }
+    var ops: *CrustX64Ops = (*emitter).operations;
+    if ops == null(*CrustX64Ops) || (*ops).statement == null(fn(*CrustX64Emitter, *CrustStmt) -> bool) {
+        x64_default_statement(emitter, statement);
+    } else {
+        var errors: usize = (*x64_context(emitter)).error_count;
+        x64_callback_result(emitter, (*ops).statement(emitter, statement), errors, &(*statement).loc);
+    }
+}
+
+fn x64_error_detail(context: *CrustContext, location: *CrustLoc, prefix: *u8, detail: *u8) -> bool {
+    var message: [u8; 512] = uninit;
+    var index: usize = 0usize;
+    while index < 511usize && prefix[index] != 0u8 { message[index] = prefix[index]; index = index + 1usize; }
+    var next: usize = 0usize;
+    while index < 511usize && detail[next] != 0u8 {
+        message[index] = detail[next]; index = index + 1usize; next = next + 1usize;
+    }
+    message[index] = 0u8;
+    return x64_error(context, location, &message[0usize]);
+}
+
+fn x64_io_error(context: *CrustContext, prefix: *u8) -> unit {
+    var error: i32 = *x64_errno();
+    var location: CrustLoc = make CrustLoc { source: null(*CrustSource), offset: 0usize };
+    x64_error_detail(context, &location, prefix, x64_strerror(error));
+    *x64_errno() = error;
+}

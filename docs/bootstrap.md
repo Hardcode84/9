@@ -6,8 +6,9 @@ The linked measurements retain the source names and hashes from the recorded
 runs.
 
 The repository contains a C99 implementation of the Crust0 version 0.1 syntax
-and execution rules. `crust0` reads Crust0, checks the program, and emits textual
-x86-64 assembly. `crust` executes source-order compilation programs. GNU
+and execution rules. `crust` executes source-order compilation programs and
+contains no backend. `crust0` links the external Crust assembly stage to read,
+check, and emit textual x86-64 assembly. GNU
 assembler produces object code, and GCC links it. The
 selected host and target profile is Linux x86-64 with the System V scalar ABI.
 
@@ -17,8 +18,7 @@ memory preconditions. It is not evidence of a checked lifetime rule.
 The [source runner](source-runner.md) executes ordinary Crust0 code that controls
 target compilation and can change the reader for the unread root bytes.
 The [native bootstrap tutorial](../stages/native/README.md) uses the same seed
-to build its selected backend and executor from source, then runs subsequent
-compilation functions natively. It needs no prepared stage library.
+with an explicitly loaded assembly stage to build a native executor.
 
 ## Build and use
 
@@ -199,6 +199,10 @@ it with `libcrust0.a`, libffi, and the system dynamic-loader interface. The
 installed executable also links `libcrust0_host.a` and exports its public native
 symbols. The separate `crust0` path does not link the evaluator.
 
+`libcrust_asm.a` and `crust-asm-library.so` contain the assembly stage. Its
+`crust_x64_*` functions are not in the seed or core archive. The C header
+describes the external stage ABI; its generated Crust model shares that layout.
+
 The frame plan retains checked operations. Instruction selection, required
 trap sequences, and final assembly remain in the emitter. Thus `--prepare`
 alone is not a measurement of all lowering work. Measurement through complete
@@ -278,7 +282,7 @@ public backend API. The remaining operations use the standard emitter.
 
 ```sh
 build/crust0 -o build/stage.s api/crust0.crs api/crust0_host.crs api/crust0_x64.crs examples/custom-stage/stage.crs
-gcc -no-pie build/stage.s build/libcrust0.a build/libcrust0_host.a -o build/stage
+gcc -no-pie build/stage.s build/libcrust_asm.a build/libcrust0.a build/libcrust0_host.a -o build/stage
 build/stage examples/custom-stage/answer.txt build/answer.s
 gcc -no-pie build/answer.s examples/custom-stage/answer_main.c -o build/answer
 build/answer
@@ -292,8 +296,10 @@ registers. This checks the replacement stage's native calling contract.
 This is stage execution through Crust0. The seed compiler remains C99. The
 [C backend stage](c-backend.md) separately implements a complete backend and
 driver in Crust0 and compiles itself through its own output. The seed reader,
-checker, evaluator, runner, and assembly backend remain C99. `make c-stage`
-builds the C stage through the seed and then through its own output.
+checker, evaluator, and runner remain C99. `make c-stage` interprets the C
+stage through `stages/c/bootstrap.crs`, then compiles its next generation.
+The assembly stage is also Crust source. `make check-asm` checks its successive
+generations.
 `make check-c` builds the next generation, compares generated C and native
 symbol response files across all three generations, and uses the final
 generation to build and run the direct-list program. No cache is used.
@@ -330,7 +336,7 @@ evaluation and aggregate value copies require storage. GNU assembler produces
 object code, and GCC links it. This path has no C optimization step. Runtime
 parity with optimized C has not been measured. The optional C backend stage
 constructs GCC input and uses GCC optimization. Its measurements are separate
-from this assembly seed.
+from this assembly stage.
 
 There is no runtime pointer metadata, allocation registry, garbage collector,
 reference count, or implicit cleanup. Required division and shift traps remain

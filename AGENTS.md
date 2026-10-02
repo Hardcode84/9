@@ -8,8 +8,10 @@ Do not add a feature before a concrete program requires it.
 
 ## Design
 
-- Keep the seed reader, checker, evaluator, runner, and assembly backend in
-  C99. Test self-compilation across generations of Crust stage libraries.
+- Keep the seed reader, checker, evaluator, and runner in C99. Keep backend
+  implementations and artifact caching in ordinary Crust stages. The seed
+  must build without a native backend. Test source bootstrap and successive
+  generations of the stage libraries.
 - Read the [language specification](docs/crust0-spec.md),
   [bootstrap guide](docs/bootstrap.md), and
   [runner contract](docs/source-runner.md) before changing their contracts.
@@ -154,6 +156,7 @@ Build with `make all`. Use the checks that cover the change:
 |---|---|
 | Core, reader, checker, evaluator, x86 backend | `make check` |
 | C backend | `make check-c` |
+| Assembly stage self-compilation | `make check-asm` |
 | Root execution and reader extensions | `make check-stage check-reader` |
 | Native bootstrap and execution handoff | `make check-native` |
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |

@@ -13,4 +13,6 @@ record NativeSession {
     compile: fn(*CrustContext, *NativeSession, *NativeImage) -> bool;
     user: *u8;
     temporary: *u8;
+    libraries: **u8;
+    library_count: usize;
 }

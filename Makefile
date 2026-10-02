@@ -13,12 +13,12 @@ ifneq ($(PROFILE),linux_x64)
 $(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64)
 endif
 CORE = $(BUILD)/core.o $(BUILD)/read.o $(BUILD)/check.o $(BUILD)/profile_$(PROFILE).o
-BACKEND = $(BUILD)/x64.o
 RUNNER = $(BUILD)/eval.o $(BUILD)/eval_ffi_$(PROFILE).o $(BUILD)/run.o $(BUILD)/run_posix.o
 HOST = $(BUILD)/host.o $(BUILD)/host_posix.o
 PRELUDE = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/host.crs
 C_LIBRARY = api/crust0.crs api/crust0_host.crs api/crust0_stage.crs stages/c/model.crs stages/c/base.crs stages/c/types.crs stages/c/emit.crs stages/c/driver.crs stages/c/program.crs
 C_STAGE = $(C_LIBRARY) stages/c/main.crs
+ASM_LIBRARY = api/crust0.crs stages/asm/model.crs stages/asm/output.crs stages/asm/plan.crs stages/asm/emit.crs stages/asm/program.crs
 READER = stages/reader/model.crs stages/reader/lex.crs stages/reader/parse.crs
 HIGHLIGHT = api/crust0.crs api/crust0_host.crs stages/reader/model.crs stages/reader/lex.crs stages/highlight/model.crs stages/highlight/scan.crs stages/highlight/output.crs stages/highlight/program.crs
 CCN = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/ccn/count.crs stages/ccn/read.crs stages/ccn/report.crs stages/ccn/program.crs
@@ -31,8 +31,8 @@ OVERLOAD_EXPORTS = overload_build overload_program ov_init ov_read ov_prepare ov
 OVERLOAD_RESOURCE_LIBRARY = $(RESOURCE_LIBRARY) $(OVERLOAD) stages/overload/resources.crs stages/overload/resource_program.crs
 OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_resource_build overload_resource_program ov_resources_init ov_resources_read ov_resources_prepare ov_resources_check
 
-.PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight ccn-stage check-ccn vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native
-all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a
+.PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight ccn-stage check-ccn vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native check-asm
+all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a $(BUILD)/crust-asm-library.so
 
 $(BUILD):
 	mkdir -p $@
@@ -43,7 +43,7 @@ $(BUILD)/%.o: src/%.c include/crust0.h | $(BUILD)
 $(HOST): $(BUILD)/%.o: runtime/%.c include/crust0_host.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@
 
-$(BUILD)/crust0: $(CORE) $(BACKEND) $(BUILD)/driver.o $(BUILD)/driver_posix.o $(HOST)
+$(BUILD)/crust0: $(BUILD)/crust-asm-library.o $(CORE) $(BUILD)/driver.o $(BUILD)/driver_posix.o $(HOST)
 	$(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@
 
 $(BUILD)/prelude.inc: tools/prelude.py $(PRELUDE) | $(BUILD)
@@ -53,26 +53,21 @@ $(BUILD)/run_main.o: CPPFLAGS += -I$(BUILD)
 $(BUILD)/run_main.o: $(BUILD)/prelude.inc
 $(BUILD)/eval.o: CPPFLAGS += -Isrc/$(PROFILE)
 
-$(BUILD)/crust: $(CORE) $(BACKEND) $(RUNNER) $(BUILD)/run_main.o $(HOST)
+$(BUILD)/crust: $(CORE) $(RUNNER) $(BUILD)/run_main.o $(HOST)
 	$(CC) $(CFLAGS) $^ -rdynamic $(LDFLAGS) -ldl -lffi -o $@
 
 $(BUILD)/libcrust0_run.a: $(RUNNER)
 	$(AR) rcs $@ $^
 
-$(BUILD)/libcrust0.a: $(CORE) $(BACKEND)
-	$(AR) rcs $@ $^
+$(BUILD)/libcrust0.a: $(CORE) Makefile
+	rm -f $@
+	$(AR) rcs $@ $(CORE)
 
 $(BUILD)/libcrust0_host.a: $(HOST)
 	$(AR) rcs $@ $^
 
-$(BUILD)/crust-c-seed.s: $(BUILD)/crust0 $(C_STAGE)
-	$(BUILD)/crust0 -S -o $@ $(C_STAGE)
-
-$(BUILD)/crust-c-seed.o: $(BUILD)/crust-c-seed.s
-	$(AS) $(ASFLAGS) $< -o $@
-
-$(BUILD)/crust-c-seed: $(BUILD)/crust-c-seed.o $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
-	$(CC) -no-pie $^ $(LDFLAGS) -o $@
+$(BUILD)/crust-c-seed: $(BUILD)/crust $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(C_STAGE) stages/c/bootstrap.crs stages/c/build.crs
+	$(BUILD)/crust stages/c/bootstrap.crs -o $@ $(filter-out api/crust0.crs,$(C_STAGE)) $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 $(BUILD)/crust-c: $(BUILD)/crust-c-seed
 	$< -o $@ $(C_STAGE) $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
@@ -85,6 +80,19 @@ $(BUILD)/crust-c-library.o: $(BUILD)/crust-c $(C_LIBRARY) $(BUILD)/c-exports Mak
 	crust_exports=$$(cat $(BUILD)/c-exports) && $< --library --object $$crust_exports --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(C_LIBRARY)
 
 $(BUILD)/crust-c-library.so: $(BUILD)/crust-c-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
+
+$(BUILD)/asm-exports: $(BUILD)/crust stages/modules/library.crs stages/modules/exports.crs api/crust0_x64.crs Makefile
+	$< stages/modules/exports.crs api/crust0_x64.crs > $@.tmp
+	mv $@.tmp $@
+
+$(BUILD)/crust-asm-library.o: $(BUILD)/crust-c $(ASM_LIBRARY) $(BUILD)/asm-exports Makefile
+	crust_exports=$$(cat $(BUILD)/asm-exports) && $< --library --object $$crust_exports --export crust_x64_default_ops --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(ASM_LIBRARY)
+
+$(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
+	$(AR) rcs $@ $^
+
+$(BUILD)/crust-asm-library.so: $(BUILD)/crust-asm-library.o
 	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
 
 c-stage: $(BUILD)/crust-c $(BUILD)/crust-c-library.so
@@ -161,6 +169,9 @@ witness: $(BUILD)/intrusive $(BUILD)/intrusive-c
 $(BUILD)/%_test: tests/%_test.c $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -pthread -o $@
 
+$(BUILD)/core_test $(BUILD)/check_test $(BUILD)/x64_test $(BUILD)/parallel_test: $(BUILD)/%_test: tests/%_test.c $(BUILD)/libcrust_asm.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -pthread -o $@
+
 $(BUILD)/arena_test: tests/arena_$(PROFILE)_test.c $(BUILD)/libcrust0.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -Wl,--wrap=madvise -o $@
 
@@ -212,6 +223,9 @@ check-examples: all c-stage
 
 check-modules: all c-stage
 	python3 tests/modules.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+
+check-asm: all
+	python3 tests/asm.py --build $(BUILD) --cc '$(CC)' --ldflags='$(LDFLAGS)'
 
 check-native: all
 	python3 tests/native.py --build $(BUILD)

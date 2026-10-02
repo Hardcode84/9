@@ -12,6 +12,22 @@ fn native_prepare(root: *CrustRun, context: *CrustContext, sources: **u8, count:
         if !crust_read(context, source, &parsed) { return false; }
         index = index + 1usize;
     }
+    return native_exports(context, exports, export_count);
+}
+
+// Inputs are captured declaration units. Their identities must be distinct.
+fn native_prepare_inputs(context: *CrustContext, sources: **CrustSource, count: usize,
+                         exports: **u8, export_count: usize) -> bool {
+    var index: usize = 0usize;
+    while index < count {
+        var parsed: *CrustUnit = null(*CrustUnit);
+        if !crust_read(context, sources[index], &parsed) { return false; }
+        index = index + 1usize;
+    }
+    return native_exports(context, exports, export_count);
+}
+
+fn native_exports(context: *CrustContext, exports: **u8, export_count: usize) -> bool {
     if !crust_collect(context) || !crust_resolve(context) || !crust_check(context) { return false; }
     var unit_value: *CrustUnit = (*context).units;
     while unit_value != null(*CrustUnit) {
@@ -22,7 +38,7 @@ fn native_prepare(root: *CrustRun, context: *CrustContext, sources: **u8, count:
         }
         unit_value = (*unit_value).next;
     }
-    index = 0usize;
+    var index: usize = 0usize;
     while index < export_count {
         var name: *CrustName = crust_try_intern(context, exports[index], native_strlen(exports[index]));
         if name == null(*CrustName) { return false; }
@@ -40,12 +56,16 @@ fn native_prepare(root: *CrustRun, context: *CrustContext, sources: **u8, count:
 // remove all temporary images on success or failure. Session storage stays live.
 fn native_bootstrap(root: *CrustRun, session: *NativeSession, sources: **u8, count: usize,
                     exports: **u8, export_count: usize) -> i32 {
+    if (*session).compile == null(fn(*CrustContext, *NativeSession, *NativeImage) -> bool) {
+        native_error((*root).context, "native compiler must be callable");
+        return 1i32;
+    }
     var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
     var status: i32 = 1i32;
     var image: *NativeImage = native_image((*root).context, session);
     if image != null(*NativeImage) && native_prepare(root, &context, sources, count, exports, export_count) &&
-       native_asm_image(&context, session, image) && crust_run_link(root, (*image).library) {
+       (*session).compile(&context, session, image) && crust_run_link(root, (*image).library) {
         status = native_start(root, session);
     }
     if context.error_count != 0usize {

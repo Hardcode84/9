@@ -77,7 +77,8 @@ Run `make check-highlight` for the highlighter roots and native service.
 Run `make check-vscode` with Bun for the editor adapter tests.
 Run `make check-modules` for module bindings, exports, and allocation failures.
 Run `make check-native` for native bootstrap, handoff, and cleanup. This example
-needs only `make all`; it builds its own stage library on each invocation.
+uses the assembly library from `make all` and builds its executor on each
+invocation.
 Run `make check-ccn` for function counts, the Lizard comparison, and the CCN build
 example. This check needs `lizard==1.21.6` in the Python environment.
 

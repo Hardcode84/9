@@ -86,7 +86,7 @@ flowchart TD
     Execute -->|explicit compiler call| Input[Select target sources and bindings]
     Input --> Frontend[Selected reader and language checks]
     Frontend --> Checked[Checked operations and any retained stage plans]
-    Checked -->|seed operations| ASM[Seed x86-64 backend]
+    Checked -->|seed operations| ASM[Crust x86-64 stage]
     Checked -->|default or custom body emitter| C[Crust C backend]
     ASM --> Assembly[Text assembly]
     Assembly --> Assembler[GNU assembler]
@@ -102,7 +102,7 @@ The backend branches are alternatives chosen by the compilation program.
 Successful compiler calls return to the root. The resulting target program
 runs separately. A root can also interpret actions directly, emit source,
 or produce only an object file. The resource stage's exit plans require its
-C body emitter; the seed assembly emitter does not consume those plans.
+C body emitter; the assembly stage does not consume those plans.
 
 ### One file can contain both programs
 
@@ -155,7 +155,7 @@ This handoff uses `CrustRun.read`, `execute`, and `user`. Loading a library
 with `host_link` alone leaves the default root executor in place. The selected
 stage must take responsibility for later code execution as well as emission.
 The [native stage tutorial](../stages/native/README.md) supplies this handoff.
-It starts with source inputs, builds a backend and executor with seed assembly,
+It starts with explicit source inputs and a selected assembly stage,
 then compiles and executes complete function actions. Its same-file example
 changes the next unit to C compilation and builds a final executable.
 
@@ -257,15 +257,15 @@ IR. Seed types do not have to represent every target type. Reusing a seed
 consumer still requires its input contract; using another consumer requires
 that consumer's contract.
 
-## Built-in assembly and a custom backend
+## External assembly and C backends
 
-The assembly backend gives the bootstrap compiler a direct native output
-path. The C backend demonstrates a complete backend implemented as an
-ordinary Crust library.
+Both backends are ordinary Crust libraries. The root selects their sources
+or native artifacts, then calls their public operations. The C99 seed has
+no instruction emitter.
 
-| Property | Seed assembly backend | Crust C backend |
+| Property | Crust assembly backend | Crust C backend |
 | --- | --- | --- |
-| Implementation | [src/x64.c](../src/x64.c), compiled as pedantic C99 | [stages/c/](../stages/c/README.md), written in Crust |
+| Implementation | [stages/asm/](../stages/asm/README.md), written in Crust | [stages/c/](../stages/c/README.md), written in Crust |
 | Input | Checked seed operations with native names | Checked declarations and default bodies, or a custom complete-body callback |
 | Output | Text x86-64 assembly | C text and a symbol response file |
 | Native toolchain | GNU assembler and linker | GCC, `objcopy`, and linker |
@@ -279,20 +279,18 @@ arithmetic, evaluation order, and raw address behavior. It is not a portable
 C target for arbitrary machines. A different target needs explicit layout
 and ABI rules; the host's `sizeof` is not a target description.
 
-The `crust` executable includes the assembly services, but the root chooses
-whether to call them. Built-in availability does not select a target backend.
-The C stage uses C99 frontend services and native allocation, file, and
-process calls. Its lowering and C text construction remain Crust code.
+The `crust` executable and `libcrust0.a` contain neither emitter. `crust0`
+is a standalone consumer linked to the external assembly stage. The C stage
+uses the same frontend services and ordinary native host calls.
 
-For its first build, `make c-stage` uses `crust0` to compile the C backend
-to assembly. That executable then compiles the same backend through C and
-GCC. The result also builds the shared library loaded by source roots.
-This bootstraps the backend and driver. `make check-c` builds one more
-generation, compares emitted C and symbol response files across all three,
-and runs a direct-list program built by the final generation. These builds
-use no cache. The seed reader, checker, evaluator, runner, and assembly
-backend remain C99 by design. The C backend calls the C99 frontend. The
-separate Crust reader library is available to stages that select it.
+The Make build interprets [bootstrap.crs](../stages/c/bootstrap.crs) to compile
+the first C backend with GCC. That backend compiles itself, then builds the
+assembly stage. No generated C, object, or archive is a source dependency.
+`make check-c check-asm` checks successive backend generations and runs the
+intrusive-list program built by each final generation.
+
+The reader, checker, evaluator, and runner remain C99. A separate Crust reader
+library is available to stages that select it.
 
 An LLVM adapter belongs at the same library boundary. There is no LLVM
 adapter in the current tree. Such an adapter must implement target layout
@@ -321,12 +319,10 @@ thread, though it permits synchronous callback reentry. These constraints
 do not require independent target compilations to share that evaluator or
 mutable context.
 
-No persistent root-result cache is implemented. Root effects run on each
-invocation. A cache would need captured input bytes, stage code, provider
-facts, target settings, options, and external inputs, including failed file
-lookups. It also needs an explicit contract for effects. It must not replay
-an output effect silently or hide native stage preparation from a cold-build
-measurement.
+Root effects run on every invocation. A persistent artifact cache requires
+captured inputs, producer code, compiler and ABI identity, target settings,
+options, and all external inputs. It must not store live contexts or addresses.
+Cold measurements must include stage preparation.
 
 Keep frontend checks, stage execution, emission, and target toolchain time
 separate. Assembly `--prepare` builds storage plans but leaves instruction

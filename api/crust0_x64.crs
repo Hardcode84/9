@@ -9,18 +9,18 @@ record CrustX64Slot {
 }
 
 record CrustX64Expr {
-    expression: *CrustExpr;
     value: CrustX64Slot;
     scratch: CrustX64Slot;
     arguments: CrustX64Slot;
+    expression: *CrustExpr;
 }
 
 record CrustX64Function {
+    symbols: CrustMap;
+    expressions: CrustMap;
     declaration: *CrustDecl;
     identity: u64;
     frame_size: u64;
-    symbols: CrustMap;
-    expressions: CrustMap;
     next: *CrustX64Function;
 }
 
@@ -33,23 +33,23 @@ record CrustX64String {
 record CrustX64Alias {
     declaration: *CrustDecl;
     identity: u64;
-    definition: bool;
     next: *CrustX64Alias;
+    definition: bool;
 }
 
 record CrustX64Program {
+    label_prefix: [u8; 48];
+    string_map: CrustMap;
+    alias_map: CrustMap;
+    native_symbols: CrustMap;
     context: *CrustContext;
     entry: *CrustDecl;
     functions: *CrustX64Function;
     last_function: *CrustX64Function;
     strings: *CrustX64String;
     last_string: *CrustX64String;
-    string_map: CrustMap;
-    alias_map: CrustMap;
-    native_symbols: CrustMap;
     aliases: *CrustX64Alias;
     alias_count: usize;
-    label_prefix: [u8; 48];
     next_identity: u64;
 }
 
@@ -73,6 +73,7 @@ record CrustX64Emitter {
     loop: *CrustX64Loop;
     next_label: u64;
     return_label: u64;
+    failed: bool;
 }
 
 extern fn crust_x64_prepare(context: *CrustContext, result: **CrustX64Program, entry: *CrustDecl) -> bool = "crust_x64_prepare";

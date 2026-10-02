@@ -979,8 +979,10 @@ policy, richer syntax, and backend adaptation into ordinary compiled libraries.
 It does not add generics, a macro evaluator, a package manager, a query engine,
 or a permanent plugin ABI to make those libraries possible.
 
-The seed reader, checker, evaluator, runner, and assembly backend remain C99.
-A C99 compiler can always build this seed. Crust stage libraries and drivers
+The seed reader, checker, evaluator, and runner remain C99. Backend emission
+and artifact caching are ordinary Crust libraries. A C99 compiler can build
+the seed without either backend. The evaluator can interpret a backend to
+build its first native generation. Crust stage libraries and drivers
 can compile themselves through their previous generation. This is the
 self-compilation gate; translating the seed is not a requirement.
 

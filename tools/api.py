@@ -18,15 +18,6 @@ C_ONLY = {
     "crust_resolve_type",
     "crust_pointer_type",
     "crust_type_equal",
-    "crust_x64_reserve",
-    "crust_x64_prepare_function",
-    "crust_x64_output",
-    "crust_x64_emit_function",
-    "crust_x64_emit_expression",
-    "crust_x64_emit_place",
-    "crust_x64_emit_statement",
-    "crust_x64_emit_constant",
-    "crust_x64_emit_constant_value",
 }
 SCALARS = {
     "void": "unit",
@@ -125,6 +116,14 @@ def main():
                     field_name, field_type = declaration(field)
                     lines.append(f"    {field_name}: {field_type};")
             lines.extend(["}", ""])
+        if stem == "crust0_x64":
+            model = ROOT / "stages/asm/model.crs"
+            model_text = "\n".join(lines).rstrip() + "\n"
+            if args.check:
+                if not model.exists() or model.read_text() != model_text:
+                    raise SystemExit("Assembly model differs; run tools/api.py")
+            else:
+                model.write_text(model_text)
         remaining = re.sub(record_pattern, "", source, flags=re.S)
         remaining = re.sub(r"typedef enum\s*\{.*?\}\s*\w+\s*;", "", remaining, flags=re.S)
         remaining = re.sub(r"typedef struct \w+ \w+\s*;", "", remaining)

@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import random
+import resource
 import statistics
 import struct
 import subprocess
@@ -54,15 +55,53 @@ BOOTSTRAP = """
 """
 
 
-def roots(workload, directory, build):
+def roots(workload, directory, build, backend="prepared", source_root=ROOT):
     quote = M.crust_string
-    source = (ROOT / "examples/native/main.crs").read_text()
-    source = source.replace('"../../', f'"{ROOT}/')
-    source = source.replace(f'"{ROOT}/build"', quote(directory))
+    source = (source_root / "examples/native/main.crs").read_text()
+    if backend == "source":
+        paths = [
+            source_root / "stages/asm" / (name + ".crs")
+            for name in ("model", "output", "plan", "emit", "program")
+        ]
+        combined = directory / "assembly-stage.crs"
+        combined.write_bytes(b"\n".join(path.read_bytes() for path in paths))
+        source = source.replace('host_link(run, "../../build/crust-asm-library.so");\n', "")
+        source = source.replace(
+            'host_source(run, "../../api/crust0_x64.crs");', f"host_source(run, {quote(combined)});"
+        )
+        source = source.replace(
+            '"../../api/crust0_x64.crs",', ", ".join(quote(path) for path in paths) + ","
+        )
+        source = source.replace("[*u8; 17]", "[*u8; 21]").replace("17usize", "21usize")
+        source = source.replace("[*u8; 3]", "[*u8; 4]").replace(
+            '"native_start", "native_c_image", "c_program"',
+            '"native_start", "native_c_image", "c_program", "native_asm_image"',
+        )
+        source = source.replace("&exports[0usize], 3usize", "&exports[0usize], 4usize")
+        source = source.replace(
+            'var libraries: [*u8; 1] = make [*u8; 1] { host_path(run, "../../build/crust-asm-library.so") };',
+            'extern fn bench_native_asm(context:*CrustContext, session:*NativeSession, image:*NativeImage)->bool="native_asm_image";',
+        )
+        source = source.replace(
+            "libraries: &libraries[0usize], library_count: 1usize",
+            "libraries: null(**u8), library_count: 0usize",
+        )
+    source = source.replace('"../../', f'"{source_root}/')
+    source = source.replace(f'"{source_root}/build"', quote(directory))
+    source = source.replace(
+        str(source_root / "build/crust-asm-library.so"), str(build / "crust-asm-library.so")
+    )
     source = source.replace("record BuildState", CLOCK + "record BuildState")
-    old = "var status: i32 = native_bootstrap(run, &session, &sources[0usize], 17usize, &exports[0usize], 3usize);"
+    count, exports = (21, 4) if backend == "source" else (17, 3)
+    old = f"var status: i32 = native_bootstrap(run, &session, &sources[0usize], {count}usize, &exports[0usize], {exports}usize);"
     assert source.count(old) == 1
-    source = source.replace(old, BOOTSTRAP)
+    bootstrap = BOOTSTRAP.replace("17usize", f"{count}usize").replace("3usize", f"{exports}usize")
+    if backend == "source":
+        bootstrap = bootstrap.replace(
+            "status=native_start(run,&session);",
+            "session.compile=bench_native_asm;\n        status=native_start(run,&session);",
+        )
+    source = source.replace(old, bootstrap)
     source = source.replace(
         "var status: i32 = c_program(&request);",
         """
@@ -94,9 +133,11 @@ def roots(workload, directory, build):
 
 
 def sample(command, native=False):
+    usage = resource.getrusage(resource.RUSAGE_CHILDREN)
     start = time.perf_counter_ns()
     result = M.BASE.run_process(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     elapsed = time.perf_counter_ns() - start
+    end_usage = resource.getrusage(resource.RUSAGE_CHILDREN)
     if result.returncode or result.stdout:
         raise RuntimeError((command, result))
     phases = {}
@@ -115,7 +156,12 @@ def sample(command, native=False):
             raise RuntimeError(phases)
     elif result.stderr:
         raise RuntimeError((command, result))
-    return {"cold_ns": elapsed, **phases}
+    return {
+        "cold_ns": elapsed,
+        "user_cpu_ns": round((end_usage.ru_utime - usage.ru_utime) * 1e9),
+        "system_cpu_ns": round((end_usage.ru_stime - usage.ru_stime) * 1e9),
+        **phases,
+    }
 
 
 def comparison(rows, baseline):
@@ -146,12 +192,12 @@ def main():
     inputs = M.source_hashes()
     inputs["benchmarks/native/measure.py"] = M.BASE.sha256(__file__)
     inputs["examples/native/main.crs"] = M.BASE.sha256(ROOT / "examples/native/main.crs")
-    for name in ("crust", "crust-c-library.so", "libcrust0_host.a"):
+    for name in ("crust", "crust-asm-library.so", "crust-c-library.so", "libcrust0_host.a"):
         inputs[str(build / name)] = M.BASE.sha256(build / name)
     report = {
         "revision": M.BASE.capture(["git", "rev-parse", "HEAD"]),
         "scope": "Cold fresh processes; no stage-result cache; warm OS caches; one CPU; final target GCC excluded",
-        "native_inputs": "crust seed, explicit Crust sources, GNU as, GCC toolchain; no installed stage library",
+        "native_inputs": "crust seed, prepared crust-asm-library.so, explicit Crust sources, GNU as, GCC toolchain",
         "phase_contract": "bootstrap ends after loading the ASM-built backend/executor; continuation includes ASM/C compilation and loading of two complete native function actions; native_target is target frontend through complete C and symbol output; startup_cleanup includes remaining root setup and process teardown",
         "cpu": args.cpu,
         "platform": M.platform.platform(),

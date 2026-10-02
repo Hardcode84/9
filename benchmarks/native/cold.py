@@ -52,9 +52,34 @@ def snapshot(root, build):
     inputs["examples/native/main.crs"] = B.sha256(root / "examples/native/main.crs")
     artifacts = {
         name: M.artifact_info(build / name, not name.endswith(".a"))
-        for name in ("crust", "crust0", "crust-c-library.so", "libcrust0.a", "libcrust0_host.a")
+        for name in (
+            "crust",
+            "crust0",
+            "crust-asm-library.so",
+            "crust-c-library.so",
+            "libcrust0.a",
+            "libcrust0_host.a",
+        )
     }
-    return {"root": str(root), "build": str(build), "sources": inputs, "artifacts": artifacts}
+    variables = M.checked(["make", "-s", "-C", str(root), "-pn"]).decode()
+    flags = (
+        "CC ",
+        "CFLAGS ",
+        "CPPFLAGS ",
+        "LDFLAGS ",
+        "STRICT ",
+        "AS ",
+        "ASFLAGS ",
+        "PROFILE ",
+        "AMALGAMATION ",
+    )
+    return {
+        "root": str(root),
+        "build": str(build),
+        "sources": inputs,
+        "artifacts": artifacts,
+        "make_configuration": [line for line in variables.splitlines() if line.startswith(flags)],
+    }
 
 
 def verify_snapshot(frozen):
@@ -204,6 +229,12 @@ def main():
     parser.add_argument("--rounds", type=int, default=20)
     parser.add_argument("--cpu", type=int, default=0)
     parser.add_argument(
+        "--backend",
+        choices=("source", "prepared"),
+        default="source",
+        help="Bootstrap the assembly stage from source or use its prepared library",
+    )
+    parser.add_argument(
         "--perf", type=Path, help="native Linux perf executable for symbol profiles"
     )
     args = parser.parse_args()
@@ -217,10 +248,21 @@ def main():
     os.chdir(ROOT)
     directory = Path(tempfile.mkdtemp(prefix="cold-native-", dir=build))
     states = {"before": snapshot(before, before / "build"), "after": snapshot(ROOT, build)}
-    tools = {name: B.tool_info(name) for name in ("gcc", "clang-20", "as", "ld", "objcopy")}
+    tools = {
+        name: B.tool_info(name)
+        for name in ("gcc", "clang-20", "as", "ld", "objcopy", "/usr/bin/time")
+    }
     if perf:
         tools[perf] = B.tool_info(perf)
-    script_hash = B.sha256(__file__)
+    scripts = {
+        str(path.relative_to(ROOT)): B.sha256(path)
+        for path in (
+            Path(__file__),
+            ROOT / "benchmarks/native/measure.py",
+            ROOT / "benchmarks/source-order/measure.py",
+            ROOT / "benchmarks/bootstrap/measure.py",
+        )
+    }
     result = {
         "revision": B.capture(["git", "rev-parse", "HEAD"]),
         "source_diff": B.capture(
@@ -228,18 +270,24 @@ def main():
         ),
         "command": sys.argv,
         "environment": B.environment(args.cpu),
-        "script_sha256": script_hash,
+        "scripts": scripts,
         "builds": states,
         "tools": tools,
         "method": {
             "rounds": args.rounds,
             "seed": 20261002,
             "bootstrap_draws": 10000,
-            "state": "Fresh process and empty stage-result cache; warm OS caches; one CPU. Only seed and system tools are installed inputs to each native route.",
+            "state": "Fresh process; no stage-result cache; warm OS caches; one CPU.",
+            "backend": args.backend,
+            "installed_inputs": (
+                "Seed and system tools"
+                if args.backend == "source"
+                else "Seed, prepared assembly stage and system tools"
+            ),
             "endpoint": "Root startup, stage preparation, native continuations, target frontend, complete C and symbol files, cleanup. Final target GCC is excluded; GCC used to prepare stages is included.",
-            "baseline": "Original C syntax checks with GCC and Clang; select fastest median in each paired bootstrap resample.",
+            "baseline": "Check: original C syntax checks with GCC and Clang, fastest median in each paired bootstrap resample. Handoff: Clang frontend IR with LLVM passes disabled; includes textual IR serialization.",
             "phases": "bootstrap includes ASM stage build and load; continuation_preparation includes both native action builds and loads; native_target includes target frontend and emission; startup_cleanup is the remaining cold process time",
-            "stop": "Any failed one-worker cold case blocks parallel scheduler expansion. This experiment is not the complete specification matrix.",
+            "scope": "Separate bootstrap comparison. The main application gate uses an already compiled backend in benchmarks/source-order/gate.py.",
         },
         "workloads": [],
     }
@@ -266,8 +314,9 @@ def main():
         for label, state in states.items():
             work = directory / f"{workload['name']}-{label}"
             work.mkdir()
-            module = load(Path(state["root"]))
-            root = module.roots(workload, work, Path(state["build"]))["native"]
+            root = N.roots(workload, work, Path(state["build"]), args.backend, Path(state["root"]))[
+                "native"
+            ]
             output, symbols = work / "target.c", work / "target.rsp"
             entry["roots"][label] = {
                 "path": str(root),
@@ -284,6 +333,13 @@ def main():
                 "--symbols",
                 str(symbols),
             ]
+            entry["commands"][label + "_check"] = [
+                str(Path(state["build"]) / "crust"),
+                str(root),
+                *(["--library"] if workload["library"] else []),
+                "--check",
+            ]
+            N.sample(entry["commands"][label + "_check"], True)
             N.sample(entry["commands"][label], True)
             hashes = [B.sha256(output), B.sha256(symbols)]
             if "output_sha256" in entry and hashes != entry["output_sha256"]:
@@ -291,13 +347,39 @@ def main():
             entry["output_sha256"] = hashes
         entry["commands"]["gcc"] = M.syntax_command(workload["paths"]["c"], not workload["library"])
         entry["commands"]["clang"] = ["clang-20", *entry["commands"]["gcc"][1:]]
+        entry["commands"]["clang_ir"] = [
+            "clang-20",
+            *[flag for flag in entry["commands"]["gcc"][1:] if flag != "-fsyntax-only"],
+            "-S",
+            "-emit-llvm",
+            "-Xclang",
+            "-disable-llvm-passes",
+            "-o",
+            str(directory / (workload["name"] + ".ll")),
+        ]
         entry["headers"] = {
             name: B.dependency_manifest(entry["commands"][name]) for name in ("gcc", "clang")
         }
-        for name in ("gcc", "clang"):
+        for name in ("gcc", "clang", "clang_ir"):
             N.sample(entry["commands"][name])
         if not workload["library"]:
             entry["executable_check"] = executable_check(entry, build)
+        entry["resource_observations"] = {}
+        for name, command in entry["commands"].items():
+            usage = directory / (workload["name"] + "-" + name + ".usage")
+            N.sample(
+                ["/usr/bin/time", "-o", str(usage), "-f", "%M", *command],
+                name.removesuffix("_check") in states,
+            )
+            entry["resource_observations"][name] = {
+                "max_rss_kib": int(usage.read_text()),
+                "observations": 1,
+            }
+        entry["root_inputs"] = {
+            str(path): B.sha256(path)
+            for label in states
+            for path in Path(entry["roots"][label]["path"]).parent.glob("*.crs")
+        }
         result["workloads"].append(entry)
 
     rng = random.Random(20261002)
@@ -307,7 +389,10 @@ def main():
         for entry in order:
             routes = list(entry["commands"])
             rng.shuffle(routes)
-            row = {name: N.sample(entry["commands"][name], name in states) for name in routes}
+            row = {
+                name: N.sample(entry["commands"][name], name.removesuffix("_check") in states)
+                for name in routes
+            }
             for label in states:
                 work = Path(entry["roots"][label]["path"]).parent
                 if [B.sha256(work / "target.c"), B.sha256(work / "target.rsp")] != entry[
@@ -329,7 +414,9 @@ def main():
             for name in entry["commands"]
         }
         entry["after_over_before"] = ratio(rows, "after", ["before"])
-        entry["after_over_fastest_c"] = ratio(rows, "after", ["gcc", "clang"])
+        entry["check_after_over_before"] = ratio(rows, "after_check", ["before_check"])
+        entry["check_over_fastest_c"] = ratio(rows, "after_check", ["gcc", "clang"])
+        entry["handoff_over_clang_ir"] = ratio(rows, "after", ["clang_ir"])
         for info in entry["inputs"].values():
             if B.sha256(info["path"]) != info["sha256"]:
                 raise RuntimeError("Target input changed")
@@ -339,6 +426,8 @@ def main():
         for info in entry["roots"].values():
             if B.sha256(info["path"]) != info["sha256"]:
                 raise RuntimeError("Root input changed")
+        if any(B.sha256(path) != digest for path, digest in entry["root_inputs"].items()):
+            raise RuntimeError("Generated stage source changed")
         print(entry["name"], json.dumps(entry["median_ms"]), flush=True)
     if perf:
         result["profiles"] = {}
@@ -348,12 +437,13 @@ def main():
             result["profiles"][label] = profile(state, workloads[-1], work, perf)
     for state in states.values():
         verify_snapshot(state)
-    if B.sha256(__file__) != script_hash or any(
+    if any(B.sha256(ROOT / path) != digest for path, digest in scripts.items()) or any(
         B.tool_info(name) != info for name, info in tools.items()
     ):
         raise RuntimeError("Measurement script or tool changed")
     result["single_worker_pass"] = all(
-        entry["after_over_fastest_c"]["pass"] for entry in result["workloads"]
+        entry["check_over_fastest_c"]["pass"] and entry["handoff_over_clang_ir"]["pass"]
+        for entry in result["workloads"]
     )
     opener = gzip.open if report_path.suffix == ".gz" else open
     with opener(report_path, "wt") as stream:

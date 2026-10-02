@@ -56,6 +56,7 @@ def cases():
     ]
     for name, source, _ in overload.runtime_cases():
         if name in {
+            "long-nominal-type-keys",
             "scalar-types-and-native-width-aliases",
             "function-values-expected-contexts",
             "function-values-in-constant-and-field",

@@ -41,7 +41,20 @@ def runtime_cases():
     initializers = ",".join(
         f"field{index:04}:{index}{'u64' if index % 2 else 'u32'}" for index in range(1024)
     )
+    long_name = "Record" + "x" * 8192
     return [
+        (
+            "long-nominal-type-keys",
+            program(
+                f"var a:*{long_name}A=null(*{long_name}A);"
+                f"var b:*{long_name}B=null(*{long_name}B);"
+                "if pick(a)!=1i32 || pick(b)!=2i32 || pick(a)!=1i32 {return 1i32;}",
+                f"record {long_name}A{{value:u8;}} record {long_name}B{{value:u8;}}"
+                f"fn pick(value:*{long_name}A)->i32{{return 1i32;}}"
+                f"fn pick(value:*{long_name}B)->i32{{return 2i32;}}",
+            ),
+            b"",
+        ),
         ("scalar-types-and-native-width-aliases", program(checks, declarations), b""),
         (
             "signed-minimum-and-group",

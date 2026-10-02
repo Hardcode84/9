@@ -24,8 +24,16 @@ fn ov_names(stage:*OvStage, function:*OvFunction)->unit {
     ov_text(stage, buffer, "n");
     var name:*CrustName = (*(*function).group).name;
     ov_part(stage, buffer, (*name).text, (*name).size);
-    var parameters:*CrustName = (*function).parameters;
-    ov_bytes(stage, buffer, (*parameters).text, (*parameters).size);
+    var signature:*CrustTypeSyntax = (*function).syntax;
+    ov_text(stage, buffer, "a");
+    ov_number(stage, buffer, (*signature).param_count as u64);
+    var index:usize = 0usize;
+    while index < (*signature).param_count {
+        var key:*CrustName = ov_type_key(stage, (*signature).params[index]);
+        if key == null(*CrustName) { return; }
+        ov_bytes(stage, buffer, (*key).text, (*key).size);
+        index = index + 1usize;
+    }
     ov_text(stage, buffer, "r");
     ov_bytes(stage, buffer, (*result_key).text, (*result_key).size);
     ov_text(stage, buffer, "c");
@@ -88,7 +96,6 @@ fn ov_add_function(stage:*OvStage, group:*OvGlobal, declaration:*CrustDecl)->uni
         (*function).declaration = declaration;
         (*function).group = group;
         (*function).syntax = syntax;
-        (*function).parameters = parameters;
         (*function).contract = contract;
         (*function).next = (*group).first;
         (*group).first = function;

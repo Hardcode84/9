@@ -71,7 +71,9 @@ fn ov_parameters(stage:*OvStage, syntax:*CrustTypeSyntax)->*CrustName {
     ov_number(stage, &(*stage).scratch, (*syntax).param_count as u64);
     var index:usize = 0usize;
     while index < (*syntax).param_count && !(*stage).failed {
-        ov_encode_type(stage, (*syntax).params[index], &(*stage).scratch, 0usize);
+        var key:*CrustName = ov_type_key(stage, (*syntax).params[index]);
+        // Selection keys stay in this context. Native names use structural type text.
+        ov_number(stage, &(*stage).scratch, key as usize as u64);
         index = index + 1usize;
     }
     return ov_finish_key(stage, begin);

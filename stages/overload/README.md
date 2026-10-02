@@ -139,7 +139,10 @@ result types. A named record uses its declared name. Complete key bytes
 are interned, and hash collisions are checked against those bytes.
 Selection uses the table; it does not run the full checker for each candidate.
 
-The stage caches type keys by source syntax node. Keep source signatures
+The stage caches type keys by source syntax node. Selection keys use the
+identities of interned type keys, so calls do not copy a long type encoding.
+These identities stay in the context. Native names use the complete structural
+encodings and contain no addresses. Keep source signatures
 and record fields unchanged between collection and mangling. A later
 stage can lower them after selection.
 

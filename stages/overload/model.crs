@@ -25,7 +25,6 @@ record OvFunction {
     declaration:*CrustDecl;
     group:*OvGlobal;
     syntax:*CrustTypeSyntax;
-    parameters:*CrustName;
     contract:*CrustName;
     internal_name:*CrustName;
     native_name:*u8;

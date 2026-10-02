@@ -119,11 +119,15 @@ Use letters, digits, and underscores for portable domain names.
 | Extension type | `x N(kind) Payload` from the type callback |
 
 `Parameters` is the concatenation of the encoded parameter types.
-The selection key is `a N(arity) Parameters`.
+The `NativeParameters` encoding is `a N(arity) Parameters`.
+Local selection uses `a N(arity)` followed by `N` of each interned type key's
+address. These keys are exact within their context. They must not be saved or
+used across contexts. Calls reuse cached type keys without copying their text.
+Native names use only structural encodings; they contain no addresses.
 The native name is:
 
 ```text
-crust_ov1_d S(domain) n S(source_name) SelectionKey r Result c S(contract)
+crust_ov1_d S(domain) n S(source_name) NativeParameters r Result c S(contract)
 ```
 
 Spaces in this notation are separators; they are not emitted.

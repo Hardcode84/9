@@ -147,3 +147,42 @@ The report lists the exact compiled RMD inputs, C core inputs, archive hashes,
 tool hashes, generated output hashes, and all commands. The initial and
 provisional timing reports remain separate; their medians are not mixed
 with this final paired run.
+
+## Long type keys, 2026-10-02
+
+[type-keys-2026-10-02.json](type-keys-2026-10-02.json) records 20 shuffled paired
+samples on CPU 0, after two warmups. Each sample starts a fresh process and
+runs `--check`. The baseline is commit `51bdc97`. Both compilers use the default
+`make all overload-stage` build with `CFLAGS='-O2 -g'`. The report retains the
+binary, generator, and input hashes and each command.
+The native toolchain is GCC 13.3.0, Ubuntu package `13.3.0-6ubuntu2~24.04.1`.
+
+The changed lookup uses interned type identities within a compiler context.
+Native symbol names retain the same structural encoding. It removes the copy
+and hash of a long type name for each call.
+
+| Type name bytes | Calls | Before, ms | After, ms | Plain Crust check, ms |
+| ---: | ---: | ---: | ---: | ---: |
+| 8 | 20,000 | 15.598 | 15.148 | 8.972 |
+| 8,192 | 20,000 | 278.376 | 16.317 | 9.533 |
+| 2,000 | 2,000 | 9.434 | 3.109 | 2.376 |
+| 8,000 | 8,000 | 106.827 | 7.155 | 4.688 |
+| 32,000 | 32,000 | 1,640.543 | 24.790 | 14.454 |
+
+The plain variant gives the scalar function a separate name and uses
+`crust-c --check`. It measures the cost without overload selection; it is not
+a GCC or Clang baseline. These results do not establish the complete C-speed
+gate. All five measured programs also compile and run with the changed driver.
+Each verifies that its counter equals its call count. Target GCC compilation
+and execution are excluded from the timing samples.
+
+To repeat with a separately built baseline:
+
+```sh
+git worktree add --detach build/type-key-before 51bdc97
+make -C build/type-key-before all overload-stage
+make all overload-stage
+python3 benchmarks/overload/type_keys.py \
+  --before build/type-key-before/build/crust-overload \
+  --output build/type-key-repeat.json
+```

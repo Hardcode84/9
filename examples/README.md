@@ -41,6 +41,7 @@ Each example has its own directory and README.
 | [modules](modules/README.md) | Compile separate namespaces and import selected names | `modules: 42` |
 | [native](native/README.md) | Bootstrap stages and execute compilation functions natively | `Hello from a bootstrapped native stage!` |
 | [intrusive](intrusive/README.md) | Build a direct intrusive list | `intrusive: ok` |
+| [cached-backend](cached-backend/README.md) | Bootstrap native stages from source and reuse the library | Native ASM/C handoff and hello output |
 | [reader-switch](reader-switch/README.md) | Replace the reader and executor from the root | Two lines read with a new grammar |
 | [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
 | [highlight](highlight/README.md) | Classify source with ordinary Crust stages | Highlighted HTML or JSON tokens |
@@ -78,7 +79,8 @@ Run `make check-vscode` with Bun for the editor adapter tests.
 Run `make check-modules` for module bindings, exports, and allocation failures.
 Run `make check-native` for native bootstrap, handoff, and cleanup. This example
 uses the assembly library from `make all` and builds its executor on each
-invocation.
+invocation. Run `make check-cache` for source-only startup, artifact reuse,
+invalidation, corruption, concurrency, and cleanup.
 Run `make check-ccn` for function counts, the Lizard comparison, and the CCN build
 example. This check needs `lizard==1.21.6` in the Python environment.
 

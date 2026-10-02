@@ -1,0 +1,112 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Inputs are immutable byte snapshots. Include the producer, its helpers, the
+// compiler and ABI, options, tools, and every other value read by the build.
+// Build writes only path. It must remove its scratch files before it returns.
+// Directory is an existing absolute, caller-owned directory. Keep published
+// files live while any runner uses them. This operation does not load code.
+fn cache_artifact(context: *CrustContext, directory: *u8, request: *CacheBuild, result: *CacheArtifact) -> bool {
+    *result = make CacheArtifact { path: null(*u8), hit: false };
+    if directory == null(*u8) || directory[0usize] != 47u8 ||
+       (*request).build == null(fn(*CrustContext, *CacheBuild, *u8) -> bool) {
+        return native_error(context, "cache requires an absolute directory and a build function");
+    }
+    var work: CacheWork = make CacheWork {
+        directory: null(*u8), manifest: null(*u8), digest: null(*u8), artifact: null(*u8), checksum: null(*u8)
+    };
+    var success: bool = cache_work(context, directory, &work) && cache_request(context, request, &work, result);
+    if !cache_cleanup(context, &work) { return false; }
+    return success;
+}
+
+fn cache_manifest_inputs(context: *CrustContext, file: *u8, request: *CacheBuild) -> bool {
+    var index: usize = 0usize;
+    while index < (*request).count {
+        var input: *CrustSource = (*request).inputs[index];
+        var name_size: u64 = native_strlen((*input).path) as u64;
+        var size: u64 = (*input).size as u64;
+        if !cache_write(context, file, &name_size as *u8, 8usize) ||
+           !cache_write(context, file, (*input).path, name_size as usize) ||
+           !cache_write(context, file, &size as *u8, 8usize) ||
+           !cache_write(context, file, (*input).bytes, (*input).size) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn cache_manifest(context: *CrustContext, request: *CacheBuild, path: *u8) -> bool {
+    var file: *u8 = native_fopen(path, "wb");
+    if file == null(*u8) { return native_error(context, "cannot open cache manifest"); }
+    var version: *u8 = "crust-artifact-v1-linux-x64\n";
+    var success: bool = cache_write(context, file, version, native_strlen(version)) &&
+        cache_manifest_inputs(context, file, request);
+    if native_fclose(file) != 0i32 { return native_error(context, "cannot close cache manifest"); }
+    return success;
+}
+
+fn cache_exists(context: *CrustContext, path: *u8, exists: *bool) -> bool {
+    var fd: i32 = cache_open(path, 196608i32, 0u32);
+    *exists = fd >= 0i32;
+    if fd < 0i32 {
+        if *native_errno() == 2i32 { return true; }
+        return native_error(context, "cannot open cache entry directory");
+    }
+    if cache_close(fd) != 0i32 { return native_error(context, "cannot close cache entry directory"); }
+    return true;
+}
+
+fn cache_verify(context: *CrustContext, entry: *u8, scratch: *u8, result: *CacheArtifact) -> bool {
+    var artifact: *u8 = native_join(context, entry, "/artifact");
+    var checksum: *u8 = native_join(context, entry, "/checksum");
+    if artifact == null(*u8) || checksum == null(*u8) { return false; }
+    var saved: CrustSource = uninit;
+    if !cache_read(context, checksum, &saved) { return false; }
+    var digest: *u8 = cache_digest(context, artifact, scratch);
+    if digest == null(*u8) { return false; }
+    if saved.size != 64usize || cache_memcmp(saved.bytes, digest, 64usize) != 0i32 {
+        return native_error(context, "cache artifact checksum mismatch");
+    }
+    (*result).path = artifact;
+    return true;
+}
+
+fn cache_publish(context: *CrustContext, work: *CacheWork, entry: *u8, result: *CacheArtifact) -> bool {
+    var digest: *u8 = cache_digest(context, (*work).artifact, (*work).digest);
+    if digest == null(*u8) || !cache_save(context, (*work).checksum, digest, 64usize) { return false; }
+    if !cache_remove(context, (*work).manifest) || !cache_remove(context, (*work).digest) { return false; }
+    // Both files become visible in one rename. A concurrent winner is verified.
+    if cache_rename((*work).directory, entry) != 0i32 {
+        if *native_errno() != 17i32 && *native_errno() != 39i32 {
+            return native_error(context, "cannot publish cache artifact");
+        }
+        return cache_verify(context, entry, (*work).digest, result);
+    }
+    *work = make CacheWork {
+        directory: null(*u8), manifest: null(*u8), digest: null(*u8), artifact: null(*u8), checksum: null(*u8)
+    };
+    (*result).path = native_join(context, entry, "/artifact");
+    return (*result).path != null(*u8);
+}
+
+fn cache_request(context: *CrustContext, request: *CacheBuild, work: *CacheWork, result: *CacheArtifact) -> bool {
+    if !cache_manifest(context, request, (*work).manifest) { return false; }
+    var key: *u8 = cache_digest(context, (*work).manifest, (*work).digest);
+    if key == null(*u8) { return false; }
+    // Replace the private work directory's final component with the content key.
+    var count: usize = native_strlen((*work).directory);
+    while count != 0usize && (*work).directory[count - 1usize] != 47u8 { count = count - 1usize; }
+    var parent: *u8 = crust_try_copy_string(context, (*work).directory, count);
+    if parent == null(*u8) { return false; }
+    var entry: *u8 = native_join(context, parent, key);
+    if entry == null(*u8) { return false; }
+    var exists: bool = false;
+    if !cache_exists(context, entry, &exists) { return false; }
+    if exists { (*result).hit = true; return cache_verify(context, entry, (*work).digest, result); }
+    var errors: usize = (*context).error_count;
+    if !(*request).build(context, request, (*work).artifact) {
+        if (*context).error_count == errors { native_error(context, "cache build failed without a diagnostic"); }
+        return false;
+    }
+    if (*context).error_count != errors { return false; }
+    return cache_publish(context, work, entry, result);
+}

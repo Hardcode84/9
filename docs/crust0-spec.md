@@ -832,7 +832,11 @@ cache must account for stage and helper code, representations, source and bindin
 facts, target settings, options, and every external input that can affect output.
 It must handle absent files and side effects as specified in the
 [cache contract](exploration/metacompilation.md#7-caching-without-changing-program-meaning).
-A cache cannot hide stage preparation in the cold-build result.
+A cache cannot hide stage preparation in the cold-build result. The optional
+[artifact cache](../stages/cache/README.md) reuses complete files from explicit
+input snapshots and a user build function. It does not store compiler contexts
+or replay root effects. The root loads the selected artifact and installs its
+operations explicitly.
 
 ## 13 Complete seed examples
 

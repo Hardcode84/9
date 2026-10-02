@@ -221,7 +221,9 @@ reader change. The [native stage](../stages/native/README.md) implements this
 boundary with complete function actions. Its bootstrap uses the compiler
 selected in `NativeSession.compile`. `NativeSession.libraries` supplies explicit
 native dependencies. `native_start` retains that compiler selection. The
-executor then compiles and calls the next
+[cached example](../examples/cached-backend/README.md) starts with the seed
+and sources, interprets assembly emission on a miss, and loads the published
+library on a hit. It then compiles and calls the next
 functions, preserves explicit state and callable identities, and builds the
 target from the unread source tail. Its unit rules are ordinary library policy.
 
@@ -342,9 +344,15 @@ facts. Submitted jobs must retain their source, selected stages, state, and
 native code until completion. A library can schedule those jobs and join them
 before releasing their inputs. The seed adds no task scheduler.
 
-Root effects execute on every invocation. A persistent artifact cache requires
-a complete dependency and effect contract, as described in the
-[metacompilation study](exploration/metacompilation.md#7-caching-without-changing-program-meaning).
+The optional [artifact cache](../stages/cache/README.md) stores complete files
+from a user build function. It hashes captured bytes and validates each reused
+artifact. Callers declare all build inputs, including code, ABI, options, tools,
+and external data. They supply captured bytes to the producer. Missing required
+inputs fail before lookup. A producer with optional lookups must include their
+presence or absence in its inputs. Root effects execute on every invocation;
+contexts, pointers, and prepared roots are not cached. See the
+[cache tutorial](../examples/cached-backend/README.md) for source bootstrap,
+publication, loading, and execution through the same source program.
 
 The [reader-transfer proof](../benchmarks/source-order/proof.md) established
 the first ownership and output boundary before this implementation. The

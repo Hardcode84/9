@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record CacheAllocation { calls: usize; fail_at: usize; live: usize; }
+
+fn cache_test_allocate(user: *u8, size: usize) -> *u8 {
+    var counts: *CacheAllocation = user as *CacheAllocation;
+    (*counts).calls = (*counts).calls + 1usize;
+    if (*counts).calls == (*counts).fail_at { return null(*u8); }
+    var bytes: *u8 = crust0_host_alloc(size, 16usize);
+    if bytes == null(*u8) { trap; }
+    (*counts).live = (*counts).live + 1usize;
+    return bytes;
+}
+
+fn cache_test_release(user: *u8, bytes: *u8) -> unit {
+    var counts: *CacheAllocation = user as *CacheAllocation;
+    if bytes == null(*u8) || (*counts).live == 0usize { trap; }
+    (*counts).live = (*counts).live - 1usize;
+    crust0_host_free(bytes);
+}
+
+// Return 42 when allocation failure was not reached. Every rejected build
+// must retain a diagnostic and release all context allocations.
+fn cache_allocation(request: *CacheBuild, directory: *u8, fail_at: usize) -> i32 {
+    var counts: CacheAllocation = make CacheAllocation { calls: 0usize, fail_at: fail_at, live: 0usize };
+    var allocator: CrustAllocator = make CrustAllocator {
+        user: &counts as *u8, allocate: cache_test_allocate, release: cache_test_release
+    };
+    var context: CrustContext = uninit;
+    crust_context_init(&context, &allocator);
+    var result: CacheArtifact = uninit;
+    var success: bool = cache_artifact(&context, directory, request, &result);
+    var errors: usize = context.error_count;
+    crust_context_destroy(&context);
+    if counts.live != 0usize || (success && errors != 0usize) || (!success && errors == 0usize) { return 2i32; }
+    if success {
+        if counts.calls >= fail_at { return 3i32; }
+        return 42i32;
+    }
+    if counts.calls < fail_at { return 4i32; }
+    return 0i32;
+}

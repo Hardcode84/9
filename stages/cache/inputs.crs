@@ -1,0 +1,101 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn cache_add(context: *CrustContext, inputs: *CacheInputs, source: *CrustSource) -> bool {
+    if (*inputs).count == (*inputs).capacity {
+        if (*inputs).capacity > ~0usize / (2usize * sizeof(*CrustSource)) {
+            return native_error(context, "too many cache inputs");
+        }
+        var next: usize = (*inputs).capacity * 2usize;
+        if next == 0usize { next = 16usize; }
+        var items: **CrustSource = crust_try_grow_array(context, (*inputs).items as *u8,
+            (*inputs).count, next, sizeof(*CrustSource), alignof(*CrustSource)) as **CrustSource;
+        if items == null(**CrustSource) { return false; }
+        (*inputs).items = items; (*inputs).capacity = next;
+    }
+    (*inputs).items[(*inputs).count] = source;
+    (*inputs).count = (*inputs).count + 1usize;
+    return true;
+}
+
+fn cache_input(context: *CrustContext, inputs: *CacheInputs, path: *u8) -> bool {
+    var source: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+    if source == null(*CrustSource) || !cache_read(context, path, source) { return false; }
+    (*source).identity = (*inputs).count as u64 + 1u64;
+    return cache_add(context, inputs, source);
+}
+
+// Add the complete dynamic library closure reported by ldd in the same fixed
+// environment used by cache_tool. Static tools need a different provider.
+fn cache_tool_libraries(context: *CrustContext, inputs: *CacheInputs, path: *u8, scratch: *u8) -> bool {
+    var arguments: [*u8; 3] = make [*u8; 3] { "/usr/bin/ldd", path, null(*u8) };
+    if !cache_tool(context, &arguments[0usize], scratch) { return false; }
+    var source: CrustSource = uninit;
+    if !cache_read(context, scratch, &source) { return false; }
+    if cache_strstr(source.bytes, "not found") != null(*u8) { return native_error(context, "missing tool library"); }
+    var index: usize = 0usize;
+    while index < source.size {
+        var end: usize = index;
+        while end < source.size && source.bytes[end] != 10u8 { end = end + 1usize; }
+        var start: usize = index;
+        while start < end && source.bytes[start] != 47u8 { start = start + 1usize; }
+        if start < end && !cache_library_path(context, inputs, &source, start, end) { return false; }
+        index = end + 1usize;
+    }
+    return true;
+}
+
+fn cache_tools(context: *CrustContext, inputs: *CacheInputs, paths: **u8, count: usize, directory: *u8) -> bool {
+    var work: CacheWork = make CacheWork {
+        directory: null(*u8), manifest: null(*u8), digest: null(*u8), artifact: null(*u8), checksum: null(*u8)
+    };
+    var success: bool = cache_work(context, directory, &work);
+    var index: usize = 0usize;
+    while success && index < count {
+        success = cache_input(context, inputs, paths[index]) && cache_tool_libraries(context, inputs, paths[index], work.manifest);
+        index = index + 1usize;
+    }
+    if !cache_cleanup(context, &work) { return false; }
+    return success;
+}
+
+fn cache_library_path(context: *CrustContext, inputs: *CacheInputs, source: *CrustSource, start: usize, end: usize) -> bool {
+            var stop: usize = start;
+            while stop + 1usize < end && !((*source).bytes[stop] == 32u8 && (*source).bytes[stop + 1usize] == 40u8) { stop = stop + 1usize; }
+            if stop + 1usize == end { return native_error(context, "invalid tool library listing"); }
+            var library: *u8 = crust_try_copy_string(context, (*source).bytes + start as isize, stop - start);
+            if library == null(*u8) || !cache_input(context, inputs, library) { return false; }
+    return true;
+}
+
+fn cache_loaded_image(image: *CacheLoadedImage, size: usize, user: *u8) -> i32 {
+    var state: *CacheLoadedInputs = user as *CacheLoadedInputs;
+    var name: *u8 = (*image).name;
+    // The main executable is captured through /proc/self/exe. The vDSO has no file.
+    if name[0usize] == 0u8 || cache_strcmp(name, "linux-vdso.so.1") == 0i32 { return 0i32; }
+    if !cache_input((*state).context, (*state).inputs, name) { return 1i32; }
+    return 0i32;
+}
+
+// Capture the executable and the actual loaded files, including explicit native
+// inputs and loader-selected libraries. Complete this call before loading output.
+fn cache_loaded_inputs(context: *CrustContext, inputs: *CacheInputs) -> bool {
+    if !cache_input(context, inputs, "/proc/self/exe") { return false; }
+    var state: CacheLoadedInputs = make CacheLoadedInputs { context: context, inputs: inputs };
+    return cache_images(cache_loaded_image, &state as *u8) == 0i32;
+}
+
+// Retain the actual source snapshots used by this runner. Files can change
+// after host_source; their new bytes do not replace already checked code.
+fn cache_loaded_sources(root: *CrustRun, inputs: *CacheInputs) -> bool {
+    var seen: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    var item: *CrustUnit = (*(*root).context).units;
+    while item != null(*CrustUnit) {
+        var source: *CrustSource = (*item).source;
+        if source != null(*CrustSource) && crust_map_get(&seen, source as usize) == null(*u8) {
+            if !cache_add((*root).context, inputs, source) ||
+               !crust_try_map_set((*root).context, &seen, source as usize, source as *u8) { return false; }
+        }
+        item = (*item).next;
+    }
+    return true;
+}

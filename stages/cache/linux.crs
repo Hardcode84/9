@@ -1,0 +1,126 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn cache_strstr(text: *u8, needle: *u8) -> *u8 = "strstr";
+extern fn cache_mkdir(path: *u8, mode: u32) -> i32 = "mkdir";
+extern fn cache_rename(old: *u8, new: *u8) -> i32 = "rename";
+extern fn cache_open(path: *u8, flags: i32, mode: u32) -> i32 = "open";
+extern fn cache_close(fd: i32) -> i32 = "close";
+extern fn cache_dup2(from: i32, to: i32) -> i32 = "dup2";
+extern fn cache_execve(file: *u8, argv: **u8, environment: **u8) -> i32 = "execve";
+extern fn cache_fwrite(bytes: *u8, size: usize, count: usize, file: *u8) -> usize = "fwrite";
+extern fn cache_memcmp(left: *u8, right: *u8, size: usize) -> i32 = "memcmp";
+
+// Tools run with this fixed environment. Arguments end in a null pointer.
+// Output is an owned scratch path, or null to keep the caller's stdout.
+fn cache_tool(context: *CrustContext, arguments: **u8, output: *u8) -> bool {
+    var pid: i32 = native_fork();
+    if pid < 0i32 { return native_error(context, "cannot start cache tool"); }
+    if pid == 0i32 {
+        if output != null(*u8) {
+            var fd: i32 = cache_open(output, 577i32, 384u32);
+            if fd < 0i32 { native_exit(126i32); trap; }
+            if cache_dup2(fd, 1i32) < 0i32 { native_exit(126i32); trap; }
+            if fd != 1i32 && cache_close(fd) != 0i32 { native_exit(126i32); trap; }
+        }
+        var environment: [*u8; 3] = make [*u8; 3] { "PATH=/usr/bin:/bin", "LANG=C", null(*u8) };
+        cache_execve(arguments[0usize], arguments, &environment[0usize]);
+        native_exit(127i32);
+        trap;
+    }
+    var status: i32 = 0i32;
+    while true {
+        var result: i32 = native_waitpid(pid, &status, 0i32);
+        if result == pid { break; }
+        if result < 0i32 && *native_errno() == 4i32 { continue; }
+        return native_error(context, "cannot wait for cache tool");
+    }
+    if status != 0i32 { return native_error(context, "cache tool failed"); }
+    return true;
+}
+
+// The caller owns the cache directory. Do not share it with untrusted writers.
+fn cache_directory(context: *CrustContext, path: *u8) -> bool {
+    if cache_mkdir(path, 448u32) == 0i32 || *native_errno() == 17i32 { return true; }
+    return native_error(context, "cannot create cache directory");
+}
+
+fn cache_read(context: *CrustContext, path: *u8, result: *CrustSource) -> bool {
+    var bytes: *u8 = null(*u8);
+    var size: usize = 0usize;
+    if crust0_host_read_file(path, &bytes, &size) != 0i32 { return native_error(context, "cannot read cache file"); }
+    var copy: *u8 = crust_try_copy_string(context, bytes, size);
+    crust0_host_free(bytes);
+    if copy == null(*u8) { return false; }
+    *result = make CrustSource { path: path, bytes: copy, size: size, identity: 0u64 };
+    return true;
+}
+
+fn cache_write(context: *CrustContext, file: *u8, bytes: *u8, size: usize) -> bool {
+    if cache_fwrite(bytes, 1usize, size, file) == size { return true; }
+    return native_error(context, "cannot write cache file");
+}
+
+fn cache_save(context: *CrustContext, path: *u8, bytes: *u8, size: usize) -> bool {
+    var file: *u8 = native_fopen(path, "wb");
+    if file == null(*u8) { return native_error(context, "cannot open cache output"); }
+    var success: bool = cache_write(context, file, bytes, size);
+    if native_fclose(file) != 0i32 { return native_error(context, "cannot close cache output"); }
+    return success;
+}
+
+// Digest the file's bytes. The digest provider is the system SHA-256 utility.
+fn cache_digest(context: *CrustContext, path: *u8, scratch: *u8) -> *u8 {
+    var arguments: [*u8; 4] = make [*u8; 4] { "/usr/bin/sha256sum", path, null(*u8), null(*u8) };
+    if !cache_tool(context, &arguments[0usize], scratch) { return null(*u8); }
+    var source: CrustSource = uninit;
+    if !cache_read(context, scratch, &source) { return null(*u8); }
+    // sha256sum prefixes escaped filenames with a backslash.
+    var begin: usize = 0usize;
+    if source.size != 0usize && source.bytes[0usize] == 92u8 { begin = 1usize; }
+    if source.size < begin + 66usize { native_error(context, "invalid SHA-256 output"); return null(*u8); }
+    var index: usize = begin;
+    while index < begin + 64usize {
+        var byte: u8 = source.bytes[index];
+        if !((byte >= 48u8 && byte <= 57u8) || (byte >= 97u8 && byte <= 102u8)) {
+            native_error(context, "invalid SHA-256 output"); return null(*u8);
+        }
+        index = index + 1usize;
+    }
+    return crust_try_copy_string(context, source.bytes + begin as isize, 64usize);
+}
+
+fn cache_work(context: *CrustContext, directory: *u8, work: *CacheWork) -> bool {
+    var path: *u8 = native_join(context, directory, "/.build-XXXXXX");
+    if path == null(*u8) { return false; }
+    if native_mkdtemp(path) == null(*u8) { return native_error(context, "cannot create cache work directory"); }
+    (*work).directory = path;
+    (*work).manifest = native_join(context, path, "/inputs");
+    (*work).digest = native_join(context, path, "/digest");
+    (*work).artifact = native_join(context, path, "/artifact");
+    (*work).checksum = native_join(context, path, "/checksum");
+    return (*work).manifest != null(*u8) && (*work).digest != null(*u8) &&
+        (*work).artifact != null(*u8) && (*work).checksum != null(*u8);
+}
+
+fn cache_remove(context: *CrustContext, path: *u8) -> bool {
+    if path == null(*u8) { return true; }
+    return native_remove(context, path);
+}
+
+fn cache_cleanup(context: *CrustContext, work: *CacheWork) -> bool {
+    var success: bool = true;
+    if !cache_remove(context, (*work).manifest) { success = false; }
+    if !cache_remove(context, (*work).digest) { success = false; }
+    if !cache_remove(context, (*work).artifact) { success = false; }
+    if !cache_remove(context, (*work).checksum) { success = false; }
+    if (*work).directory != null(*u8) && native_rmdir((*work).directory) != 0i32 {
+        native_error(context, "cannot remove cache work directory"); success = false;
+    }
+    return success;
+}
+
+// Prefix of the Linux dl_phdr_info ABI. The loader owns these borrowed bytes.
+record CacheLoadedImage { base: usize; name: *u8; }
+record CacheLoadedInputs { context: *CrustContext; inputs: *CacheInputs; }
+extern fn cache_images(callback: fn(*CacheLoadedImage, usize, *u8) -> i32, user: *u8) -> i32 = "dl_iterate_phdr";
+extern fn cache_strcmp(left: *u8, right: *u8) -> i32 = "strcmp";

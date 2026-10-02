@@ -9,7 +9,8 @@ following functions. The seed does not need to interpret their bodies.
 The [same-file example](../../examples/native/main.crs) builds an executable
 with an explicitly loaded assembly stage. Its inputs are the `crust` seed,
 `crust-asm-library.so`, the listed Crust sources, GNU assembler, GCC, and the
-system libraries.
+system libraries. The [cache tutorial](../../examples/cached-backend/README.md)
+starts with only the seed and sources and reuses its prepared library.
 
 ```sh
 make all
@@ -177,3 +178,8 @@ with the current build, GCC, and Clang. The
 [measurement instructions](../../docs/source-runner.md#compare-cold-native-builds)
 give the command and output contract. Keep all stage preparation in the cold
 total. A failed one-worker gate blocks parallel scheduler expansion.
+
+For the source-only bootstrap and cache endpoints, use the
+[new measurement tool](../../benchmarks/backend-cache/README.md). It records
+misses, hits, and prepared backend costs separately. The seed has no emitter
+in any of these current configurations.

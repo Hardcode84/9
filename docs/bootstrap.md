@@ -18,7 +18,9 @@ memory preconditions. It is not evidence of a checked lifetime rule.
 The [source runner](source-runner.md) executes ordinary Crust0 code that controls
 target compilation and can change the reader for the unread root bytes.
 The [native bootstrap tutorial](../stages/native/README.md) uses the same seed
-with an explicitly loaded assembly stage to build a native executor.
+with an explicitly loaded assembly stage to build a native executor. The
+[cache tutorial](../examples/cached-backend/README.md) starts with only the
+seed and sources and retains the resulting native library for later runs.
 
 ## Build and use
 
@@ -299,7 +301,7 @@ driver in Crust0 and compiles itself through its own output. The seed reader,
 checker, evaluator, and runner remain C99. `make c-stage` interprets the C
 stage through `stages/c/bootstrap.crs`, then compiles its next generation.
 The assembly stage is also Crust source. `make check-asm` checks its successive
-generations.
+generations. `make check-cache` checks source-only bootstrap and artifact reuse.
 `make check-c` builds the next generation, compares generated C and native
 symbol response files across all three generations, and uses the final
 generation to build and run the direct-list program. No cache is used.

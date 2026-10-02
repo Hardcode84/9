@@ -14,6 +14,8 @@ build/native-hello
 
 The program prints `Hello from a bootstrapped native stage!`. `make all` builds
 the selected assembly library. The example uses GNU assembler and GCC.
+Use the [cache tutorial](../cached-backend/README.md) for source-only startup
+and reuse of the prepared native stages.
 
 The first function selects the C backend for the second function. Both access
 the same earlier state and callback. The root checks that the state address

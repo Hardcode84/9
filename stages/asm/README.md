@@ -16,8 +16,9 @@ make check-asm
 
 `crust0` is a standalone consumer of this stage. The Make build first interprets
 [the C bootstrap](../c/bootstrap.crs), then uses that compiler to build this
-library. This route needs no checked-in generated file or binary. The same
-assembly source can run under a separate evaluator and context.
+library. The [cache tutorial](../../examples/cached-backend/README.md) instead
+interprets this assembly stage directly to prepare its first native library.
+Neither route needs a checked-in generated file or binary.
 
 ## Interface
 

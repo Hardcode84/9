@@ -289,6 +289,10 @@ assembly stage. No generated C, object, or archive is a source dependency.
 `make check-c check-asm` checks successive backend generations and runs the
 intrusive-list program built by each final generation.
 
+The [cached root](../examples/cached-backend/README.md) provides another
+bootstrap route. It interprets the assembly stage in a separate context on
+a miss, then assembles and links the selected native stages. A hit loads the
+same file directly. The root installs its compiler and executor explicitly.
 The reader, checker, evaluator, and runner remain C99. A separate Crust reader
 library is available to stages that select it.
 
@@ -319,10 +323,12 @@ thread, though it permits synchronous callback reentry. These constraints
 do not require independent target compilations to share that evaluator or
 mutable context.
 
-Root effects run on every invocation. A persistent artifact cache requires
-captured inputs, producer code, compiler and ABI identity, target settings,
-options, and all external inputs. It must not store live contexts or addresses.
-Cold measurements must include stage preparation.
+The [artifact cache](../stages/cache/README.md) uses captured inputs and an
+explicit producer. Include stage and helper code, compiler and ABI identity,
+target settings, options, and all external inputs. Optional file lookups must
+encode absence as well as presence. The producer owns only its output and
+scratch files. Root effects run on every invocation. No context, address, or
+execution state is stored. Cold measurements include stage preparation.
 
 Keep frontend checks, stage execution, emission, and target toolchain time
 separate. Assembly `--prepare` builds storage plans but leaves instruction

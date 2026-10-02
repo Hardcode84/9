@@ -157,6 +157,7 @@ Build with `make all`. Use the checks that cover the change:
 | Core, reader, checker, evaluator, x86 backend | `make check` |
 | C backend | `make check-c` |
 | Assembly stage self-compilation | `make check-asm` |
+| Artifact cache and source-only backend bootstrap | `make check-cache` |
 | Root execution and reader extensions | `make check-stage check-reader` |
 | Native bootstrap and execution handoff | `make check-native` |
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |

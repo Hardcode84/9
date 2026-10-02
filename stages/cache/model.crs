@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record CacheBuild {
+    inputs: **CrustSource;
+    count: usize;
+    build: fn(*CrustContext, *CacheBuild, *u8) -> bool;
+    user: *u8;
+}
+record CacheArtifact { path: *u8; hit: bool; }
+
+record CacheWork {
+    directory: *u8;
+    manifest: *u8;
+    digest: *u8;
+    artifact: *u8;
+    checksum: *u8;
+}
+
+record CacheInputs { items: **CrustSource; count: usize; capacity: usize; }

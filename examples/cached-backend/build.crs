@@ -1,0 +1,100 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// The first source_count inputs form the library. This value and the export
+// selection are part of the root source input in the cache manifest.
+record BackendBuild { source_count: usize; seed_count: usize; }
+
+fn backend_tools(context: *CrustContext, request: *CacheBuild, assembly: *u8, object: *u8, output: *u8) -> bool {
+    var assemble: [*u8; 6] = make [*u8; 6] {
+        "/usr/bin/as", "--64", assembly, "-o", object, null(*u8)
+    };
+    var libc: *u8 = backend_libc(context, request);
+    if libc == null(*u8) { return false; }
+    var link: [*u8; 14] = make [*u8; 14] {
+        "/usr/bin/ld", "-shared", "-Bsymbolic", "-z", "text", "-z", "relro", "-z", "now", object, libc, "-o", output, null(*u8)
+    };
+    return cache_tool(context, &assemble[0usize], null(*u8)) &&
+        cache_tool(context, &link[0usize], null(*u8));
+}
+
+// All source bytes come from request.inputs. The library has no temporary
+// native dependencies. The runner supplies its C API. libc fixes the versioned
+// system ABI at link time, including realpath with a null output buffer.
+fn backend_build(context: *CrustContext, request: *CacheBuild, output: *u8) -> bool {
+    var assembly: *u8 = native_join(context, output, ".s");
+    var object: *u8 = native_join(context, output, ".o");
+    if assembly == null(*u8) || object == null(*u8) { return false; }
+    var target: CrustContext = uninit;
+    crust_context_init(&target, null(*CrustAllocator));
+    var exports: [*u8; 4] = make [*u8; 4] { "native_start", "native_c_image", "native_asm_image", "c_program" };
+    var count: usize = (*((*request).user as *BackendBuild)).source_count;
+    var success: bool = native_prepare_inputs(&target, (*request).inputs, count, &exports[0usize], 4usize);
+    if success {
+        var file: *u8 = native_fopen(assembly, "wb");
+        if file == null(*u8) { success = native_error(context, "cannot open backend assembly"); }
+        else {
+            success = backend_emit(context, request, &target, file);
+            if native_fclose(file) != 0i32 { success = native_error(context, "cannot close backend assembly"); }
+        }
+    }
+    if success { success = backend_tools(context, request, assembly, object, output); }
+    if target.error_count != 0usize {
+        crust_set_error(context, target.error_loc.source, target.error_loc.offset, &target.error[0usize]);
+    }
+    crust_context_destroy(&target);
+    if !native_remove(context, assembly) { success = false; }
+    if !native_remove(context, object) { success = false; }
+    return success;
+}
+
+// Interpret a separate source module only on a miss. Its callbacks and storage
+// stay live through emission. The cached library contains no evaluator addresses.
+fn backend_emit(context: *CrustContext, request: *CacheBuild, target: *CrustContext, file: *u8) -> bool {
+    var seed: CrustContext = uninit;
+    crust_context_init(&seed, null(*CrustAllocator));
+    var runner: CrustRun = uninit;
+    var name: *u8 = "crust_x64_emit";
+    var success: bool = crust_run_init(&runner, &seed, (*request).inputs[0usize], 0i32, null(**u8));
+    var count: usize = (*((*request).user as *BackendBuild)).seed_count;
+    if success { success = native_prepare_inputs(&seed, (*request).inputs, count, &name, 1usize); }
+    if success { backend_interpreter_names(&seed); }
+    if success {
+        var interned: *CrustName = crust_try_intern(&seed, name, native_strlen(name));
+        if interned == null(*CrustName) { success = false; }
+        else {
+            var symbol: *CrustSymbol = crust_map_get(&seed.globals, interned as usize) as *CrustSymbol;
+            var entry: *CrustDecl = null(*CrustDecl);
+            var arguments: [*u8; 3] = make [*u8; 3] { &target as *u8, &file as *u8, &entry as *u8 };
+            var emitted: bool = false;
+            success = crust_eval_call(runner.eval, (*symbol).decl, &arguments[0usize], 3usize, &emitted as *u8) && emitted;
+        }
+    }
+    if !crust_run_destroy(&runner) { success = false; }
+    if seed.error_count != 0usize { crust_set_error(context, seed.error_loc.source, seed.error_loc.offset, &seed.error[0usize]); }
+    crust_context_destroy(&seed);
+    return success;
+}
+
+fn backend_interpreter_names(context: *CrustContext) -> unit {
+    var unit_value: *CrustUnit = (*context).units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) {
+            if (*declaration).kind != CRUST_D_EXTERN { (*declaration).link_name = (*(*declaration).name).text; }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+}
+
+fn backend_libc(context: *CrustContext, request: *CacheBuild) -> *u8 {
+    var index: usize = 0usize;
+    while index < (*request).count {
+        var path: *u8 = (*(*request).inputs[index]).path;
+        var size: usize = native_strlen(path);
+        if size >= 10usize && cache_strcmp(path + (size - 10usize) as isize, "/libc.so.6") == 0i32 { return path; }
+        index = index + 1usize;
+    }
+    native_error(context, "backend link requires the captured libc.so.6 input");
+    return null(*u8);
+}

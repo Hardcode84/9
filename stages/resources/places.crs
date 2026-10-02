@@ -67,13 +67,8 @@ fn rs_place_pointer(function: *RsFunction, value: *RsValue, output: *RsStatement
     if copy == null(*RsValue) { return null(*RsValue); }
     var captured: *RsValue = rs_capture(function, output, copy, location);
     if (*stage).failed || captured == null(*RsValue) { return null(*RsValue); }
-    var place: *RsValue = rs_value(function, (*(*value).syntax).base,
+    return rs_value(function, (*(*value).syntax).base,
         rs_unary(stage, CRUST_OP_DEREF, (*captured).expression, location));
-    if place != null(*RsValue) {
-        (*place).local = (*value).local;
-        if (*value).local != null(*RsLocal) { (*place).mode = (*value).mode; }
-    }
-    return place;
 }
 
 fn rs_place_inner(function: *RsFunction, source: *CrustExpr, output: *RsStatements,
@@ -155,6 +150,7 @@ fn rs_place_inner(function: *RsFunction, source: *CrustExpr, output: *RsStatemen
             var pointed: *RsValue = rs_place_pointer(function, base, output, location);
             if (*stage).failed || pointed == null(*RsValue) { return null(*RsValue); }
             (*base).expression = (*(*pointed).expression).left;
+            (*base).local = (*pointed).local;
             (*base).mode = (*pointed).mode;
         }
         var index: *RsValue = rs_expr(function, (*source).right, output);
@@ -208,8 +204,10 @@ fn rs_place_inner(function: *RsFunction, source: *CrustExpr, output: *RsStatemen
         var value: *RsValue = rs_value(function, (*(*operand).syntax).base,
             rs_unary(stage, CRUST_OP_DEREF, (*operand).expression, location));
         if value == null(*RsValue) { return null(*RsValue); }
-        (*value).local = (*operand).local;
-        if operand_kind == RS_READ || operand_kind == RS_MUT { (*value).mode = operand_kind; }
+        if operand_kind == RS_READ || operand_kind == RS_MUT {
+            (*value).local = (*operand).local;
+            (*value).mode = operand_kind;
+        }
         rs_place_access(function, value, write, location);
         if (*stage).failed { return null(*RsValue); }
         return value;

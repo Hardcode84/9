@@ -71,6 +71,7 @@ record RsLocal {
 record RsValue {
     syntax: *CrustTypeSyntax;
     expression: *CrustExpr;
+    // A raw place has no checked storage owner.
     local: *RsLocal;
     mode: u32;
     owned: bool;

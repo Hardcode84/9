@@ -216,6 +216,37 @@ def runtime_cases():
             b"A",
         ),
         (
+            "raw-store-moved-owner",
+            program(
+                "var a:Token=token(65i32); consume(move a); unsafe { "
+                "var p:*Token=&a; *p=token(66i32); drop_token(mut *p); }",
+                "fn consume(value:Token)->unit {}",
+            ),
+            b"AB",
+        ),
+        (
+            "raw-store-uninitialized-owner",
+            program("var a:Token=uninit; unsafe { " "*(&a)=token(66i32); drop_token(mut *(&a)); }"),
+            b"B",
+        ),
+        (
+            "raw-store-uninitialized-owner-index",
+            program(
+                "var a:[Token;1]=uninit; unsafe { var p:*Token=(&a) as *Token; "
+                "p[0usize]=token(66i32); drop_token(mut p[0usize]); }"
+            ),
+            b"B",
+        ),
+        (
+            "raw-store-uninitialized-owner-field",
+            program(
+                "var a:Box=uninit; unsafe { var p:*Box=&a; "
+                "p.item=token(66i32); drop_token(mut p.item); }",
+                "record Box {item:Token;}",
+            ),
+            b"B",
+        ),
+        (
             "assignment-destroys-old-value",
             program("var a:Token=token(65i32); a=token(66i32); emit(88i32);"),
             b"AXB",
@@ -722,6 +753,16 @@ def reject_cases():
                 + observe,
             ),
             "borrow would outlive its source storage",
+        ),
+        (
+            "raw-store-does-not-initialize-owner",
+            program(
+                "var storage:Token=uninit;\n"
+                "unsafe {*(&storage)=token(65i32); drop_token(mut *(&storage));}\n"
+                "// expect-error\nconsume(move storage);",
+                consume,
+            ),
+            "uninitialized or has been moved",
         ),
         (
             "raw-store-does-not-initialize-array",

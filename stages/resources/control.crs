@@ -278,8 +278,7 @@ fn rs_lower_statement(function: *RsFunction, source: *CrustStmt, output: *RsStat
             if !whole || (*local).initialized { rs_access(function, local, true, location); }
             else { if (*local).exclusive || (*local).readers != 0usize { rs_error(stage, location, "assignment conflicts with an active borrow"); } }
         }
-        if rs_owns(stage, (*place).syntax) {
-            if (*place).local == null(*RsLocal) { rs_error(stage, location, "resource assignment requires a checked owner or borrowed place"); return false; }
+        if (*place).local != null(*RsLocal) && rs_owns(stage, (*place).syntax) {
             if !whole || (*(*place).local).initialized {
                 var drop: *CrustStmt = rs_drop_tree(function, (*place).syntax, (*place).expression);
                 if drop == null(*CrustStmt) { return false; }

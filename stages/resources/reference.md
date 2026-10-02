@@ -71,8 +71,11 @@ resource fields and elements. Other values retain Crust0 copy semantics.
 Only whole bindings have initialization facts. A partially initialized record
 or array cannot be read through a checked place. An unsafe raw address can name
 uninitialized whole storage without reading it. Raw stores do not change the
-checked initialization fact. The unsafe code must read only bytes that it has
-initialized. This contract supports foreign output buffers without forced
+checked initialization fact. A raw store transfers the new value without
+reading or dropping the previous target bytes. Unsafe code must release any
+previous resource before overwriting it and must arrange cleanup for the new
+resource. It must read only bytes that it has initialized.
+This contract supports foreign output buffers without forced
 zero initialization or partial-initialization tables.
 
 An unsafe region permits raw pointer access, address formation, pointer and

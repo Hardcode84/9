@@ -26,7 +26,7 @@ struct CrustArenaBlock {
 static void *default_allocate(void *user, size_t size)
 {
     (void)user;
-    return malloc(size);
+    return crust_profile_allocate(size);
 }
 
 static void default_release(void *user, void *allocation)
@@ -58,6 +58,16 @@ void crust_arena_destroy(CrustArena *arena)
     arena->bytes_reserved = 0;
 }
 
+static size_t arena_capacity(const CrustArena *arena, size_t size)
+{
+    size_t capacity = arena->bytes_reserved;
+    if (capacity < 65536)
+        capacity = 65536;
+    if (capacity > 4194304)
+        capacity = 4194304;
+    return size > capacity ? size : capacity;
+}
+
 void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
 {
     CrustArenaBlock *block = arena->blocks;
@@ -75,7 +85,7 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
             return block->data + offset;
         }
     }
-    capacity = size > 65536 ? size : 65536;
+    capacity = arena_capacity(arena, size);
     if (capacity > SIZE_MAX - prefix || arena->bytes_reserved > SIZE_MAX - (prefix + capacity)) {
         return NULL;
     }

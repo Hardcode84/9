@@ -41,6 +41,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cpu", type=int, default=0)
     parser.add_argument("--pairs", type=int, default=20)
+    parser.add_argument("--prefix", type=Path, help="execute each compiler through this program")
     args = parser.parse_args()
     os.sched_setaffinity(0, {args.cpu})
     rng = random.Random(12345)
@@ -53,6 +54,9 @@ def main():
         samples=[],
         medians=[],
     )
+    prefix = [str(args.prefix)] if args.prefix else []
+    if args.prefix:
+        report["prefix"] = measure.binary_info(args.prefix)
     for label in ("before", "after"):
         directory = getattr(args, label)
         report["binaries"][label] = {
@@ -67,7 +71,7 @@ def main():
             ("c-prepare", "crust-c", "--prepare"),
         ):
             commands = {
-                label: [str(getattr(args, label) / binary), "--library", option, str(path)]
+                label: [*prefix, str(getattr(args, label) / binary), "--library", option, str(path)]
                 for label in ("before", "after")
             }
             for command in commands.values():

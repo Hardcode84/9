@@ -75,6 +75,33 @@ static void test_arena(void)
     crust_arena_destroy(&arena);
 }
 
+static void test_arena_growth(void)
+{
+    CrustArena arena;
+    uint64_t *chunks[32];
+    size_t index;
+    size_t element;
+    bool retained = true;
+    crust_arena_init(&arena, NULL);
+    for (index = 0; index < 32; ++index) {
+        chunks[index] =
+            crust_arena_alloc(&arena, 32768 * sizeof(uint64_t), CRUST_ALIGNOF(uint64_t));
+        if (chunks[index] == NULL) {
+            check(false, "growing default arena allocation");
+            crust_arena_destroy(&arena);
+            return;
+        }
+        for (element = 0; element < 32768; ++element)
+            chunks[index][element] = index * 32768 + element;
+    }
+    for (index = 0; index < 32; ++index) {
+        for (element = 0; element < 32768; ++element)
+            retained = retained && chunks[index][element] == index * 32768 + element;
+    }
+    check(retained, "growing default arena retains all earlier allocations");
+    crust_arena_destroy(&arena);
+}
+
 static void tables_stage(CrustContext *ctx, void *data)
 {
     CrustMap map = {NULL, 0, 0};
@@ -309,6 +336,7 @@ int main(void)
     AllocationCounts counts = {0, 0, 1};
     CrustAllocator allocator = {&counts, count_allocate, count_release};
     test_arena();
+    test_arena_growth();
     crust_context_init(&ctx, NULL);
     crust_set_error(&ctx, NULL, 0, "first diagnostic");
     crust_set_error(&ctx, NULL, 3, ctx.error);

@@ -109,12 +109,20 @@ The build selects `src/linux_x64/eval_storage.h` for scalar memory access withou
 an extra call on each access. These private interfaces use portable C99 types.
 Compiler policy and evaluation do not include OS or libffi headers.
 
-Each compiler context owns an arena. Arena blocks are normally 64 KiB. A larger
-request receives a separate larger block. Allocation sizes and alignment
-calculations are checked. Context destruction releases every block, including
-blocks retained after a failed stage. Callers can supply an allocator with
+Each compiler context owns an arena. Blocks start at 64 KiB and grow with
+reserved storage up to 4 MiB. A request above that limit gets a larger block.
+Allocation sizes and alignment calculations are checked. Context destruction
+releases every block, including blocks retained after a failed stage. Callers
+can supply an allocator with
 the alignment guarantees of `malloc`, an allocation callback, and a release
 callback. Both callbacks and their state must remain live until destruction.
+
+The Linux allocator aligns blocks of at least 2 MiB to a huge-page boundary
+and requests transparent huge pages for complete aligned regions. The kernel
+can still use ordinary pages. A kernel without this advice uses ordinary
+storage; other advice failures release the allocation and report failure.
+Small blocks use ordinary allocation. Custom context allocators receive the
+block requests directly. No process-wide allocator setting is changed.
 
 Syntax, types, symbols, names, and temporary tables use that arena. The context
 does not own source descriptors or source bytes. Keep them live while compiler
@@ -491,4 +499,44 @@ same flags. Each directory must contain `crust0` and `crust-c`. Then run:
 ```sh
 python3 benchmarks/bootstrap/storage.py --before build/before --after build/after \
   --work build/storage-inputs --cpu 0 --output build/storage-repeat.json
+```
+
+## Arena page-fault measurement
+
+The [huge-page run](../benchmarks/bootstrap/results/arena-thp-2026-10-02.json)
+and [disabled-page run](../benchmarks/bootstrap/results/arena-no-thp-2026-10-02.json)
+compare the allocator change against commit `635ca8b`. Both builds use the
+same GCC 13.3.0 and `-O2 -g` flags. The method uses CPU 0, two warmups, and
+20 shuffled process pairs per endpoint and size. Target GCC compilation and
+linking are excluded. The host enables transparent huge pages through advice.
+
+| Functions | Assembly before / after, THP enabled (ms) | Assembly before / after, THP disabled (ms) | Minor faults before / after, THP enabled | Peak RSS before / after, THP enabled (MiB) |
+|---|---:|---:|---:|---:|
+| 8,000 | 94.040 / 51.219 | 94.191 / 93.440 | 20,194 / 1,161 | 79.6 / 81.7 |
+| 32,000 | 380.835 / 199.561 | 380.799 / 377.445 | 80,492 / 2,856 | 315.1 / 315.9 |
+| 64,000 | 780.558 / 398.829 | 777.136 / 769.970 | 160,881 / 5,129 | 628.6 / 634.2 |
+
+All values are medians. At 8,000 functions, the after/before assembly ratio is
+0.545, with a 95% paired bootstrap interval of [0.543, 0.547]. With THP disabled,
+it is 0.992 [0.990, 0.995]. The intervals use 10,000 resamples of the 20 complete
+pairs, random seed 35, and percentile bounds. This passes the experiment's
+30% reduction rule and shows no disabled-page regression in these samples.
+The larger physical pages can retain more unused bytes, as the RSS column shows.
+
+The reports also contain checking and C preparation results. At 64,000
+functions with THP enabled, checking changes from 392.990 to 157.259 ms;
+C preparation changes from 736.546 to 460.343 ms. The C stage's separate output
+arena retains its own allocation policy. These results do not establish the
+full specification performance gate.
+
+Use `storage.py` as above for the advised run. For the disabled run, compile
+[thp_off.c](../benchmarks/bootstrap/thp_off.c) and pass the resulting executable
+with `--prefix`. It disables THP for the child process with `prctl`, verifies
+that setting, and executes the compiler. It does not change the system setting.
+
+```sh
+cc -std=c99 -pedantic-errors -O2 benchmarks/bootstrap/thp_off.c -o build/thp-off
+python3 benchmarks/bootstrap/storage.py --before build/before --after build/after \
+  --work build/arena-inputs --prefix build/thp-off --cpu 0 \
+  --output build/arena-disabled-repeat.json
 ```

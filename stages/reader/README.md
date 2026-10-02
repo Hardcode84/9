@@ -64,3 +64,5 @@ The tests compare acceptance, AST fields, source offsets, and diagnostics with
 the seed reader. They also exercise all four hooks, hook contract failures,
 source ranges, nesting and token limits, and allocation failure. The seed
 compiler checks the reader source before each test build.
+Generated inputs and outputs go in `BUILD/reader-tests`, where `--build`
+selects `BUILD`. Use `--work` to select a different test output directory.

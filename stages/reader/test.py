@@ -20,14 +20,14 @@ def run(arguments, **kwargs):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=ROOT / "build")
-    parser.add_argument("--work", type=Path, default=ROOT / ".profile-cache/reader-tests")
+    parser.add_argument("--work", type=Path, help="output directory (default: BUILD/reader-tests)")
     parser.add_argument("--cc", default="cc")
     parser.add_argument("--ldflags", default="")
     parser.add_argument("--backend", choices=("seed", "c"), default="seed")
     parser.add_argument("--cflag", action="append", default=[])
     args = parser.parse_args()
     build = args.build.resolve()
-    work = args.work.resolve()
+    work = args.work.resolve() if args.work else build / "reader-tests"
     work.mkdir(parents=True, exist_ok=True)
     sources = [
         ROOT / "api/crust0.crs",

@@ -1,12 +1,13 @@
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+
 # Reader-transfer implementation gate
 
 Date: 2026-10-01. This bounded experiment passed the first source-order
 implementation gate. It does not implement the full host evaluator.
 
-The [recorded result](reader-proof.json) contains commands, source and binary
-hashes, raw timings, tool versions, sanitizer checks, and diagnostics. `@REPO@`
-in that data denotes the repository root used for the run. The
-[proof sources](proof/) preserve the executable experiment.
+The [proof sources](proof/) preserve the executable experiment. Reports record
+commands, hashes, raw timings, diagnostics, and sanitizer configuration in the
+ignored work directory. This probe does not implement the full host evaluator.
 
 ## Actual output and ownership
 
@@ -40,20 +41,15 @@ reader-library dependency.
 
 ## Correctness checks
 
-The recorded run passed 22 checks: 11 native checks and the same 11 with GCC
-AddressSanitizer and UndefinedBehaviorSanitizer. These include the reader
-change, a fixed-reader control, failed selection, invalid alternate syntax,
-invalid input after queued work, callback type mismatch, unresolved names,
-unsupported proof arguments, the hostile byte without a reader change,
-host/target name separation, and target forward references. Target execution
-and symbol isolation are also checked.
+The verifier runs native checks and repeats them with GCC AddressSanitizer
+and UndefinedBehaviorSanitizer. Checks cover reader selection, alternate syntax,
+queued-work failure, callback signatures, unresolved names, invalid arguments,
+host/target name separation, forward references, and the final executable.
 
 The runner, core, reader library, and backend library are instrumented.
-Stack-use-after-return detection is enabled. LeakSanitizer cannot attach to a
-process in the tool sandbox: a minimal balanced allocation/free program also
-fails with `EPERM` during thread attachment. The recorded run disables leak
-scanning and retains explicit target allocation/release checks. It does not
-claim leak-detector coverage.
+Stack-use-after-return detection is enabled. The verifier disables leak scanning
+and checks target allocation/release balance explicitly. This is not a claim
+of leak-detector coverage.
 
 Clang's additional function-type check rejects calls from generated C with
 erased data-pointer types to C functions declared with record-pointer types.
@@ -63,21 +59,11 @@ does not claim Clang C function-type identity across this foreign boundary.
 
 ## Speed gate
 
-Each of 25 rounds starts four fresh processes in random order on CPU 4. One
-warmup per endpoint precedes the rounds. Input and binary hashes stay fixed
-through all 100 timed samples.
-
-| Endpoint | Median milliseconds |
-| --- | ---: |
-| Source-order root, changed reader, complete C and rename output | 2.170247 |
-| Same executor and libraries, fixed initial reader | 2.145880 |
-| Prepared C backend, complete C and rename output | 1.713992 |
-| GCC syntax checking, matched original C | 6.567504 |
-
-The source-order/GCC ratio is 0.33045. Its paired-bootstrap 95% interval is
-[0.32414, 0.33646]. The upper bound passes the required 1.0 threshold.
-The source-order/fixed-reader interval is [0.99221, 1.02891]; these samples do
-not establish a separate reader-change cost.
+Timing uses paired rounds of fresh processes with randomized endpoint order
+and a warmup. Inputs and binaries must remain unchanged. Compare the complete
+reader-changing route with a fixed-reader control, the prepared C backend, and
+the matched original C input. A confidence interval that includes no change
+does not establish a reader-change cost.
 
 The measured source-order path includes interface source reads and checks,
 root reads and actions, library loading, symbol lookup, libffi preparation,
@@ -101,11 +87,11 @@ python3 benchmarks/source-order/proof/measure.py
 
 The default work directory is `.profile-cache/source-order-proof-replay`.
 `build.py` accepts `--build-dir`, `--workdir`, and `--cpu`. For a custom replay
-directory or compiler build, set the corresponding `RMD_PROOF_DIR` and
-`RMD_PROOF_BUILD` environment variables when running `measure.py`. The timing
+directory or compiler build, set the corresponding `CRUST_PROOF_DIR` and
+`CRUST_PROOF_BUILD` environment variables when running `measure.py`. The timing
 script uses CPU 4. Select an allowed idle CPU before running the experiment.
-Rebuilt artifacts describe the current source state; the archived result
-describes the exact historical hashes in its manifest.
+Rebuilt artifacts describe the current source state. Save each report under
+a new path and keep its source and tool hashes.
 
 ## Bound of the result
 

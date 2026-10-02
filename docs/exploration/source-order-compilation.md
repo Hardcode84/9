@@ -2,9 +2,6 @@
 
 # Source-order compilation programs
 
-The linked measurements retain the source names and hashes from the recorded
-runs.
-
 Date: 2026-10-01. Status: design study retained as the experiment record.
 This study examined the [native host block](source-stages.md) at revision
 `9cff8f4`. The [source runner](../source-runner.md) now implements its selected
@@ -110,8 +107,7 @@ execution does not supply the requested root-reader behavior.
 [Python import protocol](https://peps.python.org/pep-0451/)
 
 The [repeatable witness](../../benchmarks/source-order/python_boundaries.py)
-passes nine checks on CPython 3.12.11. The
-[recorded results](../../benchmarks/source-order/python-results.json) show:
+tests these Python execution boundaries:
 
 | Input | Observed effect |
 |---|---|
@@ -416,21 +412,11 @@ the `meta` braces.
 
 ## Execution cost and implementation choices
 
-Existing measurements provide the baseline. These are medians in milliseconds
-from 25 randomized paired rounds. Prepared stage libraries were explicit
-inputs. Target GCC compilation and linking were excluded.
-
-| Workload | Prepared Crust frontend and C text output | Complete current native host request | Matched original C, GCC syntax |
-|---|---:|---:|---:|
-| 1,000 functions | 13.478 | 23.484 | 18.445 |
-| 8,000 functions | 109.505 | 123.053 | 111.167 |
-| Intrusive list | 1.778 | 11.274 | 6.907 |
-
-The prepared path passes the recorded paired speed gate for these workloads.
-The complete native host path fails it for all three. Assembly and shared
-library linking dominate the small request. Removing a source envelope cannot
-remove those operations. See the [raw measurements](../../benchmarks/source-stages/results.json)
-and [native preparation breakdown](../../benchmarks/source-stages/native-preparation.json).
+The earlier native host-block experiment separated prepared target work from
+a request that assembled and linked its host entry. Removing a source envelope
+cannot remove that preparation cost. The
+[historical study](source-stages.md#cost-gate) describes the boundaries; use the
+[current harnesses](../../benchmarks/source-order/README.md) for new reports.
 
 | Execution choice | Cost and consequence |
 |---|---|
@@ -445,12 +431,10 @@ large compiler stages as ordinary prepared native libraries when measuring
 that configuration. Do not move target tokenization, checking, or per-node
 emission into an interpreter merely to execute a short root program.
 
-The [earlier foreign-call experiment](../../benchmarks/source-stages/ffi-one-call.json)
-measured 2.046 ms for the intrusive workload against 6.700 ms for paired GCC
-syntax. It executes only one checked foreign call. It does not implement root
-statements, user function bodies, reader replacement, or general callbacks.
-It establishes that native-call setup can be small, not that a complete source
-runner meets the speed rule.
+The earlier foreign-call probe executed one checked foreign call. It did not
+implement root statements, user function bodies, reader replacement, or general
+callbacks. Such a probe can test the call boundary; it cannot establish the
+complete runner's speed or semantics.
 
 A complete execution candidate must implement the applicable Crust0 expression
 and statement rules, scalar and pointer ABI mapping, aligned local storage,

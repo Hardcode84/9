@@ -280,7 +280,7 @@ claim that every program compiles as fast as C.
 
 `--check` stops after semantic checks. `--prepare` also builds C text in
 memory. Both exclude target GCC compilation and linking. The
-[measurement report](../../benchmarks/overload/RESULTS.md) compares explicit
+[measurement method](../../benchmarks/overload/README.md) compares explicit
 names with overload selection under those boundaries.
 
 Run `make check-overload` for selection, diagnostics, native symbols,

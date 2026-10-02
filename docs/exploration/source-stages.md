@@ -227,88 +227,31 @@ evidence that rebuilding a project-owned compiler extension is free.
 The launcher has no persistent code cache or result cache. It prepares and
 executes the inline entry on each request.
 
-The repeatable measurement is `benchmarks/source-stages/measure.py`. It gives
-separate results for the prepared target frontend and the complete source-stage
-request. The [one-worker speed gate](../crust0-spec.md#14-conformance-and-performance-gates)
-must identify which of these configurations it covers. Successful output
-alone proves the phase and ownership boundary.
+The old host-block measurement driver required the removed `rmd0` launcher,
+its host-block syntax, and its original backend interface. It cannot measure
+the current source-order compiler. Its source and reports remain in Git history.
+Use the [current source-order tools](../../benchmarks/source-order/README.md)
+for new measurements.
 
-Run the current measurement from the repository root with an available CPU:
+The historical experiment separated prepared target emission from the complete
+request. The full request also assembled and linked an inline host entry.
+Changing the source envelope could not remove that preparation work. Its
+prepared result did not establish the cold speed gate.
 
-```sh
-python3 benchmarks/source-stages/measure.py --cpu 4 --output build/source-stage-results.json
-```
+Two lessons survive the removed interface. First, measure host preparation,
+loading, execution, and target frontend work separately, then retain the complete
+request total. Second, a successful foreign-call probe does not establish a
+complete evaluator. A replacement must cover expressions, control flow, aligned
+aggregate storage, scalar foreign signatures, native callbacks, reentrancy,
+and code lifetime before its speed can justify a design change.
 
-The command saves results and returns failure if the complete cold request
-misses its gate. The [recorded run](../../benchmarks/source-stages/results.json)
-uses GCC 13.3, one logical CPU, 25 randomized paired rounds, fresh processes,
-and a warm OS file cache. It performs no timed target GCC work. All stage
-inputs and emitted C and symbol files have recorded hashes. The intrusive
-target and C reference both run successfully before timing starts.
+Compare prepared assembly emitters with
+[bootstrap/compare.py](../../benchmarks/bootstrap/compare.py) and explicit
+baseline and candidate binaries. Complete output must match before timing.
+Keep raw reports and input captures in ignored storage.
 
-Median process times are in milliseconds:
-
-| Input | Original C syntax check | Prepared RMD frontend through C output | Complete source-stage request |
-|---|---:|---:|---:|
-| 1,000 functions | 18.445 | 13.478 | 23.484 |
-| 8,000 functions | 111.167 | 109.505 | 123.053 |
-| Intrusive list | 6.907 | 1.778 | 11.274 |
-
-The prepared frontend passes on these three inputs. Its largest ratio is
-0.985 for 8,000 functions, with a paired 95% bootstrap interval from 0.982
-to 0.992. The complete cold request fails on all three inputs. These are
-different claims. The installed native backend library is an explicit input,
-and the complete request prepares a new inline host entry each time.
-
-The [first prepared-frontend run](../../benchmarks/source-stages/results-before-name-buffer.json)
-had an inconclusive upper bound of 1.003 on 8,000 functions. Name generation
-allocated a temporary 256-byte arena buffer per declaration before copying
-the retained name into the context. A 64-byte local buffer holds the fixed
-prefix and two decimal 64-bit identities, including their terminator. This
-removes about 2 MiB of temporary arena requests for 8,000 names. The retained
-names still belong to the context. Reuse tests with stack-use-after-return
-detection pass.
-
-The [plain-source comparison](../../benchmarks/source-stages/plain-baseline.json)
-uses the compiler before this change and the current compiler on the same
-three RMD0 inputs. Their complete assembly bytes match. All final paired
-confidence intervals include one, so the run does not establish a timing
-difference. A first probe identified an extra out-of-line trivia call per
-token. The final reader inlines that helper and keeps primitive keywords
-before the new keyword in its lookup table. The comparison is repeatable with
-`benchmarks/source-stages/plain.py` and two prepared compiler executables.
-
-The [native preparation profile](../../benchmarks/source-stages/native-preparation.json)
-uses 25 randomized paired rounds per configuration. The default GNU BFD route
-spends a median 7.330 ms in the host linker and 1.535 ms in the assembler.
-Host input, checks, planning, and assembly text take about 0.309 ms.
-Loading the shared object takes about 0.082 ms. These are separate interval
-medians; their sum is not a measured total median.
-
-The same probe tests gold and three installed LLD configurations. The fastest
-complete route, with gold, takes 6.874 ms against a 6.106 ms C control. Its
-median paired ratio is 1.143, with a 95% interval from 1.130 to 1.168.
-Changing the installed linker alone does not meet that gate. These probes
-precede the final buffer and lexer changes. Their hashes identify their code.
-
-A [bounded libffi probe](../../benchmarks/source-stages/ffi-one-call.json) reads
-and checks an entry of the form `return foreign(parameter);`, then executes
-that call without native host compilation. It emits the same C and symbol
-bytes and produces the intrusive-list output. Its complete process takes
-2.046 ms against a 6.700 ms C control in 25 paired rounds. The ratio is 0.305,
-with a 95% interval from 0.297 to 0.309.
-
-That probe establishes a fast foreign-call boundary. It is not an RMD0
-evaluator. A replacement executor must also implement ordinary expressions,
-control flow, aligned aggregate storage, all scalar foreign signatures,
-native callbacks into host functions, reentrancy, and code lifetime. The probe
-rejects other entry bodies. Its narrow result does not justify limiting the
-source language or adding a partial evaluator to the core. No libffi dependency
-or interpreter was added to the implementation.
-
-Prepared-code reuse is a separate option. A valid key must identify the host
-prefix, its source and native inputs, compiler interface, host profile, and
-options. Reusing code must still run `build` once for each request. Reusing a
-result with file or process effects requires the stronger
+Prepared-code reuse is a separate configuration. Its key must identify source
+and native inputs, compiler interfaces, host profile, options, and external
+observations. Reusing code must still run the compilation program's effects.
+Reusing results requires the stronger
 [effect contract](metacompilation.md#7-caching-without-changing-program-meaning).
-No cache is implemented in this change.

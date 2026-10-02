@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Freeze explicit and overloaded sources, then measure the available frontend."""
 import argparse
 import hashlib
@@ -71,7 +72,7 @@ def main():
     parser.add_argument("--stage-compiler", type=Path)
     parser.add_argument("--work", type=Path, default=Path(".profile-cache/overload-baseline"))
     parser.add_argument(
-        "--output", type=Path, default=Path(".profile-cache/overload-baseline/results.json")
+        "--output", type=Path, default=Path("build/benchmarks/overload/results.json")
     )
     parser.add_argument("--calls", type=int, default=4096)
     parser.add_argument("--counts", default="1,16,64,256")

@@ -21,21 +21,26 @@ def main():
     parser.add_argument("--compiler", type=Path, default=Path("build/crust-resource"))
     parser.add_argument("--runner", type=Path, default=Path("build/crust"))
     parser.add_argument("--work", type=Path, default=Path(".profile-cache/resources-sqlite"))
-    parser.add_argument("--output", type=Path, default=EXAMPLE / "validation.json")
+    parser.add_argument(
+        "--output", type=Path, default=Path("build/benchmarks/resources/sqlite-validation.json")
+    )
+    parser.add_argument(
+        "--baseline", type=Path, default=Path("build/benchmarks/resources/baseline.json")
+    )
     parser.add_argument("--sanitizers", action="store_true")
     args = parser.parse_args()
     baseline_work = Path(".profile-cache/resources-baseline")
     os.chdir(ROOT)
     args.work.mkdir(parents=True, exist_ok=True)
-    baseline = json.loads(Path("benchmarks/resources/baseline.json").read_text())
+    baseline = json.loads(args.baseline.read_text())
     for name, digest in baseline["source_sha256"].items():
         if sha(name) != digest:
             raise SystemExit(f"Frozen baseline source changed: {name}")
     report = {
         "schema_version": 1,
         "performance_samples": False,
-        "baseline": "benchmarks/resources/baseline.json",
-        "baseline_sha256": sha("benchmarks/resources/baseline.json"),
+        "baseline": str(args.baseline),
+        "baseline_sha256": sha(args.baseline),
         "commands": [],
         "cases": [],
         "rejections": [],
@@ -334,6 +339,7 @@ int main(void) {
     }
     report["complete"] = True
     encoded = json.dumps(report, indent=2) + "\n"
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(encoded.replace(str(ROOT), "@REPO@"))
     print(
         f"SQLite resource application: {report['application_process_checks']} process checks passed"

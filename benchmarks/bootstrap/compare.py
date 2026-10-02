@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Compare two prepared compilers on plain source through complete assembly."""
 
 import argparse

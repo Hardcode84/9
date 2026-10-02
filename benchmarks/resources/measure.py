@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Measure prepared resource frontend work and shared cleanup growth."""
 import argparse
 import hashlib
@@ -260,7 +261,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--work", type=Path, default=Path(".profile-cache/resources-performance"))
     parser.add_argument(
-        "--output", type=Path, default=Path("benchmarks/resources/performance.json")
+        "--output", type=Path, default=Path("build/benchmarks/resources/performance.json")
     )
     parser.add_argument("--cpu", type=int, default=6)
     parser.add_argument("--repeats", type=int, default=21)
@@ -637,6 +638,7 @@ def main():
         "interpretation": "SQLite C reads its full public header and system headers; CRUST declares only the used FFI. Tiny stress inputs include large fixed process costs. These measurements do not establish a general faster-than-C frontend or runtime result.",
         "complete": True,
     }
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text((json.dumps(report, indent=2) + "\n").replace(str(ROOT), "@REPO@"))
     print("cleanup growth hypothesis:", passed, flush=True)
     print(args.output, flush=True)

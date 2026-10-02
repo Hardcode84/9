@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Measure the CRUST C stage and its GCC backend as separate processes.
 
 Run from the repository root. The script builds both stage variants, checks
@@ -346,7 +347,9 @@ def summarize(samples, workloads, count, draws, seed):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=Path("benchmarks/c-stage/results.json"))
+    parser.add_argument(
+        "--output", type=Path, default=Path("build/benchmarks/c-stage/results.json")
+    )
     parser.add_argument("--build-dir", type=Path, default=Path("build/c-stage-perf"))
     parser.add_argument("--inputs", type=Path, default=Path(".profile-cache/c-stage-inputs"))
     parser.add_argument("--samples", type=int, default=25)

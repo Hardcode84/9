@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Compare record field scanning and indexing through source checking."""
 
 import argparse
@@ -44,7 +45,7 @@ def main():
     parser.add_argument(
         "--baseline",
         type=Path,
-        default=Path(".profile-cache/overload-validation/rmd-overload-field-scan"),
+        required=True,
     )
     parser.add_argument("--candidate", type=Path, default=Path("build/crust-overload"))
     parser.add_argument("--counts", default="64,256,1024,4096")
@@ -53,7 +54,7 @@ def main():
     parser.add_argument("--cpu", type=int, default=6)
     parser.add_argument("--work", type=Path, default=Path(".profile-cache/overload-fields"))
     parser.add_argument(
-        "--output", type=Path, default=Path(".profile-cache/overload-fields/results.json")
+        "--output", type=Path, default=Path("build/benchmarks/overload/fields.json")
     )
     args = parser.parse_args()
     counts = [int(item) for item in args.counts.split(",")]

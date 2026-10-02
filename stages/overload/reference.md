@@ -58,7 +58,7 @@ these callbacks and preserves source import, unsafe, and drop contracts.
 The implementation passes a separate caller and provider test that formats
 typed values, links by generated symbols, and produces the required output.
 Resource tests check cleanup and reject invalid ownership across that boundary.
-The [baseline](../../benchmarks/overload/BASELINE.md) fixes the experiment and
+The [baseline](../../benchmarks/overload/README.md) fixes the experiment and
 the measurement rules. Frontend measurements stop before target C compilation
 and linking. The seed and the default compilation path have no overload pass.
 
@@ -193,8 +193,8 @@ It also loads an ordinary copied library with a custom non-resource type and
 checks all five hook diagnostic paths. `make check-overload-alloc` injects
 arena backing allocation failures with AddressSanitizer and UndefinedBehaviorSanitizer.
 
-The [measurement report](../../benchmarks/overload/RESULTS.md) separates the
+The [measurement method](../../benchmarks/overload/README.md) separates the
 explicit-name baseline, the enabled stage with explicit names, and overload
-selection. The [field lookup experiment](../../benchmarks/overload/FIELDS.md)
-checks large record constructors. These reports state the tested boundaries;
+selection. The [field lookup experiment](../../benchmarks/overload/README.md)
+checks large record constructors. These methods state the tested boundaries;
 they do not establish the project's general C-speed requirement.

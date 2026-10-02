@@ -2,9 +2,6 @@
 
 # Crust0 bootstrap compiler
 
-The linked measurements retain the source names and hashes from the recorded
-runs.
-
 The repository contains a C99 implementation of the Crust0 version 0.1 syntax
 and execution rules. `crust` executes source-order compilation programs and
 contains no backend. `crust0` links the external Crust assembly stage to read,
@@ -403,13 +400,9 @@ root actions, source snapshots, native callbacks, reader replacement, phase
 isolation, backend reuse, paths, and failure cases. Run the test commands to
 get counts for the current checkout.
 
-The [runner validation record](../benchmarks/source-order/validation.json)
-contains the GCC commands, source hashes, and complete sanitizer logs from
-revision `b1a6196`, before the example directories were added. That run passes
-141 root and 348 C-backend process checks, including buffer overlap and growth
-with a one-byte append. The example checks run unchanged source files from a
-copied layout. They cover inline targets, arguments, multiple files, reader
-replacement, original error locations, and output failure.
+The example checks run unchanged source files from a copied layout. They
+cover inline targets, arguments, multiple files, reader replacement, original
+error locations, and output failure.
 
 Use these commands for a second strict compiler and address/undefined-behavior
 instrumentation:
@@ -422,154 +415,61 @@ UBSAN_OPTIONS=halt_on_error=1 make CC=gcc BUILD=build/sanitize \
   LDFLAGS='-fsanitize=address,undefined' all c-stage check-stage
 ```
 
-LeakSanitizer could not run under the tracing environment used for those runs.
-The allocation-failure tests separately count live arena blocks. This is not
-a general replacement for leak detection. The parallel witness also runs under
-ThreadSanitizer. The
-[final thread check](../benchmarks/bootstrap/results/parallel-2026-10-01.md)
-records the exact command, source hashes, and 75 passing checks with no report.
+The shown sanitizer configuration disables leak scanning. The allocation tests
+count live arena blocks; they do not replace a general leak check. Retain the
+commands and logs for each sanitizer run in ignored storage.
 
-The [source-runner results](source-runner.md#parallel-work-reuse-and-measurements)
-include root capture and execution through complete C and symbol output.
-All three inputs pass that report's prepared-stage comparison against GCC.
-Final target GCC compilation and linking are excluded. The backend shared
-library is an explicit prepared input. The report records one separate rebuild
-observation. These historical results do not establish the full specification
-performance gate or the speed of the current checkout.
+The [source-runner measurement contract](source-runner.md#parallel-work-reuse-and-measurements)
+includes root capture and execution through complete C and symbol output.
+Required stage preparation contributes to cold cost. Final target GCC compilation
+and linking are excluded from the frontend interval.
 
-The assembly measurements below precede the source-order runner. Their source
-hashes identify that implementation. The
-[plain-seed comparison](../benchmarks/source-order/plain-results.json)
-compares the old and current seed separately.
-
-`benchmarks/bootstrap/measure.py` records fresh-process, single-worker timings
-for the list witness and generated scaling cases. It retains the source and
-binary hashes, commands, raw paired samples, and confidence intervals. Check,
-frame preparation, and complete assembly are distinct endpoints. The installed
-stage libraries and warm operating-system file cache are stated conditions.
-Results do not establish cold stage preparation cost, checked-Crust cost, time to
-compile Linux, GCC, LLVM, or SQLite sources, or self-hosted C frontend cost.
-
-The [final measurement](../benchmarks/bootstrap/results/frontend-2026-10-01.json)
-uses 25 paired rounds for each endpoint and workload, for 375 timed processes.
-The machine is an AMD Ryzen Threadripper PRO 7995WX. All compiler processes use
-one logical CPU. GCC 13.3 and Clang 20.1.8 provide the C comparisons. GCC has the
-lower median on each workload. Frequency is not fixed and the CPU is not
-reserved. The isolated single-worker build of the C99 compiler and its two
-libraries took 0.706 seconds; this build is outside the compilation samples.
-
-| Workload | GCC syntax (ms) | Crust check (ms) | Crust prepare (ms) | Crust assembly (ms) | Assembly / fastest C, with 95% interval |
-|---|---:|---:|---:|---:|---|
-| Intrusive list | 7.334 | 1.759 | 1.769 | 1.823 | 0.248 [0.245, 0.255] |
-| 1,000 generated functions | 18.772 | 8.628 | 10.679 | 12.695 | 0.676 [0.662, 0.692] |
-| 8,000 generated functions | 115.064 | 60.909 | 82.715 | 110.588 | 0.961 [0.955, 0.968] |
-
-Each generated function reads record fields, does integer arithmetic, branches,
-and writes a field. The C and Crust cases have equivalent operations. Each timed
-invocation starts a new process. Assembly goes to the null device. Assembly and
-linking of the result are outside the samples. The script checks complete
-assembly function counts and executes the list witness in both languages.
-
-The gate requires the upper 95% interval bound to be at most 1 against the
-faster C compiler. All three Crust endpoints pass on each workload. The intervals
-use 10,000 resamples of complete paired rounds. Each resample selects the
-faster C median again. These are separate comparison intervals; they do not
-provide simultaneous coverage for all nine comparisons.
-
-The [first baseline](../benchmarks/bootstrap/results/frontend-2026-10-01-baseline.json)
-failed the full-assembly gate at 1,000 and 8,000 functions. At 8,000 functions,
-it took 185.491 ms. The
-[cycle profiles](../benchmarks/bootstrap/results/x64-profile-2026-10-01.json)
-identified general `printf` formatting as a large cost: its libc symbols
-accounted for 49.31% of sampled user cycles in the baseline recording. This
-share was 0.58% in the last diagnostic candidate recording. These percentages
-are flat cycle attribution, not stage wall times. That candidate predates the
-final invariant and callback repairs; the final timing uses the repaired source.
-
-The changes remove unused scalar value slots, retain aggregate copies where
-required, use direct frame loads and stores, and use a small private text
-formatter. Public formatted output retains normal C formatting behavior. The
-[baseline patch](../benchmarks/bootstrap/results/baseline.patch) reconstructs
-the failed compiler from the final source. The
-[reconstruction record](../benchmarks/bootstrap/results/baseline-reconstruction.json)
-checks its source and executable hashes. Apply the patch in a separate clean
-copy with `git apply --unidiff-zero benchmarks/bootstrap/results/baseline.patch`.
-It changes final compiler sources back to the failed baseline.
-
-Use a new output path to repeat the measurement:
+`benchmarks/bootstrap/measure.py` measures fresh-process checking, frame
+preparation, and complete assembly as separate endpoints. It uses the list
+witness and generated scaling inputs. It records commands, source and binary
+hashes, raw paired samples, and confidence intervals. Installed stages and warm
+filesystem caches are explicit conditions. The script checks emitted function
+counts and executes the list witness outside the timed intervals.
 
 ```sh
-python3 benchmarks/bootstrap/measure.py --cpu 4 --output build/frontend-repeat.json
+python3 benchmarks/bootstrap/measure.py --cpu 0 \
+  --output build/benchmarks/frontend.json
 ```
+
+Select an allowed CPU and a new output path. Compare equivalent source operations
+against the faster eligible C compiler at the same boundary. These inputs alone
+do not test compilation of Linux, GCC, LLVM, or SQLite, nor a self-hosted C reader.
+Keep reports and profiles under `build/`; the [benchmark guide](../benchmarks/README.md)
+defines retention and comparison rules.
 
 ## Expression storage measurement
 
-The expression record orders fields from largest to smallest. On the Linux
-x86-64 profile this removes 16 bytes of padding: the record changes from
-160 to 144 bytes. Stages still construct the same named fields in one record.
-The generated API must match the C header.
-
-The [storage comparison](../benchmarks/bootstrap/results/storage-size-order-2026-10-02.json)
-uses commit `c391707` as the baseline. Both tools use GCC 13.3.0, the Makefile's
-strict C99 flags, and `-O2 -g`. Each endpoint has two warmups and 20 shuffled
-pairs of fresh processes on CPU 0. The child environment omits allocator tuning.
-The report contains commands, binary and source hashes, raw samples, peak RSS,
-and minor page faults. Elapsed time includes the GNU time process used to
-collect resource use. Target assembly, C compilation, and linking are excluded.
-
-| Functions | Check RSS before / after (MiB) | Assembly RSS before / after (MiB) | C preparation RSS before / after (MiB) | Assembly time before / after (ms) |
-|---|---:|---:|---:|---:|
-| 8,000 | 67.5 / 61.5 | 84.1 / 79.6 | 97.5 / 93.0 | 93.9 / 93.7 |
-| 32,000 | 268.5 / 250.5 | 334.6 / 315.1 | 394.7 / 375.8 | 380.5 / 380.3 |
-| 64,000 | 538.5 / 499.5 | 667.6 / 628.6 | 789.4 / 751.9 | 771.1 / 768.5 |
-
-All values are medians. The change passes this experiment's rule: lower peak
-RSS and no higher assembly median at each size. The small elapsed-time changes
-do not establish a speed improvement. This comparison does not test the
-specification's GCC and Clang performance gate. An
-[earlier field-order sample](../benchmarks/bootstrap/results/storage-2026-10-02.json)
-uses the same record size with small fields first; it is not the retained layout.
-
-To repeat, build the baseline and candidate in separate directories with the
-same flags. Each directory must contain `crust0` and `crust-c`. Then run:
+Order expression fields by decreasing size and keep the generated stage API in
+agreement with the C header. Measure layout changes with separately built
+baseline and candidate compilers using the same flags. Each build directory
+must contain `crust0` and `crust-c`.
 
 ```sh
 python3 benchmarks/bootstrap/storage.py --before build/before --after build/after \
   --work build/storage-inputs --cpu 0 --output build/storage-repeat.json
 ```
 
+The report separates checking, assembly, and C preparation. It records elapsed
+time, peak resident memory, page faults, commands, and input and tool hashes.
+Target assembly, C compilation, and linking are excluded. Reduced memory use
+does not by itself establish a speed improvement or the full C-speed gate.
+
 ## Arena page-fault measurement
 
-The [huge-page run](../benchmarks/bootstrap/results/arena-thp-2026-10-02.json)
-and [disabled-page run](../benchmarks/bootstrap/results/arena-no-thp-2026-10-02.json)
-compare the allocator change against commit `635ca8b`. Both builds use the
-same GCC 13.3.0 and `-O2 -g` flags. The method uses CPU 0, two warmups, and
-20 shuffled process pairs per endpoint and size. Target GCC compilation and
-linking are excluded. The host enables transparent huge pages through advice.
+Use the same storage comparison to test allocator changes. Measure page faults,
+peak resident memory, and elapsed time together. Huge pages can reduce faults
+while retaining more unused memory. Keep builds, inputs, and options identical
+when testing page-policy effects.
 
-| Functions | Assembly before / after, THP enabled (ms) | Assembly before / after, THP disabled (ms) | Minor faults before / after, THP enabled | Peak RSS before / after, THP enabled (MiB) |
-|---|---:|---:|---:|---:|
-| 8,000 | 94.040 / 51.219 | 94.191 / 93.440 | 20,194 / 1,161 | 79.6 / 81.7 |
-| 32,000 | 380.835 / 199.561 | 380.799 / 377.445 | 80,492 / 2,856 | 315.1 / 315.9 |
-| 64,000 | 780.558 / 398.829 | 777.136 / 769.970 | 160,881 / 5,129 | 628.6 / 634.2 |
-
-All values are medians. At 8,000 functions, the after/before assembly ratio is
-0.545, with a 95% paired bootstrap interval of [0.543, 0.547]. With THP disabled,
-it is 0.992 [0.990, 0.995]. The intervals use 10,000 resamples of the 20 complete
-pairs, random seed 35, and percentile bounds. This passes the experiment's
-30% reduction rule and shows no disabled-page regression in these samples.
-The larger physical pages can retain more unused bytes, as the RSS column shows.
-
-The reports also contain checking and C preparation results. At 64,000
-functions with THP enabled, checking changes from 392.990 to 157.259 ms;
-C preparation changes from 736.546 to 460.343 ms. The C stage's separate output
-arena retains its own allocation policy. These results do not establish the
-full specification performance gate.
-
-Use `storage.py` as above for the advised run. For the disabled run, compile
-[thp_off.c](../benchmarks/bootstrap/thp_off.c) and pass the resulting executable
-with `--prefix`. It disables THP for the child process with `prctl`, verifies
-that setting, and executes the compiler. It does not change the system setting.
+For a control with transparent huge pages disabled, compile
+[thp_off.c](../benchmarks/bootstrap/thp_off.c) and pass it with `--prefix`.
+It disables THP for the child process, verifies the setting, and executes the
+compiler. It does not change the system setting.
 
 ```sh
 cc -std=c99 -pedantic-errors -O2 benchmarks/bootstrap/thp_off.c -o build/thp-off

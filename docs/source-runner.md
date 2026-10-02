@@ -2,9 +2,6 @@
 
 # Source-order compilation
 
-The linked measurements retain the source names and hashes from the recorded
-runs.
-
 Date: 2026-10-01. This document defines the implemented root runner. The
 [language specification](crust0-spec.md) defines the Crust0 value and execution
 rules. The [design study](exploration/source-order-compilation.md) records the decision
@@ -366,136 +363,62 @@ symbol output, and cleanup. Exclude final target GCC compilation and linking.
 Report prepared native inputs explicitly. Preparation of a changed native
 stage is a separate measured configuration; it is not free project setup.
 
-The [final results](../benchmarks/source-order/results.json) contain 25 paired
-rounds per workload, with random endpoint order and one warmup. Each sample
-starts a fresh process. The native backend library is a prepared input.
-Operating-system file caches are not cleared between samples.
-
-| Input | Root through complete C output, ms | Prepared backend, ms | GCC syntax check, ms | Root/GCC 95% interval |
-| --- | ---: | ---: | ---: | --- |
-| Intrusive list | 2.461 | 1.774 | 7.016 | [0.34452, 0.36308] |
-| 1,000 functions | 14.018 | 13.017 | 18.640 | [0.74043, 0.77259] |
-| 8,000 functions | 109.335 | 106.080 | 111.387 | [0.97278, 0.98677] |
-
-The upper bound of each paired-bootstrap ratio interval is below 1.0. These
-results pass the recorded prepared-stage comparison against GCC for these
-three inputs and this host. This report does not compare Clang or include stage
-preparation in those intervals. It does not establish the full specification
-performance gate or the speed of the current checkout. All 225 timed samples
-used unchanged source and binary hashes. Complete C and symbol bytes match the
-prepared backend. The intrusive output also compiles and runs without a
-compiler-library dependency.
-
-The [experiment record](../benchmarks/source-order/performance-experiments.md)
-retains the first failed large-input gate, profiles, rejected changes, and the
-two measured changes that passed. It also records the separate native-library
-preparation observation and its exact compiler flags. The
-[validation record](../benchmarks/source-order/validation.json) contains the
-final sanitizer commands, input hashes, and logs.
+The [measurement guide](../benchmarks/source-order/README.md) explains paired
+rounds, output controls, and separate preparation costs. Store raw samples,
+commands, tool versions, hashes, and confidence intervals in ignored reports.
+A historical prepared-stage result cannot establish current checkout speed or
+the full specification performance gate. The complete gate remains
+unestablished; these benchmark tools cover only part of its required matrix.
 
 ### Source-supplied backend gate
 
-The [2026-10-02 run](../benchmarks/source-order/gate-2026-10-02.json) checks
-the current source-selected C backend with 20 randomized paired rounds per
-input. Each sample starts a new process on one CPU. Application and stage
-result caches are empty; OS file caches are warm. GCC 13.3 is faster than
-Clang 20.1.8 on each matched original C input. These are the installed compiler
-versions, not a claim to cover the latest releases.
+[gate.py](../benchmarks/source-order/gate.py) compares installed backend code,
+source interpretation, and source compilation followed by loading. Each
+endpoint must produce the same complete C and native-symbol bytes. The list
+witness must also compile and run outside the timed interval.
 
-| Input | Installed backend, ms | Backend source interpreted, ms | Backend source compiled then loaded, ms | GCC check, ms | Clang check, ms |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| Intrusive list | 2.452 | 7.553 | 459.970 | 7.028 | 20.848 |
-| 1,000 functions | 10.540 | 510.415 | 468.035 | 18.561 | 46.358 |
-| 8,000 functions | 65.517 | 4,102.980 | 522.577 | 111.149 | 233.642 |
+A compiled-source route must include compilation and linking of its selected
+stage before the stage can run. That preparation belongs inside the cold
+measurement. Final target GCC compilation and linking remain outside every
+frontend endpoint. Reusing a prepared stage is a different configuration.
 
-All routes produce identical C and native-symbol output. The direct-list
-program also runs. Target GCC compilation and linking remain outside every
-timed endpoint. In the compiled-source route, the root must compile and link
-its selected stage before that stage can run. That preparation uses GCC
-`-O2 -g0 -fPIC -fno-semantic-interposition` and is inside the measurement.
-The root removes the new library after each use. No library result is reused.
-
-The installed route passes the median and upper confidence-bound rule on
-all three inputs. Both source-supplied routes fail it. For 8,000 functions,
-the interpreted/GCC median paired ratio is 36.852, with 95% interval
-[36.805, 37.078]. The compiled-source ratio is 4.707, with interval
-[4.690, 4.720]. The JSON retains all samples, commands, roots, source and
-tool hashes, dependency checks, output checks, and intervals.
-
-A separate cycle profile puts about 82% of interpreter samples in
-`eval_expression`, `eval_place`, `read_place`, and `eval_statement`. These
-operations traverse checked syntax on each execution. Map lookup accounts
-for another 6%. This profile measures sustained interpretation of the full C
-backend. The intended startup policy instead prepares native stage code
-early and hands subsequent compilation code to the selected execution stage.
-It does not require a larger or faster interpreter in the C99 seed.
-
-These results do not establish that complete handoff: the compiled-source
-route prepares a native target backend but retains the seed root executor.
-The [native handoff example](../examples/native/README.md) now supplies that
-execution path. Its [measurement command](../benchmarks/native/measure.py)
-separates bootstrap preparation, native execution, and final target toolchain
-work. It also retains the total cold cost. Caching a prepared library does not
-erase its preparation cost.
-
-The recorded configurations fail the single-worker prerequisite in section
-14. Keep those results. Sustained seed interpretation is a comparison route,
-not a required execution mode for the intended design. Assess the explicit
-bootstrap and handoff route before choosing an execution change or expanding
-dependent stages. The full performance issue remains open.
-
-To repeat the measurement with a new report path:
+Sustained seed interpretation is a comparison route. The intended startup
+policy prepares native stage code early and hands subsequent compilation code
+to the selected execution stage. Do not expand the C99 evaluator merely to
+make it a fast execution engine for a large compiler stage. Measure the complete
+[native handoff](../examples/native/README.md) first.
 
 ```sh
-python3 benchmarks/source-order/gate.py --build build --cpu 0 --rounds 20 --output build/source-gate.json
+python3 benchmarks/source-order/gate.py --build build --cpu 0 --rounds 20 \
+  --output build/benchmarks/source-gate.json
 ```
 
-Select a CPU allowed by the host. Exit status 2 means the recorded speed gate
-failed. The optional `--perf` argument selects a native Linux perf executable
-for a separate profile after the timed rounds.
+Select an allowed CPU. Exit status 2 means the speed gate failed. The optional
+`--perf` argument selects a Linux perf executable for a separate profile after
+the timing rounds. Flat sample attribution is not elapsed time per stage.
 
 ### Native continuation measurement
 
-The [native handoff results](../benchmarks/native/results-2026-10-02.json.gz)
-record 20 randomized paired rounds on each input, with one CPU and a new
-process for each sample. Stage result caches are empty; OS file caches are
-warm. The compressed JSON retains the complete root sources, commands, input
-and tool hashes, output checks, raw samples, and confidence intervals. The
-seed binary is unchanged from the preceding compiler revision. The source
-manifest identifies the new Crust stages used in this run.
+[native/measure.py](../benchmarks/native/measure.py) separates stage preparation,
+continuation compilation, native target frontend work, C emission, and the final
+target toolchain. It also records the complete cold endpoint. Report any prepared
+assembly library as an input. The source-only cache harness measures a different
+bootstrap boundary, as described in the [cache measurements](../benchmarks/backend-cache/README.md).
 
-| Input | Cold native handoff, ms | Source interpreted, ms | Installed backend, ms | Original C GCC check, ms |
-| --- | ---: | ---: | ---: | ---: |
-| Intrusive list | 73.516 | 7.999 | 2.612 | 6.885 |
-| 1,000 functions | 88.770 | 520.274 | 11.210 | 18.836 |
-| 8,000 functions | 196.695 | 4,166.372 | 70.640 | 111.372 |
+```sh
+python3 benchmarks/native/measure.py --cpu 0 --rounds 20 \
+  --output build/benchmarks/native.json
+```
 
-The native route starts from the seed and source files. Seed assembly builds
-the backend and executor. The first native function selects C compilation
-for the second function. That function runs the target frontend and emits
-complete C and native-symbol output. Every sample's output matches the
-installed backend. The direct-list output also compiles and runs.
+Use a fresh process and an empty stage-result cache for each cold sample.
+State whether filesystem caches are warm. Check output bytes and the final
+list executable before interpreting a timing result. Separate phase medians
+need not sum to the median of the complete request.
 
-For 8,000 functions, stage bootstrap takes 32.434 ms. Preparation of the two
-native continuation functions takes 39.433 ms. Native target frontend work
-and C emission take 120.005 ms. Other startup and cleanup take 4.502 ms.
-These are separate medians, so their sum can differ from the total median.
-The final target toolchain is excluded. One separate direct-list observation
-measures 36.093 ms for target compilation, symbol renaming, and linking.
-
-The paired native/interpreted ratio for 8,000 functions is 0.04716, with a
-95% interval of [0.04674, 0.04745]. The corresponding native/GCC ratio is
-1.76613, with an interval of [1.75603, 1.77042]. Cold native execution beats
-sustained interpretation on the two generated inputs. All three cold native
-configurations fail the C-speed comparison. The small input costs more to
-bootstrap than to interpret.
-
-This run establishes the native handoff and its cost. It does not complete
-the specification performance gate. The source-built C backend runs code
-emitted by the seed assembly backend; the installed comparison backend uses
-GCC optimization. A complete performance result must account for any next
-backend generation or cache preparation, then repeat the cold comparison
-before adding matched parallel work. The C99 evaluator is unchanged.
+Cold native execution must be compared with source interpretation, installed
+backend execution, and eligible C compilers. Improvement over interpretation
+does not establish C-speed compilation. Account for any extra backend generation
+or cache preparation before adding parallel-work claims.
 
 ### Compare cold native builds
 

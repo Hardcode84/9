@@ -7,13 +7,10 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        # These reports and inputs must retain their recorded bytes and hashes.
+        # These baseline inputs must retain their recorded bytes and hashes.
         exclude: &recorded_inputs >-
           (?x)^(
-            benchmarks/.*\.(json|patch|stderr)|
-            benchmarks/resources/(callbacks\.c|common\.h|contracts\.c|direct\.c|verify\.py)|
-            benchmarks/source-stages/measure\.py|
-            examples/resources/sqlite/(initialization-before|validation)\.json
+            benchmarks/resources/(callbacks\.c|common\.h|contracts\.c|direct\.c)
           )$
       - id: end-of-file-fixer
         exclude: *recorded_inputs

@@ -146,11 +146,14 @@ Do not add a feature before a concrete program requires it.
   separate in measurements. Exclude target GCC compilation and linking from
   frontend results. Record the commands, inputs, build flags, and baseline.
 - Preserve recorded benchmark inputs and reports. Their hashes identify the
-  measured bytes. Write new evidence separately when the implementation
-  changes.
+  measured bytes. Keep these captures in ignored storage. If removing a
+  tracked capture, first retain and verify an unchanged local copy. Write new
+  evidence separately when the implementation changes.
 - Do not commit binary files or archives. Keep new raw performance results
   in the ignored build directory. Commit benchmark tools and measurement
-  instructions, not machine-specific timing numbers in documentation.
+  instructions, not machine-specific timing numbers in documentation. Do not
+  commit generated reports, profiler logs, downloaded dependency trees, or
+  third-party lockfiles under `benchmarks/`.
 
 ## Validation
 

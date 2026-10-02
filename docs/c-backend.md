@@ -2,9 +2,6 @@
 
 # C backend stage
 
-The linked measurements retain the source names and hashes from the recorded
-runs.
-
 The second backend is an ordinary Crust0 library and driver in `stages/c/`.
 It reads checked trees, makes C text, and invokes GCC. All type mapping,
 expression lowering, names, number conversion, text buffers, and stage storage
@@ -361,64 +358,27 @@ through the host allocator and checks the resulting stage error and cleanup.
 ## Compilation measurements
 
 The [measurement script](../benchmarks/c-stage/measure.py) builds isolated
-compiler executables and records their source and binary hashes. The
-[prepared-driver results](../benchmarks/c-stage/results.json) contain all raw samples,
-commands, input hashes, tool versions, and confidence intervals. The
-[earlier run](../benchmarks/c-stage/results-pre-path-fix.json) precedes the
-driver path fixes and is separate evidence. These runs precede the source-stage
-integration and backend library split. Their hashes identify the measured
-implementation. The [native host experiment](exploration/source-stages.md#cost-gate)
-measured preparation of the earlier inline entry. The
-[source runner](source-runner.md#parallel-work-reuse-and-measurements) defines
-the current complete request boundary and records its three passing speed
-gates. The [profile experiments](../benchmarks/source-order/performance-experiments.md)
-explain the library inlining option and direct one-byte text append. All other
-tested emission changes were rejected and are absent from this implementation.
+compiler executables and records their source and binary hashes. It measures
+semantic checks, complete C and symbol buffers in memory, and complete output
+as separate endpoints. All include the work needed to reach that endpoint.
+Target GCC compilation, symbol renaming, and linking are separate costs.
 
-Run a new measurement from the repository root. Select an available logical
-CPU and a new result path:
+Run from the repository root with an allowed CPU and a new report path:
 
 ```sh
-python3 benchmarks/c-stage/measure.py --cpu 4 --output build/c-stage-results.json
+python3 benchmarks/c-stage/measure.py --cpu 0 \
+  --output build/benchmarks/c-stage/results.json
 ```
 
-The final run uses GCC 13.3 and an AMD Ryzen Threadripper PRO 7995WX. The
-controller and its child processes use logical CPU 4. The OS file cache is
-warm. The CPU is not reserved, and frequency and turbo are not fixed.
-Each endpoint has 25 fresh-process samples in randomized paired rounds.
-The comparison uses equivalent source functions and the direct-list witness.
+The harness uses equivalent generated functions and the direct-list witness.
+Correctness checks compile and run the output outside the timing samples. Keep
+raw samples, commands, source and tool hashes, and confidence intervals in the
+ignored report. A result applies to its recorded builds, inputs, and host.
 
-Median times for the self-compiled stage are in milliseconds:
-
-| Input | GCC syntax check | Crust check | Complete C in memory | Complete C and symbol output |
-|---|---:|---:|---:|---:|
-| 1,000 functions | 18.522 | 8.385 | 12.457 | 13.231 |
-| 8,000 functions | 111.272 | 60.487 | 103.163 | 108.643 |
-| Intrusive list | 7.263 | 1.741 | 1.775 | 1.811 |
-
-Complete output includes reading, checking, all C lowering, text construction,
-and writes to the null device. It does not start GCC. The 8,000-function ratio
-to GCC syntax checking is 0.9764. Its paired 95% interval is 0.9518 to 0.9803.
-All three inputs pass the stated gate: the upper interval bound is at most
-one against the faster measured C frontend. GCC is faster than Clang on each
-of these inputs. This establishes the gate for this corpus and host only.
-
-GCC compilation of the generated C is measured separately, with five samples
-per input. Its medians are 1.464 seconds for 1,000 functions, 12.016 seconds
-for 8,000 functions, and 25.306 milliseconds for the list. Symbol renaming
-adds 3.585, 9.804, and 2.271 milliseconds, respectively. These backend times
-exclude linking and are not part of the frontend speed claim.
-
-Stage construction is also separate. Building the prerequisite C99 compiler
-and libraries takes 698.185 milliseconds. Building the Crust stage through
-assembly takes 33.534 milliseconds. That stage builds the optimized C-stage
-executable in 464.881 milliseconds, including GCC, renaming, and linking.
-The installed self-compiled executable is used for the table. The unoptimized
-assembly-built stage misses the full-output gate on the two generated inputs.
-The `c-stage` target therefore builds the self-compiled version by default.
-
-The first emitter probe missed the gate. Profiling identified small text
-appends and redundant scalar reads as concrete costs. The final emitter
-uses direct C scalar reads and avoids buffer-growth calls when capacity is
-sufficient. Raw access and aggregate-copy rules remain the same. This bounded
-change passed the execution tests and the complete-output measurement.
+Stage construction is also separate. Include all required construction when
+measuring a cold source-defined compilation request. The
+[source runner](source-runner.md#parallel-work-reuse-and-measurements) defines
+that boundary. A prepared backend result does not establish the full cold gate.
+The [source-order measurement guide](../benchmarks/source-order/README.md)
+describes library inlining and text-append controls. Preserve capacity, overlap,
+raw-access, and aggregate-copy contracts when testing emitter changes.

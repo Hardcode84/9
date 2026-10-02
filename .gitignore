@@ -3,3 +3,12 @@
 /.profile-cache/
 __pycache__/
 /build/
+
+# Benchmark sources belong here; generated evidence belongs in build/.
+/benchmarks/**/*.json
+/benchmarks/**/*.stderr
+/benchmarks/**/*.patch
+/benchmarks/**/*.lock
+/benchmarks/**/*.gz
+/benchmarks/**/target/
+/examples/resources/sqlite/*.json

@@ -14,7 +14,7 @@ architecture. Use the [language specification](../crust0-spec.md) and
 | Study | Contents |
 | --- | --- |
 | [Language exploration](language-exploration.md) | C, C++, D, Rust, Zig, Jai, academic work, syntax, ownership, and acceptance criteria |
-| [Compiler profiles](compiler-profiles.md) | Measured C, C++, and Rust frontend costs and reproduction commands |
+| [Compiler profiles](compiler-profiles.md) | C, C++, and Rust profile methods, interpretation, and reproduction commands |
 | [Systems capabilities](systems-capabilities.md) | Linux, GCC, LLVM, and Coho source requirements, including direct intrusive lists |
 | [Metacompilation](metacompilation.md) | Jai, Lisp, Scheme, Racket, Forth, small cores, stage dependencies, and caching |
 | [Compiler extension experiment](compiler-extension-experiment.md) | Replaceable syntax and stages, backend adapters, and a proposed C compiler benchmark |
@@ -24,6 +24,6 @@ architecture. Use the [language specification](../crust0-spec.md) and
 | [Resource stage design](resource-metastage.md) | Ownership and cleanup design, implementation evidence, and the separate intrusive observer requirement |
 | [Syntax highlighting](syntax-highlighting.md) | Reader token probe, stage-owned classifications, HTML output, and VS Code interfaces |
 
-Recorded benchmark data remains in [benchmarks](../../benchmarks/).
-Its source names, revisions, and hashes identify the measured inputs.
-Moving these notes does not update those historical inputs or results.
+The [benchmark guide](../../benchmarks/README.md) lists the maintained tools.
+Generated reports and captured inputs stay in ignored storage. Historical
+reports remain in Git history and retain their original source hashes.

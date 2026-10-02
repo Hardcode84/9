@@ -84,5 +84,5 @@ invalidation, corruption, concurrency, and cleanup.
 Run `make check-ccn` for function counts, the Lizard comparison, and the CCN build
 example. This check needs `lizard==1.21.6` in the Python environment.
 
-Recorded benchmark JSON files retain the source paths and hashes from their
-original revisions. The live measurement scripts use the current example paths.
+The [benchmark tools](../benchmarks/README.md) use the current example paths.
+Keep generated reports and their input hashes in ignored build storage.

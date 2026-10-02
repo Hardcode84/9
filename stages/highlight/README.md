@@ -231,6 +231,6 @@ tests with ASan and UBSan. If a tracing sandbox prevents LeakSanitizer from
 starting, run with `ASAN_OPTIONS=detect_leaks=0`. The allocator tests still
 check that every injected allocation failure releases all arena blocks.
 
-The [timing baseline](../../benchmarks/highlight/README.md) separates scanning,
+The [measurement method](../../benchmarks/highlight/README.md) separates scanning,
 rendering, native process startup, and editor transport. Helper compilation
 and GCC linking are outside request measurements.

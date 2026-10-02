@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 import json
 import os
 import re
@@ -219,7 +220,7 @@ result = {
     "sanitizers": ["address", "undefined"],
     "asan_options": ENV["ASAN_OPTIONS"],
     "ubsan_options": ENV["UBSAN_OPTIONS"],
-    "leak_detector": "Not run: detect_leaks=0. Historical sandbox ptrace failure and minimal probe are archived in benchmarks/source-order/reader-proof.json. Explicit target allocation/release counts are checked.",
+    "leak_detector": "Not run: detect_leaks=0. Explicit target allocation/release counts are checked.",
 }
 (HERE / "verification.json").write_text(json.dumps(result, indent=2) + "\n")
 print(

@@ -54,15 +54,14 @@ stays alive through that call. Raw writes do not mark the array initialized for
 safe source access.
 
 This storage contract avoids mandatory initialization of unused bytes. The
-[earlier code inspection](initialization-before.json) records two extra stores
-that zeroed all 20 bytes. The current optimized executable has neither store.
+verifier saves optimized formatter assembly with its local report for inspection.
 The raw pointer path also needs no array bounds check; the digit-count argument
 establishes the bound. This is an audited unsafe operation, not inferred
 partial initialization.
 
-[validation.json](validation.json) records 21 application process checks across
-the compiler CLI, the source-order root, and an ASan/UBSan target. It also records
-six rejected ownership violations and three decimal-format boundary checks.
+The verifier writes `build/benchmarks/resources/sqlite-validation.json`. It
+checks the compiler CLI, the source-order root, and an ASan/UBSan target. It
+also checks rejected ownership violations and decimal-format boundaries.
 The formatter tests zero, nine, ten, and the maximum `u64` against the actual C
 baseline helper. The SQLite object uses its baseline build; only the resource
 target is instrumented. Leak checks are disabled because LeakSanitizer fails

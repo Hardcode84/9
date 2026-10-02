@@ -2,9 +2,6 @@
 
 # Ownership and cleanup in a Crust stage
 
-The linked measurements retain the source names and hashes from the recorded
-runs.
-
 Date: 2026-10-01. Status: design record with an implemented resource stage.
 
 Implement ownership, RAII, and `defer` in an ordinary Crust compiler library.

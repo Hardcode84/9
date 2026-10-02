@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Save compact evidence from completed frontend measurements.
 
 Raw traces stay in the cache. The output contains their hashes and summaries.
@@ -116,12 +117,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--cache", type=Path, default=Path(".profile-cache"))
+    parser.add_argument("--runs", type=Path, default=Path("build/benchmarks/frontend"))
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=False)
     (args.output / "reports").mkdir()
-    baseline = args.cache / "check-runs"
-    phases = args.cache / "phase-runs"
-    samples = args.cache / "samples"
+    baseline = args.runs / "check-runs"
+    phases = args.runs / "phase-runs"
+    samples = args.runs / "samples"
     records = read(baseline / "measurements.json")
     validate_collection(records, read(baseline / "environment.json"), "timing")
     phase_measurements = read(phases / "measurements.json")

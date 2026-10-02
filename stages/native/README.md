@@ -163,15 +163,12 @@ python3 benchmarks/native/measure.py --output build/native-measurement.json
 ```
 
 The current native handoff route takes the assembly stage as a prepared input
-and builds the selected executor and C stage on each invocation. The archived
-results below used the C99 assembly implementation at their recorded revision. The target GCC run is
-outside frontend timings. Stage preparation and continuation compilation remain
-in the total cold cost.
-
-The [recorded results](../../docs/source-runner.md#native-continuation-measurement)
-show the cold total and each phase. Native execution reduces the large-input
-cost relative to interpretation. The measured cold route still exceeds the
-matched GCC syntax-check time.
+and builds the selected executor and C stage on each invocation. The target GCC
+run is outside frontend timings. Stage preparation and continuation compilation
+remain in the total cold cost. The
+[measurement contract](../../docs/source-runner.md#native-continuation-measurement)
+separates these phases and defines the output checks. Improvement over sustained
+interpretation does not by itself establish the complete C-speed gate.
 
 Use [cold.py](../../benchmarks/native/cold.py) to compare a frozen checkout
 with the current build, GCC, and Clang. The

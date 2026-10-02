@@ -15,6 +15,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def c_backend_sources():
+    return [
+        ROOT / "api" / (name + ".crs") for name in ("crust0", "crust0_host", "crust0_stage")
+    ] + [
+        ROOT / "stages/c" / (name + ".crs")
+        for name in ("model", "base", "types", "emit", "driver", "program", "main")
+    ]
+
+
 def program(body, declarations=""):
     return declarations + "\nfn main(argc:i32,argv:**u8)->i32 {\n" + body + "\nreturn 0i32;\n}\n"
 
@@ -469,7 +478,25 @@ class Suite:
         }
 
     def boundary(self, name):
-        if name == "formatter-separate-objects":
+        if name == "compile-c-backend":
+            backend = self.work / "compiled-c-backend"
+            libraries = [
+                "--ldflag=" + str(self.build / name) for name in ("libcrust0.a", "libcrust0_host.a")
+            ]
+            self.compile(c_backend_sources(), backend, libraries)
+            target = self.work / "compiled-intrusive"
+            self.command(
+                [
+                    backend,
+                    *self.flags,
+                    "-o",
+                    target,
+                    ROOT / "examples/intrusive/program.crs",
+                    "--ldflag=" + str(self.build / "libcrust0_host.a"),
+                ]
+            )
+            self.execute(target, b"intrusive: ok\n")
+        elif name == "formatter-separate-objects":
             interface = self.source("format-interface", FORMAT_INTERFACE)
             provider = self.source("format-provider", FORMAT_PROVIDER)
             caller = self.source("format-caller", FORMAT_CALLER)
@@ -639,6 +666,7 @@ def main():
     cases += [
         ("boundary", name, None, None)
         for name in (
+            "compile-c-backend",
             "formatter-separate-objects",
             "stable-native-mangles",
             "exact-native-label-and-export",

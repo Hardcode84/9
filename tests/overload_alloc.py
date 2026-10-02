@@ -46,6 +46,7 @@ STAGE = [
 
 
 def cases():
+    yield "plain-c-backend", "plain", [path.read_text() for path in overload.c_backend_sources()]
     yield "plain-format-provider", "plain", [overload.FORMAT_INTERFACE, overload.FORMAT_PROVIDER]
     yield "plain-format-consumer", "plain", [overload.FORMAT_INTERFACE, overload.FORMAT_CALLER]
     yield "plain-format-merged", "plain", [

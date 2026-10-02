@@ -92,6 +92,8 @@ Source definitions with a matching bodyless declaration are visible under
 their mangled names in that object. Private definitions cannot collide with
 helpers in another object or be replaced by another shared library's helper.
 `--entry name` selects a defined `fn(i32, **u8) -> i32` from the named family.
+Selection uses source types. A borrow with the same lowered pointer type does
+not match this entry signature.
 
 `--export name` replaces the native name of one defined function or constant
 with its plain source name. An overloaded family is ambiguous for this option.

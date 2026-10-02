@@ -653,6 +653,62 @@ class Suite:
             output = self.work / name
             self.compile([source], output, ["--entry", "start"])
             self.execute(output, b"")
+        elif name == "driver-diagnostics":
+            cases = {
+                "result": "fn start(argc:i32,argv:**u8)->u32{return 0u32;}",
+                "arity": "fn start(value:u32)->u32{return value;}",
+                "pointer": "fn start(argc:i32,argv:*u8)->i32{return 0i32;}",
+                "prototype": "fn start(argc:i32,argv:**u8)->i32;",
+                "native": 'extern fn start(argc:i32,argv:**u8)->i32="external_entry";',
+                "constant": "const start:u32=1u32;",
+                "missing": "fn other()->unit{}",
+            }
+            for tool in ("crust-overload", "crust-overload-resource"):
+                for case, text in cases.items():
+                    source = self.source(name + "-" + case, text)
+                    for endpoint in ("--prepare", "--emit-c"):
+                        result = self.command(
+                            [self.build / tool, endpoint, "--entry", "start", source], expected=1
+                        )
+                        message = (
+                            b"entry function was not found"
+                            if case == "missing"
+                            else b"entry must be a defined fn(i32, **u8) -> i32"
+                        )
+                        if (tool + ": error: ").encode() + message not in result.stderr:
+                            raise Failure(f"incorrect entry diagnostic: {result.stderr!r}")
+                source = self.source(name + "-gcc", program(""))
+                result = self.command(
+                    [
+                        self.build / tool,
+                        "--object",
+                        "--cflag=-fcrust-deliberately-invalid",
+                        "-o",
+                        self.work / "failed.o",
+                        source,
+                    ],
+                    expected=1,
+                )
+                if (tool + ": error: gcc failed with status 1").encode() not in result.stderr:
+                    raise Failure(f"incorrect driver name: {result.stderr!r}")
+            for borrow in ("read", "mut"):
+                source = self.source(
+                    name + "-" + borrow,
+                    f"fn start(argc:i32,argv:{borrow} *u8)->i32{{return 0i32;}}",
+                )
+                for endpoint in ("--prepare", "--emit-c"):
+                    result = self.command(
+                        [
+                            self.build / "crust-overload-resource",
+                            endpoint,
+                            "--entry",
+                            "start",
+                            source,
+                        ],
+                        expected=1,
+                    )
+                    if b"entry must be a defined fn(i32, **u8) -> i32" not in result.stderr:
+                        raise Failure(f"lowered ABI accepted a borrowed entry: {result.stderr!r}")
         elif name in ("source-root-hello", "source-root-separate", "source-root-resources"):
             example = name.removeprefix("source-root-")
             package = self.work / name
@@ -726,6 +782,7 @@ def main():
             "exact-native-label-and-export",
             "ambiguous-export",
             "entry-signature-selection",
+            "driver-diagnostics",
             "source-root-hello",
             "source-root-separate",
             "source-root-resources",

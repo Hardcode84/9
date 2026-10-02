@@ -36,10 +36,11 @@ fn c_driver_print_number(value: u64) -> unit {
     crust0_host_write_stream(2u32, &digits[index], 20usize - index);
 }
 
-fn c_driver_diagnostic(context: *CrustContext) -> unit {
+fn c_driver_diagnostic(context: *CrustContext, tool: *u8) -> unit {
     var source: *CrustSource = (*context).error_loc.source;
     if source == null(*CrustSource) {
-        c_driver_stderr("crust-c: error: ");
+        c_driver_stderr(tool);
+        c_driver_stderr(": error: ");
     } else {
         var line: u64 = 1u64;
         var column: u64 = 1u64;
@@ -152,6 +153,16 @@ fn c_driver_names(driver: *CDriver) -> bool {
     return true;
 }
 
+fn c_driver_is_entry(declaration: *CrustDecl) -> bool {
+    if (*declaration).kind != CRUST_D_FUNCTION || (*declaration).param_count != 2usize { return false; }
+    var parameter: *CrustParam = (*declaration).params;
+    if (*(*declaration).syntax_type).kind != CRUST_T_I32 ||
+       (*(*parameter).syntax_type).kind != CRUST_T_I32 { return false; }
+    var argument: *CrustTypeSyntax = (*(*parameter).next).syntax_type;
+    return (*argument).kind == CRUST_T_POINTER && (*(*argument).base).kind == CRUST_T_POINTER &&
+           (*(*(*argument).base).base).kind == CRUST_T_U8;
+}
+
 fn c_driver_entry(cli: *CCli) -> *CrustDecl {
     var driver: *CDriver = &(*cli).driver;
     var parsed: *CrustUnit = (*(*(*driver).stage).status.context).units;
@@ -159,15 +170,7 @@ fn c_driver_entry(cli: *CCli) -> *CrustDecl {
         var declaration: *CrustDecl = (*parsed).declarations;
         while declaration != null(*CrustDecl) {
             if c_equal((*(*declaration).name).text, (*cli).entry_name) {
-                if (*declaration).kind == CRUST_D_FUNCTION {
-                    var type: *CrustType = (*declaration).type;
-                    if (*type).param_count == 2usize && (*(*type).base).kind == CRUST_T_I32 &&
-                       (*(*type).params[0usize]).kind == CRUST_T_I32 {
-                        var argument: *CrustType = (*type).params[1usize];
-                        if (*argument).kind == CRUST_T_POINTER && (*(*argument).base).kind == CRUST_T_POINTER &&
-                           (*(*(*argument).base).base).kind == CRUST_T_U8 { return declaration; }
-                    }
-                }
+                if c_driver_is_entry(declaration) { return declaration; }
                 c_driver_error(driver, "entry must be a defined fn(i32, **u8) -> i32");
                 return null(*CrustDecl);
             }

@@ -1148,7 +1148,19 @@ class Suite:
                 )
 
     def cli(self, name):
-        if name == "cli-empty-source":
+        if name == "cli-entry-source-signature":
+            for borrow in ("read", "mut"):
+                path = self.source(
+                    name + "-" + borrow,
+                    f"fn start(argc:i32,argv:{borrow} *u8)->i32{{return 0i32;}}",
+                )
+                for endpoint in ("--prepare", "--emit-c"):
+                    result = self.command(
+                        [self.compiler, endpoint, "--entry", "start", path], expected=1
+                    )
+                    if b"entry must be a defined fn(i32, **u8) -> i32" not in result.stderr:
+                        raise Failure(f"lowered ABI accepted a borrowed entry: {result.stderr!r}")
+        elif name == "cli-empty-source":
             path = self.source(name, "")
             self.command([self.compiler, "--check", path])
             result = self.command([self.compiler, "--emit-c", "--library", path])
@@ -1336,6 +1348,7 @@ def main():
         ("cli", name, None, None)
         for name in (
             "cli-empty-source",
+            "cli-entry-source-signature",
             "cli-shared-record-cleanup-growth",
             "cli-private-cleanup-separate-objects",
             "cli-private-cleanup-native-alias",

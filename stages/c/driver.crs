@@ -173,7 +173,7 @@ fn c_driver_cleanup(driver: *CDriver, keep: *u8) -> bool {
     while item != null(*CDriverTemp) {
         if keep == null(*u8) || !c_equal((*item).path, keep) {
             if c_driver_unlink((*item).path) != 0i32 && *c_driver_errno() != 2i32 {
-                var prefix: *u8 = "crust-c: cannot remove temporary '";
+                var prefix: *u8 = "cannot remove temporary '";
                 crust0_host_write_stream(2u32, prefix, c_length(prefix));
                 crust0_host_write_stream(2u32, (*item).path, c_length((*item).path));
                 crust0_host_write_stream(2u32, "'\n", 2usize);
@@ -237,7 +237,7 @@ fn c_driver_run(driver: *CDriver, count: usize, mode: u32) -> bool {
         var inherited_mask: u32 = c_driver_umask(0u32);
         c_driver_umask(inherited_mask | ((~mode) & 511u32));
         c_driver_execvp((*driver).command[0usize], (*driver).command);
-        var prefix: *u8 = "crust-c: cannot execute ";
+        var prefix: *u8 = "cannot execute ";
         crust0_host_write_stream(2u32, prefix, c_length(prefix));
         crust0_host_write_stream(2u32, (*driver).command[0usize], c_length((*driver).command[0usize]));
         crust0_host_write_stream(2u32, "\n", 1usize);

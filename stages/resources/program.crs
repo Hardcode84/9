@@ -1,5 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
+fn resource_driver_entry(cli:*CCli, resources:*RsStage)->*CrustDecl {
+    var name:*CrustName = crust_try_intern((*resources).context, (*cli).entry_name, c_length((*cli).entry_name));
+    if name == null(*CrustName) { return null(*CrustDecl); }
+    var global:*RsGlobal = rs_global(resources, name);
+    if global == null(*RsGlobal) {
+        c_driver_error(&(*cli).driver, "entry function was not found");
+        return null(*CrustDecl);
+    }
+    if !c_driver_is_entry((*global).source) {
+        c_driver_error(&(*cli).driver, "entry must be a defined fn(i32, **u8) -> i32");
+        return null(*CrustDecl);
+    }
+    return (*global).lowered;
+}
+
 fn resource_driver_build(cli:*CCli)->i32 {
     var driver:*CDriver = &(*cli).driver;
     var context:*CrustContext = (*cli).stage.status.context;
@@ -32,7 +47,7 @@ fn resource_driver_build(cli:*CCli)->i32 {
     if !c_driver_names(driver) { return 1i32; }
     var entry:*CrustDecl = null(*CrustDecl);
     if !(*cli).library {
-        entry = c_driver_entry(cli);
+        entry = resource_driver_entry(cli, &resources);
         if entry == null(*CrustDecl) { return 1i32; }
     }
     if (*cli).mode == 4u32 {

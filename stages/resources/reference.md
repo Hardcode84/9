@@ -111,6 +111,10 @@ retains the seed's defined wrapping and trap rules.
 Both take ordinary source and option data. There is no special runner path,
 package name, destructor name, or foreign API recognized by the seed.
 
+The command wrapper selects `main`, or the name supplied with `--entry`, with
+the source signature `fn(i32, **u8) -> i32`. Borrow parameters do not match this
+signature even when their lowered pointer representation is the same.
+
 [extension.crs](extension.crs) exposes the lower-level sequence:
 
 1. Initialize a context and `RsStage`.

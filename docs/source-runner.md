@@ -107,9 +107,9 @@ The initial reader accepts one declaration or root statement at a time.
 
 ```text
 RootAction = Declaration
-           | ( Block | "if" Expr Block [ "else" Block ]
-             | "while" Expr Block ) ";"
+           | ( Block | IfStatement | "while" Expr Block ) ";"
            | SimpleStatement ;
+IfStatement = "if" Expr Block [ "else" ( Block | IfStatement ) ] ;
 ```
 
 `SimpleStatement` has the ordinary statement grammar, excluding blocks,

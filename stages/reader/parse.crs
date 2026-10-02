@@ -476,7 +476,13 @@ fn rr_standard_statement(reader:*CrustReader)->*CrustStmt {
         var result:*CrustStmt=rr_new_stmt(reader,CRUST_S_IF,offset);
         if result==null(*CrustStmt) { return result; }
         (*result).expr=rr_expression(reader);(*result).body=rr_block(reader);
-        if rr_take(reader,RR_ELSE) { (*result).otherwise=rr_block(reader); }
+        if rr_take(reader,RR_ELSE) {
+            if (*reader).token.kind==RR_IF {
+                if !rr_enter(reader) { return null(*CrustStmt); }
+                (*result).otherwise=rr_statement(reader);
+                rr_leave(reader);
+            } else { (*result).otherwise=rr_block(reader); }
+        }
         if (*reader).failed { return null(*CrustStmt); }
         return result;
     }

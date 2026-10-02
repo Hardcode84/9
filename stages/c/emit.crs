@@ -193,22 +193,22 @@ fn c_binary(stage: *CStage, input: *CrustExpr) -> usize {
     if wrap { c_wrap_begin(stage, (*input).type); c_text(stage, "(uint64_t)"); }
     c_value(stage, left);
     if operation == CRUST_OP_ADD { c_text(stage, "+"); }
-    else { if operation == CRUST_OP_SUB { c_text(stage, "-"); }
-    else { if operation == CRUST_OP_MUL { c_text(stage, "*"); }
-    else { if operation == CRUST_OP_DIV { c_text(stage, "/"); }
-    else { if operation == CRUST_OP_REM { c_text(stage, "%"); }
-    else { if operation == CRUST_OP_BIT_AND { c_text(stage, "&"); }
-    else { if operation == CRUST_OP_BIT_OR { c_text(stage, "|"); }
-    else { if operation == CRUST_OP_BIT_XOR { c_text(stage, "^"); }
-    else { if operation == CRUST_OP_SHL { c_text(stage, "<<"); }
-    else { if operation == CRUST_OP_SHR { c_text(stage, ">>"); }
-    else { if operation == CRUST_OP_EQ { c_text(stage, "=="); }
-    else { if operation == CRUST_OP_NE { c_text(stage, "!="); }
-    else { if operation == CRUST_OP_LT { c_text(stage, "<"); }
-    else { if operation == CRUST_OP_LE { c_text(stage, "<="); }
-    else { if operation == CRUST_OP_GT { c_text(stage, ">"); }
-    else { if operation == CRUST_OP_GE { c_text(stage, ">="); }
-    else { trap; } } } } } } } } } } } } } } } }
+    else if operation == CRUST_OP_SUB { c_text(stage, "-"); }
+    else if operation == CRUST_OP_MUL { c_text(stage, "*"); }
+    else if operation == CRUST_OP_DIV { c_text(stage, "/"); }
+    else if operation == CRUST_OP_REM { c_text(stage, "%"); }
+    else if operation == CRUST_OP_BIT_AND { c_text(stage, "&"); }
+    else if operation == CRUST_OP_BIT_OR { c_text(stage, "|"); }
+    else if operation == CRUST_OP_BIT_XOR { c_text(stage, "^"); }
+    else if operation == CRUST_OP_SHL { c_text(stage, "<<"); }
+    else if operation == CRUST_OP_SHR { c_text(stage, ">>"); }
+    else if operation == CRUST_OP_EQ { c_text(stage, "=="); }
+    else if operation == CRUST_OP_NE { c_text(stage, "!="); }
+    else if operation == CRUST_OP_LT { c_text(stage, "<"); }
+    else if operation == CRUST_OP_LE { c_text(stage, "<="); }
+    else if operation == CRUST_OP_GT { c_text(stage, ">"); }
+    else if operation == CRUST_OP_GE { c_text(stage, ">="); }
+    else { trap; }
     if wrap { c_text(stage, "(uint64_t)"); }
     c_value(stage, right);
     if wrap { c_text(stage, "))"); }

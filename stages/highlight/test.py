@@ -82,6 +82,7 @@ def main():
         "comments": b"// fn fake() & <script>\r\nfn /* no block comments */ real()->unit{}\n",
         "strings": 'const text:*u8="a\\n<&>😀é";\r\n'.encode(),
         "names": b"var read:u32=0u32; fn move()->unit{} record R{x:u32;} // defer\n",
+        "else-if": b"fn choose()->unit{if true{}else if false{}else{}}",
         "broken-string": b'"unfinished\nfn after()->unit{}\n',
         "broken-escape": b'"bad\\q" fn after()->unit{}\n',
         "numbers": b"0 42u32 0xffu8 18446744073709551615u64 0x 4oops 18446744073709551616u64\n",
@@ -113,6 +114,9 @@ def main():
             assert displayed == raw.decode(), (name, displayed)
     assert (b"read", "variable", 1) in results["names"]
     assert (b"move", "function", 1) in results["names"]
+    assert [token for token in results["else-if"] if token[1] == "keyword"] == [
+        (word, "keyword", 0) for word in (b"fn", b"if", b"true", b"else", b"if", b"false", b"else")
+    ]
     for name in ("broken-string", "broken-escape"):
         assert results[name][0][1] == "invalid"
         assert (b"after", "function", 1) in results[name]

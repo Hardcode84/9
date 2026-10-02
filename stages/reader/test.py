@@ -79,11 +79,12 @@ def main():
         path = work / f"syntax-{index:03}.crs"
         path.write_bytes(data)
         paths.append(path)
-    for depth in (1, 30, 120, 250, 256, 260, 500):
+    for depth in (1, 30, 120, 250, 253, 254, 256, 260, 500):
         for name, data in (
             ("types", b"record R { x:" + b"*" * depth + b"u8; }"),
             ("groups", b"fn f()->unit{" + b"(" * depth + b"1u8" + b")" * depth + b";}"),
             ("blocks", b"fn f()->unit{" + b"{" * depth + b"}" * depth + b"}"),
+            ("else-if", b"fn f()->unit{if true{}" + b"else if false{}" * depth + b"}"),
         ):
             path = work / f"depth-{name}-{depth}.crs"
             path.write_bytes(data)

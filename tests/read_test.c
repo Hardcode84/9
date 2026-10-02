@@ -115,6 +115,9 @@ static void test_grammar_corpus(void)
            true);
     SYNTAX("syntax: if_else", "fn test() -> unit { if true { return; } else { trap; } }", true);
     SYNTAX("syntax: nested_if", "fn test() -> unit { if true {} else { if false {} } }", true);
+    SYNTAX("syntax: else_if", "fn test() -> unit { if true {} else if false {} }", true);
+    SYNTAX("syntax: else_if_else", "fn test() -> unit { if true {} else if false {} else {} }",
+           true);
     SYNTAX("syntax: while_break_continue",
            "fn test() -> unit { while true { if false { break; } continue; } }", true);
     SYNTAX("syntax: trap", "fn test() -> unit { trap; }", true);
@@ -166,7 +169,9 @@ static void test_grammar_corpus(void)
     SYNTAX("syntax error: missing_initializer", "fn test() -> unit { var x: u8; }", false);
     SYNTAX("syntax error: unsupported_let", "fn test() -> unit { let x: u8 = 0u8; }", false);
     SYNTAX("syntax error: else_if_without_block",
-           "fn test() -> unit { if true {} else if false {} }", false);
+           "fn test() -> unit { if true {} else if false return; }", false);
+    SYNTAX("syntax error: else_while", "fn test() -> unit { if true {} else while false {} }",
+           false);
     SYNTAX("syntax error: empty_record", "record Empty {}", false);
     SYNTAX("syntax error: record_field_comma", "record R { x: u8, y: u8 }", false);
     SYNTAX("syntax error: record_trailing_semicolon", "record R { x: u8; };", false);
@@ -232,7 +237,8 @@ static void test_ast(void)
                                "const grouped: i8 = -(128i8);"
                                "const bytes: *u8 = \"A\\0\\xFF\\n\\\"\\\\\";"
                                "fn f(a: fn(*u8,) -> unit,) -> u64 { return a + b * c - d; }"
-                               "const offset: usize = offsetof(Node, hook);";
+                               "const offset: usize = offsetof(Node, hook);"
+                               "fn choose()->unit{if true{}else if false{}else{}}";
     static const unsigned char decoded[] = {'A', 0, 255, '\n', '"', '\\', 0};
     CrustContext ctx;
     CrustSource source = source_text(text, sizeof(text) - 1, 19);
@@ -278,7 +284,11 @@ static void test_ast(void)
               strcmp(decl->init->syntax_type->name->text, "Node") == 0 &&
               strcmp(decl->init->field_name->text, "hook") == 0,
           "offsetof record and field");
-    check(decl->identity == 5 && decl->next == NULL, "declaration order");
+    check(decl->identity == 5 && decl->next->identity == 6 && decl->next->next == NULL,
+          "declaration order");
+    check(decl->next->body->body->otherwise->kind == CRUST_S_IF &&
+              decl->next->body->body->otherwise->otherwise->kind == CRUST_S_BLOCK,
+          "else-if stores a conditional without a wrapper block");
     crust_context_destroy(&ctx);
 }
 
@@ -490,7 +500,7 @@ static void test_limits(void)
     CrustSource source = source_text("", 0, 1);
     CrustUnit *unit;
     CrustAction action;
-    char nested[512];
+    char nested[8192];
     size_t size = 0;
     unsigned index;
     allocator.user = NULL;
@@ -516,6 +526,15 @@ static void test_limits(void)
     memcpy(nested + size, "1i8;", 4);
     size += 4;
     syntax_case("excessive prefix nesting is a diagnostic", nested, size, false);
+    size = sizeof("fn f()->unit{if true{}") - 1;
+    memcpy(nested, "fn f()->unit{if true{}", size);
+    for (index = 1; index < 255; ++index) {
+        memcpy(nested + size, "else if false{}", 15);
+        size += 15;
+        nested[size] = '}';
+        if (index >= 253)
+            syntax_case("else-if reader boundary", nested, size + 1, index == 253);
+    }
 }
 
 static void one_case(const char *name, const char *text, bool declaration, int kind)
@@ -587,6 +606,8 @@ static void test_read_one(void)
     one_case("stream continue syntax", "continue;", false, CRUST_S_CONTINUE);
     one_case("stream if without else", "if true { install(); };", false, CRUST_S_IF);
     one_case("stream complete if else", "if true {} else { install(); };", false, CRUST_S_IF);
+    one_case("stream complete else if", "if true {} else if false {} else { install(); };", false,
+             CRUST_S_IF);
     one_case("stream while", "while true { if false { break; } continue; };", false, CRUST_S_WHILE);
     one_case("stream block", "{ if true {} { install(); } };", false, CRUST_S_BLOCK);
     for (index = 0; index < sizeof(invalid) / sizeof(invalid[0]); ++index) {

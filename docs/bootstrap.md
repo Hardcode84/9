@@ -131,8 +131,11 @@ Reader nesting and semantic traversal each have a limit of 256. Semantic
 traversal counts syntax and type graph depth, not source indentation or
 parentheses. A flat operator chain builds a nested expression tree and counts
 toward this limit. A nested block and its `if` statement each count as one
-level. By-value type chains also count. These limits produce diagnostics.
-They do not truncate the input or skip checks. Pointer cycles stop at nominal
+level. By-value type chains also count.
+An `else if` uses a conditional node without an extra wrapper block. Each
+recursive arm consumes one reader level and one statement traversal level.
+These limits produce diagnostics. They do not truncate the input or skip checks.
+Pointer cycles stop at nominal
 record identities and do not consume one stack frame per record in the cycle.
 Type size must fit the Crust0 `isize` limit.
 

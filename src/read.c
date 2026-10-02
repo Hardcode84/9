@@ -839,8 +839,15 @@ static CrustStmt *read_statement(Reader *reader)
         stmt = new_stmt(reader, CRUST_S_IF, loc);
         stmt->expr = read_expr(reader);
         stmt->body = read_block(reader);
-        if (take(reader, TOK_ELSE))
-            stmt->otherwise = read_block(reader);
+        if (take(reader, TOK_ELSE)) {
+            if (reader->token.kind == TOK_IF) {
+                enter(reader);
+                stmt->otherwise = read_statement(reader);
+                --reader->depth;
+            } else {
+                stmt->otherwise = read_block(reader);
+            }
+        }
         return stmt;
     }
     if (take(reader, TOK_WHILE)) {

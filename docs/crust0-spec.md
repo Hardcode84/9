@@ -136,8 +136,7 @@ tokens defined above. `EOF` is the end of the source unit.
 File        = { Declaration } EOF ;
 Root        = { RootAction } EOF ;
 RootAction  = Declaration | SimpleStatement
-            | ( Block | "if" Expr Block [ "else" Block ]
-              | "while" Expr Block ) ";" ;
+            | ( Block | IfStatement | "while" Expr Block ) ";" ;
 
 Declaration = "record" Name "{" Field { Field } "}"
               | "fn" Name Params "->" Type Block
@@ -156,9 +155,10 @@ IntegerType = "i8" | "i16" | "i32" | "i64" | "isize"
 
 Block       = "{" { Statement } "}" ;
 Statement   = Block
-            | "if" Expr Block [ "else" Block ]
+            | IfStatement
             | "while" Expr Block
             | SimpleStatement ;
+IfStatement = "if" Expr Block [ "else" ( Block | IfStatement ) ] ;
 SimpleStatement = "var" Name ":" Type "=" ( "uninit" | Expr ) ";"
             | "break" ";" | "continue" ";"
             | "return" [ Expr ] ";" | "trap" ";"
@@ -961,6 +961,12 @@ The seed reader, checker, evaluator, runner, and assembly backend remain C99.
 A C99 compiler can always build this seed. Crust stage libraries and drivers
 can compile themselves through their previous generation. This is the
 self-compilation gate; translating the seed is not a requirement.
+
+The seed accepts `else if`. Compiler stages contain long conditional chains;
+requiring a wrapper block for each next condition adds syntax nodes and closing
+braces. An `else if` uses the existing conditional node as the `otherwise`
+statement. No keyword or node kind is added. Each recursive arm counts toward
+the reader depth bound. Other branch bodies still require braces.
 
 The [systems source study](exploration/systems-capabilities.md) remains the capability
 target. Linux, GCC, and LLVM cases require explicit storage, layout, callbacks,

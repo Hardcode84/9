@@ -31,6 +31,13 @@ fn tick(trace:*u32, value:u32) -> u32 {
     *trace = *trace * 10u32 + value;
     return value;
 }
+fn branch(value:u32) -> u32 {
+    var trace:u32 = 0u32;
+    if tick(&trace,1u32) == value { return trace; }
+    else if tick(&trace,2u32) == value { return trace; }
+    else if tick(&trace,3u32) == value { return trace; }
+    else { return trace + 1000u32; }
+}
 fn pick(trace:*u32, array:*[u32; 2]) -> *u32 {
     tick(trace, 1u32);
     return &(*array)[0usize];
@@ -124,5 +131,7 @@ fn main(argc:i32,argv:**u8) -> i32 {
     var function:fn(u32)->u32 = increment;
     if function == no_function || function != increment || function(1u32) != 2u32 { return 32i32; }
     if (1u8 as bool) != true || (0i64 as bool) != false || (true as u64) != 1u64 { return 33i32; }
+    if branch(1u32) != 1u32 || branch(2u32) != 12u32 || branch(3u32) != 123u32 ||
+       branch(4u32) != 1123u32 { return 34i32; }
     return 0i32;
 }

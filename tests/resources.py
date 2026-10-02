@@ -62,6 +62,16 @@ def cleanup_tree_source(depth):
 
 def runtime_cases():
     return [
+        (
+            "else-if-cleanup-scopes",
+            program(
+                "var outer:Token=token(65i32);"
+                "if false {var item:Token=token(66i32);}"
+                "else if true {var item:Token=token(67i32);defer emit(68i32);emit(88i32);}"
+                "else {var item:Token=token(69i32);}emit(89i32);"
+            ),
+            b"XDCYA",
+        ),
         ("wide-record-reverse-initializers-and-fields", wide_record_source(), b""),
         (
             "empty-main-and-zero-argument-functions",

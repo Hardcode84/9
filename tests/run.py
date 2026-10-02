@@ -13,6 +13,7 @@ import signal
 import stat
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,6 +30,45 @@ STRICT = [
     "-Wshadow",
     "-Wvla",
 ]
+
+
+def checked_command(argv, expected=0, timeout=30, stdout=subprocess.PIPE, **options):
+    command = list(map(str, argv))
+    result = subprocess.run(
+        command,
+        cwd=options.pop("cwd", ROOT),
+        stdout=stdout,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        **options,
+    )
+    correct = result.returncode != 0 if expected is None else result.returncode == expected
+    if not correct:
+        raise AssertionError(
+            f"{shlex.join(command)}: status {result.returncode}, expected {expected}\n"
+            f"{(result.stdout or b'').decode(errors='replace')}\n{result.stderr.decode(errors='replace')}"
+        )
+    return result
+
+
+def parallel_checks(check, cases, jobs):
+    # map reports failures in input order. Join workers before any preexec_fn use.
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        return sum(1 for _ in pool.map(check, cases))
+
+
+def positive_jobs(value):
+    count = int(value)
+    if count < 1:
+        raise argparse.ArgumentTypeError("jobs must be positive")
+    return count
+
+
+def trap_environment():
+    # These fixtures are headless. Apport serializes desktop-session queries.
+    environment = os.environ.copy()
+    environment.pop("DBUS_SESSION_BUS_ADDRESS", None)
+    return environment
 
 
 def wrapped(value, bits, signed):
@@ -282,6 +322,12 @@ def main():
     parser.add_argument("--cc", default="cc")
     parser.add_argument("--assembler", default="as --64")
     parser.add_argument("--ldflags", default="")
+    parser.add_argument(
+        "--jobs",
+        type=positive_jobs,
+        default=4,
+        help="maximum concurrent trap checks (default: %(default)s)",
+    )
     args = parser.parse_args()
     compiler = args.compiler.resolve()
     build = (args.library_dir or compiler.parent).resolve()
@@ -298,19 +344,8 @@ def main():
 
     def command(argv, expected=0, **options):
         nonlocal checks
-        result = subprocess.run(
-            [str(arg) for arg in argv],
-            cwd=options.pop("cwd", ROOT),
-            capture_output=True,
-            timeout=30,
-            **options,
-        )
+        result = checked_command(argv, expected=expected, **options)
         checks += 1
-        if result.returncode != expected:
-            raise AssertionError(
-                f"{shlex.join(map(str, argv))}: status {result.returncode}, expected {expected}\n"
-                f"{result.stdout.decode(errors='replace')}\n{result.stderr.decode(errors='replace')}"
-            )
         return result
 
     def assemble(source):
@@ -588,7 +623,7 @@ fn exhaust()->unit {var large:[u8;1048576]=uninit;}
 fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
 """,
         )
-        stack_environment = os.environ.copy()
+        stack_environment = trap_environment()
         # This child must expose the native guard-page signal, including in sanitizer runs.
         stack_environment["ASAN_OPTIONS"] = ":".join(
             filter(None, [stack_environment.get("ASAN_OPTIONS"), "handle_segv=0"])
@@ -636,9 +671,10 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         if signed:
             traps.extend(f"1{kind} {op} -1{kind};" for op in ("<<", ">>"))
             traps.extend(f"-{1 << (bits - 1)}{kind} {op} -1{kind};" for op in ("/", "%"))
+    trap_programs = []
     for index, statement in enumerate(traps):
         source = f"fn main(argc:i32,argv:**u8)->i32{{{statement} return 0i32;}}"
-        command([executable(f"trap-{index}", source)], expected=-signal.SIGILL)
+        trap_programs.append(executable(f"trap-{index}", source))
     dynamic_traps = [
         "1i32 / native_i32(0i32);",
         "-2147483648i32 / native_i32(-1i32);",
@@ -650,10 +686,14 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
             'extern fn native_i32(value:i32)->i32="native_i32";'
             f"fn main(argc:i32,argv:**u8)->i32{{{statement} return 0i32;}}"
         )
-        command(
-            [executable(f"dynamic-trap-{index}", source, libraries=[native])],
-            expected=-signal.SIGILL,
-        )
+        trap_programs.append(executable(f"dynamic-trap-{index}", source, libraries=[native]))
+
+    environment = trap_environment()
+
+    def check_trap(program):
+        checked_command([program], expected=-signal.SIGILL, env=environment)
+
+    checks += parallel_checks(check_trap, trap_programs, args.jobs)
     print(f"required traps: {len(traps) + len(dynamic_traps)} processes passed")
 
     for name, source in {

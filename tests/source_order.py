@@ -97,25 +97,10 @@ class Suite:
         shutil.copyfile(self.build / "crust-c-library.so", self.backend)
 
     def command(self, command, expected=0, stdout=subprocess.PIPE, **options):
-        command = list(map(str, command))
-        result = subprocess.run(
-            command,
-            cwd=options.pop("cwd", ROOT),
-            stdout=stdout,
-            stderr=subprocess.PIPE,
-            timeout=60,
-            **options,
+        result = RUNTIME.checked_command(
+            command, expected=expected, timeout=60, stdout=stdout, **options
         )
         self.checks += 1
-        if expected is None:
-            correct = result.returncode != 0
-        else:
-            correct = result.returncode == expected
-        if not correct:
-            raise AssertionError(
-                f"{shlex.join(command)}: status {result.returncode}, expected {expected}\n"
-                f"{(result.stdout or b'').decode(errors='replace')}\n{result.stderr.decode(errors='replace')}"
-            )
         return result
 
     def write(self, name, contents):
@@ -152,12 +137,17 @@ class Suite:
             ]
         )
 
-    def host_unit(self, name, body, expected=0, native=False):
+    def host_unit_source(self, name, body, native=False):
         path = self.write(name + "-unit.crs", body)
         prefix = f"host_link(run, {string(self.native)});\n" if native else ""
+        return (
+            prefix + f"host_source(run, {string(path)});\nreturn main((*run).argc, (*run).argv);\n"
+        )
+
+    def host_unit(self, name, body, expected=0, native=False):
         return self.root(
             name,
-            prefix + f"host_source(run, {string(path)});\nreturn main((*run).argc, (*run).argv);\n",
+            self.host_unit_source(name, body, native),
             ["runtime-witness"],
             expected=expected,
         )
@@ -303,7 +293,20 @@ fn odd(value:u32)->bool { if value==0u32{return false;} return even(value-1u32);
     )
 
 
-def check_runtime(suite):
+def check_traps(suite, cases, jobs):
+    environment = RUNTIME.trap_environment()
+
+    def check(case):
+        command, diagnostic = case
+        result = RUNTIME.checked_command(
+            command, expected=-signal.SIGABRT, timeout=60, env=environment
+        )
+        assert diagnostic in result.stderr, (command, result.stderr)
+
+    suite.checks += RUNTIME.parallel_checks(check, cases, jobs)
+
+
+def check_runtime(suite, jobs=4):
     suite.native_library()
     suite.root(
         "full-runtime",
@@ -311,6 +314,7 @@ def check_runtime(suite):
         "return main((*run).argc,(*run).argv);",
         ["runtime-witness"],
     )
+    callbacks = []
     for name, declaration, statement, diagnostic in (
         ("callback-trap", "", "trap;", b"required execution trap"),
         (
@@ -333,8 +337,9 @@ def check_runtime(suite):
             + statement
             + "} fn main(argc:i32,argv:**u8)->i32{return native_callback(callback);}"
         )
-        failed = suite.host_unit(name, body, expected=-signal.SIGABRT, native=True)
-        assert diagnostic in failed.stderr, failed.stderr
+        path = suite.write(name + ".crs", suite.host_unit_source(name, body, native=True))
+        callbacks.append(([suite.runner, path, "runtime-witness"], diagnostic))
+    check_traps(suite, callbacks, jobs)
     comparisons = 0
     for kind, (bits, signed) in RUNTIME.TYPES.items():
         cases = RUNTIME.integer_cases(kind, bits, signed)
@@ -367,13 +372,10 @@ def check_runtime(suite):
         if signed:
             traps += [f"1{kind} {op} -1{kind};" for op in ("<<", ">>")]
             traps += [f"-{1 << (bits - 1)}{kind} {op} -1{kind};" for op in ("/", "%")]
+    trap_cases = []
     for index, statement in enumerate(traps):
-        suite.root(
-            f"required-trap-{index}",
-            statement,
-            expected=-signal.SIGABRT,
-            diagnostic=b"required execution trap",
-        )
+        path = suite.write(f"required-trap-{index}.crs", statement)
+        trap_cases.append(([suite.runner, path], b"required execution trap"))
     dynamic = [
         "1i32 / native_i32(0i32);",
         "-2147483648i32 / native_i32(-1i32);",
@@ -381,13 +383,13 @@ def check_runtime(suite):
         "1i32 >> native_i32(32i32);",
     ]
     for index, statement in enumerate(dynamic):
-        suite.root(
-            f"native-trap-{index}",
+        path = suite.write(
+            f"native-trap-{index}.crs",
             f"host_link(run,{string(suite.native)});"
             'extern fn native_i32(value:i32)->i32="native_i32";' + statement,
-            expected=-signal.SIGABRT,
-            diagnostic=b"required execution trap",
         )
+        trap_cases.append(([suite.runner, path], b"required execution trap"))
+    check_traps(suite, trap_cases, jobs)
     check_pointer_constants(suite)
     print(f"host integers: {comparisons} comparisons; required traps: {len(traps) + len(dynamic)}")
 
@@ -971,6 +973,12 @@ def main():
     parser.add_argument("--cflags", default="-O2")
     parser.add_argument("--ldflags", default="")
     parser.add_argument(
+        "--jobs",
+        type=RUNTIME.positive_jobs,
+        default=4,
+        help="maximum concurrent trap checks (default: %(default)s)",
+    )
+    parser.add_argument(
         "--group",
         choices=("all", "root", "runtime", "readers", "foreign", "target", "examples"),
         default="all",
@@ -980,7 +988,7 @@ def main():
     suite = Suite(arguments)
     for name, function in (
         ("root", check_root),
-        ("runtime", check_runtime),
+        ("runtime", lambda suite: check_runtime(suite, arguments.jobs)),
         ("readers", check_readers),
         ("foreign", check_foreign_errors),
         ("target", check_target),

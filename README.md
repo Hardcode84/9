@@ -54,7 +54,7 @@ the third runs it.
 
 ## Credits
 
-[Joseph Huber (@jhuber6)](https://github.com/jhuber6) is Crust's spiritual
+[Joseph Huber (@jhuber6)](https://github.com/jhuber6) is Our spiritual
 leader and the author of its name.
 
 ## License

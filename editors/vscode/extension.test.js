@@ -19,8 +19,9 @@ class EventEmitter {
     dispose() { this.listeners.clear(); }
 }
 class Range { constructor(line, start, endLine, end) { Object.assign(this, { line, start, endLine, end }); } }
+class CancellationError extends Error {}
 mock.module('vscode', () => ({
-    EventEmitter, Range,
+    EventEmitter, Range, CancellationError,
     SemanticTokensLegend: class { constructor(types, modifiers) { Object.assign(this, { types, modifiers }); } },
     SemanticTokens: class { constructor(data) { this.data = data; } },
     Diagnostic: class { constructor(range, message, severity) { Object.assign(this, { range, message, severity }); } },
@@ -58,10 +59,16 @@ test('provider publishes current tokens, discards stale snapshots, and gates cus
         expect((await provider.provideDocumentSemanticTokens(document, cancellation)).data.length).toBeGreaterThan(0);
         const pending = provider.provideDocumentSemanticTokens(document, cancellation);
         document.version++;
-        expect(await pending).toBeUndefined();
+        await expect(pending).rejects.toBeInstanceOf(CancellationError);
         const cancelled = provider.provideDocumentSemanticTokens(document, cancellation);
         changed.fire();
-        expect(await cancelled).toBeUndefined();
+        await expect(cancelled).rejects.toBeInstanceOf(CancellationError);
+        const closed = provider.provideDocumentSemanticTokens(document, cancellation);
+        document.isClosed = true;
+        await expect(closed).rejects.toBeInstanceOf(CancellationError);
+        document.isClosed = false;
+        expect(state.diagnostics.get(document.uri.toString())).toEqual([]);
+        expect(state.messages).toEqual([]);
         state.trusted = true;
         state.config = {
             'highlighter.path': '${workspaceFolder}/' + path.relative(process.cwd(), launcher),

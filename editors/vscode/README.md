@@ -92,7 +92,9 @@ after the process stops. A service sees the snapshot path, not the original
 file path. Supply project configuration through the service's arguments.
 
 Requests are cancelled when superseded, closed, or disposed. Stale results
-cannot color a later document version. The default process timeout is five
+raise the editor's cancellation error, which retains the current colors
+until a current result is available. They do not publish new diagnostics.
+The default process timeout is five
 seconds; `crust.highlighter.timeoutMs` accepts 100 through 60000 milliseconds.
 The adapter kills the direct process on cancellation or timeout. This is
 not a process sandbox for custom services or their descendants.

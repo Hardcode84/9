@@ -53,7 +53,7 @@ function activate(context) {
                     executable, args, text, signal: controller.signal,
                     timeoutMs: config.get('highlighter.timeoutMs', 5000),
                 });
-                if (controller.signal.aborted || document.version !== version || document.isClosed) return;
+                if (controller.signal.aborted || document.version !== version || document.isClosed) throw new vscode.CancellationError();
                 const tokens = decodeTokens(response, text);
                 diagnostics.set(document.uri, tokens.issues.map(issue => new vscode.Diagnostic(
                     new vscode.Range(issue.line, issue.start, issue.line, issue.end),
@@ -63,7 +63,7 @@ function activate(context) {
                 )));
                 return new vscode.SemanticTokens(tokens.data);
             } catch (error) {
-                if (controller.signal.aborted || document.version !== version || document.isClosed) return;
+                if (controller.signal.aborted || document.version !== version || document.isClosed) throw new vscode.CancellationError();
                 const message = `Crust highlighting: ${error.message}`;
                 output.appendLine(message);
                 diagnostics.set(document.uri, [new vscode.Diagnostic(

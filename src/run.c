@@ -52,7 +52,7 @@ bool crust_run_link(CrustRun *run, const char *path)
 bool crust_run_init(CrustRun *run, CrustContext *context, CrustSource *source, int32_t argc,
                     char **argv)
 {
-    CrustEvalOptions options;
+    CrustEvalOptions options = {NULL, NULL, 0};
     memset(run, 0, sizeof(*run));
     run->context = context;
     run->source = source;

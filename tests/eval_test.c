@@ -102,7 +102,7 @@ static bool resolve_native(void *user, CrustDecl *declaration, void **address)
 
 static CrustEval *new_eval(CrustContext *context, Resolver *resolver)
 {
-    CrustEvalOptions options;
+    CrustEvalOptions options = {NULL, NULL, 0};
     resolver->context = context;
     resolver->enabled = true;
     resolver->lookups = 0;
@@ -258,6 +258,7 @@ done:
 
 static void test_evaluation_depth(void)
 {
+    CrustEvalOptions options = {NULL, NULL, 1024};
     const char *text = "fn down(n:u32)->u32{if n==0u32{return 0u32;}return down(n-1u32)+1u32;}"
                        "fn indirect(n:u32)->u32{if n==0u32{return 0u32;}"
                        "var next:fn(u32)->u32=indirect;return next(n-1u32)+1u32;}";
@@ -274,7 +275,7 @@ static void test_evaluation_depth(void)
     crust_context_init(&context, &allocator);
     if (!parse(&context, &source, &unit))
         abort();
-    eval = crust_eval_create(&context, NULL);
+    eval = crust_eval_create(&context, &options);
     for (declaration = unit->declarations; declaration; declaration = declaration->next) {
         size_t reserved;
         depth = 50000;

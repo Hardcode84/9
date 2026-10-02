@@ -132,6 +132,13 @@ executes checked host trees. Prepared libraries run as native code through
 the normal foreign interface. Libffi supplies the evaluator's native call
 and callback boundary.
 
+Host interpretation has a configurable budget of 8192 active calls and
+syntax visits by default. This permits the interpreted reader's full syntax
+depth on the tested 8 MiB stack. It also bounds runaway recursion. The budget
+counts more than one visit per function call. Embedders must provide enough
+stack for their budget and native callees. See the
+[execution contract](source-runner.md#execution-and-lifetime).
+
 `host_source` checks a host declaration unit. `host_link` loads an explicit
 shared-library path. It does not compile changed library source. Stage code
 must already be available before a call uses it; preparing that code is an

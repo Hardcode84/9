@@ -10,6 +10,9 @@ typedef struct CrustEval CrustEval;
 typedef struct {
     bool (*resolve)(void *user, CrustDecl *declaration, void **address);
     void *user;
+    /* Combined call and syntax depth. Zero selects 8192. The caller must provide
+       enough thread stack for the selected limit and any native callees. */
+    uint32_t max_depth;
 } CrustEvalOptions;
 
 /* The context owns all evaluator storage. Checked syntax and bound storage must

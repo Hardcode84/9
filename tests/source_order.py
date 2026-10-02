@@ -217,7 +217,7 @@ return 0i32;
             + expression
             + ";}\ndown(50000u32);",
             expected=1,
-            diagnostic=b"host evaluation depth limit of 1024 exceeded",
+            diagnostic=b"host evaluation depth limit of 8192 exceeded",
         )
     suite.root(
         "effect-once-before-return",
@@ -317,7 +317,7 @@ def check_runtime(suite):
             "callback-depth",
             "",
             "return native_callback(callback);",
-            b"host evaluation depth limit of 1024 exceeded",
+            b"host evaluation depth limit of 8192 exceeded",
         ),
         (
             "callback-error",
@@ -513,7 +513,42 @@ extern fn first_executor(current:*CrustRun,user:*u8,action:*u8)->bool="first_exe
     )
 
 
+def check_interpreted_reader_depth(suite):
+    prefix = "".join(
+        f"host_source(run,{string(ROOT / 'stages/reader' / (name + '.crs'))});\n"
+        for name in ("model", "lex", "parse")
+    )
+    cases = [
+        ("groups", "fn f()->u32{return " + "(" * 126 + "1u32" + ")" * 126 + ";}", True),
+        ("blocks", "fn f()->u32{" + "{" * 253 + "return 0u32;" + "}" * 254, True),
+        ("types", "fn f(a:" + "*" * 254 + "u8)->unit{}", True),
+        ("too-deep", "fn f()->u32{return " + "(" * 127 + "1u32" + ")" * 127 + ";}", False),
+    ]
+    for name, text, valid in cases:
+        source = suite.write("reader-depth-" + name + ".crs", text)
+        suite.command(
+            [suite.build / "crust0", "--library", "--check", source], expected=0 if valid else 1
+        )
+        body = prefix + f"var input:*CrustSource=host_input(run,{string(source)},1u64);\n"
+        body += """
+var target:CrustContext=uninit;
+crust_context_init(&target,null(*CrustAllocator));
+var unit_value:*CrustUnit=rr_read(&target,input,0usize,(*input).size,null(*CrustReaderHooks));
+var status:i32=0i32;
+if unit_value==null(*CrustUnit) {crust_run_diagnostic(&target);status=2i32;};
+crust_context_destroy(&target);
+return status;
+"""
+        suite.root(
+            "interpreted-reader-depth-" + name,
+            body,
+            expected=0 if valid else 2,
+            diagnostic=None if valid else b"parser nesting limit of 256 exceeded",
+        )
+
+
 def check_readers(suite):
+    check_interpreted_reader_depth(suite)
     check_reader_state(suite)
     suite.root("interpreted-reader-transfer", READER_PREFIX.encode() + b"\0A", stdout=b"A")
     suite.root(

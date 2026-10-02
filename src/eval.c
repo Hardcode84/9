@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define EVAL_DEPTH_LIMIT 1024u
+#define EVAL_DEPTH_LIMIT 8192u
 
 typedef struct EvalDecl EvalDecl;
 typedef struct EvalNative EvalNative;
@@ -95,10 +95,18 @@ static bool error_at(CrustEval *eval, CrustLoc location, const char *message)
     return false;
 }
 
+static bool depth_error(CrustEval *eval, CrustLoc location)
+{
+    char message[96];
+    (void)snprintf(message, sizeof(message), "host evaluation depth limit of %u exceeded",
+                   (unsigned)eval->options.max_depth);
+    return error_at(eval, location, message);
+}
+
 static bool enter_evaluation(CrustEval *eval, CrustLoc location)
 {
-    if (eval->active_depth == EVAL_DEPTH_LIMIT)
-        return error_at(eval, location, "host evaluation depth limit of 1024 exceeded");
+    if (eval->active_depth == eval->options.max_depth)
+        return depth_error(eval, location);
     ++eval->active_depth;
     return true;
 }
@@ -224,6 +232,8 @@ CrustEval *crust_eval_create(CrustContext *context, const CrustEvalOptions *opti
     eval->context = context;
     if (options != NULL)
         eval->options = *options;
+    if (eval->options.max_depth == 0)
+        eval->options.max_depth = EVAL_DEPTH_LIMIT;
     return eval;
 }
 

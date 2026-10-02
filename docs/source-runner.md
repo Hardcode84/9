@@ -250,7 +250,7 @@ prepared calls and reusable activation frames. A loop does not allocate a new
 frame for each iteration. Active recursive or reentrant calls have separate
 frames.
 
-The evaluator permits at most 1024 active calls and syntax visits combined.
+The evaluator permits 8192 active calls and syntax visits combined by default.
 Expression, place, statement, and function visits share this depth budget.
 The budget includes direct calls, function-pointer calls, and native callback
 reentry. A deeply nested expression consumes budget in each recursive call.
@@ -259,6 +259,19 @@ a native callback terminates the process as described below. Completed visits
 release their budget. Repeated calls and loop iterations do not consume a
 cumulative allowance. This limit applies to host interpretation; emitted
 target code has no evaluator depth counter.
+
+`CrustEvalOptions.max_depth` selects a different budget. Zero selects the
+default. The caller must supply enough thread stack for the selected budget
+and native callees. The launcher uses the calling thread's stack. On Linux
+x64, the default passes the reader's full syntax-depth boundary and runaway
+direct, indirect, and native-callback recursion checks with an 8 MiB stack,
+including GCC and Clang sanitizer builds. The optimized interpreted reader
+needs between 1 and 1.5 MiB for 126 nested parentheses. A simple recursive
+function consumes several visits per call; 8192 visits do not mean 8192
+function calls. For example, a function with `if n == 0u64 { return 0u64; }`
+and `return down(n - 1u64);` accepts `down(2046u64)` and rejects
+`down(2047u64)`. Small-stack embedders must select a lower budget or supply a
+larger stack.
 
 Libffi supplies the scalar native-call and callback boundary. A function
 pointer passed to native code retains one callable identity. Native callbacks

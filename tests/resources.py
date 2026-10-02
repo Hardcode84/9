@@ -157,6 +157,19 @@ def runtime_cases():
             b"aB",
         ),
         (
+            "read-borrows-of-constants",
+            program(
+                "var view:read Cell=read cell; if peek(read view)!=65i32 {return 1i32;} "
+                "defer emit_read(read cell.code); emit_read(read cell.code); "
+                "emit_read(read codes[1usize]);",
+                "record Cell {code:i32;} const cell:Cell=make Cell {code:65i32}; "
+                "const codes:[i32;2]=make [i32;2] {66i32,67i32}; "
+                "fn peek(value:read Cell)->i32 {return value.code;} "
+                "fn emit_read(value:read i32)->unit {emit(value);}",
+            ),
+            b"ACA",
+        ),
+        (
             "scalar-borrow-repeated-read",
             program(
                 "var code:i32=65i32; { var view:read i32=read code; emit(view); emit(view); } "
@@ -565,6 +578,24 @@ def reject_cases():
             "double-move",
             program("var a:Token=token(65i32); consume(move a); consume(move a);", consume),
             "uninitialized or has been moved",
+        ),
+        (
+            "mut-borrow-of-constant",
+            program(
+                "var view:mut Cell=mut cell;",
+                "record Cell {code:i32;} const cell:Cell=make Cell {code:65i32};",
+                common=False,
+            ),
+            "cannot write a constant place",
+        ),
+        (
+            "mut-borrow-of-constant-field",
+            program(
+                "var view:mut i32=mut cell.code;",
+                "record Cell {code:i32;} const cell:Cell=make Cell {code:65i32};",
+                common=False,
+            ),
+            "cannot write a constant place",
         ),
         (
             "uninitialized-owner-read",

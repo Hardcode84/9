@@ -54,6 +54,8 @@ resource fields and elements. Other values retain Crust0 copy semantics.
   All field and element loans reserve the whole root. Reborrowing reserves the
   parent loan. Loan types cannot occur in stored fields or function results.
   A borrow mode applies to a value type; modes cannot be stacked.
+  Constants and their fields and elements permit `read` loans. Their storage
+  lives for the whole program. They do not permit `mut` loans.
 - Named loans end at lexical scope exit. Temporary call loans end after the
   complete call. Borrow modes are part of a source function type, including
   function pointers and constants. Lowering them to pointers does not erase

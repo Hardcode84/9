@@ -320,7 +320,7 @@ fn rs_expr_inner(function: *RsFunction, source: *CrustExpr, output: *RsStatement
         var place: *RsValue = rs_place(function, (*source).left, output, kind == RS_MUT, false);
         if (*stage).failed { return null(*RsValue); }
         if (*place).local != null(*RsLocal) { rs_lend(function, (*place).local, kind, location); }
-        else { if (*function).unsafe_depth == 0usize {
+        else { if (*place).mode != RS_READ && (*function).unsafe_depth == 0usize {
             rs_error(stage, location, "borrow has no checked storage owner");
             return null(*RsValue);
         } }

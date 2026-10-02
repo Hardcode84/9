@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Build and check the bounded reader-transfer proof without running timings."""
 import argparse
 import json
@@ -26,10 +27,7 @@ def main():
     for name in (
         "crust-c",
         "crust-c-library.so",
-        "core.o",
-        "read.o",
-        "check.o",
-        "profile_linux_x64.o",
+        "libcrust0.a",
         "host.o",
         "host_posix.o",
         "libcrust0_host.a",
@@ -197,10 +195,7 @@ def main():
             *[
                 build / item
                 for item in (
-                    "core.o",
-                    "read.o",
-                    "check.o",
-                    "profile_linux_x64.o",
+                    "libcrust0.a",
                     "host.o",
                     "host_posix.o",
                 )

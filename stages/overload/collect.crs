@@ -81,7 +81,6 @@ fn ov_add_function(stage:*OvStage, group:*OvGlobal, declaration:*CrustDecl)->uni
         if (*declaration).body != null(*CrustStmt) {
             (*function).declaration = declaration;
             (*function).syntax = syntax;
-            (*function).source_import = false;
         }
     } else {
         function = ov_alloc(stage, sizeof(OvFunction), alignof(OvFunction)) as *OvFunction;
@@ -91,7 +90,6 @@ fn ov_add_function(stage:*OvStage, group:*OvGlobal, declaration:*CrustDecl)->uni
         (*function).syntax = syntax;
         (*function).parameters = parameters;
         (*function).contract = contract;
-        (*function).source_import = (*declaration).kind == CRUST_D_FUNCTION && (*declaration).body == null(*CrustStmt);
         (*function).next = (*group).first;
         (*group).first = function;
         (*group).count = (*group).count + 1usize;
@@ -99,6 +97,9 @@ fn ov_add_function(stage:*OvStage, group:*OvGlobal, declaration:*CrustDecl)->uni
         (*stage).first_function = function;
         ov_put(stage, &(*group).signatures, parameters as usize, function as *u8);
         ov_names(stage, function);
+    }
+    if (*declaration).kind == CRUST_D_FUNCTION && (*declaration).body == null(*CrustStmt) {
+        (*function).has_interface = true;
     }
     ov_put(stage, &(*stage).declarations, declaration as usize, function as *u8);
 }
@@ -183,8 +184,11 @@ fn ov_mangle(stage:*OvStage)->bool {
                     continue;
                 }
                 (*declaration).name = (*function).internal_name;
-                if (*declaration).kind == CRUST_D_FUNCTION { (*declaration).link_name = (*function).native_name; }
-                if (*function).source_import { (*declaration).kind = CRUST_D_EXTERN; }
+                if (*declaration).kind == CRUST_D_FUNCTION {
+                    (*declaration).link_name = "";
+                    if (*function).has_interface { (*declaration).link_name = (*function).native_name; }
+                    if (*declaration).body == null(*CrustStmt) { (*declaration).kind = CRUST_D_EXTERN; }
+                }
             }
             cursor = &(*declaration).next;
         }

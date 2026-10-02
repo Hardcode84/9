@@ -29,7 +29,7 @@ record OvFunction {
     contract:*CrustName;
     internal_name:*CrustName;
     native_name:*u8;
-    source_import:bool;
+    has_interface:bool;
     next:*OvFunction;
     all_next:*OvFunction;
 }

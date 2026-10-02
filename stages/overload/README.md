@@ -4,8 +4,9 @@
 
 The seed language gives each function one name. This stage lets several
 functions share a source name when their parameter types differ. It selects
-one function during compilation and gives each definition a distinct native
-symbol. The target does not need a runtime dispatcher.
+one function during compilation and gives each definition a distinct internal
+name. Definitions stay private unless a matching interface declaration selects
+a source ABI export. The target does not need a runtime dispatcher.
 
 This tutorial follows that transformation from a greeting to separate object
 files. It also explains why overload selection must precede ownership
@@ -185,18 +186,22 @@ fn format(output: *Output, value: u64) -> i32;
 fn format(output: *Output, text: *u8) -> i32;
 ```
 
+The same declarations select the provider's exports. Definitions without a
+matching bodyless declaration stay private. Two libraries can each define
+their own `helper` without a link collision or shared-library interposition.
+
 An explicit `extern fn ... = "symbol";` declares a native ABI binding.
 It has a different contract from these source imports.
 
 ### Names must agree without shared compiler state
 
-Each source function's native name includes a format version, ABI domain,
+Each source ABI import or export uses a name with a format version, ABI domain,
 source name, parameter types, result type, and declaration contract. It
 contains no path, declaration position, or allocation address. The caller
 and provider can therefore calculate the same name independently.
 
-For example, the `i32` definition of `twice` above gets this symbol in the
-standalone package:
+For example, add `fn twice(value: i32) -> i32;` to the `twice` source above.
+This selects its `i32` definition for export with this native symbol:
 
 ```text
 crust_ov1_d13_crust0_x64_v1n5_twicea1_b4_rb4_c1_s

@@ -24,13 +24,15 @@ package also supports aggregate value calls under that stage's rules.
 ## Separate compilation
 
 `fn name(parameters) -> Result;` declares a source ABI import. A definition
-uses the same header and a body. A matching import and definition can occur
-in one compilation. Two definitions are an error.
+uses the same header and a body. A matching bodyless declaration selects that
+definition for source ABI export, regardless of declaration order. Other
+definitions are private. Two definitions are an error. Put public declarations
+in an interface source and compile it with both provider and caller.
 
 `extern fn name(parameters) -> Result = "native_name";` retains the explicit
 native name. This declaration uses the native ABI rules of the next stage.
 
-Source functions get a structural native name. The name contains a version,
+Source ABI imports and exports get a structural native name. The name contains a version,
 an ABI domain, the source name, the parameter types, the result type, and the
 declaration contract. Input order, paths, and allocation addresses have no
 effect on this name. Function types include their result type. Record types
@@ -86,7 +88,9 @@ package through `resource_api.crs`.
 these same libraries. They accept the C stage's input and output options.
 `--check` stops after semantic checking. `--prepare` also constructs C text in
 memory. `--library --object` emits a native object without a hosted entry.
-Source definitions are visible under their mangled names in that object.
+Source definitions with a matching bodyless declaration are visible under
+their mangled names in that object. Private definitions cannot collide with
+helpers in another object or be replaced by another shared library's helper.
 `--entry name` selects a defined `fn(i32, **u8) -> i32` from the named family.
 
 `--export name` replaces the native name of one defined function or constant

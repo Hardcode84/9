@@ -496,6 +496,56 @@ class Suite:
                 ]
             )
             self.execute(target, b"intrusive: ok\n")
+        elif name == "private-definitions-across-libraries":
+            for tool in ("crust-overload", "crust-overload-resource"):
+                compiler = self.build / tool
+                objects, libraries = [], []
+                for function, value in (("left", 65), ("right", 66)):
+                    source = self.source(
+                        tool + "-" + function,
+                        f"fn {function}()->i32; "
+                        f"fn helper()->i32 {{return {value}i32;}} "
+                        f"fn {function}()->i32 {{return helper();}}",
+                    )
+                    obj = self.work / (tool + "-" + function + ".o")
+                    self.command(
+                        [
+                            compiler,
+                            "--library",
+                            "--object",
+                            "--cflag=-fPIC",
+                            "--cflag=-fno-inline",
+                            "-o",
+                            obj,
+                            source,
+                        ]
+                    )
+                    objects.append(obj)
+                    library = obj.with_suffix(".so")
+                    self.command(["gcc", "-shared", obj, "-o", library])
+                    libraries.append(library)
+                caller = self.source(
+                    tool + "-caller",
+                    program(
+                        "if left()!=65i32 || right()!=66i32 {return 1i32;}",
+                        "fn left()->i32; fn right()->i32;",
+                    ),
+                )
+                for label, inputs in (("shared", libraries), ("static", objects)):
+                    output = self.work / (tool + "-" + label)
+                    self.command(
+                        [
+                            compiler,
+                            "-o",
+                            output,
+                            caller,
+                            *("--ldflag=" + str(path) for path in inputs),
+                        ]
+                    )
+                    self.execute(output, b"")
+                for obj in objects:
+                    if len(self.symbols(obj)) != 1:
+                        raise Failure("only the interface declaration may export a definition")
         elif name == "formatter-separate-objects":
             interface = self.source("format-interface", FORMAT_INTERFACE)
             provider = self.source("format-provider", FORMAT_PROVIDER)
@@ -537,10 +587,13 @@ class Suite:
             provider = self.source(
                 "stable-provider",
                 "record Tag{x:u64;} "
+                "fn sample(value:*Tag)->u64; fn sample(value:u64)->u64; "
                 "fn sample(value:*Tag)->u64{return (*value).x;} "
                 "fn sample(value:u64)->u64{return value;}",
             )
-            unrelated = self.source("stable-unrelated", "fn unrelated()->u32{return 8u32;}")
+            unrelated = self.source(
+                "stable-unrelated", "fn unrelated()->u32; fn unrelated()->u32{return 8u32;}"
+            )
             paths = []
             for label, sources in (
                 ("alone", [provider]),
@@ -668,6 +721,7 @@ def main():
         for name in (
             "compile-c-backend",
             "formatter-separate-objects",
+            "private-definitions-across-libraries",
             "stable-native-mangles",
             "exact-native-label-and-export",
             "ambiguous-export",

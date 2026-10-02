@@ -358,6 +358,7 @@ class Suite(ResourceSuite):
         elif name == "separate-borrow-contract-mismatch":
             provider = self.source(
                 name + "-provider",
+                "fn change(value:mut i32)->i32; "
                 "fn change(value:mut i32)->i32 {value=value+1i32; return value;}",
             )
             imported = self.object(name + "-provider", provider)

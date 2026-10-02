@@ -179,7 +179,7 @@ fn ov_resources_prepare(stage: *OvStage) -> bool {
     }
     var function: *OvFunction = (*stage).first_function;
     while function != null(*OvFunction) && !(*resources).failed {
-        if (*function).source_import {
+        if (*function).has_interface && (*(*function).declaration).kind == CRUST_D_EXTERN {
             rs_source_import(resources, (*function).declaration);
         }
         function = (*function).all_next;

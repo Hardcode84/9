@@ -78,9 +78,7 @@ fn ht_contract(mode:u32, source:*CrustSource)->bool {
         accepted = hl_region(&result, 2usize, 3usize, null(fn(*HlResult,usize,usize,*u8)->bool), null(*u8));
         if result.count != 2usize { crust_context_destroy(&context); return false; }
     }
-    var valid:bool = !accepted && result.failed && context.error_count == 1usize;
-    var count:usize = result.count;
-    valid = valid && !hl_add(&result, 4usize, 5usize, HL_STRING, 0u32) && result.count == count;
+    var valid:bool = ht_rejected(&result, accepted);
     crust_context_destroy(&context);
     return valid;
 }
@@ -132,4 +130,12 @@ fn main(argc:i32, argv:**u8)->i32 {
         index = index+1i32;
     }
     return 0i32;
+}
+
+fn ht_rejected(result:*HlResult, accepted:bool)->bool {
+    var context:*CrustContext = (*result).context;
+    var valid:bool = !accepted && (*result).failed && (*context).error_count == 1usize;
+    var count:usize = (*result).count;
+    valid = valid && !hl_add(result, 4usize, 5usize, HL_STRING, 0u32) && (*result).count == count;
+    return valid;
 }

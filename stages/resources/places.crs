@@ -79,138 +79,16 @@ fn rs_place_inner(function: *RsFunction, source: *CrustExpr, output: *RsStatemen
     var location: *CrustLoc = &(*source).loc;
     if kind == CRUST_E_GROUP { return rs_place(function, (*source).left, output, write, initialize); }
     if kind == CRUST_E_NAME {
-        var local: *RsLocal = crust_map_get(&(*function).locals, (*source).name as usize) as *RsLocal;
-        if local != null(*RsLocal) {
-            if initialize && write && !(*local).initialized && (*local).mode == 0u32 {
-                if (*local).exclusive || (*local).readers != 0usize {
-                    rs_error(stage, location, "initialization conflicts with an active borrow");
-                }
-            } else { rs_access(function, local, write, location); }
-            if (*stage).failed { return null(*RsValue); }
-            var value: *RsValue = rs_value(function, (*local).syntax,
-                rs_place_local(function, local, location));
-            if value != null(*RsValue) {
-                (*value).local = local;
-                (*value).mode = (*local).mode;
-            }
-            return value;
-        }
-        var global: *RsGlobal = rs_global(stage, (*source).name);
-        if global == null(*RsGlobal) || (*(*global).source).kind != CRUST_D_CONST {
-            rs_error(stage, location, "place requires a visible local or constant");
-            return null(*RsValue);
-        }
-        if write {
-            rs_error(stage, location, "cannot write a constant place");
-            return null(*RsValue);
-        }
-        var value: *RsValue = rs_value(function, (*global).syntax,
-            rs_named(stage, (*(*global).lowered).name, location));
-        if value != null(*RsValue) { (*value).mode = RS_READ; }
-        return value;
+        return rs_place_name(function, source, write, initialize);
     }
     if kind == CRUST_E_FIELD {
-        var base: *RsValue = rs_place_base(function, (*source).left, output);
-        if (*stage).failed || base == null(*RsValue) { return null(*RsValue); }
-        if (*(*base).syntax).kind == CRUST_T_POINTER {
-            base = rs_place_pointer(function, base, output, location);
-            if (*stage).failed || base == null(*RsValue) { return null(*RsValue); }
-        }
-        var field: *CrustField = rs_field_info(stage, (*base).syntax, (*source).field_name, location);
-        if (*stage).failed || field == null(*CrustField) { return null(*RsValue); }
-        var record_global: *RsGlobal = rs_global(stage, (*(*base).syntax).name);
-        if (*record_global).resource != null(*RsResource) && (*function).unsafe_depth == 0usize {
-            rs_error(stage, location, "resource fields require unsafe access");
-            return null(*RsValue);
-        }
-        rs_place_access(function, base, write, location);
-        if (*stage).failed { return null(*RsValue); }
-        var expression: *CrustExpr = rs_expr_node(stage, CRUST_E_FIELD, location);
-        if expression == null(*CrustExpr) { return null(*RsValue); }
-        (*expression).left = (*base).expression;
-        (*expression).field_name = (*field).name;
-        var value: *RsValue = rs_value(function, (*field).syntax_type, expression);
-        if value != null(*RsValue) {
-            (*value).local = (*base).local;
-            (*value).mode = (*base).mode;
-        }
-        return value;
+        return rs_place_field(function, source, output, write);
     }
     if kind == CRUST_E_INDEX {
-        var base: *RsValue = rs_place_base(function, (*source).left, output);
-        if (*stage).failed || base == null(*RsValue) { return null(*RsValue); }
-        var base_kind: u32 = (*(*base).syntax).kind;
-        if base_kind != CRUST_T_ARRAY && base_kind != CRUST_T_POINTER {
-            rs_error(stage, location, "indexing requires an array or raw pointer");
-            return null(*RsValue);
-        }
-        var syntax: *CrustTypeSyntax = (*(*base).syntax).base;
-        var count: u64 = (*(*base).syntax).count;
-        if base_kind == CRUST_T_POINTER {
-            var pointed: *RsValue = rs_place_pointer(function, base, output, location);
-            if (*stage).failed || pointed == null(*RsValue) { return null(*RsValue); }
-            (*base).expression = (*(*pointed).expression).left;
-            (*base).local = (*pointed).local;
-            (*base).mode = (*pointed).mode;
-        }
-        var index: *RsValue = rs_expr(function, (*source).right, output);
-        if (*stage).failed || index == null(*RsValue) { return null(*RsValue); }
-        if (*(*index).syntax).kind != CRUST_T_USIZE {
-            rs_error(stage, &(*(*source).right).loc, "array and pointer indexes require usize");
-            return null(*RsValue);
-        }
-        rs_place_access(function, base, write, location);
-        if (*stage).failed { return null(*RsValue); }
-        if base_kind == CRUST_T_ARRAY {
-            var upper: *CrustExpr = rs_expr_node(stage, CRUST_E_INTEGER, location);
-            var condition: *CrustExpr = rs_expr_node(stage, CRUST_E_BINARY, location);
-            var guard: *CrustStmt = rs_stmt_node(stage, CRUST_S_IF, location);
-            var body: *CrustStmt = rs_stmt_node(stage, CRUST_S_BLOCK, location);
-            var failure: *CrustStmt = rs_stmt_node(stage, CRUST_S_TRAP, location);
-            if (*stage).failed { return null(*RsValue); }
-            (*upper).literal_type = CRUST_T_USIZE;
-            (*upper).integer = count;
-            (*condition).op = CRUST_OP_GE;
-            (*condition).left = rs_clone_expr(stage, (*index).expression);
-            (*condition).right = upper;
-            (*guard).expr = condition;
-            (*guard).body = body;
-            (*body).body = failure;
-            rs_append(output, guard);
-        }
-        var expression: *CrustExpr = rs_expr_node(stage, CRUST_E_INDEX, location);
-        if expression == null(*CrustExpr) { return null(*RsValue); }
-        (*expression).left = (*base).expression;
-        (*expression).right = (*index).expression;
-        var value: *RsValue = rs_value(function, syntax, expression);
-        if value != null(*RsValue) {
-            (*value).local = (*base).local;
-            (*value).mode = (*base).mode;
-        }
-        return value;
+        return rs_place_index(function, source, output, write);
     }
     if kind == CRUST_E_UNARY && (*source).op == CRUST_OP_DEREF {
-        var operand: *RsValue = rs_expr(function, (*source).left, output);
-        if (*stage).failed || operand == null(*RsValue) { return null(*RsValue); }
-        var operand_kind: u32 = (*(*operand).syntax).kind;
-        if operand_kind != CRUST_T_POINTER && operand_kind != RS_READ && operand_kind != RS_MUT {
-            rs_error(stage, location, "dereference requires a pointer or borrowed view");
-            return null(*RsValue);
-        }
-        if operand_kind == CRUST_T_POINTER && (*function).unsafe_depth == 0usize {
-            rs_error(stage, location, "raw pointer access requires unsafe");
-            return null(*RsValue);
-        }
-        var value: *RsValue = rs_value(function, (*(*operand).syntax).base,
-            rs_unary(stage, CRUST_OP_DEREF, (*operand).expression, location));
-        if value == null(*RsValue) { return null(*RsValue); }
-        if operand_kind == RS_READ || operand_kind == RS_MUT {
-            (*value).local = (*operand).local;
-            (*value).mode = operand_kind;
-        }
-        rs_place_access(function, value, write, location);
-        if (*stage).failed { return null(*RsValue); }
-        return value;
+        return rs_place_deref(function, source, output, write);
     }
     rs_error(stage, location, "expression is not an assignable place");
     return null(*RsValue);
@@ -228,4 +106,163 @@ fn rs_place(function: *RsFunction, source: *CrustExpr, output: *RsStatements,
     var result: *RsValue = rs_place_inner(function, source, output, write, initialize);
     (*function).expression_depth = (*function).expression_depth - 1u32;
     return result;
+}
+
+fn rs_place_name(function: *RsFunction, source: *CrustExpr, write: bool, initialize: bool) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var local: *RsLocal = crust_map_get(&(*function).locals, (*source).name as usize) as *RsLocal;
+    if local != null(*RsLocal) {
+        if initialize && write && !(*local).initialized && (*local).mode == 0u32 {
+            if (*local).exclusive || (*local).readers != 0usize {
+                rs_error(stage, location, "initialization conflicts with an active borrow");
+            }
+        } else { rs_access(function, local, write, location); }
+        if (*stage).failed { return null(*RsValue); }
+        var value: *RsValue = rs_value(function, (*local).syntax,
+            rs_place_local(function, local, location));
+        if value != null(*RsValue) {
+            (*value).local = local;
+            (*value).mode = (*local).mode;
+        }
+        return value;
+    }
+    var global: *RsGlobal = rs_global(stage, (*source).name);
+    if global == null(*RsGlobal) || (*(*global).source).kind != CRUST_D_CONST {
+        rs_error(stage, location, "place requires a visible local or constant");
+        return null(*RsValue);
+    }
+    if write {
+        rs_error(stage, location, "cannot write a constant place");
+        return null(*RsValue);
+    }
+    var value: *RsValue = rs_value(function, (*global).syntax,
+        rs_named(stage, (*(*global).lowered).name, location));
+    if value != null(*RsValue) { (*value).mode = RS_READ; }
+    return value;
+}
+
+fn rs_place_field(function: *RsFunction, source: *CrustExpr, output: *RsStatements, write: bool) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var base: *RsValue = rs_place_base(function, (*source).left, output);
+    if (*stage).failed || base == null(*RsValue) { return null(*RsValue); }
+    if (*(*base).syntax).kind == CRUST_T_POINTER {
+        base = rs_place_pointer(function, base, output, location);
+        if (*stage).failed || base == null(*RsValue) { return null(*RsValue); }
+    }
+    var field: *CrustField = rs_field_info(stage, (*base).syntax, (*source).field_name, location);
+    if (*stage).failed || field == null(*CrustField) { return null(*RsValue); }
+    var record_global: *RsGlobal = rs_global(stage, (*(*base).syntax).name);
+    if (*record_global).resource != null(*RsResource) && (*function).unsafe_depth == 0usize {
+        rs_error(stage, location, "resource fields require unsafe access");
+        return null(*RsValue);
+    }
+    rs_place_access(function, base, write, location);
+    if (*stage).failed { return null(*RsValue); }
+    var expression: *CrustExpr = rs_expr_node(stage, CRUST_E_FIELD, location);
+    if expression == null(*CrustExpr) { return null(*RsValue); }
+    (*expression).left = (*base).expression;
+    (*expression).field_name = (*field).name;
+    var value: *RsValue = rs_value(function, (*field).syntax_type, expression);
+    if value != null(*RsValue) {
+        (*value).local = (*base).local;
+        (*value).mode = (*base).mode;
+    }
+    return value;
+}
+
+fn rs_place_index(function: *RsFunction, source: *CrustExpr, output: *RsStatements, write: bool) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var base: *RsValue = rs_place_base(function, (*source).left, output);
+    if (*stage).failed || base == null(*RsValue) { return null(*RsValue); }
+    var base_kind: u32 = (*(*base).syntax).kind;
+    if base_kind != CRUST_T_ARRAY && base_kind != CRUST_T_POINTER {
+        rs_error(stage, location, "indexing requires an array or raw pointer");
+        return null(*RsValue);
+    }
+    var syntax: *CrustTypeSyntax = (*(*base).syntax).base;
+    var count: u64 = (*(*base).syntax).count;
+    if base_kind == CRUST_T_POINTER {
+        var pointed: *RsValue = rs_place_pointer(function, base, output, location);
+        if (*stage).failed || pointed == null(*RsValue) { return null(*RsValue); }
+        (*base).expression = (*(*pointed).expression).left;
+        (*base).local = (*pointed).local;
+        (*base).mode = (*pointed).mode;
+    }
+    var index: *RsValue = rs_index_value(function, source, output);
+    if index == null(*RsValue) { return index; }
+    rs_place_access(function, base, write, location);
+    if (*stage).failed { return null(*RsValue); }
+    if base_kind == CRUST_T_ARRAY {
+        rs_index_bounds(function, index, count, output, location);
+        if (*stage).failed { return null(*RsValue); }
+    }
+    var expression: *CrustExpr = rs_expr_node(stage, CRUST_E_INDEX, location);
+    if expression == null(*CrustExpr) { return null(*RsValue); }
+    (*expression).left = (*base).expression;
+    (*expression).right = (*index).expression;
+    var value: *RsValue = rs_value(function, syntax, expression);
+    if value != null(*RsValue) {
+        (*value).local = (*base).local;
+        (*value).mode = (*base).mode;
+    }
+    return value;
+}
+
+fn rs_place_deref(function: *RsFunction, source: *CrustExpr, output: *RsStatements, write: bool) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var operand: *RsValue = rs_expr(function, (*source).left, output);
+    if (*stage).failed || operand == null(*RsValue) { return null(*RsValue); }
+    var operand_kind: u32 = (*(*operand).syntax).kind;
+    if operand_kind != CRUST_T_POINTER && operand_kind != RS_READ && operand_kind != RS_MUT {
+        rs_error(stage, location, "dereference requires a pointer or borrowed view");
+        return null(*RsValue);
+    }
+    if operand_kind == CRUST_T_POINTER && (*function).unsafe_depth == 0usize {
+        rs_error(stage, location, "raw pointer access requires unsafe");
+        return null(*RsValue);
+    }
+    var value: *RsValue = rs_value(function, (*(*operand).syntax).base,
+        rs_unary(stage, CRUST_OP_DEREF, (*operand).expression, location));
+    if value == null(*RsValue) { return null(*RsValue); }
+    if operand_kind == RS_READ || operand_kind == RS_MUT {
+        (*value).local = (*operand).local;
+        (*value).mode = operand_kind;
+    }
+    rs_place_access(function, value, write, location);
+    if (*stage).failed { return null(*RsValue); }
+    return value;
+}
+
+fn rs_index_bounds(function: *RsFunction, index: *RsValue, count: u64, output: *RsStatements, location: *CrustLoc) -> unit {
+    var stage: *RsStage = (*function).stage;
+    var upper: *CrustExpr = rs_expr_node(stage, CRUST_E_INTEGER, location);
+    var condition: *CrustExpr = rs_expr_node(stage, CRUST_E_BINARY, location);
+    var guard: *CrustStmt = rs_stmt_node(stage, CRUST_S_IF, location);
+    var body: *CrustStmt = rs_stmt_node(stage, CRUST_S_BLOCK, location);
+    var failure: *CrustStmt = rs_stmt_node(stage, CRUST_S_TRAP, location);
+    if (*stage).failed { return; }
+    (*upper).literal_type = CRUST_T_USIZE;
+    (*upper).integer = count;
+    (*condition).op = CRUST_OP_GE;
+    (*condition).left = rs_clone_expr(stage, (*index).expression);
+    (*condition).right = upper;
+    (*guard).expr = condition;
+    (*guard).body = body;
+    (*body).body = failure;
+    rs_append(output, guard);
+}
+
+fn rs_index_value(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var index: *RsValue = rs_expr(function, (*source).right, output);
+    if (*stage).failed || index == null(*RsValue) { return null(*RsValue); }
+    if (*(*index).syntax).kind != CRUST_T_USIZE {
+        rs_error(stage, &(*(*source).right).loc, "array and pointer indexes require usize");
+        return null(*RsValue);
+    }
+    return index;
 }

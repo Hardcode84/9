@@ -35,87 +35,118 @@ fn main(argc: i32, argv: **u8) -> i32 {
     var stage: CStage = uninit;
     c_stage_init(&stage, &context);
 
+    var result:i32 = c_test_map(&stage);
+    if result == 0i32 { result = c_test_buffer_alias(&stage); }
+    if result == 0i32 { result = c_test_buffer_growth(&stage); }
+    if result == 0i32 { result = c_test_quote(&stage); }
+    if result == 0i32 { result = c_test_failure(&stage); }
+    c_stage_destroy(&stage);
+    return result;
+}
+
+fn c_test_map(stage:*CStage)->i32 {
     var index: usize = 1usize;
     while index <= 129usize {
-        c_map_set(&stage.status, &stage.symbols, index * 4096usize, index + 7usize);
+        c_map_set(&(*stage).status, &(*stage).symbols, index * 4096usize, index + 7usize);
         index = index + 1usize;
     }
-    if stage.status.failed || stage.symbols.count != 129usize ||
-       c_map_get(&stage.symbols, 1usize) != 0usize { return 1i32; }
+    if (*stage).status.failed || (*stage).symbols.count != 129usize ||
+       c_map_get(&(*stage).symbols, 1usize) != 0usize { return 1i32; }
     index = 1usize;
     while index <= 129usize {
-        if c_map_get(&stage.symbols, index * 4096usize) != index + 7usize { return 2i32; }
-        c_map_set(&stage.status, &stage.symbols, index * 4096usize, index + 11usize);
-        if c_map_get(&stage.symbols, index * 4096usize) != index + 11usize { return 3i32; }
+        if c_map_get(&(*stage).symbols, index * 4096usize) != index + 7usize { return 2i32; }
+        c_map_set(&(*stage).status, &(*stage).symbols, index * 4096usize, index + 11usize);
+        if c_map_get(&(*stage).symbols, index * 4096usize) != index + 11usize { return 3i32; }
         index = index + 1usize;
     }
-    if stage.symbols.count != 129usize { return 4i32; }
+    if (*stage).symbols.count != 129usize { return 4i32; }
 
-    c_text(&stage, "abcd");
-    c_buffer_bytes(&stage.body, stage.body.data + 1isize, 3usize);
-    if !c_equal(c_buffer_end(&stage.body), "abcdbcd") { return 5i32; }
-    var repeats: usize = stage.body.capacity / 7usize + 2usize;
-    index = 0usize;
+    return 0i32;
+}
+
+fn c_test_buffer_alias(stage:*CStage)->i32 {
+    c_text(stage, "abcd");
+    c_buffer_bytes(&(*stage).body, (*stage).body.data + 1isize, 3usize);
+    if !c_equal(c_buffer_end(&(*stage).body), "abcdbcd") { return 5i32; }
+    var repeats: usize = (*stage).body.capacity / 7usize + 2usize;
+    var index:usize = 0usize;
     while index < repeats {
-        c_buffer_bytes(&stage.body, stage.body.data, 7usize);
+        c_buffer_bytes(&(*stage).body, (*stage).body.data, 7usize);
         index = index + 1usize;
     }
-    if stage.status.failed || stage.body.size != (repeats + 1usize) * 7usize { return 6i32; }
+    if (*stage).status.failed || (*stage).body.size != (repeats + 1usize) * 7usize { return 6i32; }
     index = 0usize;
     var expected: *u8 = "abcdbcd";
-    while index < stage.body.size {
-        if stage.body.data[index] != expected[index % 7usize] { return 7i32; }
+    while index < (*stage).body.size {
+        if (*stage).body.data[index] != expected[index % 7usize] { return 7i32; }
         index = index + 1usize;
     }
-    var size: usize = stage.body.size;
-    if c_buffer_end(&stage.body)[size] != 0u8 || stage.body.size != size { return 8i32; }
+    var size: usize = (*stage).body.size;
+    if c_buffer_end(&(*stage).body)[size] != 0u8 || (*stage).body.size != size { return 8i32; }
 
-    stage.body.size = 0usize;
-    c_text(&stage, "x");
-    var previous: *u8 = stage.body.data;
-    var previous_capacity: usize = stage.body.capacity;
-    while stage.body.size < previous_capacity {
-        c_buffer_end(&stage.body);
-        c_buffer_text(&stage.body, stage.body.data + (stage.body.size - 1usize) as isize);
+    return 0i32;
+}
+
+fn c_test_buffer_growth(stage:*CStage)->i32 {
+    (*stage).body.size = 0usize;
+    c_text(stage, "x");
+    var previous: *u8 = (*stage).body.data;
+    var previous_capacity: usize = (*stage).body.capacity;
+    while (*stage).body.size < previous_capacity {
+        c_buffer_end(&(*stage).body);
+        c_buffer_text(&(*stage).body, (*stage).body.data + ((*stage).body.size - 1usize) as isize);
     }
-    c_buffer_text(&stage.body, "x");
-    if stage.status.failed || stage.body.size != previous_capacity + 1usize ||
-       stage.body.data == previous || previous[0usize] != 120u8 { return 16i32; }
-    index = 0usize;
-    while index < stage.body.size {
-        if stage.body.data[index] != 120u8 { return 17i32; }
+    c_buffer_text(&(*stage).body, "x");
+    if (*stage).status.failed || (*stage).body.size != previous_capacity + 1usize ||
+       (*stage).body.data == previous || previous[0usize] != 120u8 { return 16i32; }
+    var index:usize = 0usize;
+    while index < (*stage).body.size {
+        if (*stage).body.data[index] != 120u8 { return 17i32; }
         index = index + 1usize;
     }
-    stage.body.size = 0usize;
-    c_number(&stage, 0u64);
-    c_text(&stage, ":");
-    c_number(&stage, 18446744073709551615u64);
-    if !c_equal(c_buffer_end(&stage.body), "0:18446744073709551615") { return 9i32; }
-    stage.body.size = 0usize;
+    return 0i32;
+}
+
+fn c_test_quote(stage:*CStage)->i32 {
+    (*stage).body.size = 0usize;
+    c_number(stage, 0u64);
+    c_text(stage, ":");
+    c_number(stage, 18446744073709551615u64);
+    if !c_equal(c_buffer_end(&(*stage).body), "0:18446744073709551615") { return 9i32; }
+    (*stage).body.size = 0usize;
     var bytes: [u8; 256] = uninit;
-    index = 0usize;
+    var index:usize = 0usize;
     while index < 256usize { bytes[index] = index as u8; index = index + 1usize; }
-    c_text(&stage, "static const unsigned char bytes[] = ");
-    c_quote(&stage, &bytes[0usize], 256usize);
-    c_text(&stage, ";\nint main(void){unsigned i;if(sizeof bytes!=257)return 1;for(i=0;i<256;++i)if(bytes[i]!=i)return 2;return bytes[256];}\n");
-    if stage.status.failed { return 10i32; }
-    size = stage.body.size;
-    var output: *u8 = stage.body.data;
+    c_text(stage, "static const unsigned char bytes[] = ");
+    c_quote(stage, &bytes[0usize], 256usize);
+    c_text(stage, ";\nint main(void){unsigned i;if(sizeof bytes!=257)return 1;for(i=0;i<256;++i)if(bytes[i]!=i)return 2;return bytes[256];}\n");
+    if (*stage).status.failed { return 10i32; }
+    return 0i32;
+}
 
-    if c_alloc(&stage.status, 18446744073709551615usize, 8usize) != null(*u8) ||
-       !stage.status.failed || context.error_count != 1usize || context.error[0usize] == 0u8 {
+fn c_test_failure(stage:*CStage)->i32 {
+    var context:*CrustContext = (*stage).status.context;
+    var size:usize = (*stage).body.size;
+    var output: *u8 = (*stage).body.data;
+
+    if c_alloc(&(*stage).status, 18446744073709551615usize, 8usize) != null(*u8) ||
+       !(*stage).status.failed || (*context).error_count != 1usize || (*context).error[0usize] == 0u8 {
         return 11i32;
     }
-    c_error(&stage.status, null(*CrustSource), 99usize, "must not replace the allocation error");
-    c_buffer_text(&stage.body, "must not append");
-    c_map_set(&stage.status, &stage.symbols, 1usize, 1usize);
-    if context.error_count != 1usize || context.error_loc.offset != 0usize ||
-       stage.body.size != size || stage.body.data != output || stage.symbols.count != 129usize ||
-       c_buffer_end(&stage.body) != null(*u8) { return 12i32; }
+    c_error(&(*stage).status, null(*CrustSource), 99usize, "must not replace the allocation error");
+    c_buffer_text(&(*stage).body, "must not append");
+    c_map_set(&(*stage).status, &(*stage).symbols, 1usize, 1usize);
+    if (*context).error_count != 1usize || (*context).error_loc.offset != 0usize ||
+       (*stage).body.size != size || (*stage).body.data != output || (*stage).symbols.count != 129usize ||
+       c_buffer_end(&(*stage).body) != null(*u8) { return 12i32; }
     if crust0_host_write_stream(1u32, output, size) != 0i32 { return 13i32; }
-    c_stage_destroy(&stage);
-    if !stage.status.failed || stage.status.blocks != null(*CBlock) ||
-       stage.body.data != null(*u8) || stage.symbols.capacity != 0usize { return 14i32; }
-    c_stage_destroy(&stage);
+    return c_test_destroy(stage);
+}
+
+fn c_test_destroy(stage:*CStage)->i32 {
+    c_stage_destroy(stage);
+    if !(*stage).status.failed || (*stage).status.blocks != null(*CBlock) ||
+       (*stage).body.data != null(*u8) || (*stage).symbols.capacity != 0usize { return 14i32; }
+    c_stage_destroy(stage);
     return 0i32;
 }

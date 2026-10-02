@@ -30,11 +30,7 @@ fn rt_type(left:*CrustTypeSyntax,right:*CrustTypeSyntax)->bool {
 
 fn rt_expr(left:*CrustExpr,right:*CrustExpr)->bool {
     if left==null(*CrustExpr) || right==null(*CrustExpr) { return left==right; }
-    if (*left).kind!=(*right).kind || (*left).op!=(*right).op || (*left).loc.offset!=(*right).loc.offset ||
-       (*left).integer!=(*right).integer || (*left).literal_type!=(*right).literal_type ||
-       (*left).arg_count!=(*right).arg_count || (*left).byte_count!=(*right).byte_count ||
-       !rt_name((*left).name,(*right).name) || !rt_name((*left).field_name,(*right).field_name) ||
-       !rt_type((*left).syntax_type,(*right).syntax_type) ||
+    if !rt_expr_header(left,right) ||
        !rt_expr((*left).left,(*right).left) || !rt_expr((*left).right,(*right).right) { return false; }
     var index:usize=0usize;
     while index<(*left).arg_count {
@@ -46,13 +42,7 @@ fn rt_expr(left:*CrustExpr,right:*CrustExpr)->bool {
         if (*left).bytes[index]!=(*right).bytes[index] { return false; }
         index=index+1usize;
     }
-    var a:*CrustInit=(*left).inits;
-    var b:*CrustInit=(*right).inits;
-    while a!=null(*CrustInit) && b!=null(*CrustInit) {
-        if (*a).loc.offset!=(*b).loc.offset || !rt_name((*a).name,(*b).name) || !rt_expr((*a).value,(*b).value) { return false; }
-        a=(*a).next;b=(*b).next;
-    }
-    return a==null(*CrustInit) && b==null(*CrustInit);
+    return rt_initializers((*left).inits,(*right).inits);
 }
 
 fn rt_stmt(left:*CrustStmt,right:*CrustStmt)->bool {
@@ -69,28 +59,8 @@ fn rt_stmt(left:*CrustStmt,right:*CrustStmt)->bool {
 
 fn rt_decls(left:*CrustDecl,right:*CrustDecl)->bool {
     while left!=null(*CrustDecl) && right!=null(*CrustDecl) {
-        if (*left).kind!=(*right).kind || (*left).loc.offset!=(*right).loc.offset ||
-           (*left).unit_identity!=(*right).unit_identity || (*left).identity!=(*right).identity ||
-           (*left).field_count!=(*right).field_count || (*left).param_count!=(*right).param_count ||
-           !rt_name((*left).name,(*right).name) || !rt_text((*left).link_name,(*right).link_name) ||
-           !rt_type((*left).syntax_type,(*right).syntax_type) || !rt_stmt((*left).body,(*right).body) ||
-           !rt_expr((*left).init,(*right).init) { return false; }
-        var a:*CrustField=(*left).fields;
-        var b:*CrustField=(*right).fields;
-        while a!=null(*CrustField) && b!=null(*CrustField) {
-            if (*a).loc.offset!=(*b).loc.offset || (*a).index!=(*b).index ||
-               !rt_name((*a).name,(*b).name) || !rt_type((*a).syntax_type,(*b).syntax_type) { return false; }
-            a=(*a).next;b=(*b).next;
-        }
-        if a!=null(*CrustField) || b!=null(*CrustField) { return false; }
-        var p:*CrustParam=(*left).params;
-        var q:*CrustParam=(*right).params;
-        while p!=null(*CrustParam) && q!=null(*CrustParam) {
-            if (*p).loc.offset!=(*q).loc.offset || !rt_name((*p).name,(*q).name) ||
-               !rt_type((*p).syntax_type,(*q).syntax_type) { return false; }
-            p=(*p).next;q=(*q).next;
-        }
-        if p!=null(*CrustParam) || q!=null(*CrustParam) { return false; }
+        if !rt_decl_header(left,right) || !rt_fields((*left).fields,(*right).fields) ||
+           !rt_parameters((*left).params,(*right).params) { return false; }
         left=(*left).next;right=(*right).next;
     }
     return left==null(*CrustDecl) && right==null(*CrustDecl);
@@ -184,7 +154,7 @@ fn rt_bad_prefix(reader:*CrustReader,user:*u8)->*CrustExpr {
     return null(*CrustExpr);
 }
 
-fn rt_hooks()->bool {
+fn rt_positive_hooks()->bool {
     var text:*u8="shape Box {value:word;} fn answer()->word {then return same 42u64;}";
     var source:CrustSource=make CrustSource {path:"reader-hook-test",bytes:text,size:rt_length(text),identity:1u64};
     var context:CrustContext=uninit;crust_context_init(&context,null(*CrustAllocator));
@@ -204,16 +174,22 @@ fn rt_hooks()->bool {
     }
     if !equal { rt_print("hook result: ");rt_print(&context.error[0usize]);rt_print("\n"); }
     crust_eval_destroy(eval);crust_context_destroy(&context);
-    source.bytes="fn answer()->u64{return 42u64;}";
-    source.size=rt_length(source.bytes);
+    return equal;
+}
+
+fn rt_negative_hooks()->bool {
+    var text:*u8="fn answer()->u64{return 42u64;}";
+    var source:CrustSource=make CrustSource {path:"reader-hook-test",bytes:text,size:rt_length(text),identity:1u64};
+    var context:CrustContext=uninit;
+    var equal:bool=true;
     var mode:usize=0usize;
     while mode<12usize {
         crust_context_init(&context,null(*CrustAllocator));
-        hooks=make CrustReaderHooks {
+        var hooks:CrustReaderHooks=make CrustReaderHooks {
             user:&mode as *u8,declaration:rt_bad_hook,statement:null(fn(*CrustReader,*u8)->*CrustStmt),
             prefix:null(fn(*CrustReader,*u8)->*CrustExpr),type_syntax:null(fn(*CrustReader,*u8)->*CrustTypeSyntax)
         };
-        parsed=rr_read(&context,&source,0usize,source.size,&hooks);
+        var parsed:*CrustUnit=rr_read(&context,&source,0usize,source.size,&hooks);
         if parsed!=null(*CrustUnit) || context.error_count!=1usize || context.error_loc.offset!=0usize || context.units!=null(*CrustUnit) {
             equal=false;
         }
@@ -221,11 +197,22 @@ fn rt_hooks()->bool {
         crust_context_destroy(&context);mode=mode+1usize;
     }
     crust_context_init(&context,null(*CrustAllocator));
-    hooks.declaration=null(fn(*CrustReader,*u8)->*CrustDecl);
-    hooks.prefix=rt_bad_prefix;
-    parsed=rr_read(&context,&source,0usize,source.size,&hooks);
+    var hooks:CrustReaderHooks=make CrustReaderHooks {
+        user:null(*u8),declaration:null(fn(*CrustReader,*u8)->*CrustDecl),
+        statement:null(fn(*CrustReader,*u8)->*CrustStmt),prefix:rt_bad_prefix,
+        type_syntax:null(fn(*CrustReader,*u8)->*CrustTypeSyntax)
+    };
+    var parsed:*CrustUnit=rr_read(&context,&source,0usize,source.size,&hooks);
     if parsed!=null(*CrustUnit) || !rt_text(&context.error[0usize],"unhandled reader hook consumed or changed its token") { equal=false; }
     crust_context_destroy(&context);
+    return equal;
+}
+
+fn rt_token_budget()->bool {
+    var text:*u8="fn answer()->u64{return 42u64;}";
+    var source:CrustSource=make CrustSource {path:"reader-hook-test",bytes:text,size:rt_length(text),identity:1u64};
+    var context:CrustContext=uninit;
+    var equal:bool=true;
     crust_context_init(&context,null(*CrustAllocator));
     var reader:CrustReader=uninit;
     if !rr_init(&reader,&context,&source,0usize,source.size,null(*CrustReaderHooks)) { equal=false; }
@@ -233,6 +220,12 @@ fn rt_hooks()->bool {
     if rr_next(&reader) || !reader.failed || context.error_count!=1usize { equal=false; }
     crust_context_destroy(&context);
     return equal;
+}
+
+fn rt_hooks()->bool {
+    var equal:bool=rt_positive_hooks();
+    equal=rt_negative_hooks() && equal;
+    return rt_token_budget() && equal;
 }
 
 fn rt_no_memory(user:*u8,size:usize)->*u8 { return null(*u8); }
@@ -266,4 +259,51 @@ fn main(argc:i32,argv:**u8)->i32 {
     var ranged:CrustSource=make CrustSource {path:"reader-range",bytes:range_text,size:rt_length(range_text),identity:1u64};
     if !rt_compare(&ranged,1usize,ranged.size-1usize) || !rt_compare(&ranged,ranged.size+1usize,ranged.size) { return 4i32; }
     return 0i32;
+}
+
+fn rt_expr_header(left:*CrustExpr,right:*CrustExpr)->bool {
+    if (*left).kind!=(*right).kind || (*left).op!=(*right).op || (*left).loc.offset!=(*right).loc.offset ||
+       (*left).integer!=(*right).integer || (*left).literal_type!=(*right).literal_type ||
+       (*left).arg_count!=(*right).arg_count || (*left).byte_count!=(*right).byte_count ||
+       !rt_name((*left).name,(*right).name) || !rt_name((*left).field_name,(*right).field_name) ||
+       !rt_type((*left).syntax_type,(*right).syntax_type) { return false; }
+    return true;
+}
+
+fn rt_initializers(a:*CrustInit,b:*CrustInit)->bool {
+    while a!=null(*CrustInit) && b!=null(*CrustInit) {
+        if (*a).loc.offset!=(*b).loc.offset || !rt_name((*a).name,(*b).name) || !rt_expr((*a).value,(*b).value) { return false; }
+        a=(*a).next;b=(*b).next;
+    }
+    return a==null(*CrustInit) && b==null(*CrustInit);
+}
+
+fn rt_decl_header(left:*CrustDecl,right:*CrustDecl)->bool {
+    if (*left).kind!=(*right).kind || (*left).loc.offset!=(*right).loc.offset ||
+       (*left).unit_identity!=(*right).unit_identity || (*left).identity!=(*right).identity ||
+       (*left).field_count!=(*right).field_count || (*left).param_count!=(*right).param_count ||
+       !rt_name((*left).name,(*right).name) || !rt_text((*left).link_name,(*right).link_name) ||
+       !rt_type((*left).syntax_type,(*right).syntax_type) || !rt_stmt((*left).body,(*right).body) ||
+       !rt_expr((*left).init,(*right).init) { return false; }
+    return true;
+}
+
+fn rt_fields(a:*CrustField,b:*CrustField)->bool {
+    while a!=null(*CrustField) && b!=null(*CrustField) {
+        if (*a).loc.offset!=(*b).loc.offset || (*a).index!=(*b).index ||
+           !rt_name((*a).name,(*b).name) || !rt_type((*a).syntax_type,(*b).syntax_type) { return false; }
+        a=(*a).next;b=(*b).next;
+    }
+    if a!=null(*CrustField) || b!=null(*CrustField) { return false; }
+    return true;
+}
+
+fn rt_parameters(p:*CrustParam,q:*CrustParam)->bool {
+    while p!=null(*CrustParam) && q!=null(*CrustParam) {
+        if (*p).loc.offset!=(*q).loc.offset || !rt_name((*p).name,(*q).name) ||
+           !rt_type((*p).syntax_type,(*q).syntax_type) { return false; }
+        p=(*p).next;q=(*q).next;
+    }
+    if p!=null(*CrustParam) || q!=null(*CrustParam) { return false; }
+    return true;
 }

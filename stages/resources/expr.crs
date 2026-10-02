@@ -79,24 +79,9 @@ fn rs_call(function: *RsFunction, source: *CrustExpr, output: *RsStatements, def
     var stage: *RsStage = (*function).stage;
     var callee: *RsValue = rs_expr(function, (*source).left, output);
     if (*stage).failed { return null(*RsValue); }
+    if !rs_call_signature(function, source, callee, deferred) { return null(*RsValue); }
     var signature: *CrustTypeSyntax = (*callee).syntax;
-    if (*signature).kind != CRUST_T_FUNCTION {
-        rs_error(stage, &(*source).loc, "call requires a function value");
-        return null(*RsValue);
-    }
-    if (*callee).unsafe_call && (*function).unsafe_depth == 0usize {
-        rs_error(stage, &(*source).loc, "call requires an unsafe region");
-        return null(*RsValue);
-    }
-    if (*source).arg_count != (*signature).param_count {
-        rs_error(stage, &(*source).loc, "wrong number of call arguments");
-        return null(*RsValue);
-    }
     var result_type: *CrustTypeSyntax = (*signature).base;
-    if deferred != null(*RsScope) && (*result_type).kind != CRUST_T_UNIT {
-        rs_error(stage, &(*source).loc, "deferred calls must return unit");
-        return null(*RsValue);
-    }
     var count: usize = (*source).arg_count;
     var values: **RsValue = rs_alloc(stage, count * sizeof(*RsValue), alignof(*RsValue)) as **RsValue;
     var call: *CrustExpr = rs_expr_node(stage, CRUST_E_CALL, &(*source).loc);
@@ -106,22 +91,7 @@ fn rs_call(function: *RsFunction, source: *CrustExpr, output: *RsStatements, def
     if rs_indirect(result_type) { (*call).arg_count = count + 1usize; }
     (*call).args = rs_alloc(stage, (*call).arg_count * sizeof(*CrustExpr), alignof(*CrustExpr)) as **CrustExpr;
     if (*stage).failed { return null(*RsValue); }
-    var index: usize = 0usize;
-    while index < count && !(*stage).failed {
-        var value: *RsValue = rs_expr(function, (*source).args[index], output);
-        if !rs_require_value(function, value, (*signature).params[index], &(*(*source).args[index]).loc) { return null(*RsValue); }
-        if (*value).local == null(*RsLocal) && (*value).mode != RS_READ && (*value).mode != RS_MUT && rs_indirect((*value).syntax) {
-            value = rs_capture(function, output, value, &(*source).loc);
-            if (*stage).failed { return null(*RsValue); }
-        }
-        values[index] = value;
-        (*call).args[index] = (*value).expression;
-        if rs_indirect((*signature).params[index]) {
-            (*call).args[index] = rs_unary(stage, CRUST_OP_ADDRESS, (*value).expression, &(*source).loc);
-        }
-        index = index + 1usize;
-    }
-    if (*stage).failed { return null(*RsValue); }
+    if !rs_call_arguments(function, source, signature, call, values, output) { return null(*RsValue); }
     var result: *RsValue = null(*RsValue);
     var result_local: *RsLocal = null(*RsLocal);
     if rs_indirect(result_type) {
@@ -129,53 +99,16 @@ fn rs_call(function: *RsFunction, source: *CrustExpr, output: *RsStatements, def
         if result_local == null(*RsLocal) { return null(*RsValue); }
         (*call).args[count] = rs_unary(stage, CRUST_OP_ADDRESS, rs_named(stage, (*result_local).storage, &(*source).loc), &(*source).loc);
     }
-    index = 0usize;
-    while index < count && !(*stage).failed {
-        rs_transfer(function, values[index]);
-        if deferred != null(*RsScope) && ((*values[index]).mode == RS_READ || (*values[index]).mode == RS_MUT) {
-            rs_promote_loan(function, values[index], deferred, &(*source).loc);
-        }
-        index = index + 1usize;
-    }
+    rs_call_transfer(function, values, count, deferred, &(*source).loc);
     if (*stage).failed { return null(*RsValue); }
     var guard: *CrustStmt = rs_call_guard(function, callee, &(*source).loc);
     if (*stage).failed { return null(*RsValue); }
     if deferred != null(*RsScope) {
-        var invoke: *CrustStmt = rs_stmt_node(stage, CRUST_S_EXPR, &(*source).loc);
-        if invoke == null(*CrustStmt) { return null(*RsValue); }
-        (*invoke).expr = call;
-        var body: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
-        rs_append(&body, guard);
-        rs_append(&body, invoke);
-        var statement: *CrustStmt = rs_block(stage, &body, &(*source).loc);
-        if (*stage).failed { return null(*RsValue); }
-        var current: *RsScope = (*function).scope;
-        (*function).scope = deferred;
-        rs_action(function, null(*RsLocal), statement);
-        (*function).scope = current;
-        return rs_value(function, result_type, null(*CrustExpr));
+        return rs_defer_call(function, call, guard, result_type, deferred, &(*source).loc);
     }
     rs_append(output, guard);
-    if result_local != null(*RsLocal) || (*result_type).kind == CRUST_T_UNIT {
-        var invoke: *CrustStmt = rs_stmt_node(stage, CRUST_S_EXPR, &(*source).loc);
-        if invoke == null(*CrustStmt) { return null(*RsValue); }
-        (*invoke).expr = call;
-        rs_append(output, invoke);
-        result = rs_value(function, result_type, null(*CrustExpr));
-        if result_local != null(*RsLocal) && result != null(*RsValue) {
-            (*result_local).initialized = true;
-            (*result).expression = rs_named(stage, (*result_local).storage, &(*source).loc);
-            (*result).local = result_local;
-            (*result).owned = (*result_local).owning;
-        }
-    } else {
-        result = rs_capture(function, output, rs_value(function, result_type, call), &(*source).loc);
-    }
-    index = 0usize;
-    while index < count && !(*stage).failed {
-        if (*values[index]).mode == RS_READ || (*values[index]).mode == RS_MUT { rs_end_loan(function, (*values[index]).local); }
-        index = index + 1usize;
-    }
+    result = rs_call_result(function, call, result_type, result_local, output, &(*source).loc);
+    rs_end_call_loans(function, values, count);
     return result;
 }
 
@@ -219,19 +152,8 @@ fn rs_make(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> 
     var count: usize = 0usize;
     var global: *RsGlobal = null(*RsGlobal);
     if (*source).kind == CRUST_E_RECORD {
-        if (*syntax).kind != CRUST_T_NAME {
-            rs_error(stage, &(*source).loc, "record construction requires a record type");
-            return null(*RsValue);
-        }
-        global = rs_global(stage, (*syntax).name);
-        if global == null(*RsGlobal) || (*(*global).source).kind != CRUST_D_RECORD {
-            rs_error(stage, &(*source).loc, "record construction requires a declared record");
-            return null(*RsValue);
-        }
-        if (*global).resource != null(*RsResource) && (*function).unsafe_depth == 0usize {
-            rs_error(stage, &(*source).loc, "raw resource construction requires an unsafe region");
-            return null(*RsValue);
-        }
+        global = rs_make_record_info(function, source);
+        if global == null(*RsGlobal) { return null(*RsValue); }
         var item: *CrustInit = (*source).inits;
         while item != null(*CrustInit) { count = count + 1usize; item = (*item).next; }
     } else {
@@ -247,36 +169,9 @@ fn rs_make(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> 
     if (*stage).failed { return null(*RsValue); }
     var index: usize = 0usize;
     if (*source).kind == CRUST_E_RECORD {
-        var item: *CrustInit = (*source).inits;
-        var previous: *CrustInit = null(*CrustInit);
-        while item != null(*CrustInit) && !(*stage).failed {
-            var field: *CrustField = crust_map_get(&(*global).fields, (*item).name as usize) as *CrustField;
-            if field == null(*CrustField) {
-                rs_error(stage, &(*item).loc, "record has no such field");
-                return null(*RsValue);
-            }
-            var value: *RsValue = rs_expr(function, (*item).value, output);
-            if !rs_require_value(function, value, (*field).syntax_type, &(*item).loc) { return null(*RsValue); }
-            var copy: *CrustInit = rs_alloc(stage, sizeof(CrustInit), alignof(CrustInit)) as *CrustInit;
-            if copy == null(*CrustInit) { return null(*RsValue); }
-            (*copy).name = (*item).name;
-            (*copy).loc = (*item).loc;
-            (*copy).value = (*value).expression;
-            if previous == null(*CrustInit) { (*target).inits = copy; }
-            else { (*previous).next = copy; }
-            previous = copy;
-            values[index] = value;
-            index = index + 1usize;
-            item = (*item).next;
-        }
+        if !rs_make_fields(function, source, target, global, values, output) { return null(*RsValue); }
     } else {
-        while index < count && !(*stage).failed {
-            var value: *RsValue = rs_expr(function, (*source).args[index], output);
-            if !rs_require_value(function, value, (*syntax).base, &(*source).loc) { return null(*RsValue); }
-            values[index] = value;
-            (*target).args[index] = (*value).expression;
-            index = index + 1usize;
-        }
+        rs_make_elements(function, source, target, values, output);
     }
     if (*stage).failed { return null(*RsValue); }
     var made: *RsValue = rs_value(function, syntax, target);
@@ -291,163 +186,23 @@ fn rs_make(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> 
 fn rs_expr_inner(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
     var stage: *RsStage = (*function).stage;
     if (*stage).failed { return null(*RsValue); }
-    var location: *CrustLoc = &(*source).loc;
     var kind: u32 = (*source).kind;
     if kind == CRUST_E_GROUP { return rs_expr(function, (*source).left, output); }
     if kind == CRUST_E_CALL { return rs_call(function, source, output, null(*RsScope)); }
     if kind == CRUST_E_RECORD || kind == CRUST_E_ARRAY { return rs_make(function, source, output); }
     if kind == RS_MOVE {
-        var operand: *CrustExpr = (*source).left;
-        while (*operand).kind == CRUST_E_GROUP { operand = (*operand).left; }
-        if (*operand).kind != CRUST_E_NAME {
-            rs_error(stage, location, "move requires a whole local owner");
-            return null(*RsValue);
-        }
-        var local: *RsLocal = crust_map_get(&(*function).locals, (*operand).name as usize) as *RsLocal;
-        if local == null(*RsLocal) || !(*local).owning || (*local).mode != 0u32 {
-            rs_error(stage, location, "move requires a whole local owner");
-            return null(*RsValue);
-        }
-        rs_access(function, local, true, location);
-        if (*stage).failed { return null(*RsValue); }
-        var value: *RsValue = rs_value(function, (*local).syntax, rs_place_local(function, local, location));
-        if value == null(*RsValue) { return value; }
-        (*value).owned = true;
-        (*value).local = local;
-        return rs_capture(function, output, value, location);
+        return rs_move_expression(function, source, output);
     }
     if kind == RS_READ || kind == RS_MUT {
-        var place: *RsValue = rs_place(function, (*source).left, output, kind == RS_MUT, false);
-        if (*stage).failed { return null(*RsValue); }
-        if (*place).local != null(*RsLocal) { rs_lend(function, (*place).local, kind, location); }
-        else { if (*place).mode != RS_READ && (*function).unsafe_depth == 0usize {
-            rs_error(stage, location, "borrow has no checked storage owner");
-            return null(*RsValue);
-        } }
-        var syntax: *CrustTypeSyntax = rs_type_node(stage, kind, location);
-        if syntax == null(*CrustTypeSyntax) { return null(*RsValue); }
-        (*syntax).base = (*place).syntax;
-        var local: *RsLocal = rs_local(function, null(*CrustName), syntax, null(*CrustParam), location);
-        if local == null(*RsLocal) { return null(*RsValue); }
-        (*local).initialized = true;
-        (*local).parent_loan = (*place).local;
-        rs_assign(function, output, rs_named(stage, (*local).storage, location),
-                  rs_unary(stage, CRUST_OP_ADDRESS, (*place).expression, location), location);
-        var value: *RsValue = rs_value(function, syntax, rs_named(stage, (*local).storage, location));
-        if value != null(*RsValue) { (*value).local = local; (*value).mode = kind; }
-        return value;
+        return rs_borrow_expression(function, source, output);
     }
     if kind == CRUST_E_NAME {
-        var local: *RsLocal = crust_map_get(&(*function).locals, (*source).name as usize) as *RsLocal;
-        if local != null(*RsLocal) {
-            rs_access(function, local, false, location);
-            if (*stage).failed { return null(*RsValue); }
-            var value: *RsValue = rs_value(function, (*local).syntax, rs_place_local(function, local, location));
-            if value == null(*RsValue) { return value; }
-            (*value).local = local;
-            if rs_owns(stage, (*local).syntax) { return value; }
-            return rs_capture(function, output, value, location);
-        }
-        var global: *RsGlobal = rs_global(stage, (*source).name);
-        if global == null(*RsGlobal) || (*(*global).source).kind == CRUST_D_RECORD {
-            rs_error(stage, location, "unknown value name");
-            return null(*RsValue);
-        }
-        var value: *RsValue = rs_value(function, (*global).syntax, rs_named(stage, (*source).name, location));
-        if value != null(*RsValue) { (*value).unsafe_call = (*global).unsafe_call || (*global).drop_only; }
-        return value;
+        return rs_name_expression(function, source, output);
     }
     if kind == CRUST_E_FIELD || kind == CRUST_E_INDEX || (kind == CRUST_E_UNARY && (*source).op == CRUST_OP_DEREF) {
-        var value: *RsValue = rs_place(function, source, output, false, false);
-        if (*stage).failed { return null(*RsValue); }
-        if rs_owns(stage, (*value).syntax) { return value; }
-        (*value).mode = 0u32;
-        return rs_capture(function, output, value, location);
+        return rs_load_expression(function, source, output);
     }
-    if kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL || kind == CRUST_E_STRING {
-        var type_kind: u32 = (*source).literal_type;
-        if kind == CRUST_E_BOOL { type_kind = CRUST_T_BOOL; }
-        if kind == CRUST_E_STRING { type_kind = CRUST_T_U8; }
-        var syntax: *CrustTypeSyntax = rs_type_node(stage, type_kind, location);
-        if syntax == null(*CrustTypeSyntax) { return null(*RsValue); }
-        if kind == CRUST_E_STRING { syntax = rs_pointer(stage, syntax); }
-        return rs_value(function, syntax, rs_clone_expr(stage, source));
-    }
-    if kind == CRUST_E_NULL {
-        var syntax: *CrustTypeSyntax = (*source).syntax_type;
-        if (*syntax).kind != CRUST_T_POINTER && (*syntax).kind != CRUST_T_FUNCTION {
-            rs_error(stage, location, "null requires a pointer or function type");
-            return null(*RsValue);
-        }
-        var expression: *CrustExpr = rs_clone_expr(stage, source);
-        if expression == null(*CrustExpr) { return null(*RsValue); }
-        (*expression).syntax_type = rs_lower_type(stage, syntax);
-        return rs_value(function, syntax, expression);
-    }
-    if kind == CRUST_E_SIZEOF || kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF {
-        var expression: *CrustExpr = rs_clone_expr(stage, source);
-        if expression == null(*CrustExpr) { return null(*RsValue); }
-        (*expression).syntax_type = rs_lower_type(stage, (*source).syntax_type);
-        return rs_value(function, rs_type_node(stage, CRUST_T_USIZE, location), expression);
-    }
-    if kind == CRUST_E_UNARY && (*source).op == CRUST_OP_ADDRESS {
-        if (*function).unsafe_depth == 0usize {
-            rs_error(stage, location, "raw addresses require an unsafe region; use read or mut for a loan");
-            return null(*RsValue);
-        }
-        var place: *RsValue = rs_place(function, (*source).left, output, true, true);
-        if (*stage).failed { return null(*RsValue); }
-        var syntax: *CrustTypeSyntax = rs_pointer(stage, (*place).syntax);
-        return rs_capture(function, output, rs_value(function, syntax,
-            rs_unary(stage, CRUST_OP_ADDRESS, (*place).expression, location)), location);
-    }
-    if kind == CRUST_E_BINARY && ((*source).op == CRUST_OP_AND || (*source).op == CRUST_OP_OR) {
-        return rs_short_circuit(function, source, output);
-    }
-    if kind == CRUST_E_UNARY || kind == CRUST_E_BINARY || kind == CRUST_E_CAST {
-        var left: *RsValue = rs_expr(function, (*source).left, output);
-        if (*stage).failed { return null(*RsValue); }
-        if rs_owns(stage, (*left).syntax) || (*left).mode != 0u32 || (*left).unsafe_call {
-            rs_error(stage, location, "operation cannot copy or erase a resource or borrowed view");
-            return null(*RsValue);
-        }
-        var result_type: *CrustTypeSyntax = (*left).syntax;
-        var expression: *CrustExpr = rs_expr_node(stage, kind, location);
-        if expression == null(*CrustExpr) { return null(*RsValue); }
-        (*expression).op = (*source).op;
-        (*expression).left = (*left).expression;
-        if kind == CRUST_E_BINARY {
-            var right: *RsValue = rs_expr(function, (*source).right, output);
-            if (*stage).failed { return null(*RsValue); }
-            if rs_owns(stage, (*right).syntax) || (*right).mode != 0u32 || (*right).unsafe_call {
-                rs_error(stage, location, "operation cannot copy or erase a resource or borrowed view");
-                return null(*RsValue);
-            }
-            (*expression).right = (*right).expression;
-            if (*source).op >= CRUST_OP_EQ && (*source).op <= CRUST_OP_OR {
-                result_type = rs_type_node(stage, CRUST_T_BOOL, location);
-            }
-            if (*(*left).syntax).kind == CRUST_T_POINTER && ((*source).op == CRUST_OP_ADD || (*source).op == CRUST_OP_SUB) && (*function).unsafe_depth == 0usize {
-                rs_error(stage, location, "pointer arithmetic requires an unsafe region");
-                return null(*RsValue);
-            }
-        } else { if kind == CRUST_E_CAST {
-            result_type = (*source).syntax_type;
-            if rs_owns(stage, result_type) || (*result_type).kind == RS_READ || (*result_type).kind == RS_MUT {
-                rs_error(stage, location, "casts cannot construct resources or borrowed views");
-                return null(*RsValue);
-            }
-            if ((*result_type).kind == CRUST_T_POINTER || (*result_type).kind == CRUST_T_FUNCTION ||
-                (*(*left).syntax).kind == CRUST_T_POINTER || (*(*left).syntax).kind == CRUST_T_FUNCTION) && (*function).unsafe_depth == 0usize {
-                rs_error(stage, location, "pointer and function casts require an unsafe region");
-                return null(*RsValue);
-            }
-            (*expression).syntax_type = rs_lower_type(stage, result_type);
-        } }
-        return rs_capture(function, output, rs_value(function, result_type, expression), location);
-    }
-    rs_error(stage, location, "unsupported source expression");
-    return null(*RsValue);
+    return rs_scalar_expression(function, source, output);
 }
 
 fn rs_expr(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
@@ -460,4 +215,399 @@ fn rs_expr(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> 
     var value: *RsValue = rs_expr_inner(function, source, output);
     (*function).expression_depth = (*function).expression_depth - 1u32;
     return value;
+}
+
+fn rs_move_expression(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var operand: *CrustExpr = (*source).left;
+    while (*operand).kind == CRUST_E_GROUP { operand = (*operand).left; }
+    if (*operand).kind != CRUST_E_NAME {
+        rs_error(stage, location, "move requires a whole local owner");
+        return null(*RsValue);
+    }
+    var local: *RsLocal = crust_map_get(&(*function).locals, (*operand).name as usize) as *RsLocal;
+    if local == null(*RsLocal) || !(*local).owning || (*local).mode != 0u32 {
+        rs_error(stage, location, "move requires a whole local owner");
+        return null(*RsValue);
+    }
+    rs_access(function, local, true, location);
+    if (*stage).failed { return null(*RsValue); }
+    var value: *RsValue = rs_value(function, (*local).syntax, rs_place_local(function, local, location));
+    if value == null(*RsValue) { return value; }
+    (*value).owned = true;
+    (*value).local = local;
+    return rs_capture(function, output, value, location);
+}
+
+fn rs_borrow_expression(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var kind: u32 = (*source).kind;
+    var place: *RsValue = rs_place(function, (*source).left, output, kind == RS_MUT, false);
+    if (*stage).failed { return null(*RsValue); }
+    if (*place).local != null(*RsLocal) { rs_lend(function, (*place).local, kind, location); }
+    else { if (*place).mode != RS_READ && (*function).unsafe_depth == 0usize {
+        rs_error(stage, location, "borrow has no checked storage owner");
+        return null(*RsValue);
+    } }
+    var syntax: *CrustTypeSyntax = rs_type_node(stage, kind, location);
+    if syntax == null(*CrustTypeSyntax) { return null(*RsValue); }
+    (*syntax).base = (*place).syntax;
+    var local: *RsLocal = rs_local(function, null(*CrustName), syntax, null(*CrustParam), location);
+    if local == null(*RsLocal) { return null(*RsValue); }
+    (*local).initialized = true;
+    (*local).parent_loan = (*place).local;
+    rs_assign(function, output, rs_named(stage, (*local).storage, location),
+              rs_unary(stage, CRUST_OP_ADDRESS, (*place).expression, location), location);
+    var value: *RsValue = rs_value(function, syntax, rs_named(stage, (*local).storage, location));
+    if value != null(*RsValue) { (*value).local = local; (*value).mode = kind; }
+    return value;
+}
+
+fn rs_name_expression(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var local: *RsLocal = crust_map_get(&(*function).locals, (*source).name as usize) as *RsLocal;
+    if local != null(*RsLocal) {
+        rs_access(function, local, false, location);
+        if (*stage).failed { return null(*RsValue); }
+        var value: *RsValue = rs_value(function, (*local).syntax, rs_place_local(function, local, location));
+        if value == null(*RsValue) { return value; }
+        (*value).local = local;
+        if rs_owns(stage, (*local).syntax) { return value; }
+        return rs_capture(function, output, value, location);
+    }
+    var global: *RsGlobal = rs_global(stage, (*source).name);
+    if global == null(*RsGlobal) || (*(*global).source).kind == CRUST_D_RECORD {
+        rs_error(stage, location, "unknown value name");
+        return null(*RsValue);
+    }
+    var value: *RsValue = rs_value(function, (*global).syntax, rs_named(stage, (*source).name, location));
+    if value != null(*RsValue) { (*value).unsafe_call = (*global).unsafe_call || (*global).drop_only; }
+    return value;
+}
+
+fn rs_load_expression(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var value: *RsValue = rs_place(function, source, output, false, false);
+    if (*stage).failed { return null(*RsValue); }
+    if rs_owns(stage, (*value).syntax) { return value; }
+    (*value).mode = 0u32;
+    return rs_capture(function, output, value, location);
+}
+
+fn rs_literal_expression(function: *RsFunction, source: *CrustExpr) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var kind: u32 = (*source).kind;
+    var type_kind: u32 = (*source).literal_type;
+    if kind == CRUST_E_BOOL { type_kind = CRUST_T_BOOL; }
+    if kind == CRUST_E_STRING { type_kind = CRUST_T_U8; }
+    var syntax: *CrustTypeSyntax = rs_type_node(stage, type_kind, location);
+    if syntax == null(*CrustTypeSyntax) { return null(*RsValue); }
+    if kind == CRUST_E_STRING { syntax = rs_pointer(stage, syntax); }
+    return rs_value(function, syntax, rs_clone_expr(stage, source));
+}
+
+fn rs_null_expression(function: *RsFunction, source: *CrustExpr) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var syntax: *CrustTypeSyntax = (*source).syntax_type;
+    if (*syntax).kind != CRUST_T_POINTER && (*syntax).kind != CRUST_T_FUNCTION {
+        rs_error(stage, location, "null requires a pointer or function type");
+        return null(*RsValue);
+    }
+    var expression: *CrustExpr = rs_clone_expr(stage, source);
+    if expression == null(*CrustExpr) { return null(*RsValue); }
+    (*expression).syntax_type = rs_lower_type(stage, syntax);
+    return rs_value(function, syntax, expression);
+}
+
+fn rs_type_expression(function: *RsFunction, source: *CrustExpr) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var expression: *CrustExpr = rs_clone_expr(stage, source);
+    if expression == null(*CrustExpr) { return null(*RsValue); }
+    (*expression).syntax_type = rs_lower_type(stage, (*source).syntax_type);
+    return rs_value(function, rs_type_node(stage, CRUST_T_USIZE, location), expression);
+}
+
+fn rs_address_expression(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    if (*function).unsafe_depth == 0usize {
+        rs_error(stage, location, "raw addresses require an unsafe region; use read or mut for a loan");
+        return null(*RsValue);
+    }
+    var place: *RsValue = rs_place(function, (*source).left, output, true, true);
+    if (*stage).failed { return null(*RsValue); }
+    var syntax: *CrustTypeSyntax = rs_pointer(stage, (*place).syntax);
+    return rs_capture(function, output, rs_value(function, syntax,
+        rs_unary(stage, CRUST_OP_ADDRESS, (*place).expression, location)), location);
+}
+
+fn rs_operation(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var kind: u32 = (*source).kind;
+    if kind == CRUST_E_BINARY && ((*source).op == CRUST_OP_AND || (*source).op == CRUST_OP_OR) {
+        return rs_short_circuit(function, source, output);
+    }
+    var left: *RsValue = rs_operation_value(function, (*source).left, output, location);
+    if (*stage).failed { return null(*RsValue); }
+
+    var result_type: *CrustTypeSyntax = (*left).syntax;
+    var expression: *CrustExpr = rs_expr_node(stage, kind, location);
+    if expression == null(*CrustExpr) { return null(*RsValue); }
+    (*expression).op = (*source).op;
+    (*expression).left = (*left).expression;
+    if kind == CRUST_E_BINARY {
+        result_type = rs_binary_result(function, source, (*left).syntax, expression, output);
+        if result_type == null(*CrustTypeSyntax) { return null(*RsValue); }
+    } else { if kind == CRUST_E_CAST {
+        result_type = rs_cast_result(function, source, (*left).syntax, expression);
+        if result_type == null(*CrustTypeSyntax) { return null(*RsValue); }
+    } }
+    return rs_capture(function, output, rs_value(function, result_type, expression), location);
+}
+
+fn rs_scalar_expression(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var kind: u32 = (*source).kind;
+    if kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL || kind == CRUST_E_STRING {
+        return rs_literal_expression(function, source);
+    }
+    if kind == CRUST_E_NULL {
+        return rs_null_expression(function, source);
+    }
+    if kind == CRUST_E_SIZEOF || kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF {
+        return rs_type_expression(function, source);
+    }
+    if kind == CRUST_E_UNARY && (*source).op == CRUST_OP_ADDRESS {
+        return rs_address_expression(function, source, output);
+    }
+    if kind == CRUST_E_UNARY || kind == CRUST_E_BINARY || kind == CRUST_E_CAST {
+        return rs_operation(function, source, output);
+    }
+    rs_error(stage, location, "unsupported source expression");
+    return null(*RsValue);
+}
+
+fn rs_operation_value(function: *RsFunction, source: *CrustExpr, output: *RsStatements, location: *CrustLoc) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var value: *RsValue = rs_expr(function, source, output);
+    if (*stage).failed { return null(*RsValue); }
+    if rs_owns(stage, (*value).syntax) || (*value).mode != 0u32 || (*value).unsafe_call {
+        rs_error(stage, location, "operation cannot copy or erase a resource or borrowed view");
+        return null(*RsValue);
+    }
+    return value;
+}
+
+fn rs_cast_result(function: *RsFunction, source: *CrustExpr, left: *CrustTypeSyntax, expression: *CrustExpr) -> *CrustTypeSyntax {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var result_type: *CrustTypeSyntax = (*source).syntax_type;
+    if rs_owns(stage, result_type) || (*result_type).kind == RS_READ || (*result_type).kind == RS_MUT {
+        rs_error(stage, location, "casts cannot construct resources or borrowed views");
+        return null(*CrustTypeSyntax);
+    }
+    if ((*result_type).kind == CRUST_T_POINTER || (*result_type).kind == CRUST_T_FUNCTION ||
+        (*left).kind == CRUST_T_POINTER || (*left).kind == CRUST_T_FUNCTION) && (*function).unsafe_depth == 0usize {
+        rs_error(stage, location, "pointer and function casts require an unsafe region");
+        return null(*CrustTypeSyntax);
+    }
+    (*expression).syntax_type = rs_lower_type(stage, result_type);
+    return result_type;
+}
+
+fn rs_call_signature(function: *RsFunction, source: *CrustExpr, callee: *RsValue, deferred: *RsScope) -> bool {
+    var stage: *RsStage = (*function).stage;
+    var signature: *CrustTypeSyntax = (*callee).syntax;
+    if (*signature).kind != CRUST_T_FUNCTION {
+        rs_error(stage, &(*source).loc, "call requires a function value");
+        return false;
+    }
+    if (*callee).unsafe_call && (*function).unsafe_depth == 0usize {
+        rs_error(stage, &(*source).loc, "call requires an unsafe region");
+        return false;
+    }
+    if (*source).arg_count != (*signature).param_count {
+        rs_error(stage, &(*source).loc, "wrong number of call arguments");
+        return false;
+    }
+    var result_type: *CrustTypeSyntax = (*signature).base;
+    if deferred != null(*RsScope) && (*result_type).kind != CRUST_T_UNIT {
+        rs_error(stage, &(*source).loc, "deferred calls must return unit");
+        return false;
+    }
+    return true;
+}
+
+fn rs_call_arguments(function: *RsFunction, source: *CrustExpr, signature: *CrustTypeSyntax,
+                     call: *CrustExpr, values: **RsValue, output: *RsStatements) -> bool {
+    var stage: *RsStage = (*function).stage;
+    var count: usize = (*source).arg_count;
+    var index: usize = 0usize;
+    while index < count && !(*stage).failed {
+        var value: *RsValue = rs_expr(function, (*source).args[index], output);
+        if !rs_require_value(function, value, (*signature).params[index], &(*(*source).args[index]).loc) { return false; }
+        if (*value).local == null(*RsLocal) && (*value).mode != RS_READ && (*value).mode != RS_MUT && rs_indirect((*value).syntax) {
+            value = rs_capture(function, output, value, &(*source).loc);
+            if (*stage).failed { return false; }
+        }
+        values[index] = value;
+        (*call).args[index] = (*value).expression;
+        if rs_indirect((*signature).params[index]) {
+            (*call).args[index] = rs_unary(stage, CRUST_OP_ADDRESS, (*value).expression, &(*source).loc);
+        }
+        index = index + 1usize;
+    }
+    if (*stage).failed { return false; }
+    return true;
+}
+
+fn rs_call_transfer(function: *RsFunction, values: **RsValue, count: usize, deferred: *RsScope, location: *CrustLoc) -> unit {
+    var stage: *RsStage = (*function).stage;
+    var index: usize = 0usize;
+    while index < count && !(*stage).failed {
+        rs_transfer(function, values[index]);
+        if deferred != null(*RsScope) && ((*values[index]).mode == RS_READ || (*values[index]).mode == RS_MUT) {
+            rs_promote_loan(function, values[index], deferred, location);
+        }
+        index = index + 1usize;
+    }
+}
+
+fn rs_defer_call(function: *RsFunction, call: *CrustExpr, guard: *CrustStmt,
+                 result_type: *CrustTypeSyntax, deferred: *RsScope, location: *CrustLoc) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var invoke: *CrustStmt = rs_stmt_node(stage, CRUST_S_EXPR, location);
+    if invoke == null(*CrustStmt) { return null(*RsValue); }
+    (*invoke).expr = call;
+    var body: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    rs_append(&body, guard);
+    rs_append(&body, invoke);
+    var statement: *CrustStmt = rs_block(stage, &body, location);
+    if (*stage).failed { return null(*RsValue); }
+    var current: *RsScope = (*function).scope;
+    (*function).scope = deferred;
+    rs_action(function, null(*RsLocal), statement);
+    (*function).scope = current;
+    return rs_value(function, result_type, null(*CrustExpr));
+}
+
+fn rs_call_result(function: *RsFunction, call: *CrustExpr, result_type: *CrustTypeSyntax,
+                  result_local: *RsLocal, output: *RsStatements, location: *CrustLoc) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var result: *RsValue = null(*RsValue);
+    if result_local != null(*RsLocal) || (*result_type).kind == CRUST_T_UNIT {
+        var invoke: *CrustStmt = rs_stmt_node(stage, CRUST_S_EXPR, location);
+        if invoke == null(*CrustStmt) { return null(*RsValue); }
+        (*invoke).expr = call;
+        rs_append(output, invoke);
+        result = rs_value(function, result_type, null(*CrustExpr));
+        if result_local != null(*RsLocal) && result != null(*RsValue) {
+            (*result_local).initialized = true;
+            (*result).expression = rs_named(stage, (*result_local).storage, location);
+            (*result).local = result_local;
+            (*result).owned = (*result_local).owning;
+        }
+    } else {
+        result = rs_capture(function, output, rs_value(function, result_type, call), location);
+    }
+    return result;
+}
+
+fn rs_make_record_info(function: *RsFunction, source: *CrustExpr) -> *RsGlobal {
+    var stage: *RsStage = (*function).stage;
+    var syntax: *CrustTypeSyntax = (*source).syntax_type;
+    if (*syntax).kind != CRUST_T_NAME {
+        rs_error(stage, &(*source).loc, "record construction requires a record type");
+        return null(*RsGlobal);
+    }
+    var global: *RsGlobal = rs_global(stage, (*syntax).name);
+    if global == null(*RsGlobal) || (*(*global).source).kind != CRUST_D_RECORD {
+        rs_error(stage, &(*source).loc, "record construction requires a declared record");
+        return null(*RsGlobal);
+    }
+    if (*global).resource != null(*RsResource) && (*function).unsafe_depth == 0usize {
+        rs_error(stage, &(*source).loc, "raw resource construction requires an unsafe region");
+        return null(*RsGlobal);
+    }
+    return global;
+}
+
+fn rs_make_fields(function: *RsFunction, source: *CrustExpr, target: *CrustExpr,
+                  global: *RsGlobal, values: **RsValue, output: *RsStatements) -> bool {
+    var stage: *RsStage = (*function).stage;
+    var index: usize = 0usize;
+    var item: *CrustInit = (*source).inits;
+    var previous: *CrustInit = null(*CrustInit);
+    while item != null(*CrustInit) && !(*stage).failed {
+        var field: *CrustField = crust_map_get(&(*global).fields, (*item).name as usize) as *CrustField;
+        if field == null(*CrustField) {
+            rs_error(stage, &(*item).loc, "record has no such field");
+            return false;
+        }
+        var value: *RsValue = rs_expr(function, (*item).value, output);
+        if !rs_require_value(function, value, (*field).syntax_type, &(*item).loc) { return false; }
+        var copy: *CrustInit = rs_alloc(stage, sizeof(CrustInit), alignof(CrustInit)) as *CrustInit;
+        if copy == null(*CrustInit) { return false; }
+        (*copy).name = (*item).name;
+        (*copy).loc = (*item).loc;
+        (*copy).value = (*value).expression;
+        if previous == null(*CrustInit) { (*target).inits = copy; }
+        else { (*previous).next = copy; }
+        previous = copy;
+        values[index] = value;
+        index = index + 1usize;
+        item = (*item).next;
+    }
+    return !(*stage).failed;
+}
+
+fn rs_end_call_loans(function: *RsFunction, values: **RsValue, count: usize) -> unit {
+    var stage: *RsStage = (*function).stage;
+    var index: usize = 0usize;
+    while index < count && !(*stage).failed {
+        if (*values[index]).mode == RS_READ || (*values[index]).mode == RS_MUT { rs_end_loan(function, (*values[index]).local); }
+        index = index + 1usize;
+    }
+}
+
+fn rs_make_elements(function: *RsFunction, source: *CrustExpr, target: *CrustExpr, values: **RsValue, output: *RsStatements) -> unit {
+    var stage: *RsStage = (*function).stage;
+    var syntax: *CrustTypeSyntax = (*source).syntax_type;
+    var count: usize = (*source).arg_count;
+    var index: usize = 0usize;
+    while index < count && !(*stage).failed {
+        var value: *RsValue = rs_expr(function, (*source).args[index], output);
+        if !rs_require_value(function, value, (*syntax).base, &(*source).loc) { return; }
+        values[index] = value;
+        (*target).args[index] = (*value).expression;
+        index = index + 1usize;
+    }
+}
+
+fn rs_binary_result(function: *RsFunction, source: *CrustExpr, left: *CrustTypeSyntax,
+                    expression: *CrustExpr, output: *RsStatements) -> *CrustTypeSyntax {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    var result_type: *CrustTypeSyntax = left;
+    var right: *RsValue = rs_operation_value(function, (*source).right, output, location);
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+
+    (*expression).right = (*right).expression;
+    if (*source).op >= CRUST_OP_EQ && (*source).op <= CRUST_OP_OR {
+        result_type = rs_type_node(stage, CRUST_T_BOOL, location);
+    }
+    if (*left).kind == CRUST_T_POINTER && ((*source).op == CRUST_OP_ADD || (*source).op == CRUST_OP_SUB) && (*function).unsafe_depth == 0usize {
+        rs_error(stage, location, "pointer arithmetic requires an unsafe region");
+        return null(*CrustTypeSyntax);
+    }
+    return result_type;
 }

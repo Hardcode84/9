@@ -35,16 +35,7 @@ fn ov_encode_type(stage:*OvStage, syntax:*CrustTypeSyntax, buffer:*OvText, depth
         ov_encode_type(stage, (*syntax).base, buffer, depth + 1usize);
         return;
     }
-    var hooks:*OvHooks = (*stage).hooks;
-    if hooks != null(*OvHooks) && (*hooks).type_key != null(fn(*OvStage,*CrustTypeSyntax,*OvText,usize,*u8)->bool) {
-        ov_text(stage, buffer, "x");
-        ov_number(stage, buffer, kind as u64);
-        var errors:usize = (*(*stage).context).error_count;
-        var handled:bool = (*hooks).type_key(stage, syntax, buffer, depth, (*hooks).user);
-        if (*(*stage).context).error_count != errors { (*stage).failed = true; }
-        if handled || (*stage).failed { return; }
-    }
-    ov_error(stage, &(*syntax).loc, "overload stage has no encoding for this type");
+    ov_encode_extension(stage,syntax,buffer,depth);
 }
 
 fn ov_type_key(stage:*OvStage, syntax:*CrustTypeSyntax)->*CrustName {
@@ -114,4 +105,18 @@ fn ov_select(stage:*OvStage, group:*OvGlobal, syntax:*CrustTypeSyntax, parameter
         return null(*OvFunction);
     }
     return found;
+}
+
+fn ov_encode_extension(stage:*OvStage,syntax:*CrustTypeSyntax,buffer:*OvText,depth:usize)->unit {
+    var kind:u32=(*syntax).kind;
+    var hooks:*OvHooks = (*stage).hooks;
+    if hooks != null(*OvHooks) && (*hooks).type_key != null(fn(*OvStage,*CrustTypeSyntax,*OvText,usize,*u8)->bool) {
+        ov_text(stage, buffer, "x");
+        ov_number(stage, buffer, kind as u64);
+        var errors:usize = (*(*stage).context).error_count;
+        var handled:bool = (*hooks).type_key(stage, syntax, buffer, depth, (*hooks).user);
+        if (*(*stage).context).error_count != errors { (*stage).failed = true; }
+        if handled || (*stage).failed { return; }
+    }
+    ov_error(stage, &(*syntax).loc, "overload stage has no encoding for this type");
 }

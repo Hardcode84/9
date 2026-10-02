@@ -94,8 +94,10 @@ Do not add a feature before a concrete program requires it.
 - Bound recursion on source-controlled input. Enforce the depth bound or use
   iteration. Do not rely on the host stack size.
 - Keep function cyclomatic complexity at CCN 15 or less in `src/`,
-  `include/`, and `runtime/`. Split functions by responsibility. Do not bypass
-  Lizard with exclusions or altered counting rules.
+  `include/`, and `runtime/` with Lizard. Apply the same limit to Crust
+  functions in `api/`, `stages/`, and `tests/` with the Crust CCN stage.
+  Split functions by responsibility. Do not bypass either check with
+  exclusions or altered counting rules.
 - Never install Node.js or npm on this machine.
 - Use a single `SPDX-License-Identifier: Apache-2.0` comment at the start of
   source, configuration, and documentation files, after any shebang. Keep

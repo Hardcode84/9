@@ -37,30 +37,7 @@ fn rs_lower_type(stage: *RsStage, source: *CrustTypeSyntax) -> *CrustTypeSyntax 
         }
         (*target).base = rs_lower_type(stage, (*source).base);
     } else { if kind == CRUST_T_FUNCTION {
-        var result: *CrustTypeSyntax = (*source).base;
-        if (*result).kind == RS_READ || (*result).kind == RS_MUT {
-            rs_error(stage, &(*result).loc, "function results cannot be borrowed views");
-            return null(*CrustTypeSyntax);
-        }
-        var count: usize = (*source).param_count;
-        var by_address: bool = rs_indirect(result);
-        (*target).param_count = count;
-        if by_address { (*target).param_count = count + 1usize; }
-        (*target).params = rs_alloc(stage, (*target).param_count * sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        var index: usize = 0usize;
-        while index < count && !(*stage).failed {
-            var parameter: *CrustTypeSyntax = (*source).params[index];
-            var lowered: *CrustTypeSyntax = rs_lower_type(stage, parameter);
-            if rs_indirect(parameter) && lowered != null(*CrustTypeSyntax) { lowered = rs_pointer(stage, lowered); }
-            (*target).params[index] = lowered;
-            index = index + 1usize;
-        }
-        (*target).base = rs_lower_type(stage, result);
-        if by_address && !(*stage).failed {
-            (*target).base = rs_pointer(stage, (*target).base);
-            (*target).params[count] = (*target).base;
-        }
+        return rs_lower_function_type(stage, source, target);
     } } }
     return target;
 }
@@ -82,12 +59,7 @@ fn rs_same(stage: *RsStage, a: *CrustTypeSyntax, b: *CrustTypeSyntax) -> bool {
     }
     if (*a).kind == CRUST_T_NAME { return (*a).name == (*b).name; }
     if (*a).kind == CRUST_T_FUNCTION {
-        if (*a).param_count != (*b).param_count || !rs_same(stage, (*a).base, (*b).base) { return false; }
-        var index: usize = 0usize;
-        while index < (*a).param_count {
-            if !rs_same(stage, (*a).params[index], (*b).params[index]) { return false; }
-            index = index + 1usize;
-        }
+        return rs_same_signature(stage, a, b);
     }
     return true;
 }
@@ -147,40 +119,122 @@ fn rs_collect(stage: *RsStage) -> bool {
     while unit_value != null(*CrustUnit) && !(*stage).failed {
         var declaration: *CrustDecl = (*unit_value).declarations;
         while declaration != null(*CrustDecl) && !(*stage).failed {
-            if rs_global(stage, (*declaration).name) != null(*RsGlobal) {
-                rs_error(stage, &(*declaration).loc, "duplicate declaration");
-                return false;
-            }
-            var global: *RsGlobal = rs_alloc(stage, sizeof(RsGlobal), alignof(RsGlobal)) as *RsGlobal;
-            if global == null(*RsGlobal) { return false; }
-            (*global).source = declaration;
-            if (*declaration).identity > (*stage).next_helper_identity {
-                (*stage).next_helper_identity = (*declaration).identity;
-            }
-            (*global).syntax = (*declaration).syntax_type;
-            var field: *CrustField = (*declaration).fields;
-            while field != null(*CrustField) && !(*stage).failed {
-                if crust_map_get(&(*global).fields, (*field).name as usize) != null(*u8) {
-                    rs_error(stage, &(*field).loc, "duplicate record field");
-                    return false;
-                }
-                rs_put(stage, &(*global).fields, (*field).name as usize, field as *u8);
-                field = (*field).next;
-            }
-            if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_EXTERN {
-                (*global).syntax = rs_signature(stage, declaration);
-                (*global).unsafe_call = ((*declaration).kind == CRUST_D_EXTERN &&
-                    crust_map_get(&(*stage).source_imports, declaration as usize) == null(*u8)) ||
-                    crust_map_get(&(*stage).unsafe_functions, declaration as usize) != null(*u8);
-            }
-            rs_put(stage, &(*stage).globals, (*declaration).name as usize, global as *u8);
-            if (*stage).first_global == null(*RsGlobal) { (*stage).first_global = global; }
-            else { (*(*stage).last_global).next = global; }
-            (*stage).last_global = global;
+            if !rs_collect_global(stage, declaration) { return false; }
             declaration = (*declaration).next;
         }
         unit_value = (*unit_value).next;
     }
+    return rs_collect_drops(stage);
+}
+
+fn rs_publish(stage: *RsStage) -> bool {
+    var context: *CrustContext = (*stage).context;
+    (*context).units = null(*CrustUnit);
+    (*context).last_unit = null(*CrustUnit);
+    var source_unit: *CrustUnit = (*stage).sources;
+    while source_unit != null(*CrustUnit) && !(*stage).failed {
+        var target_unit: *CrustUnit = rs_alloc(stage, sizeof(CrustUnit), alignof(CrustUnit)) as *CrustUnit;
+        if target_unit == null(*CrustUnit) { return false; }
+        (*target_unit).source = (*source_unit).source;
+        if (*context).units == null(*CrustUnit) { (*context).units = target_unit; }
+        else { (*(*context).last_unit).next = target_unit; }
+        (*context).last_unit = target_unit;
+        var source: *CrustDecl = (*source_unit).declarations;
+        var last: *CrustDecl = null(*CrustDecl);
+        while source != null(*CrustDecl) && !(*stage).failed {
+            var global: *RsGlobal = rs_global(stage, (*source).name);
+            var target: *CrustDecl = rs_alloc(stage, sizeof(CrustDecl), alignof(CrustDecl)) as *CrustDecl;
+            if target == null(*CrustDecl) { return false; }
+            *target = *source;
+            (*target).next = null(*CrustDecl);
+            (*target).body = null(*CrustStmt);
+            (*global).lowered = target;
+            if last == null(*CrustDecl) { (*target_unit).declarations = target; }
+            else { (*last).next = target; }
+            last = target;
+            if !rs_publish_declaration(stage, global, source, target) { return false; }
+            source = (*source).next;
+        }
+        source_unit = (*source_unit).next;
+    }
+    if (*stage).failed { return false; }
+    if !crust_collect(context) || !crust_resolve(context) { (*stage).failed = true; return false; }
+    return rs_check_global_ownership(stage);
+}
+
+fn rs_lower_function_type(stage: *RsStage, source: *CrustTypeSyntax, target: *CrustTypeSyntax) -> *CrustTypeSyntax {
+    var result: *CrustTypeSyntax = (*source).base;
+    if (*result).kind == RS_READ || (*result).kind == RS_MUT {
+        rs_error(stage, &(*result).loc, "function results cannot be borrowed views");
+        return null(*CrustTypeSyntax);
+    }
+    var count: usize = (*source).param_count;
+    var by_address: bool = rs_indirect(result);
+    (*target).param_count = count;
+    if by_address { (*target).param_count = count + 1usize; }
+    (*target).params = rs_alloc(stage, (*target).param_count * sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    var index: usize = 0usize;
+    while index < count && !(*stage).failed {
+        var parameter: *CrustTypeSyntax = (*source).params[index];
+        var lowered: *CrustTypeSyntax = rs_lower_type(stage, parameter);
+        if rs_indirect(parameter) && lowered != null(*CrustTypeSyntax) { lowered = rs_pointer(stage, lowered); }
+        (*target).params[index] = lowered;
+        index = index + 1usize;
+    }
+    (*target).base = rs_lower_type(stage, result);
+    if by_address && !(*stage).failed {
+        (*target).base = rs_pointer(stage, (*target).base);
+        (*target).params[count] = (*target).base;
+    }
+    return target;
+}
+
+fn rs_same_signature(stage: *RsStage, a: *CrustTypeSyntax, b: *CrustTypeSyntax) -> bool {
+    if (*a).param_count != (*b).param_count || !rs_same(stage, (*a).base, (*b).base) { return false; }
+    var index: usize = 0usize;
+    while index < (*a).param_count {
+        if !rs_same(stage, (*a).params[index], (*b).params[index]) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn rs_collect_global(stage: *RsStage, declaration: *CrustDecl) -> bool {
+    if rs_global(stage, (*declaration).name) != null(*RsGlobal) {
+        rs_error(stage, &(*declaration).loc, "duplicate declaration");
+        return false;
+    }
+    var global: *RsGlobal = rs_alloc(stage, sizeof(RsGlobal), alignof(RsGlobal)) as *RsGlobal;
+    if global == null(*RsGlobal) { return false; }
+    (*global).source = declaration;
+    if (*declaration).identity > (*stage).next_helper_identity {
+        (*stage).next_helper_identity = (*declaration).identity;
+    }
+    (*global).syntax = (*declaration).syntax_type;
+    var field: *CrustField = (*declaration).fields;
+    while field != null(*CrustField) && !(*stage).failed {
+        if crust_map_get(&(*global).fields, (*field).name as usize) != null(*u8) {
+            rs_error(stage, &(*field).loc, "duplicate record field");
+            return false;
+        }
+        rs_put(stage, &(*global).fields, (*field).name as usize, field as *u8);
+        field = (*field).next;
+    }
+    if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_EXTERN {
+        (*global).syntax = rs_signature(stage, declaration);
+        (*global).unsafe_call = ((*declaration).kind == CRUST_D_EXTERN &&
+            crust_map_get(&(*stage).source_imports, declaration as usize) == null(*u8)) ||
+            crust_map_get(&(*stage).unsafe_functions, declaration as usize) != null(*u8);
+    }
+    rs_put(stage, &(*stage).globals, (*declaration).name as usize, global as *u8);
+    if (*stage).first_global == null(*RsGlobal) { (*stage).first_global = global; }
+    else { (*(*stage).last_global).next = global; }
+    (*stage).last_global = global;
+    return !(*stage).failed;
+}
+
+fn rs_collect_drops(stage: *RsStage) -> bool {
     var resource: *RsResource = (*stage).resources;
     while resource != null(*RsResource) && !(*stage).failed {
         var global: *RsGlobal = rs_global(stage, (*(*resource).declaration).name);
@@ -210,105 +264,93 @@ fn rs_collect(stage: *RsStage) -> bool {
     return !(*stage).failed;
 }
 
-fn rs_publish(stage: *RsStage) -> bool {
-    var context: *CrustContext = (*stage).context;
-    (*context).units = null(*CrustUnit);
-    (*context).last_unit = null(*CrustUnit);
-    var source_unit: *CrustUnit = (*stage).sources;
-    while source_unit != null(*CrustUnit) && !(*stage).failed {
-        var target_unit: *CrustUnit = rs_alloc(stage, sizeof(CrustUnit), alignof(CrustUnit)) as *CrustUnit;
-        if target_unit == null(*CrustUnit) { return false; }
-        (*target_unit).source = (*source_unit).source;
-        if (*context).units == null(*CrustUnit) { (*context).units = target_unit; }
-        else { (*(*context).last_unit).next = target_unit; }
-        (*context).last_unit = target_unit;
-        var source: *CrustDecl = (*source_unit).declarations;
-        var last: *CrustDecl = null(*CrustDecl);
-        while source != null(*CrustDecl) && !(*stage).failed {
-            var global: *RsGlobal = rs_global(stage, (*source).name);
-            var target: *CrustDecl = rs_alloc(stage, sizeof(CrustDecl), alignof(CrustDecl)) as *CrustDecl;
-            if target == null(*CrustDecl) { return false; }
-            *target = *source;
-            (*target).next = null(*CrustDecl);
-            (*target).body = null(*CrustStmt);
-            (*global).lowered = target;
-            if last == null(*CrustDecl) { (*target_unit).declarations = target; }
-            else { (*last).next = target; }
-            last = target;
-            if (*source).kind == CRUST_D_RECORD {
-                (*target).fields = null(*CrustField);
-                var field: *CrustField = (*source).fields;
-                var previous: *CrustField = null(*CrustField);
-                while field != null(*CrustField) && !(*stage).failed {
-                    if (*(*field).syntax_type).kind == RS_READ || (*(*field).syntax_type).kind == RS_MUT {
-                        rs_error(stage, &(*field).loc, "borrowed views cannot be record fields");
-                        return false;
-                    }
-                    var copy: *CrustField = rs_alloc(stage, sizeof(CrustField), alignof(CrustField)) as *CrustField;
-                    if copy == null(*CrustField) { return false; }
-                    *copy = *field;
-                    (*copy).syntax_type = rs_lower_type(stage, (*field).syntax_type);
-                    (*copy).next = null(*CrustField);
-                    if previous == null(*CrustField) { (*target).fields = copy; }
-                    else { (*previous).next = copy; }
-                    previous = copy;
-                    field = (*field).next;
-                }
-            } else { if (*source).kind == CRUST_D_FUNCTION || (*source).kind == CRUST_D_EXTERN {
-                var signature: *CrustTypeSyntax = rs_lower_type(stage, (*global).syntax);
-                if (*stage).failed { return false; }
-                (*target).syntax_type = (*signature).base;
-                (*target).params = null(*CrustParam);
-                var source_param: *CrustParam = (*source).params;
-                var last_param: *CrustParam = null(*CrustParam);
-                var index: usize = 0usize;
-                while index < (*signature).param_count && !(*stage).failed {
-                    var parameter: *CrustParam = rs_alloc(stage, sizeof(CrustParam), alignof(CrustParam)) as *CrustParam;
-                    if parameter == null(*CrustParam) { return false; }
-                    (*parameter).loc = (*source).loc;
-                    (*parameter).name = rs_name(stage);
-                    (*parameter).syntax_type = (*signature).params[index];
-                    if source_param != null(*CrustParam) {
-                        (*parameter).loc = (*source_param).loc;
-                        source_param = (*source_param).next;
-                    }
-                    if last_param == null(*CrustParam) { (*target).params = parameter; }
-                    else { (*last_param).next = parameter; }
-                    last_param = parameter;
-                    index = index + 1usize;
-                }
-                if (*source).kind == CRUST_D_EXTERN &&
-                   crust_map_get(&(*stage).source_imports, source as usize) == null(*u8) {
-                    index = 0usize;
-                    while index < (*(*global).syntax).param_count {
-                        var parameter: *CrustTypeSyntax = (*(*global).syntax).params[index];
-                        if rs_indirect(parameter) || (*parameter).kind == RS_READ || (*parameter).kind == RS_MUT {
-                            rs_error(stage, &(*parameter).loc, "foreign signatures require explicit scalar ABI types");
-                            return false;
-                        }
-                        index = index + 1usize;
-                    }
-                    if rs_indirect((*(*global).syntax).base) {
-                        rs_error(stage, &(*source).loc, "foreign results require an explicit scalar ABI type");
-                        return false;
-                    }
-                }
-            } else {
-                if (*(*source).syntax_type).kind == RS_READ ||
-                   (*(*source).syntax_type).kind == RS_MUT {
-                    rs_error(stage, &(*source).loc, "global constants cannot own resources or local views");
-                    return false;
-                }
-                (*target).syntax_type = rs_lower_type(stage, (*source).syntax_type);
-                (*target).init = rs_lower_constant(stage, (*source).init);
-                if (*stage).failed { return false; }
-            } }
-            source = (*source).next;
+fn rs_publish_record(stage: *RsStage, source: *CrustDecl, target: *CrustDecl) -> bool {
+    (*target).fields = null(*CrustField);
+    var field: *CrustField = (*source).fields;
+    var previous: *CrustField = null(*CrustField);
+    while field != null(*CrustField) && !(*stage).failed {
+        if (*(*field).syntax_type).kind == RS_READ || (*(*field).syntax_type).kind == RS_MUT {
+            rs_error(stage, &(*field).loc, "borrowed views cannot be record fields");
+            return false;
         }
-        source_unit = (*source_unit).next;
+        var copy: *CrustField = rs_alloc(stage, sizeof(CrustField), alignof(CrustField)) as *CrustField;
+        if copy == null(*CrustField) { return false; }
+        *copy = *field;
+        (*copy).syntax_type = rs_lower_type(stage, (*field).syntax_type);
+        (*copy).next = null(*CrustField);
+        if previous == null(*CrustField) { (*target).fields = copy; }
+        else { (*previous).next = copy; }
+        previous = copy;
+        field = (*field).next;
     }
+    return !(*stage).failed;
+}
+
+fn rs_publish_function(stage: *RsStage, global: *RsGlobal, source: *CrustDecl, target: *CrustDecl) -> bool {
+    var signature: *CrustTypeSyntax = rs_lower_type(stage, (*global).syntax);
     if (*stage).failed { return false; }
-    if !crust_collect(context) || !crust_resolve(context) { (*stage).failed = true; return false; }
+    (*target).syntax_type = (*signature).base;
+    (*target).params = null(*CrustParam);
+    var source_param: *CrustParam = (*source).params;
+    var last_param: *CrustParam = null(*CrustParam);
+    var index: usize = 0usize;
+    while index < (*signature).param_count && !(*stage).failed {
+        var parameter: *CrustParam = rs_alloc(stage, sizeof(CrustParam), alignof(CrustParam)) as *CrustParam;
+        if parameter == null(*CrustParam) { return false; }
+        (*parameter).loc = (*source).loc;
+        (*parameter).name = rs_name(stage);
+        (*parameter).syntax_type = (*signature).params[index];
+        if source_param != null(*CrustParam) {
+            (*parameter).loc = (*source_param).loc;
+            source_param = (*source_param).next;
+        }
+        if last_param == null(*CrustParam) { (*target).params = parameter; }
+        else { (*last_param).next = parameter; }
+        last_param = parameter;
+        index = index + 1usize;
+    }
+    return rs_foreign_signature(stage, global, source);
+}
+
+fn rs_foreign_signature(stage: *RsStage, global: *RsGlobal, source: *CrustDecl) -> bool {
+    if (*source).kind == CRUST_D_EXTERN &&
+       crust_map_get(&(*stage).source_imports, source as usize) == null(*u8) {
+        var index: usize = 0usize;
+        while index < (*(*global).syntax).param_count {
+            var parameter: *CrustTypeSyntax = (*(*global).syntax).params[index];
+            if rs_indirect(parameter) || (*parameter).kind == RS_READ || (*parameter).kind == RS_MUT {
+                rs_error(stage, &(*parameter).loc, "foreign signatures require explicit scalar ABI types");
+                return false;
+            }
+            index = index + 1usize;
+        }
+        if rs_indirect((*(*global).syntax).base) {
+            rs_error(stage, &(*source).loc, "foreign results require an explicit scalar ABI type");
+            return false;
+        }
+    }
+    return !(*stage).failed;
+}
+
+fn rs_publish_declaration(stage: *RsStage, global: *RsGlobal, source: *CrustDecl, target: *CrustDecl) -> bool {
+    if (*source).kind == CRUST_D_RECORD {
+        if !rs_publish_record(stage, source, target) { return false; }
+    } else { if (*source).kind == CRUST_D_FUNCTION || (*source).kind == CRUST_D_EXTERN {
+        if !rs_publish_function(stage, global, source, target) { return false; }
+    } else {
+        if (*(*source).syntax_type).kind == RS_READ ||
+           (*(*source).syntax_type).kind == RS_MUT {
+            rs_error(stage, &(*source).loc, "global constants cannot own resources or local views");
+            return false;
+        }
+        (*target).syntax_type = rs_lower_type(stage, (*source).syntax_type);
+        (*target).init = rs_lower_constant(stage, (*source).init);
+        if (*stage).failed { return false; }
+    } }
+    return !(*stage).failed;
+}
+
+fn rs_check_global_ownership(stage: *RsStage) -> bool {
     var global: *RsGlobal = (*stage).first_global;
     while global != null(*RsGlobal) && !(*stage).failed {
         var source: *CrustDecl = (*global).source;

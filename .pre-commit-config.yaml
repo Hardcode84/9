@@ -77,3 +77,10 @@ repos:
         entry: python tools/api.py --check
         files: ^(include/crust0.*\.h|api/.*\.crs|tools/api\.py|\.pre-commit-config\.yaml)$
         pass_filenames: false
+      - id: crust-ccn
+        name: Crust cyclomatic complexity (CCN <= 15)
+        language: python
+        entry: python tools/check_crust_ccn.py
+        files: ^((api|stages|tests)/.*\.crs|(src|include|runtime)/.*\.[ch]|tools/(check_crust_ccn|api|prelude)\.py|Makefile|\.pre-commit-config\.yaml)$
+        pass_filenames: false
+        require_serial: true

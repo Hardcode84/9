@@ -78,12 +78,7 @@ fn ra_check(sources:*CrustSource, count:usize)->i32 {
             index = index + 1usize;
         }
         if success { success = rs_prepare(&stage); }
-        var valid:bool = !state.host_failed && context.failure == null(*u8);
-        if success {
-            valid = valid && !state.rejected && !stage.failed && context.error_count == 0usize;
-        } else {
-            valid = valid && state.rejected && stage.failed && context.error_count != 0usize && context.error[0usize] != 0u8;
-        }
+        var valid:bool = ra_valid(&state, &context, &stage, success);
         if !valid { ra_report(fail_at, "invalid failure state or invalid test input", &context); }
         crust_context_destroy(&context);
         if state.live != 0usize || context.arena.blocks != null(*u8) || context.arena.bytes_reserved != 0usize {
@@ -139,4 +134,14 @@ fn main(argc:i32, argv:**u8)->i32 {
     }
     crust0_host_free(sources as *u8);
     return result;
+}
+
+fn ra_valid(state:*RaAllocator, context:*CrustContext, stage:*RsStage, success:bool)->bool {
+    var valid:bool = !(*state).host_failed && (*context).failure == null(*u8);
+    if success {
+        valid = valid && !(*state).rejected && !(*stage).failed && (*context).error_count == 0usize;
+    } else {
+        valid = valid && (*state).rejected && (*stage).failed && (*context).error_count != 0usize && (*context).error[0usize] != 0u8;
+    }
+    return valid;
 }

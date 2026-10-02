@@ -81,42 +81,9 @@ fn main(argc:i32, argv:**u8)->i32 {
     };
     (*helper).body = null(*CrustStmt);
     (*entry).body = null(*CrustStmt);
-    var stage:CStage = uninit;
-    state.mode = 1u32;
-    while state.mode <= 3u32 {
-        context.error_count = 0usize;
-        context.error[0usize] = 0u8;
-        state.calls = 0usize;
-        c_stage_init(&stage, &context);
-        if c_emit_with_body(&stage, entry, body_test_emit, &state as *u8) ||
-           !stage.status.failed || state.calls != 1usize || context.error_count != 1usize {
-            return 3i32;
-        }
-        var expected:*u8 = "C function body callback failed";
-        if state.mode == 2u32 { expected = "selected body failure"; }
-        if state.mode == 3u32 { expected = "selected context failure"; }
-        if !body_test_equal(&context.error[0usize], expected) || context.error_loc.source != &source {
-            return 4i32;
-        }
-        c_stage_destroy(&stage);
-        if stage.status.blocks != null(*CBlock) { return 5i32; }
-        state.mode = state.mode + 1u32;
-    }
-    context.error_count = 0usize;
-    context.error[0usize] = 0u8;
-    state.mode = 0u32;
-    state.calls = 0usize;
-    (*external).link_name = "";
-    c_stage_init(&stage, &context);
-    if c_emit_with_body(&stage, entry, body_test_emit, &state as *u8) ||
-       !stage.status.failed || state.calls != 0usize || context.error_count != 1usize ||
-       !body_test_equal(&context.error[0usize], "private C linkage requires a definition in this output") {
-        return 7i32;
-    }
-    c_stage_destroy(&stage);
-    (*external).link_name = "body_absent";
-    context.error_count = 0usize;
-    context.error[0usize] = 0u8;
+    var checked:i32 = body_test_failures(&context, &source, entry, &state);
+    if checked == 0i32 { checked = body_test_private(&context, entry, external, &state); }
+    if checked != 0i32 { crust_context_destroy(&context); return checked; }
     var flags:[*u8;1] = make [*u8;1] {"-O0"};
     var options:CBackendOptions = make CBackendOptions {
         mode:0u32, output:argv[1usize], symbols:null(*u8),
@@ -266,4 +233,49 @@ fn body_dag_test(output:*u8)->i32 {
     }
     crust_context_destroy(&context);
     return result;
+}
+
+fn body_test_failures(context:*CrustContext, source:*CrustSource, entry:*CrustDecl, state:*BodyTest)->i32 {
+    var stage:CStage = uninit;
+    (*state).mode = 1u32;
+    while (*state).mode <= 3u32 {
+        (*context).error_count = 0usize;
+        (*context).error[0usize] = 0u8;
+        (*state).calls = 0usize;
+        c_stage_init(&stage, context);
+        if c_emit_with_body(&stage, entry, body_test_emit, state as *u8) ||
+           !stage.status.failed || (*state).calls != 1usize || (*context).error_count != 1usize {
+            return 3i32;
+        }
+        var expected:*u8 = "C function body callback failed";
+        if (*state).mode == 2u32 { expected = "selected body failure"; }
+        if (*state).mode == 3u32 { expected = "selected context failure"; }
+        if !body_test_equal(&(*context).error[0usize], expected) || (*context).error_loc.source != source {
+            return 4i32;
+        }
+        c_stage_destroy(&stage);
+        if stage.status.blocks != null(*CBlock) { return 5i32; }
+        (*state).mode = (*state).mode + 1u32;
+    }
+    return 0i32;
+}
+
+fn body_test_private(context:*CrustContext, entry:*CrustDecl, external:*CrustDecl, state:*BodyTest)->i32 {
+    var stage:CStage = uninit;
+    (*context).error_count = 0usize;
+    (*context).error[0usize] = 0u8;
+    (*state).mode = 0u32;
+    (*state).calls = 0usize;
+    (*external).link_name = "";
+    c_stage_init(&stage, context);
+    if c_emit_with_body(&stage, entry, body_test_emit, state as *u8) ||
+       !stage.status.failed || (*state).calls != 0usize || (*context).error_count != 1usize ||
+       !body_test_equal(&(*context).error[0usize], "private C linkage requires a definition in this output") {
+        return 7i32;
+    }
+    c_stage_destroy(&stage);
+    (*external).link_name = "body_absent";
+    (*context).error_count = 0usize;
+    (*context).error[0usize] = 0u8;
+    return 0i32;
 }

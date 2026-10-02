@@ -166,6 +166,21 @@ The C backend builds it with GCC. Analysis itself does not invoke a backend.
 The native tool links the existing run library for its source diagnostic
 printer.
 
+The repository's `crust-ccn` pre-commit hook runs this native checker with
+`-w --CCN 15`. It checks every `.crs` file in `api/`, `stages/`, and `tests/`,
+including the checker itself. It calls `make ccn-stage` before analysis so
+changes to the compiler or checker rebuild the executable. A failed build,
+invalid input, or function above the limit fails the hook.
+
+```sh
+pre-commit run crust-ccn --all-files
+```
+
+These directories contain implementation code and test helpers in seed syntax.
+Tutorial inputs can select other grammars. Archived benchmark inputs must keep
+their recorded bytes. The repository hook does not scan those two groups.
+Use the file command or the AST interface to check a tutorial program.
+
 ## 6. Compare with Lizard
 
 The comparison uses Lizard 1.21.6, which is also the version in the repository's

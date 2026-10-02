@@ -37,15 +37,7 @@ fn rs_constant_source(stage: *RsStage, expression: *CrustExpr, expected: *CrustT
         return;
     }
     if kind == CRUST_E_NAME {
-        var global: *RsGlobal = rs_global(stage, (*expression).name);
-        if (*global).unsafe_call || (*global).drop_only {
-            rs_error(stage, location, "constant initializer cannot retain an unsafe function");
-            return;
-        }
-        if !rs_same(stage, (*global).syntax, expected) {
-            rs_error(stage, location, "constant function value has incompatible source types or borrow modes");
-        }
-        return;
+        rs_constant_name(stage, expression, expected); return;
     }
     if kind == CRUST_E_NULL || kind == CRUST_E_RECORD || kind == CRUST_E_ARRAY {
         if !rs_same(stage, (*expression).syntax_type, expected) {
@@ -83,4 +75,17 @@ fn rs_check_constants(stage: *RsStage) -> bool {
         global = (*global).next;
     }
     return !(*stage).failed;
+}
+
+fn rs_constant_name(stage: *RsStage, expression: *CrustExpr, expected: *CrustTypeSyntax) -> unit {
+    var location: *CrustLoc = &(*expression).loc;
+    var global: *RsGlobal = rs_global(stage, (*expression).name);
+    if (*global).unsafe_call || (*global).drop_only {
+        rs_error(stage, location, "constant initializer cannot retain an unsafe function");
+        return;
+    }
+    if !rs_same(stage, (*global).syntax, expected) {
+        rs_error(stage, location, "constant function value has incompatible source types or borrow modes");
+    }
+    return;
 }

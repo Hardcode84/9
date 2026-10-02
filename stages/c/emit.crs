@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
+// Arithmetic and comparison spellings follow the public CrustOp order.
+const C_BINARY_OPERATORS: [*u8; 16] = make [*u8; 16] {
+    "+", "-", "*", "/", "%", "<<", ">>", "&", "|", "^", "==", "!=", "<", "<=", ">", ">="
+};
+
 fn c_signed(input: *CrustType) -> bool {
     var kind: u32 = (*input).kind;
     return kind == CRUST_T_I8 || kind == CRUST_T_I16 || kind == CRUST_T_I32 ||
@@ -163,19 +168,7 @@ fn c_binary(stage: *CStage, input: *CrustExpr) -> usize {
     }
     var right: usize = c_expression(stage, (*input).right);
     var input_type: *CrustType = (*(*input).left).type;
-    if operation == CRUST_OP_DIV || operation == CRUST_OP_REM {
-        c_text(stage, "if("); c_value(stage, right); c_text(stage, "==0");
-        if c_signed(input_type) {
-            c_text(stage, "||("); c_value(stage, left); c_text(stage, "==");
-            c_literal(stage, input_type, 1u64 << ((*input_type).size * 8u64 - 1u64));
-            c_text(stage, "&&"); c_value(stage, right); c_text(stage, "==-1)");
-        }
-        c_text(stage, ")__builtin_trap();\n");
-    }
-    if operation == CRUST_OP_SHL || operation == CRUST_OP_SHR {
-        c_text(stage, "if((uint64_t)"); c_value(stage, right); c_text(stage, ">=");
-        c_number(stage, (*input_type).size * 8u64); c_text(stage, "u)__builtin_trap();\n");
-    }
+    c_binary_checks(stage, operation, input_type, left, right);
     var result: usize = c_temp(stage, (*input).type);
     c_text(stage, "=");
     if (*input_type).kind == CRUST_T_POINTER {
@@ -187,28 +180,10 @@ fn c_binary(stage: *CStage, input: *CrustExpr) -> usize {
             return result;
         }
     }
-    var wrap: bool = operation == CRUST_OP_ADD || operation == CRUST_OP_SUB || operation == CRUST_OP_MUL ||
-        operation == CRUST_OP_BIT_AND || operation == CRUST_OP_BIT_OR || operation == CRUST_OP_BIT_XOR ||
-        operation == CRUST_OP_SHL;
+    var wrap: bool = c_wraps(operation);
     if wrap { c_wrap_begin(stage, (*input).type); c_text(stage, "(uint64_t)"); }
     c_value(stage, left);
-    if operation == CRUST_OP_ADD { c_text(stage, "+"); }
-    else if operation == CRUST_OP_SUB { c_text(stage, "-"); }
-    else if operation == CRUST_OP_MUL { c_text(stage, "*"); }
-    else if operation == CRUST_OP_DIV { c_text(stage, "/"); }
-    else if operation == CRUST_OP_REM { c_text(stage, "%"); }
-    else if operation == CRUST_OP_BIT_AND { c_text(stage, "&"); }
-    else if operation == CRUST_OP_BIT_OR { c_text(stage, "|"); }
-    else if operation == CRUST_OP_BIT_XOR { c_text(stage, "^"); }
-    else if operation == CRUST_OP_SHL { c_text(stage, "<<"); }
-    else if operation == CRUST_OP_SHR { c_text(stage, ">>"); }
-    else if operation == CRUST_OP_EQ { c_text(stage, "=="); }
-    else if operation == CRUST_OP_NE { c_text(stage, "!="); }
-    else if operation == CRUST_OP_LT { c_text(stage, "<"); }
-    else if operation == CRUST_OP_LE { c_text(stage, "<="); }
-    else if operation == CRUST_OP_GT { c_text(stage, ">"); }
-    else if operation == CRUST_OP_GE { c_text(stage, ">="); }
-    else { trap; }
+    c_text(stage, C_BINARY_OPERATORS[operation as usize]);
     if wrap { c_text(stage, "(uint64_t)"); }
     c_value(stage, right);
     if wrap { c_text(stage, "))"); }
@@ -222,17 +197,7 @@ fn c_expression(stage: *CStage, input: *CrustExpr) -> usize {
     if kind == CRUST_E_GROUP { return c_expression(stage, (*input).left); }
     if kind == CRUST_E_BINARY { return c_binary(stage, input); }
     if kind == CRUST_E_NAME && (*(*input).symbol).kind != CRUST_SYM_FUNCTION {
-        var input_type: *CrustType = (*input).type;
-        if (*input_type).kind != CRUST_T_ARRAY && (*input_type).kind != CRUST_T_RECORD {
-            var result: usize = c_temp(stage, input_type);
-            c_text(stage, "=");
-            if (*(*input).symbol).kind == CRUST_SYM_CONST { c_global(stage, (*(*input).symbol).decl); }
-            else { c_symbol(stage, (*input).symbol); }
-            c_text(stage, ";\n");
-            return result;
-        }
-        var address: usize = c_place(stage, input);
-        return c_load(stage, (*input).type, address);
+        return c_name_value(stage, input);
     }
     if kind == CRUST_E_FIELD || kind == CRUST_E_INDEX ||
        (kind == CRUST_E_UNARY && (*input).op == CRUST_OP_DEREF) {
@@ -243,86 +208,12 @@ fn c_expression(stage: *CStage, input: *CrustExpr) -> usize {
         return c_place(stage, (*input).left);
     }
     if kind == CRUST_E_CALL {
-        var callee: usize = c_expression(stage, (*input).left);
-        var arguments: *usize = c_alloc(&(*stage).status, (*input).arg_count * sizeof(usize), alignof(usize)) as *usize;
-        if (*stage).status.failed { return 0usize; }
-        var index: usize = 0usize;
-        while index < (*input).arg_count {
-            arguments[index] = c_expression(stage, (*input).args[index]);
-            index = index + 1usize;
-        }
-        var result: usize = 0usize;
-        if (*(*input).type).kind != CRUST_T_UNIT {
-            result = c_temp(stage, (*input).type); c_text(stage, "=");
-        }
-        c_value(stage, callee); c_text(stage, "(");
-        index = 0usize;
-        while index < (*input).arg_count {
-            if index != 0usize { c_text(stage, ","); }
-            c_value(stage, arguments[index]);
-            index = index + 1usize;
-        }
-        c_text(stage, ");\n");
-        return result;
+        return c_call(stage, input);
     }
     if kind == CRUST_E_RECORD || kind == CRUST_E_ARRAY {
-        var result: usize = c_temp(stage, (*input).type);
-        c_text(stage, ";\n");
-        var initializer: *CrustInit = (*input).inits;
-        var index: usize = 0usize;
-        while initializer != null(*CrustInit) || index < (*input).arg_count {
-            var item: *CrustExpr = null(*CrustExpr);
-            var offset: u64 = 0u64;
-            if kind == CRUST_E_RECORD {
-                item = (*initializer).value;
-                offset = (*(*initializer).field).offset;
-                initializer = (*initializer).next;
-            } else {
-                item = (*input).args[index];
-                offset = index as u64 * (*(*(*input).type).base).size;
-                index = index + 1usize;
-            }
-            var value: usize = c_expression(stage, item);
-            c_text(stage, "__builtin_memcpy((unsigned char*)&"); c_value(stage, result);
-            c_text(stage, "+"); c_number(stage, offset); c_text(stage, "u,&"); c_value(stage, value);
-            c_text(stage, ","); c_number(stage, (*(*item).type).size); c_text(stage, "u);\n");
-        }
-        return result;
+        return c_aggregate(stage, input);
     }
-    var operand: usize = 0usize;
-    if kind == CRUST_E_UNARY || kind == CRUST_E_CAST { operand = c_expression(stage, (*input).left); }
-    var result: usize = c_temp(stage, (*input).type);
-    c_text(stage, "=");
-    if kind == CRUST_E_NAME { c_global(stage, (*(*input).symbol).decl); }
-    else { if kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL || kind == CRUST_E_SIZEOF ||
-              kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF {
-        c_literal(stage, (*input).type, (*input).integer);
-    } else { if kind == CRUST_E_STRING {
-        c_text(stage, "(void*)"); c_quote(stage, (*input).bytes, (*input).byte_count - 1usize);
-    } else { if kind == CRUST_E_NULL { c_text(stage, "0"); }
-    else { if kind == CRUST_E_UNARY {
-        if (*input).op == CRUST_OP_NOT { c_text(stage, "!"); c_value(stage, operand); }
-        else {
-            c_wrap_begin(stage, (*input).type);
-            if (*input).op == CRUST_OP_NEG { c_text(stage, "UINT64_C(0)-(uint64_t)"); }
-            else { if (*input).op == CRUST_OP_BIT_NOT { c_text(stage, "~(uint64_t)"); }
-                   else { trap; } }
-            c_value(stage, operand); c_text(stage, "))");
-        }
-    } else { if kind == CRUST_E_CAST {
-        var target: *CrustType = (*input).type;
-        if (*target).kind == CRUST_T_POINTER {
-            c_text(stage, "r_addr((uintptr_t)"); c_value(stage, operand); c_text(stage, ")");
-        } else { if (*target).kind == CRUST_T_BOOL {
-            c_text(stage, "("); c_value(stage, operand); c_text(stage, "!=0)");
-        } else { if c_integer(target) {
-            c_wrap_begin(stage, target);
-            if (*(*(*input).left).type).kind == CRUST_T_POINTER { c_text(stage, "(uintptr_t)"); }
-            c_value(stage, operand); c_text(stage, "))");
-        } else { c_value(stage, operand); } } }
-    } else { trap; } } } } } }
-    c_text(stage, ";\n");
-    return result;
+    return c_scalar_expression(stage, input);
 }
 
 fn c_braced_statement(stage: *CStage, input: *CrustStmt) -> unit {
@@ -335,24 +226,9 @@ fn c_statement(stage: *CStage, input: *CrustStmt) -> unit {
     if (*stage).status.failed { return; }
     var kind: u32 = (*input).kind;
     if kind == CRUST_S_BLOCK {
-        c_text(stage, "{\n");
-        var child: *CrustStmt = (*input).body;
-        while child != null(*CrustStmt) { c_statement(stage, child); child = (*child).next; }
-        c_text(stage, "}\n");
-        return;
+        c_block(stage, input); return;
     }
-    if kind == CRUST_S_VAR {
-        var value: usize = 0usize;
-        if !(*input).uninitialized { value = c_expression(stage, (*input).value); }
-        var variable_type: *CrustType = (*(*input).symbol).type;
-        c_type_name(stage, variable_type); c_text(stage, " "); c_symbol(stage, (*input).symbol); c_text(stage, ";\n");
-        if !(*input).uninitialized {
-            c_text(stage, "__builtin_memcpy(&"); c_symbol(stage, (*input).symbol);
-            c_text(stage, ",&"); c_value(stage, value); c_text(stage, ",");
-            c_number(stage, (*variable_type).size); c_text(stage, "u);\n");
-        }
-        return;
-    }
+    if kind == CRUST_S_VAR { c_variable(stage, input); return; }
     if kind == CRUST_S_ASSIGN {
         var address: usize = c_place(stage, (*input).expr);
         var value: usize = c_expression(stage, (*input).value);
@@ -397,8 +273,7 @@ fn c_constant(stage: *CStage, input: *CrustExpr) -> unit {
     if kind == CRUST_E_UNARY {
         c_literal(stage, (*input).type, 0u64 - (*(*input).left).integer); return;
     }
-    if kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL || kind == CRUST_E_SIZEOF ||
-       kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF {
+    if c_literal_kind(kind) {
         c_literal(stage, (*input).type, (*input).integer); return;
     }
     if kind == CRUST_E_STRING {
@@ -501,24 +376,7 @@ fn c_emit_with_body(stage: *CStage, entry: *CrustDecl,
         var declaration: *CrustDecl = (*parsed).declarations;
         while declaration != null(*CrustDecl) {
             if (*declaration).kind == CRUST_D_FUNCTION {
-                if body == null(fn(*CStage,*CrustDecl,*u8)->bool) {
-                    c_function(stage, declaration);
-                } else {
-                    c_function_header(stage, declaration);
-                    if (*stage).status.failed { return false; }
-                    var errors: usize = (*context).error_count;
-                    var success: bool = body(stage, declaration, user);
-                    if (*stage).status.failed { return false; }
-                    if (*context).error_count != errors {
-                        (*stage).status.failed = true;
-                        return false;
-                    }
-                    if !success {
-                        c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
-                                "C function body callback failed");
-                        return false;
-                    }
-                }
+                if !c_function_body(stage, declaration, body, user) { return false; }
             }
             if (*declaration).kind == CRUST_D_CONST {
                 var binding: *CBinding = c_binding(stage, declaration);
@@ -543,4 +401,179 @@ fn c_emit_with_body(stage: *CStage, entry: *CrustDecl,
     c_emit_prototypes(stage);
     c_emit_renames(stage);
     return !(*stage).status.failed;
+}
+
+fn c_binary_checks(stage: *CStage, operation: u32, input_type: *CrustType, left: usize, right: usize) -> unit {
+    if operation == CRUST_OP_DIV || operation == CRUST_OP_REM {
+        c_text(stage, "if("); c_value(stage, right); c_text(stage, "==0");
+        if c_signed(input_type) {
+            c_text(stage, "||("); c_value(stage, left); c_text(stage, "==");
+            c_literal(stage, input_type, 1u64 << ((*input_type).size * 8u64 - 1u64));
+            c_text(stage, "&&"); c_value(stage, right); c_text(stage, "==-1)");
+        }
+        c_text(stage, ")__builtin_trap();\n");
+    }
+    if operation == CRUST_OP_SHL || operation == CRUST_OP_SHR {
+        c_text(stage, "if((uint64_t)"); c_value(stage, right); c_text(stage, ">=");
+        c_number(stage, (*input_type).size * 8u64); c_text(stage, "u)__builtin_trap();\n");
+    }
+}
+
+fn c_call(stage: *CStage, input: *CrustExpr) -> usize {
+    var callee: usize = c_expression(stage, (*input).left);
+    var arguments: *usize = c_alloc(&(*stage).status, (*input).arg_count * sizeof(usize), alignof(usize)) as *usize;
+    if (*stage).status.failed { return 0usize; }
+    var index: usize = 0usize;
+    while index < (*input).arg_count {
+        arguments[index] = c_expression(stage, (*input).args[index]);
+        index = index + 1usize;
+    }
+    var result: usize = 0usize;
+    if (*(*input).type).kind != CRUST_T_UNIT {
+        result = c_temp(stage, (*input).type); c_text(stage, "=");
+    }
+    c_value(stage, callee); c_text(stage, "(");
+    index = 0usize;
+    while index < (*input).arg_count {
+        if index != 0usize { c_text(stage, ","); }
+        c_value(stage, arguments[index]);
+        index = index + 1usize;
+    }
+    c_text(stage, ");\n");
+    return result;
+}
+
+fn c_aggregate(stage: *CStage, input: *CrustExpr) -> usize {
+    var kind: u32 = (*input).kind;
+    var result: usize = c_temp(stage, (*input).type);
+    c_text(stage, ";\n");
+    var initializer: *CrustInit = (*input).inits;
+    var index: usize = 0usize;
+    while initializer != null(*CrustInit) || index < (*input).arg_count {
+        var item: *CrustExpr = null(*CrustExpr);
+        var offset: u64 = 0u64;
+        if kind == CRUST_E_RECORD {
+            item = (*initializer).value;
+            offset = (*(*initializer).field).offset;
+            initializer = (*initializer).next;
+        } else {
+            item = (*input).args[index];
+            offset = index as u64 * (*(*(*input).type).base).size;
+            index = index + 1usize;
+        }
+        var value: usize = c_expression(stage, item);
+        c_text(stage, "__builtin_memcpy((unsigned char*)&"); c_value(stage, result);
+        c_text(stage, "+"); c_number(stage, offset); c_text(stage, "u,&"); c_value(stage, value);
+        c_text(stage, ","); c_number(stage, (*(*item).type).size); c_text(stage, "u);\n");
+    }
+    return result;
+}
+
+fn c_scalar_expression(stage: *CStage, input: *CrustExpr) -> usize {
+    var kind: u32 = (*input).kind;
+    var operand: usize = 0usize;
+    if kind == CRUST_E_UNARY || kind == CRUST_E_CAST { operand = c_expression(stage, (*input).left); }
+    var result: usize = c_temp(stage, (*input).type);
+    c_text(stage, "=");
+    if kind == CRUST_E_NAME { c_global(stage, (*(*input).symbol).decl); }
+    else if c_literal_kind(kind) {
+        c_literal(stage, (*input).type, (*input).integer);
+    } else if kind == CRUST_E_STRING {
+        c_text(stage, "(void*)"); c_quote(stage, (*input).bytes, (*input).byte_count - 1usize);
+    } else if kind == CRUST_E_NULL { c_text(stage, "0"); }
+    else if kind == CRUST_E_UNARY { c_unary(stage, input, operand); }
+    else if kind == CRUST_E_CAST { c_cast(stage, input, operand); }
+    else { trap; }
+    c_text(stage, ";\n");
+    return result;
+}
+
+fn c_unary(stage: *CStage, input: *CrustExpr, operand: usize) -> unit {
+    if (*input).op == CRUST_OP_NOT { c_text(stage, "!"); c_value(stage, operand); return; }
+    c_wrap_begin(stage, (*input).type);
+    if (*input).op == CRUST_OP_NEG { c_text(stage, "UINT64_C(0)-(uint64_t)"); }
+    else if (*input).op == CRUST_OP_BIT_NOT { c_text(stage, "~(uint64_t)"); }
+    else { trap; }
+    c_value(stage, operand); c_text(stage, "))");
+}
+
+fn c_cast(stage: *CStage, input: *CrustExpr, operand: usize) -> unit {
+    var target: *CrustType = (*input).type;
+    if (*target).kind == CRUST_T_POINTER {
+        c_text(stage, "r_addr((uintptr_t)"); c_value(stage, operand); c_text(stage, ")");
+    } else if (*target).kind == CRUST_T_BOOL {
+        c_text(stage, "("); c_value(stage, operand); c_text(stage, "!=0)");
+    } else if c_integer(target) {
+        c_wrap_begin(stage, target);
+        if (*(*(*input).left).type).kind == CRUST_T_POINTER { c_text(stage, "(uintptr_t)"); }
+        c_value(stage, operand); c_text(stage, "))");
+    } else { c_value(stage, operand); }
+}
+
+fn c_variable(stage: *CStage, input: *CrustStmt) -> unit {
+    var value: usize = 0usize;
+    if !(*input).uninitialized { value = c_expression(stage, (*input).value); }
+    var variable_type: *CrustType = (*(*input).symbol).type;
+    c_type_name(stage, variable_type); c_text(stage, " "); c_symbol(stage, (*input).symbol); c_text(stage, ";\n");
+    if !(*input).uninitialized {
+        c_text(stage, "__builtin_memcpy(&"); c_symbol(stage, (*input).symbol);
+        c_text(stage, ",&"); c_value(stage, value); c_text(stage, ",");
+        c_number(stage, (*variable_type).size); c_text(stage, "u);\n");
+    }
+}
+
+fn c_literal_kind(kind: u32) -> bool {
+    return kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL || kind == CRUST_E_SIZEOF ||
+           kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF;
+}
+
+fn c_function_body(stage: *CStage, declaration: *CrustDecl,
+                   body: fn(*CStage,*CrustDecl,*u8)->bool, user: *u8) -> bool {
+    var context: *CrustContext = (*stage).status.context;
+    if body == null(fn(*CStage,*CrustDecl,*u8)->bool) {
+        c_function(stage, declaration);
+    } else {
+        c_function_header(stage, declaration);
+        if (*stage).status.failed { return false; }
+        var errors: usize = (*context).error_count;
+        var success: bool = body(stage, declaration, user);
+        if (*stage).status.failed { return false; }
+        if (*context).error_count != errors {
+            (*stage).status.failed = true;
+            return false;
+        }
+        if !success {
+            c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
+                    "C function body callback failed");
+            return false;
+        }
+    }
+    return true;
+}
+
+fn c_wraps(operation: u32) -> bool {
+    return operation == CRUST_OP_ADD || operation == CRUST_OP_SUB || operation == CRUST_OP_MUL ||
+           operation == CRUST_OP_BIT_AND || operation == CRUST_OP_BIT_OR || operation == CRUST_OP_BIT_XOR ||
+           operation == CRUST_OP_SHL;
+}
+
+fn c_name_value(stage: *CStage, input: *CrustExpr) -> usize {
+    var input_type: *CrustType = (*input).type;
+    if (*input_type).kind != CRUST_T_ARRAY && (*input_type).kind != CRUST_T_RECORD {
+        var result: usize = c_temp(stage, input_type);
+        c_text(stage, "=");
+        if (*(*input).symbol).kind == CRUST_SYM_CONST { c_global(stage, (*(*input).symbol).decl); }
+        else { c_symbol(stage, (*input).symbol); }
+        c_text(stage, ";\n");
+        return result;
+    }
+    var address: usize = c_place(stage, input);
+    return c_load(stage, (*input).type, address);
+}
+
+fn c_block(stage: *CStage, input: *CrustStmt) -> unit {
+    c_text(stage, "{\n");
+    var child: *CrustStmt = (*input).body;
+    while child != null(*CrustStmt) { c_statement(stage, child); child = (*child).next; }
+    c_text(stage, "}\n");
 }

@@ -4,10 +4,10 @@ record OaAllocator {
     calls: usize;
     fail_at: usize;
     live: usize;
-    rejected: bool;
-    host_failed: bool;
     phase: u32;
     rejected_phase: u32;
+    rejected: bool;
+    host_failed: bool;
 }
 
 fn oa_text(stream:u32, text:*u8)->bool {
@@ -82,14 +82,7 @@ fn oa_check(sources:*CrustSource, count:usize, composed:bool)->i32 {
         var hooks:OvHooks = uninit;
         if composed { ov_resources_init(&stage, &resources, "resources_x64_v1", &hooks); }
         else { ov_init(&stage, &context, "crust0_x64_v1", null(*OvHooks)); }
-        var success:bool = true;
-        var index:usize = 0usize;
-        while index < count && success {
-            if composed {
-                success = ov_resources_read(&stage, &sources[index], 0usize, sources[index].size);
-            } else { success = ov_read(&stage, &sources[index], 0usize, sources[index].size); }
-            index = index + 1usize;
-        }
+        var success:bool = oa_read(&stage, sources, count, composed);
         if success {
             state.phase = 1u32;
             if composed { success = ov_resources_prepare(&stage); }
@@ -98,17 +91,9 @@ fn oa_check(sources:*CrustSource, count:usize, composed:bool)->i32 {
         var stage_complete:bool = success;
         if success {
             state.phase = 2u32;
-            if composed { success = rs_prepare(&resources); }
-            else { success = crust_collect(&context) && crust_resolve(&context) && crust_check(&context); }
+            success = oa_finalize(&context, &resources, composed);
         }
-        var valid:bool = !state.host_failed && context.failure == null(*u8) && stage.scratch.size == 0usize;
-        if success {
-            valid = valid && !state.rejected && !stage.failed && !resources.failed && context.error_count == 0usize;
-        } else {
-            valid = valid && state.rejected && context.error_count != 0usize && context.error[0usize] != 0u8;
-            if !stage_complete { valid = valid && stage.failed; }
-            if composed { valid = valid && resources.failed; }
-        }
+        var valid:bool = oa_valid(&state, &context, &stage, &resources, success, stage_complete, composed);
         if !valid { oa_report(fail_at, "invalid failure state or invalid test input", &context); }
         crust_context_destroy(&context);
         if state.live != 0usize || context.arena.blocks != null(*u8) || context.arena.bytes_reserved != 0usize {
@@ -117,12 +102,7 @@ fn oa_check(sources:*CrustSource, count:usize, composed:bool)->i32 {
         }
         if !valid { return 1i32; }
         if success {
-            if !oa_text(1u32, "overload allocation: ") || !oa_number(1u32, fail_at - 1usize) ||
-               !oa_text(1u32, " failure points checked (read ") || !oa_number(1u32, failed_read) ||
-               !oa_text(1u32, ", overload ") || !oa_number(1u32, failed_overload) ||
-               !oa_text(1u32, ", final ") || !oa_number(1u32, failed_final) ||
-               !oa_text(1u32, ")\n") { return 1i32; }
-            return 0i32;
+            return oa_summary(fail_at, failed_read, failed_overload, failed_final);
         }
         if state.rejected_phase == 0u32 { failed_read = failed_read + 1usize; }
         else {
@@ -177,4 +157,42 @@ fn main(argc:i32, argv:**u8)->i32 {
     }
     crust0_host_free(sources as *u8);
     return result;
+}
+
+fn oa_read(stage:*OvStage, sources:*CrustSource, count:usize, composed:bool)->bool {
+    var success:bool = true;
+    var index:usize = 0usize;
+    while index < count && success {
+        if composed {
+            success = ov_resources_read(stage, &sources[index], 0usize, sources[index].size);
+        } else { success = ov_read(stage, &sources[index], 0usize, sources[index].size); }
+        index = index + 1usize;
+    }
+    return success;
+}
+
+fn oa_finalize(context:*CrustContext, resources:*RsStage, composed:bool)->bool {
+    if composed { return rs_prepare(resources); }
+    return crust_collect(context) && crust_resolve(context) && crust_check(context);
+}
+
+fn oa_valid(state:*OaAllocator, context:*CrustContext, stage:*OvStage, resources:*RsStage, success:bool, stage_complete:bool, composed:bool)->bool {
+    var valid:bool = !(*state).host_failed && (*context).failure == null(*u8) && (*stage).scratch.size == 0usize;
+    if success {
+        valid = valid && !(*state).rejected && !(*stage).failed && !(*resources).failed && (*context).error_count == 0usize;
+    } else {
+        valid = valid && (*state).rejected && (*context).error_count != 0usize && (*context).error[0usize] != 0u8;
+        if !stage_complete { valid = valid && (*stage).failed; }
+        if composed { valid = valid && (*resources).failed; }
+    }
+    return valid;
+}
+
+fn oa_summary(fail_at:usize, failed_read:usize, failed_overload:usize, failed_final:usize)->i32 {
+    if !oa_text(1u32, "overload allocation: ") || !oa_number(1u32, fail_at - 1usize) ||
+       !oa_text(1u32, " failure points checked (read ") || !oa_number(1u32, failed_read) ||
+       !oa_text(1u32, ", overload ") || !oa_number(1u32, failed_overload) ||
+       !oa_text(1u32, ", final ") || !oa_number(1u32, failed_final) ||
+       !oa_text(1u32, ")\n") { return 1i32; }
+    return 0i32;
 }

@@ -19,9 +19,7 @@ fn c_test_comparison_reuse()->i32 {
     var integer:*CrustType = &context.builtins[CRUST_T_I32 as usize];
     var different:*CrustType = &context.builtins[CRUST_T_U32 as usize];
     var result:*CrustType = &context.builtins[CRUST_T_UNIT as usize];
-    var copy:CrustType = *integer;
-    if !c_exact_type_equal(&stage, integer, &copy) || c_exact_type_equal(&stage, integer, different) ||
-       stage.comparison.capacity != 0usize { return 20i32; }
+    if !c_test_scalar_comparison(&stage, integer, different) { return 20i32; }
     var left:[CrustType;40] = uninit;
     var right:[CrustType;40] = uninit;
     var left_params:[*CrustType;80] = uninit;
@@ -80,13 +78,8 @@ fn c_test_comparison_failures()->i32 {
         var stage:CStage = uninit;
         c_stage_init(&stage, &context);
         var success:bool = c_exact_type_equal(&stage, &a, &b);
-        if success {
-            if stage.status.failed || context.error_count != 0usize || c_test_calls() >= fail_at { return 26i32; }
-        } else {
-            if !stage.status.failed || context.error_count != 1usize || context.error[0usize] == 0u8 ||
-               c_test_calls() != fail_at { return 27i32; }
-        }
-        if stage.comparison.count != 0usize { return 28i32; }
+        var checked:i32 = c_test_comparison_result(&stage, success, fail_at);
+        if checked != 0i32 { return checked; }
         c_stage_destroy(&stage);
         if c_test_live() != 0usize || stage.comparison.capacity != 0usize { return 29i32; }
         if success { break; }
@@ -95,5 +88,24 @@ fn c_test_comparison_failures()->i32 {
     crust_context_destroy(&context);
     c_test_reset(0usize);
     if fail_at < 4usize { return 30i32; }
+    return 0i32;
+}
+
+fn c_test_scalar_comparison(stage:*CStage, integer:*CrustType, different:*CrustType)->bool {
+    var copy:CrustType = *integer;
+    if !c_exact_type_equal(stage, integer, &copy) || c_exact_type_equal(stage, integer, different) ||
+       (*stage).comparison.capacity != 0usize { return false; }
+    return true;
+}
+
+fn c_test_comparison_result(stage:*CStage, success:bool, fail_at:usize)->i32 {
+    var context:*CrustContext = (*stage).status.context;
+    if success {
+        if (*stage).status.failed || (*context).error_count != 0usize || c_test_calls() >= fail_at { return 26i32; }
+    } else {
+        if !(*stage).status.failed || (*context).error_count != 1usize || (*context).error[0usize] == 0u8 ||
+           c_test_calls() != fail_at { return 27i32; }
+    }
+    if (*stage).comparison.count != 0usize { return 28i32; }
     return 0i32;
 }

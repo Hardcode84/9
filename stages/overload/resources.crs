@@ -20,15 +20,7 @@ fn ov_resources_expression(walk: *OvWalk, expression: *CrustExpr,
     var location: *CrustLoc = &(*expression).loc;
     if kind == RS_MOVE { return ov_expression(walk, (*expression).left, expected); }
     if kind == RS_READ || kind == RS_MUT {
-        var operand_expected: *CrustTypeSyntax = null(*CrustTypeSyntax);
-        if expected != null(*CrustTypeSyntax) && (*expected).kind == kind {
-            operand_expected = (*expected).base;
-        }
-        var base: *CrustTypeSyntax = ov_expression(walk, (*expression).left, operand_expected);
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        var result: *CrustTypeSyntax = ov_type(stage, kind, location);
-        if result != null(*CrustTypeSyntax) { (*result).base = base; }
-        return result;
+        return ov_resources_borrow(walk,expression,expected);
     }
     if kind == CRUST_E_UNARY && (*expression).op == CRUST_OP_DEREF {
         var operand: *CrustTypeSyntax = ov_expression(walk, (*expression).left, null(*CrustTypeSyntax));
@@ -40,20 +32,7 @@ fn ov_resources_expression(walk: *OvWalk, expression: *CrustExpr,
         return (*operand).base;
     }
     if kind == CRUST_E_FIELD || kind == CRUST_E_INDEX {
-        var base: *CrustTypeSyntax = ov_expression(walk, (*expression).left, null(*CrustTypeSyntax));
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        if (*base).kind == RS_READ || (*base).kind == RS_MUT { base = (*base).base; }
-        if kind == CRUST_E_FIELD {
-            if (*base).kind == CRUST_T_POINTER { base = (*base).base; }
-            return ov_field_type(stage, base, (*expression).field_name, location);
-        }
-        ov_expression(walk, (*expression).right, null(*CrustTypeSyntax));
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        if (*base).kind != CRUST_T_ARRAY && (*base).kind != CRUST_T_POINTER {
-            ov_error(stage, location, "indexing requires an array or raw pointer");
-            return null(*CrustTypeSyntax);
-        }
-        return (*base).base;
+        return ov_resources_place(walk,expression);
     }
     return null(*CrustTypeSyntax);
 }
@@ -186,4 +165,39 @@ fn ov_resources_prepare(stage: *OvStage) -> bool {
     }
     if (*resources).failed { (*stage).failed = true; }
     return !(*stage).failed;
+}
+
+fn ov_resources_borrow(walk:*OvWalk,expression:*CrustExpr,expected:*CrustTypeSyntax)->*CrustTypeSyntax {
+    var stage: *OvStage = (*walk).stage;
+    var location: *CrustLoc = &(*expression).loc;
+    var kind: u32 = (*expression).kind;
+    var operand_expected: *CrustTypeSyntax = null(*CrustTypeSyntax);
+    if expected != null(*CrustTypeSyntax) && (*expected).kind == kind {
+        operand_expected = (*expected).base;
+    }
+    var base: *CrustTypeSyntax = ov_expression(walk, (*expression).left, operand_expected);
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    var result: *CrustTypeSyntax = ov_type(stage, kind, location);
+    if result != null(*CrustTypeSyntax) { (*result).base = base; }
+    return result;
+}
+
+fn ov_resources_place(walk:*OvWalk,expression:*CrustExpr)->*CrustTypeSyntax {
+    var stage: *OvStage = (*walk).stage;
+    var location: *CrustLoc = &(*expression).loc;
+    var kind: u32 = (*expression).kind;
+    var base: *CrustTypeSyntax = ov_expression(walk, (*expression).left, null(*CrustTypeSyntax));
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    if (*base).kind == RS_READ || (*base).kind == RS_MUT { base = (*base).base; }
+    if kind == CRUST_E_FIELD {
+        if (*base).kind == CRUST_T_POINTER { base = (*base).base; }
+        return ov_field_type(stage, base, (*expression).field_name, location);
+    }
+    ov_expression(walk, (*expression).right, null(*CrustTypeSyntax));
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    if (*base).kind != CRUST_T_ARRAY && (*base).kind != CRUST_T_POINTER {
+        ov_error(stage, location, "indexing requires an array or raw pointer");
+        return null(*CrustTypeSyntax);
+    }
+    return (*base).base;
 }

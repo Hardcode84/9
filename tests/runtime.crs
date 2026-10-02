@@ -60,14 +60,17 @@ fn factorial(n:u32) -> u32 {
     if n == 0u32 { return 1u32; }
     return n * factorial(n - 1u32);
 }
-fn main(argc:i32,argv:**u8) -> i32 {
-    if argc < 1i32 || argv == null(**u8) { return 1i32; }
+fn runtime_scalars()->i32 {
     if native_i8(-128i8) != -128i8 || native_u8(255u8) != 255u8 { return 2i32; }
     if native_i16(-32768i16) != -32768i16 || native_u16(65535u16) != 65535u16 { return 3i32; }
     if native_i32(-2147483648i32) != -2147483648i32 || native_u32(4294967295u32) != 4294967295u32 { return 4i32; }
     if native_i64(-9223372036854775808i64) != -9223372036854775808i64 ||
        native_u64(18446744073709551615u64) != 18446744073709551615u64 { return 5i32; }
     if native_bool(true) || !native_bool(false) { return 6i32; }
+    return 0i32;
+}
+
+fn runtime_calls()->i32 {
     var byte:u8 = 42u8;
     if native_pointer(&byte) != &byte { return 7i32; }
     if native_stack(-128i8,255u8,-32768i16,65535u16,-2147483648i32,4294967295u32,
@@ -75,12 +78,24 @@ fn main(argc:i32,argv:**u8) -> i32 {
     if native_callback(callback) != 42i32 || native_function()(41i32) != 42i32 { return 9i32; }
     if sum8(1u64,2u64,3u64,4u64,5u64,6u64,sum8(1u64,1u64,1u64,1u64,1u64,1u64,1u64,1u64),8u64) != 37u64 { return 10i32; }
     if factorial(6u32) != 720u32 { return 11i32; }
+    return 0i32;
+}
+
+fn runtime_constants()->i32 {
     if integers[0usize] != -32768i16 || integers[2usize] != 32767i16 ||
        pair_constant.a != 1u64 || pair_constant.b != 2u64 { return 12i32; }
     if table.bytes[2usize] != 3u8 || table.function(41u32) != 42u32 { return 13i32; }
     if text[0usize] != 97u8 || text[1usize] != 0u8 || text[2usize] != 98u8 || text[3usize] != 0u8 { return 14i32; }
+    return 0i32;
+}
+
+fn runtime_layout()->i32 {
     if layout != 8usize || sizeof(Padded) != 32usize || alignof(Padded) != 8usize { return 15i32; }
     if no_pointer != null(*u8) || no_function != null(fn(u32)->u32) || !yes { return 16i32; }
+    return 0i32;
+}
+
+fn runtime_evaluation_order()->i32 {
     var trace:u32 = 0u32;
     if tick(&trace,1u32) + tick(&trace,2u32) != 3u32 || trace != 12u32 { return 17i32; }
     trace = 0u32;
@@ -91,12 +106,21 @@ fn main(argc:i32,argv:**u8) -> i32 {
     var array:[u32; 2] = make [u32; 2] {0u32,0u32};
     *pick(&trace,&array) = tick(&trace,2u32);
     if trace != 12u32 || array[0usize] != 2u32 { return 21i32; }
-    trace = 0u32;
+    return 0i32;
+}
+
+fn runtime_constructors()->i32 {
+    var trace:u32 = 0u32;
+    var array:[u32; 2] = make [u32; 2] {2u32,0u32};
     var constructed:Pair = make Pair {b:tick(&trace,1u32) as u64,a:tick(&trace,2u32) as u64};
     if trace != 12u32 || constructed.a != 2u64 || constructed.b != 1u64 { return 22i32; }
     trace = 0u32;
     array = make [u32; 2] {tick(&trace,1u32),tick(&trace,2u32)};
     if trace != 12u32 || array[1usize] != 2u32 { return 23i32; }
+    return 0i32;
+}
+
+fn runtime_storage()->i32 {
     var triple:[u64; 3] = make [u64; 3] {1u64,2u64,3u64};
     var src:*Pair = &triple[0usize] as *Pair;
     var dst:*Pair = &triple[1usize] as *Pair;
@@ -114,6 +138,10 @@ fn main(argc:i32,argv:**u8) -> i32 {
     var p:*u64 = &triple[0usize];
     if *(p + 2isize) != 2u64 || *((p + 2isize) - 1isize) != 1u64 { return 29i32; }
     if null(*u64) + 0isize != null(*u64) { return 30i32; }
+    return 0i32;
+}
+
+fn runtime_loops()->i32 {
     var counter:u32 = 0u32;
     var total:u32 = 0u32;
     while counter < 10u32 {
@@ -128,10 +156,37 @@ fn main(argc:i32,argv:**u8) -> i32 {
         total = total + counter;
     }
     if total != 8u32 || counter != 5u32 { return 31i32; }
+    return 0i32;
+}
+
+fn runtime_values()->i32 {
     var function:fn(u32)->u32 = increment;
     if function == no_function || function != increment || function(1u32) != 2u32 { return 32i32; }
     if (1u8 as bool) != true || (0i64 as bool) != false || (true as u64) != 1u64 { return 33i32; }
     if branch(1u32) != 1u32 || branch(2u32) != 12u32 || branch(3u32) != 123u32 ||
        branch(4u32) != 1123u32 { return 34i32; }
+    return 0i32;
+}
+
+fn main(argc:i32,argv:**u8) -> i32 {
+    if argc < 1i32 || argv == null(**u8) { return 1i32; }
+    var result:i32 = runtime_scalars();
+    if result != 0i32 { return result; }
+    result = runtime_calls();
+    if result != 0i32 { return result; }
+    result = runtime_constants();
+    if result != 0i32 { return result; }
+    result = runtime_layout();
+    if result != 0i32 { return result; }
+    result = runtime_evaluation_order();
+    if result != 0i32 { return result; }
+    result = runtime_constructors();
+    if result != 0i32 { return result; }
+    result = runtime_storage();
+    if result != 0i32 { return result; }
+    result = runtime_loops();
+    if result != 0i32 { return result; }
+    result = runtime_values();
+    if result != 0i32 { return result; }
     return 0i32;
 }

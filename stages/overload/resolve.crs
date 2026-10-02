@@ -106,26 +106,7 @@ fn ov_call(walk:*OvWalk,expression:*CrustExpr)->*CrustTypeSyntax {
     var signature:*CrustTypeSyntax=null(*CrustTypeSyntax);
     var index:usize=0usize;
     if group!=null(*OvGlobal) && (*group).count>1usize {
-        signature=ov_type(stage,CRUST_T_FUNCTION,&(*expression).loc);
-        if signature==null(*CrustTypeSyntax) { return signature; }
-        (*signature).base=ov_type(stage,CRUST_T_UNIT,&(*expression).loc);
-        (*signature).param_count=(*expression).arg_count;
-        (*signature).params=ov_alloc(stage,(*expression).arg_count*sizeof(*CrustTypeSyntax),alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        while index<(*expression).arg_count && !(*stage).failed {
-            (*signature).params[index]=ov_expression(walk,(*expression).args[index],null(*CrustTypeSyntax));
-            index=index+1usize;
-        }
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        var selected:*OvFunction=ov_select(stage,group,signature,true,&(*expression).loc);
-        if selected==null(*OvFunction) || (*stage).failed { return null(*CrustTypeSyntax); }
-        signature=ov_expression(walk,(*expression).left,(*selected).syntax);
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        if (*signature).kind!=CRUST_T_FUNCTION {
-            ov_error(stage,&(*expression).loc,"call requires a function value");
-            return null(*CrustTypeSyntax);
-        }
-        return (*signature).base;
+        return ov_overloaded_call(walk,expression,group);
     }
     signature=ov_expression(walk,(*expression).left,null(*CrustTypeSyntax));
     if (*stage).failed { return null(*CrustTypeSyntax); }
@@ -153,27 +134,12 @@ fn ov_standard_expression(walk:*OvWalk,expression:*CrustExpr,expected:*CrustType
     var kind:u32=(*expression).kind;
     var location:*CrustLoc=&(*expression).loc;
     if kind==CRUST_E_NAME {
-        var local:*OvLocal=ov_lookup(walk,(*expression).name);
-        if local!=null(*OvLocal) { return ov_binding_value(walk,(*local).syntax); }
-        var global:*OvGlobal=ov_global(stage,(*expression).name);
-        if global==null(*OvGlobal) {
-            ov_error(stage,location,"unknown source value name");
-            return null(*CrustTypeSyntax);
-        }
-        if (*global).first!=null(*OvFunction) { return ov_function_value(walk,expression,global,expected); }
-        if (*(*global).declaration).kind!=CRUST_D_CONST {
-            ov_error(stage,location,"record name is not a value");
-            return null(*CrustTypeSyntax);
-        }
-        return ov_binding_value(walk,(*(*global).declaration).syntax_type);
+        return ov_name_expression(walk,expression,expected);
     }
     if kind==CRUST_E_INTEGER { return ov_type(stage,(*expression).literal_type,location); }
     if kind==CRUST_E_BOOL { return ov_type(stage,CRUST_T_BOOL,location); }
     if kind==CRUST_E_STRING {
-        var syntax:*CrustTypeSyntax=ov_type(stage,CRUST_T_POINTER,location);
-        if syntax!=null(*CrustTypeSyntax) { (*syntax).base=ov_type(stage,CRUST_T_U8,location); }
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        return syntax;
+        return ov_string_expression(walk,expression);
     }
     if kind==CRUST_E_GROUP { return ov_expression(walk,(*expression).left,expected); }
     if kind==CRUST_E_CALL { return ov_call(walk,expression); }
@@ -182,81 +148,15 @@ fn ov_standard_expression(walk:*OvWalk,expression:*CrustExpr,expected:*CrustType
         return ov_type(stage,CRUST_T_USIZE,location);
     }
     if kind==CRUST_E_CAST {
-        ov_expression(walk,(*expression).left,(*expression).syntax_type);
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        return (*expression).syntax_type;
+        return ov_cast_expression(walk,expression);
     }
     if kind==CRUST_E_UNARY {
-        var operand:*CrustTypeSyntax=ov_expression(walk,(*expression).left,null(*CrustTypeSyntax));
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        if (*expression).op==CRUST_OP_ADDRESS {
-            var syntax:*CrustTypeSyntax=ov_type(stage,CRUST_T_POINTER,location);
-            if syntax!=null(*CrustTypeSyntax) { (*syntax).base=operand; }
-            return syntax;
-        }
-        if (*expression).op==CRUST_OP_DEREF {
-            if (*operand).kind!=CRUST_T_POINTER {
-                ov_error(stage,location,"dereference requires a pointer");
-                return null(*CrustTypeSyntax);
-            }
-            return (*operand).base;
-        }
-        if (*expression).op==CRUST_OP_NOT { return ov_type(stage,CRUST_T_BOOL,location); }
-        if (*expression).op==CRUST_OP_NEG || (*expression).op==CRUST_OP_BIT_NOT { return operand; }
-        ov_error(stage,location,"unknown unary operation");
-        return null(*CrustTypeSyntax);
+        return ov_unary_expression(walk,expression);
     }
     if kind==CRUST_E_BINARY {
-        var left:*CrustTypeSyntax=ov_expression(walk,(*expression).left,null(*CrustTypeSyntax));
-        ov_expression(walk,(*expression).right,null(*CrustTypeSyntax));
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        if (*expression).op>=CRUST_OP_EQ && (*expression).op<=CRUST_OP_OR {
-            return ov_type(stage,CRUST_T_BOOL,location);
-        }
-        return left;
+        return ov_binary_expression(walk,expression);
     }
-    if kind==CRUST_E_INDEX {
-        var base:*CrustTypeSyntax=ov_expression(walk,(*expression).left,null(*CrustTypeSyntax));
-        var index_type:*CrustTypeSyntax=ov_type(stage,CRUST_T_USIZE,location);
-        ov_expression(walk,(*expression).right,index_type);
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        if (*base).kind!=CRUST_T_ARRAY && (*base).kind!=CRUST_T_POINTER {
-            ov_error(stage,location,"indexing requires an array or pointer");
-            return null(*CrustTypeSyntax);
-        }
-        return (*base).base;
-    }
-    if kind==CRUST_E_FIELD {
-        var base:*CrustTypeSyntax=ov_expression(walk,(*expression).left,null(*CrustTypeSyntax));
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        return ov_field_type(stage,base,(*expression).field_name,location);
-    }
-    if kind==CRUST_E_RECORD {
-        var item:*CrustInit=(*expression).inits;
-        while item!=null(*CrustInit) && !(*stage).failed {
-            var field:*CrustTypeSyntax=ov_field_type(stage,(*expression).syntax_type,(*item).name,&(*item).loc);
-            ov_expression(walk,(*item).value,field);
-            item=(*item).next;
-        }
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        return (*expression).syntax_type;
-    }
-    if kind==CRUST_E_ARRAY {
-        var syntax:*CrustTypeSyntax=(*expression).syntax_type;
-        if (*syntax).kind!=CRUST_T_ARRAY {
-            ov_error(stage,location,"array construction requires an array type");
-            return null(*CrustTypeSyntax);
-        }
-        var index:usize=0usize;
-        while index<(*expression).arg_count && !(*stage).failed {
-            ov_expression(walk,(*expression).args[index],(*syntax).base);
-            index=index+1usize;
-        }
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        return syntax;
-    }
-    ov_error(stage,location,"unhandled source expression kind");
-    return null(*CrustTypeSyntax);
+    return ov_aggregate_expression(walk,expression);
 }
 
 // Infer one expression with optional expected function type and extension hooks.
@@ -375,4 +275,158 @@ fn ov_resolve(stage:*OvStage)->bool {
         function=(*function).all_next;
     }
     return !(*stage).failed;
+}
+
+fn ov_overloaded_call(walk:*OvWalk,expression:*CrustExpr,group:*OvGlobal)->*CrustTypeSyntax {
+    var stage:*OvStage=(*walk).stage;
+    var signature:*CrustTypeSyntax=null(*CrustTypeSyntax);
+    var index:usize=0usize;
+    signature=ov_type(stage,CRUST_T_FUNCTION,&(*expression).loc);
+    if signature==null(*CrustTypeSyntax) { return signature; }
+    (*signature).base=ov_type(stage,CRUST_T_UNIT,&(*expression).loc);
+    (*signature).param_count=(*expression).arg_count;
+    (*signature).params=ov_alloc(stage,(*expression).arg_count*sizeof(*CrustTypeSyntax),alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    while index<(*expression).arg_count && !(*stage).failed {
+        (*signature).params[index]=ov_expression(walk,(*expression).args[index],null(*CrustTypeSyntax));
+        index=index+1usize;
+    }
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    var selected:*OvFunction=ov_select(stage,group,signature,true,&(*expression).loc);
+    if selected==null(*OvFunction) || (*stage).failed { return null(*CrustTypeSyntax); }
+    signature=ov_expression(walk,(*expression).left,(*selected).syntax);
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    if (*signature).kind!=CRUST_T_FUNCTION {
+        ov_error(stage,&(*expression).loc,"call requires a function value");
+        return null(*CrustTypeSyntax);
+    }
+    return (*signature).base;
+}
+
+fn ov_name_expression(walk:*OvWalk,expression:*CrustExpr,expected:*CrustTypeSyntax)->*CrustTypeSyntax {
+    var stage:*OvStage=(*walk).stage;
+    var location:*CrustLoc=&(*expression).loc;
+    var local:*OvLocal=ov_lookup(walk,(*expression).name);
+    if local!=null(*OvLocal) { return ov_binding_value(walk,(*local).syntax); }
+    var global:*OvGlobal=ov_global(stage,(*expression).name);
+    if global==null(*OvGlobal) {
+        ov_error(stage,location,"unknown source value name");
+        return null(*CrustTypeSyntax);
+    }
+    if (*global).first!=null(*OvFunction) { return ov_function_value(walk,expression,global,expected); }
+    if (*(*global).declaration).kind!=CRUST_D_CONST {
+        ov_error(stage,location,"record name is not a value");
+        return null(*CrustTypeSyntax);
+    }
+    return ov_binding_value(walk,(*(*global).declaration).syntax_type);
+}
+
+fn ov_unary_expression(walk:*OvWalk,expression:*CrustExpr)->*CrustTypeSyntax {
+    var stage:*OvStage=(*walk).stage;
+    var location:*CrustLoc=&(*expression).loc;
+    var operand:*CrustTypeSyntax=ov_expression(walk,(*expression).left,null(*CrustTypeSyntax));
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    if (*expression).op==CRUST_OP_ADDRESS {
+        var syntax:*CrustTypeSyntax=ov_type(stage,CRUST_T_POINTER,location);
+        if syntax!=null(*CrustTypeSyntax) { (*syntax).base=operand; }
+        return syntax;
+    }
+    if (*expression).op==CRUST_OP_DEREF {
+        if (*operand).kind!=CRUST_T_POINTER {
+            ov_error(stage,location,"dereference requires a pointer");
+            return null(*CrustTypeSyntax);
+        }
+        return (*operand).base;
+    }
+    if (*expression).op==CRUST_OP_NOT { return ov_type(stage,CRUST_T_BOOL,location); }
+    if (*expression).op==CRUST_OP_NEG || (*expression).op==CRUST_OP_BIT_NOT { return operand; }
+    ov_error(stage,location,"unknown unary operation");
+    return null(*CrustTypeSyntax);
+}
+
+fn ov_binary_expression(walk:*OvWalk,expression:*CrustExpr)->*CrustTypeSyntax {
+    var stage:*OvStage=(*walk).stage;
+    var location:*CrustLoc=&(*expression).loc;
+    var left:*CrustTypeSyntax=ov_expression(walk,(*expression).left,null(*CrustTypeSyntax));
+    ov_expression(walk,(*expression).right,null(*CrustTypeSyntax));
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    if (*expression).op>=CRUST_OP_EQ && (*expression).op<=CRUST_OP_OR {
+        return ov_type(stage,CRUST_T_BOOL,location);
+    }
+    return left;
+}
+
+fn ov_aggregate_expression(walk:*OvWalk,expression:*CrustExpr)->*CrustTypeSyntax {
+    var stage:*OvStage=(*walk).stage;
+    var location:*CrustLoc=&(*expression).loc;
+    var kind:u32=(*expression).kind;
+    if kind==CRUST_E_INDEX {
+        var base:*CrustTypeSyntax=ov_expression(walk,(*expression).left,null(*CrustTypeSyntax));
+        var index_type:*CrustTypeSyntax=ov_type(stage,CRUST_T_USIZE,location);
+        ov_expression(walk,(*expression).right,index_type);
+        if (*stage).failed { return null(*CrustTypeSyntax); }
+        if (*base).kind!=CRUST_T_ARRAY && (*base).kind!=CRUST_T_POINTER {
+            ov_error(stage,location,"indexing requires an array or pointer");
+            return null(*CrustTypeSyntax);
+        }
+        return (*base).base;
+    }
+    if kind==CRUST_E_FIELD {
+        var base:*CrustTypeSyntax=ov_expression(walk,(*expression).left,null(*CrustTypeSyntax));
+        if (*stage).failed { return null(*CrustTypeSyntax); }
+        return ov_field_type(stage,base,(*expression).field_name,location);
+    }
+    if kind==CRUST_E_RECORD {
+        return ov_record_expression(walk,expression);
+    }
+    if kind==CRUST_E_ARRAY {
+        return ov_array_expression(walk,expression);
+    }
+    ov_error(stage,location,"unhandled source expression kind");
+    return null(*CrustTypeSyntax);
+}
+
+fn ov_record_expression(walk:*OvWalk,expression:*CrustExpr)->*CrustTypeSyntax {
+    var stage:*OvStage=(*walk).stage;
+    var item:*CrustInit=(*expression).inits;
+    while item!=null(*CrustInit) && !(*stage).failed {
+        var field:*CrustTypeSyntax=ov_field_type(stage,(*expression).syntax_type,(*item).name,&(*item).loc);
+        ov_expression(walk,(*item).value,field);
+        item=(*item).next;
+    }
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    return (*expression).syntax_type;
+}
+
+fn ov_array_expression(walk:*OvWalk,expression:*CrustExpr)->*CrustTypeSyntax {
+    var stage:*OvStage=(*walk).stage;
+    var location:*CrustLoc=&(*expression).loc;
+    var syntax:*CrustTypeSyntax=(*expression).syntax_type;
+    if (*syntax).kind!=CRUST_T_ARRAY {
+        ov_error(stage,location,"array construction requires an array type");
+        return null(*CrustTypeSyntax);
+    }
+    var index:usize=0usize;
+    while index<(*expression).arg_count && !(*stage).failed {
+        ov_expression(walk,(*expression).args[index],(*syntax).base);
+        index=index+1usize;
+    }
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    return syntax;
+}
+
+fn ov_string_expression(walk:*OvWalk,expression:*CrustExpr)->*CrustTypeSyntax {
+    var stage:*OvStage=(*walk).stage;
+    var location:*CrustLoc=&(*expression).loc;
+    var syntax:*CrustTypeSyntax=ov_type(stage,CRUST_T_POINTER,location);
+    if syntax!=null(*CrustTypeSyntax) { (*syntax).base=ov_type(stage,CRUST_T_U8,location); }
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    return syntax;
+}
+
+fn ov_cast_expression(walk:*OvWalk,expression:*CrustExpr)->*CrustTypeSyntax {
+    var stage:*OvStage=(*walk).stage;
+    ov_expression(walk,(*expression).left,(*expression).syntax_type);
+    if (*stage).failed { return null(*CrustTypeSyntax); }
+    return (*expression).syntax_type;
 }

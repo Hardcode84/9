@@ -122,27 +122,7 @@ fn rr_standard_type(reader:*CrustReader)->*CrustTypeSyntax {
                     if !rr_next(reader) || !rr_expect(reader,93u32,"expected ']'") { return null(*CrustTypeSyntax); }
                 } else {
                     if rr_take(reader,RR_FN) {
-                        (*result).kind=CRUST_T_FUNCTION;
-                        if !rr_expect(reader,40u32,"expected '('") { return null(*CrustTypeSyntax); }
-                        var capacity:usize=0usize;
-                        while (*reader).token.kind!=41u32 && !(*reader).failed {
-                            if (*result).param_count==capacity {
-                                capacity=rr_capacity(reader,capacity);
-                                if (*reader).failed { return null(*CrustTypeSyntax); }
-                                (*result).params=crust_try_grow_array((*reader).context,(*result).params as *u8,
-                                    (*result).param_count,capacity,sizeof(*CrustTypeSyntax),alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
-                                if (*result).params==null(**CrustTypeSyntax) { rr_allocation_failed(reader);return null(*CrustTypeSyntax); }
-                            }
-                            var parameter:*CrustTypeSyntax=rr_type(reader);
-                            if parameter==null(*CrustTypeSyntax) { return null(*CrustTypeSyntax); }
-                            (*result).params[(*result).param_count]=parameter;
-                            (*result).param_count=(*result).param_count+1usize;
-                            if !rr_take(reader,44u32) { break; }
-                        }
-                        if !rr_expect(reader,41u32,"expected ')'") || !rr_expect(reader,RR_ARROW,"expected '->'") {
-                            return null(*CrustTypeSyntax);
-                        }
-                        (*result).base=rr_type(reader);
+                        return rr_function_type(reader,result);
                     } else { rr_error(reader,(*reader).token.offset,"expected a type"); }
                 }
             }
@@ -228,41 +208,7 @@ fn rr_primary(reader:*CrustReader)->*CrustExpr {
                     if result==null(*CrustExpr) { return result; }
                     (*result).bytes=token.bytes;(*result).byte_count=token.byte_count;rr_next(reader);
                 } else {
-                    if token.kind==40u32 {
-                        if !rr_next(reader) { return null(*CrustExpr); }
-                        result=rr_new_expr(reader,CRUST_E_GROUP,token.offset);
-                        if result==null(*CrustExpr) { return result; }
-                        (*result).left=rr_expression(reader);
-                        if !rr_expect(reader,41u32,"expected ')'") { return null(*CrustExpr); }
-                    } else {
-                        if token.kind==RR_MAKE {
-                            if !rr_next(reader) { return null(*CrustExpr); }
-                            return rr_constructor(reader,token.offset);
-                        }
-                        if token.kind==RR_NULL || token.kind==RR_SIZEOF || token.kind==RR_ALIGNOF {
-                            if !rr_next(reader) { return null(*CrustExpr); }
-                            var kind:u32=CRUST_E_NULL;
-                            if token.kind==RR_SIZEOF { kind=CRUST_E_SIZEOF; }
-                            if token.kind==RR_ALIGNOF { kind=CRUST_E_ALIGNOF; }
-                            result=rr_new_expr(reader,kind,token.offset);
-                            if result==null(*CrustExpr) || !rr_expect(reader,40u32,"expected '('") { return null(*CrustExpr); }
-                            (*result).syntax_type=rr_type(reader);
-                            if !rr_expect(reader,41u32,"expected ')'") { return null(*CrustExpr); }
-                        } else {
-                            if token.kind!=RR_OFFSETOF {
-                                rr_error(reader,token.offset,"expected an expression");return null(*CrustExpr);
-                            }
-                            if !rr_next(reader) { return null(*CrustExpr); }
-                            result=rr_new_expr(reader,CRUST_E_OFFSETOF,token.offset);
-                            if result==null(*CrustExpr) || !rr_expect(reader,40u32,"expected '('") { return null(*CrustExpr); }
-                            (*result).syntax_type=rr_new_type(reader,CRUST_T_NAME,(*reader).token.offset);
-                            if (*result).syntax_type==null(*CrustTypeSyntax) { return null(*CrustExpr); }
-                            (*(*result).syntax_type).name=rr_name(reader);
-                            if !rr_expect(reader,44u32,"expected ','") { return null(*CrustExpr); }
-                            (*result).field_name=rr_name(reader);
-                            if !rr_expect(reader,41u32,"expected ')'") { return null(*CrustExpr); }
-                        }
-                    }
+                    return rr_primary_compound(reader, &token);
                 }
             }
         }
@@ -361,12 +307,8 @@ fn rr_operator(token:u32,operation:*u32)->u32 {
     if token==124u32 { *operation=CRUST_OP_BIT_OR;return 3u32; }
     if token==94u32 { *operation=CRUST_OP_BIT_XOR;return 4u32; }
     if token==38u32 { *operation=CRUST_OP_BIT_AND;return 5u32; }
-    if token==RR_EQ { *operation=CRUST_OP_EQ;return 6u32; }
-    if token==RR_NE { *operation=CRUST_OP_NE;return 6u32; }
-    if token==60u32 { *operation=CRUST_OP_LT;return 7u32; }
-    if token==RR_LE { *operation=CRUST_OP_LE;return 7u32; }
-    if token==62u32 { *operation=CRUST_OP_GT;return 7u32; }
-    if token==RR_GE { *operation=CRUST_OP_GE;return 7u32; }
+    var comparison:u32=rr_comparison_operator(token,operation);
+    if comparison!=0u32 { return comparison; }
     if token==RR_SHL { *operation=CRUST_OP_SHL;return 8u32; }
     if token==RR_SHR { *operation=CRUST_OP_SHR;return 8u32; }
     if token==43u32 { *operation=CRUST_OP_ADD;return 9u32; }
@@ -412,14 +354,7 @@ fn rr_simple_statement(reader:*CrustReader)->*CrustStmt {
     var offset:usize=(*reader).token.offset;
     var result:*CrustStmt=null(*CrustStmt);
     if rr_take(reader,RR_VAR) {
-        result=rr_new_stmt(reader,CRUST_S_VAR,offset);
-        if result==null(*CrustStmt) { return result; }
-        (*result).name=rr_name(reader);
-        if !rr_expect(reader,58u32,"expected ':'") { return null(*CrustStmt); }
-        (*result).syntax_type=rr_type(reader);
-        if !rr_expect(reader,61u32,"expected '='") { return null(*CrustStmt); }
-        (*result).uninitialized=rr_take(reader,RR_UNINIT);
-        if !(*result).uninitialized { (*result).value=rr_expression(reader); }
+        result=rr_variable(reader,offset);
     } else {
         if rr_take(reader,RR_BREAK) { result=rr_new_stmt(reader,CRUST_S_BREAK,offset); }
         else {
@@ -556,19 +491,7 @@ fn rr_function_header(reader:*CrustReader)->*CrustDecl {
     if kind==CRUST_D_EXTERN && !rr_expect(reader,RR_FN,"expected 'fn'") { return null(*CrustDecl); }
     (*result).name=rr_name(reader);
     if !rr_expect(reader,40u32,"expected '('") { return null(*CrustDecl); }
-    var tail:**CrustParam=&(*result).params;
-    while (*reader).token.kind!=41u32 && !(*reader).failed {
-        var parameter:*CrustParam=rr_alloc(reader,sizeof(CrustParam),alignof(CrustParam)) as *CrustParam;
-        if parameter==null(*CrustParam) { return null(*CrustDecl); }
-        (*parameter).loc=make CrustLoc {source:(*reader).source,offset:(*reader).token.offset};
-        (*parameter).name=rr_name(reader);
-        if !rr_expect(reader,58u32,"expected ':'") { return null(*CrustDecl); }
-        (*parameter).syntax_type=rr_type(reader);
-        if (*reader).failed { return null(*CrustDecl); }
-        *tail=parameter;tail=&(*parameter).next;
-        (*result).param_count=(*result).param_count+1usize;
-        if !rr_take(reader,44u32) { break; }
-    }
+    if !rr_function_parameters(reader,result) { return null(*CrustDecl); }
     if !rr_expect(reader,41u32,"expected ')'") || !rr_expect(reader,RR_ARROW,"expected '->'") { return null(*CrustDecl); }
     (*result).syntax_type=rr_type(reader);
     if (*reader).failed { return null(*CrustDecl); }
@@ -673,4 +596,125 @@ fn rr_read(context:*CrustContext,source:*CrustSource,begin:usize,end:usize,hooks
     else { (*(*context).last_unit).next=parsed; }
     (*context).last_unit=parsed;
     return parsed;
+}
+
+fn rr_function_type(reader:*CrustReader,result:*CrustTypeSyntax)->*CrustTypeSyntax {
+    (*result).kind=CRUST_T_FUNCTION;
+    if !rr_expect(reader,40u32,"expected '('") { return null(*CrustTypeSyntax); }
+    var capacity:usize=0usize;
+    while (*reader).token.kind!=41u32 && !(*reader).failed {
+        if (*result).param_count==capacity {
+            capacity=rr_capacity(reader,capacity);
+            if (*reader).failed { return null(*CrustTypeSyntax); }
+            (*result).params=crust_try_grow_array((*reader).context,(*result).params as *u8,
+                (*result).param_count,capacity,sizeof(*CrustTypeSyntax),alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
+            if (*result).params==null(**CrustTypeSyntax) { rr_allocation_failed(reader);return null(*CrustTypeSyntax); }
+        }
+        var parameter:*CrustTypeSyntax=rr_type(reader);
+        if parameter==null(*CrustTypeSyntax) { return null(*CrustTypeSyntax); }
+        (*result).params[(*result).param_count]=parameter;
+        (*result).param_count=(*result).param_count+1usize;
+        if !rr_take(reader,44u32) { break; }
+    }
+    if !rr_expect(reader,41u32,"expected ')'") || !rr_expect(reader,RR_ARROW,"expected '->'") {
+        return null(*CrustTypeSyntax);
+    }
+    (*result).base=rr_type(reader);
+    if (*reader).failed { return null(*CrustTypeSyntax); }
+    return result;
+}
+
+fn rr_primary_compound(reader:*CrustReader,token:*CrustReaderToken)->*CrustExpr {
+    var result:*CrustExpr=null(*CrustExpr);
+    if (*token).kind==40u32 {
+        if !rr_next(reader) { return null(*CrustExpr); }
+        result=rr_new_expr(reader,CRUST_E_GROUP,(*token).offset);
+        if result==null(*CrustExpr) { return result; }
+        (*result).left=rr_expression(reader);
+        if !rr_expect(reader,41u32,"expected ')'") { return null(*CrustExpr); }
+    } else {
+        if (*token).kind==RR_MAKE {
+            if !rr_next(reader) { return null(*CrustExpr); }
+            return rr_constructor(reader,(*token).offset);
+        }
+        if (*token).kind==RR_NULL || (*token).kind==RR_SIZEOF || (*token).kind==RR_ALIGNOF {
+            return rr_type_expression(reader,token);
+        } else {
+            return rr_offset_expression(reader,token);
+        }
+    }
+    if (*reader).failed { return null(*CrustExpr); }
+    return result;
+}
+
+fn rr_type_expression(reader:*CrustReader,token:*CrustReaderToken)->*CrustExpr {
+    var result:*CrustExpr=null(*CrustExpr);
+    if !rr_next(reader) { return null(*CrustExpr); }
+    var kind:u32=CRUST_E_NULL;
+    if (*token).kind==RR_SIZEOF { kind=CRUST_E_SIZEOF; }
+    if (*token).kind==RR_ALIGNOF { kind=CRUST_E_ALIGNOF; }
+    result=rr_new_expr(reader,kind,(*token).offset);
+    if result==null(*CrustExpr) || !rr_expect(reader,40u32,"expected '('") { return null(*CrustExpr); }
+    (*result).syntax_type=rr_type(reader);
+    if !rr_expect(reader,41u32,"expected ')'") { return null(*CrustExpr); }
+    if (*reader).failed { return null(*CrustExpr); }
+    return result;
+}
+
+fn rr_offset_expression(reader:*CrustReader,token:*CrustReaderToken)->*CrustExpr {
+    var result:*CrustExpr=null(*CrustExpr);
+    if (*token).kind!=RR_OFFSETOF {
+        rr_error(reader,(*token).offset,"expected an expression");return null(*CrustExpr);
+    }
+    if !rr_next(reader) { return null(*CrustExpr); }
+    result=rr_new_expr(reader,CRUST_E_OFFSETOF,(*token).offset);
+    if result==null(*CrustExpr) || !rr_expect(reader,40u32,"expected '('") { return null(*CrustExpr); }
+    (*result).syntax_type=rr_new_type(reader,CRUST_T_NAME,(*reader).token.offset);
+    if (*result).syntax_type==null(*CrustTypeSyntax) { return null(*CrustExpr); }
+    (*(*result).syntax_type).name=rr_name(reader);
+    if !rr_expect(reader,44u32,"expected ','") { return null(*CrustExpr); }
+    (*result).field_name=rr_name(reader);
+    if !rr_expect(reader,41u32,"expected ')'") { return null(*CrustExpr); }
+    if (*reader).failed { return null(*CrustExpr); }
+    return result;
+}
+
+fn rr_comparison_operator(token:u32,operation:*u32)->u32 {
+    if token==RR_EQ { *operation=CRUST_OP_EQ;return 6u32; }
+    if token==RR_NE { *operation=CRUST_OP_NE;return 6u32; }
+    if token==60u32 { *operation=CRUST_OP_LT;return 7u32; }
+    if token==RR_LE { *operation=CRUST_OP_LE;return 7u32; }
+    if token==62u32 { *operation=CRUST_OP_GT;return 7u32; }
+    if token==RR_GE { *operation=CRUST_OP_GE;return 7u32; }
+    return 0u32;
+}
+
+fn rr_variable(reader:*CrustReader,offset:usize)->*CrustStmt {
+    var result:*CrustStmt=null(*CrustStmt);
+    result=rr_new_stmt(reader,CRUST_S_VAR,offset);
+    if result==null(*CrustStmt) { return result; }
+    (*result).name=rr_name(reader);
+    if !rr_expect(reader,58u32,"expected ':'") { return null(*CrustStmt); }
+    (*result).syntax_type=rr_type(reader);
+    if !rr_expect(reader,61u32,"expected '='") { return null(*CrustStmt); }
+    (*result).uninitialized=rr_take(reader,RR_UNINIT);
+    if !(*result).uninitialized { (*result).value=rr_expression(reader); }
+    return result;
+}
+
+fn rr_function_parameters(reader:*CrustReader,result:*CrustDecl)->bool {
+    var tail:**CrustParam=&(*result).params;
+    while (*reader).token.kind!=41u32 && !(*reader).failed {
+        var parameter:*CrustParam=rr_alloc(reader,sizeof(CrustParam),alignof(CrustParam)) as *CrustParam;
+        if parameter==null(*CrustParam) { return false; }
+        (*parameter).loc=make CrustLoc {source:(*reader).source,offset:(*reader).token.offset};
+        (*parameter).name=rr_name(reader);
+        if !rr_expect(reader,58u32,"expected ':'") { return false; }
+        (*parameter).syntax_type=rr_type(reader);
+        if (*reader).failed { return false; }
+        *tail=parameter;tail=&(*parameter).next;
+        (*result).param_count=(*result).param_count+1usize;
+        if !rr_take(reader,44u32) { break; }
+    }
+    return true;
 }

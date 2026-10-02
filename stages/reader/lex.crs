@@ -107,20 +107,7 @@ fn rr_string(reader:*CrustReader)->bool {
             rr_error(reader,(*reader).token.offset,"invalid byte in string literal");return false;
         }
         if byte==92u8 {
-            if finish==(*reader).end {
-                rr_error(reader,(*reader).token.offset,"unterminated string escape");return false;
-            }
-            byte=source[finish];finish=finish+1usize;
-            if byte==120u8 {
-                if (*reader).end-finish<2usize || rr_hex(source[finish])<0i32 || rr_hex(source[finish+1usize])<0i32 {
-                    rr_error(reader,(*reader).token.offset,"expected two hexadecimal escape digits");return false;
-                }
-                finish=finish+2usize;
-            } else {
-                if byte!=92u8 && byte!=34u8 && byte!=110u8 && byte!=114u8 && byte!=116u8 && byte!=48u8 {
-                    rr_error(reader,(*reader).token.offset,"unknown string escape");return false;
-                }
-            }
+            if !rr_string_escape(reader, source, &finish) { return false; }
         }
         decoded=decoded+1usize;
     }
@@ -177,12 +164,7 @@ fn rr_number(reader:*CrustReader)->bool {
     }
     if start==finish && base==10u64 { (*reader).token.kind=RR_COUNT; }
     else {
-        var suffix:*CrustReaderKeyword=rr_keyword(source+start as isize,finish-start);
-        if suffix==null(*CrustReaderKeyword) || (*suffix).kind!=RR_TYPE || (*suffix).type>CRUST_T_USIZE {
-            rr_error(reader,(*reader).token.offset,"invalid integer type suffix");return false;
-        }
-        (*reader).token.kind=RR_INTEGER;
-        (*reader).token.integer_type=(*suffix).type;
+        if !rr_number_suffix(reader, source+start as isize, finish-start) { return false; }
     }
     (*reader).token.integer=value;
     (*reader).offset=finish;
@@ -222,19 +204,7 @@ fn rr_lex(reader:*CrustReader)->bool {
     if start==(*reader).end { return true; }
     var byte:u8=source[start];
     if rr_name_start(byte) {
-        (*reader).offset=start+1usize;
-        while (*reader).offset<(*reader).end && rr_name_continue(source[(*reader).offset]) {
-            (*reader).offset=(*reader).offset+1usize;
-        }
-        var word:*CrustReaderKeyword=rr_keyword(source+start as isize,(*reader).offset-start);
-        if word!=null(*CrustReaderKeyword) {
-            (*reader).token.kind=(*word).kind;(*reader).token.integer_type=(*word).type;
-        } else {
-            (*reader).token.kind=RR_NAME;
-            (*reader).token.name=crust_try_intern((*reader).context,source+start as isize,(*reader).offset-start);
-            if (*reader).token.name==null(*CrustName) { rr_allocation_failed(reader);return false; }
-        }
-        return true;
+        return rr_identifier(reader, source, start);
     }
     if byte>=48u8 && byte<=57u8 { return rr_number(reader); }
     if byte==34u8 { return rr_string(reader); }
@@ -242,15 +212,7 @@ fn rr_lex(reader:*CrustReader)->bool {
     (*reader).offset=start+1usize;
     if (*reader).offset<(*reader).end {
         var second:u8=source[(*reader).offset];
-        if byte==45u8 && second==62u8 { (*reader).token.kind=RR_ARROW; }
-        if byte==61u8 && second==61u8 { (*reader).token.kind=RR_EQ; }
-        if byte==33u8 && second==61u8 { (*reader).token.kind=RR_NE; }
-        if byte==60u8 && second==61u8 { (*reader).token.kind=RR_LE; }
-        if byte==62u8 && second==61u8 { (*reader).token.kind=RR_GE; }
-        if byte==60u8 && second==60u8 { (*reader).token.kind=RR_SHL; }
-        if byte==62u8 && second==62u8 { (*reader).token.kind=RR_SHR; }
-        if byte==38u8 && second==38u8 { (*reader).token.kind=RR_AND; }
-        if byte==124u8 && second==124u8 { (*reader).token.kind=RR_OR; }
+        (*reader).token.kind=rr_pair(byte,second);
         if (*reader).token.kind!=byte as u32 {
             (*reader).offset=(*reader).offset+1usize;return true;
         }
@@ -331,4 +293,67 @@ fn rr_is_name(reader:*CrustReader,word:*u8)->bool {
         index=index+1usize;
     }
     return word[index]==0u8;
+}
+
+fn rr_string_escape(reader:*CrustReader,source:*u8,finish:*usize)->bool {
+    var byte:u8=0u8;
+    if *finish==(*reader).end {
+        rr_error(reader,(*reader).token.offset,"unterminated string escape");return false;
+    }
+    byte=source[*finish];*finish=*finish+1usize;
+    if byte==120u8 {
+        if (*reader).end-*finish<2usize || rr_hex(source[*finish])<0i32 || rr_hex(source[(*finish)+1usize])<0i32 {
+            rr_error(reader,(*reader).token.offset,"expected two hexadecimal escape digits");return false;
+        }
+        *finish=*finish+2usize;
+    } else {
+        if byte!=92u8 && byte!=34u8 && byte!=110u8 && byte!=114u8 && byte!=116u8 && byte!=48u8 {
+            rr_error(reader,(*reader).token.offset,"unknown string escape");return false;
+        }
+    }
+    return true;
+}
+
+fn rr_number_suffix(reader:*CrustReader,text:*u8,size:usize)->bool {
+    var suffix:*CrustReaderKeyword=rr_keyword(text,size);
+    if suffix==null(*CrustReaderKeyword) || (*suffix).kind!=RR_TYPE || (*suffix).type>CRUST_T_USIZE {
+        rr_error(reader,(*reader).token.offset,"invalid integer type suffix");return false;
+    }
+    (*reader).token.kind=RR_INTEGER;
+    (*reader).token.integer_type=(*suffix).type;
+    return true;
+}
+
+fn rr_identifier(reader:*CrustReader,source:*u8,start:usize)->bool {
+    (*reader).offset=start+1usize;
+    while (*reader).offset<(*reader).end && rr_name_continue(source[(*reader).offset]) {
+        (*reader).offset=(*reader).offset+1usize;
+    }
+    var word:*CrustReaderKeyword=rr_keyword(source+start as isize,(*reader).offset-start);
+    if word!=null(*CrustReaderKeyword) {
+        (*reader).token.kind=(*word).kind;(*reader).token.integer_type=(*word).type;
+    } else {
+        (*reader).token.kind=RR_NAME;
+        (*reader).token.name=crust_try_intern((*reader).context,source+start as isize,(*reader).offset-start);
+        if (*reader).token.name==null(*CrustName) { rr_allocation_failed(reader);return false; }
+    }
+    return true;
+}
+
+// Return a two-byte token kind, or the first byte when no pair matches.
+fn rr_pair(byte:u8,second:u8)->u32 {
+    if second==61u8 {
+        if byte==61u8 { return RR_EQ; }
+        if byte==33u8 { return RR_NE; }
+        if byte==60u8 { return RR_LE; }
+        if byte==62u8 { return RR_GE; }
+    }
+    if byte==second {
+        if byte==60u8 { return RR_SHL; }
+        if byte==62u8 { return RR_SHR; }
+        if byte==38u8 { return RR_AND; }
+        if byte==124u8 { return RR_OR; }
+    }
+    if byte==45u8 && second==62u8 { return RR_ARROW; }
+    return byte as u32;
 }

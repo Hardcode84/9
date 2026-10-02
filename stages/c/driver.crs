@@ -341,22 +341,8 @@ fn c_driver_dump(driver: *CDriver) -> bool {
     var output_temporary: *u8 = null(*u8);
     var symbols_temporary: *u8 = null(*u8);
     var stream_output: bool = output == null(*u8) || c_equal(output, "-");
-    if !stream_output {
-        var kind: i32 = c_driver_output_kind(driver, output);
-        if kind < 0i32 { return false; }
-        if kind != 2i32 {
-            output_temporary = c_driver_temporary(driver, output, c_driver_output_mode(driver, output));
-            if output_temporary == null(*u8) || !c_driver_write(driver, output_temporary, &(*stage).header) { return false; }
-        }
-    }
-    if symbols != null(*u8) {
-        var kind: i32 = c_driver_output_kind(driver, symbols);
-        if kind < 0i32 { return false; }
-        if kind != 2i32 {
-            symbols_temporary = c_driver_temporary(driver, symbols, c_driver_output_mode(driver, symbols));
-            if symbols_temporary == null(*u8) || !c_driver_write(driver, symbols_temporary, &(*stage).renames) { return false; }
-        }
-    }
+    if !stream_output && !c_driver_dump_temporary(driver, output, &(*stage).header, &output_temporary) { return false; }
+    if symbols != null(*u8) && !c_driver_dump_temporary(driver, symbols, &(*stage).renames, &symbols_temporary) { return false; }
     if symbols != null(*u8) {
         if symbols_temporary != null(*u8) {
             if !c_driver_publish(driver, symbols_temporary, symbols) { return false; }
@@ -442,27 +428,7 @@ fn c_driver_validate(driver: *CDriver) -> bool {
             return c_driver_error(driver, "--symbols requires a separate file path");
         }
         if (*(*driver).options).output != null(*u8) && !c_equal((*(*driver).options).output, "-") {
-            var output_path: *u8 = c_driver_canonical(driver, (*(*driver).options).output);
-            if output_path == null(*u8) { return false; }
-            var symbols_path: *u8 = c_driver_canonical(driver, (*(*driver).options).symbols);
-            if symbols_path == null(*u8) { return false; }
-            if c_equal(output_path, symbols_path) {
-                return c_driver_error(driver, "C and symbol outputs must name separate destinations");
-            }
-            var output_info: CDriverStat = uninit;
-            var symbols_info: CDriverStat = uninit;
-            var output_exists: bool = c_driver_lstat(output_path, &output_info) == 0i32;
-            if !output_exists && *c_driver_errno() != 2i32 {
-                return c_driver_io_error(driver, "cannot inspect paired output", output_path, *c_driver_errno());
-            }
-            var symbols_exist: bool = c_driver_lstat(symbols_path, &symbols_info) == 0i32;
-            if !symbols_exist && *c_driver_errno() != 2i32 {
-                return c_driver_io_error(driver, "cannot inspect paired output", symbols_path, *c_driver_errno());
-            }
-            if output_exists && symbols_exist && output_info.device == symbols_info.device &&
-               output_info.inode == symbols_info.inode {
-                return c_driver_error(driver, "C and symbol outputs must name separate files");
-            }
+            return c_driver_distinct_outputs(driver);
         }
     }
     return true;
@@ -522,4 +488,37 @@ fn c_backend_build_with_body(context: *CrustContext, entry: *CrustDecl, options:
     }
     c_stage_destroy(&stage);
     return result;
+}
+
+fn c_driver_dump_temporary(driver: *CDriver, path: *u8, buffer: *CBuffer, temporary: **u8) -> bool {
+    var kind: i32 = c_driver_output_kind(driver, path);
+    if kind < 0i32 { return false; }
+    if kind == 2i32 { return true; }
+    *temporary = c_driver_temporary(driver, path, c_driver_output_mode(driver, path));
+    return *temporary != null(*u8) && c_driver_write(driver, *temporary, buffer);
+}
+
+fn c_driver_distinct_outputs(driver: *CDriver) -> bool {
+    var output_path: *u8 = c_driver_canonical(driver, (*(*driver).options).output);
+    if output_path == null(*u8) { return false; }
+    var symbols_path: *u8 = c_driver_canonical(driver, (*(*driver).options).symbols);
+    if symbols_path == null(*u8) { return false; }
+    if c_equal(output_path, symbols_path) {
+        return c_driver_error(driver, "C and symbol outputs must name separate destinations");
+    }
+    var output_info: CDriverStat = uninit;
+    var symbols_info: CDriverStat = uninit;
+    var output_exists: bool = c_driver_lstat(output_path, &output_info) == 0i32;
+    if !output_exists && *c_driver_errno() != 2i32 {
+        return c_driver_io_error(driver, "cannot inspect paired output", output_path, *c_driver_errno());
+    }
+    var symbols_exist: bool = c_driver_lstat(symbols_path, &symbols_info) == 0i32;
+    if !symbols_exist && *c_driver_errno() != 2i32 {
+        return c_driver_io_error(driver, "cannot inspect paired output", symbols_path, *c_driver_errno());
+    }
+    if output_exists && symbols_exist && output_info.device == symbols_info.device &&
+       output_info.inode == symbols_info.inode {
+        return c_driver_error(driver, "C and symbol outputs must name separate files");
+    }
+    return true;
 }

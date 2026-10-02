@@ -4,21 +4,14 @@
 fn hl_utf8(bytes:*u8, begin:usize, end:usize)->usize {
     var first:u8 = bytes[begin];
     if first < 128u8 { return 1usize; }
-    var size:usize = 0usize;
-    if first >= 194u8 && first <= 223u8 { size = 2usize; }
-    if first >= 224u8 && first <= 239u8 { size = 3usize; }
-    if first >= 240u8 && first <= 244u8 { size = 4usize; }
+    var size:usize = hl_utf8_width(first);
     if size == 0usize || size > end-begin { return 0usize; }
     var index:usize = 1usize;
     while index < size {
         if bytes[begin+index] < 128u8 || bytes[begin+index] > 191u8 { return 0usize; }
         index = index+1usize;
     }
-    var second:u8 = bytes[begin+1usize];
-    if first == 224u8 && second < 160u8 { return 0usize; }
-    if first == 237u8 && second > 159u8 { return 0usize; }
-    if first == 240u8 && second < 144u8 { return 0usize; }
-    if first == 244u8 && second > 143u8 { return 0usize; }
+    if !hl_utf8_scalar(first, bytes[begin+1usize]) { return 0usize; }
     return size;
 }
 
@@ -38,20 +31,7 @@ fn hl_string(lexer:*HlLexer)->unit {
         }
         if byte == 0u8 { valid = false; }
         if byte == 92u8 {
-            if (*lexer).cursor == (*lexer).end { break; }
-            byte = (*lexer).bytes[(*lexer).cursor];
-            if byte == 10u8 || byte == 13u8 { break; }
-            (*lexer).cursor = (*lexer).cursor+1usize;
-            if byte == 120u8 {
-                if (*lexer).end-(*lexer).cursor >= 2usize &&
-                   rr_hex((*lexer).bytes[(*lexer).cursor]) >= 0i32 &&
-                   rr_hex((*lexer).bytes[(*lexer).cursor+1usize]) >= 0i32 {
-                    (*lexer).cursor = (*lexer).cursor+2usize;
-                } else { valid = false; }
-            } else {
-                if byte != 92u8 && byte != 34u8 && byte != 110u8 && byte != 114u8 &&
-                   byte != 116u8 && byte != 48u8 { valid = false; }
-            }
+            if !hl_escape(lexer) { valid = false; }
         }
     }
 }
@@ -111,9 +91,7 @@ fn hl_punctuation(lexer:*HlLexer, byte:u8)->unit {
     }
     if (*lexer).cursor == (*lexer).end { return; }
     var second:u8 = (*lexer).bytes[(*lexer).cursor];
-    if (byte == 45u8 && second == 62u8) ||
-       ((byte == 61u8 || byte == 33u8 || byte == 60u8 || byte == 62u8) && second == 61u8) ||
-       ((byte == 60u8 || byte == 62u8 || byte == 38u8 || byte == 124u8) && second == byte) {
+    if rr_pair(byte, second) != byte as u32 {
         (*lexer).cursor = (*lexer).cursor+1usize;
     }
 }
@@ -132,13 +110,7 @@ fn hl_token(lexer:*HlLexer)->unit {
     }
     if byte == 34u8 { hl_string(lexer); return; }
     if byte == 47u8 && (*lexer).cursor < (*lexer).end && (*lexer).bytes[(*lexer).cursor] == 47u8 {
-        (*lexer).span.kind = HL_COMMENT;
-        while (*lexer).cursor < (*lexer).end && (*lexer).bytes[(*lexer).cursor] != 10u8 {
-            if (*lexer).bytes[(*lexer).cursor] == 0u8 { (*lexer).span.kind = HL_INVALID; }
-            (*lexer).cursor = (*lexer).cursor+1usize;
-        }
-        (*lexer).token = (*lexer).previous;
-        return;
+        hl_comment(lexer); return;
     }
     if byte >= 128u8 {
         var size:usize = hl_utf8((*lexer).bytes, (*lexer).span.begin, (*lexer).end);
@@ -164,4 +136,49 @@ fn hl_seed(result:*HlResult, begin:usize, end:usize, user:*u8)->bool {
         }
     }
     return true;
+}
+
+fn hl_utf8_width(first:u8)->usize {
+    var size:usize = 0usize;
+    if first >= 194u8 && first <= 223u8 { size = 2usize; }
+    if first >= 224u8 && first <= 239u8 { size = 3usize; }
+    if first >= 240u8 && first <= 244u8 { size = 4usize; }
+    return size;
+}
+
+fn hl_utf8_scalar(first:u8,second:u8)->bool {
+    if first == 224u8 && second < 160u8 { return false; }
+    if first == 237u8 && second > 159u8 { return false; }
+    if first == 240u8 && second < 144u8 { return false; }
+    if first == 244u8 && second > 143u8 { return false; }
+    return true;
+}
+
+fn hl_escape(lexer:*HlLexer)->bool {
+    var byte:u8=0u8;
+    if (*lexer).cursor == (*lexer).end { return false; }
+    byte = (*lexer).bytes[(*lexer).cursor];
+    if byte == 10u8 || byte == 13u8 { return false; }
+    (*lexer).cursor = (*lexer).cursor+1usize;
+    if byte == 120u8 {
+        if (*lexer).end-(*lexer).cursor >= 2usize &&
+           rr_hex((*lexer).bytes[(*lexer).cursor]) >= 0i32 &&
+           rr_hex((*lexer).bytes[(*lexer).cursor+1usize]) >= 0i32 {
+            (*lexer).cursor = (*lexer).cursor+2usize;
+        } else { return false; }
+    } else {
+        if byte != 92u8 && byte != 34u8 && byte != 110u8 && byte != 114u8 &&
+           byte != 116u8 && byte != 48u8 { return false; }
+    }
+    return true;
+}
+
+fn hl_comment(lexer:*HlLexer)->unit {
+    (*lexer).span.kind = HL_COMMENT;
+    while (*lexer).cursor < (*lexer).end && (*lexer).bytes[(*lexer).cursor] != 10u8 {
+        if (*lexer).bytes[(*lexer).cursor] == 0u8 { (*lexer).span.kind = HL_INVALID; }
+        (*lexer).cursor = (*lexer).cursor+1usize;
+    }
+    (*lexer).token = (*lexer).previous;
+    return;
 }

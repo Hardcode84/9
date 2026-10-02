@@ -4,6 +4,9 @@ import { test, expect } from 'bun:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { EventEmitter, getEventListeners } from 'node:events';
+import { createRequire } from 'node:module';
+import { runInNewContext } from 'node:vm';
 import { tokenTypes, tokenModifiers, snapshot, decodeTokens, runHighlighter } from './adapter.cjs';
 
 const executable = process.env.CRUST_HIGHLIGHT;
@@ -102,6 +105,40 @@ test('process and protocol failures reach the caller', async () => {
     await expect(runHighlighter({ executable: 'python3', args: ['-c', 'import sys;sys.stderr.write("bad profile");sys.exit(3)'], text: '' })).rejects.toThrow('bad profile');
     await expect(runHighlighter({ executable: 'python3', args: ['-c', 'print("not json")'], text: '' })).rejects.toThrow();
     await expect(runHighlighter({ executable: 'python3', args: ['-c', 'import sys;sys.stderr.write("x"*65537)'], text: '' })).rejects.toThrow('64 KiB');
+});
+
+test('failed spawn with absent streams preserves its error and releases request state', async () => {
+    const code = await fs.readFile(path.join(import.meta.dir, 'adapter.cjs'), 'utf8');
+    const require = createRequire(import.meta.url);
+    for (const stream of [null, undefined]) {
+        const failure = Object.assign(new Error('spawn EMFILE'), { code: 'EMFILE' });
+        const child = new EventEmitter();
+        child.stdout = child.stderr = stream;
+        child.kill = () => { throw new Error('failed process must not be killed after close'); };
+        const timers = new Set();
+        const controller = new AbortController();
+        let input;
+        const module = { exports: {} };
+        runInNewContext(code, {
+            module, Buffer,
+            require: name => name === 'node:child_process' ? { spawn: (_file, args) => {
+                input = args.at(-1);
+                queueMicrotask(() => { child.emit('error', failure); child.emit('close', -1); });
+                return child;
+            } } : require(name),
+            setTimeout: (callback, delay) => { const timer = setTimeout(callback, delay); timers.add(timer); return timer; },
+            clearTimeout: timer => { timers.delete(timer); clearTimeout(timer); },
+        });
+        try {
+            await expect(module.exports.runHighlighter({ executable: 'missing', text: '', signal: controller.signal })).rejects.toBe(failure);
+            expect(timers.size).toBe(0);
+            expect(getEventListeners(controller.signal, 'abort')).toHaveLength(0);
+            await expect(fs.stat(path.dirname(input))).rejects.toMatchObject({ code: 'ENOENT' });
+            controller.abort();
+        } finally {
+            for (const timer of timers) clearTimeout(timer);
+        }
+    }
 });
 
 test('JSON output is bounded before parsing and the native producer bounds dense tokens', async () => {

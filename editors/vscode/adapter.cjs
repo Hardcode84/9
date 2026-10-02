@@ -142,26 +142,26 @@ async function runHighlighter({ executable, args = [], text, signal, timeoutMs =
             });
             const chunks = [], errors = [];
             let size = 0, errorSize = 0, failure;
+            child.on('error', error => { if (!failure) failure = error; });
             const stop = error => {
                 if (!failure) failure = error;
                 child.kill('SIGKILL');
-                child.stdout.destroy();
-                child.stderr.destroy();
+                child.stdout?.destroy();
+                child.stderr?.destroy();
             };
             const cancel = () => stop(new Error('Highlight request cancelled'));
             signal?.addEventListener('abort', cancel, { once: true });
             const timer = setTimeout(() => stop(new Error('Crust highlighter timed out')), timeoutMs);
-            child.stdout.on('data', chunk => {
+            child.stdout?.on('data', chunk => {
                 size += chunk.length;
                 if (size > maxOutputBytes) stop(new Error('Highlight output exceeds 8 MiB'));
                 else if (!failure) chunks.push(chunk);
             });
-            child.stderr.on('data', chunk => {
+            child.stderr?.on('data', chunk => {
                 errorSize += chunk.length;
                 if (errorSize > 65536) stop(new Error('Highlighter diagnostic exceeds 64 KiB'));
                 else if (!failure) errors.push(chunk);
             });
-            child.on('error', error => { failure = error; });
             child.on('close', (code, termination) => {
                 clearTimeout(timer);
                 signal?.removeEventListener('abort', cancel);

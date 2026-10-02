@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "../../api/crust0_stage.crs");
+host_source(run, "../../stages/c/api.crs");
+host_source(run, "../../stages/modules/library.crs");
+host_source(run, "../../stages/ccn/count.crs");
+host_link(run, "../../build/crust-c-library.so");
+
+const CCN_LIMIT: usize = 4usize;
+
+fn checked_build(root: *CrustRun, target: *CrustModule) -> i32 {
+    var input: *u8 = host_path(root, "program.crs");
+    var output: *u8 = host_path(root, "../../build/ccn-example");
+    if input == null(*u8) || output == null(*u8) { return 1i32; }
+    if !module_read(target, input, 1u64) { return 1i32; }
+
+    var counter: CcnCounter = uninit;
+    ccn_init(&counter, &(*target).context);
+    if !ccn_check_unit(&counter, (*target).context.units, CCN_LIMIT) { return 1i32; }
+    if !module_check(target) || !module_export(target, "main", "ccn_example_main") { return 1i32; }
+
+    var options: CBackendOptions = make CBackendOptions {
+        mode: 0u32, output: output, symbols: null(*u8),
+        cflags: null(**u8), cflag_count: 0usize,
+        ldflags: null(**u8), ldflag_count: 0usize
+    };
+    return c_backend_build(&(*target).context, module_find(target, "main"), &options);
+}
+
+var target: CrustModule = uninit;
+module_init(&target, null(*CrustAllocator));
+var status: i32 = checked_build(run, &target);
+if target.context.error_count != 0usize { crust_run_diagnostic(&target.context); };
+module_destroy(&target);
+return status;

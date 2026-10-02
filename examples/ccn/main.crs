@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "../../stages/ccn/count.crs");
+host_source(run, "../../stages/ccn/read.crs");
+host_source(run, "../../stages/ccn/report.crs");
+host_source(run, "../../stages/ccn/program.crs");
+
+return ccn_program((*run).argc, (*run).argv);

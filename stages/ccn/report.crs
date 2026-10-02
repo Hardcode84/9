@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record CcnText { bytes: *u8; size: usize; }
+
+fn ccn_length(text: *u8) -> usize {
+    var size: usize = 0usize;
+    while text[size] != 0u8 { size = size + 1usize; }
+    return size;
+}
+
+fn ccn_equal(left: *u8, right: *u8) -> bool {
+    var index: usize = 0usize;
+    while left[index] == right[index] {
+        if left[index] == 0u8 { return true; }
+        index = index + 1usize;
+    }
+    return false;
+}
+
+// Append to storage with enough remaining capacity.
+fn ccn_text(output: *CcnText, text: *u8, size: usize) -> unit {
+    crust0_host_move_bytes((*output).bytes + (*output).size as isize, text, size);
+    (*output).size = (*output).size + size;
+}
+
+fn ccn_number(output: *CcnText, value: usize) -> unit {
+    var digits: [u8; 20] = uninit;
+    var index: usize = 20usize;
+    while true {
+        index = index - 1usize;
+        digits[index] = 48u8 + (value % 10usize) as u8;
+        value = value / 10usize;
+        if value == 0usize { break; }
+    }
+    ccn_text(output, &digits[index], 20usize - index);
+}
+
+fn ccn_row(output: *CcnText, row: *CcnRow, limit: usize) -> unit {
+    var declaration: *CrustDecl = (*row).declaration;
+    var path: *u8 = (*(*declaration).loc.source).path;
+    (*output).size = 0usize;
+    ccn_text(output, path, ccn_length(path));
+    ccn_text(output, ":", 1usize);
+    ccn_number(output, (*row).line);
+    ccn_text(output, ":", 1usize);
+    ccn_number(output, (*row).column);
+    ccn_text(output, ": ", 2usize);
+    ccn_text(output, (*(*declaration).name).text, (*(*declaration).name).size);
+    ccn_text(output, ": CCN=", 6usize);
+    ccn_number(output, (*row).complexity);
+    if (*row).complexity > limit {
+        ccn_text(output, " (limit ", 8usize);
+        ccn_number(output, limit);
+        ccn_text(output, ")", 1usize);
+    }
+    ccn_text(output, "\n", 1usize);
+}
+
+// Report rows from one source. Return 0 within limit, 1 over limit, or 2 on
+// allocation or output failure. Warnings selects only rows above the limit.
+fn ccn_report(context: *CrustContext, source: *CrustSource, rows: *CcnRow,
+              limit: usize, warnings: bool) -> i32 {
+    var name_size: usize = 0usize;
+    var row: *CcnRow = rows;
+    while row != null(*CcnRow) {
+        var size: usize = (*(*(*row).declaration).name).size;
+        if size > name_size { name_size = size; }
+        row = (*row).next;
+    }
+    if rows == null(*CcnRow) { return 0i32; }
+    var path_size: usize = ccn_length((*source).path);
+    if name_size > (~0usize) - 128usize || path_size > (~0usize) - name_size - 128usize {
+        crust_set_error(context, source, 0usize, "CCN report row is too large");
+        return 2i32;
+    }
+    // Four 20-digit values and fixed punctuation fit in 128 bytes.
+    var bytes: *u8 = crust_try_alloc(context, path_size + name_size + 128usize, 1usize);
+    if bytes == null(*u8) { return 2i32; }
+    var output: CcnText = make CcnText { bytes: bytes, size: 0usize };
+    var status: i32 = 0i32;
+    row = rows;
+    while row != null(*CcnRow) {
+        if (*row).complexity > limit { status = 1i32; }
+        if !warnings || (*row).complexity > limit {
+            ccn_row(&output, row, limit);
+            if crust0_host_write_stream(1u32, output.bytes, output.size) != 0i32 {
+                crust_set_error(context, source, (*(*row).declaration).loc.offset, "cannot write CCN report");
+                return 2i32;
+            }
+        }
+        row = (*row).next;
+    }
+    return status;
+}

@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record CcnRow {
+    declaration: *CrustDecl;
+    complexity: usize;
+    line: usize;
+    column: usize;
+    next: *CcnRow;
+}
+
+// Read seed syntax as data, including root actions and bytes after root return.
+// Source storage stays live through context destruction. On failure, result is
+// null and context retains a diagnostic. No input action is executed.
+fn ccn_read(context: *CrustContext, source: *CrustSource, result: **CcnRow) -> bool {
+    *result = null(*CcnRow);
+    var first: *CcnRow = null(*CcnRow);
+    var tail: **CcnRow = &first;
+    var counter: CcnCounter = uninit;
+    ccn_init(&counter, context);
+    var cursor: usize = 0usize;
+    var position: usize = 0usize;
+    var line: usize = 1usize;
+    var column: usize = 1usize;
+    while cursor < (*source).size {
+        var action: CrustAction = uninit;
+        if !crust_read_one(context, source, cursor, (*source).size, &action) { return false; }
+        cursor = action.end;
+        var declaration: *CrustDecl = action.declaration;
+        if declaration != null(*CrustDecl) && (*declaration).kind == CRUST_D_FUNCTION {
+            var row: *CcnRow = crust_try_alloc(context, sizeof(CcnRow), alignof(CcnRow)) as *CcnRow;
+            if row == null(*CcnRow) { return false; }
+            if !ccn_function(&counter, declaration, &(*row).complexity) { return false; }
+            while position < (*declaration).loc.offset {
+                if (*source).bytes[position] == 10u8 { line = line + 1usize; column = 1usize; }
+                else { column = column + 1usize; }
+                position = position + 1usize;
+            }
+            (*row).declaration = declaration;
+            (*row).line = line;
+            (*row).column = column;
+            *tail = row;
+            tail = &(*row).next;
+        }
+    }
+    *result = first;
+    return true;
+}

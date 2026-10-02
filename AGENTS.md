@@ -156,6 +156,7 @@ Build with `make all`. Use the checks that cover the change:
 | Compilation program examples | `make check-examples` |
 | Module selection, bindings, and exports | `make check-modules` |
 | Highlighting and editor integration | `make check-highlight check-vscode` |
+| Crust cyclomatic complexity stage | `make check-ccn` |
 
 A core or shared API change requires the full matrix. Run the relevant
 sanitizer checks when allocation, native calls, or resource lifetimes change.

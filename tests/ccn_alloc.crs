@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record CcnAllocation { calls: usize; fail_at: usize; live: usize; }
+
+fn test_allocate(user: *u8, size: usize) -> *u8 {
+    var counts: *CcnAllocation = user as *CcnAllocation;
+    (*counts).calls = (*counts).calls + 1usize;
+    if (*counts).calls == (*counts).fail_at { return null(*u8); }
+    var bytes: *u8 = crust0_host_alloc(size, 16usize);
+    if bytes == null(*u8) { trap; }
+    (*counts).live = (*counts).live + 1usize;
+    return bytes;
+}
+
+fn test_release(user: *u8, bytes: *u8) -> unit {
+    var counts: *CcnAllocation = user as *CcnAllocation;
+    if bytes == null(*u8) || (*counts).live == 0usize { trap; }
+    (*counts).live = (*counts).live - 1usize;
+    crust0_host_free(bytes);
+}
+
+fn test_read(context: *CrustContext, source: *CrustSource) -> bool {
+    var sentinel: CcnRow = uninit;
+    var rows: *CcnRow = &sentinel;
+    if !ccn_read(context, source, &rows) {
+        if rows != null(*CcnRow) { trap; }
+        return false;
+    }
+    if (*rows).complexity != 1001usize || (*rows).next == null(*CcnRow) { trap; }
+    if (*(*rows).next).complexity != 1usize || (*(*rows).next).next != null(*CcnRow) { trap; }
+    return true;
+}
+
+fn test_count(context: *CrustContext, rows: *CcnRow, counts: *CcnAllocation) -> bool {
+    var counter: CcnCounter = uninit;
+    ccn_init(&counter, context);
+    var result: usize = 73usize;
+    if !ccn_function(&counter, (*rows).declaration, &result) {
+        if result != 73usize { trap; }
+        return false;
+    }
+    if result != 1001usize { trap; }
+    var calls: usize = (*counts).calls;
+    if !ccn_function(&counter, (*rows).declaration, &result) || result != 1001usize { trap; }
+    if !ccn_function(&counter, (*(*rows).next).declaration, &result) || result != 1usize { trap; }
+    if calls != (*counts).calls { trap; }
+    return true;
+}
+
+fn test_sweep(source: *CrustSource, rows: *CcnRow, mode: u32) -> unit {
+    var fail_at: usize = 1usize;
+    while true {
+        var counts: CcnAllocation = make CcnAllocation { calls: 0usize, fail_at: fail_at, live: 0usize };
+        var allocator: CrustAllocator = make CrustAllocator {
+            user: &counts as *u8, allocate: test_allocate, release: test_release
+        };
+        var context: CrustContext = uninit;
+        crust_context_init(&context, &allocator);
+        var success: bool = false;
+        if mode == 0u32 { success = test_read(&context, source); }
+        else if mode == 1u32 { success = test_count(&context, rows, &counts); }
+        else { success = ccn_report(&context, source, rows, ~0usize, true) == 0i32; }
+        var diagnosed: bool = context.error_count != 0usize;
+        crust_context_destroy(&context);
+        if counts.live != 0usize || success == diagnosed { trap; }
+        if success {
+            if counts.calls >= fail_at { trap; }
+            return;
+        }
+        if counts.calls != fail_at { trap; }
+        fail_at = fail_at + 1usize;
+    }
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 2i32 { return 1i32; }
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var source: CrustSource = make CrustSource {
+        path: argv[1usize], bytes: null(*u8), size: 0usize, identity: 1u64
+    };
+    var status: i32 = 1i32;
+    var rows: *CcnRow = null(*CcnRow);
+    if crust0_host_read_file(source.path, &source.bytes, &source.size) == 0i32 &&
+       ccn_read(&context, &source, &rows) {
+        test_sweep(&source, rows, 0u32);
+        test_sweep(&source, rows, 1u32);
+        test_sweep(&source, rows, 2u32);
+        status = 0i32;
+    }
+    crust_context_destroy(&context);
+    crust0_host_free(source.bytes);
+    return status;
+}

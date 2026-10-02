@@ -1,0 +1,112 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record CcnNode { address: *u8; statement: bool; }
+
+record CcnCounter {
+    context: *CrustContext;
+    pending: *CcnNode;
+    count: usize;
+    capacity: usize;
+    complexity: usize;
+}
+
+// Initialize reusable scratch storage owned by context.
+fn ccn_init(counter: *CcnCounter, context: *CrustContext) -> unit {
+    *counter = make CcnCounter {
+        context: context, pending: null(*CcnNode), count: 0usize,
+        capacity: 0usize, complexity: 1usize
+    };
+}
+
+fn ccn_push(counter: *CcnCounter, address: *u8, statement: bool) -> bool {
+    if address == null(*u8) { return true; }
+    if (*counter).count == (*counter).capacity {
+        var capacity: usize = 32usize;
+        if (*counter).capacity != 0usize {
+            if (*counter).capacity > (~0usize) / 2usize {
+                crust_set_error((*counter).context, null(*CrustSource), 0usize, "CCN worklist is too large");
+                return false;
+            }
+            capacity = (*counter).capacity * 2usize;
+        }
+        var pending: *CcnNode = crust_try_grow_array((*counter).context,
+            (*counter).pending as *u8, (*counter).count, capacity,
+            sizeof(CcnNode), alignof(CcnNode)) as *CcnNode;
+        if pending == null(*CcnNode) { return false; }
+        (*counter).pending = pending;
+        (*counter).capacity = capacity;
+    }
+    (*counter).pending[(*counter).count] = make CcnNode { address: address, statement: statement };
+    (*counter).count = (*counter).count + 1usize;
+    return true;
+}
+
+fn ccn_expression(counter: *CcnCounter, expression: *CrustExpr) -> bool {
+    if (*expression).kind == CRUST_E_BINARY &&
+       ((*expression).op == CRUST_OP_AND || (*expression).op == CRUST_OP_OR) {
+        (*counter).complexity = (*counter).complexity + 1usize;
+    }
+    if !ccn_push(counter, (*expression).left as *u8, false) ||
+       !ccn_push(counter, (*expression).right as *u8, false) { return false; }
+    var index: usize = 0usize;
+    while index < (*expression).arg_count {
+        if !ccn_push(counter, (*expression).args[index] as *u8, false) { return false; }
+        index = index + 1usize;
+    }
+    var item: *CrustInit = (*expression).inits;
+    while item != null(*CrustInit) {
+        if !ccn_push(counter, (*item).value as *u8, false) { return false; }
+        item = (*item).next;
+    }
+    return true;
+}
+
+fn ccn_statement(counter: *CcnCounter, statement: *CrustStmt) -> bool {
+    if (*statement).kind == CRUST_S_IF || (*statement).kind == CRUST_S_WHILE {
+        (*counter).complexity = (*counter).complexity + 1usize;
+    }
+    return ccn_push(counter, (*statement).next as *u8, true) &&
+           ccn_push(counter, (*statement).body as *u8, true) &&
+           ccn_push(counter, (*statement).otherwise as *u8, true) &&
+           ccn_push(counter, (*statement).expr as *u8, false) &&
+           ccn_push(counter, (*statement).value as *u8, false);
+}
+
+// Require a defined function with a finite syntax tree under the public AST
+// contract. Count 1 + if + while + && + ||. No type facts are required.
+// Failure retains a diagnostic and leaves result unchanged. Do not mutate syntax.
+fn ccn_function(counter: *CcnCounter, declaration: *CrustDecl, result: *usize) -> bool {
+    (*counter).count = 0usize;
+    (*counter).complexity = 1usize;
+    if !ccn_push(counter, (*declaration).body as *u8, true) { return false; }
+    while (*counter).count != 0usize {
+        (*counter).count = (*counter).count - 1usize;
+        var node: CcnNode = (*counter).pending[(*counter).count];
+        if node.statement {
+            if !ccn_statement(counter, node.address as *CrustStmt) { return false; }
+        } else {
+            if !ccn_expression(counter, node.address as *CrustExpr) { return false; }
+        }
+    }
+    *result = (*counter).complexity;
+    return true;
+}
+
+// Check an already parsed unit before lowering. Reject the first function over
+// limit with its original source location. No input is read again or executed.
+fn ccn_check_unit(counter: *CcnCounter, unit_value: *CrustUnit, limit: usize) -> bool {
+    var declaration: *CrustDecl = (*unit_value).declarations;
+    while declaration != null(*CrustDecl) {
+        if (*declaration).kind == CRUST_D_FUNCTION {
+            var complexity: usize = 0usize;
+            if !ccn_function(counter, declaration, &complexity) { return false; }
+            if complexity > limit {
+                crust_set_error((*counter).context, (*declaration).loc.source, (*declaration).loc.offset,
+                                "function exceeds CCN limit");
+                return false;
+            }
+        }
+        declaration = (*declaration).next;
+    }
+    return true;
+}

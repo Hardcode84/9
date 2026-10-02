@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn score(value: i32, enabled: bool) -> i32 {
+    if enabled && value > 0i32 { return value; }
+    else if value < 0i32 { return 0i32 - value; }
+    return 0i32;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if score(-7i32, false) != 7i32 { return 1i32; }
+    return 0i32;
+}

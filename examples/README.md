@@ -23,6 +23,7 @@ and commands to inspect the result.
 | 5 | [Syntax highlighting](../stages/highlight/README.md) | HTML, editor tokens, custom reader services, and a VS Code extension |
 | 6 | [Modules](../stages/modules/README.md) | Separate contexts, selected imports, native exports, and provider lifetimes |
 | 7 | [Native bootstrap](../stages/native/README.md) | Build stages from source and hand following compilation code to native execution |
+| 8 | [Cyclomatic complexity](../stages/ccn/README.md) | Count decisions with the public AST and reject functions before backend emission |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -43,6 +44,7 @@ Each example has its own directory and README.
 | [reader-switch](reader-switch/README.md) | Replace the reader and executor from the root | Two lines read with a new grammar |
 | [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
 | [highlight](highlight/README.md) | Classify source with ordinary Crust stages | Highlighted HTML or JSON tokens |
+| [ccn](ccn/README.md) | Measure function complexity and select a compilation limit | CCN report or checked executable |
 | [resources/hello](resources/hello/README.md) | Select ownership, RAII, and defer in the same source file | `Hello, resources!` |
 | [resources/sqlite](resources/sqlite/README.md) | Own SQLite connections and statements; borrow column bytes | Typed rows and separate error codes |
 | [overload/hello](overload/hello/README.md) | Select overloads and a typed function value in the same file | Two greeting lines |
@@ -76,6 +78,8 @@ Run `make check-vscode` with Bun for the editor adapter tests.
 Run `make check-modules` for module bindings, exports, and allocation failures.
 Run `make check-native` for native bootstrap, handoff, and cleanup. This example
 needs only `make all`; it builds its own stage library on each invocation.
+Run `make check-ccn` for function counts, the Lizard comparison, and the CCN build
+example. This check needs `lizard==1.21.6` in the Python environment.
 
 Recorded benchmark JSON files retain the source paths and hashes from their
 original revisions. The live measurement scripts use the current example paths.

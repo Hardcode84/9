@@ -21,6 +21,7 @@ C_LIBRARY = api/crust0.crs api/crust0_host.crs api/crust0_stage.crs stages/c/mod
 C_STAGE = $(C_LIBRARY) stages/c/main.crs
 READER = stages/reader/model.crs stages/reader/lex.crs stages/reader/parse.crs
 HIGHLIGHT = api/crust0.crs api/crust0_host.crs stages/reader/model.crs stages/reader/lex.crs stages/highlight/model.crs stages/highlight/scan.crs stages/highlight/output.crs stages/highlight/program.crs
+CCN = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/ccn/count.crs stages/ccn/read.crs stages/ccn/report.crs stages/ccn/program.crs
 RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources/read.crs stages/resources/types.crs stages/resources/constants.crs stages/resources/state.crs stages/resources/cleanup.crs stages/resources/places.crs stages/resources/expr.crs stages/resources/control.crs stages/resources/emit.crs stages/resources/program.crs stages/resources/build.crs
 RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(RESOURCE)
 RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_c_body rs_source_import
@@ -30,7 +31,7 @@ OVERLOAD_EXPORTS = overload_build overload_program ov_init ov_read ov_prepare ov
 OVERLOAD_RESOURCE_LIBRARY = $(RESOURCE_LIBRARY) $(OVERLOAD) stages/overload/resources.crs stages/overload/resource_program.crs
 OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_resource_build overload_resource_program ov_resources_init ov_resources_read ov_resources_prepare ov_resources_check
 
-.PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native
+.PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight ccn-stage check-ccn vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native
 all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a
 
 $(BUILD):
@@ -95,6 +96,14 @@ highlight-stage: $(BUILD)/crust-highlight
 
 check-highlight: all highlight-stage
 	python3 stages/highlight/test.py --build $(BUILD)
+
+$(BUILD)/crust-ccn: $(BUILD)/crust-c $(CCN) stages/ccn/main.crs $(BUILD)/libcrust0_run.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a Makefile
+	$< -o $@ $(CCN) stages/ccn/main.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0_run.a --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a --ldflag=-ldl --ldflag=-lffi $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+ccn-stage: $(BUILD)/crust-ccn
+
+check-ccn: all c-stage ccn-stage
+	python3 tests/ccn.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
 vscode: highlight-stage
 	python3 editors/vscode/package.py --binary $(BUILD)/crust-highlight --output $(BUILD)/crust-vscode.vsix

@@ -18,8 +18,8 @@ Do not add a feature before a concrete program requires it.
   selects inputs, stages, and outputs through ordinary calls.
 - Keep the seed evaluator simple. An early explicit root action prepares the
   selected backend and hands subsequent compilation code to its execution
-  stage. Keep bootstrap and execution policy in Crust stages. Prove this
-  handoff before expanding the C99 evaluator for stage execution speed.
+  stage. Keep bootstrap and execution policy in Crust stages. Preserve the
+  native handoff witness before expanding the C99 evaluator for stage speed.
 - Keep module management, ownership, cleanup, overloads, syntax extensions,
   and backend adapters in user stages. Compiler interfaces must be general.
   Do not add special cases for a stage name, source path, or example.
@@ -150,6 +150,7 @@ Build with `make all`. Use the checks that cover the change:
 | Core, reader, checker, evaluator, x86 backend | `make check` |
 | C backend | `make check-c` |
 | Root execution and reader extensions | `make check-stage check-reader` |
+| Native bootstrap and execution handoff | `make check-native` |
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |
 | Overloads and resource composition | `make check-overload check-overload-alloc` |
 | Compilation program examples | `make check-examples` |

@@ -30,7 +30,7 @@ OVERLOAD_EXPORTS = overload_build overload_program ov_init ov_read ov_prepare ov
 OVERLOAD_RESOURCE_LIBRARY = $(RESOURCE_LIBRARY) $(OVERLOAD) stages/overload/resources.crs stages/overload/resource_program.crs
 OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_resource_build overload_resource_program ov_resources_init ov_resources_read ov_resources_prepare ov_resources_check
 
-.PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules
+.PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native
 all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a
 
 $(BUILD):
@@ -203,6 +203,9 @@ check-examples: all c-stage
 
 check-modules: all c-stage
 	python3 tests/modules.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+
+check-native: all
+	python3 tests/native.py --build $(BUILD)
 
 clean:
 	rm -rf $(BUILD)

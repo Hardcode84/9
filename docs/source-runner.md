@@ -216,8 +216,11 @@ code, with explicit state and code lifetimes. The action performing the
 handoff finishes under its captured operations. Later actions use the new
 selection without replaying the setup prefix. Native execution must preserve
 the source-order boundaries; it cannot parse unread bytes across a pending
-reader change. This complete native continuation still needs an executable
-witness. The reader-switch example proves operation replacement alone.
+reader change. The [native stage](../stages/native/README.md) implements this
+boundary with complete function actions. Its source bootstrap builds a native
+executor and C backend with seed assembly. It then compiles and calls the next
+functions, preserves explicit state and callable identities, and builds the
+target from the unread source tail. Its unit rules are ordinary library policy.
 
 ## Files and native inputs
 
@@ -419,11 +422,11 @@ It does not require a larger or faster interpreter in the C99 seed.
 
 These results do not establish that complete handoff: the compiled-source
 route prepares a native target backend but retains the seed root executor.
-The next witness must prepare the backend explicitly and execute subsequent
-compilation code through the selected stage, with unchanged effects and
-storage lifetimes. Measure bootstrap preparation, execution after handoff,
-and final target toolchain work separately. Retain total cold-request cost;
-caching a prepared library does not erase the recorded preparation cost.
+The [native handoff example](../examples/native/README.md) now supplies that
+execution path. Its [measurement command](../benchmarks/native/measure.py)
+separates bootstrap preparation, native execution, and final target toolchain
+work. It also retains the total cold cost. Caching a prepared library does not
+erase its preparation cost.
 
 The recorded configurations fail the single-worker prerequisite in section
 14. Keep those results. Sustained seed interpretation is a comparison route,
@@ -440,3 +443,46 @@ python3 benchmarks/source-order/gate.py --build build --cpu 0 --rounds 20 --outp
 Select a CPU allowed by the host. Exit status 2 means the recorded speed gate
 failed. The optional `--perf` argument selects a native Linux perf executable
 for a separate profile after the timed rounds.
+
+### Native continuation measurement
+
+The [native handoff results](../benchmarks/native/results-2026-10-02.json.gz)
+record 20 randomized paired rounds on each input, with one CPU and a new
+process for each sample. Stage result caches are empty; OS file caches are
+warm. The compressed JSON retains the complete root sources, commands, input
+and tool hashes, output checks, raw samples, and confidence intervals. The
+seed binary is unchanged from the preceding compiler revision. The source
+manifest identifies the new Crust stages used in this run.
+
+| Input | Cold native handoff, ms | Source interpreted, ms | Installed backend, ms | Original C GCC check, ms |
+| --- | ---: | ---: | ---: | ---: |
+| Intrusive list | 73.516 | 7.999 | 2.612 | 6.885 |
+| 1,000 functions | 88.770 | 520.274 | 11.210 | 18.836 |
+| 8,000 functions | 196.695 | 4,166.372 | 70.640 | 111.372 |
+
+The native route starts from the seed and source files. Seed assembly builds
+the backend and executor. The first native function selects C compilation
+for the second function. That function runs the target frontend and emits
+complete C and native-symbol output. Every sample's output matches the
+installed backend. The direct-list output also compiles and runs.
+
+For 8,000 functions, stage bootstrap takes 32.434 ms. Preparation of the two
+native continuation functions takes 39.433 ms. Native target frontend work
+and C emission take 120.005 ms. Other startup and cleanup take 4.502 ms.
+These are separate medians, so their sum can differ from the total median.
+The final target toolchain is excluded. One separate direct-list observation
+measures 36.093 ms for target compilation, symbol renaming, and linking.
+
+The paired native/interpreted ratio for 8,000 functions is 0.04716, with a
+95% interval of [0.04674, 0.04745]. The corresponding native/GCC ratio is
+1.76613, with an interval of [1.75603, 1.77042]. Cold native execution beats
+sustained interpretation on the two generated inputs. All three cold native
+configurations fail the C-speed comparison. The small input costs more to
+bootstrap than to interpret.
+
+This run establishes the native handoff and its cost. It does not complete
+the specification performance gate. The source-built C backend runs code
+emitted by the seed assembly backend; the installed comparison backend uses
+GCC optimization. A complete performance result must account for any next
+backend generation or cache preparation, then repeat the cold comparison
+before adding matched parallel work. The C99 evaluator is unchanged.

@@ -764,6 +764,12 @@ replayed. Earlier storage and published callables retain their lifetime and
 identity contracts. A selected execution stage chooses compilation units
 under the source-order and unread-input rules above.
 
+The [native stage](../stages/native/README.md) implements one such policy without
+a C99 core change. It compiles complete functions and passes earlier storage
+and callable values through explicit user state. These library unit rules do
+not change the seed grammar or require all execution stages to use functions
+as their action payload.
+
 Host execution and target description are separate. `sizeof` in a running
 stage describes that stage program's execution profile. A cross-compiler gets
 target layout from its target description. It must not serialize a host address

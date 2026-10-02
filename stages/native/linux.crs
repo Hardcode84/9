@@ -1,0 +1,126 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Linux x86-64 process and temporary-file operations for the native stage.
+extern fn native_strlen(text: *u8) -> usize = "strlen";
+extern fn native_memcpy(dest: *u8, source: *u8, size: usize) -> *u8 = "memcpy";
+extern fn native_mkdtemp(path: *u8) -> *u8 = "mkdtemp";
+extern fn native_unlink(path: *u8) -> i32 = "unlink";
+extern fn native_rmdir(path: *u8) -> i32 = "rmdir";
+extern fn native_errno() -> *i32 = "__errno_location";
+extern fn native_fork() -> i32 = "fork";
+extern fn native_execvp(file: *u8, arguments: **u8) -> i32 = "execvp";
+extern fn native_waitpid(pid: i32, status: *i32, options: i32) -> i32 = "waitpid";
+extern fn native_exit(status: i32) -> unit = "_exit";
+extern fn native_fopen(path: *u8, mode: *u8) -> *u8 = "fopen";
+extern fn native_fclose(file: *u8) -> i32 = "fclose";
+
+fn native_error(context: *CrustContext, message: *u8) -> bool {
+    crust_set_error(context, null(*CrustSource), 0usize, message);
+    return false;
+}
+
+fn native_join(context: *CrustContext, left: *u8, right: *u8) -> *u8 {
+    var a: usize = native_strlen(left);
+    var b: usize = native_strlen(right);
+    if a >= ~0usize - b { native_error(context, "native path is too long"); return null(*u8); }
+    var result: *u8 = crust_try_alloc(context, a + b + 1usize, 1usize);
+    if result != null(*u8) {
+        native_memcpy(result, left, a);
+        native_memcpy(result + a as isize, right, b + 1usize);
+    }
+    return result;
+}
+
+// Arguments end with a null pointer. A failed child retains a diagnostic.
+fn native_tool(context: *CrustContext, arguments: **u8) -> bool {
+    var pid: i32 = native_fork();
+    if pid < 0i32 { return native_error(context, "cannot start native tool"); }
+    if pid == 0i32 {
+        native_execvp(arguments[0usize], arguments);
+        native_exit(127i32);
+        trap;
+    }
+    var status: i32 = 0i32;
+    while true {
+        var result: i32 = native_waitpid(pid, &status, 0i32);
+        if result == pid { break; }
+        if result < 0i32 && *native_errno() == 4i32 { continue; }
+        return native_error(context, "cannot wait for native tool");
+    }
+    if status == 0i32 { return true; }
+    var message: *u8 = native_join(context, "native tool failed: ", arguments[0usize]);
+    if message == null(*u8) { return false; }
+    return native_error(context, message);
+}
+
+// Create an image in a private directory. The session owns its cleanup,
+// including partially written output. Temporary is an existing absolute path.
+fn native_image(context: *CrustContext, session: *NativeSession) -> *NativeImage {
+    var image: *NativeImage = crust_try_alloc(context, sizeof(NativeImage), alignof(NativeImage)) as *NativeImage;
+    if image == null(*NativeImage) { return image; }
+    var path: *u8 = native_join(context, (*session).temporary, "/crust-XXXXXX");
+    if path == null(*u8) { return null(*NativeImage); }
+    (*image).assembly = native_join(context, path, "/unit.s");
+    (*image).object = native_join(context, path, "/unit.o");
+    (*image).library = native_join(context, path, "/unit.so");
+    if (*image).assembly == null(*u8) || (*image).object == null(*u8) || (*image).library == null(*u8) {
+        return null(*NativeImage);
+    }
+    if native_mkdtemp(path) == null(*u8) {
+        native_error(context, "cannot create native temporary directory");
+        return null(*NativeImage);
+    }
+    (*image).directory = path;
+    var size: usize = native_strlen(path);
+    native_memcpy((*image).assembly, path, size);
+    native_memcpy((*image).object, path, size);
+    native_memcpy((*image).library, path, size);
+    (*image).next = (*session).images;
+    (*session).images = image;
+    return image;
+}
+
+fn native_remove(context: *CrustContext, path: *u8) -> bool {
+    if native_unlink(path) == 0i32 || *native_errno() == 2i32 { return true; }
+    return native_error(context, "cannot remove native temporary file");
+}
+
+// Complete all compilation calls before cleanup. Loaded code remains runner-owned.
+fn native_cleanup(context: *CrustContext, session: *NativeSession) -> bool {
+    var success: bool = true;
+    while (*session).images != null(*NativeImage) {
+        var image: *NativeImage = (*session).images;
+        if !native_remove(context, (*image).assembly) { success = false; }
+        if !native_remove(context, (*image).object) { success = false; }
+        if !native_remove(context, (*image).library) { success = false; }
+        if native_rmdir((*image).directory) != 0i32 {
+            native_error(context, "cannot remove native temporary directory");
+            success = false;
+        }
+        (*session).images = (*image).next;
+    }
+    return success;
+}
+
+fn native_link_image(context: *CrustContext, image: *NativeImage) -> bool {
+    var count: usize = 0usize;
+    var dependency: *NativeImage = (*image).next;
+    while dependency != null(*NativeImage) { count = count + 1usize; dependency = (*dependency).next; }
+    if count > (~0usize / sizeof(*u8)) - 7usize { return native_error(context, "too many native images"); }
+    var arguments: **u8 = crust_try_alloc(context, (count + 7usize) * sizeof(*u8), alignof(*u8)) as **u8;
+    if arguments == null(**u8) { return false; }
+    arguments[0usize] = "gcc";
+    arguments[1usize] = "-shared";
+    arguments[2usize] = "-Wl,-Bsymbolic,-z,text,-z,relro,-z,now";
+    arguments[3usize] = (*image).object;
+    arguments[4usize] = "-o";
+    arguments[5usize] = (*image).library;
+    count = 6usize;
+    dependency = (*image).next;
+    while dependency != null(*NativeImage) {
+        arguments[count] = (*dependency).library;
+        count = count + 1usize;
+        dependency = (*dependency).next;
+    }
+    return native_tool(context, arguments);
+}

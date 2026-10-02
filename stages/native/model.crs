@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record NativeImage {
+    directory: *u8;
+    assembly: *u8;
+    object: *u8;
+    library: *u8;
+    next: *NativeImage;
+}
+
+record NativeSession {
+    images: *NativeImage;
+    compile: fn(*CrustContext, *NativeSession, *NativeImage) -> bool;
+    user: *u8;
+    temporary: *u8;
+}

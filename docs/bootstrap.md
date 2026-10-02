@@ -16,6 +16,9 @@ cleanup, imports, or macros. The direct-list example uses raw
 memory preconditions. It is not evidence of a checked lifetime rule.
 The [source runner](source-runner.md) executes ordinary Crust0 code that controls
 target compilation and can change the reader for the unread root bytes.
+The [native bootstrap tutorial](../stages/native/README.md) uses the same seed
+to build its selected backend and executor from source, then runs subsequent
+compilation functions natively. It needs no prepared stage library.
 
 ## Build and use
 

@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Compile checked declarations with assigned names. Keep borrowed facts live.
+fn native_c_image(context: *CrustContext, session: *NativeSession, image: *NativeImage) -> bool {
+    var flags: [*u8; 2] = make [*u8; 2] { "-fPIC", "-fno-semantic-interposition" };
+    var options: CBackendOptions = make CBackendOptions {
+        mode: 1u32, output: (*image).object, symbols: null(*u8),
+        cflags: &flags[0usize], cflag_count: 2usize,
+        ldflags: null(**u8), ldflag_count: 0usize
+    };
+    return c_backend_build(context, null(*CrustDecl), &options) == 0i32 && native_link_image(context, image);
+}

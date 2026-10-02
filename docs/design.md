@@ -154,8 +154,10 @@ are the available emission paths; LLVM requires a separate adapter stage.
 This handoff uses `CrustRun.read`, `execute`, and `user`. Loading a library
 with `host_link` alone leaves the default root executor in place. The selected
 stage must take responsibility for later code execution as well as emission.
-The current runner supplies the handoff interface; a native continuation from
-a source-bootstrapped backend still needs an executable witness.
+The [native stage tutorial](../stages/native/README.md) supplies this handoff.
+It starts with source inputs, builds a backend and executor with seed assembly,
+then compiles and executes complete function actions. Its same-file example
+changes the next unit to C compilation and builds a final executable.
 
 Keep this policy in Crust code. The seed must not identify a backend by its
 name or source path. Preserve completed effects, persistent storage, and

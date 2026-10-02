@@ -1,0 +1,90 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "../../api/crust0_x64.crs");
+host_source(run, "../../api/crust0_stage.crs");
+host_source(run, "../../stages/c/api.crs");
+host_source(run, "../../stages/native/model.crs");
+host_source(run, "../../stages/native/api.crs");
+host_source(run, "../../stages/native/linux.crs");
+host_source(run, "../../stages/native/asm.crs");
+host_source(run, "../../stages/native/bootstrap.crs");
+
+record BuildState {
+    counter: *usize;
+    callback: fn(*usize) -> usize;
+    original: fn(*usize) -> usize;
+    first: fn(*CrustRun, *u8) -> i32;
+    output: *u8;
+}
+
+fn increment(counter: *usize) -> usize {
+    *counter = *counter + 1usize;
+    return *counter;
+}
+
+var counter: usize = 0usize;
+var state: BuildState = make BuildState {
+    counter: &counter, callback: increment, original: increment,
+    first: null(fn(*CrustRun, *u8) -> i32), output: host_path(run, "../../build/native-hello")
+};
+var session: NativeSession = make NativeSession {
+    images: null(*NativeImage), compile: null(fn(*CrustContext, *NativeSession, *NativeImage) -> bool),
+    user: &state as *u8, temporary: host_path(run, "../../build")
+};
+var sources: [*u8; 17] = make [*u8; 17] {
+    "../../api/crust0.crs", "../../api/crust0_host.crs", "../../api/crust0_eval.crs",
+    "../../api/crust0_run.crs", "../../api/crust0_x64.crs", "../../api/crust0_stage.crs",
+    "../../stages/c/model.crs", "../../stages/c/base.crs", "../../stages/c/types.crs",
+    "../../stages/c/emit.crs", "../../stages/c/driver.crs", "../../stages/c/program.crs",
+    "../../stages/native/model.crs", "../../stages/native/linux.crs", "../../stages/native/asm.crs",
+    "../../stages/native/execute.crs", "../../stages/native/c.crs"
+};
+var exports: [*u8; 3] = make [*u8; 3] { "native_start", "native_c_image", "c_program" };
+{
+    if increment(&counter) != 1usize { return 80i32; }
+    var status: i32 = native_bootstrap(run, &session, &sources[0usize], 17usize, &exports[0usize], 3usize);
+    if status == 0i32 && (counter != 3usize || state.counter != &counter || state.callback != increment) {
+        return 81i32;
+    }
+    return status;
+};
+
+// This complete function is the first native action. Select C for the next one.
+fn select_c(root: *CrustRun, user: *u8) -> i32 {
+    var state: *BuildState = user as *BuildState;
+    if (*state).callback != (*state).original || (*state).callback((*state).counter) != 2usize { return 82i32; }
+    (*state).first = select_c;
+    var session: *NativeSession = (*root).user as *NativeSession;
+    (*session).compile = native_c_image;
+    return 0i32;
+}
+
+// This function runs natively after compilation with the source-supplied C stage.
+fn build_target(root: *CrustRun, user: *u8) -> i32 {
+    var state: *BuildState = user as *BuildState;
+    if (*state).first != select_c || (*state).callback((*state).counter) != 3usize { return 83i32; }
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var arguments: [*u8; 2] = make [*u8; 2] { "-o", (*state).output };
+    var request: CrustBuild = make CrustBuild {
+        context: &context, source: (*root).source, target_begin: (*root).cursor,
+        argc: 2i32, argv: &arguments[0usize]
+    };
+    if (*root).argc != 0i32 { request.argc = (*root).argc; request.argv = (*root).argv; }
+    var status: i32 = c_program(&request);
+    if context.error_count != 0usize {
+        crust_set_error((*root).context, context.error_loc.source, context.error_loc.offset, &context.error[0usize]);
+    }
+    crust_context_destroy(&context);
+    (*root).returned = true;
+    (*root).status = status;
+    return status;
+}
+
+// The last native action gives these unread bytes to the target frontend.
+extern fn puts(text: *u8) -> i32 = "puts";
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if puts("Hello from a bootstrapped native stage!") < 0i32 { return 1i32; }
+    return 0i32;
+}

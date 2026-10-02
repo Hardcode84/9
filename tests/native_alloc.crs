@@ -1,0 +1,57 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record NativeAllocation { calls: usize; fail_at: usize; live: usize; }
+
+fn test_allocate(user: *u8, size: usize) -> *u8 {
+    var counts: *NativeAllocation = user as *NativeAllocation;
+    (*counts).calls = (*counts).calls + 1usize;
+    if (*counts).calls == (*counts).fail_at { return null(*u8); }
+    var bytes: *u8 = crust0_host_alloc(size, 16usize);
+    if bytes == null(*u8) { trap; }
+    (*counts).live = (*counts).live + 1usize;
+    return bytes;
+}
+
+fn test_release(user: *u8, bytes: *u8) -> unit {
+    var counts: *NativeAllocation = user as *NativeAllocation;
+    if bytes == null(*u8) || (*counts).live == 0usize { trap; }
+    (*counts).live = (*counts).live - 1usize;
+    crust0_host_free(bytes);
+}
+
+fn allocation_sweep(parent: *CrustRun, path: *u8, temporary: *u8) -> i32 {
+    var fail_at: usize = 1usize;
+    while true {
+        var counts: NativeAllocation = make NativeAllocation { calls: 0usize, fail_at: fail_at, live: 0usize };
+        var allocator: CrustAllocator = make CrustAllocator {
+            user: &counts as *u8, allocate: test_allocate, release: test_release
+        };
+        var storage: CrustContext = uninit;
+        var context: CrustContext = uninit;
+        crust_context_init(&storage, &allocator);
+        crust_context_init(&context, &allocator);
+        var root: CrustRun = *parent;
+        root.context = &storage;
+        var session: NativeSession = make NativeSession {
+            images: null(*NativeImage), compile: null(fn(*CrustContext,*NativeSession,*NativeImage)->bool),
+            user: null(*u8), temporary: temporary
+        };
+        var name: *u8 = "answer";
+        var image: *NativeImage = native_image(&storage, &session);
+        var success: bool = image != null(*NativeImage) &&
+            native_prepare(&root, &context, &path, 1usize, &name, 1usize) &&
+            native_asm_image(&context, &session, image);
+        if !native_cleanup(&storage, &session) { return 4i32; }
+        var diagnosed: bool = storage.error_count != 0usize || context.error_count != 0usize;
+        crust_context_destroy(&context);
+        crust_context_destroy(&storage);
+        if counts.live != 0usize || success == diagnosed { return 2i32; }
+        if success {
+            if counts.calls >= fail_at { return 3i32; }
+            return 0i32;
+        }
+        if counts.calls < fail_at { return 5i32; }
+        fail_at = fail_at + 1usize;
+    }
+    trap;
+}

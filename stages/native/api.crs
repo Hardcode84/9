@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Include model.crs. Keep the session, user storage, and selected operations live
+// through this call. Start native function actions at the current root cursor.
+extern fn native_start(root: *CrustRun, session: *NativeSession) -> i32 = "native_start";
+
+// Compile checked, named declarations to this image with the C backend.
+// Link against image.next. The caller owns every image and its cleanup.
+extern fn native_c_image(context: *CrustContext, session: *NativeSession, image: *NativeImage) -> bool = "native_c_image";

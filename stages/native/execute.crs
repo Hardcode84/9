@@ -1,0 +1,104 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn native_signature(root: *CrustRun, declaration: *CrustDecl) -> bool {
+    var type: *CrustType = (*declaration).type;
+    if (*type).param_count != 2usize || (*(*type).base).kind != CRUST_T_I32 { return false; }
+    var first: *CrustType = (*type).params[0usize];
+    var second: *CrustType = (*type).params[1usize];
+    if (*first).kind != CRUST_T_POINTER || (*second).kind != CRUST_T_POINTER ||
+       (*(*second).base).kind != CRUST_T_U8 { return false; }
+    var name: *CrustName = crust_try_intern((*root).context, "CrustRun", 8usize);
+    if name == null(*CrustName) { return false; }
+    var symbol: *CrustSymbol = crust_map_get(&(*(*root).context).globals, name as usize) as *CrustSymbol;
+    var equal: bool = false;
+    return crust_try_type_equal((*root).context, (*first).base, (*symbol).type, &equal) && equal;
+}
+
+fn native_check(root: *CrustRun, declaration: *CrustDecl) -> bool {
+    var context: *CrustContext = (*root).context;
+    if crust_map_get(&(*root).scope.locals, (*declaration).name as usize) != null(*u8) {
+        crust_set_error(context, (*declaration).loc.source, (*declaration).loc.offset,
+                        "declaration conflicts with a root local");
+        return false;
+    }
+    var unit_value: *CrustUnit = crust_try_alloc(context, sizeof(CrustUnit), alignof(CrustUnit)) as *CrustUnit;
+    if unit_value == null(*CrustUnit) { return false; }
+    (*unit_value).source = (*declaration).loc.source;
+    (*unit_value).declarations = declaration;
+    if (*context).last_unit == null(*CrustUnit) { (*context).units = unit_value; }
+    else { (*(*context).last_unit).next = unit_value; }
+    (*context).last_unit = unit_value;
+    if !crust_collect_unit(context, unit_value) || !crust_resolve_unit(context, unit_value) ||
+       !crust_check_unit(context, unit_value) { return false; }
+    if !native_signature(root, declaration) {
+        if (*context).error_count != 0usize { return false; }
+        crust_set_error(context, (*declaration).loc.source, (*declaration).loc.offset,
+                        "native action must be a defined fn(*CrustRun, *u8) -> i32");
+        return false;
+    }
+    return true;
+}
+
+fn native_compile(root: *CrustRun, session: *NativeSession, declaration: *CrustDecl) -> bool {
+    if (*session).compile == null(fn(*CrustContext, *NativeSession, *NativeImage) -> bool) {
+        return native_error((*root).context, "native compiler must be callable");
+    }
+    var image: *NativeImage = native_image((*root).context, session);
+    if image == null(*NativeImage) { return false; }
+    // The private directory gives each published callable a unique link identity.
+    (*declaration).link_name = native_join((*root).context, (*image).directory, "/entry");
+    if (*declaration).link_name == null(*u8) { return false; }
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var unit_value: CrustUnit = make CrustUnit {
+        source: (*declaration).loc.source, declarations: declaration, next: null(*CrustUnit)
+    };
+    context.units = &unit_value;
+    context.last_unit = &unit_value;
+    var success: bool = (*session).compile(&context, session, image);
+    if context.error_count != 0usize {
+        crust_set_error((*root).context, context.error_loc.source, context.error_loc.offset, &context.error[0usize]);
+        success = false;
+    }
+    crust_context_destroy(&context);
+    return success && crust_run_link(root, (*image).library);
+}
+
+// Consume one complete function from crust_run_read. Each function executes once.
+// A nonzero result stops the stream. Functions can select the following reader.
+fn native_execute(root: *CrustRun, user: *u8, data: *u8) -> bool {
+    var session: *NativeSession = user as *NativeSession;
+    var action: *CrustAction = data as *CrustAction;
+    var declaration: *CrustDecl = (*action).declaration;
+    if declaration == null(*CrustDecl) || (*declaration).kind != CRUST_D_FUNCTION {
+        crust_set_error((*root).context, (*root).source, (*root).cursor,
+                        "native executor expects a complete function action");
+        return false;
+    }
+    if !native_check(root, declaration) || !native_compile(root, session, declaration) { return false; }
+    // Publish only after native code exists. No interpreted callable was prepared.
+    (*declaration).kind = CRUST_D_EXTERN;
+    var entry: fn(*CrustRun, *u8) -> i32 = null(fn(*CrustRun, *u8) -> i32);
+    if !crust_eval_function((*root).eval, declaration, &entry as *u8) { return false; }
+    var status: i32 = entry(root, (*session).user);
+    if status != 0i32 { (*root).returned = true; (*root).status = status; }
+    return true;
+}
+
+// Start with assembly compilation. Later actions can replace session.compile.
+// Restore the caller's operations when the nested source loop finishes.
+fn native_start(root: *CrustRun, session: *NativeSession) -> i32 {
+    var reader: fn(*CrustRun,*u8,**u8)->bool = (*root).read;
+    var executor: fn(*CrustRun,*u8,*u8)->bool = (*root).execute;
+    var user: *u8 = (*root).user;
+    (*session).compile = native_asm_image;
+    (*root).read = crust_run_read;
+    (*root).execute = native_execute;
+    (*root).user = session as *u8;
+    var success: bool = crust_run_loop(root);
+    (*root).read = reader;
+    (*root).execute = executor;
+    (*root).user = user;
+    if !success { return 1i32; }
+    return (*root).status;
+}

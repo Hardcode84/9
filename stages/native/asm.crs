@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Compile checked declarations with assigned names. Keep borrowed facts live.
+fn native_asm_image(context: *CrustContext, session: *NativeSession, image: *NativeImage) -> bool {
+    var stream: *u8 = native_fopen((*image).assembly, "wb");
+    if stream == null(*u8) { return native_error(context, "cannot open native assembly output"); }
+    var success: bool = crust_x64_emit(context, stream, null(*CrustDecl));
+    if native_fclose(stream) != 0i32 { return native_error(context, "cannot close native assembly output"); }
+    if !success { return false; }
+    var arguments: [*u8; 6] = make [*u8; 6] {
+        "as", "--64", (*image).assembly, "-o", (*image).object, null(*u8)
+    };
+    return native_tool(context, &arguments[0usize]) && native_link_image(context, image);
+}

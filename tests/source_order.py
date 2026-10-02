@@ -207,6 +207,18 @@ return 0i32;
 """,
     )
     suite.root("return-skips-unread", b"return 37i32;\0unread", expected=37)
+    for nesting in (0, 100):
+        expression = "down(n-1u32)"
+        for _ in range(nesting):
+            expression = "1u32+(" + expression + ")"
+        suite.root(
+            f"evaluation-depth-{nesting}",
+            "fn down(n:u32)->u32{if n==0u32{return 0u32;}return "
+            + expression
+            + ";}\ndown(50000u32);",
+            expected=1,
+            diagnostic=b"host evaluation depth limit of 1024 exceeded",
+        )
     suite.root(
         "effect-once-before-return",
         'crust0_host_write_stream(1u32,"X",1usize); return 37i32;',
@@ -301,6 +313,12 @@ def check_runtime(suite):
     )
     for name, declaration, statement, diagnostic in (
         ("callback-trap", "", "trap;", b"required execution trap"),
+        (
+            "callback-depth",
+            "",
+            "return native_callback(callback);",
+            b"host evaluation depth limit of 1024 exceeded",
+        ),
         (
             "callback-error",
             'extern fn absent()->i32="crust_callback_missing_symbol";',

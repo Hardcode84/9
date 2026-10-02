@@ -256,6 +256,44 @@ done:
     crust_context_destroy(&context);
 }
 
+static void test_evaluation_depth(void)
+{
+    const char *text = "fn down(n:u32)->u32{if n==0u32{return 0u32;}return down(n-1u32)+1u32;}"
+                       "fn indirect(n:u32)->u32{if n==0u32{return 0u32;}"
+                       "var next:fn(u32)->u32=indirect;return next(n-1u32)+1u32;}";
+    CrustSource source = source_text(text);
+    CrustContext context;
+    CrustUnit *unit;
+    CrustEval *eval;
+    CrustDecl *declaration;
+    AllocatorState state = {false, 0, 0, 0};
+    CrustAllocator allocator = {&state, test_allocate, test_release};
+    uint32_t depth;
+    uint32_t result;
+    void *argument = &depth;
+    crust_context_init(&context, &allocator);
+    if (!parse(&context, &source, &unit))
+        abort();
+    eval = crust_eval_create(&context, NULL);
+    for (declaration = unit->declarations; declaration; declaration = declaration->next) {
+        size_t reserved;
+        depth = 50000;
+        result = UINT32_MAX;
+        check(!crust_eval_call(eval, declaration, &argument, 1, &result) &&
+                  strstr(context.error, "host evaluation depth limit of 1024 exceeded") != NULL &&
+                  context.error_loc.source == &source && result == UINT32_MAX,
+              "direct and indirect recursion fail with a located diagnostic and no result");
+        reserved = context.arena.bytes_reserved;
+        depth = 50;
+        check(crust_eval_call(eval, declaration, &argument, 1, &result) && result == 50 &&
+                  context.arena.bytes_reserved == reserved,
+              "evaluation unwinds its depth and reuses frames after depth exhaustion");
+    }
+    crust_eval_destroy(eval);
+    crust_context_destroy(&context);
+    check(state.live == 0, "depth exhaustion releases all context allocations");
+}
+
 typedef struct {
     CrustType types[40];
     CrustType *parameters[40][2];
@@ -926,6 +964,7 @@ int main(void)
 {
     test_runtime();
     test_reentry();
+    test_evaluation_depth();
     test_native_identity();
     test_native_type_graph();
     test_callback_types();

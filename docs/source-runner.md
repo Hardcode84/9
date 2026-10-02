@@ -250,6 +250,16 @@ prepared calls and reusable activation frames. A loop does not allocate a new
 frame for each iteration. Active recursive or reentrant calls have separate
 frames.
 
+The evaluator permits at most 1024 active calls and syntax visits combined.
+Expression, place, statement, and function visits share this depth budget.
+The budget includes direct calls, function-pointer calls, and native callback
+reentry. A deeply nested expression consumes budget in each recursive call.
+Exhaustion records a source diagnostic and returns failure. A failure during
+a native callback terminates the process as described below. Completed visits
+release their budget. Repeated calls and loop iterations do not consume a
+cumulative allowance. This limit applies to host interpretation; emitted
+target code has no evaluator depth counter.
+
 Libffi supplies the scalar native-call and callback boundary. A function
 pointer passed to native code retains one callable identity. Native callbacks
 can synchronously enter the evaluator again. One evaluator requires exclusive

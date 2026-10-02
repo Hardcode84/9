@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define EVAL_DEPTH_LIMIT 1024u
+
 typedef struct EvalDecl EvalDecl;
 typedef struct EvalNative EvalNative;
 typedef struct EvalPlan EvalPlan;
@@ -64,6 +66,7 @@ struct EvalDecl {
 
 struct CrustEval {
     CrustContext *context;
+    unsigned active_depth;
     CrustEvalOptions options;
     CrustMap declarations;
     CrustMap identities;
@@ -90,6 +93,14 @@ static bool error_at(CrustEval *eval, CrustLoc location, const char *message)
 {
     crust_set_error(eval->context, location.source, location.offset, message);
     return false;
+}
+
+static bool enter_evaluation(CrustEval *eval, CrustLoc location)
+{
+    if (eval->active_depth == EVAL_DEPTH_LIMIT)
+        return error_at(eval, location, "host evaluation depth limit of 1024 exceeded");
+    ++eval->active_depth;
+    return true;
 }
 
 static CrustLoc no_location(void)
@@ -571,7 +582,7 @@ static bool index_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression
     return true;
 }
 
-static bool eval_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression, void **result)
+static bool eval_place_impl(CrustEval *eval, EvalFrame *frame, CrustExpr *expression, void **result)
 {
     EvalValue value;
     void *address;
@@ -609,6 +620,16 @@ static bool eval_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
     default:
         abort();
     }
+}
+
+static bool eval_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression, void **result)
+{
+    bool success;
+    if (!enter_evaluation(eval, expression->loc))
+        return false;
+    success = eval_place_impl(eval, frame, expression, result);
+    --eval->active_depth;
+    return success;
 }
 
 static bool read_place(CrustEval *eval, EvalFrame *frame, CrustExpr *expression, EvalValue *result)
@@ -925,8 +946,8 @@ static uint64_t literal_bits(CrustExpr *expression)
     }
 }
 
-static bool eval_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
-                            EvalValue *result)
+static bool eval_expression_impl(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
+                                 EvalValue *result)
 {
     result->bits = 0;
     result->aggregate = NULL;
@@ -954,6 +975,17 @@ static bool eval_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expres
         result->bits = literal_bits(expression);
         return true;
     }
+}
+
+static bool eval_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
+                            EvalValue *result)
+{
+    bool success;
+    if (!enter_evaluation(eval, expression->loc))
+        return false;
+    success = eval_expression_impl(eval, frame, expression, result);
+    --eval->active_depth;
+    return success;
 }
 
 static bool eval_block(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, EvalFlow *flow,
@@ -1015,8 +1047,8 @@ static bool eval_while(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, 
     }
 }
 
-static bool eval_statement(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, EvalFlow *flow,
-                           EvalValue *result)
+static bool eval_statement_impl(CrustEval *eval, EvalFrame *frame, CrustStmt *statement,
+                                EvalFlow *flow, EvalValue *result)
 {
     EvalValue value;
     void *address;
@@ -1057,8 +1089,19 @@ static bool eval_statement(CrustEval *eval, EvalFrame *frame, CrustStmt *stateme
     }
 }
 
-static bool call_declaration(CrustEval *eval, EvalDecl *declaration, void *const *arguments,
-                             EvalValue *result)
+static bool eval_statement(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, EvalFlow *flow,
+                           EvalValue *result)
+{
+    bool success;
+    if (!enter_evaluation(eval, statement->loc))
+        return false;
+    success = eval_statement_impl(eval, frame, statement, flow, result);
+    --eval->active_depth;
+    return success;
+}
+
+static bool call_declaration_impl(CrustEval *eval, EvalDecl *declaration, void *const *arguments,
+                                  EvalValue *result)
 {
     EvalPlan *plan;
     EvalFrame *frame;
@@ -1094,6 +1137,17 @@ static bool call_declaration(CrustEval *eval, EvalDecl *declaration, void *const
     result->aggregate = NULL;
     success = eval_statement(eval, frame, declaration->declaration->body, &flow, result);
     release_frame(frame);
+    return success;
+}
+
+static bool call_declaration(CrustEval *eval, EvalDecl *declaration, void *const *arguments,
+                             EvalValue *result)
+{
+    bool success;
+    if (!enter_evaluation(eval, declaration->declaration->loc))
+        return false;
+    success = call_declaration_impl(eval, declaration, arguments, result);
+    --eval->active_depth;
     return success;
 }
 

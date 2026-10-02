@@ -315,6 +315,11 @@ orders. Their assembly and diagnostics must match. The test also checks that
 provider facts do not change. The default command-line driver stays sequential;
 it does not impose a scheduler or a module resolver on other drivers.
 
+The [module tutorial](../stages/modules/README.md) implements source selection,
+visibility, and native exports in Crust. Its root selects a provider before
+its consumer, then destroys contexts in reverse dependency order. This
+library uses the same public binding boundary as the parallel C test.
+
 ## Native output and cost
 
 The backend emits unoptimized assembly. It uses stack slots where operand

@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "library.crs");
+
+fn interface_exports(module: *CrustModule) -> bool {
+    var unit_value: *CrustUnit = (*module).context.units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) {
+            if (*declaration).kind == CRUST_D_EXTERN {
+                if !module_equal((*(*declaration).name).text, (*declaration).link_name) {
+                    crust_set_error(&(*module).context, (*declaration).loc.source, (*declaration).loc.offset,
+                                    "export arguments require identical source and native names");
+                    return false;
+                }
+            }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    unit_value = (*module).context.units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) {
+            if (*declaration).kind == CRUST_D_EXTERN {
+                var name: *CrustName = (*declaration).name;
+                if crust0_host_write_stream(1u32, "--export ", 9usize) != 0i32 ||
+                   crust0_host_write_stream(1u32, (*name).text, (*name).size) != 0i32 ||
+                   crust0_host_write_stream(1u32, "\n", 1usize) != 0i32 {
+                    crust_set_error(&(*module).context, null(*CrustSource), 0usize, "cannot write export arguments");
+                    return false;
+                }
+            }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    return true;
+}
+
+fn export_arguments(root: *CrustRun) -> i32 {
+    var module: CrustModule = uninit;
+    module_init(&module, null(*CrustAllocator));
+    var index: i32 = 0i32;
+    var ok: bool = true;
+    if (*root).argc == 0i32 {
+        crust_set_error(&module.context, null(*CrustSource), 0usize, "expected consumer interface paths");
+        ok = false;
+    }
+    while index < (*root).argc && ok {
+        ok = module_read(&module, (*root).argv[index as usize], index as u64 + 1u64);
+        index = index + 1i32;
+    }
+    if ok { ok = interface_exports(&module); }
+    if module.context.error_count != 0usize { crust_run_diagnostic(&module.context); }
+    module_destroy(&module);
+    if ok { return 0i32; }
+    return 1i32;
+}
+
+return export_arguments(run);

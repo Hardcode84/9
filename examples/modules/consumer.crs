@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn puts(text: *u8) -> i32 = "puts";
+
+fn helper() -> i32 { return 42i32; }
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    var value: Number = make Number { number: step };
+    if calculate(&value) != helper() { return 1i32; }
+    if puts("modules: 42") < 0i32 { return 2i32; }
+    return 0i32;
+}

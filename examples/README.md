@@ -21,6 +21,7 @@ and commands to inspect the result.
 | 3 | [Function overloads](../stages/overload/README.md) | Exact type selection, symbol mangling, and separate objects |
 | 4 | [Ownership, RAII, and defer](../stages/resources/README.md) | Moves, loans, rejected programs, and emitted cleanup plans |
 | 5 | [Syntax highlighting](../stages/highlight/README.md) | HTML, editor tokens, custom reader services, and a VS Code extension |
+| 6 | [Modules](../stages/modules/README.md) | Separate contexts, selected imports, native exports, and provider lifetimes |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -35,6 +36,7 @@ Each example has its own directory and README.
 | [hello](hello/README.md) | Compilation code and target code in one file | `Hello, world!` |
 | [arguments](arguments/README.md) | Separate compiler arguments from target arguments | Each target argument on its own line |
 | [multiple-files](multiple-files/README.md) | Select and compile two target files | `Hello from another source file!` |
+| [modules](modules/README.md) | Compile separate namespaces and import selected names | `modules: 42` |
 | [intrusive](intrusive/README.md) | Build a direct intrusive list | `intrusive: ok` |
 | [reader-switch](reader-switch/README.md) | Replace the reader and executor from the root | Two lines read with a new grammar |
 | [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
@@ -69,6 +71,7 @@ Run `make check-overload` for the overload examples, native symbols, separate
 objects, and resource composition tests.
 Run `make check-highlight` for the highlighter roots and native service.
 Run `make check-vscode` with Bun for the editor adapter tests.
+Run `make check-modules` for module bindings, exports, and allocation failures.
 
 Recorded benchmark JSON files retain the source paths and hashes from their
 original revisions. The live measurement scripts use the current example paths.

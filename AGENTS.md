@@ -149,6 +149,7 @@ Build with `make all`. Use the checks that cover the change:
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |
 | Overloads and resource composition | `make check-overload check-overload-alloc` |
 | Compilation program examples | `make check-examples` |
+| Module selection, bindings, and exports | `make check-modules` |
 | Highlighting and editor integration | `make check-highlight check-vscode` |
 
 A core or shared API change requires the full matrix. Run the relevant

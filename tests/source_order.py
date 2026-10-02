@@ -922,6 +922,10 @@ def check_examples(suite):
     assert suite.command([output / "hello"]).stdout == b"Hello, world!\n"
     compile_example("multiple-files")
     assert suite.command([output / "multiple-files"]).stdout == b"Hello from another source file!\n"
+    compile_example("modules")
+    assert suite.command([output / "modules"]).stdout == b"modules: 42\n"
+    symbols = suite.command(["nm", "-g", "--defined-only", output / "modules-provider.o"]).stdout
+    assert set(symbols.split()[2::3]) == {b"tutorial_answer", b"tutorial_increment"}, symbols
 
     compile_example("arguments", ["--check"])
     compile_example("arguments", ["-o", "argument output"])

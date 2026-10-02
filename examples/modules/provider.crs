@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record Value { number: i32; }
+
+const increment: i32 = 2i32;
+
+fn helper() -> i32 { return 40i32; }
+
+fn answer(value: *Value) -> i32 {
+    return helper() + (*value).number;
+}

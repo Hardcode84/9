@@ -19,7 +19,6 @@ HOST = $(BUILD)/host.o $(BUILD)/host_posix.o
 PRELUDE = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/host.crs
 C_LIBRARY = api/crust0.crs api/crust0_host.crs api/crust0_stage.crs stages/c/model.crs stages/c/base.crs stages/c/types.crs stages/c/emit.crs stages/c/driver.crs stages/c/program.crs
 C_STAGE = $(C_LIBRARY) stages/c/main.crs
-C_EXPORTS = c_backend_build c_program c_backend_build_with_body c_stage_init c_stage_destroy c_emit c_emit_with_body c_error c_alloc c_map_get c_map_set c_text c_number c_quote c_expression c_place c_statement c_value c_symbol c_global c_type_name c_binding c_temp c_address_temp
 READER = stages/reader/model.crs stages/reader/lex.crs stages/reader/parse.crs
 HIGHLIGHT = api/crust0.crs api/crust0_host.crs stages/reader/model.crs stages/reader/lex.crs stages/highlight/model.crs stages/highlight/scan.crs stages/highlight/output.crs stages/highlight/program.crs
 RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources/read.crs stages/resources/types.crs stages/resources/constants.crs stages/resources/state.crs stages/resources/cleanup.crs stages/resources/places.crs stages/resources/expr.crs stages/resources/control.crs stages/resources/emit.crs stages/resources/program.crs stages/resources/build.crs
@@ -31,7 +30,7 @@ OVERLOAD_EXPORTS = overload_build overload_program ov_init ov_read ov_prepare ov
 OVERLOAD_RESOURCE_LIBRARY = $(RESOURCE_LIBRARY) $(OVERLOAD) stages/overload/resources.crs stages/overload/resource_program.crs
 OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_resource_build overload_resource_program ov_resources_init ov_resources_read ov_resources_prepare ov_resources_check
 
-.PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader
+.PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules
 all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a
 
 $(BUILD):
@@ -77,8 +76,12 @@ $(BUILD)/crust-c-seed: $(BUILD)/crust-c-seed.o $(BUILD)/libcrust0.a $(BUILD)/lib
 $(BUILD)/crust-c: $(BUILD)/crust-c-seed
 	$< -o $@ $(C_STAGE) $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-$(BUILD)/crust-c-library.o: $(BUILD)/crust-c $(C_LIBRARY) Makefile
-	$< --library --object $(foreach name,$(C_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(C_LIBRARY)
+$(BUILD)/c-exports: $(BUILD)/crust stages/modules/library.crs stages/modules/exports.crs stages/c/api.crs stages/c/extension.crs Makefile
+	$< stages/modules/exports.crs stages/c/api.crs stages/c/extension.crs > $@.tmp
+	mv $@.tmp $@
+
+$(BUILD)/crust-c-library.o: $(BUILD)/crust-c $(C_LIBRARY) $(BUILD)/c-exports Makefile
+	crust_exports=$$(cat $(BUILD)/c-exports) && $< --library --object $$crust_exports --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(C_LIBRARY)
 
 $(BUILD)/crust-c-library.so: $(BUILD)/crust-c-library.o
 	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
@@ -197,6 +200,9 @@ check-stage: all c-stage
 
 check-examples: all c-stage
 	python3 tests/source_order.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)' --group examples
+
+check-modules: all c-stage
+	python3 tests/modules.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
 clean:
 	rm -rf $(BUILD)

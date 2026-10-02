@@ -1,0 +1,162 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record CrustExport {
+    declaration: *CrustDecl;
+    next: *CrustExport;
+}
+
+record CrustModule {
+    context: CrustContext;
+    exports: CrustMap;
+}
+
+fn module_length(text:*u8)->usize {
+    var size:usize=0usize;
+    while text[size]!=0u8 {size=size+1usize;}
+    return size;
+}
+
+fn module_equal(left:*u8,right:*u8)->bool {
+    var index:usize=0usize;
+    while left[index]==right[index] {
+        if left[index]==0u8 {return true;}
+        index=index+1usize;
+    }
+    return false;
+}
+
+fn module_key(text:*u8)->usize {
+    var hash:usize=14695981039346656037usize;
+    var index:usize=0usize;
+    while text[index]!=0u8 {
+        hash=(hash ^ text[index] as usize)*1099511628211usize;
+        index=index+1usize;
+    }
+    if hash==0usize {return 1usize;}
+    return hash;
+}
+
+// Initialize fresh storage. Destroy consumers before the providers they import.
+fn module_init(module:*CrustModule,allocator:*CrustAllocator)->unit {
+    crust_context_init(&(*module).context,allocator);
+    (*module).exports=make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize};
+}
+
+fn module_destroy(module:*CrustModule)->unit {
+    crust_context_destroy(&(*module).context);
+    (*module).exports=make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize};
+}
+
+// Capture a file in this module before checking it. Identities must be distinct
+// across all owned and imported units. Failure leaves a diagnostic in context.
+fn module_read(module:*CrustModule,path:*u8,identity:u64)->bool {
+    var context:*CrustContext=&(*module).context;
+    var source:*CrustSource=crust_try_alloc(context,sizeof(CrustSource),alignof(CrustSource)) as *CrustSource;
+    if source==null(*CrustSource) {return false;}
+    (*source).path=crust_try_copy_string(context,path,module_length(path));
+    if (*source).path==null(*u8) {return false;}
+    (*source).identity=identity;
+    var bytes:*u8=null(*u8);
+    var size:usize=0usize;
+    if crust0_host_read_file(path,&bytes,&size)!=0i32 {
+        crust_set_error(context,source,0usize,"cannot read module source");
+        return false;
+    }
+    (*source).bytes=crust_try_copy_string(context,bytes,size);
+    crust0_host_free(bytes);
+    if (*source).bytes==null(*u8) {return false;}
+    (*source).size=size;
+    var unit_value:*CrustUnit=null(*CrustUnit);
+    return crust_read(context,source,&unit_value);
+}
+
+// Read all inputs and bind all imports before this call. Definitions start private.
+// Finish export selection before another context borrows this module's facts.
+fn module_check(module:*CrustModule)->bool {
+    var context:*CrustContext=&(*module).context;
+    if !crust_collect(context) || !crust_resolve(context) || !crust_check(context) {return false;}
+    var unit_value:*CrustUnit=(*context).units;
+    while unit_value!=null(*CrustUnit) {
+        var declaration:*CrustDecl=(*unit_value).declarations;
+        while declaration!=null(*CrustDecl) {
+            if (*declaration).kind==CRUST_D_FUNCTION || (*declaration).kind==CRUST_D_CONST {
+                (*declaration).link_name="";
+            }
+            declaration=(*declaration).next;
+        }
+        unit_value=(*unit_value).next;
+    }
+    return true;
+}
+
+// Query exports without changing the provider. Null means the name is private or absent.
+fn module_find(module:*CrustModule,name:*u8)->*CrustDecl {
+    var item:*CrustExport=crust_map_get(&(*module).exports,module_key(name)) as *CrustExport;
+    while item!=null(*CrustExport) {
+        var declaration:*CrustDecl=(*item).declaration;
+        if module_equal((*(*declaration).name).text,name) {return declaration;}
+        item=(*item).next;
+    }
+    return null(*CrustDecl);
+}
+
+fn module_owned(module:*CrustModule,declaration:*CrustDecl)->bool {
+    var unit_value:*CrustUnit=(*module).context.units;
+    while unit_value!=null(*CrustUnit) {
+        if (*unit_value).source==(*declaration).loc.source {return true;}
+        unit_value=(*unit_value).next;
+    }
+    return false;
+}
+
+// Export a checked owned definition once. Records require an empty native name;
+// functions and constants require a nonempty native name, retained by the module.
+fn module_export(module:*CrustModule,name:*u8,native:*u8)->bool {
+    var context:*CrustContext=&(*module).context;
+    var interned:*CrustName=crust_try_intern(context,name,module_length(name));
+    if interned==null(*CrustName) {return false;}
+    var symbol:*CrustSymbol=crust_map_get(&(*context).globals,interned as usize) as *CrustSymbol;
+    if symbol==null(*CrustSymbol) {
+        crust_set_error(context,null(*CrustSource),0usize,"module export name is absent");
+        return false;
+    }
+    var declaration:*CrustDecl=(*symbol).decl;
+    if !module_owned(module,declaration) || (*declaration).kind==CRUST_D_EXTERN ||
+       (*declaration).resolve_state!=2u32 ||
+       ((*declaration).kind!=CRUST_D_RECORD && !(*declaration).checked) {
+        crust_set_error(context,(*declaration).loc.source,(*declaration).loc.offset,"module export requires a checked owned definition");
+        return false;
+    }
+    if ((*declaration).kind==CRUST_D_RECORD)!=(native[0usize]==0u8) {
+        crust_set_error(context,(*declaration).loc.source,(*declaration).loc.offset,"module export has an invalid native name");
+        return false;
+    }
+    if module_find(module,name)!=null(*CrustDecl) {
+        crust_set_error(context,(*declaration).loc.source,(*declaration).loc.offset,"duplicate module export");
+        return false;
+    }
+    var link:*u8=crust_try_copy_string(context,native,module_length(native));
+    if link==null(*u8) {return false;}
+    var item:*CrustExport=crust_try_alloc(context,sizeof(CrustExport),alignof(CrustExport)) as *CrustExport;
+    if item==null(*CrustExport) {return false;}
+    var key:usize=module_key(name);
+    (*item).declaration=declaration;
+    (*item).next=crust_map_get(&(*module).exports,key) as *CrustExport;
+    if !crust_try_map_set(context,&(*module).exports,key,item as *u8) {return false;}
+    (*declaration).link_name=link;
+    return true;
+}
+
+// Import one public name before checking the consumer. The provider and its
+// stage code must remain live and unchanged until the consumer is destroyed.
+fn module_import(consumer:*CrustModule,provider:*CrustModule,name:*u8,alias:*u8)->bool {
+    var context:*CrustContext=&(*consumer).context;
+    var declaration:*CrustDecl=module_find(provider,name);
+    if declaration==null(*CrustDecl) {
+        crust_set_error(context,null(*CrustSource),0usize,"module name is not exported");
+        return false;
+    }
+    var interned:*CrustName=crust_try_intern(context,alias,module_length(alias));
+    if interned==null(*CrustName) {return false;}
+    return crust_bind(context,interned,declaration);
+}

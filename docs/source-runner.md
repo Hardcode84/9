@@ -224,6 +224,8 @@ The helpers implement one flat host namespace. There is no implicit file
 search, deduplication, import graph, package resolver, or source execution in
 `host_source`. Loading the same definitions twice is an error. A module library
 can use public reads, bindings, and contexts to implement another policy.
+The [module tutorial](../stages/modules/README.md) does this with separate
+contexts, explicit exports, and consumer aliases.
 
 Native libraries use immediate symbol binding and local loader visibility.
 They remain loaded through runner destruction. The default resolver searches

@@ -417,6 +417,12 @@ allocation failures. Runtime-sized owner creation still needs a local invariant
 for a changing owner set. This result does not complete the general container
 and Rust source-complexity gate.
 
+The [user guide](ownership.md) teaches the implemented rules. The
+[Rust comparison](ownership-rust.md) checks ordinary resource and borrowing
+examples and compares intrusive-library obligations. It records additional
+Crust annotations and rejected borrowing patterns; it does not establish that
+the full user model meets the Rust complexity ceiling.
+
 ## Current safety stages
 
 Safety claims follow the selected stages. Raw seed pointers do not

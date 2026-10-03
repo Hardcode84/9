@@ -2,6 +2,10 @@
 
 # Tutorial: modular ownership for intrusive lists
 
+Start with the [ownership guide](../../docs/ownership.md) for moves, loans,
+cleanup, and returned views. The [Rust comparison](../../docs/ownership-rust.md)
+separates client syntax from container implementation obligations.
+
 This program uses ordinary `prev` and `next` pointers. Each node has one owner
 and two independent hooks. A destructor detaches both hooks, then releases that
 node. A head destructor detaches its members without destroying them. Nodes can

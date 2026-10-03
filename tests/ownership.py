@@ -365,7 +365,30 @@ def rejected(compiler, directory, cases, prefix, inputs):
     return len(cases)
 
 
+def basics(build, directory, sanitize):
+    tutorial = ROOT / "examples/ownership-basics"
+    for name, expected in (("program", b"BC\n"), ("heap", b"AB\n")):
+        source = tutorial / f"{name}.crs"
+        generated, symbols = directory / f"basic-{name}.c", directory / f"basic-{name}.rsp"
+        command(
+            [
+                build / "crust",
+                tutorial / "main.crs",
+                "--emit-c",
+                "--symbols",
+                symbols,
+                "-o",
+                generated,
+                source,
+            ]
+        )
+        command([build / "crust-ownership-erasure", "--check", source])
+        execute(generated, symbols, directory, f"basic-{name}", sanitize, expected)
+    print("ownership basics: 2 source-root examples, erasure, and native output passed")
+
+
 def run(build, directory, sanitize):
+    basics(build, directory, sanitize)
     compiler = build / "crust-ownership-test"
     links = TUTORIAL / "links.crs"
     program = TUTORIAL / "program.crs"

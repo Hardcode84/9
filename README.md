@@ -47,6 +47,8 @@ the third runs it.
 
 - [Core design and compilation flow](docs/design.md)
 - [Language specification](docs/crust0-spec.md)
+- [Ownership tutorial](docs/ownership.md)
+- [Ownership compared with Rust](docs/ownership-rust.md)
 - [Tutorials and examples](examples/README.md)
 - [Compilation programs and stage APIs](docs/source-runner.md)
 - [Build, tests, and contributor setup](docs/bootstrap.md)

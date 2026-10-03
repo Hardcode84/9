@@ -10,9 +10,10 @@ make all c-stage
 
 ## Tutorials
 
-Start with Hello World. Then follow the compiler stages from source input to
-native output. Each tutorial explains the motivation, design, implementation,
-and commands to inspect the result.
+Start with Hello World, then read the [ownership guide](../docs/ownership.md)
+for the user-facing rules. The stage tutorials explain implementation and
+commands to inspect compilation. The [Rust comparison](../docs/ownership-rust.md)
+separates application rules from container-author obligations.
 
 | Order | Tutorial | What you will build or inspect |
 | --- | --- | --- |
@@ -38,6 +39,7 @@ Each example has its own directory and README.
 | Directory | Example | Output |
 | --- | --- | --- |
 | [hello](hello/README.md) | Compilation code and target code in one file | `Hello, world!` |
+| [ownership-basics](ownership-basics/README.md) | Moves, loans, returned views, cleanup, and individual heap owners | `BC`; heap example: `AB` |
 | [arguments](arguments/README.md) | Separate compiler arguments from target arguments | Each target argument on its own line |
 | [multiple-files](multiple-files/README.md) | Select and compile two target files | `Hello from another source file!` |
 | [modules](modules/README.md) | Compile separate namespaces and import selected names | `modules: 42` |
@@ -60,7 +62,10 @@ The root files select their compiler libraries explicitly. Resource examples
 require `make resource-stage`. The SQLite example also needs its pinned native
 SQLite input; its README gives the command.
 Overload examples require `make overload-stage`.
-The checked intrusive example requires `make resource-memory-stage` and Z3.
+The modular intrusive and ownership-basics examples require
+`make ownership-stage` and Z3.
+The intrusive `closed-main.crs` proof example requires
+`make resource-memory-stage` and Z3.
 Its `raw-main.crs` root retains the seed-language bootstrap witness.
 Its `contract-main.crs` root checks a declared unlink contract against the body
 and callers. Build that optional stage with `make memory-contract-stage` and Z3.
@@ -78,12 +83,15 @@ Run `make check-examples` to check the root examples. The test copies their
 unchanged source files and selected libraries into a path with spaces. It runs
 them from a separate working directory, executes their outputs, and checks
 reader and inline-target errors. `make check` and `make check-c` also check the
-custom assembly stage. These checks use the raw intrusive witness. The checked
-intrusive root runs in `make check-resource-memory` with Z3.
+custom assembly stage. These checks use the raw intrusive witness. The modular
+intrusive root runs in `make check-ownership` with Z3; the closed-program root
+runs in `make check-resource-memory`.
 
 Run `make check-resources` for the resource hello and resource language tests.
 Run `make check-memory` with a Z3 library for the optional static memory tutorial.
-Run `make check-resource-memory` with Z3 for the checked intrusive tutorial.
+Run `make check-ownership check-ownership-imports` with Z3 for the ownership
+basics, modular intrusive ownership, and verified library imports.
+Run `make check-resource-memory` with Z3 for the closed-program intrusive proof.
 Run `make check-memory-contracts` with Z3 for declared body and caller contracts.
 Run `make check-memory-loops` with Z3 for inductive loop checks and traversal.
 The SQLite verifier checks the native application against its frozen C baseline.

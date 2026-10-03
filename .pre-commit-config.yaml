@@ -70,7 +70,7 @@ repos:
         name: check Apache 2.0 SPDX headers
         language: python
         entry: python tools/check_spdx.py
-        files: '(^|/)(Makefile|\.clang-format|\.gitignore)$|\.(c|h|cc|cpp|hpp|crs|py|sh|js|cjs|mjs|yaml|yml|toml|md)$'
+        files: '(^|/)(Makefile|\.clang-format|\.gitignore)$|\.(c|h|cc|cpp|hpp|crs|rs|py|sh|js|cjs|mjs|yaml|yml|toml|md)$'
         # Recorded benchmark sources must retain their measured bytes.
         exclude: ^benchmarks/
       - id: lizard

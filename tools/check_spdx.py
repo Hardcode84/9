@@ -11,7 +11,7 @@ IDENTIFIER = "SPDX-License-Identifier: Apache-2.0"
 def expected_header(path):
     if path.suffix in {".c", ".h", ".cc", ".cpp", ".hpp"}:
         return f"/* {IDENTIFIER} */"
-    if path.suffix in {".crs", ".js", ".cjs", ".mjs"}:
+    if path.suffix in {".crs", ".rs", ".js", ".cjs", ".mjs"}:
         return f"// {IDENTIFIER}"
     if path.suffix == ".md":
         return f"<!-- {IDENTIFIER} -->"

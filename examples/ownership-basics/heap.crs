@@ -1,0 +1,45 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
+extern fn release(pointer: *u8) -> unit foreign(release) = "free";
+extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
+
+record Cell { value: i64; } domain(Cells);
+resource CellOwner { cell: *Cell; } owns(cell) domain(Cells) drop cell_drop;
+
+fn cell_new(value: i64) -> CellOwner access(reclaim, Cells) {
+    var cell: *Cell = allocate(sizeof(Cell)) as *Cell;
+    if cell != null(*Cell) { (*cell).value = value; }
+    return make CellOwner { cell: move cell };
+}
+
+fn cell_drop(owner: mut CellOwner) -> unit access(reclaim, Cells) {
+    var cell: *Cell = move owner.cell;
+    if cell != null(*Cell) { release(cell as *u8); }
+}
+
+fn cell_view(owner: read CellOwner) -> read Cell access(read, Cells) from owner.cell {
+    if owner.cell == null(*Cell) { trap; }
+    return read *owner.cell;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Cells) {
+    var owner: CellOwner = cell_new(65i64);
+    if owner.cell == null(*Cell) { return 1i32; }
+    read Cells {
+        var cell: read Cell = cell_view(read owner);
+        var result: i32 = emit(cell.value as i32);
+        if result < 0i32 { return 1i32; }
+    }
+    drop owner;
+    var replacement: CellOwner = cell_new(66i64);
+    if replacement.cell == null(*Cell) { return 1i32; }
+    read Cells {
+        var cell: read Cell = cell_view(read replacement);
+        var result: i32 = emit(cell.value as i32);
+        if result < 0i32 { return 1i32; }
+    }
+    var result: i32 = emit(10i32);
+    if result < 0i32 { return 1i32; }
+    return 0i32;
+}

@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
+
+resource Ticket { code: i32; } domain(Demo) drop ticket_drop;
+
+fn ticket_drop(ticket: mut Ticket) -> unit access(reclaim, Demo) {
+    var result: i32 = emit(ticket.code);
+    if result < 0i32 { trap; }
+}
+
+fn ticket_code(ticket: read Ticket) -> read i32 access(read, Demo) from ticket.code {
+    return read ticket.code;
+}
+
+fn set_code(ticket: mut Ticket, code: i32) -> unit access(edit, Demo) {
+    ticket.code = code;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Demo) {
+    var first: Ticket = make Ticket { code: 65i32 };
+    var ticket: Ticket = move first;
+    read Demo {
+        var code: read i32 = ticket_code(read ticket);
+        if code != 65i32 { trap; }
+    }
+    edit Demo { set_code(mut ticket, 66i32); }
+    drop ticket;
+    { var last: Ticket = make Ticket { code: 67i32 }; }
+    var result: i32 = emit(10i32);
+    if result < 0i32 { return 1i32; }
+    return 0i32;
+}

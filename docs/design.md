@@ -413,9 +413,18 @@ provider bundle binds these contracts and layouts to its compiled object and
 checker images. A client can use that bundle without provider source or solver
 queries for provider bodies. The compiler host still links Z3. The tutorial
 states the receipt trust boundary and tests changed artifacts and compiler
-allocation failures. Runtime-sized owner creation still needs a local invariant
+allocation failures. Iterative owner replacement still needs a local invariant
 for a changing owner set. This result does not complete the general container
 and Rust source-complexity gate.
+
+The [recursive owner example](../examples/intrusive/recursive/README.md) uses
+finite type contracts for recursive owned fields. It retains a runtime number
+of nodes with two hooks, removes one allocation, and checks a client after the
+provider source is removed. It adds no source annotation or target metadata.
+The explicit owner chain costs one pointer per node. Construction and cleanup
+use a call stack proportional to the node count. The loop rule still rejects
+replacement of an outer owner, and domain-wide loans require separate attach
+passes for the two families. This result does not pass the full complexity gate.
 
 The [user guide](ownership.md) teaches the implemented rules. The
 [Rust comparison](ownership-rust.md) checks ordinary resource and borrowing

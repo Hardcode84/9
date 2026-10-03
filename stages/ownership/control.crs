@@ -104,10 +104,14 @@ fn os_join(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState, l
         var b: u32 = os_flags(right, object);
         if os_absent_storage(check, left, object, location) { a = b & ~OS_NONNULL; }
         if os_absent_storage(check, right, object, location) { b = a & ~OS_NONNULL; }
+        if os_join_summary(check, target, left, right, object, location) {
+            object = (*object).next;
+            continue;
+        }
         os_join_construction(check, left, right, object, a, b, location);
         os_join_owner(check, target, left, right, object, location);
         os_mark(check, target, object, a & b);
-        var field: *OsSlot = (*object).fields;
+        var field: *OsSlot = os_fields(target, object);
         while field != null(*OsSlot) && !os_failed(check) {
             os_join_slot(check, target, left, right, field, location);
             field = (*field).next;
@@ -125,7 +129,8 @@ fn os_join_new_object(check: *OsCheck, target: *OsState, left: *OsState, right: 
     if source == null(*OsState) || os_fact(source, object as *u8) == null(*OsFact) { return; }
     os_mark(check, target, object, os_flags(source, object));
     os_set_owner(check, target, object, os_owner(source, object));
-    var slot: *OsSlot = (*object).fields;
+    os_set_fields(check, target, object, os_fields(source, object));
+    var slot: *OsSlot = os_fields(source, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         os_set(check, target, slot as *u8, os_bound(source, slot), OS_READY);
         slot = (*slot).next;
@@ -261,4 +266,33 @@ fn os_return(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
         os_scope_end(check, state, &(*statement).loc);
     }
     (*state).flow = PF_RETURN;
+}
+
+fn os_join_summary(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
+                   object: *OsObject, location: *CrustLoc) -> bool {
+    if os_fields(left, object) == os_fields(right, object) { return false; }
+    var a: u32 = os_flags(left, object);
+    var b: u32 = os_flags(right, object);
+    if ((a | b | os_flags(target, object)) & OS_SUMMARY) == 0u32 { return false; }
+    if os_absent_storage(check, left, object, location) { a = b & ~OS_NONNULL; }
+    if os_absent_storage(check, right, object, location) { b = a & ~OS_NONNULL; }
+    if ((a ^ b) & (OS_LIVE | OS_READY | OS_DESTROYED)) != 0u32 {
+        os_error(check, location, "continuing paths must agree on owned storage lifetime"); return true;
+    }
+    var flags: u32 = (a & b & ~OS_SUMMARY) | ((a | b) & OS_PINNED);
+    if (flags & OS_LIVE) != 0u32 && (flags & OS_DESTROYED) == 0u32 {
+        os_summary_initialized(check, left, object, location);
+        os_summary_initialized(check, right, object, location);
+        flags = flags | OS_SUMMARY;
+    }
+    os_join_owner(check, target, left, right, object, location);
+    os_mark(check, target, object, flags);
+    os_set_fields(check, target, object, null(*OsSlot));
+    return true;
+}
+
+fn os_summary_initialized(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+    if !os_absent_storage(check, state, object, location) && !os_initialized(check, state, object) {
+        os_error(check, location, "continuing paths must preserve initialized owned storage");
+    }
 }

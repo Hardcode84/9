@@ -87,7 +87,7 @@ fn os_field_place(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *
         return null(*OsSlot);
     }
     if !os_access_through(check, state, (*base).object, (*base).loan, false, &(*expression).loc) { return null(*OsSlot); }
-    var field: *OsSlot = os_object_slot((*base).object, (*expression).field_name);
+    var field: *OsSlot = os_object_slot(check, state, (*base).object, (*expression).field_name);
     if field == null(*OsSlot) { os_error(check, &(*expression).loc, "ownership field does not exist"); }
     return os_loan_slot(check, field, (*base).loan);
 }
@@ -145,9 +145,9 @@ fn os_store_record(check: *OsCheck, state: *OsState, target: *OsObject,
         (*check).depth = (*check).depth - 1usize;
         return;
     }
-    var slot: *OsSlot = (*target).fields;
+    var slot: *OsSlot = os_fields(state, target);
     while slot != null(*OsSlot) && !os_failed(check) {
-        var from: *OsSlot = os_object_slot(source, (*slot).name);
+        var from: *OsSlot = os_object_slot(check, state, source, (*slot).name);
         var value: *OsValue = os_bound(state, from);
         if value != null(*OsValue) {
             var previous: *OsValue = os_bound(state, slot);
@@ -222,7 +222,7 @@ fn os_first_store(check: *OsCheck, state: *OsState, value: *OsValue, location: *
 fn os_pristine(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
     if !os_enter(check, location) { return false; }
     var pristine: bool = (os_flags(state, object) & (OS_READY | OS_PINNED | OS_DESTROYED)) == 0u32;
-    var slot: *OsSlot = (*object).fields;
+    var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && pristine && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
         if value != null(*OsValue) {

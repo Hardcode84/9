@@ -15,6 +15,9 @@ The [root](main.crs) selects an external ownership stage. The stage checks each
 function from its own body and declared interfaces. It does not expand callees
 or start a whole-program proof at `main`. The C99 seed has no new operation.
 
+The [recursive owner tutorial](recursive/README.md) extends this program to a
+runtime node count. It uses an explicit owner chain and recursive functions.
+
 ## Build and run
 
 ```sh
@@ -367,7 +370,8 @@ stability. Container authors add inverse fields and role, effect, and result
 contracts. They write no solver terms or ghost lemmas. Lexical scopes and domain
 exclusion can reject code that Rust accepts with narrower inferred loans. The
 separate verified provider and client now cover returned views and nested
-resources. The runtime-sized owner-creation and broader container comparison in
+resources and a recursive runtime-sized owner chain. The iterative owner-loop
+rule and broader container comparison in
 the [acceptance gate](../../docs/design.md#checked-ownership-target) remain
 necessary before adding another ownership mechanism.
 

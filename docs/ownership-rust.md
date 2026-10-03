@@ -308,6 +308,39 @@ independent destruction-and-reuse API. A fixed common lifetime, a different
 owning representation, and an encapsulated pinned raw implementation must be
 compared as different designs.
 
+## Recursive owners
+
+The [recursive intrusive example](../examples/intrusive/recursive/README.md)
+adds a runtime-sized owner chain. Its `owned_next: *Node` field has an `owns`
+contract. A corresponding Rust ownership field is:
+
+```rust
+struct Node {
+    owned_next: Option<Box<Node>>,
+    value: i64,
+}
+```
+
+Both declarations describe a recursive owning structure with a finite layout.
+Neither requires a user-written heap-depth bound or a proof annotation for
+recursive calls. The Rust Book teaches this layout with its
+[recursive `Box` example](https://doc.rust-lang.org/book/ch15-01-box.html#enabling-recursive-types-with-boxes).
+For a sized `Node` and the global allocator, Rust guarantees that
+[`Option<Box<Node>>` has the same size and alignment as `Box<Node>`](https://doc.rust-lang.org/std/option/index.html#representation).
+
+This snippet compares the owner chain only. It omits the two intrusive hooks,
+address stability, and their destruction protocol. Crust still needs explicit
+field roles, domain effects, nullable allocation handling, and callback code.
+The example has one explicit owner pointer per node in addition to both hooks.
+That storage cost belongs to the chosen representation.
+
+The Crust example uses recursive construction and cleanup. Its stack use grows
+with the node count. Rust can also express an iterative owner transfer with
+`Option::take`; Crust's current owner-loop rule rejects a changed outer owner
+identity. A helper that receives both Crust heads also encounters domain-wide
+loan exclusion when it edits just one hook family. The example uses two attach
+passes. These are concrete costs in the container-author comparison.
+
 ## What the comparison establishes
 
 For ordinary application code, Crust has familiar ownership concepts but more

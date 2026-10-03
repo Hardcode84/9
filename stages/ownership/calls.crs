@@ -199,12 +199,14 @@ fn os_mutable_call(check: *OsCheck, state: *OsState, contract: *OsFunction,
 
 fn os_mutable_fields(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
     if !os_enter(check, location) { return; }
-    var slot: *OsSlot = (*object).fields;
+    var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
-        if value != null(*OsValue) && (*value).object != null(*OsObject) {
+        if value != null(*OsValue) {
             if (*slot).owns && (*value).pointer { os_mutable_owner(check, state, slot, value); }
-            else { if !(*value).pointer { os_mutable_fields(check, state, (*value).object, location); } }
+            else { if !(*value).pointer && (*value).object != null(*OsObject) {
+                os_mutable_fields(check, state, (*value).object, location);
+            } }
         }
         slot = (*slot).next;
     }
@@ -212,7 +214,7 @@ fn os_mutable_fields(check: *OsCheck, state: *OsState, object: *OsObject, locati
 }
 
 fn os_mutable_owner(check: *OsCheck, state: *OsState, slot: *OsSlot, old: *OsValue) -> unit {
-    (*(*old).object).uncertain = true;
+    if (*old).object != null(*OsObject) { (*(*old).object).uncertain = true; }
     var value: *OsValue = os_field_value(check, state, slot);
     if value == null(*OsValue) || (*value).object == null(*OsObject) { return; }
     os_abstract_value(check, state, (*value).object, true);

@@ -151,7 +151,7 @@ fn os_make(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
     if object == null(*OsObject) { return null(*OsValue); }
     var item: *CrustInit = (*expression).inits;
     while item != null(*CrustInit) && !os_failed(check) {
-        var slot: *OsSlot = os_object_slot(object, (*item).name);
+        var slot: *OsSlot = os_object_slot(check, state, object, (*item).name);
         var value: *OsValue = os_expr(check, state, (*item).value);
         if slot == null(*OsSlot) { os_error(check, &(*item).loc, "record initializer names no field"); return null(*OsValue); }
         os_store(check, state, slot, value, &(*item).loc);

@@ -28,23 +28,49 @@ fn os_member_family(check: *OsCheck, field: *OsField, location: *CrustLoc) -> *O
 fn os_object(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax,
              parent: *OsObject, scope: *OsScope, initialized: bool) -> *OsObject {
     if !os_enter(check, &(*syntax).loc) { return null(*OsObject); }
-    var object: *OsObject = os_alloc(check, sizeof(OsObject), alignof(OsObject)) as *OsObject;
-    if object != null(*OsObject) {
-        (*object).syntax = syntax;
-        (*object).contract = os_record((*check).stage, syntax);
-        (*object).parent = parent;
-        (*object).scope = scope;
-        (*object).next = (*check).objects;
-        (*check).objects = object;
-        if (*object).contract != null(*OsRecord) { (*object).domain = (*(*object).contract).domain; }
-        if parent != null(*OsObject) { (*object).domain = (*parent).domain; }
-        var flags: u32 = OS_LIVE | OS_NONNULL;
-        if initialized { flags = flags | OS_READY; }
-        os_mark(check, state, object, flags);
-        os_object_fields(check, state, object, initialized);
-    }
+    var object: *OsObject = os_object_header(check, state, syntax, parent, scope, initialized);
+    if object != null(*OsObject) { os_object_fields(check, state, object, initialized); }
     (*check).depth = (*check).depth - 1usize;
     return object;
+}
+
+fn os_object_header(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax,
+                    parent: *OsObject, scope: *OsScope, initialized: bool) -> *OsObject {
+    var object: *OsObject = os_alloc(check, sizeof(OsObject), alignof(OsObject)) as *OsObject;
+    if object == null(*OsObject) { return object; }
+    (*object).syntax = syntax;
+    (*object).contract = os_record((*check).stage, syntax);
+    (*object).parent = parent;
+    (*object).scope = scope;
+    (*object).next = (*check).objects;
+    (*check).objects = object;
+    if (*object).contract != null(*OsRecord) { (*object).domain = (*(*object).contract).domain; }
+    if parent != null(*OsObject) { (*object).domain = (*parent).domain; }
+    var flags: u32 = OS_LIVE | OS_NONNULL;
+    if initialized { flags = flags | OS_READY; }
+    os_mark(check, state, object, flags);
+    return object;
+}
+
+fn os_fields(state: *OsState, object: *OsObject) -> *OsSlot {
+    var fact: *OsFact = os_fact(state, object as *u8);
+    if fact == null(*OsFact) { return null(*OsSlot); }
+    return (*fact).fields;
+}
+
+fn os_set_fields(check: *OsCheck, state: *OsState, object: *OsObject, fields: *OsSlot) -> unit {
+    os_mark(check, state, object, os_flags(state, object));
+    if !os_failed(check) { (*(*state).facts).fields = fields; }
+}
+
+// An owned pointer promises an initialized value of its declared type.
+// Its pointee fields belong to the current control-flow path.
+fn os_unfold(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
+    if (os_flags(state, object) & OS_SUMMARY) == 0u32 || os_failed(check) { return; }
+    os_mark(check, state, object, os_flags(state, object) & ~OS_SUMMARY);
+    os_object_fields(check, state, object, true);
+    os_abstract_value(check, state, object, (*object).uncertain);
+    if (*object).readonly { os_projection_view(check, state, object); }
 }
 
 fn os_object_fields(check: *OsCheck, state: *OsState, object: *OsObject, initialized: bool) -> unit {
@@ -56,7 +82,7 @@ fn os_object_fields(check: *OsCheck, state: *OsState, object: *OsObject, initial
     while field != null(*CrustField) && !os_failed(check) {
         var slot: *OsSlot = os_slot(check, (*field).syntax_type, (*field).name, object, (*object).scope);
         if slot == null(*OsSlot) { return; }
-        if last == null(*OsSlot) { (*object).fields = slot; }
+        if last == null(*OsSlot) { os_set_fields(check, state, object, slot); }
         else { (*last).next = slot; }
         last = slot;
         os_object_field(check, state, object, slot, initialized);
@@ -111,19 +137,20 @@ fn os_field_value(check: *OsCheck, state: *OsState, slot: *OsSlot) -> *OsValue {
     var syntax: *CrustTypeSyntax = (*slot).syntax;
     var target: *OsObject = null(*OsObject);
     if (*syntax).kind == CRUST_T_POINTER && (*slot).owns {
-        target = os_object(check, state, (*syntax).base, null(*OsObject), null(*OsScope), true);
+        target = os_object_header(check, state, (*syntax).base, null(*OsObject), null(*OsScope), true);
         if target == null(*OsObject) { return null(*OsValue); }
         (*target).heap = true;
         (*target).owner = (*slot).object;
-        os_mark(check, state, target, os_flags(state, target) & ~OS_NONNULL);
+        os_mark(check, state, target, (os_flags(state, target) & ~OS_NONNULL) | OS_SUMMARY);
     }
     var result: *OsValue = os_value(check, syntax, target, (*syntax).kind == CRUST_T_POINTER);
     if result != null(*OsValue) { (*result).owner = (*slot).owns; }
     return result;
 }
 
-fn os_object_slot(object: *OsObject, name: *CrustName) -> *OsSlot {
-    var slot: *OsSlot = (*object).fields;
+fn os_object_slot(check: *OsCheck, state: *OsState, object: *OsObject, name: *CrustName) -> *OsSlot {
+    os_unfold(check, state, object);
+    var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) {
         if (*slot).name == name { return slot; }
         slot = (*slot).next;
@@ -147,21 +174,14 @@ fn os_local(state: *OsState, name: *CrustName) -> *OsSlot {
 fn os_initialized(check: *OsCheck, state: *OsState, object: *OsObject) -> bool {
     if object == null(*OsObject) { return true; }
     if (os_flags(state, object) & OS_DESTROYED) != 0u32 { return false; }
+    if (os_flags(state, object) & OS_SUMMARY) != 0u32 { return true; }
     if !os_enter(check, &(*(*object).syntax).loc) { return false; }
     var valid: bool = true;
     if (*object).family != null(*OsField) { valid = (os_flags(state, object) & OS_READY) != 0u32; }
     else {
-        var slot: *OsSlot = (*object).fields;
+        var slot: *OsSlot = os_fields(state, object);
         while slot != null(*OsSlot) && valid {
-            var value: *OsValue = os_bound(state, slot);
-            valid = value != null(*OsValue);
-            if valid && !(*value).pointer && (*value).object != null(*OsObject) {
-                valid = os_initialized(check, state, (*value).object);
-            }
-            if valid && (*slot).owns && (*value).pointer && (*value).object != null(*OsObject) &&
-               (os_flags(state, (*value).object) & OS_ABSENT) == 0u32 {
-                valid = os_initialized(check, state, (*value).object);
-            }
+            valid = os_initialized_field(check, state, slot);
             slot = (*slot).next;
         }
     }
@@ -169,14 +189,25 @@ fn os_initialized(check: *OsCheck, state: *OsState, object: *OsObject) -> bool {
     return valid;
 }
 
+fn os_initialized_field(check: *OsCheck, state: *OsState, slot: *OsSlot) -> bool {
+    var value: *OsValue = os_bound(state, slot);
+    if value == null(*OsValue) { return false; }
+    if (*value).object == null(*OsObject) { return true; }
+    if (*value).pointer {
+        if !(*slot).owns || (os_flags(state, (*value).object) & OS_ABSENT) != 0u32 { return true; }
+    }
+    return os_initialized(check, state, (*value).object);
+}
+
 fn os_isolated(check: *OsCheck, state: *OsState, object: *OsObject) -> bool {
+    os_unfold(check, state, object);
     if !os_enter(check, &(*(*object).syntax).loc) { return false; }
     var isolated: bool = true;
     if (*object).family != null(*OsField) {
         isolated = (os_flags(state, object) & OS_READY) == 0u32 ||
             (os_flags(state, object) & OS_ISOLATED) != 0u32;
     } else {
-        var slot: *OsSlot = (*object).fields;
+        var slot: *OsSlot = os_fields(state, object);
         while slot != null(*OsSlot) && isolated {
             var value: *OsValue = os_bound(state, slot);
             if value != null(*OsValue) && !(*value).pointer && (*value).object != null(*OsObject) {

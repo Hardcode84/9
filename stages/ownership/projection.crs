@@ -72,7 +72,7 @@ fn os_projection_view(check: *OsCheck, state: *OsState, object: *OsObject) -> un
     if !os_enter(check, &(*(*object).syntax).loc) { return; }
     (*object).readonly = true;
     (*object).abstract = true;
-    var slot: *OsSlot = (*object).fields;
+    var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
         if value != null(*OsValue) && (*value).object != null(*OsObject) {

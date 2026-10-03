@@ -53,6 +53,7 @@ const OS_RETIRING: u32 = 64u32;
 const OS_ASSOCIATED: u32 = 128u32;
 const OS_MEMBER: u32 = 256u32;
 const OS_DESTROYED: u32 = 512u32;
+const OS_SUMMARY: u32 = 1024u32;
 
 record OsObject {
     syntax: *CrustTypeSyntax;
@@ -64,7 +65,6 @@ record OsObject {
     family: *OsField;
     domain: *CrustName;
     scope: *OsScope;
-    fields: *OsSlot;
     next: *OsObject;
     anchor: bool;
     heap: bool;
@@ -101,6 +101,7 @@ record OsValue {
 }
 
 record OsFact {
+    fields: *OsSlot;
     key: *u8;
     value: *OsValue;
     next: *OsFact;

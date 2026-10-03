@@ -362,6 +362,13 @@ Continue with the [intrusive tutorial](../examples/intrusive/README.md) to build
 and inspect the full two-hook program. No `unsafe` region is needed in that
 checked list implementation or its client.
 
+The [recursive owner tutorial](../examples/intrusive/recursive/README.md)
+retains a runtime number of nodes. An explicit owned pointer links each node
+to the next owner. It uses the same `owns` contract and recursive functions.
+The two intrusive hooks still use direct pointers. This source uses a call
+stack proportional to the node count; it does not establish an iterative
+owner-loop rule.
+
 ## 8. Destroy embedded resources
 
 A node can contain resource fields as well as links. Its destructor detaches
@@ -413,7 +420,7 @@ The following distinctions matter when you design an interface:
 | Store a borrowed field in a record | Rejected: there is no stored-lifetime field contract. |
 | Store a persistent raw pointer | Declare an owned field or a reciprocal link role. |
 | Return an unchecked raw pointer | Rejected: use a borrowed result with an origin. |
-| Create or change an owner set across loop iterations | Rejected when no local owner-state invariant can be established. General runtime-sized owner creation has no such contract. |
+| Create or change an owner set across loop iterations | Rejected when no local owner-state invariant can be established. Changing the outer owner identity needs a loop invariant; recursive construction uses ordinary function contracts. |
 | Traverse or detach an intrusive ring | Use its checked family contracts; traversal has no fixed node-count bound. |
 | Register `defer` in this modular stage | Rejected. The separate resource stage supports it, but this stage has no deferred-effect contract. |
 

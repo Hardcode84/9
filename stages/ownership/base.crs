@@ -32,7 +32,7 @@ fn os_fact(state: *OsState, key: *u8) -> *OsFact {
 fn os_set(check: *OsCheck, state: *OsState, key: *u8, value: *OsValue, flags: u32) -> unit {
     var fact: *OsFact = os_alloc(check, sizeof(OsFact), alignof(OsFact)) as *OsFact;
     if fact == null(*OsFact) { return; }
-    *fact = make OsFact { key: key, value: value, next: (*state).facts, flags: flags };
+    *fact = make OsFact { fields: null(*OsSlot), key: key, value: value, next: (*state).facts, flags: flags };
     (*state).facts = fact;
 }
 
@@ -43,7 +43,9 @@ fn os_flags(state: *OsState, object: *OsObject) -> u32 {
 }
 
 fn os_mark(check: *OsCheck, state: *OsState, object: *OsObject, flags: u32) -> unit {
+    var fields: *OsSlot = os_fields(state, object);
     os_set(check, state, object as *u8, null(*OsValue), flags);
+    if !os_failed(check) { (*(*state).facts).fields = fields; }
 }
 
 fn os_bound(state: *OsState, slot: *OsSlot) -> *OsValue {

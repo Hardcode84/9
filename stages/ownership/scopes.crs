@@ -80,7 +80,7 @@ fn os_drop_object(check: *OsCheck, state: *OsState, object: *OsObject, location:
 
 fn os_expire_owned(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
     if !os_enter(check, location) { return; }
-    var slot: *OsSlot = (*object).fields;
+    var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
         if value != null(*OsValue) && (*value).object != null(*OsObject) {
@@ -91,12 +91,12 @@ fn os_expire_owned(check: *OsCheck, state: *OsState, object: *OsObject, location
         os_set(check, state, slot as *u8, null(*OsValue), 0u32);
         slot = (*slot).next;
     }
-    os_mark(check, state, object, (os_flags(state, object) & ~OS_LIVE) | OS_DESTROYED | OS_ISOLATED);
+    os_mark(check, state, object, (os_flags(state, object) & ~(OS_LIVE | OS_SUMMARY)) | OS_DESTROYED | OS_ISOLATED);
     (*check).depth = (*check).depth - 1usize;
 }
 
 fn os_destructor_end(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
-    var slot: *OsSlot = (*object).fields;
+    var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
         if (*slot).owns && (*(*slot).syntax).kind == CRUST_T_POINTER && value != null(*OsValue) {

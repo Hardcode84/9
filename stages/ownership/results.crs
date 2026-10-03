@@ -22,7 +22,7 @@ fn os_result_step(check: *OsCheck, state: *OsState, value: *OsValue,
     if (*value).object == null(*OsObject) {
         os_error(check, location, "returned view path requires record storage"); return null(*OsValue);
     }
-    var slot: *OsSlot = os_object_slot((*value).object, (*field).name);
+    var slot: *OsSlot = os_object_slot(check, state, (*value).object, (*field).name);
     if slot == null(*OsSlot) { os_error(check, location, "returned view path names an absent field"); return null(*OsValue); }
     var result: *OsValue = null(*OsValue);
     if (*(*slot).object).family != null(*OsField) {

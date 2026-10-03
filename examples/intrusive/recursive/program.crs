@@ -1,0 +1,141 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
+extern fn release(pointer: *u8) -> unit foreign(release) = "free";
+extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
+
+resource Chain { node: *Node; } owns(node) domain(Graph) drop chain_drop;
+resource Node { ready: Hook; active: Hook; owned_next: *Node; value: i64; }
+    owns(owned_next) members(ready, active) domain(Graph) drop node_drop;
+resource ReadyHead { hook: Hook; } anchor(hook, Node.ready) domain(Graph) drop ready_drop;
+resource ActiveHead { hook: Hook; } anchor(hook, Node.active) domain(Graph) drop active_drop;
+
+fn chain_drop(chain: mut Chain) -> unit access(reclaim, Graph) {
+    var node: *Node = move chain.node;
+    if node != null(*Node) { drop *node; release(node as *u8); }
+}
+
+fn node_drop(node: mut Node) -> unit access(reclaim, Graph) {
+    var rest: Chain = make Chain { node: move node.owned_next };
+    drop rest;
+    edit Graph { unlink(&node.ready); unlink(&node.active); }
+}
+
+fn ready_drop(head: mut ReadyHead) -> unit access(reclaim, Graph) {
+    edit Graph { while head.hook.next != &head.hook { unlink(head.hook.next); } }
+}
+
+fn active_drop(head: mut ActiveHead) -> unit access(reclaim, Graph) {
+    edit Graph { while head.hook.next != &head.hook { unlink(head.hook.next); } }
+}
+
+// Consume the input chain. Return an empty chain if allocation fails.
+fn chain_push(rest: Chain) -> Chain access(reclaim, Graph) {
+    var node: *Node = allocate(sizeof(Node)) as *Node;
+    if node == null(*Node) { return make Chain { node: null(*Node) }; }
+    (*node).value = 65i64;
+    (*node).owned_next = move rest.node;
+    rest.node = null(*Node);
+    hook_init(&(*node).ready);
+    hook_init(&(*node).active);
+    return make Chain { node: move node };
+}
+
+fn chain_new(count: usize) -> Chain access(reclaim, Graph) {
+    if count == 0usize { return make Chain { node: null(*Node) }; }
+    var rest: Chain = chain_new(count - 1usize);
+    if count > 1usize && rest.node == null(*Node) { return move rest; }
+    return chain_push(move rest);
+}
+
+fn chain_pop(chain: Chain) -> Chain access(reclaim, Graph) {
+    var node: *Node = move chain.node;
+    chain.node = null(*Node);
+    if node == null(*Node) { return move chain; }
+    var rest: Chain = make Chain { node: move (*node).owned_next };
+    (*node).owned_next = null(*Node);
+    drop *node;
+    release(node as *u8);
+    return move rest;
+}
+
+fn attach_ready(node: mut Node, head: mut ReadyHead) -> unit access(edit, Graph) {
+    insert_after(&head.hook, &node.ready);
+    if node.owned_next != null(*Node) { attach_ready(mut *node.owned_next, mut head); }
+}
+
+fn attach_active(node: mut Node, head: mut ActiveHead) -> unit access(edit, Graph) {
+    insert_after(&head.hook, &node.active);
+    if node.owned_next != null(*Node) { attach_active(mut *node.owned_next, mut head); }
+}
+
+fn ready_count(head: read ReadyHead) -> usize access(read, Graph) {
+    read Graph {
+        var count: usize = 0usize;
+        var cursor: *Hook = head.hook.next;
+        while cursor != &head.hook {
+            var node: *Node = parent(Node.ready, cursor);
+            if (*node).value != 65i64 { trap; }
+            count = count + 1usize;
+            cursor = (*cursor).next;
+        }
+        return count;
+    }
+}
+
+fn active_count(head: read ActiveHead) -> usize access(read, Graph) {
+    read Graph {
+        var count: usize = 0usize;
+        var cursor: *Hook = head.hook.prev;
+        while cursor != &head.hook {
+            var node: *Node = parent(Node.active, cursor);
+            if (*node).value != 65i64 { trap; }
+            count = count + 1usize;
+            cursor = (*cursor).prev;
+        }
+        return count;
+    }
+}
+
+fn chain_isolated(chain: read Chain) -> unit access(read, Graph) {
+    if chain.node == null(*Node) { return; }
+    nodes_isolated(read *chain.node);
+}
+
+fn nodes_isolated(node: read Node) -> unit access(read, Graph) {
+    if node.ready.next != &node.ready || node.active.prev != &node.active { trap; }
+    if node.owned_next != null(*Node) { nodes_isolated(read *node.owned_next); }
+}
+
+fn report() -> i32 { emit(79i32); emit(75i32); emit(10i32); return 0i32; }
+
+fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Graph) {
+    var count: usize = (argc - 1i32) as usize;
+    var chain: Chain = chain_new(count);
+    if count == 0usize { return report(); }
+    if chain.node == null(*Node) { return 1i32; }
+    {
+        var ready: ReadyHead = make ReadyHead { hook: make Hook { prev: null(*Hook), next: null(*Hook) } };
+        var active: ActiveHead = make ActiveHead { hook: make Hook { prev: null(*Hook), next: null(*Hook) } };
+        hook_init(&ready.hook);
+        hook_init(&active.hook);
+        attach_ready(mut *chain.node, mut ready);
+        attach_active(mut *chain.node, mut active);
+        var before: usize = ready_count(read ready);
+        var active_before: usize = active_count(read active);
+        if before != count || active_before != count { trap; }
+        chain = chain_pop(move chain);
+        var after: usize = ready_count(read ready);
+        var active_after: usize = active_count(read active);
+        if after != count - 1usize || active_after != count - 1usize { trap; }
+        chain = chain_push(move chain);
+        if chain.node == null(*Node) { return 1i32; }
+        insert_after(&ready.hook, &(*chain.node).ready);
+        insert_after(&active.hook, &(*chain.node).active);
+        var replaced: usize = ready_count(read ready);
+        var active_replaced: usize = active_count(read active);
+        if replaced != count || active_replaced != count { trap; }
+    }
+    chain_isolated(read chain);
+    return report();
+}

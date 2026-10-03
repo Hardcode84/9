@@ -219,10 +219,11 @@ check-ownership-imports: $(BUILD)/crust-ownership-import-test
 .PHONY: ownership-stage check-ownership check-ownership-alloc
 ownership-stage: $(BUILD)/crust-ownership-test $(BUILD)/crust-ownership-library.so
 
-check-ownership: all ownership-stage $(BUILD)/crust-ownership-erasure
+check-ownership: all ownership-stage $(BUILD)/crust-ownership-erasure $(BUILD)/crust-ownership-import-test
 	python3 tests/ownership.py --build $(BUILD)
 	python3 tests/ownership_fields.py --build $(BUILD)
 	python3 tests/ownership_loans.py --build $(BUILD)
+	python3 tests/ownership_recursive.py --build $(BUILD)
 
 check-ownership-alloc: all c-stage
 	python3 tests/memory_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)' --ownership

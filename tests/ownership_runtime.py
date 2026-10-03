@@ -8,7 +8,7 @@ import subprocess
 from memory import command
 
 
-def check_runtime(build, directory, root, sanitize, source_path=None, outputs=None):
+def check_runtime(build, directory, root, sanitize, source_path=None, outputs=None, arguments=()):
     if source_path is None:
         source_path = root / "examples/intrusive/program.crs"
     if outputs is None:
@@ -45,7 +45,9 @@ def check_runtime(build, directory, root, sanitize, source_path=None, outputs=No
         command(["gcc", *flags, renamed, root / "tests/ownership_runtime.c", "-o", executable])
         for failure, output in enumerate(outputs):
             environment = dict(os.environ, CRUST_TEST_ALLOCATION_FAILURE=str(failure))
-            result = subprocess.run([executable], env=environment, capture_output=True, timeout=15)
+            result = subprocess.run(
+                [executable, *arguments], env=environment, capture_output=True, timeout=15
+            )
             expected = 1 if failure else 0
             if result.returncode != expected or result.stdout != output or result.stderr:
                 raise RuntimeError(

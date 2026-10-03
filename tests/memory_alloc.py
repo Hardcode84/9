@@ -164,6 +164,7 @@ def main():
             "links": links,
             "intrusive": links + (ROOT / "examples/intrusive/program.crs").read_text(),
             "fields": links + (ROOT / "examples/intrusive/fields.crs").read_text(),
+            "recursive": links + (ROOT / "examples/intrusive/recursive/program.crs").read_text(),
         }
         names = tuple(cases)
     selected = [

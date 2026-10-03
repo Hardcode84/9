@@ -694,7 +694,7 @@ def check_foreign_errors(suite):
 
 
 def check_target(suite):
-    target = ROOT / "examples/intrusive/program.crs"
+    target = ROOT / "examples/intrusive/raw.crs"
     response = suite.work / "intrusive.rsp"
     code = compilation_root(target, suite.backend, allocator_checks=True)
     result = suite.root("intrusive-stage", code, ["--emit-c", "--symbols", response])
@@ -914,8 +914,8 @@ def check_examples(suite):
     elsewhere = package / "working directory"
     elsewhere.mkdir()
 
-    def compile_example(name, arguments=()):
-        path = package / "examples" / name / "main.crs"
+    def compile_example(name, arguments=(), root_file="main.crs"):
+        path = package / "examples" / name / root_file
         result = suite.command([suite.runner, path, *arguments], cwd=elsewhere)
         assert not result.stdout and not result.stderr, (name, result)
         return path
@@ -938,7 +938,9 @@ def check_examples(suite):
     flags = [item for flag in suite.cflags for item in ("--cflag", flag)]
     flags += [item for flag in suite.ldflags for item in ("--ldflag", flag)]
     compile_example(
-        "intrusive", ["-o", output / "intrusive", "--ldflag", output / "libcrust0_host.a", *flags]
+        "intrusive",
+        ["-o", output / "intrusive", "--ldflag", output / "libcrust0_host.a", *flags],
+        root_file="raw-main.crs",
     )
     assert suite.command([output / "intrusive"]).stdout == b"intrusive: ok\n"
 

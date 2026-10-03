@@ -376,7 +376,7 @@ def main():
     native = work / "native.o"
     command([*cc, *STRICT, "-O2", "-c", "tests/native.c", "-o", native])
     command([executable("runtime", inputs=["tests/runtime.crs"], libraries=[native])])
-    intrusive = executable("intrusive", inputs=["examples/intrusive/program.crs"])
+    intrusive = executable("intrusive", inputs=["examples/intrusive/raw.crs"])
     assert command([intrusive]).stdout == b"intrusive: ok\n"
 
     dynamic = """
@@ -1173,7 +1173,7 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
                 "-o",
                 next_object,
                 *c_options,
-                "examples/intrusive/program.crs",
+                "examples/intrusive/raw.crs",
             ]
         )
         next_program = work / "self-intrusive"

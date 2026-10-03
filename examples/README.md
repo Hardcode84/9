@@ -25,7 +25,7 @@ and commands to inspect the result.
 | 7 | [Native bootstrap](../stages/native/README.md) | Build stages from source and hand following compilation code to native execution |
 | 8 | [Cyclomatic complexity](../stages/ccn/README.md) | Count decisions with the public AST and reject functions before backend emission |
 | 9 | [Static memory checks](ownership/README.md) | Check direct pointer programs and intrusive link invariants before emission |
-| 10 | [RAII with intrusive links](ownership/resources/README.md) | Check moves, deferred captures, storage lifetimes, and automatic unlink and release |
+| 10 | [RAII with intrusive links](intrusive/README.md) | Check moves, deferred captures, storage lifetimes, and automatic unlink and release |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -42,7 +42,7 @@ Each example has its own directory and README.
 | [multiple-files](multiple-files/README.md) | Select and compile two target files | `Hello from another source file!` |
 | [modules](modules/README.md) | Compile separate namespaces and import selected names | `modules: 42` |
 | [native](native/README.md) | Bootstrap stages and execute compilation functions natively | `Hello from a bootstrapped native stage!` |
-| [intrusive](intrusive/README.md) | Build a direct intrusive list | `intrusive: ok` |
+| [intrusive](intrusive/README.md) | Check two intrusive hooks with node and head destructors | `OK` |
 | [cached-backend](cached-backend/README.md) | Bootstrap native stages from source and reuse the library | Native ASM/C handoff and hello output |
 | [reader-switch](reader-switch/README.md) | Replace the reader and executor from the root | Two lines read with a new grammar |
 | [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
@@ -51,7 +51,6 @@ Each example has its own directory and README.
 | [resources/hello](resources/hello/README.md) | Select ownership, RAII, and defer in the same source file | `Hello, resources!` |
 | [resources/returned](resources/returned/README.md) | Return a field view tied to a source loan | `42` |
 | [ownership](ownership/README.md) | Select static memory checking for two intrusive hooks | `OK` |
-| [ownership/resources](ownership/resources/README.md) | Combine memory checks with node and head destructors | `OK` |
 | [resources/sqlite](resources/sqlite/README.md) | Own SQLite connections and statements; borrow column bytes | Typed rows and separate error codes |
 | [overload/hello](overload/hello/README.md) | Select overloads and a typed function value in the same file | Two greeting lines |
 | [overload/separate](overload/separate/README.md) | Link overloaded functions from a separate native object | `types: 42` |
@@ -61,6 +60,8 @@ The root files select their compiler libraries explicitly. Resource examples
 require `make resource-stage`. The SQLite example also needs its pinned native
 SQLite input; its README gives the command.
 Overload examples require `make overload-stage`.
+The checked intrusive example requires `make resource-memory-stage` and Z3.
+Its `raw-main.crs` root retains the seed-language bootstrap witness.
 Paths passed to `host_source`, `host_input`, and `host_path` are relative to the
 root file. A raw `-o` argument passed to the C backend is relative to the working
 directory. Each example states its output path. A root builds an executable;
@@ -73,11 +74,12 @@ Run `make check-examples` to check the root examples. The test copies their
 unchanged source files and selected libraries into a path with spaces. It runs
 them from a separate working directory, executes their outputs, and checks
 reader and inline-target errors. `make check` and `make check-c` also check the
-custom assembly stage.
+custom assembly stage. These checks use the raw intrusive witness. The checked
+intrusive root runs in `make check-resource-memory` with Z3.
 
 Run `make check-resources` for the resource hello and resource language tests.
 Run `make check-memory` with a Z3 library for the optional static memory tutorial.
-Run `make check-resource-memory` with Z3 for the composed RAII tutorial.
+Run `make check-resource-memory` with Z3 for the checked intrusive tutorial.
 The SQLite verifier checks the native application against its frozen C baseline.
 Run `make check-overload` for the overload examples, native symbols, separate
 objects, and resource composition tests.

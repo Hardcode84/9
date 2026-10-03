@@ -295,7 +295,7 @@ can call back into a list or expose partially destroyed payload. A non-owning
 head detaches its nodes; it does not destroy them. These requirements cannot
 be discharged by placing a hidden unchecked list in the compiler library.
 
-The existing [intrusive example](../../examples/intrusive/program.crs) is a Crust0
+The existing [intrusive example](../../examples/intrusive/raw.crs) is a Crust0
 raw-pointer example. It supplies a representation and behavior reference.
 It does not establish this checked observer contract.
 

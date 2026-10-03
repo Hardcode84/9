@@ -108,7 +108,7 @@ def main():
         *READER,
         ROOT / "stages/reader/test.crs",
         ROOT / "tests/runtime.crs",
-        ROOT / "examples/intrusive/program.crs",
+        ROOT / "examples/intrusive/raw.crs",
         ROOT / "examples/custom-stage/stage.crs",
     ]
     run([work / "reader-test", *paths, *production])

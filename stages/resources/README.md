@@ -284,7 +284,7 @@ values without changing emitted C.
 `rs_prepare_with_access(stage, true)` delegates raw-access authorization to
 the caller's checking stage. Moves, loans, initialization, and cleanup retain
 their checks. The caller must verify all reachable memory effects, transfer
-facts, and cleanup before emission. The [combined tutorial](../../examples/ownership/resources/README.md)
+facts, and cleanup before emission. The [combined tutorial](../../examples/intrusive/README.md)
 does this through complete proof views. Plain `rs_prepare` retains its explicit
 `unsafe` requirement.
 

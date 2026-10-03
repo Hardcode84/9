@@ -298,7 +298,7 @@ def main():
             "name": "intrusive",
             "library": False,
             "paths": {
-                "crust": ROOT / "examples/intrusive/program.crs",
+                "crust": ROOT / "examples/intrusive/raw.crs",
                 "c": ROOT / "benchmarks/bootstrap/intrusive.c",
             },
         },

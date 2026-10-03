@@ -170,7 +170,7 @@ The [resource stage](../../stages/resources/README.md) supplies moves, RAII,
 complete seed operation trees. Resource cleanup also exists in retained exit
 plans, so checking only its lowered tree would omit cleanup and would be wrong.
 
-The [RAII composition tutorial](resources/README.md) preserves source storage
+The [RAII composition tutorial](../intrusive/README.md) preserves source storage
 lifetimes and executes the retained cleanup at each exit. It also removes
 initialized-field permissions after owner transfers. Its emitted C uses the
 same resource body emitter. It checks a complete two-hook client with automatic

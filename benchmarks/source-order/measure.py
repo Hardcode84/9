@@ -148,7 +148,7 @@ def staged_source(target, output, native_library):
 
 def workloads_in(directory, native_library):
     workloads = [BASE.generate(directory, count) for count in (1000, 8000)]
-    intrusive = ROOT / "examples/intrusive/program.crs"
+    intrusive = ROOT / "examples/intrusive/raw.crs"
     workloads.append(
         {
             "name": "intrusive",

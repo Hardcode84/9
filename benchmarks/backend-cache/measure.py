@@ -87,7 +87,7 @@ def main():
         "hit_validation": "Input capture plus lookup on a verified hit. Excludes native library loading, continuation preparation and target frontend work.",
         "implementation": "The tutorial's interpreted cache prefix and source-bootstrap recipe. Compiled-backend application timings are a separate configuration.",
     }
-    inputs = {"intrusive": (ROOT / "examples/intrusive/program.crs").read_text()}
+    inputs = {"intrusive": (ROOT / "examples/intrusive/raw.crs").read_text()}
     for count in (1000, 8000):
         inputs[str(count)] = (
             "\n".join(

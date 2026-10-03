@@ -243,16 +243,13 @@ def main():
             "--emit-c",
             "--symbols",
             work / "reference.rsp",
-            "examples/intrusive/program.crs",
+            "examples/intrusive/raw.crs",
         ],
         work / "reference.c",
     )
     prefix = b"set_backend(session, c_backend_build);\nset_reader(session, alternate);"
     (work / "main.crs").write_bytes(
-        prefix
-        + b"\0@include |"
-        + str(root / "examples/intrusive/program.crs").encode()
-        + b"|\n@emit\n"
+        prefix + b"\0@include |" + str(root / "examples/intrusive/raw.crs").encode() + b"|\n@emit\n"
     )
     command = [work / "runner", work / "main.crs"]
     for path in (

@@ -55,7 +55,7 @@ the exported symbols in both modes.
 
 ```sh
 make
-build/crust0 -S -o build/intrusive.s examples/intrusive/program.crs
+build/crust0 -S -o build/intrusive.s examples/intrusive/raw.crs
 gcc -no-pie build/intrusive.s build/libcrust0_host.a -o build/intrusive
 build/intrusive
 make check

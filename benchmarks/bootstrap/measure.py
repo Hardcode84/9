@@ -341,7 +341,7 @@ def main():
         parser.error("This experiment requires the Linux x86-64 execution profile")
     os.sched_setaffinity(0, {args.cpu})
     workloads = [generate(args.inputs, count) for count in (1000, 8000)]
-    witness_source = Path("examples/intrusive/program.crs")
+    witness_source = Path("examples/intrusive/raw.crs")
     workloads.append(
         {
             "name": "intrusive",

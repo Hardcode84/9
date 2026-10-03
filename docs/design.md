@@ -351,7 +351,7 @@ do not occur in emitted code.
 
 Resource cleanup also exists in retained exit plans, so its lowered operation
 tree alone is not a complete memory-checking input. The optional
-[combined profile](../examples/ownership/resources/README.md) reconstructs
+[combined profile](../examples/intrusive/README.md) reconstructs
 source storage scopes, executes the exit plans, and consumes initialized-field
 permissions after owner transfers and consuming pointer reads. A pointer move
 can consume a destructor's node field without a runtime clear store. Alias

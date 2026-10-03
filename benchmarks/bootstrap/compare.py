@@ -40,7 +40,7 @@ def main():
         {
             "name": "intrusive",
             "library": False,
-            "paths": {"crust": ROOT / "examples/intrusive/program.crs"},
+            "paths": {"crust": ROOT / "examples/intrusive/raw.crs"},
         }
     )
     binaries = {"before": args.before.resolve(), "after": args.after.resolve()}

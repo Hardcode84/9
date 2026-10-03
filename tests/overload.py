@@ -504,7 +504,7 @@ class Suite:
                     *self.flags,
                     "-o",
                     target,
-                    ROOT / "examples/intrusive/program.crs",
+                    ROOT / "examples/intrusive/raw.crs",
                     "--ldflag=" + str(self.build / "libcrust0_host.a"),
                 ]
             )

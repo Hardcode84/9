@@ -92,7 +92,7 @@ does not create a cleanup obligation for the returned raw pointer.
 
 Plain resource checking requires `unsafe` for this operation. In that mode,
 the programmer must meet the consumed-read contract. The
-[combined memory stage](../../examples/ownership/resources/README.md) enforces
+[combined memory stage](../../examples/intrusive/README.md) enforces
 it without `unsafe`, including in subsequent cleanup and called bodies. It
 consumes the transfer facts retained with the checked operations. A source
 loan that forbids writing the place also forbids moving its pointer.

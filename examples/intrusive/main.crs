@@ -1,17 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 host_source(run, "../../api/crust0_stage.crs");
-host_source(run, "../../stages/c/api.crs");
-host_source(run, "../../stages/c/build.crs");
-host_link(run, "../../build/crust-c-library.so");
+host_source(run, "../../stages/memory/options.crs");
+host_source(run, "../../stages/resource_memory/api.crs");
+host_source(run, "../../stages/resource_memory/build.crs");
+host_link(run, "../../build/crust-resource-memory-library.so");
 
-var target: *CrustSource = host_input(run, "program.crs", 1u64);
-if (*run).argc != 0i32 {
-    return c_build(target, 0usize, (*run).argc, (*run).argv);
+var contracts: [PmForeignSpec; 3] = make [PmForeignSpec; 3] {
+    make PmForeignSpec { name: "allocate", alignment: 16usize, kind: PM_ALLOCATE },
+    make PmForeignSpec { name: "release", alignment: 1usize, kind: PM_RELEASE },
+    make PmForeignSpec { name: "emit", alignment: 1usize, kind: PM_SCALAR }
 };
-var arguments: [*u8; 4] = uninit;
-arguments[0usize] = "-o";
-arguments[1usize] = host_path(run, "../../build/intrusive-from-root");
-arguments[2usize] = "--ldflag";
-arguments[3usize] = host_path(run, "../../build/libcrust0_host.a");
-return c_build(target, 0usize, 4i32, &arguments[0usize]);
+var options: PmOptions = make PmOptions {
+    foreign: &contracts[0usize], foreign_count: 3usize,
+    max_depth: 128usize, max_paths: 256usize, max_iterations: 8usize,
+    milliseconds: 10000u32
+};
+if (*run).argc != 0i32 {
+    return resource_memory_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv, &options);
+};
+var arguments: [*u8; 4] = make [*u8; 4] {
+    "-o", host_path(run, "../../build/intrusive-checked"),
+    host_path(run, "../ownership/links.crs"), host_path(run, "program.crs")
+};
+return resource_memory_build((*run).source, (*run).cursor, 4i32, &arguments[0usize], &options);

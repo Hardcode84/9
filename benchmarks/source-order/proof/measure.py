@@ -53,7 +53,7 @@ commands = {
         "--emit-c",
         "--symbols",
         "/dev/null",
-        str(ROOT / "examples/intrusive/program.crs"),
+        str(ROOT / "examples/intrusive/raw.crs"),
     ],
     "gcc-original-syntax": [
         "gcc",
@@ -89,7 +89,7 @@ paths += [HERE / "replay-build.json"]
 paths += interfaces + [
     ROOT / p
     for p in (
-        "examples/intrusive/program.crs",
+        "examples/intrusive/raw.crs",
         "benchmarks/bootstrap/intrusive.c",
         "benchmarks/bootstrap/measure.py",
     )

@@ -28,7 +28,7 @@ B = M.BASE
 
 def generate(directory, count, functions, deep):
     # Keep the direct list operations identical to the executable seed witness.
-    provider = (ROOT / "examples/intrusive/program.crs").read_text()
+    provider = (ROOT / "examples/intrusive/raw.crs").read_text()
     hook = provider[provider.index("record Hook") : provider.index("record Node")]
     bodies = provider[provider.index("fn init") : provider.index("fn node_of")]
     (directory / "provider.crs").write_text(hook + bodies)

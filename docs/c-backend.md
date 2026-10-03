@@ -25,7 +25,7 @@ GCC and GNU `objcopy` must be available through `PATH`.
 
 ```sh
 make c-stage
-build/crust-c -o build/list examples/intrusive/program.crs --ldflag build/libcrust0_host.a
+build/crust-c -o build/list examples/intrusive/raw.crs --ldflag build/libcrust0_host.a
 build/list
 ```
 
@@ -291,7 +291,7 @@ before optimization.
 Use both artifacts when compiling dumped C by hand:
 
 ```sh
-build/crust-c --emit-c -o build/list.c --symbols build/list.rsp examples/intrusive/program.crs
+build/crust-c --emit-c -o build/list.c --symbols build/list.rsp examples/intrusive/raw.crs
 gcc -std=c99 -pedantic-errors -O2 -fstack-clash-protection -Wno-overlength-strings -c build/list.c -o build/list.raw.o
 objcopy @build/list.rsp build/list.raw.o build/list.o
 gcc -no-pie build/list.o build/libcrust0_host.a -o build/list

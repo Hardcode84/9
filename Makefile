@@ -225,8 +225,8 @@ $(BUILD)/crust-overload-resource-library.so: $(BUILD)/crust-overload-resource-li
 
 overload-stage: $(BUILD)/crust-overload $(BUILD)/crust-overload-library.so $(BUILD)/crust-overload-resource $(BUILD)/crust-overload-resource-library.so
 
-$(BUILD)/intrusive.s: $(BUILD)/crust0 examples/intrusive/program.crs
-	$(BUILD)/crust0 -S -o $@ examples/intrusive/program.crs
+$(BUILD)/intrusive.s: $(BUILD)/crust0 examples/intrusive/raw.crs
+	$(BUILD)/crust0 -S -o $@ examples/intrusive/raw.crs
 
 $(BUILD)/intrusive.o: $(BUILD)/intrusive.s
 	$(AS) $(ASFLAGS) $< -o $@

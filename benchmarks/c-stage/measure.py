@@ -376,7 +376,7 @@ def main():
     if sources() != source_hashes:
         raise RuntimeError("Compiler or stage source changed during preparation")
     workloads = [BASE.generate(args.inputs, count) for count in (1000, 8000)]
-    intrusive = Path("examples/intrusive/program.crs")
+    intrusive = Path("examples/intrusive/raw.crs")
     workloads.append(
         {
             "name": "intrusive",

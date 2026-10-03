@@ -8,7 +8,7 @@ compile it, or load its compiled library through the ordinary runner API.
 
 ```sh
 make all
-build/crust0 -o build/list.s examples/intrusive/program.crs
+build/crust0 -o build/list.s examples/intrusive/raw.crs
 gcc -no-pie build/list.s build/libcrust0_host.a -o build/list
 build/list
 make check-asm

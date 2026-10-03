@@ -66,7 +66,7 @@ def main():
     assembly = work / "intrusive.s"
     obj = assembly.with_suffix(".o")
     output = work / "intrusive"
-    run([compiler, "-o", assembly, ROOT / "examples/intrusive/program.crs"])
+    run([compiler, "-o", assembly, ROOT / "examples/intrusive/raw.crs"])
     run(["as", "--64", assembly, "-o", obj])
     run([*cc, "-no-pie", obj, build / "libcrust0_host.a", *ldflags, "-o", output])
     assert run([output]) == b"intrusive: ok\n"

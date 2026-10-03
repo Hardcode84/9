@@ -942,7 +942,7 @@ The optional [memory stage](../examples/ownership/README.md) checks a complete
 direct two-hook client through its typed operation tree. Its library proof also
 checks init, unlink, insert, and splice over rings of arbitrary length. The
 client checker expands calls and requires a proved end to each unfolded loop.
-The [resource composition](../examples/ownership/resources/README.md) also
+The [resource composition](../examples/intrusive/README.md) also
 checks source lifetimes, owner transfers, and complete cleanup plans. Neither
 closed-program profile consumes modular ownership summaries. Passing
 these checks does not complete compiler-construction or checked-language

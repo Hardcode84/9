@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn emit(code: i32) -> i32 = "putchar";
+
+resource Detach { hook: *Hook; } drop detach;
+
+fn detach(value: mut Detach) -> unit {
+    unlink(value.hook);
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    var head: Hook = uninit;
+    hook_init(&head);
+    {
+        var node: Hook = uninit;
+        hook_init(&node);
+        var cleanup: Detach = make Detach { hook: &node };
+        insert_after(&head, &node);
+        if head.next != &node || node.prev != &head { trap; }
+    }
+    // The resource detaches node before its storage expires.
+    if head.next != &head || head.prev != &head { trap; }
+    emit(79i32);
+    emit(75i32);
+    emit(10i32);
+    return 0i32;
+}

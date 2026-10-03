@@ -4,7 +4,7 @@ fn memory_alloc_verify(context:*CrustContext, source:*CrustSource, summary:*u8)-
     var resources:RsStage=uninit;
     rs_init(&resources, context);
     if !rs_read(&resources, source, 0usize, (*source).size) ||
-       !rs_prepare_with_access(&resources, true) { return false; }
+       !rs_prepare_delegated(&resources) { return false; }
     var entry:*CrustDecl=pm_lookup(context, "main");
     if entry == null(*CrustDecl) { return false; }
     var contracts:[PmForeignSpec;3] = make [PmForeignSpec;3] {

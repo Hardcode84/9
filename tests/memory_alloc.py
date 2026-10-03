@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 from memory import accept_cases
+from resource_initialization import accept_cases as initialization_cases
 from resource_memory import accept_cases as resource_cases
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,7 +109,7 @@ def main():
     if not compiler.is_file():
         parser.error(f"compiler does not exist: {compiler}")
     cases = (
-        {name: item[0] for name, item in resource_cases().items()}
+        {name: item[0] for name, item in (resource_cases() | initialization_cases()).items()}
         if args.resources
         else accept_cases()
     )
@@ -120,6 +121,8 @@ def main():
             "loop-cleanup",
             "pointer-local",
             "pointer-index-once",
+            "output-cleanup-initializes",
+            "output-loop-continue",
         )
         if args.resources
         else CASES

@@ -11,7 +11,14 @@ fn rs_note(function: *RsFunction, local: *RsLocal) -> unit {
     (*function).changes = change;
 }
 
+fn rs_tracks_initialization(function: *RsFunction, local: *RsLocal) -> bool {
+    return !(*(*function).stage).delegate_memory || (*local).owning || (*local).mode != 0u32;
+}
+
 fn rs_live(function: *RsFunction, local: *RsLocal, initialized: bool) -> unit {
+    // Plain-value state comes from the memory proof, including branch and loop paths.
+    // Owners and loan bindings still determine cleanup and loan release here.
+    if !rs_tracks_initialization(function, local) { return; }
     if (*local).initialized == initialized { return; }
     rs_note(function, local);
     (*local).initialized = initialized;
@@ -92,7 +99,7 @@ fn rs_scope(function: *RsFunction) -> *RsScope {
 }
 
 fn rs_access(function: *RsFunction, local: *RsLocal, write: bool, location: *CrustLoc) -> unit {
-    if !(*local).initialized {
+    if rs_tracks_initialization(function, local) && !(*local).initialized {
         rs_error((*function).stage, location, "value is uninitialized or has been moved");
         return;
     }

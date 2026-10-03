@@ -34,10 +34,13 @@ extern fn rs_return_from(stage: *RsStage, declaration: *CrustDecl, parameter: *C
 // On failure, return false and retain the diagnostic in stage.context.
 extern fn rs_prepare(stage: *RsStage) -> bool = "rs_prepare";
 
-// Prepare with the same ownership, loan, and cleanup checks. When allow_raw is
-// true, delegate raw-access authorization to the caller's checking stage.
-// The caller must verify all reachable memory effects, transfers, and cleanup before output.
-extern fn rs_prepare_with_access(stage: *RsStage, allow_raw: bool) -> bool = "rs_prepare_with_access";
+// Delegate raw memory and plain-value initialization checks to the caller.
+// Plain values have no resource cleanup obligation and are not read or mut bindings.
+// Keep source checks for owner construction, moves, loans, and cleanup eligibility.
+// Before output, prove every reachable read, write, transfer, and cleanup, including
+// initialization through aliases on all branch and loop paths. Taking an address
+// does not initialize storage or construct an owner. Other rs_prepare conditions apply.
+extern fn rs_prepare_delegated(stage: *RsStage) -> bool = "rs_prepare_delegated";
 
 // Pass as the C backend body callback with the prepared RsStage address as user.
 // Require declarations from that stage and checked target nodes with assigned link names.

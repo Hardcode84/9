@@ -357,6 +357,10 @@ permissions after owner transfers and consuming pointer reads. A pointer move
 can consume a destructor's node field without a runtime clear store. Alias
 reads must respect the consumed field permission. The profile uses the original
 resource body emitter.
+It also checks initialization of plain values through aliases, output calls,
+and cleanup. Resource lowering delegates that rule explicitly while retaining
+owner construction, moves, loans, and cleanup eligibility. It adds no target
+initialization stores or flags.
 The root can select inferred summaries for straight-line memory functions.
 The stage derives each effect template from the complete checked proof view,
 then checks its obligations and typed-write separation at each call. It retains

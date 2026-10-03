@@ -179,8 +179,8 @@ Build with `make all`. Use the checks that cover the change:
 | Root execution and reader extensions | `make check-stage check-reader` |
 | Native bootstrap and execution handoff | `make check-native` |
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |
-| Memory proofs and call effects | `make check-memory check-resource-memory check-memory-summaries` |
-| Optional memory proofs and cleanup composition | `make check-memory check-memory-alloc check-resource-memory check-resource-memory-alloc` with Z3 |
+| Memory proofs, initialization, and call effects | `make check-memory check-resource-memory check-memory-summaries` with Z3 |
+| Memory proof allocation and cleanup | `make check-memory-alloc check-resource-memory-alloc` with Z3 |
 | Overloads and resource composition | `make check-overload check-overload-alloc` |
 | Compilation program examples | `make check-examples` |
 | Module selection, bindings, and exports | `make check-modules` |

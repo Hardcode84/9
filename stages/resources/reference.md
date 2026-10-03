@@ -123,8 +123,9 @@ conversion is rejected, including in `unsafe` code. The overload reader does
 not accept the `from` clause; that adapter must preserve the result mode and
 source parameter index in its declaration contract before it can accept it.
 
-Only whole bindings have initialization facts. A partially initialized record
-or array cannot be read through a checked place. An unsafe raw address can name
+In the standalone resource policy, only whole bindings have initialization
+facts. A partially initialized record or array cannot be read through a checked
+place. An unsafe raw address can name
 uninitialized whole storage without reading it. Raw stores do not change the
 checked initialization fact. A raw store transfers the new value without
 reading or dropping the previous target bytes. Unsafe code must release any
@@ -171,6 +172,23 @@ signature even when their lowered pointer representation is the same.
 3. Call `rs_prepare` after all source units have been read.
 4. Assign native link names and pass `rs_c_body` to the C backend's body callback.
 5. Destroy the context after output is complete.
+
+To delegate memory checking, use `rs_prepare_delegated` in step 3. It permits
+raw accesses without `unsafe` and delegates initialization of plain values to
+the caller. A plain value has no resource cleanup obligation and is not a
+`read` or `mut` binding. The caller must prove every reachable memory access, transfer, and
+cleanup before step 4. Each read needs initialized storage, including reads
+through aliases and on branch and loop paths. Address formation does not
+initialize storage. The [combined stage](../../examples/intrusive/README.md)
+provides this proof and stops output if it fails.
+
+Owner construction, moves, loan bindings, active loans, and cleanup eligibility
+remain checked by the resource stage. A raw output store does not construct an
+owner or create its cleanup obligation. Assign an owning result to the whole
+binding for that operation. These states must still agree at continuing
+branches and loop edges; initialization of plain values need not agree if the
+memory proof establishes each subsequent read. This adds no target state or
+implicit initialization stores.
 
 An earlier source stage can publish a source ABI import. It supplies an external
 declaration with the complete source signature and native link name, then calls

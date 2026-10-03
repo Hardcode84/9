@@ -1040,6 +1040,13 @@ Resource checking retains cleanup chains outside its lowered tree and moves
 local declarations to function entry. The combined stage consumes those chains,
 preserves source storage scopes and deferred captures, and removes initialized
 permissions from moved values. Its proof view adds no emitted operations.
+The resource stage can explicitly delegate raw memory and plain-value
+initialization checks to this proof. Plain values have no resource cleanup
+obligation and are not loan bindings. Output calls, field stores, and cleanup
+can initialize them; each read must have initialized storage on its reachable path. Taking an address
+does not initialize storage. Owner construction, moves, loan bindings, and
+cleanup eligibility keep the resource stage's source checks. Plain resource
+checking retains its whole-binding initialization rule.
 The resource syntax also permits `move` on a writable raw pointer place.
 The combined stage consumes that place's initialized permission without a
 clear store. Reads through all aliases then fail until assignment initializes

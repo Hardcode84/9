@@ -29,7 +29,7 @@ fn rm_driver_build(cli: *CCli, options: *PmOptions) -> i32 {
     }
     var resources: RsStage = uninit;
     rs_init(&resources, context);
-    if !resource_driver_read(cli, &resources) || !rs_prepare_with_access(&resources, true) { return 1i32; }
+    if !resource_driver_read(cli, &resources) || !rs_prepare_delegated(&resources) { return 1i32; }
     var entry: *CrustDecl = resource_driver_entry(cli, &resources);
     if entry == null(*CrustDecl) { return 1i32; }
     if !rm_verify(&resources, entry, options) { return 1i32; }

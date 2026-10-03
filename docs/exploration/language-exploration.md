@@ -1263,6 +1263,12 @@ releases the node without clearing that field. Consumed-field reads through
 aliases, repeated drop, reentrant reads, and surviving external links reject.
 Pointer moves emit the same C operations as ordinary pointer reads. Other
 fields retain their permissions; no destructor has an exemption from checking.
+The resource interface also delegates plain-value initialization explicitly.
+The memory proof follows output stores through aliases, branches, loops, and
+cleanup. Owner construction and loan bindings retain their source-flow rules.
+The stack-hook example initializes each hook at its final address and uses a
+separate RAII guard to detach it before storage ends. Missing initialization
+and missing cleanup both reject. This adds no initialization store or flag.
 The next modular interface must connect owner rights and field permissions to
 verified library contracts. The combined stage can now reuse concrete memory
 effects for selected straight-line, unit-returning functions. It derives the

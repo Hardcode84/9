@@ -150,7 +150,7 @@ fn rs_lower_statement(function: *RsFunction, source: *CrustStmt, output: *RsStat
     return rs_lower_effect(function, source, output);
 }
 
-fn rs_function(stage: *RsStage, global: *RsGlobal, allow_raw: bool) -> bool {
+fn rs_function(stage: *RsStage, global: *RsGlobal) -> bool {
     var source: *CrustDecl = (*global).source;
     var target: *CrustDecl = (*global).lowered;
     var function: *RsFunction = rs_alloc(stage, sizeof(RsFunction), alignof(RsFunction)) as *RsFunction;
@@ -159,7 +159,7 @@ fn rs_function(stage: *RsStage, global: *RsGlobal, allow_raw: bool) -> bool {
     (*function).global = global;
     (*function).next_label = 1usize;
     (*function).returned = rs_terminal(function);
-    if (*global).unsafe_call || allow_raw { (*function).unsafe_depth = 1usize; }
+    if (*global).unsafe_call || (*stage).delegate_memory { (*function).unsafe_depth = 1usize; }
     rs_scope(function);
     rs_put(stage, &(*stage).functions, target as usize, function as *u8);
     var result_type: *CrustTypeSyntax = rs_function_parameters(function, source, target);
@@ -201,17 +201,23 @@ fn rs_function(stage: *RsStage, global: *RsGlobal, allow_raw: bool) -> bool {
 // Publish interfaces, check resource operations, and produce checked target trees.
 // Require complete source units and retain all source bytes through context use.
 fn rs_prepare(stage: *RsStage) -> bool {
-    return rs_prepare_with_access(stage, false);
+    return rs_prepare_policy(stage, false);
 }
 
-// With allow_raw, the caller must check raw memory effects and transfers before emission.
-// Move, loan, initialization, and cleanup rules still apply to every body.
-fn rs_prepare_with_access(stage: *RsStage, allow_raw: bool) -> bool {
+// Delegate raw memory and plain-value initialization checks to the caller.
+// Require a proof of every reachable read, write, transfer, and cleanup before output.
+// Owner construction, moves, loan bindings, and cleanup retain their source checks.
+fn rs_prepare_delegated(stage: *RsStage) -> bool {
+    return rs_prepare_policy(stage, true);
+}
+
+fn rs_prepare_policy(stage: *RsStage, delegate_memory: bool) -> bool {
+    (*stage).delegate_memory = delegate_memory;
     if !rs_collect(stage) || !rs_publish(stage) { return false; }
     var global: *RsGlobal = (*stage).first_global;
     while global != null(*RsGlobal) && !(*stage).failed {
         if (*(*global).source).kind == CRUST_D_FUNCTION {
-            if !rs_function(stage, global, allow_raw) { return false; }
+            if !rs_function(stage, global) { return false; }
         }
         global = (*global).next;
     }

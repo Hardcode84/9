@@ -31,7 +31,7 @@ HIGHLIGHT = api/crust0.crs api/crust0_host.crs stages/reader/model.crs stages/re
 CCN = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/ccn/count.crs stages/ccn/read.crs stages/ccn/report.crs stages/ccn/program.crs
 RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources/read.crs stages/resources/types.crs stages/resources/constants.crs stages/resources/state.crs stages/resources/cleanup.crs stages/resources/places.crs stages/resources/expr.crs stages/resources/control.crs stages/resources/emit.crs stages/resources/program.crs stages/resources/build.crs
 RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(RESOURCE)
-RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_prepare_with_access rs_c_body rs_source_import rs_return_from
+RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_prepare_delegated rs_c_body rs_source_import rs_return_from
 PROOF = stages/proof/model.crs stages/proof/base.crs stages/proof/terms.crs stages/proof/state.crs stages/proof/query.crs stages/proof/expression.crs stages/proof/execute.crs stages/proof/verify.crs stages/proof/z3.crs
 MEMORY = stages/memory/options.crs stages/memory/model.crs stages/memory/base.crs stages/memory/plan.crs stages/memory/storage.crs stages/memory/expr.crs stages/memory/foreign.crs stages/memory/statement.crs stages/memory/assign.crs stages/memory/copy.crs stages/memory/summary_plan.crs stages/memory/summary_terms.crs stages/memory/summary.crs stages/memory/program.crs
 MEMORY_LIBRARY = $(C_LIBRARY) $(PROOF) $(MEMORY)
@@ -184,6 +184,7 @@ resource-memory-stage: $(BUILD)/crust-resource-memory-test $(BUILD)/crust-resour
 
 check-resource-memory: all resource-stage resource-memory-stage
 	python3 tests/resource_memory.py --build $(BUILD)
+	python3 tests/resource_initialization.py --build $(BUILD)
 
 check-resource-memory-alloc: all c-stage
 	python3 tests/memory_alloc.py --resources --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)'

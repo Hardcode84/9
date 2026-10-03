@@ -49,6 +49,7 @@ record RsStage {
     last_helper: *CrustDecl;
     next_helper_identity: u64;
     next_name: usize;
+    delegate_memory: bool;
     failed: bool;
 }
 

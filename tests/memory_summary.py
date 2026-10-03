@@ -48,6 +48,10 @@ def accept_cases(resources=False):
             "var p:*i32=allocate(sizeof(i32)) as *i32;if p!=null(*i32) {"
             "rewrite(p);var x:i32=*p;release(p as *u8);if x!=3i32{return 1i32;}}",
         ),
+        "local-output-initialization": source(
+            "fn rewrite(p:*i32)->unit {*p=3i32;}",
+            "var x:i32=uninit;rewrite(&x);if x!=3i32{return 1i32;}",
+        ),
     }
     if resources:
         del cases["early-return"]
@@ -56,10 +60,6 @@ def accept_cases(resources=False):
             "var p:*u8=allocate(1usize);var h:Hold=make Hold{value:p};rewrite(&h);release(p);",
         )
     else:
-        cases["local-output-initialization"] = source(
-            "fn rewrite(p:*i32)->unit {*p=3i32;}",
-            "var x:i32=uninit;rewrite(&x);if x!=3i32{return 1i32;}",
-        )
         cases["guarded-read"] = source(
             "fn rewrite(p:*i32,out:*bool)->unit {*out=false && *p==0i32;}",
             "var out:bool=true;rewrite(null(*i32),&out);if out{return 1i32;}",
@@ -154,14 +154,6 @@ def run_suite(build, directory, resources, sanitize):
         execute(checked, symbols, directory, name, sanitize, b"")
         count += 1
     rejected = reject_cases(resources)
-    if resources:
-        rejected["local-output-initialization"] = (
-            source(
-                "fn rewrite(p:*i32)->unit {*p=3i32;}",
-                "var x:i32=uninit;rewrite(&x);if x!=3i32{return 1i32;}",
-            ),
-            "value is uninitialized",
-        )
     for name, (body, message) in unsupported_cases().items():
         rejected[name] = (
             source(

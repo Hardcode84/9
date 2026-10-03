@@ -128,6 +128,42 @@ checked declaration and derives its effects from the complete body. Use
 
 ## Connect the stages
 
+### Initialize plain storage through a helper
+
+The [output initialization example](output-init.crs) uses a stack head and
+stack node. Each hook starts with uninitialized storage at its final address:
+
+```crust
+var head: Hook = uninit;
+hook_init(&head);
+{
+    var node: Hook = uninit;
+    hook_init(&node);
+    var cleanup: Detach = make Detach { hook: &node };
+    insert_after(&head, &node);
+}
+```
+
+`Detach` is a resource whose drop function calls `unlink`. Its cleanup runs
+before the node's storage expires. The memory proof checks the helper's actual
+stores before any field read, then checks cleanup and the surviving head links.
+Removing node initialization or the detach call rejects the program.
+No null initializer, initialization flag, or runtime validity check is added.
+
+Run its [root](output-main.crs), which selects only the scalar `emit` foreign
+contract because this example has no foreign allocation or release:
+
+```sh
+build/crust examples/intrusive/output-main.crs
+build/intrusive-output
+```
+
+The output is `OK` and a newline. This example delegates initialization of plain
+hook storage. It constructs the `Detach` owner with an ordinary complete
+initializer. A raw output store does not construct a resource owner.
+
+### Check the complete resource program
+
 Resource lowering hoists C storage and retains cleanup outside the operation
 tree. Checking that tree alone would miss cleanup and extend source lifetimes.
 The [adapter](../../stages/resource_memory/view.crs) uses the retained
@@ -173,8 +209,15 @@ The source's copies, pointer stores, drop calls, and ordinary seed checks remain
 ## Select the contract
 
 The ordinary resource stage requires explicit `unsafe` regions for raw access.
-The combined stage calls `rs_prepare_with_access` to delegate that access check
-to the memory proof. It retains the resource stage's move and loan rules.
+The combined stage calls `rs_prepare_delegated` to delegate raw memory and
+plain-value initialization checks to the memory proof. Plain values have no
+resource cleanup obligation and are not `read` or `mut` bindings. Scalars,
+pointers, and plain records and arrays can be initialized through output parameters or field stores.
+The proof requires initialization at each read, through every alias and on each
+reachable path. Taking an address grants no initialized permission.
+Owner construction, moves, loan bindings, and cleanup eligibility retain their
+resource checks. Their states must still agree at continuing branches and loop
+edges. Plain initialization can differ between paths when later reads are safe.
 The combined driver emits only after both checks pass. Foreign effects retain
 the explicit trust boundary described in the [memory tutorial](../ownership/README.md).
 Raw aliases obey the memory-access proof. This does not establish exclusive
@@ -193,13 +236,13 @@ expansion. The template reuses concrete effects; the solver still checks them
 at each call. Abstract ownership predicates and loop invariants require a
 separate contract and proof rule. The ring proof is not a caller memory proof.
 
-Resource lowering still checks local initialization before the memory stage
-runs. It rejects a read of a local initialized only through an output parameter.
-It does permit taking the uninitialized local's address. The memory stage can check
-initialization of allocated storage through a pointer. To accept that local
-case, the resource interface must delegate plain-value initialization checks
-while retaining owner construction, loan, and cleanup rules. Summary selection
-does not bypass those source rules.
+An output write can occur in an expanded call, a selected effect template, or
+cleanup. All three use the same memory state. Deferred arguments are still
+captured at registration. A captured scalar or pointer value must already be
+initialized. The pointed-to value needs initialization when the deferred body
+reads it.
+Plain `rs_prepare` retains whole-binding initialization checks, including in
+`unsafe` regions. Summary selection does not change the selected source policy.
 
 Moves consume initialized-field permissions. Destruction can consume one
 pointer field and continue to use other fields. Subsequent calls, including
@@ -221,12 +264,16 @@ make check-resource-memory Z3_FLAGS=-l:libz3.so.4
 make check-resource-memory-alloc Z3_FLAGS=-l:libz3.so.4
 make check-memory-summaries Z3_FLAGS=-l:libz3.so.4
 python3 tests/resource_memory.py --sanitize
+python3 tests/resource_initialization.py --sanitize
 ```
 
 The suite covers deferred owners and loans, nested owned fields, owned arrays,
 owner arguments and results, replacement, returned views, and loop cleanup.
 It rejects moved-source reads through raw aliases, use after cleanup, a late
 deferred read, double release, leaks, stale stack addresses, and retained links.
+Initialization cases cover output parameters, partial aggregates, conditional
+writes, loop exits, deferred captures, and destructor reads. They also check that
+delegation retains owner construction and loan conflicts.
 Pointer-move cases also check repeated destruction, argument evaluation order,
 reentrant reads, field reinitialization, and automatic child cleanup after a
 parent has consumed a child field.

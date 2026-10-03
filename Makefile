@@ -39,7 +39,8 @@ RESOURCE_MEMORY = stages/resource_memory/model.crs stages/resource_memory/view.c
 RESOURCE_MEMORY_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(MEMORY) $(RESOURCE_MEMORY)
 RELATIONS = stages/relations/model.crs stages/relations/base.crs stages/relations/invariant.crs stages/relations/check.crs stages/relations/calls.crs stages/relations/read.crs
 OWNERSHIP = stages/ownership/model.crs stages/ownership/base.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/fields.crs stages/ownership/loans.crs stages/ownership/results.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/calls.crs stages/ownership/relations.crs stages/ownership/projection.crs stages/ownership/scopes.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/program.crs
-OWNERSHIP_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(RELATIONS) $(OWNERSHIP)
+OWNERSHIP_IMPORTS = api/crust0_eval.crs api/crust0_run.crs stages/native/model.crs stages/native/linux.crs stages/cache/model.crs stages/cache/linux.crs stages/cache/artifact.crs stages/cache/inputs.crs stages/ownership/library_model.crs stages/ownership/interface.crs stages/ownership/artifact.crs stages/ownership/publish.crs stages/ownership/imports.crs
+OWNERSHIP_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(RELATIONS) $(OWNERSHIP) $(OWNERSHIP_IMPORTS)
 MEMORY_CONTRACT = stages/memory/contract.crs
 INTRUSIVE_CONTRACT = examples/intrusive/contract-options.crs examples/intrusive/contract.crs
 MEMORY_LOOP = stages/memory/loop.crs
@@ -197,13 +198,23 @@ $(BUILD)/crust-ownership-test: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) tests/owner
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 $(BUILD)/crust-ownership-library.o: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) Makefile
-	$< --library --object --export ownership_program --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(OWNERSHIP_LIBRARY)
+	$< --library --object --export ownership_program --export ownership_publish --export ownership_import_program --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(OWNERSHIP_LIBRARY)
 
 $(BUILD)/crust-ownership-library.so: $(BUILD)/crust-ownership-library.o
 	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(Z3_FLAGS) $(LDFLAGS) -o $@
 
 $(BUILD)/crust-ownership-erasure: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) tests/ownership_erasure.crs Makefile
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_erasure.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+$(BUILD)/ownership_import_solver.o: tests/ownership_import_solver.c Makefile | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -c $< -o $@
+
+$(BUILD)/crust-ownership-import-test: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) tests/ownership_import_driver.crs $(BUILD)/ownership_import_solver.o Makefile
+	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_import_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a --ldflag $(BUILD)/ownership_import_solver.o --ldflag=-Wl,--wrap=Z3_mk_config $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+.PHONY: check-ownership-imports
+check-ownership-imports: $(BUILD)/crust-ownership-import-test
+	python3 tests/ownership_imports.py --build $(BUILD)
 
 .PHONY: ownership-stage check-ownership check-ownership-alloc
 ownership-stage: $(BUILD)/crust-ownership-test $(BUILD)/crust-ownership-library.so

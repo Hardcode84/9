@@ -30,7 +30,57 @@ build/crust-ownership-test --library --check examples/intrusive/links.crs
 ```
 
 The compilation root takes compiler arguments when arguments are supplied.
-All provider definitions are checked before emission.
+All provider definitions are checked before emission. A separate publication
+operation can save their verified interfaces and object code for client builds.
+
+## Reuse a verified library
+
+The compilation program can load [library_model.crs](../../stages/ownership/library_model.crs)
+and [library_api.crs](../../stages/ownership/library_api.crs), then call these
+operations from the same ownership stage library:
+
+```crust
+if ownership_publish(provider_request, cache_directory, library_receipt) != 0i32 { return 1i32; }
+return ownership_import_program(client_request, imports);
+```
+
+Both requests use the ordinary `CrustBuild` interface. Publication accepts
+provider sources and C compilation flags. It checks each function, emits an
+object, and saves one bundle that contains the object and the complete source
+interface. The generated interface keeps types, field roles, effects, destructor
+names, and returned-view origins. It contains no function bodies. Publication
+compiles the provider on each call; it does not cache GCC execution.
+
+`OwnershipLibrary` contains the artifact path and its SHA-256 digest.
+`OwnershipImports` selects an absolute cache directory and an array of these
+receipts. The trusted compilation program must retain receipts from successful
+publication. Receipt strings belong to the provider request context; copy them
+before that context is destroyed. A digest supplied with an untrusted object
+does not establish that its contracts were checked.
+
+The cache directory must belong to the caller and have no untrusted writers.
+The bundle binds its interface and object to the exact checker executable and
+loaded library images. A changed checker requires new publication. Imported
+record layouts are checked by that same compiler. Changing the saved object,
+contract, or type bytes fails the retained digest check, even if the cache
+checksum file is also changed.
+
+Import captures the bundle once and links a private object copy from those
+bytes. Replacing the published path cannot replace the object used for linking.
+Client checking uses the verified interfaces, without reading provider sources
+or making solver calls for their bodies. The current compiler host still links
+Z3. New client link-function bodies still require their own proofs. Imports
+support linked output and `--check`; C-only and object-only output reject because
+they cannot retain the imported object dependencies.
+
+```sh
+make check-ownership-imports Z3_FLAGS=-l:libz3.so.4
+```
+
+This check publishes the intrusive provider, removes its source files, builds a
+separate client process with a solver trap, and runs the result. It also checks
+changed artifacts, changed checker images, replacement during linking, and
+compiler allocation failures.
 
 ## Declare storage and access
 
@@ -312,7 +362,8 @@ For the Rust comparison, clients use affine moves, scoped loans, and address
 stability. Container authors add inverse fields and role, effect, and result
 contracts. They write no solver terms or ghost lemmas. Lexical scopes and domain
 exclusion can reject code that Rust accepts with narrower inferred loans. The
-intrusive program now covers returned views and nested resources. The runtime-sized owner-creation and broader container comparison in
+separate verified provider and client now cover returned views and nested
+resources. The runtime-sized owner-creation and broader container comparison in
 the [acceptance gate](../../docs/design.md#checked-ownership-target) remain
 necessary before adding another ownership mechanism.
 

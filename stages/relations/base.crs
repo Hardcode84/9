@@ -73,7 +73,7 @@ fn rl_family(stage: *RlStage, declaration: *CrustDecl,
 fn rl_contract(stage: *RlStage, declaration: *CrustDecl,
                family: *RlFamily, effect: u32) -> *RlContract {
     if family == null(*RlFamily) || (effect != RL_READ && effect != RL_EDIT) ||
-       (*declaration).kind != CRUST_D_FUNCTION ||
+       ((*declaration).kind != CRUST_D_FUNCTION && (*declaration).kind != CRUST_D_EXTERN) ||
        (*(*(*declaration).type).base).kind != CRUST_T_UNIT {
         pf_error(&(*stage).proof, &(*declaration).loc, "link contract requires a unit function and a declared family");
         return null(*RlContract);

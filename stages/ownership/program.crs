@@ -34,6 +34,11 @@ fn os_relation_interfaces(stage: *OsStage, relations: *RlStage) -> bool {
     syntax = (*stage).relations;
     while syntax != null(*RlSyntax) {
         if (*(*syntax).declaration).kind != CRUST_D_RECORD {
+            if (*(*syntax).declaration).kind == CRUST_D_EXTERN && !os_imported(stage, (*syntax).declaration) {
+                rs_error((*stage).resources, &(*(*syntax).declaration).loc,
+                         "external link contracts require a verified library import");
+                return false;
+            }
             var contract: *RlContract = rls_resolve_function(relations, (*stage).resources, syntax);
             if contract == null(*RlContract) { return false; }
             var function: *OsFunction = crust_map_get(&(*stage).functions, (*syntax).declaration as usize) as *OsFunction;
@@ -70,7 +75,8 @@ fn os_verify(stage: *OsStage, relations: *RlStage) -> bool {
     var global: *RsGlobal = (*resources).first_global;
     while global != null(*RsGlobal) {
         var function: *OsFunction = crust_map_get(&(*stage).functions, (*global).source as usize) as *OsFunction;
-        if function != null(*OsFunction) && (*function).relation != null(*RlContract) {
+        if function != null(*OsFunction) && (*function).relation != null(*RlContract) &&
+           !os_imported(stage, (*global).source) {
             if !rl_verify(relations, (*function).relation) { return false; }
         }
         global = (*global).next;

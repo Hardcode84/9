@@ -228,9 +228,19 @@ def main():
             sources += [
                 str(path.relative_to(ROOT))
                 for path in sorted((ROOT / "stages/ownership").glob("*.crs"))
-                if path.name not in ("api.crs", "build.crs")
+                if path.name not in ("api.crs", "build.crs", "library_api.crs")
             ]
-            sources += ["tests/ownership_alloc.crs"]
+            sources += [
+                "api/crust0_eval.crs",
+                "api/crust0_run.crs",
+                "stages/native/model.crs",
+                "stages/native/linux.crs",
+                "stages/cache/model.crs",
+                "stages/cache/linux.crs",
+                "stages/cache/artifact.crs",
+                "stages/cache/inputs.crs",
+                "tests/ownership_alloc.crs",
+            ]
         generated = work / "fixture.c"
         response = work / "fixture.rsp"
         run(

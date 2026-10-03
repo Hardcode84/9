@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record OsLibraryWork {
+    files: CacheWork;
+    inputs: CacheInputs;
+    checker: *u8;
+    provider: *u8;
+}
+
+record OsLibraryBundle {
+    interface_source: CrustSource;
+    object: CrustSource;
+    checker: *u8;
+    provider: *u8;
+}
+
+fn os_library_error(context: *CrustContext, message: *u8) -> bool {
+    return native_error(context, message);
+}
+
+fn os_library_hash(context: *CrustContext, inputs: *CacheInputs, work: *CacheWork) -> *u8 {
+    var request: CacheBuild = make CacheBuild {
+        inputs: (*inputs).items, count: (*inputs).count,
+        build: null(fn(*CrustContext, *CacheBuild, *u8) -> bool), user: null(*u8)
+    };
+    if !cache_manifest(context, &request, (*work).manifest) { return null(*u8); }
+    return cache_digest(context, (*work).manifest, (*work).digest);
+}
+
+fn os_library_begin(context: *CrustContext, directory: *u8, work: *OsLibraryWork) -> bool {
+    (*work).files = make CacheWork {
+        directory: null(*u8), manifest: null(*u8), digest: null(*u8), artifact: null(*u8), checksum: null(*u8)
+    };
+    (*work).inputs = make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize };
+    (*work).checker = null(*u8);
+    (*work).provider = null(*u8);
+    if directory == null(*u8) || directory[0usize] != 47u8 {
+        return os_library_error(context, "ownership library requires an absolute trusted cache directory");
+    }
+    if !cache_work(context, directory, &(*work).files) || !cache_loaded_inputs(context, &(*work).inputs) {
+        return false;
+    }
+    (*work).checker = os_library_hash(context, &(*work).inputs, &(*work).files);
+    return (*work).checker != null(*u8);
+}
+
+fn os_library_sources(stage: *OsStage, work: *OsLibraryWork) -> bool {
+    var context: *CrustContext = (*(*stage).resources).context;
+    var parsed: *CrustUnit = (*(*stage).resources).sources;
+    while parsed != null(*CrustUnit) {
+        if !cache_add(context, &(*work).inputs, (*parsed).source) { return false; }
+        parsed = (*parsed).next;
+    }
+    (*work).provider = os_library_hash(context, &(*work).inputs, &(*work).files);
+    return (*work).provider != null(*u8);
+}
+
+fn os_library_pack(buffer: *CBuffer, work: *OsLibraryWork,
+                    interface_source: *CrustSource, object: *CrustSource) -> bool {
+    c_buffer_text(buffer, "crust-ownership-library-v1-linux-x64\n");
+    c_buffer_bytes(buffer, (*work).checker, 64usize);
+    c_buffer_bytes(buffer, (*work).provider, 64usize);
+    var interface_size: u64 = (*interface_source).size as u64;
+    var object_size: u64 = (*object).size as u64;
+    c_buffer_bytes(buffer, &interface_size as *u8, 8usize);
+    c_buffer_bytes(buffer, &object_size as *u8, 8usize);
+    c_buffer_bytes(buffer, (*interface_source).bytes, (*interface_source).size);
+    c_buffer_bytes(buffer, (*object).bytes, (*object).size);
+    return !(*(*buffer).status).failed;
+}
+
+fn os_library_unpack(context: *CrustContext, source: *CrustSource, bundle: *OsLibraryBundle) -> bool {
+    var tag: *u8 = "crust-ownership-library-v1-linux-x64\n";
+    var size: usize = native_strlen(tag);
+    if (*source).size < size + 144usize || cache_memcmp((*source).bytes, tag, size) != 0i32 {
+        return os_library_error(context, "invalid ownership library format or target");
+    }
+    (*bundle).checker = (*source).bytes + size as isize;
+    (*bundle).provider = (*bundle).checker + 64isize;
+    var interface_size: u64 = 0u64;
+    var object_size: u64 = 0u64;
+    native_memcpy(&interface_size as *u8, (*bundle).provider + 64isize, 8usize);
+    native_memcpy(&object_size as *u8, (*bundle).provider + 72isize, 8usize);
+    size = size + 144usize;
+    if interface_size > ((*source).size - size) as u64 ||
+       object_size != ((*source).size - size - interface_size as usize) as u64 {
+        return os_library_error(context, "invalid ownership library lengths");
+    }
+    (*bundle).interface_source = make CrustSource {
+        path: (*source).path, bytes: (*source).bytes + size as isize,
+        size: interface_size as usize, identity: (*source).identity
+    };
+    (*bundle).object = make CrustSource {
+        path: (*source).path, bytes: (*source).bytes + (size + interface_size as usize) as isize,
+        size: object_size as usize, identity: 0u64
+    };
+    return true;
+}
+
+fn os_library_copy(context: *CrustContext, request: *CacheBuild, path: *u8) -> bool {
+    var source: *CrustSource = (*request).user as *CrustSource;
+    return cache_save(context, path, (*source).bytes, (*source).size);
+}
+
+fn os_library_publish_bytes(context: *CrustContext, directory: *u8, work: *OsLibraryWork,
+                            source: *CrustSource, result: *OwnershipLibrary) -> bool {
+    if !cache_add(context, &(*work).inputs, source) ||
+       !cache_save(context, (*work).files.artifact, (*source).bytes, (*source).size) { return false; }
+    var digest: *u8 = cache_digest(context, (*work).files.artifact, (*work).files.digest);
+    if digest == null(*u8) { return false; }
+    var request: CacheBuild = make CacheBuild {
+        inputs: (*work).inputs.items, count: (*work).inputs.count, build: os_library_copy, user: source as *u8
+    };
+    var artifact: CacheArtifact = uninit;
+    if !cache_artifact(context, directory, &request, &artifact) { return false; }
+    *result = make OwnershipLibrary { artifact: artifact.path, digest: digest };
+    return true;
+}

@@ -408,8 +408,12 @@ Its restricted internal group rule addresses sentinel and payload types. The
 that rule, declared owners, domain access, construction, and destruction in
 external Crust stages. It checks link definitions without a client, and all
 callers use declared interfaces. Named read and mutable loans, dotted returned-view
-origins, and embedded-resource destruction now have local contracts.
-Runtime-sized owner creation still needs a local invariant
+origins, and embedded-resource destruction now have local contracts. A verified
+provider bundle binds these contracts and layouts to its compiled object and
+checker images. A client can use that bundle without provider source or solver
+queries for provider bodies. The compiler host still links Z3. The tutorial
+states the receipt trust boundary and tests changed artifacts and compiler
+allocation failures. Runtime-sized owner creation still needs a local invariant
 for a changing owner set. This result does not complete the general container
 and Rust source-complexity gate.
 

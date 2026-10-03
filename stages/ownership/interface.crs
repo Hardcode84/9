@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_imported(stage: *OsStage, declaration: *CrustDecl) -> bool {
+    return crust_map_get(&(*stage).imports, declaration as usize) != null(*u8);
+}
+
+fn os_interface_read(stage: *OsStage, source: *CrustSource) -> bool {
+    if !os_read(stage, source, 0usize, (*source).size) { return false; }
+    var declaration: *CrustDecl = (*(*(*(*stage).resources).context).last_unit).declarations;
+    while declaration != null(*CrustDecl) {
+        if (*declaration).kind == CRUST_D_FUNCTION {
+            rs_error((*stage).resources, &(*declaration).loc, "library interface contains a function body");
+            return false;
+        }
+        if (*declaration).kind == CRUST_D_EXTERN {
+            var function: *OsFunction = crust_map_get(&(*stage).functions, declaration as usize) as *OsFunction;
+            if (*function).foreign == 0u32 {
+                if !rs_source_import((*stage).resources, declaration) { return false; }
+                rs_put((*stage).resources, &(*stage).imports, declaration as usize, declaration as *u8);
+            }
+        }
+        declaration = (*declaration).next;
+    }
+    return !(*(*stage).resources).failed;
+}
+
+fn os_interface_symbol(context: *CrustContext, provider: *u8, name: *CrustName) -> *u8 {
+    var prefix: *u8 = native_join(context, "crust_library_", provider);
+    if prefix == null(*u8) { return null(*u8); }
+    prefix = native_join(context, prefix, "_");
+    if prefix == null(*u8) { return null(*u8); }
+    return native_join(context, prefix, (*name).text);
+}
+
+fn os_interface_declaration(stage: *OsStage, buffer: *CBuffer, global: *RsGlobal,
+                            provider: *u8) -> bool {
+    var declaration: *CrustDecl = (*global).source;
+    var source: *CrustSource = (*declaration).loc.source;
+    var begin: usize = (*declaration).loc.offset;
+    var end: usize = (*source).size;
+    if (*declaration).next != null(*CrustDecl) { end = (*(*declaration).next).loc.offset; }
+    if (*declaration).kind == CRUST_D_FUNCTION {
+        end = (*(*declaration).body).loc.offset;
+        var symbol: *u8 = os_interface_symbol((*(*stage).resources).context, provider, (*declaration).name);
+        if symbol == null(*u8) { return false; }
+        (*(*global).lowered).link_name = symbol;
+        c_buffer_text(buffer, "extern ");
+        c_buffer_bytes(buffer, (*source).bytes + begin as isize, end - begin);
+        c_buffer_text(buffer, " = \"");
+        c_buffer_text(buffer, symbol);
+        c_buffer_text(buffer, "\";\n");
+    } else {
+        c_buffer_bytes(buffer, (*source).bytes + begin as isize, end - begin);
+        c_buffer_text(buffer, "\n");
+    }
+    return !(*(*buffer).status).failed;
+}
+
+fn os_interface_emit(stage: *OsStage, buffer: *CBuffer, provider: *u8) -> bool {
+    var global: *RsGlobal = (*(*stage).resources).first_global;
+    while global != null(*RsGlobal) {
+        if !os_interface_declaration(stage, buffer, global, provider) { return false; }
+        global = (*global).next;
+    }
+    return true;
+}

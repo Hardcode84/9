@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record OiAllocation { calls: usize; fail_at: usize; live: usize; }
+
+fn oi_allocate(user: *u8, size: usize) -> *u8 {
+    var state: *OiAllocation = user as *OiAllocation;
+    (*state).calls = (*state).calls + 1usize;
+    if (*state).calls == (*state).fail_at { return null(*u8); }
+    var result: *u8 = crust0_host_alloc(size, 16usize);
+    if result != null(*u8) { (*state).live = (*state).live + 1usize; }
+    return result;
+}
+
+fn oi_release(user: *u8, bytes: *u8) -> unit {
+    var state: *OiAllocation = user as *OiAllocation;
+    if bytes == null(*u8) || (*state).live == 0usize { trap; }
+    (*state).live = (*state).live - 1usize;
+    crust0_host_free(bytes);
+}
+
+fn oi_publish(request: *CrustBuild, directory: *u8) -> i32 {
+    var library: OwnershipLibrary = uninit;
+    var result: i32 = ownership_publish(request, directory, &library);
+    if result == 0i32 {
+        if crust0_host_write_stream(1u32, library.artifact, c_length(library.artifact)) != 0i32 ||
+           crust0_host_write_stream(1u32, "\n", 1usize) != 0i32 ||
+           crust0_host_write_stream(1u32, library.digest, 64usize) != 0i32 ||
+           crust0_host_write_stream(1u32, "\n", 1usize) != 0i32 { return 1i32; }
+    }
+    return result;
+}
+
+fn oi_command(context: *CrustContext, argc: i32, argv: **u8) -> i32 {
+    if argc < 4i32 { native_error(context, "expected publish CACHE SOURCES or import CACHE ARTIFACT DIGEST SOURCES"); return 1i32; }
+    var request: CrustBuild = make CrustBuild {
+        context: context, source: null(*CrustSource), target_begin: 0usize,
+        argc: argc - 3i32, argv: argv + 3isize
+    };
+    if c_equal(argv[1usize], "publish") { return oi_publish(&request, argv[2usize]); }
+    if !c_equal(argv[1usize], "import") || argc < 6i32 {
+        native_error(context, "invalid ownership library command"); return 1i32;
+    }
+    var library: OwnershipLibrary = make OwnershipLibrary { artifact: argv[3usize], digest: argv[4usize] };
+    var imports: OwnershipImports = make OwnershipImports { directory: argv[2usize], libraries: &library, count: 1usize };
+    request.argc = argc - 5i32;
+    request.argv = argv + 5isize;
+    return ownership_import_program(&request, &imports);
+}
+
+fn oi_attempt(argc: i32, argv: **u8, state: *OiAllocation) -> i32 {
+    var allocator: CrustAllocator = make CrustAllocator {
+        user: state as *u8, allocate: oi_allocate, release: oi_release
+    };
+    var context: CrustContext = uninit;
+    crust_context_init(&context, &allocator);
+    var result: i32 = oi_command(&context, argc, argv);
+    var diagnosed: bool = context.error_count != 0usize;
+    if diagnosed && (*state).fail_at == 0usize { c_driver_diagnostic(&context, argv[0usize]); }
+    crust_context_destroy(&context);
+    if (*state).live != 0usize || ((result == 0i32) == diagnosed) { trap; }
+    return result;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    var state: OiAllocation = make OiAllocation { calls: 0usize, fail_at: 0usize, live: 0usize };
+    if argc < 2i32 || !c_equal(argv[1usize], "sweep") { return oi_attempt(argc, argv, &state); }
+    var fail_at: usize = 1usize;
+    while true {
+        state = make OiAllocation { calls: 0usize, fail_at: fail_at, live: 0usize };
+        var result: i32 = oi_attempt(argc - 1i32, argv + 1isize, &state);
+        if result == 0i32 {
+            if state.calls >= fail_at { trap; }
+            c_driver_stderr("ownership library allocation sweep passed\n");
+            return 0i32;
+        }
+        if state.calls < fail_at { trap; }
+        fail_at = fail_at + 1usize;
+    }
+    trap;
+}

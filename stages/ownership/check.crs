@@ -179,6 +179,7 @@ fn os_function_exit(check: *OsCheck, state: *OsState, location: *CrustLoc) -> un
 }
 
 fn os_check_function(stage: *OsStage, global: *RsGlobal, contract: *OsFunction) -> unit {
+    if os_imported(stage, (*global).source) { return; }
     var declaration: *CrustDecl = (*global).source;
     var check: OsCheck = make OsCheck {
         stage: stage, function: contract, objects: null(*OsObject), loans: null(*OsLoan), depth: 0usize, loop_depth: 0usize,

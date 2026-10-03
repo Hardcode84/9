@@ -5,6 +5,7 @@ fn os_init(stage: *OsStage, resources: *RsStage) -> unit {
     (*stage).functions = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
     (*stage).blocks = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
     (*stage).projections = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).imports = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
     (*stage).resources = resources;
     (*stage).relations = null(*RlSyntax);
 }

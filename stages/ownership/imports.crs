@@ -1,0 +1,143 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record OsLoadedLibrary {
+    bundle: OsLibraryBundle;
+    files: CacheWork;
+    source: CrustSource;
+    next: *OsLoadedLibrary;
+}
+
+fn os_library_hex(text: *u8, size: usize) -> bool {
+    var index: usize = 0usize;
+    while index < size {
+        var byte: u8 = text[index];
+        if !((byte >= 48u8 && byte <= 57u8) || (byte >= 97u8 && byte <= 102u8)) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn os_library_location(context: *CrustContext, directory: *u8, receipt: *OwnershipLibrary) -> bool {
+    if (*receipt).artifact == null(*u8) || (*receipt).digest == null(*u8) {
+        return os_library_error(context, "ownership import requires an artifact and a trusted digest receipt");
+    }
+    var size: usize = native_strlen(directory);
+    var artifact: *u8 = (*receipt).artifact;
+    if native_strlen(artifact) != size + 74usize || cache_memcmp(artifact, directory, size) != 0i32 ||
+       artifact[size] != 47u8 || !os_library_hex(artifact + (size + 1usize) as isize, 64usize) ||
+       !c_equal(artifact + (size + 65usize) as isize, "/artifact") {
+        return os_library_error(context, "ownership artifact is not an entry in the selected trusted cache");
+    }
+    if native_strlen((*receipt).digest) != 64usize || !os_library_hex((*receipt).digest, 64usize) {
+        return os_library_error(context, "ownership receipt requires a SHA-256 digest");
+    }
+    return true;
+}
+
+fn os_library_capture(context: *CrustContext, directory: *u8, receipt: *OwnershipLibrary,
+                       checker: *u8, loaded: *OsLoadedLibrary) -> bool {
+    if !os_library_location(context, directory, receipt) ||
+       !cache_work(context, directory, &(*loaded).files) ||
+       !cache_read(context, (*receipt).artifact, &(*loaded).source) { return false; }
+    if !cache_save(context, (*loaded).files.artifact, (*loaded).source.bytes, (*loaded).source.size) { return false; }
+    var digest: *u8 = cache_digest(context, (*loaded).files.artifact, (*loaded).files.digest);
+    if digest == null(*u8) { return false; }
+    if cache_memcmp(digest, (*receipt).digest, 64usize) != 0i32 {
+        return os_library_error(context, "ownership artifact does not match its trusted digest receipt");
+    }
+    if !os_library_unpack(context, &(*loaded).source, &(*loaded).bundle) { return false; }
+    if cache_memcmp(checker, (*loaded).bundle.checker, 64usize) != 0i32 {
+        return os_library_error(context, "ownership library checker host or loaded images changed");
+    }
+    return cache_save(context, (*loaded).files.checksum, (*loaded).bundle.object.bytes, (*loaded).bundle.object.size);
+}
+
+fn os_import_link(cli: *CCli, imports: *OwnershipImports, loaded: *OsLoadedLibrary) -> bool {
+    var context: *CrustContext = (*cli).stage.status.context;
+    var count: usize = (*cli).options.ldflag_count;
+    if (*imports).count == 0usize { return true; }
+    if (*imports).count > ~0usize / sizeof(*u8) - count {
+        return os_library_error(context, "too many ownership library link inputs");
+    }
+    var flags: **u8 = crust_try_alloc(context, (count + (*imports).count) * sizeof(*u8), alignof(*u8)) as **u8;
+    if flags == null(**u8) { return false; }
+    native_memcpy(flags as *u8, (*cli).options.ldflags as *u8, count * sizeof(*u8));
+    while loaded != null(*OsLoadedLibrary) {
+        flags[count] = (*loaded).files.checksum;
+        count = count + 1usize;
+        loaded = (*loaded).next;
+    }
+    (*cli).options.ldflags = flags;
+    (*cli).options.ldflag_count = count;
+    return true;
+}
+
+fn os_import_read(cli: *CCli, stage: *OsStage, imports: *OwnershipImports,
+                    work: *OsLibraryWork, first: **OsLoadedLibrary) -> bool {
+    var context: *CrustContext = (*(*stage).resources).context;
+    if !os_library_begin(context, (*imports).directory, work) { return false; }
+    var identity: u64 = (*cli).source_count as u64 + 1u64;
+    if (*cli).root != null(*CrustSource) { identity = identity + (*(*cli).root).identity; }
+    var index: usize = 0usize;
+    while index < (*imports).count {
+        var loaded: *OsLoadedLibrary = crust_try_alloc(context, sizeof(OsLoadedLibrary), alignof(OsLoadedLibrary)) as *OsLoadedLibrary;
+        if loaded == null(*OsLoadedLibrary) { return false; }
+        (*loaded).next = *first;
+        *first = loaded;
+        if !os_library_capture(context, (*imports).directory, &(*imports).libraries[index], (*work).checker, loaded) { return false; }
+        (*loaded).bundle.interface_source.identity = identity;
+        identity = identity + 1u64;
+        if !os_interface_read(stage, &(*loaded).bundle.interface_source) { return false; }
+        index = index + 1usize;
+    }
+    return os_import_link(cli, imports, *first);
+}
+
+fn os_import_cleanup(context: *CrustContext, work: *OsLibraryWork, loaded: *OsLoadedLibrary) -> bool {
+    var success: bool = true;
+    while loaded != null(*OsLoadedLibrary) {
+        if !cache_cleanup(context, &(*loaded).files) { success = false; }
+        loaded = (*loaded).next;
+    }
+    if !cache_cleanup(context, &(*work).files) { success = false; }
+    return success;
+}
+
+fn os_import_build(cli: *CCli, imports: *OwnershipImports) -> i32 {
+    var context: *CrustContext = (*cli).stage.status.context;
+    if (*cli).mode != 0u32 && (*cli).mode != 3u32 {
+        os_library_error(context, "ownership imports require linked output or --check; C/object output loses imported dependencies");
+        return 1i32;
+    }
+    var resources: RsStage = uninit;
+    rs_init(&resources, context);
+    var stage: OsStage = uninit;
+    os_init(&stage, &resources);
+    var relations: RlStage = uninit;
+    rl_init(&relations, context);
+    var work: OsLibraryWork = uninit;
+    var loaded: *OsLoadedLibrary = null(*OsLoadedLibrary);
+    var result: i32 = 1i32;
+    if os_import_read(cli, &stage, imports, &work, &loaded) && os_driver_read(cli, &stage) &&
+       os_lower(&stage, &relations) && os_verify(&stage, &relations) {
+        result = os_driver_emit(cli, &resources);
+    }
+    if !os_import_cleanup(context, &work, loaded) { result = 1i32; }
+    rl_destroy(&relations);
+    return result;
+}
+
+// Consume receipts from trusted publication and use captured interface/object
+// bytes. Replacing a published path cannot change the object passed to the linker.
+fn ownership_import_program(request: *CrustBuild, imports: *OwnershipImports) -> i32 {
+    var cli: CCli = uninit;
+    var success: bool = c_driver_init(&cli, (*request).context, (*request).argc);
+    cli.root = (*request).source;
+    cli.target_begin = (*request).target_begin;
+    var result: i32 = 1i32;
+    if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
+        result = os_import_build(&cli, imports);
+    }
+    c_stage_destroy(&cli.stage);
+    return result;
+}

@@ -12,6 +12,7 @@ record OsStage {
     functions: CrustMap;
     blocks: CrustMap;
     projections: CrustMap;
+    imports: CrustMap;
     resources: *RsStage;
     relations: *RlSyntax;
 }

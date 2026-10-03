@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// The trusted compilation program retains both values from publication.
+record OwnershipLibrary { artifact: *u8; digest: *u8; }
+
+// Directory is absolute, caller-owned, and has no untrusted writers.
+record OwnershipImports {
+    directory: *u8;
+    libraries: *OwnershipLibrary;
+    count: usize;
+}

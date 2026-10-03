@@ -592,6 +592,12 @@ Projection keeps field-loan identity, including owned payload pointers. Mutable
 calls discard stale ownership origins, and returned owners can retain aliases
 to their input storage. Each rule uses declared interfaces and local flow facts.
 
+A verified provider bundle contains bodyless contracts and its exact compiled
+object. A trusted publication receipt binds both to the checker host and loaded
+images. Client checking uses this interface without provider source or solver
+queries for provider bodies. The compiler host still links Z3. The tutorial tests
+separate compilation, replaced artifacts, linked output, and allocation failures.
+
 Borrowed record fields still need a stored-lifetime contract. Allocation inside
 repeated bodies and changes to loop-carried owners need an ownership invariant
 for that loop. These forms reject. The existing read-loop contract proves

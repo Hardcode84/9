@@ -344,7 +344,8 @@ test does not establish C-level compilation speed for that configuration.
 
 Checked Crust has two requirements: no whole-program ownership analysis, and a
 user-facing ownership model no more complex than Rust's. These are design
-requirements. The current memory proof stages do not implement this model.
+requirements. The closed-program memory proof stages do not implement this
+model. The separate modular stage below implements a bounded source subset.
 
 Check each function against its declared contract. Use its body, declared type
 and field contracts, and the interfaces of called functions. Local flow analysis
@@ -397,19 +398,34 @@ client with a runtime number of nodes:
    emitted code and measure library and client checking separately. Do not
    extend the model if this witness needs more complex user proofs.
 
-The current resource stage does not provide this reusable list contract. Keep
-the existing proof experiments as evidence. Do not expand their heap-graph
+The ordinary resource stage does not provide this reusable list contract. Keep
+the closed-program proof experiments as evidence. Do not expand their heap-graph
 machinery as a substitute for passing this gate.
 The [modular candidate](exploration/resource-metastage.md#7-modular-ownership-candidate)
 combines stable individual owners, scoped access, and reciprocal field contracts.
-Its restricted internal group rule addresses sentinel and payload types. It is
-a candidate for this gate, not a claim that the stage is implemented.
+Its restricted internal group rule addresses sentinel and payload types. The
+[annotated intrusive tutorial](../examples/intrusive/README.md) now implements
+that rule, declared owners, domain access, construction, and destruction in
+external Crust stages. It checks link definitions without a client, and all
+callers use declared interfaces. The stage still rejects interface shapes that
+lack a lifetime or field destruction contract. This result does not complete
+the general container and Rust source-complexity gate.
 
 ## Current safety stages
 
 Safety claims follow the selected stages. Raw seed pointers do not
 justify ownership guarantees or exclusive-access metadata. The resource
 stage checks local owners, loans, and returned views tied to a named input.
+The [modular ownership stage](../stages/ownership/program.crs) checks function
+bodies independently. Record suffixes declare owned pointers, member origins,
+anchors, and domains. Function suffixes declare access and link results. The
+[relation stage](../stages/relations/check.crs) verifies inverse pointer fields,
+anchor identity, and arbitrary-size head-drain loops. Calls consume interfaces;
+they do not expand bodies. The local checker verifies owners, initialization,
+fixed storage, cursor scopes, projection, and resource destruction. The seed is
+unchanged, and checks add no target operations. The tutorial specifies accepted
+source shapes and the contracts required to accept other shapes.
+
 The optional [memory proof stage](../examples/ownership/README.md) checks
 closed sequential entries through the typed seed tree. It gives allocations
 distinct proof identities, checks accesses and destruction, and proves that
@@ -418,7 +434,7 @@ do not occur in emitted code.
 
 Resource cleanup also exists in retained exit plans, so its lowered operation
 tree alone is not a complete memory-checking input. The optional
-[combined profile](../examples/intrusive/README.md) reconstructs
+[closed-program composition](../examples/intrusive/README.md#closed-program-proof-examples) reconstructs
 source storage scopes, executes the exit plans, and consumes initialized-field
 permissions after owner transfers and consuming pointer reads. A pointer move
 can consume a destructor's node field without a runtime clear store. Alias

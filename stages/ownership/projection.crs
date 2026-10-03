@@ -1,0 +1,155 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record OsProjection {
+    syntax: *CrustTypeSyntax;
+    member: *CrustName;
+    cursor: *CrustExpr;
+}
+
+fn os_projection_cast(reader: *CrustReader, expression: *CrustExpr,
+                      syntax: *CrustTypeSyntax, offset: usize) -> *CrustExpr {
+    var result: *CrustExpr = rr_new_expr(reader, CRUST_E_CAST, offset);
+    if result != null(*CrustExpr) { (*result).left = expression; (*result).syntax_type = syntax; }
+    return result;
+}
+
+fn os_projection_pointer(reader: *CrustReader, base: *CrustTypeSyntax, offset: usize) -> *CrustTypeSyntax {
+    var pointer: *CrustTypeSyntax = rr_new_type(reader, CRUST_T_POINTER, offset);
+    if pointer != null(*CrustTypeSyntax) { (*pointer).base = base; }
+    return pointer;
+}
+
+fn os_projection_expression(reader: *CrustReader, projection: *OsProjection, offset: usize) -> *CrustExpr {
+    var byte: *CrustTypeSyntax = rr_new_type(reader, CRUST_T_U8, offset);
+    var address: *CrustExpr = os_projection_cast(reader, (*projection).cursor,
+        os_projection_pointer(reader, byte, offset), offset);
+    var displacement: *CrustExpr = rr_new_expr(reader, CRUST_E_OFFSETOF, offset);
+    if displacement == null(*CrustExpr) { return displacement; }
+    (*displacement).syntax_type = (*projection).syntax;
+    (*displacement).field_name = (*projection).member;
+    displacement = os_projection_cast(reader, displacement, rr_new_type(reader, CRUST_T_ISIZE, offset), offset);
+    var subtract: *CrustExpr = rr_new_expr(reader, CRUST_E_BINARY, offset);
+    if subtract == null(*CrustExpr) { return subtract; }
+    (*subtract).op = CRUST_OP_SUB;
+    (*subtract).left = address;
+    (*subtract).right = displacement;
+    return os_projection_cast(reader, subtract, os_projection_pointer(reader, (*projection).syntax, offset), offset);
+}
+
+fn os_read_projection(reader: *CrustReader, stage: *OsStage) -> *CrustExpr {
+    var offset: usize = (*reader).token.offset;
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' after parent");
+    var projection: *OsProjection = rr_alloc(reader, sizeof(OsProjection), alignof(OsProjection)) as *OsProjection;
+    if projection == null(*OsProjection) { return null(*CrustExpr); }
+    (*projection).syntax = rr_new_type(reader, CRUST_T_NAME, offset);
+    if (*projection).syntax == null(*CrustTypeSyntax) { return null(*CrustExpr); }
+    (*(*projection).syntax).name = rr_name(reader);
+    rr_expect(reader, 46u32, "expected '.' before member field");
+    (*projection).member = rr_name(reader);
+    rr_expect(reader, 44u32, "expected ',' before member cursor");
+    (*projection).cursor = rr_expression(reader);
+    rr_expect(reader, 41u32, "expected ')' after member cursor");
+    if (*reader).failed { return null(*CrustExpr); }
+    var expression: *CrustExpr = os_projection_expression(reader, projection, offset);
+    if expression != null(*CrustExpr) {
+        rs_put((*stage).resources, &(*stage).projections, expression as usize, projection as *u8);
+    }
+    return expression;
+}
+
+fn os_associate(check: *OsCheck, state: *OsState, target: *OsObject, source: *OsObject) -> unit {
+    var anchor: *OsObject = null(*OsObject);
+    if (*source).anchor { anchor = source; }
+    else { if (os_flags(state, source) & OS_ASSOCIATED) != 0u32 { anchor = (*source).association; } }
+    if anchor != null(*OsObject) {
+        (*target).association = anchor;
+        os_mark(check, state, target, os_flags(state, target) | OS_ASSOCIATED);
+    }
+}
+
+fn os_projection_shape(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {
+    if !os_enter(check, &(*syntax).loc) { return false; }
+    var schema: *OsRecord = os_record((*check).stage, syntax);
+    var valid: bool = true;
+    if rs_owns((*(*check).stage).resources, syntax) || (*syntax).kind == CRUST_T_POINTER {
+        os_error(check, &(*syntax).loc, "projection of pointer or owner fields requires a field-borrow contract");
+        valid = false;
+    } else { if schema != null(*OsRecord) {
+        var field: *CrustField = (*(*schema).declaration).fields;
+        while field != null(*CrustField) && valid {
+            if os_field((*schema).members, (*field).name) == null(*OsField) {
+                valid = os_projection_shape(check, (*field).syntax_type);
+            }
+            field = (*field).next;
+        }
+    } }
+    (*check).depth = (*check).depth - 1usize;
+    return valid && !os_failed(check);
+}
+
+fn os_projection_view(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
+    if !os_enter(check, &(*(*object).syntax).loc) { return; }
+    (*object).readonly = true;
+    (*object).abstract = true;
+    var slot: *OsSlot = (*object).fields;
+    while slot != null(*OsSlot) && !os_failed(check) {
+        var value: *OsValue = os_bound(state, slot);
+        if value != null(*OsValue) && (*value).object != null(*OsObject) {
+            os_projection_view(check, state, (*value).object);
+        }
+        slot = (*slot).next;
+    }
+    (*check).depth = (*check).depth - 1usize;
+}
+
+fn os_projection_member(check: *OsCheck, state: *OsState, object: *OsObject,
+                        field: *OsField, location: *CrustLoc) -> bool {
+    if object == null(*OsObject) || (*object).family != field || (*object).anchor {
+        os_error(check, location, "parent requires the exact declared member family");
+        return false;
+    }
+    if (*object).abstract && (os_flags(state, object) & OS_MEMBER) == 0u32 {
+        os_error(check, location, "parent requires a member cursor; exclude its associated anchor first");
+        return false;
+    }
+    if !(*object).abstract && !os_initialized(check, state, os_root(object)) {
+        os_error(check, location, "parent requires a fully initialized containing value");
+        return false;
+    }
+    return os_access(check, state, object, false, location);
+}
+
+fn os_projection(check: *OsCheck, state: *OsState, expression: *CrustExpr,
+                  projection: *OsProjection) -> *OsValue {
+    var schema: *OsRecord = os_record((*check).stage, (*projection).syntax);
+    var field: *OsField = null(*OsField);
+    if schema != null(*OsRecord) { field = os_field((*schema).members, (*projection).member); }
+    if field == null(*OsField) {
+        os_error(check, &(*expression).loc, "parent requires a declared member field");
+        return null(*OsValue);
+    }
+    var cursor: *OsValue = os_expr(check, state, (*projection).cursor);
+    if cursor == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+    if !(*cursor).pointer {
+        os_error(check, &(*expression).loc, "parent requires a pointer to a member hook");
+        return null(*OsValue);
+    }
+    if !os_projection_member(check, state, (*cursor).object, field, &(*expression).loc) {
+        return null(*OsValue);
+    }
+    if !os_projection_shape(check, (*projection).syntax) { return null(*OsValue); }
+    if (*cursor).borrow_scope != null(*OsScope) && !os_scope_contains((*cursor).borrow_scope, (*state).scope) {
+        os_error(check, &(*expression).loc, "member cursor outlived its access scope");
+        return null(*OsValue);
+    }
+    var object: *OsObject = os_object(check, state, (*projection).syntax, null(*OsObject), (*state).scope, true);
+    if object == null(*OsObject) { return null(*OsValue); }
+    os_projection_view(check, state, object);
+    var result: *OsValue = os_value(check, (*expression).syntax_type, object, true);
+    if result != null(*OsValue) {
+        (*result).borrow_scope = (*cursor).borrow_scope;
+        if (*result).borrow_scope == null(*OsScope) { (*result).borrow_scope = (*state).scope; }
+    }
+    return result;
+}

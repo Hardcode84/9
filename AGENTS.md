@@ -190,6 +190,7 @@ Build with `make all`. Use the checks that cover the change:
 | Root execution and reader extensions | `make check-stage check-reader` |
 | Native bootstrap and execution handoff | `make check-native` |
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |
+| Modular owners, reciprocal fields, and intrusive lists | `make check-ownership check-ownership-alloc` with Z3 |
 | Memory proofs, initialization, and call effects | `make check-memory check-resource-memory check-memory-summaries` with Z3 |
 | Declared memory call contracts | `make check-memory-contracts` with Z3 |
 | Inductive read-only loops and intrusive traversal | `make check-memory-loops` with Z3 |

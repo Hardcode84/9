@@ -1,0 +1,124 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn rl_role(run: *PfRun, state: *PfState, value: *u8, role: u32) -> *u8 {
+    var world: *RlWorld = rl_world(state);
+    var live: *u8 = pf_select(run, (*world).live, value);
+    if role == RL_CONSTRUCT {
+        return pf_and(run, pf_not(run, live), pf_not(run, pf_eq(run, value, "0")));
+    }
+    if role == RL_HEAD { return pf_and(run, live, pf_select(run, (*world).heads, value)); }
+    if role == RL_MEMBER { return pf_and(run, live, pf_not(run, pf_select(run, (*world).heads, value))); }
+    return live;
+}
+
+fn rl_pre_parameters(run: *PfRun, state: *PfState) -> bool {
+    var contract: *RlContract = (*rl_stage(run)).current;
+    var entry: *RlParam = (*contract).parameters;
+    var count: usize = 0usize;
+    var constructor: bool = false;
+    while entry != null(*RlParam) {
+        var value: *u8 = pf_binding(state, (*(*entry).parameter).symbol);
+        pf_assume(run, state, rl_role(run, state, value, (*entry).role));
+        if (*entry).role == RL_CONSTRUCT {
+            if constructor {
+                pf_error((*run).stage, &(*(*entry).parameter).loc, "link constructor accepts one unpublished slot");
+                return false;
+            }
+            constructor = true;
+            (*rl_world(state)).construction = pf_store(run, (*rl_world(state)).construction, value, "true");
+        }
+        count = count + 1usize;
+        entry = (*entry).next;
+    }
+    if count != (*(*contract).declaration).param_count {
+        pf_error((*run).stage, &(*(*contract).declaration).loc, "each link function parameter requires a role");
+        return false;
+    }
+    return !pf_failed(run);
+}
+
+fn rl_pre(run: *PfRun, state: *PfState) -> bool {
+    var world: *RlWorld = pf_alloc(run, sizeof(RlWorld), alignof(RlWorld)) as *RlWorld;
+    if world == null(*RlWorld) { return false; }
+    *world = make RlWorld {
+        live: pf_fresh(run, "(Array Int Bool)"), heads: pf_fresh(run, "(Array Int Bool)"),
+        colors: pf_fresh(run, "(Array Int Int)"),
+        construction: "((as const (Array Int Bool)) false)", snapshots: null(*RlSnapshot)
+    };
+    (*state).data = world as *u8;
+    var family: *RlFamily = (*(*rl_stage(run)).current).family;
+    pf_field_set(run, state, (*family).first, pf_fresh(run, "(Array Int Int)"), (*world).live);
+    pf_field_set(run, state, (*family).second, pf_fresh(run, "(Array Int Int)"), (*world).live);
+    pf_assume(run, state, pf_not(run, pf_select(run, (*world).live, "0")));
+    if !rl_pre_parameters(run, state) { return false; }
+    rl_snapshot(run, state);
+    return !pf_failed(run);
+}
+
+fn rl_access(run: *PfRun, state: *PfState, field: *CrustField,
+             target: *u8, writing: bool, location: *CrustLoc) -> *u8 {
+    var contract: *RlContract = (*rl_stage(run)).current;
+    if field != (*(*contract).family).first && field != (*(*contract).family).second {
+        pf_error((*run).stage, location, "link access is outside the declared reciprocal family");
+        return null(*u8);
+    }
+    if writing && (*contract).effect != RL_EDIT {
+        pf_error((*run).stage, location, "read link contract cannot write a reciprocal field");
+        return null(*u8);
+    }
+    rl_ground(run, state, target);
+    var world: *RlWorld = rl_world(state);
+    return pf_or(run, pf_select(run, (*world).live, target),
+                       pf_select(run, (*world).construction, target));
+}
+
+fn rl_value(run: *PfRun, state: *PfState, expression: *CrustExpr, guard: *u8) -> *u8 {
+    if (*expression).kind == CRUST_E_CALL {
+        pf_error((*run).stage, &(*expression).loc, "link value call requires a declared return contract");
+    }
+    return null(*u8);
+}
+
+fn rl_publish(run: *PfRun, state: *PfState, contract: *RlContract, entry_values: bool) -> unit {
+    var entry: *RlParam = (*contract).parameters;
+    while entry != null(*RlParam) && !pf_failed(run) {
+        if (*entry).role == RL_CONSTRUCT {
+            var value: *u8 = pf_binding(state, (*(*entry).parameter).symbol);
+            if entry_values { value = rl_parameter_value(run, (*entry).parameter); }
+            var world: *RlWorld = rl_copy_world(run, state);
+            if world == null(*RlWorld) { return; }
+            (*world).live = pf_store(run, (*world).live, value, "true");
+            (*world).colors = pf_store(run, (*world).colors, value, value);
+            (*world).construction = pf_store(run, (*world).construction, value, "false");
+        }
+        entry = (*entry).next;
+    }
+}
+
+fn rl_results(run: *PfRun, state: *PfState, contract: *RlContract,
+               entry_values: bool, assumption: bool) -> unit {
+    var entry: *RlParam = (*contract).parameters;
+    while entry != null(*RlParam) && !pf_failed(run) {
+        if (*entry).isolated || (*entry).role == RL_CONSTRUCT {
+            var value: *u8 = pf_binding(state, (*(*entry).parameter).symbol);
+            if entry_values { value = rl_parameter_value(run, (*entry).parameter); }
+            var result: *u8 = rl_isolated(run, state, value);
+            if (*entry).unless_same != null(*CrustParam) {
+                var other: *u8 = pf_binding(state, (*(*entry).unless_same).symbol);
+                if entry_values { other = rl_parameter_value(run, (*entry).unless_same); }
+                result = pf_implies(run, pf_not(run, pf_eq(run, value, other)), result);
+            }
+            if assumption { pf_assume(run, state, result); }
+            else { pf_goal(run, state, result, &(*(*entry).parameter).loc); }
+        }
+        entry = (*entry).next;
+    }
+}
+
+fn rl_post(run: *PfRun, state: *PfState) -> bool {
+    var contract: *RlContract = (*rl_stage(run)).current;
+    if (*state).flow == PF_TRAP { return pf_prove_goals(run, state); }
+    rl_results(run, state, contract, true, false);
+    rl_publish(run, state, contract, true);
+    return rl_close(run, state, &(*(*contract).declaration).loc);
+}

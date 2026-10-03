@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_scope_contains(outer: *OsScope, inner: *OsScope) -> bool {
+    while inner != null(*OsScope) {
+        if inner == outer { return true; }
+        inner = (*inner).parent;
+    }
+    return false;
+}
+
+fn os_unused(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> unit {
+    if value == null(*OsValue) || !(*value).owner || os_failed(check) { return; }
+    if (*value).pointer { os_error(check, location, "unused allocation must be released or assigned an owner"); return; }
+    if (*value).object != null(*OsObject) { os_drop_object(check, state, (*value).object, location); }
+}
+
+fn os_scope(check: *OsCheck, state: *OsState) -> unit {
+    var scope: *OsScope = os_alloc(check, sizeof(OsScope), alignof(OsScope)) as *OsScope;
+    if scope != null(*OsScope) {
+        (*scope).parent = (*state).scope;
+        (*scope).domain = (*state).domain;
+        (*scope).effect = (*state).effect;
+        (*state).scope = scope;
+    }
+}
+
+fn os_bind(check: *OsCheck, state: *OsState, name: *CrustName, syntax: *CrustTypeSyntax,
+           value: *OsValue, location: *CrustLoc) -> *OsSlot {
+    var slot: *OsSlot = os_slot(check, syntax, name, null(*OsObject), (*state).scope);
+    if slot == null(*OsSlot) { return slot; }
+    if value != null(*OsValue) && (*value).owner && (*value).pointer { (*slot).owns = true; }
+    (*slot).next = (*(*state).scope).locals;
+    (*(*state).scope).locals = slot;
+    if value != null(*OsValue) { os_store(check, state, slot, value, location); }
+    return slot;
+}
+
+fn os_scope_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> unit {
+    var scope: *OsScope = (*state).scope;
+    var slot: *OsSlot = (*(*state).scope).locals;
+    while slot != null(*OsSlot) && !os_failed(check) {
+        var value: *OsValue = os_bound(state, slot);
+        if value != null(*OsValue) { os_end_local(check, state, slot, value, location); }
+        os_set(check, state, slot as *u8, null(*OsValue), 0u32);
+        slot = (*slot).next;
+    }
+    (*state).scope = (*scope).parent;
+    (*state).domain = (*scope).domain;
+    (*state).effect = (*scope).effect;
+}
+
+fn os_end_local(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue, location: *CrustLoc) -> unit {
+    if (*slot).argument && ((*(*slot).syntax).kind == RS_READ || (*(*slot).syntax).kind == RS_MUT) { return; }
+    if (*value).pointer {
+        if (*slot).owns && (*value).object != null(*OsObject) &&
+           (os_flags(state, (*value).object) & OS_ABSENT) == 0u32 {
+            os_error(check, location, "owned pointer must be released or moved before its scope ends");
+        }
+        return;
+    }
+    var object: *OsObject = (*value).object;
+    if object == null(*OsObject) { return; }
+    if (*slot).owns { os_drop_object(check, state, object, location); }
+    else { if !os_isolated(check, state, object) {
+        os_error(check, location, "stack storage cannot expire while a member hook is linked");
+    } }
+    os_mark(check, state, object, os_flags(state, object) & ~OS_LIVE);
+}
+
+fn os_drop_object(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+    if !os_initialized(check, state, object) {
+        os_error(check, location, "resource destruction requires initialized owner fields"); return;
+    }
+    var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*object).syntax).name);
+    if global == null(*RsGlobal) || (*global).resource == null(*RsResource) {
+        os_error(check, location, "owning aggregates require a declared resource destructor"); return;
+    }
+    var destructor: *OsFunction = os_function((*check).stage, (*(*global).resource).drop_name);
+    if destructor == null(*OsFunction) || (*destructor).effect != OS_RECLAIM {
+        os_error(check, location, "resource destructor requires a reclamation contract"); return;
+    }
+    if !os_call_effect(check, state, destructor, location) { return; }
+    os_havoc(check, state, (*destructor).domain, null(*OsField));
+    os_expire_owned(check, state, object, location);
+}
+
+fn os_expire_owned(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+    if !os_enter(check, location) { return; }
+    var slot: *OsSlot = (*object).fields;
+    while slot != null(*OsSlot) && !os_failed(check) {
+        var value: *OsValue = os_bound(state, slot);
+        if value != null(*OsValue) && (*value).object != null(*OsObject) {
+            if (*slot).owns && (*value).pointer {
+                os_mark(check, state, (*value).object, os_flags(state, (*value).object) & ~OS_LIVE);
+            } else { if !(*value).pointer { os_expire_owned(check, state, (*value).object, location); } }
+        }
+        slot = (*slot).next;
+    }
+    os_mark(check, state, object, os_flags(state, object) & ~OS_LIVE);
+    (*check).depth = (*check).depth - 1usize;
+}
+
+fn os_destructor_end(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+    var slot: *OsSlot = (*object).fields;
+    while slot != null(*OsSlot) && !os_failed(check) {
+        if (*slot).owns && os_bound(state, slot) != null(*OsValue) {
+            os_error(check, location, "destructor must consume each owned field"); return;
+        }
+        slot = (*slot).next;
+    }
+    if !os_isolated(check, state, object) {
+        os_error(check, location, "destructor must isolate all embedded hooks before storage expires");
+    }
+}

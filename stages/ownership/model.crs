@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: Apache-2.0
+
+const OS_READ: u32 = 1u32;
+const OS_EDIT: u32 = 2u32;
+const OS_RECLAIM: u32 = 3u32;
+const OS_ALLOCATE: u32 = 1u32;
+const OS_RELEASE: u32 = 2u32;
+const OS_SCALAR: u32 = 3u32;
+
+record OsStage {
+    records: CrustMap;
+    functions: CrustMap;
+    blocks: CrustMap;
+    projections: CrustMap;
+    resources: *RsStage;
+    relations: *RlSyntax;
+}
+
+record OsField {
+    name: *CrustName;
+    record_name: *CrustName;
+    member_name: *CrustName;
+    next: *OsField;
+}
+
+record OsRecord {
+    declaration: *CrustDecl;
+    domain: *CrustName;
+    owns: *OsField;
+    members: *OsField;
+    anchors: *OsField;
+}
+
+record OsFunction {
+    declaration: *CrustDecl;
+    domain: *CrustName;
+    relation: *RlContract;
+    effect: u32;
+    foreign: u32;
+}
+
+record OsAccess { domain: *CrustName; effect: u32; }
+
+const OS_LIVE: u32 = 1u32;
+const OS_NONNULL: u32 = 2u32;
+const OS_PINNED: u32 = 4u32;
+const OS_READY: u32 = 8u32;
+const OS_ISOLATED: u32 = 16u32;
+const OS_ABSENT: u32 = 32u32;
+const OS_RETIRING: u32 = 64u32;
+const OS_ASSOCIATED: u32 = 128u32;
+const OS_MEMBER: u32 = 256u32;
+
+record OsObject {
+    syntax: *CrustTypeSyntax;
+    contract: *OsRecord;
+    parent: *OsObject;
+    association: *OsObject;
+    family: *OsField;
+    domain: *CrustName;
+    scope: *OsScope;
+    fields: *OsSlot;
+    next: *OsObject;
+    anchor: bool;
+    heap: bool;
+    abstract: bool;
+    readonly: bool;
+}
+
+record OsSlot {
+    syntax: *CrustTypeSyntax;
+    name: *CrustName;
+    object: *OsObject;
+    scope: *OsScope;
+    next: *OsSlot;
+    owns: bool;
+    authority: bool;
+    argument: bool;
+}
+
+record OsValue {
+    syntax: *CrustTypeSyntax;
+    object: *OsObject;
+    place: *OsSlot;
+    hook_source: *OsObject;
+    allocation_type: *CrustTypeSyntax;
+    borrow_scope: *OsScope;
+    owner: bool;
+    pointer: bool;
+    unknown: bool;
+    fresh: bool;
+}
+
+record OsFact {
+    key: *u8;
+    value: *OsValue;
+    next: *OsFact;
+    flags: u32;
+}
+
+record OsScope { parent: *OsScope; locals: *OsSlot; domain: *CrustName; effect: u32; access: bool; }
+
+record OsState {
+    facts: *OsFact;
+    scope: *OsScope;
+    domain: *CrustName;
+    effect: u32;
+    flow: u32;
+}
+
+record OsCheck {
+    stage: *OsStage;
+    function: *OsFunction;
+    objects: *OsObject;
+    depth: usize;
+    loop_depth: usize;
+    drop: bool;
+}

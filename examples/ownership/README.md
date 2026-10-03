@@ -57,7 +57,7 @@ both arguments to be roots. Equal roots give a no-op. Distinct roots name
 disjoint cycles.
 
 The root in this tutorial expands actual calls. The optional inferred summaries
-described in the [RAII tutorial](../intrusive/README.md#connect-the-stages) reuse
+described in the [closed-program tutorial](../intrusive/README.md#closed-program-proof-examples) reuse
 straight-line memory effects from checked bodies. They do not consume the ring
 proof as a call summary. Thus a successful ring proof alone cannot authorize
 a caller to free linked storage. Both checks use the same link source.
@@ -176,7 +176,7 @@ The [resource stage](../../stages/resources/README.md) supplies moves, RAII,
 complete seed operation trees. Resource cleanup also exists in retained exit
 plans, so checking only its lowered tree would omit cleanup and would be wrong.
 
-The [RAII composition tutorial](../intrusive/README.md) preserves source storage
+The [closed-program composition](../intrusive/README.md#closed-program-proof-examples) preserves source storage
 lifetimes and executes the retained cleanup at each exit. It also removes
 initialized-field permissions after owner transfers. Its emitted C uses the
 same resource body emitter. It checks a complete two-hook client with automatic

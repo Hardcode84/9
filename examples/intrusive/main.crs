@@ -1,28 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 host_source(run, "../../api/crust0_stage.crs");
-host_source(run, "../../stages/memory/options.crs");
-host_source(run, "../../stages/resource_memory/api.crs");
-host_source(run, "../../stages/resource_memory/build.crs");
-host_link(run, "../../build/crust-resource-memory-library.so");
+host_source(run, "../../stages/ownership/api.crs");
+host_source(run, "../../stages/ownership/build.crs");
+host_link(run, "../../build/crust-ownership-library.so");
 
-var contracts: [PmForeignSpec; 3] = make [PmForeignSpec; 3] {
-    make PmForeignSpec { name: "allocate", alignment: 16usize, kind: PM_ALLOCATE },
-    make PmForeignSpec { name: "release", alignment: 1usize, kind: PM_RELEASE },
-    make PmForeignSpec { name: "emit", alignment: 1usize, kind: PM_SCALAR }
-};
-var summarized: *u8 = "unlink";
-var options: PmOptions = make PmOptions {
-    summaries: &summarized, summary_count: 1usize,
-    foreign: &contracts[0usize], foreign_count: 3usize,
-    max_depth: 128usize, max_paths: 256usize, max_iterations: 8usize,
-    milliseconds: 10000u32
-};
 if (*run).argc != 0i32 {
-    return resource_memory_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv, &options);
+    return ownership_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv);
 };
 var arguments: [*u8; 4] = make [*u8; 4] {
     "-o", host_path(run, "../../build/intrusive-checked"),
-    host_path(run, "../ownership/links.crs"), host_path(run, "program.crs")
+    host_path(run, "links.crs"), host_path(run, "program.crs")
 };
-return resource_memory_build((*run).source, (*run).cursor, 4i32, &arguments[0usize], &options);
+return ownership_build((*run).source, (*run).cursor, 4i32, &arguments[0usize]);

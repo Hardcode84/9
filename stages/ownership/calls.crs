@@ -1,0 +1,237 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_call(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
+    var callee: *CrustExpr = (*expression).left;
+    while (*callee).kind == CRUST_E_GROUP { callee = (*callee).left; }
+    if (*callee).kind != CRUST_E_NAME {
+        os_error(check, &(*expression).loc, "indirect calls require an ownership interface");
+        return null(*OsValue);
+    }
+    var contract: *OsFunction = os_function((*check).stage, (*callee).name);
+    if contract == null(*OsFunction) {
+        os_error(check, &(*expression).loc, "call has no ownership interface");
+        return null(*OsValue);
+    }
+    if (*contract).relation != null(*RlContract) { return os_relation_call(check, state, expression, contract); }
+    if (*contract).foreign == OS_ALLOCATE { return os_allocate(check, state, expression, contract); }
+    if (*contract).foreign == OS_RELEASE { return os_release(check, state, expression, contract); }
+    if (*contract).foreign == OS_SCALAR { return os_scalar_call(check, state, expression, contract); }
+    return os_local_call(check, state, expression, contract);
+}
+
+fn os_call_effect(check: *OsCheck, state: *OsState, contract: *OsFunction, location: *CrustLoc) -> bool {
+    if (*contract).effect == 0u32 { return true; }
+    if (*contract).domain != (*state).domain || (*contract).effect > (*state).effect {
+        os_error(check, location, "callee requires stronger domain authority");
+        return false;
+    }
+    if (*contract).effect == OS_RECLAIM { return os_no_cursors(check, state, (*contract).domain, location); }
+    return true;
+}
+
+fn os_no_cursors(check: *OsCheck, state: *OsState, domain: *CrustName, location: *CrustLoc) -> bool {
+    var scope: *OsScope = (*state).scope;
+    while scope != null(*OsScope) && !os_failed(check) {
+        var slot: *OsSlot = (*scope).locals;
+        while slot != null(*OsSlot) {
+            var value: *OsValue = os_bound(state, slot);
+            if value != null(*OsValue) && !(*slot).owns && !(*slot).authority && (*value).object != null(*OsObject) &&
+               ((*value).pointer || (*(*slot).syntax).kind == RS_READ || (*(*slot).syntax).kind == RS_MUT) {
+                if (*(*value).object).domain == domain {
+                    os_error(check, location, "reclamation conflicts with an active domain cursor");
+                    return false;
+                }
+            }
+            slot = (*slot).next;
+        }
+        scope = (*scope).parent;
+    }
+    return !os_failed(check);
+}
+
+fn os_allocate(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract: *OsFunction) -> *OsValue {
+    if (*check).loop_depth != 0usize || (*expression).arg_count != 1usize ||
+       (*(*expression).args[0usize]).kind != CRUST_E_SIZEOF {
+        os_error(check, &(*expression).loc, "checked allocation requires sizeof(TYPE) outside a loop");
+        return null(*OsValue);
+    }
+    var syntax: *CrustTypeSyntax = (*(*expression).args[0usize]).syntax_type;
+    if os_record((*check).stage, syntax) == null(*OsRecord) {
+        os_error(check, &(*expression).loc, "checked allocation requires a record with field contracts");
+        return null(*OsValue);
+    }
+    var object: *OsObject = os_object(check, state, syntax, null(*OsObject), null(*OsScope), false);
+    if object == null(*OsObject) { return null(*OsValue); }
+    (*object).heap = true;
+    os_mark(check, state, object, os_flags(state, object) & ~OS_NONNULL);
+    var result: *OsValue = os_value(check, (*(*contract).declaration).syntax_type, object, true);
+    if result != null(*OsValue) { (*result).owner = true; (*result).allocation_type = syntax; }
+    return result;
+}
+
+fn os_release(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract: *OsFunction) -> *OsValue {
+    if (*expression).arg_count != 1usize { os_error(check, &(*expression).loc, "release requires one owner pointer"); return null(*OsValue); }
+    var value: *OsValue = os_expr(check, state, (*expression).args[0usize]);
+    if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+    var object: *OsObject = (*value).object;
+    if object != null(*OsObject) {
+        if !(*value).pointer || !(*object).heap || (*object).parent != null(*OsObject) ||
+           (!(*value).owner && ((*value).place == null(*OsSlot) || !(*(*value).place).owns)) {
+            os_error(check, &(*expression).loc, "release requires the unique allocation owner");
+            return null(*OsValue);
+        }
+        if !os_reclaim(check, state, object, &(*expression).loc) { return null(*OsValue); }
+        if !os_isolated(check, state, object) {
+            os_error(check, &(*expression).loc, "release requires every member hook to be isolated");
+            return null(*OsValue);
+        }
+        os_destructor_end(check, state, object, &(*expression).loc);
+        os_mark(check, state, object, os_flags(state, object) & ~OS_LIVE);
+    }
+    if (*value).place != null(*OsSlot) { os_set(check, state, (*value).place as *u8, null(*OsValue), 0u32); }
+    return os_value(check, (*(*contract).declaration).syntax_type, null(*OsObject), false);
+}
+
+fn os_reclaim(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
+    if (*os_root(object)).readonly {
+        os_error(check, location, "member projection has no reclamation authority");
+        return false;
+    }
+    if (*state).effect != OS_RECLAIM || (*state).domain != (*object).domain {
+        os_error(check, location, "release requires exclusive reclamation authority");
+        return false;
+    }
+    if (os_flags(state, object) & OS_LIVE) == 0u32 {
+        os_error(check, location, "allocation has already been released");
+        return false;
+    }
+    return os_no_cursors(check, state, (*object).domain, location);
+}
+
+fn os_scalar_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract: *OsFunction) -> *OsValue {
+    var index: usize = 0usize;
+    while index < (*expression).arg_count && !os_failed(check) {
+        var value: *OsValue = os_expr(check, state, (*expression).args[index]);
+        if value != null(*OsValue) && ((*value).pointer || (*value).object != null(*OsObject)) {
+            os_error(check, &(*expression).loc, "scalar foreign interface cannot receive checked storage");
+        }
+        index = index + 1usize;
+    }
+    return os_value(check, (*(*contract).declaration).syntax_type, null(*OsObject), false);
+}
+
+fn os_call_argument(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
+    var source: *CrustExpr = expression;
+    while (*source).kind == CRUST_E_GROUP { source = (*source).left; }
+    if (*source).kind == RS_READ { return os_borrow(check, state, source); }
+    return os_expr(check, state, expression);
+}
+
+fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract: *OsFunction) -> *OsValue {
+    if !os_call_effect(check, state, contract, &(*expression).loc) { return null(*OsValue); }
+    if !os_argument_effects(check, expression, contract) { return null(*OsValue); }
+    var parameter: *CrustParam = (*(*contract).declaration).params;
+    var index: usize = 0usize;
+    while parameter != null(*CrustParam) && !os_failed(check) {
+        if index >= (*expression).arg_count { os_error(check, &(*expression).loc, "missing ownership argument"); return null(*OsValue); }
+        var value: *OsValue = os_call_argument(check, state, (*expression).args[index]);
+        os_argument(check, state, contract, parameter, value, &(*expression).loc);
+        parameter = (*parameter).next;
+        index = index + 1usize;
+    }
+    if os_failed(check) { return null(*OsValue); }
+    if (*contract).effect >= OS_EDIT { os_havoc(check, state, (*contract).domain, null(*OsField)); }
+    var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
+    if (*syntax).kind == CRUST_T_POINTER || (*syntax).kind == RS_READ || (*syntax).kind == RS_MUT {
+        os_error(check, &(*expression).loc, "pointer results require a declared cursor lifetime");
+        return null(*OsValue);
+    }
+    var object: *OsObject = null(*OsObject);
+    if (*syntax).kind == CRUST_T_NAME {
+        object = os_object(check, state, syntax, null(*OsObject), (*state).scope, true);
+        if object != null(*OsObject) { os_abstract_parameter(check, state, object); }
+    }
+    var result: *OsValue = os_value(check, syntax, object, false);
+    if result != null(*OsValue) { (*result).owner = rs_owns((*(*check).stage).resources, syntax); (*result).fresh = true; }
+    return result;
+}
+
+fn os_argument_effects(check: *OsCheck, expression: *CrustExpr, contract: *OsFunction) -> bool {
+    var parameter: *CrustParam = (*(*contract).declaration).params;
+    var borrowed: bool = false;
+    while parameter != null(*CrustParam) {
+        var kind: u32 = (*(*parameter).syntax_type).kind;
+        if kind == RS_READ || kind == RS_MUT { borrowed = true; }
+        parameter = (*parameter).next;
+    }
+    if !borrowed { return true; }
+    var index: usize = 0usize;
+    while index < (*expression).arg_count {
+        if !os_no_nested_calls(check, (*expression).args[index]) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn os_no_nested_calls(check: *OsCheck, expression: *CrustExpr) -> bool {
+    if expression == null(*CrustExpr) { return true; }
+    if !os_enter(check, &(*expression).loc) { return false; }
+    var valid: bool = (*expression).kind != CRUST_E_CALL;
+    if !valid { os_error(check, &(*expression).loc, "borrowed call arguments require prior evaluation of nested calls"); }
+    if valid { valid = os_no_nested_calls(check, (*expression).left) && os_no_nested_calls(check, (*expression).right); }
+    var index: usize = 0usize;
+    while valid && index < (*expression).arg_count {
+        valid = os_no_nested_calls(check, (*expression).args[index]);
+        index = index + 1usize;
+    }
+    var item: *CrustInit = (*expression).inits;
+    while valid && item != null(*CrustInit) {
+        valid = os_no_nested_calls(check, (*item).value);
+        item = (*item).next;
+    }
+    (*check).depth = (*check).depth - 1usize;
+    return valid;
+}
+
+fn os_argument(check: *OsCheck, state: *OsState, contract: *OsFunction, parameter: *CrustParam,
+                value: *OsValue, location: *CrustLoc) -> unit {
+    if value == null(*OsValue) || os_failed(check) { return; }
+    var syntax: *CrustTypeSyntax = (*parameter).syntax_type;
+    if (*syntax).kind == RS_READ || (*syntax).kind == RS_MUT {
+        os_borrow_argument(check, state, contract, syntax, value, location);
+        return;
+    }
+    if (*value).pointer { os_error(check, location, "raw pointer argument has no cursor contract"); return; }
+    if !os_transferable(check, state, value, location) { return; }
+    if rs_owns((*(*check).stage).resources, syntax) && !(*value).owner {
+        os_error(check, location, "owner argument requires an explicit move");
+    }
+    if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
+        os_error(check, location, "argument contains uninitialized storage");
+    }
+}
+
+fn os_borrow_argument(check: *OsCheck, state: *OsState, contract: *OsFunction,
+                      syntax: *CrustTypeSyntax, value: *OsValue, location: *CrustLoc) -> unit {
+    if (*value).object == null(*OsObject) || (*(*value).syntax).kind != (*syntax).kind {
+        os_error(check, location, "borrow parameter requires an explicit checked borrow"); return;
+    }
+    if !os_access(check, state, (*value).object, (*syntax).kind == RS_MUT, location) { return; }
+    if !os_initialized(check, state, (*value).object) {
+        os_error(check, location, "borrowed argument must be fully initialized"); return;
+    }
+    if (*syntax).kind == RS_MUT && (*contract).effect == OS_RECLAIM {
+        os_error(check, location, "explicit mutable calls cannot carry destruction authority");
+    }
+}
+
+fn os_havoc(check: *OsCheck, state: *OsState, domain: *CrustName, family: *OsField) -> unit {
+    var object: *OsObject = (*check).objects;
+    while object != null(*OsObject) && !os_failed(check) {
+        if (*object).family != null(*OsField) && (*object).domain == domain &&
+           (family == null(*OsField) || (*object).family == family) {
+            os_mark(check, state, object, os_flags(state, object) & ~(OS_ISOLATED | OS_ASSOCIATED));
+        }
+        object = (*object).next;
+    }
+}

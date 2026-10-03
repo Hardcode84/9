@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record Hook { prev: *Hook; next: *Hook; } reciprocal(prev, next);
+
+fn hook_init(h: *Hook) -> unit links(edit, Hook) construct(h) {
+    (*h).prev = h;
+    (*h).next = h;
+}
+
+fn unlink(h: *Hook) -> unit links(edit, Hook) cursor(h) isolated(h) {
+    var before: *Hook = (*h).prev;
+    var after: *Hook = (*h).next;
+    (*before).next = after;
+    (*after).prev = before;
+    (*h).prev = h;
+    (*h).next = h;
+}
+
+fn insert_after(at: *Hook, h: *Hook) -> unit
+    links(edit, Hook) cursor(at) member(h) {
+    if at == h { return; }
+    unlink(h);
+    var after: *Hook = (*at).next;
+    (*h).prev = at;
+    (*h).next = after;
+    (*after).prev = h;
+    (*at).next = h;
+}
+
+fn splice_init(at: *Hook, source: *Hook) -> unit
+    links(edit, Hook) anchor(at) anchor(source) isolated(source) unless_same(source, at) {
+    if at == source || (*source).next == source { return; }
+    var first: *Hook = (*source).next;
+    var last: *Hook = (*source).prev;
+    var after: *Hook = (*at).next;
+    (*at).next = first;
+    (*first).prev = at;
+    (*last).next = after;
+    (*after).prev = last;
+    (*source).prev = source;
+    (*source).next = source;
+}

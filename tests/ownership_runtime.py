@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+"""Run the intrusive program with exact-address reuse and allocation failures."""
+
+import os
+import subprocess
+
+from memory import command
+
+
+def check_runtime(build, directory, root, sanitize):
+    source = directory / "allocator-program.crs"
+    source.write_text(
+        (root / "examples/intrusive/program.crs")
+        .read_text()
+        .replace('= "malloc";', '= "ownership_test_allocate";')
+        .replace('= "free";', '= "ownership_test_release";')
+    )
+    generated = directory / "allocator-program.c"
+    symbols = directory / "allocator-program.rsp"
+    command(
+        [
+            build / "crust-ownership-test",
+            "--emit-c",
+            "--symbols",
+            symbols,
+            "-o",
+            generated,
+            root / "examples/intrusive/links.crs",
+            source,
+        ]
+    )
+    for optimization in ("-O0", "-O2"):
+        flags = ["-std=c99", "-pedantic-errors", optimization]
+        if sanitize:
+            flags += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-no-pie"]
+        original = directory / "allocator-input.o"
+        renamed = directory / "allocator.o"
+        executable = directory / f"allocator{optimization}"
+        command(["gcc", *flags, "-c", generated, "-o", original])
+        command(["objcopy", f"@{symbols}", original, renamed])
+        command(["gcc", *flags, renamed, root / "tests/ownership_runtime.c", "-o", executable])
+        for failure in range(4):
+            environment = dict(os.environ, CRUST_TEST_ALLOCATION_FAILURE=str(failure))
+            result = subprocess.run([executable], env=environment, capture_output=True, timeout=15)
+            expected = 1 if failure else 0
+            if (
+                result.returncode != expected
+                or result.stdout != (b"" if failure else b"OK\n")
+                or result.stderr
+            ):
+                raise RuntimeError(
+                    f"allocation {failure}: {result.returncode}, {result.stdout!r}, {result.stderr!r}"
+                )

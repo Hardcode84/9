@@ -92,7 +92,7 @@ does not create a cleanup obligation for the returned raw pointer.
 
 Plain resource checking requires `unsafe` for this operation. In that mode,
 the programmer must meet the consumed-read contract. The
-[combined memory stage](../../examples/intrusive/README.md) enforces
+[closed-program memory stage](../../examples/intrusive/README.md#closed-program-proof-examples) enforces
 it without `unsafe`, including in subsequent cleanup and called bodies. It
 consumes the transfer facts retained with the checked operations. A source
 loan that forbids writing the place also forbids moving its pointer.
@@ -179,8 +179,10 @@ the caller. A plain value has no resource cleanup obligation and is not a
 `read` or `mut` binding. The caller must prove every reachable memory access, transfer, and
 cleanup before step 4. Each read needs initialized storage, including reads
 through aliases and on branch and loop paths. Address formation does not
-initialize storage. The [combined stage](../../examples/intrusive/README.md)
-provides this proof and stops output if it fails.
+initialize storage. A delegated raw address can come from a shared loan. The
+caller must preserve its access permission when checking pointer uses. The
+[intrusive stages](../../examples/intrusive/README.md) provide these checks
+and stop output if they fail.
 
 Owner construction, moves, loan bindings, active loans, and cleanup eligibility
 remain checked by the resource stage. A raw output store does not construct an

@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Require an empty context. Retain source bytes and arguments until return.
+// Verify function interfaces, owners, and reciprocal links before output.
+extern fn ownership_program(request: *CrustBuild) -> i32 = "ownership_program";

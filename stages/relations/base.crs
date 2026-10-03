@@ -1,0 +1,158 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn rl_stage(run: *PfRun) -> *RlStage { return (*(*run).stage).user as *RlStage; }
+fn rl_world(state: *PfState) -> *RlWorld { return (*state).data as *RlWorld; }
+
+fn rl_put(stage: *RlStage, table: *CrustMap, key: usize, value: *u8) -> bool {
+    if (*stage).proof.status.failed { return false; }
+    if crust_try_map_set((*stage).proof.status.context, table, key, value) { return true; }
+    (*stage).proof.status.failed = true;
+    return false;
+}
+
+fn rl_alloc(stage: *RlStage, size: usize, alignment: usize) -> *u8 {
+    return c_alloc(&(*stage).proof.status, size, alignment);
+}
+
+// Context, declarations, fields, and parameter nodes must outlive the stage.
+fn rl_init(stage: *RlStage, context: *CrustContext) -> unit {
+    pf_init(&(*stage).proof, context);
+    (*stage).families = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).contracts = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).current = null(*RlContract);
+    (*stage).proof.user = stage as *u8;
+    (*stage).proof.solve = rl_solve;
+    (*stage).proof.pre = rl_pre;
+    (*stage).proof.post = rl_post;
+    (*stage).proof.access = rl_access;
+    (*stage).proof.value = rl_value;
+    (*stage).proof.statement = rl_statement;
+    (*stage).proof.invoke = rl_invoke;
+    (*stage).milliseconds = 10000u32;
+}
+
+fn rl_destroy(stage: *RlStage) -> unit { pf_destroy(&(*stage).proof); }
+
+fn rl_solve(proof: *PfStage, query: *u8, location: *CrustLoc) -> i32 {
+    var stage: *RlStage = (*proof).user as *RlStage;
+    return proof_z3_query((*proof).status.context, query, location, (*stage).milliseconds);
+}
+
+fn rl_field_type(declaration: *CrustDecl, field: *CrustField) -> bool {
+    var entry: *CrustField = (*declaration).fields;
+    while entry != null(*CrustField) {
+        if entry == field {
+            return (*(*field).type).kind == CRUST_T_POINTER &&
+                   (*(*field).type).base == (*declaration).type;
+        }
+        entry = (*entry).next;
+    }
+    return false;
+}
+
+// Declare reciprocal pointer fields of one checked record type.
+fn rl_family(stage: *RlStage, declaration: *CrustDecl,
+             first: *CrustField, second: *CrustField) -> *RlFamily {
+    if (*declaration).kind != CRUST_D_RECORD || first == second ||
+       !rl_field_type(declaration, first) || !rl_field_type(declaration, second) {
+        pf_error(&(*stage).proof, &(*declaration).loc, "reciprocal fields must be distinct pointers to their record");
+        return null(*RlFamily);
+    }
+    if crust_map_get(&(*stage).families, declaration as usize) != null(*u8) {
+        pf_error(&(*stage).proof, &(*declaration).loc, "record already has a reciprocal family");
+        return null(*RlFamily);
+    }
+    var family: *RlFamily = rl_alloc(stage, sizeof(RlFamily), alignof(RlFamily)) as *RlFamily;
+    if family == null(*RlFamily) { return family; }
+    *family = make RlFamily { declaration: declaration, first: first, second: second };
+    if !rl_put(stage, &(*stage).families, declaration as usize, family as *u8) { return null(*RlFamily); }
+    return family;
+}
+
+// Register a source interface before checking any definition that calls it.
+fn rl_contract(stage: *RlStage, declaration: *CrustDecl,
+               family: *RlFamily, effect: u32) -> *RlContract {
+    if family == null(*RlFamily) || (effect != RL_READ && effect != RL_EDIT) ||
+       (*declaration).kind != CRUST_D_FUNCTION ||
+       (*(*(*declaration).type).base).kind != CRUST_T_UNIT {
+        pf_error(&(*stage).proof, &(*declaration).loc, "link contract requires a unit function and a declared family");
+        return null(*RlContract);
+    }
+    if crust_map_get(&(*stage).contracts, declaration as usize) != null(*u8) {
+        pf_error(&(*stage).proof, &(*declaration).loc, "function already has a link contract");
+        return null(*RlContract);
+    }
+    var contract: *RlContract = rl_alloc(stage, sizeof(RlContract), alignof(RlContract)) as *RlContract;
+    if contract == null(*RlContract) { return contract; }
+    *contract = make RlContract {
+        declaration: declaration, family: family, parameters: null(*RlParam), effect: effect
+    };
+    if !rl_put(stage, &(*stage).contracts, declaration as usize, contract as *u8) { return null(*RlContract); }
+    return contract;
+}
+
+fn rl_has_parameter(contract: *RlContract, parameter: *CrustParam) -> bool {
+    var entry: *CrustParam = (*(*contract).declaration).params;
+    while entry != null(*CrustParam) {
+        if entry == parameter { return true; }
+        entry = (*entry).next;
+    }
+    return false;
+}
+
+fn rl_parameter_valid(contract: *RlContract, parameter: *CrustParam, role: u32,
+                      isolated: bool, unless_same: *CrustParam) -> bool {
+    if !rl_has_parameter(contract, parameter) || role < RL_LINK || role > RL_CONSTRUCT { return false; }
+    if (*(*parameter).type).kind != CRUST_T_POINTER ||
+       (*(*parameter).type).base != (*(*(*contract).family).declaration).type { return false; }
+    if role == RL_CONSTRUCT && (*contract).effect != RL_EDIT { return false; }
+    if unless_same != null(*CrustParam) && (!isolated || !rl_has_parameter(contract, unless_same)) { return false; }
+    return true;
+}
+
+fn rl_parameter_insert(contract: *RlContract, entry: *RlParam) -> unit {
+    var parameter: *CrustParam = (*(*contract).declaration).params;
+    var next: *RlParam = (*contract).parameters;
+    var previous: *RlParam = null(*RlParam);
+    while parameter != (*entry).parameter {
+        if next != null(*RlParam) && (*next).parameter == parameter {
+            previous = next;
+            next = (*next).next;
+        }
+        parameter = (*parameter).next;
+    }
+    (*entry).next = next;
+    if previous == null(*RlParam) { (*contract).parameters = entry; }
+    else { (*previous).next = entry; }
+}
+
+// Construction requires exclusive unpublished storage and publishes an isolated hook.
+fn rl_parameter(stage: *RlStage, contract: *RlContract, parameter: *CrustParam,
+                role: u32, isolated: bool, unless_same: *CrustParam) -> bool {
+    if !rl_parameter_valid(contract, parameter, role, isolated, unless_same) {
+        pf_error(&(*stage).proof, &(*parameter).loc, "invalid link parameter contract");
+        return false;
+    }
+    var entry: *RlParam = (*contract).parameters;
+    while entry != null(*RlParam) {
+        if (*entry).parameter == parameter {
+            pf_error(&(*stage).proof, &(*parameter).loc, "link parameter already has a role");
+            return false;
+        }
+        entry = (*entry).next;
+    }
+    entry = rl_alloc(stage, sizeof(RlParam), alignof(RlParam)) as *RlParam;
+    if entry == null(*RlParam) { return false; }
+    *entry = make RlParam {
+        parameter: parameter, unless_same: unless_same, next: null(*RlParam),
+        role: role, isolated: isolated
+    };
+    rl_parameter_insert(contract, entry);
+    return true;
+}
+
+// Check every definition before emitting code that relies on registered contracts.
+fn rl_verify(stage: *RlStage, contract: *RlContract) -> bool {
+    (*stage).current = contract;
+    return pf_verify(&(*stage).proof, (*contract).declaration);
+}

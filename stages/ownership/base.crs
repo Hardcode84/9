@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_init(stage: *OsStage, resources: *RsStage) -> unit {
+    (*stage).records = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).functions = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).blocks = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).projections = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).resources = resources;
+    (*stage).relations = null(*RlSyntax);
+}
+
+fn os_failed(check: *OsCheck) -> bool { return (*(*(*check).stage).resources).failed; }
+
+fn os_error(check: *OsCheck, location: *CrustLoc, message: *u8) -> unit {
+    rs_error((*(*check).stage).resources, location, message);
+}
+
+fn os_alloc(check: *OsCheck, size: usize, alignment: usize) -> *u8 {
+    return rs_alloc((*(*check).stage).resources, size, alignment);
+}
+
+fn os_fact(state: *OsState, key: *u8) -> *OsFact {
+    var fact: *OsFact = (*state).facts;
+    while fact != null(*OsFact) {
+        if (*fact).key == key { return fact; }
+        fact = (*fact).next;
+    }
+    return null(*OsFact);
+}
+
+fn os_set(check: *OsCheck, state: *OsState, key: *u8, value: *OsValue, flags: u32) -> unit {
+    var fact: *OsFact = os_alloc(check, sizeof(OsFact), alignof(OsFact)) as *OsFact;
+    if fact == null(*OsFact) { return; }
+    *fact = make OsFact { key: key, value: value, next: (*state).facts, flags: flags };
+    (*state).facts = fact;
+}
+
+fn os_flags(state: *OsState, object: *OsObject) -> u32 {
+    var fact: *OsFact = os_fact(state, object as *u8);
+    if fact == null(*OsFact) { return 0u32; }
+    return (*fact).flags;
+}
+
+fn os_mark(check: *OsCheck, state: *OsState, object: *OsObject, flags: u32) -> unit {
+    os_set(check, state, object as *u8, null(*OsValue), flags);
+}
+
+fn os_bound(state: *OsState, slot: *OsSlot) -> *OsValue {
+    var fact: *OsFact = os_fact(state, slot as *u8);
+    if fact == null(*OsFact) { return null(*OsValue); }
+    return (*fact).value;
+}
+
+fn os_value(check: *OsCheck, syntax: *CrustTypeSyntax, object: *OsObject, pointer: bool) -> *OsValue {
+    var result: *OsValue = os_alloc(check, sizeof(OsValue), alignof(OsValue)) as *OsValue;
+    if result != null(*OsValue) {
+        (*result).syntax = syntax;
+        (*result).object = object;
+        (*result).pointer = pointer;
+    }
+    return result;
+}
+
+fn os_copy(check: *OsCheck, source: *OsValue) -> *OsValue {
+    if source == null(*OsValue) { return source; }
+    var result: *OsValue = os_alloc(check, sizeof(OsValue), alignof(OsValue)) as *OsValue;
+    if result != null(*OsValue) { *result = *source; }
+    return result;
+}
+
+fn os_field(fields: *OsField, name: *CrustName) -> *OsField {
+    while fields != null(*OsField) {
+        if (*fields).name == name { return fields; }
+        fields = (*fields).next;
+    }
+    return null(*OsField);
+}
+
+fn os_record(stage: *OsStage, syntax: *CrustTypeSyntax) -> *OsRecord {
+    if syntax == null(*CrustTypeSyntax) || (*syntax).kind != CRUST_T_NAME { return null(*OsRecord); }
+    var global: *RsGlobal = rs_global((*stage).resources, (*syntax).name);
+    if global == null(*RsGlobal) { return null(*OsRecord); }
+    return crust_map_get(&(*stage).records, (*global).source as usize) as *OsRecord;
+}
+
+fn os_root(object: *OsObject) -> *OsObject {
+    while (*object).parent != null(*OsObject) { object = (*object).parent; }
+    return object;
+}
+
+fn os_function(stage: *OsStage, name: *CrustName) -> *OsFunction {
+    var global: *RsGlobal = rs_global((*stage).resources, name);
+    if global == null(*RsGlobal) { return null(*OsFunction); }
+    return crust_map_get(&(*stage).functions, (*global).source as usize) as *OsFunction;
+}
+
+fn os_syntax(check: *OsCheck, kind: u32, location: *CrustLoc) -> *CrustTypeSyntax {
+    return rs_type_node((*(*check).stage).resources, kind, location);
+}
+
+fn os_enter(check: *OsCheck, location: *CrustLoc) -> bool {
+    if os_failed(check) { return false; }
+    if (*check).depth >= 128usize {
+        os_error(check, location, "ownership syntax nesting exceeds 128");
+        return false;
+    }
+    (*check).depth = (*check).depth + 1usize;
+    return true;
+}

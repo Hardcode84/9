@@ -287,7 +287,7 @@ def root_fixture(build, directory):
 
 def root_case(build, directory, sanitize, reference):
     output, symbols = directory / "intrusive.c", directory / "intrusive.rsp"
-    inputs = [ROOT / "examples/ownership/links.crs", ROOT / "examples/intrusive/program.crs"]
+    inputs = [ROOT / "examples/ownership/links.crs", ROOT / "examples/intrusive/closed-program.crs"]
     command(
         [
             build / "crust",

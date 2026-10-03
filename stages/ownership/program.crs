@@ -1,0 +1,124 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_driver_read(cli: *CCli, stage: *OsStage) -> bool {
+    var context: *CrustContext = (*(*stage).resources).context;
+    if (*cli).root != null(*CrustSource) {
+        if !os_read(stage, (*cli).root, (*cli).target_begin, (*(*cli).root).size) { return false; }
+    }
+    var index: usize = 0usize;
+    while index < (*cli).source_count {
+        var source: *CrustSource = &(*cli).sources[index];
+        var bytes: *u8 = null(*u8);
+        var size: usize = 0usize;
+        if crust0_host_read_file((*source).path, &bytes, &size) != 0i32 {
+            c_driver_io_error(&(*cli).driver, "cannot read input", (*source).path, *c_driver_errno());
+            return false;
+        }
+        (*source).bytes = crust_try_copy_string(context, bytes, size);
+        (*source).size = size;
+        crust0_host_free(bytes);
+        if (*source).bytes == null(*u8) || !os_read(stage, source, 0usize, size) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn os_relation_interfaces(stage: *OsStage, relations: *RlStage) -> bool {
+    var syntax: *RlSyntax = (*stage).relations;
+    while syntax != null(*RlSyntax) {
+        if (*(*syntax).declaration).kind == CRUST_D_RECORD {
+            if !rls_resolve_family(relations, (*stage).resources, syntax) { return false; }
+        }
+        syntax = (*syntax).next;
+    }
+    syntax = (*stage).relations;
+    while syntax != null(*RlSyntax) {
+        if (*(*syntax).declaration).kind != CRUST_D_RECORD {
+            var contract: *RlContract = rls_resolve_function(relations, (*stage).resources, syntax);
+            if contract == null(*RlContract) { return false; }
+            var function: *OsFunction = crust_map_get(&(*stage).functions, (*syntax).declaration as usize) as *OsFunction;
+            (*function).relation = contract;
+        }
+        syntax = (*syntax).next;
+    }
+    return true;
+}
+
+fn os_lower(stage: *OsStage, relations: *RlStage) -> bool {
+    var resources: *RsStage = (*stage).resources;
+    (*resources).delegate_memory = true;
+    if !rs_collect(resources) || !rs_publish(resources) { return false; }
+    if !os_relation_interfaces(stage, relations) { return false; }
+    var global: *RsGlobal = (*resources).first_global;
+    while global != null(*RsGlobal) && !(*resources).failed {
+        if (*(*global).source).kind == CRUST_D_FUNCTION {
+            var function: *OsFunction = crust_map_get(&(*stage).functions, (*global).source as usize) as *OsFunction;
+            if (*function).relation != null(*RlContract) {
+                // Link contracts accept only plain checked bodies, with no cleanup effects.
+                (*(*global).lowered).body = (*(*global).source).body;
+            } else { if !rs_function(resources, global) { return false; } }
+        }
+        global = (*global).next;
+    }
+    if (*resources).failed || !crust_check((*resources).context) { return false; }
+    return rs_check_constants(resources);
+}
+
+fn os_verify(stage: *OsStage, relations: *RlStage) -> bool {
+    var resources: *RsStage = (*stage).resources;
+    var global: *RsGlobal = (*resources).first_global;
+    while global != null(*RsGlobal) {
+        var function: *OsFunction = crust_map_get(&(*stage).functions, (*global).source as usize) as *OsFunction;
+        if function != null(*OsFunction) && (*function).relation != null(*RlContract) {
+            if !rl_verify(relations, (*function).relation) { return false; }
+        }
+        global = (*global).next;
+    }
+    return os_check(stage);
+}
+
+fn os_driver_emit(cli: *CCli, resources: *RsStage) -> i32 {
+    if !c_driver_exports(cli) { return 1i32; }
+    if (*cli).mode == 3u32 { return 0i32; }
+    if !c_driver_names(&(*cli).driver) { return 1i32; }
+    var entry: *CrustDecl = null(*CrustDecl);
+    if !(*cli).library {
+        entry = resource_driver_entry(cli, resources);
+        if entry == null(*CrustDecl) { return 1i32; }
+    }
+    if (*cli).mode == 4u32 {
+        if c_emit_with_body(&(*cli).stage, entry, rs_c_body, resources as *u8) { return 0i32; }
+        return 1i32;
+    }
+    return c_backend_build_with_body((*resources).context, entry, &(*cli).options, rs_c_body, resources as *u8);
+}
+
+fn os_driver_build(cli: *CCli) -> i32 {
+    var resources: RsStage = uninit;
+    rs_init(&resources, (*cli).stage.status.context);
+    var stage: OsStage = uninit;
+    os_init(&stage, &resources);
+    var relations: RlStage = uninit;
+    rl_init(&relations, resources.context);
+    var result: i32 = 1i32;
+    if os_driver_read(cli, &stage) && os_lower(&stage, &relations) && os_verify(&stage, &relations) {
+        result = os_driver_emit(cli, &resources);
+    }
+    rl_destroy(&relations);
+    return result;
+}
+
+// Check every function from its declared interface before producing output.
+// Keep source and arguments alive until return. Retain diagnostics in context.
+fn ownership_program(request: *CrustBuild) -> i32 {
+    var cli: CCli = uninit;
+    var success: bool = c_driver_init(&cli, (*request).context, (*request).argc);
+    cli.root = (*request).source;
+    cli.target_begin = (*request).target_begin;
+    var result: i32 = 1i32;
+    if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
+        result = os_driver_build(&cli);
+    }
+    c_stage_destroy(&cli.stage);
+    return result;
+}

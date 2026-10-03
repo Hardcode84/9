@@ -1,0 +1,211 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_read_field(reader: *CrustReader, list: **OsField) -> *OsField {
+    var field: *OsField = rr_alloc(reader, sizeof(OsField), alignof(OsField)) as *OsField;
+    if field == null(*OsField) { return field; }
+    (*field).name = rr_name(reader);
+    var previous: *OsField = *list;
+    while previous != null(*OsField) {
+        if (*previous).name == (*field).name {
+            rr_error(reader, (*reader).token.offset, "duplicate ownership field annotation");
+            return null(*OsField);
+        }
+        previous = (*previous).next;
+    }
+    (*field).next = *list;
+    *list = field;
+    return field;
+}
+
+fn os_read_fields(reader: *CrustReader, fields: **OsField) -> unit {
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' before ownership fields");
+    while !(*reader).failed {
+        os_read_field(reader, fields);
+        if (*reader).token.kind != 44u32 { break; }
+        rr_next(reader);
+    }
+    rr_expect(reader, 41u32, "expected ')' after ownership fields");
+}
+
+fn os_read_anchor(reader: *CrustReader, contract: *OsRecord) -> unit {
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' after anchor");
+    var field: *OsField = os_read_field(reader, &(*contract).anchors);
+    if field == null(*OsField) { return; }
+    rr_expect(reader, 44u32, "expected ',' before anchor member origin");
+    (*field).record_name = rr_name(reader);
+    rr_expect(reader, 46u32, "expected '.' between member type and field");
+    (*field).member_name = rr_name(reader);
+    rr_expect(reader, 41u32, "expected ')' after anchor origin");
+}
+
+fn os_read_domain(reader: *CrustReader, domain: **CrustName) -> unit {
+    if *domain != null(*CrustName) {
+        rr_error(reader, (*reader).token.offset, "duplicate domain annotation");
+        return;
+    }
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' after domain");
+    *domain = rr_name(reader);
+    rr_expect(reader, 41u32, "expected ')' after domain name");
+}
+
+fn os_read_record_clause(reader: *CrustReader, contract: *OsRecord) -> bool {
+    if rr_is_name(reader, "owns") { os_read_fields(reader, &(*contract).owns); return true; }
+    if rr_is_name(reader, "members") { os_read_fields(reader, &(*contract).members); return true; }
+    if rr_is_name(reader, "anchor") { os_read_anchor(reader, contract); return true; }
+    if rr_is_name(reader, "domain") { os_read_domain(reader, &(*contract).domain); return true; }
+    return false;
+}
+
+fn os_read_drop(reader: *CrustReader, stage: *OsStage, declaration: *CrustDecl) -> unit {
+    if !rr_is_name(reader, "drop") {
+        rr_error(reader, (*reader).token.offset, "expected drop FUNCTION after resource contract");
+        return;
+    }
+    rr_next(reader);
+    var resource: *RsResource = rr_alloc(reader, sizeof(RsResource), alignof(RsResource)) as *RsResource;
+    if resource == null(*RsResource) { return; }
+    (*resource).declaration = declaration;
+    (*resource).drop_name = rr_name(reader);
+    (*resource).next = (*(*stage).resources).resources;
+    (*(*stage).resources).resources = resource;
+    rr_expect(reader, 59u32, "expected ';' after resource drop function");
+}
+
+fn os_read_record(reader: *CrustReader, stage: *OsStage, resource: bool) -> *CrustDecl {
+    (*reader).token.kind = RR_RECORD;
+    var declaration: *CrustDecl = rr_record(reader);
+    if declaration == null(*CrustDecl) { return declaration; }
+    var contract: *OsRecord = rr_alloc(reader, sizeof(OsRecord), alignof(OsRecord)) as *OsRecord;
+    if contract == null(*OsRecord) { return null(*CrustDecl); }
+    (*contract).declaration = declaration;
+    rs_put((*stage).resources, &(*stage).records, declaration as usize, contract as *u8);
+    if rr_is_name(reader, "reciprocal") {
+        if resource {
+            rr_error(reader, (*reader).token.offset, "reciprocal storage must have a separate resource owner");
+            return null(*CrustDecl);
+        }
+        var syntax: *RlSyntax = rls_new(reader, declaration);
+        if syntax == null(*RlSyntax) { return null(*CrustDecl); }
+        rls_pair(reader, syntax);
+        (*syntax).next = (*stage).relations;
+        (*stage).relations = syntax;
+    } else {
+        var annotated: bool = false;
+        while !(*reader).failed && os_read_record_clause(reader, contract) { annotated = true; }
+        if resource { os_read_drop(reader, stage, declaration); }
+        else { if annotated { rr_expect(reader, 59u32, "expected ';' after record contract"); } }
+    }
+    return declaration;
+}
+
+fn os_read_effect(reader: *CrustReader) -> u32 {
+    if rr_is_name(reader, "read") { return OS_READ; }
+    if rr_is_name(reader, "edit") { return OS_EDIT; }
+    if rr_is_name(reader, "reclaim") { return OS_RECLAIM; }
+    rr_error(reader, (*reader).token.offset, "expected read, edit, or reclaim access");
+    return 0u32;
+}
+
+fn os_read_function_access(reader: *CrustReader, function: *OsFunction) -> unit {
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' after access");
+    (*function).effect = os_read_effect(reader);
+    rr_next(reader);
+    rr_expect(reader, 44u32, "expected ',' before access domain");
+    (*function).domain = rr_name(reader);
+    rr_expect(reader, 41u32, "expected ')' after access domain");
+}
+
+fn os_read_foreign(reader: *CrustReader, function: *OsFunction) -> unit {
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' after foreign");
+    if rr_is_name(reader, "allocate") { (*function).foreign = OS_ALLOCATE; }
+    else { if rr_is_name(reader, "release") { (*function).foreign = OS_RELEASE; }
+    else { if rr_is_name(reader, "scalar") { (*function).foreign = OS_SCALAR; }
+    else { rr_error(reader, (*reader).token.offset, "expected allocate, release, or scalar foreign contract"); } } }
+    rr_next(reader);
+    rr_expect(reader, 41u32, "expected ')' after foreign contract");
+}
+
+fn os_read_function_clause(reader: *CrustReader, stage: *OsStage, function: *OsFunction) -> bool {
+    if rr_is_name(reader, "access") {
+        if (*function).effect != 0u32 { rr_error(reader, (*reader).token.offset, "duplicate access contract"); return true; }
+        os_read_function_access(reader, function);
+        return true;
+    }
+    if rr_is_name(reader, "foreign") {
+        if (*function).foreign != 0u32 { rr_error(reader, (*reader).token.offset, "duplicate foreign contract"); return true; }
+        os_read_foreign(reader, function);
+        return true;
+    }
+    if !rr_is_name(reader, "links") { return false; }
+    var syntax: *RlSyntax = rls_new(reader, (*function).declaration);
+    if syntax == null(*RlSyntax) { return true; }
+    rls_function(reader, syntax);
+    (*syntax).next = (*stage).relations;
+    (*stage).relations = syntax;
+    return true;
+}
+
+fn os_read_function(reader: *CrustReader, stage: *OsStage) -> *CrustDecl {
+    var declaration: *CrustDecl = rr_function_header(reader);
+    if declaration == null(*CrustDecl) { return declaration; }
+    var function: *OsFunction = rr_alloc(reader, sizeof(OsFunction), alignof(OsFunction)) as *OsFunction;
+    if function == null(*OsFunction) { return null(*CrustDecl); }
+    (*function).declaration = declaration;
+    rs_put((*stage).resources, &(*stage).functions, declaration as usize, function as *u8);
+    while !(*reader).failed && os_read_function_clause(reader, stage, function) { }
+    if rr_is_name(reader, "from") {
+        rr_next(reader);
+        var name: *CrustName = rr_name(reader);
+        if !rs_return_from((*stage).resources, declaration, name) { (*reader).failed = true; }
+    }
+    return rr_function_end(reader, declaration);
+}
+
+fn os_read_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
+    var stage: *OsStage = user as *OsStage;
+    if (*reader).token.kind == RR_RECORD { return os_read_record(reader, stage, false); }
+    if rr_is_name(reader, "resource") { return os_read_record(reader, stage, true); }
+    if (*reader).token.kind == RR_FN || (*reader).token.kind == RR_EXTERN { return os_read_function(reader, stage); }
+    return null(*CrustDecl);
+}
+
+fn os_read_statement(reader: *CrustReader, user: *u8) -> *CrustStmt {
+    var stage: *OsStage = user as *OsStage;
+    if !rr_is_name(reader, "edit") && !rr_is_name(reader, "read") {
+        return rs_read_statement(reader, (*stage).resources as *u8);
+    }
+    var access: *OsAccess = rr_alloc(reader, sizeof(OsAccess), alignof(OsAccess)) as *OsAccess;
+    if access == null(*OsAccess) { return null(*CrustStmt); }
+    (*access).effect = os_read_effect(reader);
+    rr_next(reader);
+    (*access).domain = rr_name(reader);
+    var block: *CrustStmt = rr_block(reader);
+    if block != null(*CrustStmt) {
+        rs_put((*stage).resources, &(*stage).blocks, block as usize, access as *u8);
+    }
+    return block;
+}
+
+fn os_read_prefix(reader: *CrustReader, user: *u8) -> *CrustExpr {
+    if rr_is_name(reader, "parent") { return os_read_projection(reader, user as *OsStage); }
+    return rs_read_prefix(reader, (*((user as *OsStage))).resources as *u8);
+}
+
+fn os_read_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax {
+    return rs_read_type(reader, (*((user as *OsStage))).resources as *u8);
+}
+
+fn os_read(stage: *OsStage, source: *CrustSource, begin: usize, end: usize) -> bool {
+    var hooks: CrustReaderHooks = make CrustReaderHooks {
+        user: stage as *u8, declaration: os_read_declaration, statement: os_read_statement,
+        prefix: os_read_prefix, type_syntax: os_read_type
+    };
+    var unit_value: *CrustUnit = rr_read((*(*stage).resources).context, source, begin, end, &hooks);
+    if unit_value == null(*CrustUnit) { (*(*stage).resources).failed = true; return false; }
+    return !(*(*stage).resources).failed;
+}

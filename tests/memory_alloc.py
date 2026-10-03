@@ -100,6 +100,7 @@ def main():
     parser.add_argument("--amalgamation", type=int, choices=(0, 1), default=1)
     parser.add_argument("--z3-flags", default="-lz3")
     parser.add_argument("--resources", action="store_true")
+    parser.add_argument("--ownership", action="store_true")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--summaries", action="store_true")
     selection.add_argument("--contracts", action="store_true")
@@ -108,6 +109,8 @@ def main():
     parser.add_argument("--no-sanitize", action="store_true")
     parser.add_argument("--work", type=Path)
     args = parser.parse_args()
+    if args.ownership and (args.resources or args.summaries or args.contracts or args.loops):
+        parser.error("--ownership selects its own stage and inputs")
     if args.contracts or args.loops:
         args.resources = True
     compiler = args.build.resolve() / "crust-c"
@@ -154,6 +157,13 @@ def main():
         models = {name: item[0] for name, item in loop_cases().items()}
         cases = {name: item[1] for name, item in loop_cases().items()}
         names = ("countdown", "continue", "break", "walk")
+    if args.ownership:
+        links = (ROOT / "examples/intrusive/links.crs").read_text()
+        cases = {
+            "links": links,
+            "intrusive": links + (ROOT / "examples/intrusive/program.crs").read_text(),
+        }
+        names = tuple(cases)
     selected = [
         name
         for name in names
@@ -203,6 +213,22 @@ def main():
                 "tests/memory_loop_models.crs",
                 "tests/memory_loop_alloc.crs",
             ]
+        if args.ownership:
+            sources = [
+                path
+                for path in resource_stage()[:-1]
+                if not path.startswith(("stages/memory/", "stages/resource_memory/"))
+            ]
+            sources += [
+                str(path.relative_to(ROOT))
+                for path in sorted((ROOT / "stages/relations").glob("*.crs"))
+            ]
+            sources += [
+                str(path.relative_to(ROOT))
+                for path in sorted((ROOT / "stages/ownership").glob("*.crs"))
+                if path.name not in ("api.crs", "build.crs")
+            ]
+            sources += ["tests/ownership_alloc.crs"]
         generated = work / "fixture.c"
         response = work / "fixture.rsp"
         run(

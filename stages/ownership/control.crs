@@ -1,0 +1,208 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_statement(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    if statement == null(*CrustStmt) || (*state).flow != PF_NORMAL { return; }
+    if !os_enter(check, &(*statement).loc) { return; }
+    os_statement_inner(check, state, statement);
+    (*check).depth = (*check).depth - 1usize;
+}
+
+fn os_statement_inner(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    var kind: u32 = (*statement).kind;
+    if kind == CRUST_S_BLOCK { os_block(check, state, statement); return; }
+    if kind == CRUST_S_IF { os_if(check, state, statement); return; }
+    if kind == CRUST_S_WHILE { os_while(check, state, statement); return; }
+    if kind == CRUST_S_VAR { os_variable(check, state, statement); return; }
+    if kind == CRUST_S_ASSIGN {
+        var slot: *OsSlot = os_place(check, state, (*statement).expr);
+        var value: *OsValue = os_expr(check, state, (*statement).value);
+        if slot != null(*OsSlot) { os_store(check, state, slot, value, &(*statement).loc); }
+        return;
+    }
+    if kind == CRUST_S_EXPR {
+        var unused: *OsValue = os_expr(check, state, (*statement).expr);
+        os_unused(check, state, unused, &(*statement).loc);
+        return;
+    }
+    if kind == CRUST_S_RETURN { os_return(check, state, statement); return; }
+    if kind == CRUST_S_TRAP { (*state).flow = PF_TRAP; return; }
+    os_error(check, &(*statement).loc, "statement has no modular ownership contract");
+}
+
+fn os_block(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    var domain: *CrustName = (*state).domain;
+    var effect: u32 = (*state).effect;
+    var access: *OsAccess = crust_map_get(&(*(*check).stage).blocks, statement as usize) as *OsAccess;
+    if access != null(*OsAccess) {
+        if (*access).domain != domain || (*access).effect > effect {
+            os_error(check, &(*statement).loc, "access scope cannot acquire undeclared authority"); return;
+        }
+        (*state).effect = (*access).effect;
+    }
+    os_scope(check, state);
+    if os_failed(check) { return; }
+    (*(*state).scope).domain = domain;
+    (*(*state).scope).effect = effect;
+    (*(*state).scope).access = access != null(*OsAccess);
+    var child: *CrustStmt = (*statement).body;
+    while child != null(*CrustStmt) && (*state).flow == PF_NORMAL && !os_failed(check) {
+        os_statement(check, state, child);
+        child = (*child).next;
+    }
+    if (*state).flow == PF_NORMAL { os_scope_end(check, state, &(*statement).loc); }
+    else { if (*state).flow == PF_TRAP { (*state).scope = (*(*state).scope).parent; } }
+    (*state).domain = domain;
+    (*state).effect = effect;
+}
+
+fn os_variable(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    var value: *OsValue = null(*OsValue);
+    if !(*statement).uninitialized { value = os_expr(check, state, (*statement).value); }
+    else { if (*(*statement).syntax_type).kind == CRUST_T_NAME {
+        var object: *OsObject = os_object(check, state, (*statement).syntax_type, null(*OsObject), (*state).scope, false);
+        value = os_value(check, (*statement).syntax_type, object, false);
+    } }
+    if !os_failed(check) { os_bind(check, state, (*statement).name, (*statement).syntax_type, value, &(*statement).loc); }
+}
+
+fn os_if(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    if !os_pure(check, (*statement).expr) { return; }
+    os_expr(check, state, (*statement).expr);
+    if os_failed(check) { return; }
+    var yes: OsState = *state;
+    var no: OsState = *state;
+    os_refine(check, &yes, (*statement).expr, true);
+    os_refine(check, &no, (*statement).expr, false);
+    os_statement(check, &yes, (*statement).body);
+    os_statement(check, &no, (*statement).otherwise);
+    if yes.flow != PF_NORMAL { *state = no; if no.flow != PF_NORMAL { (*state).flow = yes.flow; } return; }
+    if no.flow != PF_NORMAL { *state = yes; return; }
+    os_join(check, state, &yes, &no, &(*statement).loc);
+}
+
+fn os_join(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState, location: *CrustLoc) -> unit {
+    var scope: *OsScope = (*target).scope;
+    while scope != null(*OsScope) && !os_failed(check) {
+        var slot: *OsSlot = (*scope).locals;
+        while slot != null(*OsSlot) && !os_failed(check) {
+            os_join_slot(check, target, left, right, slot, location);
+            slot = (*slot).next;
+        }
+        scope = (*scope).parent;
+    }
+    var object: *OsObject = (*check).objects;
+    while object != null(*OsObject) && !os_failed(check) {
+        if !os_shared_object(target, left, right, object) { object = (*object).next; continue; }
+        var a: u32 = os_flags(left, object);
+        var b: u32 = os_flags(right, object);
+        if (os_flags(left, os_root(object)) & OS_ABSENT) != 0u32 { a = b & ~OS_NONNULL; }
+        if (os_flags(right, os_root(object)) & OS_ABSENT) != 0u32 { b = a & ~OS_NONNULL; }
+        os_join_construction(check, left, right, object, a, b, location);
+        os_mark(check, target, object, a & b);
+        var field: *OsSlot = (*object).fields;
+        while field != null(*OsSlot) && !os_failed(check) {
+            os_join_slot(check, target, left, right, field, location);
+            field = (*field).next;
+        }
+        object = (*object).next;
+    }
+}
+
+fn os_shared_object(target: *OsState, left: *OsState, right: *OsState, object: *OsObject) -> bool {
+    return os_fact(target, object as *u8) != null(*OsFact) &&
+        os_fact(left, object as *u8) != null(*OsFact) && os_fact(right, object as *u8) != null(*OsFact);
+}
+
+fn os_join_construction(check: *OsCheck, left: *OsState, right: *OsState, object: *OsObject,
+                         a: u32, b: u32, location: *CrustLoc) -> unit {
+    var root: *OsObject = os_root(object);
+    if (os_flags(left, root) & OS_LIVE) == 0u32 && (os_flags(right, root) & OS_LIVE) == 0u32 { return; }
+    if ((a ^ b) & (OS_READY | OS_PINNED)) != 0u32 {
+        os_error(check, location, "continuing paths must agree on construction and stable storage");
+    }
+}
+
+fn os_join_slot(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
+                slot: *OsSlot, location: *CrustLoc) -> unit {
+    var a: *OsValue = os_bound(left, slot);
+    var b: *OsValue = os_bound(right, slot);
+    if (*slot).object != null(*OsObject) {
+        var root: *OsObject = os_root((*slot).object);
+        if (os_flags(left, root) & OS_ABSENT) != 0u32 { a = b; }
+        if (os_flags(right, root) & OS_ABSENT) != 0u32 { b = a; }
+    }
+    if a == b { os_set(check, target, slot as *u8, a, 0u32); return; }
+    if a == null(*OsValue) || b == null(*OsValue) { os_join_absent(check, target, left, right, slot, a, b, location); return; }
+    if (*a).object != (*b).object || (*a).pointer != (*b).pointer || (*a).borrow_scope != (*b).borrow_scope {
+        os_error(check, location, "continuing paths must agree on storage origins and cursor lifetimes"); return;
+    }
+    os_set(check, target, slot as *u8, a, 0u32);
+}
+
+fn os_join_absent(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
+                  slot: *OsSlot, a: *OsValue, b: *OsValue, location: *CrustLoc) -> unit {
+    var live: *OsValue = a;
+    var branch: *OsState = left;
+    if live == null(*OsValue) { live = b; branch = right; }
+    if (*slot).owns && live != null(*OsValue) && (*live).pointer && (*live).object != null(*OsObject) &&
+       (os_flags(branch, (*live).object) & OS_ABSENT) != 0u32 {
+        os_set(check, target, slot as *u8, null(*OsValue), 0u32); return;
+    }
+    if (*slot).owns { os_error(check, location, "continuing paths must agree on owner consumption"); return; }
+    os_set(check, target, slot as *u8, null(*OsValue), 0u32);
+}
+
+fn os_while(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    if (*state).effect == OS_READ { os_read_loop(check, state, statement); return; }
+    if !os_pure(check, (*statement).expr) { return; }
+    var entry: OsState = *state;
+    os_havoc(check, state, (*state).domain, null(*OsField));
+    os_expr(check, state, (*statement).expr);
+    var body: OsState = *state;
+    os_refine(check, &body, (*statement).expr, true);
+    (*check).loop_depth = (*check).loop_depth + 1usize;
+    os_statement(check, &body, (*statement).body);
+    (*check).loop_depth = (*check).loop_depth - 1usize;
+    if os_failed(check) { return; }
+    if body.flow != PF_NORMAL && body.flow != PF_TRAP {
+        os_error(check, &(*statement).loc, "ownership loop requires a normal invariant-preserving backedge"); return;
+    }
+    if body.flow == PF_NORMAL { os_loop_owners(check, state, &body, &(*statement).loc); }
+    os_join(check, state, &entry, &body, &(*statement).loc);
+    os_refine(check, state, (*statement).expr, false);
+}
+
+fn os_loop_owners(check: *OsCheck, entry: *OsState, body: *OsState, location: *CrustLoc) -> unit {
+    var scope: *OsScope = (*entry).scope;
+    while scope != null(*OsScope) && !os_failed(check) {
+        var slot: *OsSlot = (*scope).locals;
+        while slot != null(*OsSlot) && !os_failed(check) {
+            var before: *OsValue = os_bound(entry, slot);
+            var after: *OsValue = os_bound(body, slot);
+            if before != after && ((*slot).owns || (before != null(*OsValue) && (*before).pointer)) {
+                os_error(check, location, "loop backedge must preserve outer owners and cursor origins");
+            }
+            slot = (*slot).next;
+        }
+        scope = (*scope).parent;
+    }
+}
+
+fn os_return(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    if (*statement).expr != null(*CrustExpr) {
+        var value: *OsValue = os_expr(check, state, (*statement).expr);
+        if value == null(*OsValue) || os_failed(check) { return; }
+        if !os_transferable(check, state, value, &(*statement).loc) { return; }
+        if (*value).pointer || (*(*value).syntax).kind == RS_READ || (*(*value).syntax).kind == RS_MUT {
+            os_error(check, &(*statement).loc, "returning a cursor requires a declared lifetime interface"); return;
+        }
+        if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
+            os_error(check, &(*statement).loc, "return value is not fully initialized"); return;
+        }
+    }
+    os_function_exit(check, state, &(*statement).loc);
+    while (*state).scope != null(*OsScope) && !os_failed(check) {
+        os_scope_end(check, state, &(*statement).loc);
+    }
+    (*state).flow = PF_RETURN;
+}

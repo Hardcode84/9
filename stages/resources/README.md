@@ -286,10 +286,12 @@ checks to the caller's stage. Plain values have no resource cleanup obligation
 and are not `read` or `mut` bindings. The caller must prove every reachable read, write,
 transfer, and cleanup before emission. This includes initialization through
 aliases and all branch and loop paths. Taking an address does not initialize
-storage. Owner construction, moves, loan bindings, and cleanup eligibility keep
+storage. Delegated address formation can read a shared loan; the caller must
+check the resulting pointer's access permission before use. Owner construction,
+moves, loan bindings, and cleanup eligibility keep
 their source checks. Their states must still agree at continuing control-flow
-edges. The [combined tutorial](../../examples/intrusive/README.md)
-meets this contract through complete proof views. Plain `rs_prepare` retains
+edges. The [intrusive tutorial](../../examples/intrusive/README.md) describes
+the modular checker and the earlier complete proof views. Plain `rs_prepare` retains
 whole-binding initialization checks and its explicit `unsafe` requirement.
 
 ## 6. Check the proof and cost boundaries

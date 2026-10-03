@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_relation_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract: *OsFunction) -> *OsValue {
+    var relation: *RlContract = (*contract).relation;
+    var arguments: **OsValue = os_alloc(check, (*expression).arg_count * sizeof(*OsValue), alignof(*OsValue)) as **OsValue;
+    if arguments == null(**OsValue) { return null(*OsValue); }
+    var parameter: *RlParam = (*relation).parameters;
+    var family: *OsField = null(*OsField);
+    var index: usize = 0usize;
+    while index < (*expression).arg_count && !os_failed(check) {
+        if !os_pure(check, (*expression).args[index]) { return null(*OsValue); }
+        arguments[index] = os_expr(check, state, (*expression).args[index]);
+        index = index + 1usize;
+    }
+    while parameter != null(*RlParam) && !os_failed(check) {
+        index = os_parameter_index((*relation).declaration, (*parameter).parameter);
+        if index >= (*expression).arg_count { os_error(check, &(*expression).loc, "missing relation argument"); return null(*OsValue); }
+        os_relation_argument(check, state, relation, parameter, arguments[index], family, &(*expression).loc);
+        if os_failed(check) { return null(*OsValue); }
+        family = (*(*arguments[index]).object).family;
+        parameter = (*parameter).next;
+    }
+    if (*relation).effect == RL_EDIT { os_havoc(check, state, (*state).domain, family); }
+    parameter = (*relation).parameters;
+    index = 0usize;
+    while parameter != null(*RlParam) && !os_failed(check) {
+        index = os_parameter_index((*relation).declaration, (*parameter).parameter);
+        os_relation_result(check, state, relation, parameter, arguments, index);
+        parameter = (*parameter).next;
+    }
+    return os_value(check, (*(*contract).declaration).syntax_type, null(*OsObject), false);
+}
+
+fn os_parameter_index(declaration: *CrustDecl, target: *CrustParam) -> usize {
+    var parameter: *CrustParam = (*declaration).params;
+    var index: usize = 0usize;
+    while parameter != null(*CrustParam) && parameter != target {
+        parameter = (*parameter).next;
+        index = index + 1usize;
+    }
+    return index;
+}
+
+fn os_relation_argument(check: *OsCheck, state: *OsState, relation: *RlContract, parameter: *RlParam,
+                        value: *OsValue, family: *OsField, location: *CrustLoc) -> unit {
+    if value == null(*OsValue) || os_failed(check) { return; }
+    var object: *OsObject = (*value).object;
+    if !(*value).pointer || object == null(*OsObject) || (*object).family == null(*OsField) {
+        os_error(check, location, "relation argument requires a declared member or anchor cursor"); return;
+    }
+    if family != null(*OsField) && (*object).family != family {
+        os_error(check, location, "relation arguments use different member families"); return;
+    }
+    if !os_access(check, state, object, (*relation).effect == RL_EDIT, location) { return; }
+    if (*parameter).role == RL_CONSTRUCT { os_construct_argument(check, state, object, location); return; }
+    if (os_flags(state, object) & OS_READY) == 0u32 {
+        os_error(check, location, "relation cursor requires an initialized hook"); return;
+    }
+    if !os_relation_role(check, state, parameter, object, location) { return; }
+    os_publish_argument(check, state, relation, parameter, object, location);
+}
+
+fn os_relation_role(check: *OsCheck, state: *OsState, parameter: *RlParam,
+                    object: *OsObject, location: *CrustLoc) -> bool {
+    if (*parameter).role == RL_HEAD && !(*object).anchor {
+        os_error(check, location, "relation parameter requires an anchor"); return false;
+    }
+    if (*parameter).role == RL_MEMBER && ((*object).anchor ||
+       ((*object).abstract && (os_flags(state, object) & OS_MEMBER) == 0u32)) {
+        os_error(check, location, "relation parameter requires a proven member-field origin"); return false;
+    }
+    return true;
+}
+
+fn os_construct_argument(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+    if (*check).loop_depth != 0usize {
+        os_error(check, location, "hook construction requires storage outside a repeated loop body"); return;
+    }
+    if (*object).abstract || (os_flags(state, object) & OS_READY) != 0u32 {
+        os_error(check, location, "hook initialization requires a fresh construction slot"); return;
+    }
+    if (os_flags(state, os_root(object)) & OS_RETIRING) != 0u32 {
+        os_error(check, location, "destruction cannot republish a construction slot");
+    }
+}
+
+fn os_publish_argument(check: *OsCheck, state: *OsState, relation: *RlContract,
+                       parameter: *RlParam, object: *OsObject, location: *CrustLoc) -> unit {
+    if (*relation).effect != RL_EDIT || (*parameter).isolated { return; }
+    var root: *OsObject = os_root(object);
+    if (os_flags(state, root) & OS_RETIRING) != 0u32 {
+        os_error(check, location, "destruction cannot publish a member cursor"); return;
+    }
+    if !(*object).abstract && !os_initialized(check, state, root) {
+        os_error(check, location, "publication requires a fully initialized containing value");
+    }
+}
+
+fn os_distinct(left: *OsObject, right: *OsObject) -> bool {
+    return left != right && !(*left).abstract && !(*right).abstract;
+}
+
+fn os_relation_result(check: *OsCheck, state: *OsState, relation: *RlContract,
+                      parameter: *RlParam, values: **OsValue, index: usize) -> unit {
+    var object: *OsObject = (*values[index]).object;
+    var isolated: bool = (*parameter).isolated || (*parameter).role == RL_CONSTRUCT;
+    if (*parameter).unless_same != null(*CrustParam) {
+        var other: *CrustParam = (*(*relation).declaration).params;
+        var offset: usize = 0usize;
+        while other != (*parameter).unless_same && other != null(*CrustParam) { other = (*other).next; offset = offset + 1usize; }
+        isolated = isolated && os_distinct(object, (*values[offset]).object);
+    }
+    if (*parameter).role == RL_CONSTRUCT {
+        os_mark(check, state, object, os_flags(state, object) | OS_READY);
+        var root: *OsObject = os_root(object);
+        os_mark(check, state, root, os_flags(state, root) | OS_PINNED);
+    }
+    if isolated { os_mark(check, state, object, os_flags(state, object) | OS_ISOLATED); }
+}

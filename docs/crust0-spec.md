@@ -28,7 +28,9 @@ function boundaries. Check each body against those contracts, with local flow
 analysis. The user-facing model must be no more complex than Rust's for both
 application and container authors. The [checked ownership target](design.md#checked-ownership-target)
 defines the acceptance gate. The current closed-program memory stage does not
-meet that gate. These requirements add no ownership feature to the seed.
+meet that gate. The separate [modular stage](../examples/intrusive/README.md)
+implements a bounded source subset through public compiler interfaces.
+These requirements add no ownership feature to the seed.
 
 This document controls Crust0 version 0.1. The earlier documents remain research
 and capability requirements. Their proposed syntax is not additional Crust0 syntax.
@@ -950,7 +952,7 @@ direct two-hook client through its typed operation tree. Its library proof also
 checks init, unlink, insert, and splice over rings of arbitrary length. The
 client checker expands calls or uses selected concrete effect templates. It
 requires a proved end to each unfolded loop.
-The [resource composition](../examples/intrusive/README.md) also
+The [closed-program resource composition](../examples/intrusive/README.md#closed-program-proof-examples) also
 checks source lifetimes, owner transfers, and complete cleanup plans. Neither
 closed-program profile consumes modular ownership summaries. Passing
 these checks does not complete compiler-construction or checked-language
@@ -963,6 +965,14 @@ An optional read-only loop stage checks an inductive invariant and a decreasing
 integer variant. It checks runtime-sized intrusive traversal and subsequent
 resource cleanup. Loops with memory writes or allocation require a different
 frame rule and reject this form.
+
+The separate [modular ownership stage](../examples/intrusive/README.md) checks
+each source body against declared field and function contracts. It supports
+individual owners, two reciprocal hook families, scoped cursors, checked payload
+projection, and head cleanup over arbitrary list sizes. It does not expand
+callees or inspect clients when checking a library body. Inferred proof state
+erases before emission. Unexpressed lifetime and field destruction relationships
+reject; this bounded subset does not establish the full checked-language gate.
 
 The first implementation must establish these cases before adding language
 facilities:

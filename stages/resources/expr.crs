@@ -401,7 +401,7 @@ fn rs_address_expression(function: *RsFunction, source: *CrustExpr, output: *RsS
         rs_error(stage, location, "raw addresses require an unsafe region; use read or mut for a loan");
         return null(*RsValue);
     }
-    var place: *RsValue = rs_place(function, (*source).left, output, true, true);
+    var place: *RsValue = rs_place(function, (*source).left, output, !(*stage).delegate_memory, true);
     if (*stage).failed { return null(*RsValue); }
     var syntax: *CrustTypeSyntax = rs_pointer(stage, (*place).syntax);
     return rs_capture(function, output, rs_value(function, syntax,

@@ -1,0 +1,175 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn rl_copy_world(run: *PfRun, state: *PfState) -> *RlWorld {
+    var world: *RlWorld = pf_alloc(run, sizeof(RlWorld), alignof(RlWorld)) as *RlWorld;
+    if world != null(*RlWorld) { *world = *rl_world(state); (*state).data = world as *u8; }
+    return world;
+}
+
+fn rl_snapshot(run: *PfRun, state: *PfState) -> unit {
+    var world: *RlWorld = rl_copy_world(run, state);
+    var family: *RlFamily = (*(*rl_stage(run)).current).family;
+    var snapshot: *RlSnapshot = pf_alloc(run, sizeof(RlSnapshot), alignof(RlSnapshot)) as *RlSnapshot;
+    if pf_failed(run) { return; }
+    *snapshot = make RlSnapshot {
+        first: (*pf_field(run, state, (*family).first)).value,
+        second: (*pf_field(run, state, (*family).second)).value,
+        live: (*world).live, heads: (*world).heads, colors: (*world).colors,
+        next: (*world).snapshots
+    };
+    (*world).snapshots = snapshot;
+}
+
+fn rl_invariant(run: *PfRun, snapshot: *RlSnapshot, at: *u8) -> *u8 {
+    var first: *u8 = pf_select(run, (*snapshot).first, at);
+    var second: *u8 = pf_select(run, (*snapshot).second, at);
+    var color: *u8 = pf_select(run, (*snapshot).colors, at);
+    var valid: *u8 = pf_and(run, pf_select(run, (*snapshot).live, first),
+                               pf_select(run, (*snapshot).live, second));
+    valid = pf_and(run, valid, pf_eq(run, pf_select(run, (*snapshot).second, first), at));
+    valid = pf_and(run, valid, pf_eq(run, pf_select(run, (*snapshot).first, second), at));
+    valid = pf_and(run, valid, pf_eq(run, pf_select(run, (*snapshot).colors, first), color));
+    valid = pf_and(run, valid, pf_eq(run, pf_select(run, (*snapshot).colors, second), color));
+    valid = pf_and(run, valid, pf_implies(run, pf_select(run, (*snapshot).heads, at), pf_eq(run, color, at)));
+    return pf_implies(run, pf_select(run, (*snapshot).live, at), valid);
+}
+
+// A finite set of instances weakens the universal premise. An UNSAT result
+// therefore proves the obligation for every heap size.
+fn rl_ground(run: *PfRun, state: *PfState, at: *u8) -> unit {
+    var snapshot: *RlSnapshot = (*rl_world(state)).snapshots;
+    while snapshot != null(*RlSnapshot) {
+        pf_assume(run, state, rl_invariant(run, snapshot, at));
+        pf_assume(run, state, rl_invariant(run, snapshot, pf_select(run, (*snapshot).first, at)));
+        pf_assume(run, state, rl_invariant(run, snapshot, pf_select(run, (*snapshot).second, at)));
+        snapshot = (*snapshot).next;
+    }
+}
+
+fn rl_isolated(run: *PfRun, state: *PfState, at: *u8) -> *u8 {
+    var family: *RlFamily = (*(*rl_stage(run)).current).family;
+    return pf_and(run,
+        pf_eq(run, pf_select(run, (*pf_field(run, state, (*family).first)).value, at), at),
+        pf_eq(run, pf_select(run, (*pf_field(run, state, (*family).second)).value, at), at));
+}
+
+fn rl_test(run: *PfRun, state: *PfState, term: *u8, location: *CrustLoc) -> i32 {
+    var goal: PfGoal = make PfGoal {
+        loc: *location, value: term, assumptions: (*state).assumptions,
+        next: null(*PfGoal), proven: false
+    };
+    return pf_solve(run, pf_query(run, &goal), location);
+}
+
+fn rl_post_snapshot(run: *PfRun, state: *PfState, colors: *u8, result: *RlSnapshot) -> unit {
+    var family: *RlFamily = (*(*rl_stage(run)).current).family;
+    var world: *RlWorld = rl_world(state);
+    *result = make RlSnapshot {
+        first: (*pf_field(run, state, (*family).first)).value,
+        second: (*pf_field(run, state, (*family).second)).value,
+        live: (*world).live, heads: (*world).heads, colors: colors, next: null(*RlSnapshot)
+    };
+}
+
+fn rl_closed_term(run: *PfRun, state: *PfState, colors: *u8, witness: *u8) -> *u8 {
+    var snapshot: RlSnapshot = uninit;
+    rl_post_snapshot(run, state, colors, &snapshot);
+    var family: *RlFamily = (*(*rl_stage(run)).current).family;
+    var initialized: *u8 = pf_and(run,
+        pf_select(run, (*pf_field(run, state, (*family).first)).initialized, witness),
+        pf_select(run, (*pf_field(run, state, (*family).second)).initialized, witness));
+    return pf_and(run, rl_invariant(run, &snapshot, witness),
+        pf_implies(run, pf_select(run, snapshot.live, witness), initialized));
+}
+
+fn rl_ground_state(run: *PfRun, state: *PfState, witness: *u8) -> unit {
+    rl_ground(run, state, witness);
+    var term: *PfTerm = (*state).terms;
+    while term != null(*PfTerm) {
+        rl_ground(run, state, (*term).value);
+        term = (*term).next;
+    }
+}
+
+fn rl_parameter_value(run: *PfRun, parameter: *CrustParam) -> *u8 {
+    var binding: *PfBinding = (*run).parameters;
+    while binding != null(*PfBinding) {
+        if (*binding).symbol == (*parameter).symbol { return (*binding).value; }
+        binding = (*binding).next;
+    }
+    pf_error((*run).stage, &(*parameter).loc, "link contract parameter has no value");
+    return null(*u8);
+}
+
+fn rl_color_candidate(run: *PfRun, state: *PfState, source: *u8,
+                      target: *u8, merge: bool, exceptions: *u8) -> *u8 {
+    var colors: *u8 = (*rl_world(state)).colors;
+    var condition: *u8 = pf_eq(run, "rl!cell", source);
+    if merge {
+        condition = pf_and(run, exceptions,
+            pf_eq(run, pf_select(run, colors, "rl!cell"), pf_select(run, colors, source)));
+    }
+    return pf_unary(run, "lambda ((rl!cell Int))", pf_ite(run, condition,
+        pf_select(run, colors, target), pf_select(run, colors, "rl!cell")));
+}
+
+fn rl_color_exceptions(run: *PfRun, state: *PfState, location: *CrustLoc) -> *u8 {
+    var result: *u8 = "true";
+    var parameter: *RlParam = (*(*rl_stage(run)).current).parameters;
+    while parameter != null(*RlParam) && !pf_failed(run) {
+        var value: *u8 = rl_parameter_value(run, (*parameter).parameter);
+        if rl_test(run, state, rl_isolated(run, state, value), location) == 0i32 {
+            result = pf_and(run, result, pf_not(run, pf_eq(run, "rl!cell", value)));
+        }
+        parameter = (*parameter).next;
+    }
+    return result;
+}
+
+fn rl_try_colors(run: *PfRun, state: *PfState, witness: *u8,
+                 source: *RlParam, exceptions: *u8, location: *CrustLoc) -> *u8 {
+    var from: *u8 = rl_parameter_value(run, (*source).parameter);
+    var target: *RlParam = (*(*rl_stage(run)).current).parameters;
+    while target != null(*RlParam) && !pf_failed(run) {
+        var to: *u8 = rl_parameter_value(run, (*target).parameter);
+        var candidate: *u8 = rl_color_candidate(run, state, from, to, false, exceptions);
+        if rl_test(run, state, rl_closed_term(run, state, candidate, witness), location) == 0i32 {
+            return candidate;
+        }
+        if (*source).role == RL_HEAD {
+            candidate = rl_color_candidate(run, state, from, to, true, exceptions);
+            if rl_test(run, state, rl_closed_term(run, state, candidate, witness), location) == 0i32 {
+                return candidate;
+            }
+        }
+        target = (*target).next;
+    }
+    return null(*u8);
+}
+
+fn rl_close(run: *PfRun, state: *PfState, location: *CrustLoc) -> bool {
+    var witness: *u8 = pf_fresh(run, "Int");
+    rl_ground_state(run, state, witness);
+    var colors: *u8 = (*rl_world(state)).colors;
+    if rl_test(run, state, rl_closed_term(run, state, colors, witness), location) != 0i32 {
+        var exceptions: *u8 = rl_color_exceptions(run, state, location);
+        var source: *RlParam = (*(*rl_stage(run)).current).parameters;
+        colors = null(*u8);
+        while source != null(*RlParam) && colors == null(*u8) && !pf_failed(run) {
+            colors = rl_try_colors(run, state, witness, source, exceptions, location);
+            source = (*source).next;
+        }
+    }
+    if pf_failed(run) { return false; }
+    if colors == null(*u8) {
+        pf_error((*run).stage, location, "link body does not preserve reciprocal fields and anchor identity");
+        return false;
+    }
+    pf_goal(run, state, rl_closed_term(run, state, colors, witness), location);
+    if !pf_prove_goals(run, state) { return false; }
+    var world: *RlWorld = rl_copy_world(run, state);
+    if world == null(*RlWorld) { return false; }
+    (*world).colors = pf_define(run, "(Array Int Int)", colors);
+    rl_snapshot(run, state);
+    return !pf_failed(run);
+}

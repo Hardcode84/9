@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn memory_alloc_verify(context: *CrustContext, source: *CrustSource, selection: *u8) -> bool {
+    var resources: RsStage = uninit;
+    rs_init(&resources, context);
+    var ownership: OsStage = uninit;
+    os_init(&ownership, &resources);
+    var relations: RlStage = uninit;
+    rl_init(&relations, context);
+    var valid: bool = os_read(&ownership, source, 0usize, (*source).size);
+    if valid { valid = os_lower(&ownership, &relations) && os_verify(&ownership, &relations); }
+    rl_destroy(&relations);
+    return valid;
+}

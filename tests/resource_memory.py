@@ -373,13 +373,13 @@ def run_suite(build, directory, sanitize, pattern):
 def intrusive_cases(build, directory, sanitize):
     tutorial = ROOT / "examples/intrusive"
     links = ROOT / "examples/ownership/links.crs"
-    program = tutorial / "program.crs"
+    program = tutorial / "closed-program.crs"
     generated = directory / "intrusive.c"
     symbols = directory / "intrusive.rsp"
     command(
         [
             build / "crust",
-            tutorial / "main.crs",
+            tutorial / "closed-main.crs",
             "--emit-c",
             "--symbols",
             symbols,

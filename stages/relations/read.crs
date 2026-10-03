@@ -1,0 +1,184 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record RlSyntaxParam {
+    name: *CrustName;
+    unless_same: *CrustName;
+    next: *RlSyntaxParam;
+    role: u32;
+    isolated: bool;
+}
+
+record RlSyntax {
+    declaration: *CrustDecl;
+    family: *CrustName;
+    first: *CrustName;
+    second: *CrustName;
+    parameters: *RlSyntaxParam;
+    next: *RlSyntax;
+    effect: u32;
+}
+
+fn rls_new(reader: *CrustReader, declaration: *CrustDecl) -> *RlSyntax {
+    var syntax: *RlSyntax = rr_alloc(reader, sizeof(RlSyntax), alignof(RlSyntax)) as *RlSyntax;
+    if syntax != null(*RlSyntax) { (*syntax).declaration = declaration; }
+    return syntax;
+}
+
+fn rls_pair(reader: *CrustReader, syntax: *RlSyntax) -> unit {
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' after reciprocal");
+    (*syntax).first = rr_name(reader);
+    rr_expect(reader, 44u32, "expected ',' between inverse fields");
+    (*syntax).second = rr_name(reader);
+    rr_expect(reader, 41u32, "expected ')' after inverse fields");
+    rr_expect(reader, 59u32, "expected ';' after reciprocal fields");
+}
+
+fn rls_parameter(reader: *CrustReader, syntax: *RlSyntax, name: *CrustName) -> *RlSyntaxParam {
+    var parameter: *RlSyntaxParam = (*syntax).parameters;
+    while parameter != null(*RlSyntaxParam) {
+        if (*parameter).name == name { return parameter; }
+        parameter = (*parameter).next;
+    }
+    parameter = rr_alloc(reader, sizeof(RlSyntaxParam), alignof(RlSyntaxParam)) as *RlSyntaxParam;
+    if parameter != null(*RlSyntaxParam) {
+        (*parameter).name = name;
+        (*parameter).next = (*syntax).parameters;
+        (*syntax).parameters = parameter;
+    }
+    return parameter;
+}
+
+fn rls_role(reader: *CrustReader) -> u32 {
+    if rr_is_name(reader, "cursor") { return RL_LINK; }
+    if rr_is_name(reader, "anchor") { return RL_HEAD; }
+    if rr_is_name(reader, "member") { return RL_MEMBER; }
+    if rr_is_name(reader, "construct") { return RL_CONSTRUCT; }
+    return 0u32;
+}
+
+fn rls_parameter_clause(reader: *CrustReader, syntax: *RlSyntax) -> bool {
+    var role: u32 = rls_role(reader);
+    var isolated: bool = rr_is_name(reader, "isolated");
+    var conditional: bool = rr_is_name(reader, "unless_same");
+    if role == 0u32 && !isolated && !conditional { return false; }
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' in link contract");
+    var name: *CrustName = rr_name(reader);
+    var parameter: *RlSyntaxParam = rls_parameter(reader, syntax, name);
+    if parameter == null(*RlSyntaxParam) { return true; }
+    if role != 0u32 {
+        if (*parameter).role != 0u32 { rr_error(reader, (*reader).token.offset, "duplicate link parameter role"); }
+        (*parameter).role = role;
+    }
+    if isolated { (*parameter).isolated = true; }
+    if conditional {
+        rr_expect(reader, 44u32, "expected ',' before exception parameter");
+        (*parameter).unless_same = rr_name(reader);
+    }
+    rr_expect(reader, 41u32, "expected ')' in link contract");
+    return true;
+}
+
+fn rls_function(reader: *CrustReader, syntax: *RlSyntax) -> unit {
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' after links");
+    if rr_is_name(reader, "read") { (*syntax).effect = RL_READ; }
+    else { if rr_is_name(reader, "edit") { (*syntax).effect = RL_EDIT; }
+    else { rr_error(reader, (*reader).token.offset, "expected read or edit link effect"); return; } }
+    rr_next(reader);
+    rr_expect(reader, 44u32, "expected ',' before link type");
+    (*syntax).family = rr_name(reader);
+    rr_expect(reader, 41u32, "expected ')' after link type");
+    while !(*reader).failed && rls_parameter_clause(reader, syntax) { }
+}
+
+fn rls_field(declaration: *CrustDecl, name: *CrustName) -> *CrustField {
+    var field: *CrustField = (*declaration).fields;
+    while field != null(*CrustField) {
+        if (*field).name == name { return field; }
+        field = (*field).next;
+    }
+    return null(*CrustField);
+}
+
+fn rls_param(declaration: *CrustDecl, name: *CrustName) -> *CrustParam {
+    var parameter: *CrustParam = (*declaration).params;
+    while parameter != null(*CrustParam) {
+        if (*parameter).name == name { return parameter; }
+        parameter = (*parameter).next;
+    }
+    return null(*CrustParam);
+}
+
+fn rls_resolve_family(stage: *RlStage, resources: *RsStage, syntax: *RlSyntax) -> bool {
+    var global: *RsGlobal = rs_global(resources, (*(*syntax).declaration).name);
+    var declaration: *CrustDecl = (*global).lowered;
+    var first: *CrustField = rls_field(declaration, (*syntax).first);
+    var second: *CrustField = rls_field(declaration, (*syntax).second);
+    if first == null(*CrustField) || second == null(*CrustField) {
+        rs_error(resources, &(*declaration).loc, "reciprocal contract names an absent field");
+        return false;
+    }
+    return rl_family(stage, declaration, first, second) != null(*RlFamily);
+}
+
+fn rls_resolve_parameters(stage: *RlStage, resources: *RsStage,
+                          contract: *RlContract, syntax: *RlSyntax) -> bool {
+    var source: *RlSyntaxParam = (*syntax).parameters;
+    while source != null(*RlSyntaxParam) {
+        var parameter: *CrustParam = rls_param((*contract).declaration, (*source).name);
+        var exception: *CrustParam = null(*CrustParam);
+        if (*source).unless_same != null(*CrustName) {
+            exception = rls_param((*contract).declaration, (*source).unless_same);
+        }
+        if parameter == null(*CrustParam) || (*source).role == 0u32 ||
+           ((*source).unless_same != null(*CrustName) && (exception == null(*CrustParam) || !(*source).isolated)) {
+            rs_error(resources, &(*(*syntax).declaration).loc, "link contract needs declared parameter roles and valid isolation results");
+            return false;
+        }
+        if !rl_parameter(stage, contract, parameter, (*source).role, (*source).isolated, exception) { return false; }
+        source = (*source).next;
+    }
+    return true;
+}
+
+fn rls_resolve_function(stage: *RlStage, resources: *RsStage, syntax: *RlSyntax) -> *RlContract {
+    var global: *RsGlobal = rs_global(resources, (*syntax).family);
+    var family: *RlFamily = null(*RlFamily);
+    if global != null(*RsGlobal) {
+        family = crust_map_get(&(*stage).families, (*global).lowered as usize) as *RlFamily;
+    }
+    if family == null(*RlFamily) {
+        rs_error(resources, &(*(*syntax).declaration).loc, "link contract needs a reciprocal record");
+        return null(*RlContract);
+    }
+    global = rs_global(resources, (*(*syntax).declaration).name);
+    if !rls_parameter_names(resources, global) { return null(*RlContract); }
+    var contract: *RlContract = rl_contract(stage, (*global).lowered, family, (*syntax).effect);
+    if contract == null(*RlContract) { return contract; }
+    if !rls_resolve_parameters(stage, resources, contract, syntax) { return null(*RlContract); }
+    return contract;
+}
+
+fn rls_parameter_names(resources: *RsStage, global: *RsGlobal) -> bool {
+    var source: *CrustDecl = (*global).source;
+    var target: *CrustDecl = (*global).lowered;
+    if (*(*source).syntax_type).kind != CRUST_T_UNIT || (*source).param_count != (*target).param_count {
+        rs_error(resources, &(*source).loc, "link functions require a unit result and direct pointer parameters");
+        return false;
+    }
+    var before: *CrustParam = (*source).params;
+    var after: *CrustParam = (*target).params;
+    while before != null(*CrustParam) {
+        if (*(*before).syntax_type).kind != CRUST_T_POINTER {
+            rs_error(resources, &(*before).loc, "link parameter requires a plain pointer source type");
+            return false;
+        }
+        // These bodies use the source bindings without resource ABI lowering.
+        (*after).name = (*before).name;
+        before = (*before).next;
+        after = (*after).next;
+    }
+    return true;
+}

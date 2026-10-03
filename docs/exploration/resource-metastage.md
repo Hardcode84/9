@@ -578,11 +578,25 @@ leaf bodies. Their structural release result removes a hook from that relation;
 it does not by itself authorize freeing an enclosing allocation. Solver rejection
 can be conservative when the finite input instances omit a needed invariant fact.
 
-This is evidence for local relation rules. It is not an implemented modular
-Crust ownership stage. The complete acceptance run must connect these rules to
-owner and access-scope checking, construction, nominal field origins, cleanup,
-separate interfaces, and emitted code. Internal proof probes do not establish
-the Rust complexity ceiling or a compilation-speed result.
+The [source stage and tutorial](../../examples/intrusive/README.md) now connect
+these rules to local owner and access checks, construction, nominal fields,
+cleanup, and emitted code. The stage checks each library body without a client
+and applies declared interfaces at calls. Both hook families support individual
+destruction and allocation reuse. Payload projection checks the associated head
+and exact field origin. Proof state adds no emitted C or symbol-map bytes.
+
+This is a bounded implementation of the candidate. The source subset rejects
+returned cursor interfaces and embedded resource destruction because it has no
+contract for their retained loans or child cleanup. Projection of owner-bearing
+payload needs field-loan identity. A `read` parameter requires a read-only domain
+effect. Read loans are accepted only as direct call arguments; nested argument
+calls must be evaluated first. Stored loans and ordinary mutable helper
+parameters are rejected. Resource destructors use their declared destruction
+authority. General payload loans need an access-origin contract that excludes
+conflicting cursors. These relationships must be added at the interface,
+not inferred from callee bodies. The general container and Rust complexity gate
+remains separate from the current native witness. No general compilation-speed
+result follows from a passing proof.
 
 The useful precedents each supply only part of the model.
 [GhostCell](https://plv.mpi-sws.org/rustbelt/ghostcell/paper.pdf) separates access

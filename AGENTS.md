@@ -2,9 +2,11 @@
 
 # Crust
 
-Crust is a small systems language with a C99 bootstrap compiler. Compilation
-speed through backend handoff is the first requirement. Keep the core small.
-Do not add a feature before a concrete program requires it.
+Crust is a small systems language with a C99 bootstrap compiler. Keep the core
+small and the basic compilation path fast. Users can select stronger checking
+stages with higher compilation cost. Measure that cost; it is not a veto on an
+explicitly selected capability. Do not add a feature before a concrete program
+requires it.
 
 ## Design
 
@@ -32,6 +34,11 @@ Do not add a feature before a concrete program requires it.
   reference counting, checks, or cleanup to the raw seed.
 - Raw-pointer examples do not prove memory safety. Validate a safety claim
   through the stage that enforces its rules and the final program behavior.
+- Keep ownership proof state out of generated programs. Stronger static checks
+  can cost more compiler time, but must not add runtime identity metadata,
+  validity checks, reference counts, or hidden cleanup flags. Null checks before
+  release and debug bounds checks are permitted. A cheaper checking profile
+  must reject unsupported proofs, not silently weaken its declared guarantees.
 
 ## Communication and documentation
 

@@ -11,8 +11,8 @@ language they need through ordinary libraries, and pay only for what they use.
 
 ## Design principles
 
-- **Compilation speed first.** C-level compilation speed before backend
-  processing is the main requirement.
+- **Fast by default.** Keep the basic compilation path close to C. Select
+  stronger language checks when their capabilities justify more compiler work.
 - **A small, extensible core.** Add language features through libraries.
   Keep the compiler interfaces open to replacement readers, checkers, and
   backends.

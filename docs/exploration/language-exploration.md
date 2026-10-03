@@ -2,7 +2,7 @@
 
 # Crust: exploration of a small systems language
 
-Date: 2026-09-30. Updated: 2026-10-01. Status: research and a proposed experiment.
+Date: 2026-09-30. Updated: 2026-10-03. Status: research and executable experiments.
 
 The [Crust0 specification](../crust0-spec.md) now defines the bootstrap language.
 The richer syntax and checked rules below remain research candidates, not seed
@@ -54,8 +54,10 @@ standard language stages. The seed has no hidden ownership solver. The
 preserves resource operations until checking and cleanup lowering are complete.
 The semantics below describe the standard checked Crust configuration.
 
-**C-level front-end speed is the first acceptance condition.** A feature that fails
-this condition does not enter the standard language, even if it has no runtime cost.
+**Keep the basic path fast; make stronger checks selectable.** The root program
+can choose capabilities with different compilation costs. C-level speed remains
+the basic profile's target, not a veto on an explicitly selected proof stage.
+Ownership proof state must still have no runtime representation.
 
 A required production witness is an intrusive doubly-linked list implemented in
 ordinary safe user code. Nodes must support individual destruction and storage
@@ -101,10 +103,10 @@ investigation also covers public Jai material.
 
 Use this priority order:
 
-1. Match or beat C before backend processing, including a single-worker build.
-2. Keep syntax and semantics small enough to learn and implement.
+1. Keep the basic path near C and measure optional checking costs separately.
+2. Keep the core small; expose stronger rules through user-selected stages.
 3. Preserve direct control of storage, layout, allocation, and calls.
-4. Prevent common resource and memory errors without a large proof system.
+4. Check common resource and memory errors locally; select stronger proofs when needed.
 5. Expose independent work to the compiler. Parallelism must improve an already fast path.
 
 The intrusive-list requirement includes writing the list algorithm itself.
@@ -972,18 +974,19 @@ Use this bounded comparison to resolve the gap:
 | Plain pointers with RAII | Useful C/C++ reliability baseline. Lifetime preconditions remain on the programmer; this alone does not pass the stronger safe-code requirement. |
 | Tracked observers and generation keys | Historical alternatives only. Their runtime validity metadata violates the revised ownership requirement. |
 
-No candidate in this table has passed the combined safety, simplicity, and
-C-speed gates. First specify a complete contract for one direct two-hook example.
+No candidate in this table has passed the combined safety and simplicity gates.
+First specify a complete contract for one direct two-hook example.
 Test the invalid programs in section 10.2, then measure the checker and generated
-code. Stop that candidate if it needs a global heap solver, hidden alias metadata,
-or a difficult proof language to meet its stated guarantees. Do not add a larger
-container system before this decision.
+code. More expensive static proof is permitted in an explicitly selected stage.
+Stop a candidate that requires runtime alias metadata or fails its safety and
+usability contract. Do not add a larger container system before this decision.
 
 #### Static ownership candidate and unresolved proof
 
-The research favors a small permission experiment over a second general borrow
-solver. This is a proposed external stage, not an implemented or proved language
-contract. The seed needs no ownership types or list operations.
+The experiments support an external stage based on permissions and explicit
+contracts. The following model is selected for the next implementation step.
+The current resource stage does not implement it. The seed needs no ownership
+types or list operations.
 
 Separate these compile-time facts:
 
@@ -1061,8 +1064,9 @@ Splice requires disjoint rooted cycles or its declared self-splice case. A root
 predicate must describe the complete set of hooks in its cycle. Splice transfers
 an abstract set between roots without a runtime list ID or a proof expansion per
 node. Unlink without a head argument must update the affected root description
-through a checked general lemma. This is the main unresolved proof. A non-head
-hook must also have the expected enclosing payload before a container projection.
+through a checked general lemma. The experiments below supply two algorithm-level
+proofs of this update. A non-head hook must also have the expected enclosing
+payload before a container projection.
 Neither a different address nor a domain brand proves these facts.
 
 Ordinary cursor views borrow domain access. In the conservative first rule, a
@@ -1070,9 +1074,9 @@ live shared cursor blocks mutation and destruction anywhere in that domain.
 Use the same domain permission for registered payload access in this first
 experiment; a separate payload-permission protocol is not yet justified.
 Payload projections, returned views, and captured views retain this loan.
-Owner access must obey the
-same permission rule, including access through another embedded hook. Internal
-link reads need named liveness facts; obtaining the domain again must not make
+Owner access must obey the same permission rule, including access through another
+embedded hook. Internal link reads need named liveness facts; obtaining the
+domain again must not make
 a saved stale address usable.
 
 Owner cleanup requires the mutation permission and the absence of conflicting
@@ -1094,8 +1098,8 @@ call unless its complete cleanup effects preserve every retained view. A
 remove-current operation must consume its current view and establish the next
 view after the permitted mutation; it cannot retain an unchecked successor.
 
-The decisive missing mechanism is a checked, reusable proof that exposes a local
-neighborhood from the invariant and restores the invariant after the stores.
+A checked, reusable proof must expose a local neighborhood from the invariant
+and restore the invariant after the stores.
 It must preserve facts about all untouched fields. A recursive segment proof
 or an abstract set of field locations can express this, but neither provides
 a cheap checker automatically. Domain permission reduces liveness bookkeeping;
@@ -1108,21 +1112,152 @@ must terminate and have no runtime effects. An unchecked axiom named `unlink`,
 an unchecked invariant declaration, or a stage exemption for hook records fails
 the experiment. The generic rules must justify user-defined field relationships.
 
-For compilation speed, start with local permission transfer, explicit invariant
-open and close operations, and bounded equality reasoning. Do not infer arbitrary
-heap shapes, search for proofs, or add a general SMT solver. Independent bodies
-can use the same declared contracts in parallel. Reuse checked helper results
-only with their exact definitions, interfaces, stage, and target-layout inputs;
-caching does not excuse a slow fresh application check.
+The inexpensive profile can use local permission transfer and explicit
+contracts. An optional relational profile can use invariant proofs and an
+external solver. The root selects these stages through ordinary calls. Solver
+failure, timeout, or an unsupported construct must stop the selected proof;
+there is no automatic downgrade to unchecked compilation. Independent bodies
+can use declared contracts in parallel. Reuse checked helper results only with
+their exact definitions, interfaces, stage, solver configuration, and target
+layout. Report fresh checking and proof-result reuse separately.
 
 The first decision point is the complete two-hook witness: unlink, individual
 destruction, exact-address reconstruction, continued use of the remaining list,
 head-first teardown, and constant-work splice. Reject faulty stores and escaped
 views through the same generic rules. Compare emitted operations and annotations
 with the direct baseline, then measure the complete stage. Stop if it requires
-runtime ownership state, trusted list algorithms, per-node splice work, global
-heap solving, or proof code that fails the readability gate in section 10.2.
-No source examined establishes all these properties together.
+runtime ownership state, trusted list algorithms, per-node runtime splice work,
+or proof code that fails the readability gate in section 10.2. Measure proof
+work without imposing the basic profile's C-speed gate on an optional profile.
+The experiments below establish parts of this boundary through executable
+checks. They do not establish a complete checked Crust application.
+
+#### Executable experiments and model selection
+
+The next model combines linear owners, scoped access permissions, and verified
+library contracts. Stronger proof is optional compiler work. All profiles keep
+proof state out of the application. A less capable checker rejects operations
+that it cannot justify; it does not silently accept their memory preconditions.
+
+The useful separation-logic representation pairs matching fields:
+
+```text
+edge(p, q) = owns(p.next = q) * owns(q.prev = p)
+```
+
+Here `*` combines disjoint field permissions. It does not require disjoint whole
+objects. An edge from a hook to itself owns its two different fields. A circular
+path joins these edge predicates. A detached hook owns `edge(h, h)`.
+
+This representation makes the destruction rule precise. The allocation owner
+keeps the deallocation right. The domain holds registered field permissions.
+Unlink returns the detached hook fields. Destruction must recover both hooks,
+all payload permissions, and the allocation right, with no remaining view.
+Membership never manufactures ownership. Removing a current cursor can return
+a detached place; it cannot return a destruction right that the cursor did not
+have. A list head's cleanup detaches members without taking their owners.
+
+One permission domain governs the first implementation. Its external shared
+views prevent mutation and destruction in that domain. This conservative rule
+also blocks edits to unrelated members. A projected payload view retains the
+loan after its cursor goes out of scope. A callback can use the domain only
+after its invariant is closed and conflicting views have ended. Teardown first
+detaches all hooks and prevents new views of the dying construction.
+
+Three independent experiments support this model:
+
+| Experiment | Established result | Boundary |
+|---|---|---|
+| Symbolic checking of actual Crust bodies | The ordinary reader, resolver, and checker export init, unlink, insertion, and splice operations. Their real stores satisfy an unbounded rooted-ring invariant. | The caller supplies valid disjoint typed storage and exclusive domain permission. This slice does not check allocator or owner code. |
+| Annotated C with VeriFast | Checked edge and path lemmas justify actual pointer edits over arbitrary-length lists. A client uses two embedded hooks, independent heap owners, and stack nodes. Deallocation requires both hooks back. | This verifier has its own C provenance model. It is evidence for the permission rules, not a Crust frontend. |
+| Executable lifetime model | Owner rights, cursor and projected-view loans, both hooks, teardown phases, and exact-address reuse obey one transition contract. Tests cover thousands of membership and destruction orders. | This is a concrete state model. Its scans and ghost counters are an oracle, not compiler algorithms or emitted state. |
+
+The independent proof uses [VeriFast 26.09](https://github.com/verifast/verifast/releases/tag/26.09).
+It verifies 318 statements and rejects 13 mutation and misuse cases. Its iterative
+head-clear loop returns every former member's detached fields. The head can then
+leave scope before the independently owned heap nodes are destroyed. There is no
+assumed unlink lemma. Checked ghost lemmas expose and restore the ring fields.
+
+That proof contains 171 nonblank executable C lines and 452 lines of annotations
+and comments, including 15 checked ghost lemmas and 9 predicates. This supports
+the permission mechanism, not a claim of simple proof authoring. Library helpers
+must carry the repeated proof work. The proof uses explicit erased ring witnesses;
+it does not establish automatic selection of a ring from a client's domain.
+
+The reuse results have different scopes. The C proof permits reconstruction in
+the same stack slot after both hooks are detached. A separate negative witness
+assumes that a new heap allocation has the freed block's numeric address; that
+equality still cannot authorize access through the old pointer. This does not
+prove that two constructions within one continuously allocated block receive
+distinct lifetime permissions. The executable lifetime model tests that rule;
+the Crust source checker must still enforce it.
+
+The Crust experiment is a real compiler path. An ordinary Crust stage reads
+source through the existing APIs, exports resolved operation identities, invokes
+the selected checker, and emits from the same unchanged context after success.
+It has no additional source parser, list-name exemption, or trusted unlink
+operation. A scratch Python executor constructs solver queries from that tree;
+it is not yet a Crust implementation of the ownership checker.
+
+The library supplies its invariant and function contracts separately from the
+generic operation executor. Declaration and field identities bind them to the
+checked input. Renaming functions, records, and fields preserves the proof.
+The solver receives the stores from the source, not replacement stores from the
+contract. Missing backlinks, wrong neighbors, wrong splice boundaries, and
+missing source-head reset fail before emission. Unsupported bodies and solver
+uncertainty fail too. Direct calls in this experiment expand the actual callee
+body; modular checking from a saved summary is not yet exercised.
+
+The symbolic model uses ghost maps for live hooks, roots, ranks, and ring lengths.
+Ranks distinguish a rooted cycle from an orphan cycle. Universal invariant
+instances at affected locations are enough for the tested operations; the proof
+does not enumerate a bounded number of nodes. The initial unrestricted
+quantifier experiment timed out on a rank obligation. Explicit instantiation
+and a preserved rank-uniqueness fact discharged it. This is a reason to make
+proof policy and budgets explicit, not to accept `unknown` as success.
+
+The accepted C for the four list operations is byte-identical to ordinary
+backend output before target optimization. A native client exercises two hooks,
+stack and separate heap storage, individual destruction, head-first cleanup,
+constant-work splice, and reconstruction at the exact address. It passes
+unoptimized, optimized, and address/undefined-behavior sanitizer runs. This
+client supplies runtime evidence; it is not checked by the Crust lifetime model.
+No frontend speed claim follows from these checks.
+
+Subobject projection needs its own contract. The default VeriFast C model
+rejects subtraction outside a field subobject, even with a known parent. Crust's
+existing storage rules retain the whole allocation origin for a field address.
+A separate symbolic check of the actual Crust `offsetof` projector uses those
+rules. Given a live typed parent and a loan to the specified embedded hook, it
+proves that pointer casts and subtraction recover that parent. Wrong member
+offsets, wrong element strides, and offsets outside the allocation fail. Native
+stack and heap projector calls also pass. No pointer tag or runtime test is used.
+
+That proof cannot infer a parent from address bits. A typed list must preserve
+the payload type and hook path at insertion and through traversal. A head has no
+payload projection. Two hooks in the same node retain the same construction
+identity and destruction boundary. The projection must carry its input loan;
+returning the address alone cannot extend the construction's lifetime. Recovering
+the parent address also grants no additional access permission. Reading payload
+needs its domain permission; a loan of one hook cannot become an exclusive view
+of the whole parent or its sibling hook.
+
+The selectable boundary is therefore between local checking and relational
+proof, not between two pointer representations. Local checking handles moves,
+cleanup obligations, scoped views, and declared capability transfers. A
+relational stage proves pointer-manipulating library bodies and loop invariants.
+Clients should consume checked contracts without repeating the library proof.
+That requires binding a summary to the exact body, types, layout, imports, and
+checker configuration. Such summaries may be cached by an ordinary stage.
+
+The concrete implementation work is to connect these contracts to Crust owner
+bindings, cleanup plans, and call effects. Every exit must return its domain
+permission or transfer it explicitly. Every projected or returned view must
+retain its loan. The checker must reject destruction while that loan survives,
+including through callbacks and another hook. The current experiments establish
+the field-edit and permission foundations; they do not replace these source
+checks. Keep the experiment artifacts in ignored build storage until that
+connection is ready. The C99 core remains unchanged.
 
 ### 6.10 Systems programming capability target
 
@@ -1367,7 +1502,8 @@ dependencies above address that separate problem.
 
 Measure parallel I/O, parsing, and body checking separately. A faster storage
 device or a warm cache can remove the benefit of I/O overlap. A language design
-claim is not speedup evidence. The single-worker C-speed gate still applies.
+claim is not speedup evidence. A claim of C-level speed still requires the
+single-worker gate. Other selected profiles must report their measured costs.
 
 ## 9. Cost ledger
 
@@ -1628,14 +1764,17 @@ Distinguish filesystem caches, backend artifacts, and application results.
 
 Use at least 20 paired timing samples after setup checks. Randomize run order.
 Report medians, variation, total CPU time, and peak memory. For each frozen
-workload and each comparable boundary, require a median candidate/C ratio at
-most 1.00. Require the upper bound of its 95% confidence interval to be at most 1.00.
-Otherwise, the speed requirement is not established. Collect more samples when
-noise prevents a decision. Do not average away a failing workload.
+workload and each comparable boundary that claims C-level speed, require a median
+candidate/C ratio at most 1.00. Require the upper bound of its 95% confidence
+interval to be at most 1.00.
+Otherwise, that speed claim is not established. An optional stronger checking
+profile can have a higher measured cost. Do not average away a failing workload
+or repeat samples solely to obtain a passing interval.
 
-Meet the single-worker gate first. Then run 2, 4, and 8 workers where hardware
-permits. Report wall-time gain and CPU/memory cost. Require identical diagnostics
-and equivalent program output across worker counts.
+Measure the single-worker path first. A C-level speed claim must pass its gate
+there. Then run 2, 4, and 8 workers where hardware permits. Report wall-time gain
+and CPU/memory cost. Require identical diagnostics and equivalent program output
+across worker counts.
 
 Check final generated code for wrapper call ABI, cleanup branches, hidden
 allocations, reference counts, indirect calls, and retained metadata.
@@ -1648,10 +1787,9 @@ direct-access path. A resource wrapper must have the C representation's size
 and alignment. Reject an abstraction that adds those costs for the same operation.
 
 The direct list's representation and operations use C/C++ as the primary baseline.
-Opt-in pointer checks can add declared costs. Compare them with equivalent checked
-C using the same ratio and confidence rule. Also report their full cost against
-the direct baseline. A match against checked C does not prove raw-pointer cost,
-and checks do not authorize a mandatory pool or hidden runtime service.
+The selected ownership model excludes runtime pointer-validity checks. A match
+against a C implementation with such checks would not meet this requirement.
+Null-before-release and debug bounds checks remain separately permitted behavior.
 
 Also run repeated in-memory column processing with a checksum instead of output.
 This prevents disk and terminal time from hiding callback cost. Require a median
@@ -1667,11 +1805,11 @@ is free because it is small beside database I/O.
 3. Specify and test the grammar independently of names and types.
 4. Implement only the SQLite boundary and the direct intrusive-list witness.
 5. Test forbidden programs as well as successful executions.
-6. Measure one-worker check and handoff time. Stop feature expansion on failure.
-7. Compare the declared view-return and pointer-check alternatives only where needed.
+6. Measure one-worker check and handoff time for each selected capability level.
+7. Compare the declared view-return alternative where callbacks add unnecessary cost.
 8. Re-run safety, readability, layout, and runtime gates for each changed contract.
 9. Test the source-derived systems slices before claiming that capability level.
-10. Test parallel scheduling after the single-worker path passes.
+10. Test parallel scheduling after the single-worker path is correct and measured.
 
 Do not authorize a general compiler framework, trait system, or container
 ecosystem from parser throughput or synthetic ownership tests.
@@ -1695,8 +1833,8 @@ safe node reuse, measured compilation, and measured runtime cost.
 
 | Require a separate successful experiment | Concrete question |
 |---|---|
-| Safe direct-link pointer contract | Can user-written links allow individual reuse without unsafe code, pools, or a large proof system? |
-| Erased domain and invariant permissions | Can local checked proofs support direct links without runtime state or expensive inference? |
+| Safe direct-link pointer contract | Can the source checker connect the verified link algorithms to individual destruction, reuse, and readable client code? |
+| Erased domain and invariant permissions | Can checked library contracts support simple callers without runtime state or repeated graph proofs? |
 | Single-source borrowed returns | Can ordinary view APIs stay simple without general lifetime solving? |
 | User generics | Can useful containers avoid both specialization growth and unwanted indirect calls? |
 | Safe thread and retained callback APIs | Can transfer and quiescence be proved without hidden lifetime escape? |
@@ -1711,7 +1849,7 @@ safe node reuse, measured compilation, and measured runtime cost.
 | Open overload or trait search | Resolution work not bounded by one explicit interface |
 | Exceptions, mandatory GC, and automatic reference counting | Runtime policy is imposed on programs |
 | Escaping local lexical views and implicit moves of address-stable values | Violate the stated scope or address contract |
-| General graph and heap-shape proof machinery | No evidence yet that its checking cost and annotations meet the primary gates |
+| Mandatory general graph and heap-shape proof machinery | Stronger proofs belong in selected stages; their cost must not affect the basic path |
 | Mandatory pools and per-node list identities | Impose storage or mutation costs not required by direct intrusive lists |
 | Implicit allocation, cloning, and conversions | Hide cost and ownership changes |
 

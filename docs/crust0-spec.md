@@ -9,7 +9,10 @@ defines its syntax, static rules, execution rules, and compiler construction
 contract. A conforming implementation must implement these requirements.
 Examples do not add rules.
 
-The first requirement is C-level compilation speed through backend handoff.
+The basic compilation path targets C-level speed through backend handoff.
+The root can select more capable checking stages with higher compilation cost.
+Such a stage must state its guarantees and cost; it need not meet the basic
+profile's speed gate. This choice adds no checking policy to the seed.
 The [C99 bootstrap implementation](bootstrap.md) implements the seed and has
 bounded measurements. Those results do not establish checked-Crust performance.
 
@@ -970,8 +973,8 @@ construction are separate bootstrap measurements. Report automatic backend
 cache validation separately too. If a request must compile a changed project
 stage, identify that configuration and include its preparation cost.
 
-For each frozen comparable workload, use at least 20 randomized paired samples
-against the fastest eligible C baseline. Require a median candidate/C ratio
+For a configuration that claims C-level speed, use at least 20 randomized paired
+samples against the fastest eligible C baseline. Require a median candidate/C ratio
 at most 1.00 and a 95% bootstrap confidence upper bound at most 1.00. Apply this
 rule to one-worker builds as well as matched parallel builds. Application
 result reuse or more workers cannot excuse failure in the one-worker case
@@ -979,10 +982,13 @@ with the same compiled backend. Retain
 the exact configurations and intervals required by the
 [measurement rule](exploration/language-exploration.md#104-test-matrix-and-pass-rule).
 
-A failed case blocks expansion. Identify the operation responsible, change it,
-and repeat that witness before adding another dependent layer. If measurement
-cannot distinguish a pass, report that result; do not rename it C-level speed.
-The seed's cost and the checked language's full cost are separate claims.
+A failed correctness case blocks expansion. Identify the operation responsible,
+change it, and repeat that witness before adding another dependent layer. A
+slower optional checking stage can proceed when its capability and cost are
+explicit. If measurement cannot establish the speed gate, do not call that
+configuration C-level. The seed and each checked configuration have separate
+cost claims. Unsupported proofs and exhausted solver budgets are diagnostics,
+not permission to emit unchecked code under the same safety claim.
 
 Runtime costs also require evidence. Compare selected abstractions with C that
 performs the same operations and required checks. No feature can require unused
@@ -1026,11 +1032,13 @@ checks, identity metadata, pointer tags, reference counts, and hidden cleanup
 flags are excluded. Null checks before release and debug-only bounds checks are
 permitted; debug-only checks do not prove release-build spatial safety. The
 [static ownership experiment](exploration/language-exploration.md#static-ownership-candidate-and-unresolved-proof)
-states the candidate and the proof still required. It adds no seed feature.
+states the selected model, executable evidence, and remaining source-checking
+work. It adds no seed feature.
 
-The experiment tests one claim: ordinary compiled libraries can define language
-rules and backend interfaces while retaining C-level frontend speed. A small
-grammar alone does not prove that claim. Public replacement, executable output,
-and the measured gates are the required evidence. This document makes no claim
+The experiment tests whether ordinary compiled libraries can define language
+rules and backend interfaces with selectable capability and compilation costs.
+A small grammar alone does not establish those properties. Public replacement,
+executable output, and measurements for each configuration provide the evidence.
+The basic profile retains its C-level speed target. This document makes no claim
 of novelty or proven safety. Bootstrap timing results apply only to their
 stated workloads and endpoints.

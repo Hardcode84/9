@@ -6,7 +6,10 @@ Crust keeps a small language core and exposes the compiler as libraries.
 `crust main.crs` executes a compilation program. That program selects its
 inputs, language rules, and backend through ordinary calls.
 
-Compilation speed through backend handoff is the first requirement.
+Keep the basic compilation path fast through backend handoff. The root program
+can select stronger checks with a higher compilation cost. Measure each selected
+configuration and state its guarantees; a slower optional check is not a design
+failure by itself.
 Explicit types, direct name lookup, and separate declaration facts keep
 the core work bounded. Richer rules belong to selected stages. A program
 that does not select those stages does not run their compiler passes or
@@ -335,7 +338,7 @@ separate. Assembly `--prepare` builds storage plans but leaves instruction
 selection to emission. C `--prepare` constructs complete C and symbol text
 in memory. These endpoints are different. Exclude target GCC compilation
 and linking from the current frontend measurements. Passing a functional
-test does not establish the project's C-speed requirement.
+test does not establish C-level compilation speed for that configuration.
 
 Safety claims also follow the selected stages. Raw seed pointers do not
 justify ownership guarantees or exclusive-access metadata. The resource

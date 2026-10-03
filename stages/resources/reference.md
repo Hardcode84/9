@@ -193,6 +193,9 @@ and cleanup growth. Passing resource tests alone is not a speed result.
 
 The stage proves local ownership and loan rules. Persistent intrusive-list links
 need an additional observer-validity contract across unlink, destruction, and
-storage reuse. The current source types do not express that contract. Add and
-check such an observer type in a stage before calling a direct intrusive list
-safe. Neither a resource drop nor a raw pointer establishes it.
+storage reuse. The current source types do not express that contract. The
+[static ownership experiment](../../docs/exploration/language-exploration.md#executable-experiments-and-model-selection)
+selects erased permissions and verified library contracts. Source owners,
+cleanup plans, projected loans, and destructive call effects must obey those
+contracts before a Crust application can use the checked list. Neither a
+resource drop nor a raw pointer establishes them.

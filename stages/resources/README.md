@@ -276,14 +276,15 @@ stage yourself.
 
 The retained function plan also maps checked blocks to source scopes. Actions
 retain their registration scope; exits retain their start and stop scopes.
-Deferred captures name the scope that holds their storage. Owning copies have
-transfer facts attached to their checked assignment. These facts let another
-stage check source lifetimes and consumed values without changing emitted C.
+Deferred captures name the scope that holds their storage. Owning copies and
+consuming pointer reads have transfer facts attached to their checked
+assignment. These facts let another stage check source lifetimes and consumed
+values without changing emitted C.
 
 `rs_prepare_with_access(stage, true)` delegates raw-access authorization to
 the caller's checking stage. Moves, loans, initialization, and cleanup retain
-their checks. The caller must verify all reachable memory effects, including
-cleanup, before emission. The [combined tutorial](../../examples/ownership/resources/README.md)
+their checks. The caller must verify all reachable memory effects, transfer
+facts, and cleanup before emission. The [combined tutorial](../../examples/ownership/resources/README.md)
 does this through complete proof views. Plain `rs_prepare` retains its explicit
 `unsafe` requirement.
 

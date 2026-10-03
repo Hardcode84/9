@@ -36,7 +36,7 @@ extern fn rs_prepare(stage: *RsStage) -> bool = "rs_prepare";
 
 // Prepare with the same ownership, loan, and cleanup checks. When allow_raw is
 // true, delegate raw-access authorization to the caller's checking stage.
-// The caller must verify all reachable memory effects and cleanup before output.
+// The caller must verify all reachable memory effects, transfers, and cleanup before output.
 extern fn rs_prepare_with_access(stage: *RsStage, allow_raw: bool) -> bool = "rs_prepare_with_access";
 
 // Pass as the C backend body callback with the prepared RsStage address as user.

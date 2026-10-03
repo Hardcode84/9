@@ -102,6 +102,10 @@ fn rm_statement_view(plan: *RmPlan, source: *CrustStmt, depth: usize) -> *CrustS
     var transfer: *RsTransfer = crust_map_get(&(*(*plan).function).transfers, source as usize) as *RsTransfer;
     if transfer != null(*RsTransfer) {
         c_map_set(&(*(*plan).stage).status, &(*(*plan).policy).transfers, copy as usize, transfer as usize);
+        while transfer != null(*RsTransfer) && !(*(*plan).stage).status.failed {
+            pm_plan_address((*plan).stage, &(*(*plan).policy).memory, (*transfer).place);
+            transfer = (*transfer).next;
+        }
     }
     var items: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
     if (*source).kind == CRUST_S_BLOCK {

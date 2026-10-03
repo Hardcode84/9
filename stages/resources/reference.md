@@ -41,7 +41,9 @@ and construction require `unsafe`. Ordinary records and fixed arrays own their
 resource fields and elements. Other values retain Crust0 copy semantics.
 
 - Initialization creates one cleanup obligation. A move transfers it and makes
-  the whole source binding unavailable. Resource copies and partial moves fail.
+  the whole source binding unavailable. A resource value can move only from a
+  whole local binding. Resource copies and moves of resource-valued fields or
+  elements fail.
 - An owner passed by value requires `move` or a fresh owning result. Return of
   a local owner requires `move`. The caller owns a returned resource.
 - Reassignment captures the new value, drops the old live value, and installs
@@ -74,6 +76,26 @@ resource fields and elements. Other values retain Crust0 copy semantics.
   statement. Parentheses around `true` do not change this rule. Other loop
   conditions can reach the next statement; the checker does not evaluate
   constant expressions for this decision.
+
+### Consuming pointer reads
+
+```crust
+var node: *Node = move owner.node;
+```
+
+`move` also accepts a writable pointer place: a variable, field, element, or
+dereference. It reads that place once and consumes its initialized permission.
+No store clears the source. It has no readable value until assignment
+initializes it again. This applies through aliases and to null pointer values.
+Other fields and the pointed-to allocation remain unchanged. The operation
+does not create a cleanup obligation for the returned raw pointer.
+
+Plain resource checking requires `unsafe` for this operation. In that mode,
+the programmer must meet the consumed-read contract. The
+[combined memory stage](../../examples/ownership/resources/README.md) enforces
+it without `unsafe`, including in subsequent cleanup and called bodies. It
+consumes the transfer facts retained with the checked operations. A source
+loan that forbids writing the place also forbids moving its pointer.
 
 ### Returned views
 

@@ -797,6 +797,11 @@ def reject_cases():
             "move requires a whole local owner",
         ),
         (
+            "pointer-move-requires-proof-or-unsafe",
+            program("var value:*i32=null(*i32); var copy:*i32=move value;"),
+            "pointer moves require unsafe or a memory checker",
+        ),
+        (
             "write-with-shared-borrow",
             program("var value:i32=65i32; var view:read i32=read value; value=66i32;"),
             "active borrow",

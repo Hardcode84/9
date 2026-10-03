@@ -109,7 +109,16 @@ def main():
         else accept_cases()
     )
     names = (
-        ("defer-move", "owner-return", "owner-array", "loop-cleanup") if args.resources else CASES
+        (
+            "defer-move",
+            "owner-return",
+            "owner-array",
+            "loop-cleanup",
+            "pointer-local",
+            "pointer-index-once",
+        )
+        if args.resources
+        else CASES
     )
     selected = [
         name

@@ -353,7 +353,10 @@ Resource cleanup also exists in retained exit plans, so its lowered operation
 tree alone is not a complete memory-checking input. The optional
 [combined profile](../examples/ownership/resources/README.md) reconstructs
 source storage scopes, executes the exit plans, and consumes initialized-field
-permissions after owner transfers. It uses the original resource body emitter.
+permissions after owner transfers and consuming pointer reads. A pointer move
+can consume a destructor's node field without a runtime clear store. Alias
+reads must respect the consumed field permission. The profile uses the original
+resource body emitter.
 Calls still expand their actual bodies. Reusable checked effects and caller
 permissions require a summary interface; the combined profile does not consume
 the separate ring proof as such a summary.

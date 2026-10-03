@@ -264,10 +264,14 @@ fn rs_capture(function: *RsFunction, output: *RsStatements, value: *RsValue, loc
 
 fn rs_transfer_after(function: *RsFunction, statement: *CrustStmt, value: *RsValue) -> unit {
     if !(*value).owned || (*value).local == null(*RsLocal) { return; }
+    rs_transfer_place(function, statement, (*value).expression);
+}
+
+fn rs_transfer_place(function: *RsFunction, statement: *CrustStmt, place: *CrustExpr) -> unit {
     var stage: *RsStage = (*function).stage;
     var transfer: *RsTransfer = rs_alloc(stage, sizeof(RsTransfer), alignof(RsTransfer)) as *RsTransfer;
     if transfer == null(*RsTransfer) { return; }
-    (*transfer).place = (*value).expression;
+    (*transfer).place = place;
     (*transfer).next = crust_map_get(&(*function).transfers, statement as usize) as *RsTransfer;
     rs_put(stage, &(*function).transfers, statement as usize, transfer as *u8);
 }

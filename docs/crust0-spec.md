@@ -1039,6 +1039,12 @@ Resource checking retains cleanup chains outside its lowered tree and moves
 local declarations to function entry. The combined stage consumes those chains,
 preserves source storage scopes and deferred captures, and removes initialized
 permissions from moved values. Its proof view adds no emitted operations.
+The resource syntax also permits `move` on a writable raw pointer place.
+The combined stage consumes that place's initialized permission without a
+clear store. Reads through all aliases then fail until assignment initializes
+the place again. Plain resource checking requires `unsafe` for pointer moves;
+it does not perform this memory proof. Whole-resource moves retain their
+cleanup obligations and source loan checks.
 Reusable call summaries still require an interface that binds permissions and
 destructive effects to checked bodies and layouts and checks caller
 preconditions. The current executor expands the actual bodies. The existing

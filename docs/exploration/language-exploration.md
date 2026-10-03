@@ -1257,6 +1257,12 @@ RAII, and `defer` use retained cleanup plans. The
 [combined stage](../../examples/ownership/resources/README.md) now brings those
 plans, source storage scopes, deferred captures, and owner transfers into the
 memory proof. A check of the lowered tree alone would still omit cleanup calls.
+The same transfer facts support consuming pointer reads with `move place`.
+The two-hook RAII destructor consumes its node field, unlinks both hooks, and
+releases the node without clearing that field. Consumed-field reads through
+aliases, repeated drop, reentrant reads, and surviving external links reject.
+Pointer moves emit the same C operations as ordinary pointer reads. Other
+fields retain their permissions; no destructor has an exemption from checking.
 The next modular interface must connect owner rights and field permissions to
 verified library contracts. The combined stage currently expands actual bodies.
 

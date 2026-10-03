@@ -18,8 +18,7 @@ fn box_new()->Box {unsafe {
     return make Box {pointer:p};
 }}
 fn box_drop(value:mut Box)->unit {unsafe {
-    var p:*u8=value.pointer;
-    value.pointer=null(*u8);
+    var p:*u8=move value.pointer;
     release(p);
     emit(68i32);
 }}
@@ -110,6 +109,83 @@ def accept_cases():
             ),
             b"",
         ),
+        **pointer_move_cases(),
+    }
+
+
+def pointer_move_cases():
+    return {
+        "pointer-local": (
+            source("var p:*u8=allocate(1usize);var q:*u8=move p;release(q);"),
+            b"",
+        ),
+        "pointer-explicit-clear": (
+            source("var owner:Box=box_new();").replace(
+                "var p:*u8=move value.pointer;",
+                "var p:*u8=value.pointer;value.pointer=null(*u8);",
+            ),
+            b"D",
+        ),
+        "pointer-field-reinitialize": (
+            source(
+                "var owner:Box=box_new();var p:*u8=move owner.pointer;"
+                "release(p);owner.pointer=null(*u8);"
+            ),
+            b"D",
+        ),
+        "pointer-field-self-move": (
+            source("var owner:Box=box_new();owner.pointer=move owner.pointer;see(read owner);"),
+            b"SD",
+        ),
+        "pointer-field-return": (
+            source(
+                "var owner:Box=box_new();var p:*u8=take(mut owner);"
+                "release(p);owner.pointer=null(*u8);",
+                "fn take(value:mut Box)->*u8 {unsafe {return move value.pointer;}}",
+            ),
+            b"D",
+        ),
+        "pointer-index-once": (
+            source(
+                "var slots:[*u8;2]=make [*u8;2] {allocate(1usize),null(*u8)};"
+                "var index:usize=0usize;var p:*u8=move slots[next(&index)];"
+                "if index!=1usize {trap;}release(p);",
+                "fn next(index:*usize)->usize {unsafe {var old:usize=*index;"
+                "*index=old+1usize;return old;}}",
+            ),
+            b"",
+        ),
+        "pointer-indirect": (
+            source(
+                "var owner:Box=box_new();var slot:**u8=&owner.pointer;"
+                "var p:*u8=move *slot;release(p);owner.pointer=null(*u8);"
+            ),
+            b"D",
+        ),
+        "pointer-branch": (
+            source(
+                "var owner:Box=box_new();if argc==1i32 {"
+                "var p:*u8=move owner.pointer;release(p);owner.pointer=null(*u8);}"
+            ),
+            b"D",
+        ),
+        "pointer-sibling-field": (
+            source(
+                "var pair:Pair=make Pair {a:allocate(1usize),b:allocate(1usize)};"
+                "var p:*u8=move pair.a;release(p);var q:*u8=move pair.b;release(q);",
+                "record Pair {a:*u8;b:*u8;}",
+            ),
+            b"",
+        ),
+        "pointer-parent-and-child": (
+            source(
+                "var item:Parent=make Parent {child:box_new(),pointer:allocate(1usize)};",
+                "resource Parent {child:Box;pointer:*u8;} drop parent_drop;"
+                "fn parent_drop(value:mut Parent)->unit {unsafe {"
+                "var p:*u8=move value.pointer;release(p);}}",
+            ),
+            b"D",
+        ),
     }
 
 
@@ -120,7 +196,7 @@ def reject_cases():
         ),
         "missing-release": source("var owner:Box=box_new();").replace("release(p);", ""),
         "retained-owner-pointer": source("var owner:Box=box_new();").replace(
-            "value.pointer=null(*u8);", ""
+            "move value.pointer", "value.pointer"
         ),
         "access-after-cleanup": source(
             "var alias:*u8=null(*u8);{var owner:Box=box_new();alias=owner.pointer;}"
@@ -153,8 +229,78 @@ def reject_cases():
         "invalid-before-trap": source("var bad:i32=*null(*i32);trap;").replace(
             "trap;return 0i32;", "trap;"
         ),
+        **pointer_move_rejections(),
     }
-    return {name: (text, "counterexample") for name, text in cases.items()}
+    rejected = {name: (text, "counterexample") for name, text in cases.items()}
+    rejected["pointer-read-loan"] = (
+        source(
+            "var owner:Box=box_new();var view:read Box=read owner;"
+            "var p:*u8=move view.pointer;release(p);"
+        ),
+        "read",
+    )
+    return rejected
+
+
+def pointer_move_rejections():
+    return {
+        "pointer-local-reread": source("var p:*u8=null(*u8);var q:*u8=move p;var stale:*u8=p;"),
+        "pointer-field-reread": source("var owner:Box=box_new();").replace(
+            "release(p);", "var stale:*u8=value.pointer;release(p);"
+        ),
+        "pointer-field-double-move": source("var owner:Box=box_new();").replace(
+            "release(p);", "var stale:*u8=move value.pointer;release(p);"
+        ),
+        "pointer-slot-alias": source(
+            "var owner:Box=box_new();var slot:**u8=&owner.pointer;"
+            "var p:*u8=move owner.pointer;var stale:*u8=*slot;"
+            "release(p);owner.pointer=null(*u8);"
+        ),
+        "pointer-owner-alias": source(
+            "var owner:Box=box_new();var alias:*Box=&owner;"
+            "var p:*u8=move owner.pointer;var stale:*u8=(*alias).pointer;"
+            "release(p);owner.pointer=null(*u8);"
+        ),
+        "pointer-retained-observer": source(
+            "var observer:Observer=make Observer {pointer:null(*u8)};"
+            "{var owner:Box=box_new();observer.pointer=owner.pointer;}",
+            "record Observer {pointer:*u8;}",
+        ),
+        "pointer-drop-twice": source("var owner:Box=box_new();box_drop(mut owner);"),
+        "pointer-reentry-before-release": source(
+            "var owner:Box=box_new();",
+            "fn callback(value:read Box)->unit {unsafe {var stale:*u8=value.pointer;}}",
+        ).replace("release(p);", "callback(read value);release(p);"),
+        "pointer-reentry-after-release": source(
+            "var owner:Box=box_new();",
+            "fn callback(value:read Box)->unit {unsafe {var stale:*u8=value.pointer;}}",
+        ).replace("release(p);", "release(p);callback(read value);"),
+        "pointer-pointee-after-release": source("var owner:Box=box_new();").replace(
+            "release(p);", "release(p);if p!=null(*u8) {var stale:i32=*(p as *i32);}"
+        ),
+        "pointer-deferred-reread": source(
+            "var owner:Box=box_new();var slot:**u8=&owner.pointer;"
+            "defer see(read owner);var p:*u8=move *slot;release(p);"
+        ),
+        "pointer-incomplete-owner-move": source(
+            "var owner:Box=box_new();var p:*u8=move owner.pointer;"
+            "var second:Box=move owner;release(p);"
+        ),
+        "pointer-child-already-consumed": source(
+            "var item:Parent=make Parent {child:box_new()};",
+            "resource Parent {child:Box;} drop parent_drop;"
+            "fn parent_drop(value:mut Parent)->unit {unsafe {"
+            "var p:*u8=move value.child.pointer;release(p);}}",
+        ),
+        "pointer-argument-order": source(
+            "var owner:Box=box_new();both(move owner.pointer,owner.pointer);",
+            "fn both(a:*u8,b:*u8)->unit {unsafe {release(a);}}",
+        ),
+        "pointer-branch-reread": source(
+            "var owner:Box=box_new();if argc==1i32 {"
+            "var p:*u8=move owner.pointer;release(p);}see(read owner);"
+        ),
+    }
 
 
 def execute(generated, symbols, directory, name, sanitize, output):
@@ -188,6 +334,22 @@ def run_suite(build, directory, sanitize, pattern):
         command([build / "crust-resource", "--emit-c", "-o", ordinary, path])
         if generated.read_bytes() != ordinary.read_bytes():
             raise RuntimeError(f"{name}: proof changed resource C output")
+        # Pointer moves must emit the same operations as ordinary pointer reads.
+        # Whole-owner moves retain their resource lowering in this comparison.
+        for operand in (
+            "value.pointer",
+            "owner.pointer",
+            "p;",
+            "slots[next(&index)]",
+            "*slot",
+            "pair.a",
+            "pair.b",
+        ):
+            text = text.replace("move " + operand, operand)
+        path.write_text(text)
+        command([build / "crust-resource", "--emit-c", "-o", ordinary, path])
+        if generated.read_bytes() != ordinary.read_bytes():
+            raise RuntimeError(f"{name}: pointer move added target operations")
         execute(generated, symbols, directory, name, sanitize, output)
         count += 1
         print(f"{name}: accepted, erased, executed", flush=True)
@@ -235,7 +397,10 @@ def intrusive_cases(build, directory, sanitize):
     original = program.read_text()
     mutations = {
         "second-hook-still-linked": ("unlink(&(*node).active);", ""),
-        "head-dies-with-links": ("while head.hook.next!=&head.hook {unlink(head.hook.next);}", ""),
+        "head-dies-with-links": (
+            "while head.hook.next != &head.hook { unlink(head.hook.next); }",
+            "",
+        ),
     }
     for name, (old, new) in mutations.items():
         if old not in original:

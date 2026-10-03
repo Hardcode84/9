@@ -204,7 +204,7 @@ fn rs_prepare(stage: *RsStage) -> bool {
     return rs_prepare_with_access(stage, false);
 }
 
-// With allow_raw, the caller must check raw memory effects before emission.
+// With allow_raw, the caller must check raw memory effects and transfers before emission.
 // Move, loan, initialization, and cleanup rules still apply to every body.
 fn rs_prepare_with_access(stage: *RsStage, allow_raw: bool) -> bool {
     if !rs_collect(stage) || !rs_publish(stage) { return false; }

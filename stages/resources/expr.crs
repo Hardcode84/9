@@ -264,14 +264,12 @@ fn rs_move_expression(function: *RsFunction, source: *CrustExpr, output: *RsStat
     var location: *CrustLoc = &(*source).loc;
     var operand: *CrustExpr = (*source).left;
     while (*operand).kind == CRUST_E_GROUP { operand = (*operand).left; }
-    if (*operand).kind != CRUST_E_NAME {
-        rs_error(stage, location, "move requires a whole local owner");
-        return null(*RsValue);
+    var local: *RsLocal = null(*RsLocal);
+    if (*operand).kind == CRUST_E_NAME {
+        local = crust_map_get(&(*function).locals, (*operand).name as usize) as *RsLocal;
     }
-    var local: *RsLocal = crust_map_get(&(*function).locals, (*operand).name as usize) as *RsLocal;
     if local == null(*RsLocal) || !(*local).owning || (*local).mode != 0u32 {
-        rs_error(stage, location, "move requires a whole local owner");
-        return null(*RsValue);
+        return rs_move_pointer(function, operand, output, location);
     }
     rs_access(function, local, true, location);
     if (*stage).failed { return null(*RsValue); }
@@ -280,6 +278,26 @@ fn rs_move_expression(function: *RsFunction, source: *CrustExpr, output: *RsStat
     (*value).owned = true;
     (*value).local = local;
     return rs_capture(function, output, value, location);
+}
+
+fn rs_move_pointer(function: *RsFunction, operand: *CrustExpr, output: *RsStatements,
+                    location: *CrustLoc) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    if (*function).unsafe_depth == 0usize {
+        rs_error(stage, location, "move requires a whole local owner; pointer moves require unsafe or a memory checker");
+        return null(*RsValue);
+    }
+    var place: *RsValue = rs_place(function, operand, output, true, false);
+    if (*stage).failed { return null(*RsValue); }
+    if (*(*place).syntax).kind != CRUST_T_POINTER {
+        rs_error(stage, location, "move requires a whole local owner or a pointer place");
+        return null(*RsValue);
+    }
+    (*place).mode = 0u32;
+    // The fresh capture cannot change the address of the consumed place.
+    var result: *RsValue = rs_capture(function, output, place, location);
+    if !(*stage).failed { rs_transfer_place(function, (*output).last, (*place).expression); }
+    return result;
 }
 
 fn rs_borrow_expression(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {

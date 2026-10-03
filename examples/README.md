@@ -62,6 +62,8 @@ SQLite input; its README gives the command.
 Overload examples require `make overload-stage`.
 The checked intrusive example requires `make resource-memory-stage` and Z3.
 Its `raw-main.crs` root retains the seed-language bootstrap witness.
+Its `contract-main.crs` root checks a declared unlink contract against the body
+and callers. Build that optional stage with `make memory-contract-stage` and Z3.
 Paths passed to `host_source`, `host_input`, and `host_path` are relative to the
 root file. A raw `-o` argument passed to the C backend is relative to the working
 directory. Each example states its output path. A root builds an executable;
@@ -80,6 +82,7 @@ intrusive root runs in `make check-resource-memory` with Z3.
 Run `make check-resources` for the resource hello and resource language tests.
 Run `make check-memory` with a Z3 library for the optional static memory tutorial.
 Run `make check-resource-memory` with Z3 for the checked intrusive tutorial.
+Run `make check-memory-contracts` with Z3 for declared body and caller contracts.
 The SQLite verifier checks the native application against its frozen C baseline.
 Run `make check-overload` for the overload examples, native symbols, separate
 objects, and resource composition tests.

@@ -126,6 +126,98 @@ This selection grants no memory permission. The stage resolves the name to the
 checked declaration and derives its effects from the complete body. Use
 `summaries: null(**u8), summary_count: 0usize` to expand all calls instead.
 
+### Check a declared call contract
+
+The [contract root](contract-main.crs) selects a different check for the same
+target program. It supplies an [unlink contract](contract.crs), proves the
+selected body against that contract, then checks each caller. A missing
+backlink store fails the body proof even when no caller uses the function.
+
+```sh
+make memory-contract-stage Z3_FLAGS=-l:libz3.so.4
+build/crust examples/intrusive/contract-main.crs
+build/intrusive-contract
+```
+
+The result is `OK` and a newline. The target source and its annotations are
+unchanged. The root selects `unlink`, `prev`, and `next` through ordinary data.
+The contract obtains the hook type and field offsets from checked declarations.
+It also works with renamed functions, records, and fields.
+
+The contract reads the two input links and requires live, aligned storage for
+the hook and both neighbors. Storage permission does not imply initialization.
+Each link read separately requires initialization and its pointer type. The
+contract then declares these four ordered writes:
+
+```text
+before.next = after
+after.prev = before
+hook.prev = hook
+hook.next = hook
+```
+
+Reads use the memory at function entry. Writes use the declared output memory
+in sequence, so the model also covers aliased neighbors and singleton hooks.
+Each declared write requires writable storage and a compatible type. A stored
+pointer must be null or refer to live storage.
+
+The [contract stage](../../stages/memory/contract.crs) uses these operations:
+
+| Operation | Contract |
+|---|---|
+| `pm_contract_access` | Require live, aligned storage of the given extent; optionally require write permission. |
+| `pm_contract_read` | Require an initialized scalar and return its input value. |
+| `pm_contract_write` | Permit a scalar write and specify its required output value. |
+| `pm_contract_require` | Add a Boolean input condition. |
+| `pm_contract_register` | Prove the selected body, then install the verified effect for callers. |
+
+Registration first checks that the input conditions can be satisfied. It runs
+the actual body with symbolic parameters and input memory. Every access must
+pass the memory policy. Every final memory map must equal the declared result;
+this proves that memory outside the declared effect is unchanged. Every actual
+write must also target a declared writable cell with the same representation.
+This last check rejects a write outside the contract even if the body restores
+the original value before return.
+
+The body can contain branches, scalar assignments, scalar bindings without
+local storage, and unit returns. Calls, loops, traps, aggregate copies, and
+address-taken bindings reject this contract form. The proof uses the complete
+resource view, so a deferred call cannot disappear from this check. Omit the
+contract selection to use the normal complete-body check.
+
+After the body proof, each caller must establish the input conditions and
+typed-write separation from its existing cells. The caller receives the
+verified output maps and written pointer cells. Those cells still participate
+in later destruction checks. Registration retains an immutable term template;
+it does not call the contract builder again for each caller. No disk artifact
+or unchecked imported contract is used.
+
+This is an exact contract for a finite memory effect. It adds an independent
+body check and can increase compilation time. It does not summarize an
+arbitrary owned graph or provide a loop invariant. Those require predicates
+that describe an unbounded set of cells, a rule for separating that set from
+the caller's memory, and inductive checks for the loop or recursive body.
+Caller formulas in this implementation still grow with the selected calls.
+
+The example compiles ordinary Crust sources into its own library. Its entry
+calls `resource_memory_program_with` with a preparation callback. The combined
+stage calls that callback after storage planning and construction of complete
+cleanup views, before the entry proof. The callback registers the contract;
+it must retain the memory policy and complete body semantics. A false result
+stops output, with a diagnostic. The default entry uses no callback.
+This interface and the contract implementation are external Crust code.
+The C99 core has no contract operation.
+
+Contract builders use the listed helpers and generated terms from the input
+parameters and memory maps. They must not mutate proof state directly or
+introduce free solver symbols. The selected compiler stages remain trusted
+compiler code, as do the solver, backend, and explicit foreign-effect table.
+The selected target body is checked rather than trusted.
+
+The emitted C is byte-identical to the output with inferred effects. Native
+tests run it at `-O0` and `-O2`, including sanitizer builds. The body proof,
+contract maps, permissions, and frame checks add no target operations.
+
 ## Connect the stages
 
 ### Initialize plain storage through a helper
@@ -263,8 +355,10 @@ protocol is established by this sequential proof.
 make check-resource-memory Z3_FLAGS=-l:libz3.so.4
 make check-resource-memory-alloc Z3_FLAGS=-l:libz3.so.4
 make check-memory-summaries Z3_FLAGS=-l:libz3.so.4
+make check-memory-contracts Z3_FLAGS=-l:libz3.so.4
 python3 tests/resource_memory.py --sanitize
 python3 tests/resource_initialization.py --sanitize
+python3 tests/memory_contract.py --sanitize
 ```
 
 The suite covers deferred owners and loans, nested owned fields, owned arrays,
@@ -284,6 +378,10 @@ summary must fail at the caller's destruction check. Summary tests cover
 aliased arguments, new links, consumed fields, overlapping typed stores,
 invalid accesses, and unchanged C output. Allocation tests inject failures
 during summary construction and application.
+Declared-contract tests also cover unused incorrect bodies, aliased parameters,
+conditional implementations, restored writes outside the contract, inconsistent
+input conditions, invalid callers, retained pointer cells, and allocation
+failure during registration and application.
 
 ## Raw bootstrap witness
 

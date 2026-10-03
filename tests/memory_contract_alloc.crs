@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn memory_alloc_verify(context:*CrustContext, source:*CrustSource, model:*u8)->bool {
+    var resources:RsStage=uninit;
+    rs_init(&resources, context);
+    if !rs_read(&resources, source, 0usize, (*source).size) ||
+       !rs_prepare_delegated(&resources) { return false; }
+    var entry:*CrustDecl=pm_lookup(context, "main");
+    if entry == null(*CrustDecl) { return false; }
+    var contracts:[PmForeignSpec;3] = make [PmForeignSpec;3] {
+        make PmForeignSpec {name:"allocate", alignment:16usize, kind:PM_ALLOCATE},
+        make PmForeignSpec {name:"release", alignment:1usize, kind:PM_RELEASE},
+        make PmForeignSpec {name:"emit", alignment:1usize, kind:PM_SCALAR}
+    };
+    var options:PmOptions = make PmOptions {
+        summaries: null(**u8), summary_count: 0usize,
+        foreign:&contracts[0usize], foreign_count:3usize, max_depth:128usize,
+        max_paths:64usize, max_iterations:4usize, milliseconds:10000u32
+    };
+    return rm_verify_with(&resources, entry, &options, contract_test_prepare, model);
+}

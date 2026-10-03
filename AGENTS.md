@@ -180,6 +180,7 @@ Build with `make all`. Use the checks that cover the change:
 | Native bootstrap and execution handoff | `make check-native` |
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |
 | Memory proofs, initialization, and call effects | `make check-memory check-resource-memory check-memory-summaries` with Z3 |
+| Declared memory call contracts | `make check-memory-contracts` with Z3 |
 | Memory proof allocation and cleanup | `make check-memory-alloc check-resource-memory-alloc` with Z3 |
 | Overloads and resource composition | `make check-overload check-overload-alloc` |
 | Compilation program examples | `make check-examples` |

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn rm_verify(resources: *RsStage, entry: *CrustDecl, options: *PmOptions) -> bool {
+fn rm_verify_with(resources: *RsStage, entry: *CrustDecl, options: *PmOptions,
+                   prepare: fn(*PfStage, *u8) -> bool, user: *u8) -> bool {
     var policy: RmPolicy = uninit;
     rm_empty_map(&policy.bodies);
     rm_empty_map(&policy.ends);
@@ -16,12 +17,23 @@ fn rm_verify(resources: *RsStage, entry: *CrustDecl, options: *PmOptions) -> boo
     stage.body = rm_body;
     stage.statement = rm_statement;
     if success { success = pm_plan(&stage, &policy.memory); }
+    if success && prepare != null(fn(*PfStage, *u8) -> bool) {
+        success = prepare(&stage, user);
+        if !success && (*(*resources).context).error_count == 0usize {
+            pf_error(&stage, &(*entry).loc, "memory stage preparation failed");
+        }
+    }
     if success { success = pf_verify(&stage, entry); }
     pf_destroy(&stage);
     return success;
 }
 
-fn rm_driver_build(cli: *CCli, options: *PmOptions) -> i32 {
+fn rm_verify(resources: *RsStage, entry: *CrustDecl, options: *PmOptions) -> bool {
+    return rm_verify_with(resources, entry, options, null(fn(*PfStage, *u8) -> bool), null(*u8));
+}
+
+fn rm_driver_build(cli: *CCli, options: *PmOptions,
+                    prepare: fn(*PfStage, *u8) -> bool, user: *u8) -> i32 {
     var context: *CrustContext = (*cli).stage.status.context;
     if (*cli).library || (*cli).export_count != 0usize {
         c_driver_error(&(*cli).driver, "closed-program resource checking does not accept library exports");
@@ -32,7 +44,7 @@ fn rm_driver_build(cli: *CCli, options: *PmOptions) -> i32 {
     if !resource_driver_read(cli, &resources) || !rs_prepare_delegated(&resources) { return 1i32; }
     var entry: *CrustDecl = resource_driver_entry(cli, &resources);
     if entry == null(*CrustDecl) { return 1i32; }
-    if !rm_verify(&resources, entry, options) { return 1i32; }
+    if !rm_verify_with(&resources, entry, options, prepare, user) { return 1i32; }
     if (*cli).mode == 3u32 { return 0i32; }
     if !c_driver_names(&(*cli).driver) { return 1i32; }
     if (*cli).mode == 4u32 {
@@ -42,17 +54,25 @@ fn rm_driver_build(cli: *CCli, options: *PmOptions) -> i32 {
     return c_backend_build_with_body(context, entry, &(*cli).options, rs_c_body, &resources as *u8);
 }
 
-// Check source resource rules, cleanup plans, and memory effects before emission.
-// Retain inputs and contracts until return. No unchecked output is produced.
-fn resource_memory_program(request: *CrustBuild, options: *PmOptions) -> i32 {
+// Prepare an extension after complete resource views and storage planning.
+// Keep the memory policy and complete body semantics. Return false on failure.
+// Retain inputs, callback data, and contracts until return. Proof must pass before emission.
+fn resource_memory_program_with(request: *CrustBuild, options: *PmOptions,
+                                 prepare: fn(*PfStage, *u8) -> bool, user: *u8) -> i32 {
     var cli: CCli = uninit;
     var success: bool = c_driver_init(&cli, (*request).context, (*request).argc);
     cli.root = (*request).source;
     cli.target_begin = (*request).target_begin;
     var result: i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
-        result = rm_driver_build(&cli, options);
+        result = rm_driver_build(&cli, options, prepare, user);
     }
     c_stage_destroy(&cli.stage);
     return result;
+}
+
+// Check source resource rules, cleanup plans, and memory effects before emission.
+// Retain inputs and contracts until return. No unchecked output is produced.
+fn resource_memory_program(request: *CrustBuild, options: *PmOptions) -> i32 {
+    return resource_memory_program_with(request, options, null(fn(*PfStage, *u8) -> bool), null(*u8));
 }

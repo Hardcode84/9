@@ -37,6 +37,8 @@ MEMORY = stages/memory/options.crs stages/memory/model.crs stages/memory/base.cr
 MEMORY_LIBRARY = $(C_LIBRARY) $(PROOF) $(MEMORY)
 RESOURCE_MEMORY = stages/resource_memory/model.crs stages/resource_memory/view.crs stages/resource_memory/effects.crs stages/resource_memory/program.crs
 RESOURCE_MEMORY_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(MEMORY) $(RESOURCE_MEMORY)
+MEMORY_CONTRACT = stages/memory/contract.crs
+INTRUSIVE_CONTRACT = examples/intrusive/contract-options.crs examples/intrusive/contract.crs
 Z3_LIBDIR ?=
 Z3_FLAGS = -lz3
 ifneq ($(strip $(Z3_LIBDIR)),)
@@ -54,6 +56,7 @@ OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_res
 .PHONY: memory-stage check-memory check-memory-alloc
 .PHONY: resource-memory-stage check-resource-memory check-resource-memory-alloc
 .PHONY: check-memory-summaries
+.PHONY: memory-contract-stage check-memory-contracts
 all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a $(BUILD)/crust-asm-library.so
 
 $(BUILD):
@@ -181,6 +184,21 @@ $(BUILD)/crust-resource-memory-library.so: $(BUILD)/crust-resource-memory-librar
 	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(Z3_FLAGS) $(LDFLAGS) -o $@
 
 resource-memory-stage: $(BUILD)/crust-resource-memory-test $(BUILD)/crust-resource-memory-library.so
+
+$(BUILD)/crust-memory-contract-test: $(BUILD)/crust-c $(RESOURCE_MEMORY_LIBRARY) $(MEMORY_CONTRACT) $(INTRUSIVE_CONTRACT) tests/memory_contract_models.crs tests/memory_contract_driver.crs Makefile
+	$< -o $@ $(RESOURCE_MEMORY_LIBRARY) $(MEMORY_CONTRACT) $(INTRUSIVE_CONTRACT) tests/memory_contract_models.crs tests/memory_contract_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+$(BUILD)/crust-intrusive-contract-library.o: $(BUILD)/crust-c $(RESOURCE_MEMORY_LIBRARY) $(MEMORY_CONTRACT) $(INTRUSIVE_CONTRACT) Makefile
+	$< --library --object --export intrusive_contract_program --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(RESOURCE_MEMORY_LIBRARY) $(MEMORY_CONTRACT) $(INTRUSIVE_CONTRACT)
+
+$(BUILD)/crust-intrusive-contract-library.so: $(BUILD)/crust-intrusive-contract-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(Z3_FLAGS) $(LDFLAGS) -o $@
+
+memory-contract-stage: $(BUILD)/crust-memory-contract-test $(BUILD)/crust-intrusive-contract-library.so
+
+check-memory-contracts: all resource-memory-stage memory-contract-stage
+	python3 tests/memory_contract.py --build $(BUILD)
+	python3 tests/memory_alloc.py --contracts --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)'
 
 check-resource-memory: all resource-stage resource-memory-stage
 	python3 tests/resource_memory.py --build $(BUILD)

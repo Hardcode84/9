@@ -100,11 +100,15 @@ def main():
     parser.add_argument("--amalgamation", type=int, choices=(0, 1), default=1)
     parser.add_argument("--z3-flags", default="-lz3")
     parser.add_argument("--resources", action="store_true")
-    parser.add_argument("--summaries", action="store_true")
+    selection = parser.add_mutually_exclusive_group()
+    selection.add_argument("--summaries", action="store_true")
+    selection.add_argument("--contracts", action="store_true")
     parser.add_argument("--case", action="append", default=[])
     parser.add_argument("--no-sanitize", action="store_true")
     parser.add_argument("--work", type=Path)
     args = parser.parse_args()
+    if args.contracts:
+        args.resources = True
     compiler = args.build.resolve() / "crust-c"
     if not compiler.is_file():
         parser.error(f"compiler does not exist: {compiler}")
@@ -136,6 +140,13 @@ def main():
             "new-pointer-cell",
             "consume-field" if args.resources else "guarded-read",
         )
+    models = {}
+    if args.contracts:
+        from memory_contract import accept_cases as contract_cases
+
+        models = {name: item[0] for name, item in contract_cases().items()}
+        cases = {name: item[1] for name, item in contract_cases().items()}
+        names = ("aliased-swap", "conditional-body", "new-pointer-cell")
     selected = [
         name
         for name in names
@@ -168,6 +179,14 @@ def main():
 
     completed = False
     try:
+        sources = resource_stage() if args.resources else STAGE
+        if args.contracts:
+            sources = [
+                *sources[:-1],
+                "stages/memory/contract.crs",
+                "tests/memory_contract_models.crs",
+                "tests/memory_contract_alloc.crs",
+            ]
         generated = work / "fixture.c"
         response = work / "fixture.rsp"
         run(
@@ -181,7 +200,7 @@ def main():
                 generated,
                 "--symbols",
                 response,
-                *(resource_stage() if args.resources else STAGE),
+                *sources,
             ]
         )
         flags = ["-std=c99", "-pedantic-errors", "-g", "-O1", "-fno-omit-frame-pointer"]
@@ -229,7 +248,10 @@ def main():
         for name in selected:
             source = work / f"{name}.crs"
             source.write_text(cases[name])
-            result = run([executable, source, *(["rewrite"] if args.summaries else [])])
+            selected_model = (
+                [models[name]] if args.contracts else (["rewrite"] if args.summaries else [])
+            )
+            result = run([executable, source, *selected_model])
             matched = re.fullmatch(
                 rb"memory allocation: ([0-9]+) failure points checked\n", result.stdout
             )

@@ -948,6 +948,10 @@ checks source lifetimes, owner transfers, and complete cleanup plans. Neither
 closed-program profile consumes modular ownership summaries. Passing
 these checks does not complete compiler-construction or checked-language
 acceptance.
+An optional finite-effect contract proves a selected body independently and
+checks its callers against declared input conditions, exact output maps, and
+a writable-cell set. It does not establish an abstract ownership predicate for
+an arbitrary graph or replace bounded loop execution.
 
 The first implementation must establish these cases before adding language
 facilities:
@@ -1061,8 +1065,17 @@ checks the obligations and typed-write separation, and retains cells for later
 destruction checks. Calls, branches, loops, and local storage inside a selected
 body are rejected. Other bodies still expand. There is no saved-summary import.
 These concrete effects do not establish abstract ownership predicates or loop
-invariants. Those require explicit preconditions, postconditions, and frame
-rules checked against both the library body and its callers.
+invariants. The optional declared-contract stage adds explicit input conditions,
+exact output maps, and a finite writable-cell set. It proves the actual body
+once, including every access and intermediate write, then installs the verified
+effect for callers. Complete final-map equality supplies the unchanged-memory
+frame. Inconsistent input conditions reject registration. This form supports
+loop-free unit functions with scalar parameters and bindings without local
+storage. It checks branches but rejects calls, loops, traps, and aggregate
+copies in the selected body. Abstract graph predicates still require a rule
+for separating an unbounded set of cells from caller memory. Unbounded loops
+also require inductive invariants. The [contract tutorial](../examples/intrusive/README.md#check-a-declared-call-contract)
+provides the complete source and selectable compilation root.
 Ownership proofs must erase before backend optimization. Runtime pointer-validity
 checks, identity metadata, pointer tags, reference counts, and hidden cleanup
 flags are excluded. Null checks before release and debug-only bounds checks are

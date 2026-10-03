@@ -367,6 +367,14 @@ then checks its obligations and typed-write separation at each call. It retains
 written pointer cells for later destruction checks. Other calls expand their
 actual bodies. These templates do not establish abstract ownership predicates
 or loop invariants. The separate ring proof is not a caller memory summary.
+An optional [declared call contract](../examples/intrusive/README.md#check-a-declared-call-contract)
+proves a selected body against input conditions, exact output maps, and a finite
+set of writable cells. It checks every intermediate write as well as the final
+memory frame. Each caller must establish the verified contract's conditions.
+This form supports branches in scalar, loop-free unit functions. It adds proof
+work and still uses concrete memory effects at call sites. It supplies no
+abstract graph predicate or inductive loop rule. All contract code and its
+preparation callback are in ordinary Crust stages.
 Native host execution is trusted process code, with no sandbox guarantee.
 
 ## Read next

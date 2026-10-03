@@ -116,7 +116,11 @@ Later allocation constraints cannot hide an earlier error. Immutable SMT
 definitions share terms without adding assumptions. An unreachable path can
 be removed only after its preceding obligations have been proved.
 Each active stack allocation must also admit a valid placement under every
-preceding state. An impossible layout cannot make later checks pass by
+preceding state. The checker uses a sufficient capacity bound: each live
+allocation reserves its extent plus room for one aligned gap for the new
+object. It also reserves one gap before those allocations. This bound can
+reject a feasible layout when the address space is nearly full. An impossible
+layout cannot make later checks pass by
 contradiction. This checks abstract address-space placement. It does not prove
 that the operating system's stack limit is sufficient. That check needs a
 target stack budget and evidence for the generated frame sizes.
@@ -129,9 +133,12 @@ Solver counterexamples, timeout, unknown results, unsupported operations, and
 checker allocation failures stop output. Existing output files remain unchanged
 when proof fails. There is no unchecked fallback.
 
-Direct unit calls use their actual bodies. A value helper requires one
-unconditional return expression and no foreign calls. Recursive and indirect
-calls, aggregate copies and results, global values, string values,
+Direct calls in statements and assignment right-hand sides use their actual
+bodies, including branch results. A nested value helper requires one
+unconditional return expression and no foreign calls. Aggregate copies read
+the complete old value before stores, including self-copy. Array copies use
+the selected iteration budget. Recursive and indirect
+calls, aggregate function arguments and results, global values, string values,
 arbitrary integer-to-pointer conversions, and external calls without an effect
 contract are rejected. The checker has no concurrency, RCU, or
 partial-destruction rule.
@@ -163,11 +170,16 @@ The [resource stage](../../stages/resources/README.md) supplies moves, RAII,
 complete seed operation trees. Resource cleanup also exists in retained exit
 plans, so checking only its lowered tree would omit cleanup and would be wrong.
 
-A combined checker must preserve source storage lifetimes, execute each planned
-cleanup at the correct exit, and validate reusable call effects against the
-exact implementation and layout. The current tutorial does not provide that
-adapter or a modular ownership model. It establishes the direct-pointer access
-and destruction checks on complete sequential programs.
+The [RAII composition tutorial](resources/README.md) preserves source storage
+lifetimes and executes the retained cleanup at each exit. It also removes
+initialized-field permissions after owner transfers. Its emitted C uses the
+same resource body emitter. It checks a complete two-hook client with automatic
+node and head destruction, without `unsafe` regions.
+
+Both closed-program profiles expand actual calls. Reusable call effects need
+verification against the exact implementation and layout, plus caller checks
+for their preconditions and destructive effects. The executor has no consumer
+for those summaries. The separate ring proof does not supply that interface.
 
 See the [systems source study](../../docs/exploration/systems-capabilities.md#static-model-reassessment)
 for the differences that matter to Linux, GCC, and LLVM.

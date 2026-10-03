@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn allocate(size:usize)->*u8="malloc";
+extern fn release(pointer:*u8)->unit="free";
+extern fn emit(code:i32)->i32="putchar";
+record Node { ready:Hook; active:Hook; value:i64; }
+resource Owner { node:*Node; } drop owner_drop;
+resource Head { hook:Hook; } drop head_drop;
+fn owner_new(value:i64)->Owner {
+    var node:*Node=allocate(sizeof(Node)) as *Node;
+    if node!=null(*Node) {
+        (*node).value=value;
+        hook_init(&(*node).ready);
+        hook_init(&(*node).active);
+    }
+    return make Owner {node:node};
+}
+fn owner_drop(owner:mut Owner)->unit {
+    var node:*Node=owner.node;
+    owner.node=null(*Node);
+    if node!=null(*Node) {
+        unlink(&(*node).ready);
+        unlink(&(*node).active);
+        release(node as *u8);
+    }
+}
+fn head_drop(head:mut Head)->unit {
+    while head.hook.next!=&head.hook {unlink(head.hook.next);}
+}
+fn main(argc:i32,argv:**u8)->i32 {
+    var first:Owner=owner_new(65i64);
+    var second:Owner=owner_new(66i64);
+    if first.node==null(*Node) || second.node==null(*Node) {return 1i32;}
+    {
+        var ready:Head=make Head {hook:make Hook {prev:null(*Hook),next:null(*Hook)}};
+        var active:Head=make Head {hook:make Hook {prev:null(*Hook),next:null(*Hook)}};
+        hook_init(&ready.hook);
+        hook_init(&active.hook);
+        insert_after(&ready.hook,&(*first.node).ready);
+        insert_after(&(*first.node).ready,&(*second.node).ready);
+        insert_after(&active.hook,&(*first.node).active);
+        insert_after(&(*first.node).active,&(*second.node).active);
+        {var early:Owner=move first;}
+        if ready.hook.next!=&(*second.node).ready || active.hook.next!=&(*second.node).active {trap;}
+    }
+    if (*second.node).ready.next!=&(*second.node).ready || (*second.node).active.prev!=&(*second.node).active {trap;}
+    if (*second.node).value!=66i64 {trap;}
+    emit(79i32);emit(75i32);emit(10i32);
+    return 0i32;
+}

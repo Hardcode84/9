@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 from memory import accept_cases
+from resource_memory import accept_cases as resource_cases
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = [
@@ -45,6 +46,8 @@ STAGE = [
             "expr",
             "foreign",
             "statement",
+            "assign",
+            "copy",
             "program",
         )
     ],
@@ -59,12 +62,40 @@ CASES = (
 )
 
 
+def resource_stage():
+    return [
+        *STAGE[:-1],
+        *[f"stages/reader/{name}.crs" for name in ("model", "lex", "parse")],
+        *[
+            f"stages/resources/{name}.crs"
+            for name in (
+                "model",
+                "base",
+                "read",
+                "types",
+                "constants",
+                "state",
+                "cleanup",
+                "places",
+                "expr",
+                "control",
+                "emit",
+                "program",
+                "build",
+            )
+        ],
+        *[f"stages/resource_memory/{name}.crs" for name in ("model", "view", "effects", "program")],
+        "tests/resource_memory_alloc.crs",
+    ]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=ROOT / "build")
     parser.add_argument("--cc", default="gcc")
     parser.add_argument("--amalgamation", type=int, choices=(0, 1), default=1)
     parser.add_argument("--z3-flags", default="-lz3")
+    parser.add_argument("--resources", action="store_true")
     parser.add_argument("--case", action="append", default=[])
     parser.add_argument("--no-sanitize", action="store_true")
     parser.add_argument("--work", type=Path)
@@ -72,9 +103,17 @@ def main():
     compiler = args.build.resolve() / "crust-c"
     if not compiler.is_file():
         parser.error(f"compiler does not exist: {compiler}")
+    cases = (
+        {name: item[0] for name, item in resource_cases().items()}
+        if args.resources
+        else accept_cases()
+    )
+    names = (
+        ("defer-move", "owner-return", "owner-array", "loop-cleanup") if args.resources else CASES
+    )
     selected = [
         name
-        for name in CASES
+        for name in names
         if not args.case or any(fnmatch.fnmatchcase(name, pattern) for pattern in args.case)
     ]
     if not selected:
@@ -117,7 +156,7 @@ def main():
                 generated,
                 "--symbols",
                 response,
-                *STAGE,
+                *(resource_stage() if args.resources else STAGE),
             ]
         )
         flags = ["-std=c99", "-pedantic-errors", "-g", "-O1", "-fno-omit-frame-pointer"]
@@ -162,7 +201,6 @@ def main():
             ]
         )
         total = 0
-        cases = accept_cases()
         for name in selected:
             source = work / f"{name}.crs"
             source.write_text(cases[name])

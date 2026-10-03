@@ -87,6 +87,7 @@ record RsValue {
 
 record RsAction {
     owner: *RsLocal;
+    scope: *RsScope;
     statement: *CrustStmt;
     next: *RsAction;
     validated: bool;
@@ -103,7 +104,11 @@ record RsChain {
 record RsExit {
     chain: *RsChain;
     continuation: *RsChain;
+    scope: *RsScope;
+    stop: *RsScope;
 }
+
+record RsTransfer { place: *CrustExpr; next: *RsTransfer; }
 
 record RsChange {
     local: *RsLocal;
@@ -128,6 +133,9 @@ record RsFunction {
     loop_targets: CrustMap;
     seed_blocks: CrustMap;
     chain_map: CrustMap;
+    scopes: CrustMap;
+    captures: CrustMap;
+    transfers: CrustMap;
     stage: *RsStage;
     global: *RsGlobal;
     scope: *RsScope;

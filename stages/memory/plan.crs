@@ -53,7 +53,7 @@ fn pm_plan(stage: *PfStage, policy: *PmPolicy) -> bool {
     while source_unit != null(*CrustUnit) && !(*stage).status.failed {
         var declaration: *CrustDecl = (*source_unit).declarations;
         while declaration != null(*CrustDecl) && !(*stage).status.failed {
-            pm_plan_statement(stage, policy, (*declaration).body, 0usize);
+            pm_plan_statement(stage, policy, pf_body(stage, declaration), 0usize);
             declaration = (*declaration).next;
         }
         source_unit = (*source_unit).next;

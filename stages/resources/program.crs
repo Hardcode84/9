@@ -15,14 +15,12 @@ fn resource_driver_entry(cli:*CCli, resources:*RsStage)->*CrustDecl {
     return (*global).lowered;
 }
 
-fn resource_driver_build(cli:*CCli)->i32 {
+fn resource_driver_read(cli:*CCli, resources:*RsStage)->bool {
     var driver:*CDriver = &(*cli).driver;
     var context:*CrustContext = (*cli).stage.status.context;
-    var resources:RsStage = uninit;
-    rs_init(&resources, context);
     if (*cli).root != null(*CrustSource) {
-        if !rs_read(&resources, (*cli).root, (*cli).target_begin, (*(*cli).root).size) {
-            return 1i32;
+        if !rs_read(resources, (*cli).root, (*cli).target_begin, (*(*cli).root).size) {
+            return false;
         }
     }
     var index:usize = 0usize;
@@ -32,15 +30,24 @@ fn resource_driver_build(cli:*CCli)->i32 {
         var size:usize = 0usize;
         if crust0_host_read_file((*source).path, &bytes, &size) != 0i32 {
             c_driver_io_error(driver, "cannot read input", (*source).path, *c_driver_errno());
-            return 1i32;
+            return false;
         }
         (*source).bytes = crust_try_copy_string(context, bytes, size);
         (*source).size = size;
         crust0_host_free(bytes);
-        if (*source).bytes == null(*u8) { return 1i32; }
-        if !rs_read(&resources, source, 0usize, size) { return 1i32; }
+        if (*source).bytes == null(*u8) { return false; }
+        if !rs_read(resources, source, 0usize, size) { return false; }
         index = index + 1usize;
     }
+    return true;
+}
+
+fn resource_driver_build(cli:*CCli)->i32 {
+    var driver:*CDriver = &(*cli).driver;
+    var context:*CrustContext = (*cli).stage.status.context;
+    var resources:RsStage = uninit;
+    rs_init(&resources, context);
+    if !resource_driver_read(cli, &resources) { return 1i32; }
     if !rs_prepare(&resources) { return 1i32; }
     if !c_driver_exports(cli) { return 1i32; }
     if (*cli).mode == 3u32 { return 0i32; }

@@ -31,10 +31,12 @@ HIGHLIGHT = api/crust0.crs api/crust0_host.crs stages/reader/model.crs stages/re
 CCN = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/ccn/count.crs stages/ccn/read.crs stages/ccn/report.crs stages/ccn/program.crs
 RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources/read.crs stages/resources/types.crs stages/resources/constants.crs stages/resources/state.crs stages/resources/cleanup.crs stages/resources/places.crs stages/resources/expr.crs stages/resources/control.crs stages/resources/emit.crs stages/resources/program.crs stages/resources/build.crs
 RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(RESOURCE)
-RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_c_body rs_source_import rs_return_from
+RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_prepare_with_access rs_c_body rs_source_import rs_return_from
 PROOF = stages/proof/model.crs stages/proof/base.crs stages/proof/terms.crs stages/proof/state.crs stages/proof/query.crs stages/proof/expression.crs stages/proof/execute.crs stages/proof/verify.crs stages/proof/z3.crs
-MEMORY = stages/memory/options.crs stages/memory/model.crs stages/memory/base.crs stages/memory/plan.crs stages/memory/storage.crs stages/memory/expr.crs stages/memory/foreign.crs stages/memory/statement.crs stages/memory/program.crs
+MEMORY = stages/memory/options.crs stages/memory/model.crs stages/memory/base.crs stages/memory/plan.crs stages/memory/storage.crs stages/memory/expr.crs stages/memory/foreign.crs stages/memory/statement.crs stages/memory/assign.crs stages/memory/copy.crs stages/memory/program.crs
 MEMORY_LIBRARY = $(C_LIBRARY) $(PROOF) $(MEMORY)
+RESOURCE_MEMORY = stages/resource_memory/model.crs stages/resource_memory/view.crs stages/resource_memory/effects.crs stages/resource_memory/program.crs
+RESOURCE_MEMORY_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(MEMORY) $(RESOURCE_MEMORY)
 Z3_LIBDIR ?=
 Z3_FLAGS = -lz3
 ifneq ($(strip $(Z3_LIBDIR)),)
@@ -50,6 +52,7 @@ OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_res
 .PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight ccn-stage check-ccn vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native check-asm check-cache
 .PHONY: amalgamate check-amalgamation FORCE
 .PHONY: memory-stage check-memory check-memory-alloc
+.PHONY: resource-memory-stage check-resource-memory check-resource-memory-alloc
 all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a $(BUILD)/crust-asm-library.so
 
 $(BUILD):
@@ -166,6 +169,23 @@ resource-stage: $(BUILD)/crust-resource $(BUILD)/crust-resource-library.so
 
 $(BUILD)/crust-memory-test: $(BUILD)/crust-c $(MEMORY_LIBRARY) examples/ownership/ring_contracts.crs examples/ownership/compiler.crs tests/memory_driver.crs Makefile
 	$< -o $@ $(MEMORY_LIBRARY) examples/ownership/ring_contracts.crs examples/ownership/compiler.crs tests/memory_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+$(BUILD)/crust-resource-memory-test: $(BUILD)/crust-c $(RESOURCE_MEMORY_LIBRARY) tests/resource_memory_driver.crs Makefile
+	$< -o $@ $(RESOURCE_MEMORY_LIBRARY) tests/resource_memory_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+$(BUILD)/crust-resource-memory-library.o: $(BUILD)/crust-c $(RESOURCE_MEMORY_LIBRARY) Makefile
+	$< --library --object --export resource_memory_program --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(RESOURCE_MEMORY_LIBRARY)
+
+$(BUILD)/crust-resource-memory-library.so: $(BUILD)/crust-resource-memory-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(Z3_FLAGS) $(LDFLAGS) -o $@
+
+resource-memory-stage: $(BUILD)/crust-resource-memory-test $(BUILD)/crust-resource-memory-library.so
+
+check-resource-memory: all resource-stage resource-memory-stage
+	python3 tests/resource_memory.py --build $(BUILD)
+
+check-resource-memory-alloc: all c-stage
+	python3 tests/memory_alloc.py --resources --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)'
 
 $(BUILD)/crust-memory-library.o: $(BUILD)/crust-c $(MEMORY_LIBRARY) Makefile
 	$< --library --object --export memory_program --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(MEMORY_LIBRARY)

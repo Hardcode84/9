@@ -25,6 +25,7 @@ fn rs_expression_scope(function: *RsFunction, output: *RsStatements, location: *
     var continuation: *RsChain = rs_terminal(function);
     if continuation == null(*RsChain) { return null(*CrustStmt); }
     rs_exit(function, block, (*(*function).scope).parent, continuation, continuation);
+    rs_put((*function).stage, &(*function).scopes, block as usize, (*function).scope as *u8);
     rs_leave_scope(function);
     return block;
 }
@@ -216,7 +217,11 @@ fn rs_make(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> 
     (*made).owned = rs_owns(stage, syntax);
     var result: *RsValue = rs_capture(function, output, made, &(*source).loc);
     index = 0usize;
-    while index < count && !(*stage).failed { rs_transfer(function, values[index]); index = index + 1usize; }
+    while index < count && !(*stage).failed {
+        rs_transfer_after(function, (*output).last, values[index]);
+        rs_transfer(function, values[index]);
+        index = index + 1usize;
+    }
     return result;
 }
 
@@ -513,6 +518,9 @@ fn rs_call_transfer(function: *RsFunction, values: **RsValue, count: usize, defe
     var index: usize = 0usize;
     while index < count && !(*stage).failed {
         rs_transfer(function, values[index]);
+        if deferred != null(*RsScope) && (*values[index]).local != null(*RsLocal) {
+            rs_put(stage, &(*function).captures, (*(*values[index]).local).storage as usize, deferred as *u8);
+        }
         if deferred != null(*RsScope) && ((*values[index]).mode == RS_READ || (*values[index]).mode == RS_MUT) {
             rs_promote_loan(function, values[index], deferred, location);
         }

@@ -1,84 +1,58 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn pm_initialize(run: *PfRun, state: *PfState, address: *u8, type: *CrustType,
-                 source: *CrustExpr, location: *CrustLoc) -> bool {
-    if !pf_enter(run, location) { return false; }
-    var result: bool = pm_initialize_inner(run, state, address, type, source, location);
+                 source: *CrustExpr, location: *CrustLoc) -> unit {
+    var writes: *PmWrite = null(*PmWrite);
+    pm_initializer(run, state, address, type, source, location, &writes);
+    // Evaluate the complete RHS before any destination field changes.
+    while writes != null(*PmWrite) && !pf_failed(run) {
+        pm_write(run, state, (*writes).address, (*writes).type, (*writes).value, true, location);
+        writes = (*writes).next;
+    }
+}
+
+fn pm_initializer(run: *PfRun, state: *PfState, address: *u8, type: *CrustType,
+                   source: *CrustExpr, location: *CrustLoc, writes: **PmWrite) -> unit {
+    if !pf_enter(run, location) { return; }
+    pm_initialize_inner(run, state, address, type, source, location, writes);
     (*run).depth = (*run).depth - 1usize;
-    return result;
 }
 
 fn pm_initialize_inner(run: *PfRun, state: *PfState, address: *u8, type: *CrustType,
-                       source: *CrustExpr, location: *CrustLoc) -> bool {
+                       source: *CrustExpr, location: *CrustLoc, writes: **PmWrite) -> unit {
     while (*source).kind == CRUST_E_GROUP { source = (*source).left; }
     if (*source).kind == CRUST_E_RECORD {
         var item: *CrustInit = (*source).inits;
         while item != null(*CrustInit) && !pf_failed(run) {
             var field: *CrustField = (*item).field;
-            var offset: *u8 = pf_binary(run, "+", pm_offset(run, address), pm_number(run, (*field).offset));
-            var destination: *u8 = pm_pointer(run, pm_origin(run, address), offset);
-            if !pm_initialize(run, state, destination, (*field).type, (*item).value, location) { return false; }
+            pm_initializer(run, state, pm_subobject(run, address, (*field).offset),
+                (*field).type, (*item).value, location, writes);
             item = (*item).next;
         }
-        return !pf_failed(run);
+        return;
     }
     if (*source).kind == CRUST_E_ARRAY {
-        return pm_initialize_array(run, state, address, type, source, location);
+        pm_initialize_array(run, state, address, type, source, location, writes);
+        return;
+    }
+    if (*type).kind == CRUST_T_RECORD || (*type).kind == CRUST_T_ARRAY {
+        var origin: *u8 = pm_place(run, state, source, "true");
+        if !pf_failed(run) { pm_copy_value(run, state, address, origin, type, location, writes); }
+        return;
     }
     var value: *u8 = pf_expression(run, state, source, "true");
-    if pf_failed(run) { return false; }
-    return pm_write(run, state, address, type, value, true, location);
+    if !pf_failed(run) { pm_pending_write(run, address, type, value, writes); }
 }
 
 fn pm_initialize_array(run: *PfRun, state: *PfState, address: *u8, type: *CrustType,
-                       source: *CrustExpr, location: *CrustLoc) -> bool {
+                       source: *CrustExpr, location: *CrustLoc, writes: **PmWrite) -> unit {
     var index: usize = 0usize;
     var element: *CrustType = (*type).base;
     while index < (*source).arg_count && !pf_failed(run) {
-        var offset: *u8 = pf_binary(run, "+", pm_offset(run, address), pm_number(run, index as u64 * (*element).size));
-        var destination: *u8 = pm_pointer(run, pm_origin(run, address), offset);
-        if !pm_initialize(run, state, destination, element, (*source).args[index], location) { return false; }
+        pm_initializer(run, state, pm_subobject(run, address, index as u64 * (*element).size),
+            element, (*source).args[index], location, writes);
         index = index + 1usize;
     }
-    return !pf_failed(run);
-}
-
-fn pm_variable(run: *PfRun, state: *PfState, statement: *CrustStmt) -> bool {
-    var type: *CrustType = (*(*statement).symbol).type;
-    if !pm_needs_storage(run, (*statement).symbol) {
-        var value: *u8 = null(*u8);
-        if !(*statement).uninitialized { value = pf_expression(run, state, (*statement).value, "true"); }
-        pf_bind(run, state, (*statement).symbol, value);
-        return !pf_failed(run);
-    }
-    var address: *u8 = pm_local_slot(run, state, (*statement).symbol, &(*statement).loc);
-    if address == null(*u8) { return false; }
-    if (*statement).uninitialized { return true; }
-    if (*type).kind == CRUST_T_RECORD || (*type).kind == CRUST_T_ARRAY {
-        return pm_initialize(run, state, address, type, (*statement).value, &(*statement).loc);
-    }
-    var value: *u8 = pf_expression(run, state, (*statement).value, "true");
-    if pf_failed(run) { return false; }
-    return pm_write(run, state, address, type, value, false, &(*statement).loc);
-}
-
-fn pm_statement(run: *PfRun, state: *PfState, statement: *CrustStmt) -> u32 {
-    if (*statement).kind == CRUST_S_VAR {
-        if pm_variable(run, state, statement) { return PF_HANDLED; }
-        return PF_REJECT;
-    }
-    if (*statement).kind == CRUST_S_ASSIGN {
-        var target: *CrustExpr = pf_ungroup(run, (*statement).expr);
-        if pf_failed(run) { return PF_REJECT; }
-        if (*target).kind == CRUST_E_NAME && !pm_needs_storage(run, (*target).symbol) { return PF_DELEGATE; }
-        var address: *u8 = pm_place(run, state, (*statement).expr, "true");
-        var value: *u8 = null(*u8);
-        if !pf_failed(run) { value = pf_expression(run, state, (*statement).value, "true"); }
-        if pf_failed(run) { return PF_REJECT; }
-        if pm_store(run, state, (*statement).expr, address, value, &(*statement).loc) { return PF_HANDLED; }
-        return PF_REJECT;
-    }
-    return PF_DELEGATE;
 }
 
 fn pm_post(run: *PfRun, state: *PfState) -> bool {

@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-bool memory_alloc_verify(CrustContext *context, CrustDecl *entry);
+bool memory_alloc_verify(CrustContext *context, CrustSource *source);
 void *__real_crust0_host_alloc(size_t size, size_t alignment);
 void __real_crust0_host_free(void *allocation);
 void *__wrap_crust0_host_alloc(size_t size, size_t alignment);
@@ -56,21 +56,6 @@ void __wrap_crust0_host_free(void *allocation)
     __real_crust0_host_free(allocation);
 }
 
-static CrustDecl *prepare(CrustContext *context, CrustSource *source)
-{
-    CrustUnit *unit_value;
-    CrustDecl *entry;
-    if (!crust_read(context, source, &unit_value) || !crust_collect(context) ||
-        !crust_resolve(context) || !crust_check(context))
-        return NULL;
-    for (entry = unit_value->declarations; entry != NULL; entry = entry->next) {
-        if (entry->kind == CRUST_D_FUNCTION && strcmp(entry->name->text, "main") == 0)
-            return entry;
-    }
-    crust_set_error(context, source, 0, "test input has no main function");
-    return NULL;
-}
-
 static bool valid_result(CrustContext *context, size_t fail_at, bool success)
 {
     if (allocation_state.live != 0 || allocation_state.host_failed || context->failure != NULL)
@@ -84,20 +69,16 @@ static bool valid_result(CrustContext *context, size_t fail_at, bool success)
 static bool attempt(CrustSource *source, size_t fail_at, size_t *calls)
 {
     CrustContext context;
-    CrustDecl *entry;
     bool success;
     bool valid = false;
     crust_context_init(&context, NULL);
-    entry = prepare(&context, source);
-    if (entry != NULL) {
-        memset(&allocation_state, 0, sizeof(allocation_state));
-        allocation_state.active = true;
-        allocation_state.fail_at = fail_at;
-        success = memory_alloc_verify(&context, entry);
-        allocation_state.active = false;
-        *calls = allocation_state.calls;
-        valid = valid_result(&context, fail_at, success);
-    }
+    memset(&allocation_state, 0, sizeof(allocation_state));
+    allocation_state.active = true;
+    allocation_state.fail_at = fail_at;
+    success = memory_alloc_verify(&context, source);
+    allocation_state.active = false;
+    *calls = allocation_state.calls;
+    valid = valid_result(&context, fail_at, success);
     if (!valid) {
         fprintf(stderr, "%s: allocation %zu: invalid verifier result or lifetime state: %s\n",
                 source->path, fail_at, context.error);

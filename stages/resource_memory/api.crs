@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Include api/crust0_stage.crs and stages/memory/options.crs first.
+// Require an empty context. Keep source, arguments, and options live until return.
+// Check source ownership, complete cleanup, and memory effects before output.
+// Retain diagnostics in context. Only a closed executable entry is accepted.
+extern fn resource_memory_program(request: *CrustBuild, options: *PmOptions) -> i32 = "resource_memory_program";

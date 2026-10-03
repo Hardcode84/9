@@ -43,6 +43,8 @@ record PmCell {
     persistent: bool;
 }
 
+record PmWrite { address: *u8; type: *CrustType; value: *u8; next: *PmWrite; }
+
 record PmScope {
     block: *CrustStmt;
     locals: *PmLocal;

@@ -185,7 +185,7 @@ fn pf_external_value(run: *PfRun, state: *PfState, expression: *CrustExpr, guard
 }
 
 fn pf_projector_body(run: *PfRun, declaration: *CrustDecl) -> *CrustStmt {
-    var body: *CrustStmt = (*declaration).body;
+    var body: *CrustStmt = pf_body((*run).stage, declaration);
     if (*body).kind == CRUST_S_BLOCK { body = (*body).body; }
     if body != null(*CrustStmt) {
         if (*body).kind == CRUST_S_RETURN && (*body).expr != null(*CrustExpr) &&
@@ -204,7 +204,7 @@ fn pf_projector(run: *PfRun, state: *PfState, expression: *CrustExpr,
     if pf_failed(run) { return null(*u8); }
     var frame: PfCall = make PfCall { declaration: declaration, parent: (*run).calls, guard: guard };
     (*run).calls = &frame;
-    if !pf_scope(run, called, (*declaration).body, true) {
+    if !pf_scope(run, called, pf_body((*run).stage, declaration), true) {
         (*run).calls = frame.parent;
         return null(*u8);
     }
@@ -213,7 +213,7 @@ fn pf_projector(run: *PfRun, state: *PfState, expression: *CrustExpr,
     (*run).projector_depth = (*run).projector_depth - 1usize;
     (*called).result = value;
     (*called).flow = PF_RETURN;
-    var success: bool = !pf_failed(run) && pf_scope(run, called, (*declaration).body, false);
+    var success: bool = !pf_failed(run) && pf_scope(run, called, pf_body((*run).stage, declaration), false);
     (*run).calls = frame.parent;
     if !success { return null(*u8); }
     (*called).env = (*state).env;

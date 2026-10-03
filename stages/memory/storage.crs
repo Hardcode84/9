@@ -33,18 +33,29 @@ fn pm_storage_placement(run: *PfRun, state: *PfState, base: *u8, size: *u8, vali
     return c_buffer_end(&buffer);
 }
 
-fn pm_stack_available(run: *PfRun, state: *PfState, base: *u8, placement: *u8,
+fn pm_storage_range(run: *PfRun, base: *u8, size: *u8, alignment: usize) -> *u8 {
+    var valid: *u8 = pf_and(run, pf_binary(run, ">", base, "0"), pf_binary(run, ">=", size, "0"));
+    valid = pf_and(run, valid, pf_binary(run, "<=", pf_binary(run, "+", base, size), "18446744073709551615"));
+    return pf_and(run, valid, pf_eq(run, pf_binary(run, "mod", base, pm_number(run, alignment as u64)), "0"));
+}
+
+fn pm_stack_available(run: *PfRun, state: *PfState, size: *u8, alignment: usize,
                       live: *u8, location: *CrustLoc) -> unit {
-    var buffer: CBuffer = uninit;
-    pf_buffer(run, &buffer);
-    c_buffer_text(&buffer, "(exists ((");
-    c_buffer_text(&buffer, base);
-    c_buffer_text(&buffer, " Int)) ");
-    c_buffer_text(&buffer, placement);
-    c_buffer_text(&buffer, ")");
-    // Every preceding state must admit a placement. A later allocation cannot
-    // discard an unsafe prefix by making its address facts contradictory.
-    pm_require(run, state, live, c_buffer_end(&buffer), location);
+    // N occupied intervals leave N+1 gaps. Reserve size+alignment in each gap:
+    // this sufficient bound guarantees a positive aligned placement regardless
+    // of the intervals' numeric addresses. It can reject a feasible tight layout.
+    var gap: *u8 = pf_binary(run, "+", size, pm_number(run, alignment as u64));
+    var required: *u8 = gap;
+    var world: *PmWorld = pm_world(run, state);
+    var object: *PmObject = (*pm_world(run, state)).objects;
+    while object != null(*PmObject) && !pf_failed(run) {
+        var occupied: *u8 = pf_binary(run, "+", (*object).size, gap);
+        required = pf_define(run, "Int", pf_binary(run, "+", required,
+            pf_ite(run, pf_select(run, (*world).live, (*object).identity), occupied, "0")));
+        object = (*object).next;
+    }
+    // Capture the goal before the chosen base can discard any unsafe prefix.
+    pm_require(run, state, live, pf_binary(run, "<=", required, "18446744073709551615"), location);
 }
 
 fn pm_new_object(run: *PfRun, state: *PfState, size: *u8, alignment: usize,
@@ -52,11 +63,9 @@ fn pm_new_object(run: *PfRun, state: *PfState, size: *u8, alignment: usize,
     var base: *u8 = pf_fresh(run, "Int");
     var identity: *u8 = pm_number(run, ((*run).next_name + 1usize) as u64);
     (*run).next_name = (*run).next_name + 1usize;
-    var valid: *u8 = pf_and(run, pf_binary(run, ">", base, "0"), pf_binary(run, ">=", size, "0"));
-    valid = pf_and(run, valid, pf_binary(run, "<=", pf_binary(run, "+", base, size), "18446744073709551615"));
-    valid = pf_and(run, valid, pf_eq(run, pf_binary(run, "mod", base, pm_number(run, alignment as u64)), "0"));
+    var valid: *u8 = pm_storage_range(run, base, size, alignment);
     var placement: *u8 = pm_storage_placement(run, state, base, size, valid);
-    if !heap { pm_stack_available(run, state, base, placement, live, location); }
+    if !heap { pm_stack_available(run, state, size, alignment, live, location); }
     pf_assume(run, state, pf_implies(run, live, placement));
     var world: *PmWorld = pm_change(run, state);
     var object: *PmObject = pf_alloc(run, sizeof(PmObject), alignof(PmObject)) as *PmObject;
@@ -140,7 +149,7 @@ fn pm_parameter_slot(run: *PfRun, state: *PfState, parameter: *CrustParam, guard
 
 fn pm_scope_parameters(run: *PfRun, state: *PfState, block: *CrustStmt) -> bool {
     var frame: *PfCall = (*run).calls;
-    if block != (*(*frame).declaration).body { return true; }
+    if block != pf_body((*run).stage, (*frame).declaration) { return true; }
     var parameter: *CrustParam = (*(*frame).declaration).params;
     while parameter != null(*CrustParam) {
         if pm_needs_storage(run, (*parameter).symbol) {
@@ -169,12 +178,31 @@ fn pm_no_incoming(run: *PfRun, state: *PfState, identity: *u8,
     }
 }
 
-fn pm_retire(run: *PfRun, state: *PfState, identity: *u8, guard: *u8, location: *CrustLoc) -> unit {
-    pm_no_incoming(run, state, identity, guard, location);
+fn pm_expire(run: *PfRun, state: *PfState, identity: *u8, guard: *u8) -> unit {
     var world: *PmWorld = pm_change(run, state);
     if world == null(*PmWorld) { return; }
     var live: *u8 = pf_select(run, (*world).live, identity);
     (*world).live = pm_array_store(run, "(Array Int Bool)", (*world).live, identity, pf_and(run, live, pf_not(run, guard)));
+}
+
+fn pm_retire(run: *PfRun, state: *PfState, identity: *u8, guard: *u8, location: *CrustLoc) -> unit {
+    pm_no_incoming(run, state, identity, guard, location);
+    pm_expire(run, state, identity, guard);
+}
+
+fn pm_scope_end(run: *PfRun, state: *PfState, scope: *PmScope, guard: *u8, location: *CrustLoc) -> unit {
+    if (*state).flow == PF_TRAP { return; }
+    var object: *PmObject = (*scope).objects;
+    // All storage in this lexical scope ends together, after its cleanup.
+    while object != null(*PmObject) && !pf_failed(run) {
+        pm_expire(run, state, (*object).identity, guard);
+        object = (*object).scope_next;
+    }
+    object = (*scope).objects;
+    while object != null(*PmObject) && !pf_failed(run) {
+        pm_no_incoming(run, state, (*object).identity, guard, location);
+        object = (*object).scope_next;
+    }
 }
 
 fn pm_scope(run: *PfRun, state: *PfState, block: *CrustStmt, entering: bool) -> bool {
@@ -191,12 +219,8 @@ fn pm_scope(run: *PfRun, state: *PfState, block: *CrustStmt, entering: bool) -> 
         return pm_scope_parameters(run, state, block);
     }
     var guard: *u8 = "true";
-    if block == (*(*(*run).calls).declaration).body { guard = (*(*run).calls).guard; }
-    var object: *PmObject = (*scope).objects;
-    while object != null(*PmObject) && !pf_failed(run) {
-        if (*state).flow != PF_TRAP { pm_retire(run, state, (*object).identity, guard, &(*block).loc); }
-        object = (*object).scope_next;
-    }
+    if block == pf_body((*run).stage, (*(*run).calls).declaration) { guard = (*(*run).calls).guard; }
+    pm_scope_end(run, state, scope, guard, &(*block).loc);
     world = pm_change(run, state);
     if world == null(*PmWorld) { return false; }
     (*world).scope = (*scope).parent;

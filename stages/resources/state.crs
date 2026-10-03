@@ -166,6 +166,7 @@ fn rs_action(function: *RsFunction, owner: *RsLocal, statement: *CrustStmt) -> *
     (*action).owner = owner;
     (*action).statement = statement;
     var scope: *RsScope = (*function).scope;
+    (*action).scope = scope;
     if (*scope).first_action == null(*RsAction) { (*scope).first_action = action; }
     else { (*(*scope).last_action).next = action; }
     (*scope).last_action = action;
@@ -245,6 +246,7 @@ fn rs_capture(function: *RsFunction, output: *RsStatements, value: *RsValue, loc
     if local == null(*RsLocal) { return null(*RsValue); }
     var place: *CrustExpr = rs_named(stage, (*local).storage, location);
     rs_assign(function, output, place, (*value).expression, location);
+    rs_transfer_after(function, (*output).last, value);
     (*local).initialized = true;
     if (*value).owned && (*value).local != null(*RsLocal) { rs_live(function, (*value).local, false); }
     if (*(*value).syntax).kind == RS_READ || (*(*value).syntax).kind == RS_MUT {
@@ -258,6 +260,16 @@ fn rs_capture(function: *RsFunction, output: *RsStatements, value: *RsValue, loc
         (*result).owned = (*local).owning;
     }
     return result;
+}
+
+fn rs_transfer_after(function: *RsFunction, statement: *CrustStmt, value: *RsValue) -> unit {
+    if !(*value).owned || (*value).local == null(*RsLocal) { return; }
+    var stage: *RsStage = (*function).stage;
+    var transfer: *RsTransfer = rs_alloc(stage, sizeof(RsTransfer), alignof(RsTransfer)) as *RsTransfer;
+    if transfer == null(*RsTransfer) { return; }
+    (*transfer).place = (*value).expression;
+    (*transfer).next = crust_map_get(&(*function).transfers, statement as usize) as *RsTransfer;
+    rs_put(stage, &(*function).transfers, statement as usize, transfer as *u8);
 }
 
 fn rs_terminal(function: *RsFunction) -> *RsChain {
@@ -310,5 +322,7 @@ fn rs_exit(function: *RsFunction, statement: *CrustStmt, stop: *RsScope,
     if exit_value == null(*RsExit) { return; }
     (*exit_value).chain = rs_cleanup(function, (*function).scope, stop, target);
     (*exit_value).continuation = continuation;
+    (*exit_value).scope = (*function).scope;
+    (*exit_value).stop = stop;
     rs_put((*function).stage, &(*function).exits, statement as usize, exit_value as *u8);
 }

@@ -5,14 +5,12 @@ const PF_RETURN: u32 = 1u32;
 const PF_BREAK: u32 = 2u32;
 const PF_CONTINUE: u32 = 3u32;
 const PF_TRAP: u32 = 4u32;
-const PF_DELEGATE: u32 = 0u32;
-const PF_HANDLED: u32 = 1u32;
-const PF_REJECT: u32 = 2u32;
 
 record PfStage {
     status: CStatus;
     user: *u8;
     preamble: *u8;
+    body: fn(*PfStage, *CrustDecl) -> *CrustStmt;
     // Query strings are borrowed only for the duration of each callback.
     // Return 0 for UNSAT, 1 for SAT, and -1 for error or unknown.
     solve: fn(*PfStage, *u8, *CrustLoc) -> i32;
@@ -24,7 +22,9 @@ record PfStage {
     store: fn(*PfRun, *PfState, *CrustExpr, *u8, *u8, *CrustLoc) -> bool;
     external: fn(*PfRun, *PfState, *CrustExpr, *u8) -> *u8;
     sort: fn(*PfRun, *CrustType) -> *u8;
-    statement: fn(*PfRun, *PfState, *CrustStmt) -> u32;
+    // Return all resulting paths, including an empty set. Delegate other nodes
+    // explicitly to pf_statement_inner with the current call frame.
+    statement: fn(*PfRun, *PfState, *CrustStmt) -> *PfPath;
     scope: fn(*PfRun, *PfState, *CrustStmt, bool) -> bool;
     max_depth: usize;
     max_paths: usize;

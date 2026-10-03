@@ -1252,12 +1252,13 @@ counterexamples, and solver uncertainty stop output. The library proof is a
 separate conditional check; callers do not consume it as a permission summary.
 There is no claim of C-speed proof checking or completed modular ownership.
 
-The resource stage separately supports a result view tied to one input loan.
-Its moves, RAII, and `defer` still use retained cleanup plans. Those plans and
-the original lexical storage lifetimes must enter the memory proof before the
-two stages can share a safety claim. A check of the resource stage's lowered
-tree alone would omit cleanup calls. The next modular interface must also
-connect owner rights and field permissions to the verified library contract.
+The resource stage supports a result view tied to one input loan. Its moves,
+RAII, and `defer` use retained cleanup plans. The
+[combined stage](../../examples/ownership/resources/README.md) now brings those
+plans, source storage scopes, deferred captures, and owner transfers into the
+memory proof. A check of the lowered tree alone would still omit cleanup calls.
+The next modular interface must connect owner rights and field permissions to
+verified library contracts. The combined stage currently expands actual bodies.
 
 Subobject projection needs its own contract. The default VeriFast C model
 rejects subtraction outside a field subobject, even with a known parent. Crust's
@@ -1285,8 +1286,8 @@ Clients should consume checked contracts without repeating the library proof.
 That requires binding a summary to the exact body, types, layout, imports, and
 checker configuration. Such summaries may be cached by an ordinary stage.
 
-The concrete implementation work is to connect these contracts to Crust owner
-bindings, cleanup plans, and call effects. Every exit must return its domain
+The next contract work is to summarize the checked call effects. Every exit
+must return its domain
 permission or transfer it explicitly. Every projected or returned view must
 retain its loan. The checker must reject destruction while that loan survives,
 including through callbacks and another hook. The current experiments establish

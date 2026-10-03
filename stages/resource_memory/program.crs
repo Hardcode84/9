@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn rm_verify(resources: *RsStage, entry: *CrustDecl, options: *PmOptions) -> bool {
+    var policy: RmPolicy = uninit;
+    rm_empty_map(&policy.bodies);
+    rm_empty_map(&policy.ends);
+    rm_empty_map(&policy.transfers);
+    var stage: PfStage = uninit;
+    var success: bool = pm_setup(&stage, &policy.memory, (*resources).context, options);
+    var global: *RsGlobal = (*resources).first_global;
+    while global != null(*RsGlobal) && success && !stage.status.failed {
+        var function: *RsFunction = crust_map_get(&(*resources).functions, (*global).lowered as usize) as *RsFunction;
+        if function != null(*RsFunction) { rm_function_view(&stage, &policy, function); }
+        global = (*global).next;
+    }
+    stage.body = rm_body;
+    stage.statement = rm_statement;
+    if success { success = pm_plan(&stage, &policy.memory); }
+    if success { success = pf_verify(&stage, entry); }
+    pf_destroy(&stage);
+    return success;
+}
+
+fn rm_driver_build(cli: *CCli, options: *PmOptions) -> i32 {
+    var context: *CrustContext = (*cli).stage.status.context;
+    if (*cli).library || (*cli).export_count != 0usize {
+        c_driver_error(&(*cli).driver, "closed-program resource checking does not accept library exports");
+        return 1i32;
+    }
+    var resources: RsStage = uninit;
+    rs_init(&resources, context);
+    if !resource_driver_read(cli, &resources) || !rs_prepare_with_access(&resources, true) { return 1i32; }
+    var entry: *CrustDecl = resource_driver_entry(cli, &resources);
+    if entry == null(*CrustDecl) { return 1i32; }
+    if !rm_verify(&resources, entry, options) { return 1i32; }
+    if (*cli).mode == 3u32 { return 0i32; }
+    if !c_driver_names(&(*cli).driver) { return 1i32; }
+    if (*cli).mode == 4u32 {
+        if c_emit_with_body(&(*cli).stage, entry, rs_c_body, &resources as *u8) { return 0i32; }
+        return 1i32;
+    }
+    return c_backend_build_with_body(context, entry, &(*cli).options, rs_c_body, &resources as *u8);
+}
+
+// Check source resource rules, cleanup plans, and memory effects before emission.
+// Retain inputs and contracts until return. No unchecked output is produced.
+fn resource_memory_program(request: *CrustBuild, options: *PmOptions) -> i32 {
+    var cli: CCli = uninit;
+    var success: bool = c_driver_init(&cli, (*request).context, (*request).argc);
+    cli.root = (*request).source;
+    cli.target_begin = (*request).target_begin;
+    var result: i32 = 1i32;
+    if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
+        result = rm_driver_build(&cli, options);
+    }
+    c_stage_destroy(&cli.stage);
+    return result;
+}

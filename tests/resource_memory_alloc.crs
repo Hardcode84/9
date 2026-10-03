@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn memory_alloc_verify(context:*CrustContext, source:*CrustSource)->bool {
-    var input:*CrustUnit=null(*CrustUnit);
-    if !crust_read(context, source, &input) || !crust_collect(context) ||
-       !crust_resolve(context) || !crust_check(context) { return false; }
+    var resources:RsStage=uninit;
+    rs_init(&resources, context);
+    if !rs_read(&resources, source, 0usize, (*source).size) ||
+       !rs_prepare_with_access(&resources, true) { return false; }
     var entry:*CrustDecl=pm_lookup(context, "main");
     if entry == null(*CrustDecl) { return false; }
     var contracts:[PmForeignSpec;3] = make [PmForeignSpec;3] {
@@ -15,5 +16,5 @@ fn memory_alloc_verify(context:*CrustContext, source:*CrustSource)->bool {
         foreign:&contracts[0usize], foreign_count:3usize, max_depth:128usize,
         max_paths:64usize, max_iterations:4usize, milliseconds:10000u32
     };
-    return pm_verify(context, entry, &options);
+    return rm_verify(&resources, entry, &options);
 }

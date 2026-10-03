@@ -86,6 +86,7 @@ fn rs_initialize(function: *RsFunction, local: *RsLocal, value: *RsValue,
         rs_live(function, (*value).local, false);
     }
     rs_assign(function, output, rs_named(stage, (*local).storage, location), (*value).expression, location);
+    rs_transfer_after(function, (*output).last, value);
     rs_transfer(function, value);
     rs_live(function, local, true);
 }
@@ -112,6 +113,7 @@ fn rs_lower_block(function: *RsFunction, source: *CrustStmt, output: *RsStatemen
         if continuation == null(*RsChain) { return false; }
         rs_exit(function, block, (*(*function).scope).parent, continuation, continuation);
     }
+    rs_put(stage, &(*function).scopes, block as usize, (*function).scope as *u8);
     rs_leave_scope(function);
     rs_append(output, block);
     return falls;
@@ -148,7 +150,7 @@ fn rs_lower_statement(function: *RsFunction, source: *CrustStmt, output: *RsStat
     return rs_lower_effect(function, source, output);
 }
 
-fn rs_function(stage: *RsStage, global: *RsGlobal) -> bool {
+fn rs_function(stage: *RsStage, global: *RsGlobal, allow_raw: bool) -> bool {
     var source: *CrustDecl = (*global).source;
     var target: *CrustDecl = (*global).lowered;
     var function: *RsFunction = rs_alloc(stage, sizeof(RsFunction), alignof(RsFunction)) as *RsFunction;
@@ -157,7 +159,7 @@ fn rs_function(stage: *RsStage, global: *RsGlobal) -> bool {
     (*function).global = global;
     (*function).next_label = 1usize;
     (*function).returned = rs_terminal(function);
-    if (*global).unsafe_call { (*function).unsafe_depth = 1usize; }
+    if (*global).unsafe_call || allow_raw { (*function).unsafe_depth = 1usize; }
     rs_scope(function);
     rs_put(stage, &(*stage).functions, target as usize, function as *u8);
     var result_type: *CrustTypeSyntax = rs_function_parameters(function, source, target);
@@ -192,17 +194,24 @@ fn rs_function(stage: *RsStage, global: *RsGlobal) -> bool {
     rs_append(&all, (*function).body);
     rs_append(&all, (*function).epilogue);
     (*target).body = rs_block(stage, &all, &(*source).loc);
+    rs_put(stage, &(*function).scopes, (*target).body as usize, (*function).scope as *u8);
     return !(*stage).failed;
 }
 
 // Publish interfaces, check resource operations, and produce checked target trees.
 // Require complete source units and retain all source bytes through context use.
 fn rs_prepare(stage: *RsStage) -> bool {
+    return rs_prepare_with_access(stage, false);
+}
+
+// With allow_raw, the caller must check raw memory effects before emission.
+// Move, loan, initialization, and cleanup rules still apply to every body.
+fn rs_prepare_with_access(stage: *RsStage, allow_raw: bool) -> bool {
     if !rs_collect(stage) || !rs_publish(stage) { return false; }
     var global: *RsGlobal = (*stage).first_global;
     while global != null(*RsGlobal) && !(*stage).failed {
         if (*(*global).source).kind == CRUST_D_FUNCTION {
-            if !rs_function(stage, global) { return false; }
+            if !rs_function(stage, global, allow_raw) { return false; }
         }
         global = (*global).next;
     }
@@ -364,6 +373,7 @@ fn rs_lower_return(function: *RsFunction, source: *CrustStmt, output: *RsStateme
             destination = rs_unary(stage, CRUST_OP_DEREF, rs_named(stage, (*function).output, location), location);
         } else { destination = rs_named(stage, (*(*function).result).storage, location); }
         rs_assign(function, effects, destination, (*value).expression, location);
+        rs_transfer_after(function, (*effects).last, value);
         rs_transfer(function, value);
     }
     var returning: *CrustStmt = rs_stmt_node(stage, CRUST_S_RETURN, location);
@@ -372,8 +382,11 @@ fn rs_lower_return(function: *RsFunction, source: *CrustStmt, output: *RsStateme
     else { if (*function).result != null(*RsLocal) { (*returning).expr = rs_named(stage, (*(*function).result).storage, location); } }
     rs_exit(function, returning, null(*RsScope), (*function).returned, null(*RsChain));
     rs_append(effects, returning);
+    var block: *CrustStmt = rs_block(stage, effects, location);
+    if block == null(*CrustStmt) { return; }
+    rs_put(stage, &(*function).scopes, block as usize, (*function).scope as *u8);
     rs_leave_scope(function);
-    rs_append(output, rs_block(stage, effects, location));
+    rs_append(output, block);
     return;
 }
 
@@ -413,6 +426,7 @@ fn rs_lower_assignment(function: *RsFunction, source: *CrustStmt, effects: *RsSt
         }
     }
     rs_assign(function, effects, (*place).expression, (*value).expression, location);
+    rs_transfer_after(function, (*effects).last, value);
     rs_transfer(function, value);
     if whole && (*place).local != null(*RsLocal) { rs_live(function, (*place).local, true); }
 }

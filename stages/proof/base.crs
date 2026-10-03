@@ -5,6 +5,7 @@ fn pf_init(stage: *PfStage, context: *CrustContext) -> unit {
     (*stage) = make PfStage {
         status: make CStatus { context: context, blocks: null(*CBlock), failed: false },
         user: null(*u8), preamble: "", solve: null(fn(*PfStage, *u8, *CrustLoc) -> i32),
+        body: null(fn(*PfStage, *CrustDecl) -> *CrustStmt),
         pre: null(fn(*PfRun, *PfState) -> bool),
         access: null(fn(*PfRun, *PfState, *CrustField, *u8, bool, *CrustLoc) -> *u8),
         post: null(fn(*PfRun, *PfState) -> bool),
@@ -13,10 +14,18 @@ fn pf_init(stage: *PfStage, context: *CrustContext) -> unit {
         store: null(fn(*PfRun, *PfState, *CrustExpr, *u8, *u8, *CrustLoc) -> bool),
         external: null(fn(*PfRun, *PfState, *CrustExpr, *u8) -> *u8),
         sort: null(fn(*PfRun, *CrustType) -> *u8),
-        statement: null(fn(*PfRun, *PfState, *CrustStmt) -> u32),
+        statement: null(fn(*PfRun, *PfState, *CrustStmt) -> *PfPath),
         scope: null(fn(*PfRun, *PfState, *CrustStmt, bool) -> bool),
         max_depth: 128usize, max_paths: 128usize, max_iterations: 32usize, obligations: 0usize, prune: false
     };
+}
+
+// An optional view must retain the complete checked semantics of each body.
+fn pf_body(stage: *PfStage, declaration: *CrustDecl) -> *CrustStmt {
+    if (*stage).body != null(fn(*PfStage, *CrustDecl) -> *CrustStmt) {
+        return (*stage).body(stage, declaration);
+    }
+    return (*declaration).body;
 }
 
 // Release proof storage. Retain the context and failure state.

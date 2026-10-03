@@ -69,7 +69,7 @@ fn pf_verify(stage: *PfStage, declaration: *CrustDecl) -> bool {
     run.before = pf_fork(&run, state);
     if pf_failed(&run) { return false; }
     var frame: PfCall = make PfCall { declaration: declaration, parent: null(*PfCall), guard: "true" };
-    var path: *PfPath = pf_statement(&run, state, (*declaration).body, &frame);
+    var path: *PfPath = pf_statement(&run, state, pf_body(stage, declaration), &frame);
     if pf_failed(&run) { return false; }
     while path != null(*PfPath) {
         if !pf_prove(&run, (*path).state) { return false; }

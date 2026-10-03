@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn pm_subobject(run: *PfRun, address: *u8, offset: u64) -> *u8 {
+    return pf_define(run, "Ptr", pm_pointer(run, pm_origin(run, address),
+        pf_binary(run, "+", pm_offset(run, address), pm_number(run, offset))));
+}
+
+fn pm_copy_fields(run: *PfRun, state: *PfState,
+                   destination: *u8, source: *u8, type: *CrustType, location: *CrustLoc, writes: **PmWrite) -> unit {
+    if (*type).kind == CRUST_T_RECORD {
+        var field: *CrustField = (*(*type).record_decl).fields;
+        while field != null(*CrustField) && !pf_failed(run) {
+            pm_copy_value(run, state, pm_subobject(run, destination, (*field).offset),
+                pm_subobject(run, source, (*field).offset), (*field).type, location, writes);
+            field = (*field).next;
+        }
+    } else {
+        if (*type).count > (*(*run).stage).max_iterations as u64 {
+            pf_error((*run).stage, location, "aggregate copy exceeds the proof iteration budget");
+            return;
+        }
+        var index: u64 = 0u64;
+        while index < (*type).count && !pf_failed(run) {
+            var offset: u64 = index * (*(*type).base).size;
+            pm_copy_value(run, state, pm_subobject(run, destination, offset),
+                pm_subobject(run, source, offset), (*type).base, location, writes);
+            index = index + 1u64;
+        }
+    }
+}
+
+fn pm_copy_value(run: *PfRun, state: *PfState,
+                 destination: *u8, source: *u8, type: *CrustType, location: *CrustLoc, writes: **PmWrite) -> unit {
+    if !pf_enter(run, location) { return; }
+    if (*type).kind == CRUST_T_RECORD || (*type).kind == CRUST_T_ARRAY {
+        pm_copy_fields(run, state, destination, source, type, location, writes);
+    } else {
+        var value: *u8 = pm_load(run, state, source, type, "true", location);
+        if !pf_failed(run) { pm_pending_write(run, destination, type, value, writes); }
+    }
+    (*run).depth = (*run).depth - 1usize;
+}
+
+fn pm_pending_write(run: *PfRun, address: *u8, type: *CrustType, value: *u8, writes: **PmWrite) -> unit {
+    var entry: *PmWrite = pf_alloc(run, sizeof(PmWrite), alignof(PmWrite)) as *PmWrite;
+    if entry == null(*PmWrite) { return; }
+    *entry = make PmWrite { address: address, type: type, value: value, next: *writes };
+    *writes = entry;
+}

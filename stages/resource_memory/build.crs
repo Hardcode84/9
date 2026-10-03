@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Check and compile the captured target and selected files. Report diagnostics
+// and destroy the compilation context before return.
+fn resource_memory_build(source: *CrustSource, begin: usize, argc: i32, argv: **u8,
+                         options: *PmOptions) -> i32 {
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var request: CrustBuild = make CrustBuild {
+        context: &context, source: source, target_begin: begin, argc: argc, argv: argv
+    };
+    var result: i32 = resource_memory_program(&request, options);
+    if context.error_count != 0usize { crust_run_diagnostic(&context); }
+    crust_context_destroy(&context);
+    return result;
+}

@@ -942,7 +942,9 @@ The optional [memory stage](../examples/ownership/README.md) checks a complete
 direct two-hook client through its typed operation tree. Its library proof also
 checks init, unlink, insert, and splice over rings of arbitrary length. The
 client checker expands calls and requires a proved end to each unfolded loop.
-It does not use modular ownership summaries or resource cleanup plans. Passing
+The [resource composition](../examples/ownership/resources/README.md) also
+checks source lifetimes, owner transfers, and complete cleanup plans. Neither
+closed-program profile consumes modular ownership summaries. Passing
 these checks does not complete compiler-construction or checked-language
 acceptance.
 
@@ -1033,12 +1035,14 @@ persistent links. These checks apply to user-written direct pointer operations,
 without a pool or trusted unlink operation. They establish a closed sequential
 program profile, not the full modular ownership contract.
 
-The next composition boundary is explicit: resource checking retains cleanup
-chains outside its lowered tree and moves local declarations to function entry.
-A combined checker must consume those chains and preserve source storage
-lifetimes. Reusable call summaries must also bind permissions and destructive
-effects to checked bodies and layouts. The existing correctness and cost gates
-apply before expanding that interface.
+Resource checking retains cleanup chains outside its lowered tree and moves
+local declarations to function entry. The combined stage consumes those chains,
+preserves source storage scopes and deferred captures, and removes initialized
+permissions from moved values. Its proof view adds no emitted operations.
+Reusable call summaries still require an interface that binds permissions and
+destructive effects to checked bodies and layouts and checks caller
+preconditions. The current executor expands the actual bodies. The existing
+correctness and cost gates apply before adding that interface.
 Ownership proofs must erase before backend optimization. Runtime pointer-validity
 checks, identity metadata, pointer tags, reference counts, and hidden cleanup
 flags are excluded. Null checks before release and debug-only bounds checks are

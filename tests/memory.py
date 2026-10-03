@@ -65,6 +65,26 @@ def accept_cases():
         "direct-call-write": source(
             "var x:i32=0i32;set(&x);if x!=7i32 {return 1i32;}", "fn set(p:*i32)->unit {*p=7i32;}"
         ),
+        "value-call-with-branches": source(
+            "var x:i32=0i32;var p:*i32=select(&x,argc>0i32);var value:i32=*p;",
+            "fn select(p:*i32,test:bool)->*i32 {if test {*p=7i32;} else {*p=9i32;}return p;}",
+        ),
+        "aggregate-copy-and-self-copy": source(
+            "var a:[Cell;2]=make [Cell;2] {make Cell {value:3i32},make Cell {value:7i32}};"
+            "var b:[Cell;2]=a;b=b;if b[1usize].value!=7i32 {return 1i32;}"
+        ),
+        "aggregate-constructor-alias": source(
+            "var a:[i32;2]=make [i32;2] {0i32,1i32};a=make [i32;2] {a[1usize],a[0usize]};"
+            "if a[0usize]!=1i32 || a[1usize]!=0i32 {return 1i32;}"
+        ),
+        "record-constructor-alias": source(
+            "var a:Pair=make Pair {x:0i32,y:1i32};a=make Pair {x:a.y,y:a.x};"
+            "if a.x!=1i32 || a.y!=0i32 {return 1i32;}",
+            "record Pair {x:i32;y:i32;}",
+        ),
+        "same-scope-cycle": source(
+            "var a:Link=make Link {next:null(*Link)};var b:Link=make Link {next:&a};a.next=&b;"
+        ),
         "projected-call": source(
             "var c:Cell=make Cell {value:9i32};var p:*i32=field(&c);if *p!=9i32 {return 1i32;}",
             "fn field(p:*Cell)->*i32 {return &(*p).value;}",
@@ -131,6 +151,15 @@ def reject_cases():
             ALLOCATE + "(*p).value=1i32;release(p as *u8);var x:i32=(*p).value;"
         ),
         "double-free": source(ALLOCATE + "release(p as *u8);release(p as *u8);"),
+        "value-call-use-after-release": source(
+            ALLOCATE + "(*p).value=7i32;var x:i32=destroy(p);",
+            "fn destroy(p:*Cell)->i32 {release(p as *u8);return (*p).value;}",
+        ),
+        "uninitialized-aggregate-copy": source("var a:Cell=uninit;var b:Cell=a;"),
+        "constructor-alias-hides-null-access": source(
+            "var a:[i32;2]=make [i32;2] {0i32,1i32};a=make [i32;2] {a[1usize],a[0usize]};"
+            "if a[1usize]==0i32 {var bad:i32=*null(*i32);}"
+        ),
         "interior-free": source(ALLOCATE + "release((p as *u8)+1isize);"),
         "stack-free": source("var x:i32=0i32;release(&x as *u8);"),
         "uninitialized-local": source("var x:i32=uninit;var y:i32=x;"),
@@ -209,9 +238,9 @@ def reject_cases():
     return result
 
 
-def command(arguments, expected=0):
+def command(arguments, expected=0, timeout=180):
     result = subprocess.run(
-        [str(arg) for arg in arguments], cwd=ROOT, capture_output=True, timeout=180
+        [str(arg) for arg in arguments], cwd=ROOT, capture_output=True, timeout=timeout
     )
     if result.returncode != expected:
         raise RuntimeError(

@@ -274,6 +274,19 @@ only its context after the call does not retain an API for emitting again.
 For custom composition, follow [extension.crs](extension.crs) and keep the
 stage yourself.
 
+The retained function plan also maps checked blocks to source scopes. Actions
+retain their registration scope; exits retain their start and stop scopes.
+Deferred captures name the scope that holds their storage. Owning copies have
+transfer facts attached to their checked assignment. These facts let another
+stage check source lifetimes and consumed values without changing emitted C.
+
+`rs_prepare_with_access(stage, true)` delegates raw-access authorization to
+the caller's checking stage. Moves, loans, initialization, and cleanup retain
+their checks. The caller must verify all reachable memory effects, including
+cleanup, before emission. The [combined tutorial](../../examples/ownership/resources/README.md)
+does this through complete proof views. Plain `rs_prepare` retains its explicit
+`unsafe` requirement.
+
 ## 6. Check the proof and cost boundaries
 
 Resource lowering adds levels to the tree passed to the seed checker. For the
@@ -288,11 +301,11 @@ required drop calls. Captured values, aggregate ABI storage, bounds checks,
 and indirect-call null checks can also have a cost. Inspect optimized native
 output before calling a specific use free.
 
-The checker proves local ownership and loans. It does not prove the native
-adapter's pointer contracts. It also has no observer type that proves a
-persistent intrusive link remains valid across unlink, destruction, and
-storage reuse. Such a stage must define and check that relation before a
-raw intrusive list can claim that guarantee.
+This checker proves local ownership and loans. Native adapters still require
+correct foreign contracts. The optional combined stage checks direct intrusive
+links through actual function bodies and cleanup plans. Its checks do not make
+the standalone resource stage a memory checker or provide reusable ownership
+summaries for separately checked callers.
 
 Run `make check-resources check-resource-alloc` for language, cleanup, and
 allocation failure checks. `--check` stops after semantic checks;

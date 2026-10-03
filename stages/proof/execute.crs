@@ -51,26 +51,33 @@ fn pf_variable(run: *PfRun, state: *PfState, statement: *CrustStmt) -> unit {
     pf_bind(run, state, (*statement).symbol, value);
 }
 
-fn pf_call(run: *PfRun, state: *PfState, expression: *CrustExpr, stack: *PfCall) -> *PfPath {
+fn pf_call_results(run: *PfRun, state: *PfState, expression: *CrustExpr, stack: *PfCall) -> *PfPath {
     var declaration: *CrustDecl = pf_callee(run, expression, stack);
     if pf_failed(run) { return null(*PfPath); }
     if (*declaration).kind == CRUST_D_EXTERN {
-        pf_external_value(run, state, expression, "true");
-        return pf_path(run, state);
-    }
-    if (*(*(*declaration).type).base).kind != CRUST_T_UNIT {
-        pf_projector(run, state, expression, declaration, "true");
+        (*state).result = pf_external_value(run, state, expression, "true");
         return pf_path(run, state);
     }
     var called: *PfState = pf_arguments(run, state, expression, declaration, "true");
     if pf_failed(run) { return null(*PfPath); }
     var frame: PfCall = make PfCall { declaration: declaration, parent: stack, guard: "true" };
-    var result: *PfPath = pf_statement(run, called, (*declaration).body, &frame);
+    (*called).result = null(*u8);
+    var result: *PfPath = pf_statement(run, called, pf_body((*run).stage, declaration), &frame);
     var path: *PfPath = result;
     while path != null(*PfPath) {
         (*(*path).state).env = (*state).env;
         if (*(*path).state).flow == PF_RETURN { (*(*path).state).flow = PF_NORMAL; }
-        (*(*path).state).result = (*state).result;
+        path = (*path).next;
+    }
+    return result;
+}
+
+fn pf_call(run: *PfRun, state: *PfState, expression: *CrustExpr, stack: *PfCall) -> *PfPath {
+    var saved: *u8 = (*state).result;
+    var result: *PfPath = pf_call_results(run, state, expression, stack);
+    var path: *PfPath = result;
+    while path != null(*PfPath) {
+        (*(*path).state).result = saved;
         path = (*path).next;
     }
     return result;
@@ -157,13 +164,11 @@ fn pf_statement_inner(run: *PfRun, state: *PfState, statement: *CrustStmt, stack
     return pf_terminal(run, state, statement);
 }
 
-fn pf_statement_policy(run: *PfRun, state: *PfState, statement: *CrustStmt) -> u32 {
-    if (*(*run).stage).statement == null(fn(*PfRun, *PfState, *CrustStmt) -> u32) { return PF_DELEGATE; }
-    var result: u32 = (*(*run).stage).statement(run, state, statement);
-    if result != PF_DELEGATE && result != PF_HANDLED {
-        pf_error((*run).stage, &(*statement).loc, "proof policy rejected the statement");
+fn pf_statement_policy(run: *PfRun, state: *PfState, statement: *CrustStmt) -> *PfPath {
+    if (*(*run).stage).statement == null(fn(*PfRun, *PfState, *CrustStmt) -> *PfPath) {
+        return pf_statement_inner(run, state, statement, (*run).calls);
     }
-    return result;
+    return (*(*run).stage).statement(run, state, statement);
 }
 
 fn pf_statement(run: *PfRun, state: *PfState, statement: *CrustStmt, stack: *PfCall) -> *PfPath {
@@ -174,11 +179,7 @@ fn pf_statement(run: *PfRun, state: *PfState, statement: *CrustStmt, stack: *PfC
     if (*state).flow != PF_NORMAL {
         result = pf_path(run, state);
     } else {
-        var handled: u32 = pf_statement_policy(run, state, statement);
-        if !pf_failed(run) {
-            if handled == PF_HANDLED { result = pf_path(run, state); }
-            else { result = pf_statement_inner(run, state, statement, stack); }
-        }
+        result = pf_statement_policy(run, state, statement);
     }
     (*run).calls = saved;
     (*run).depth = (*run).depth - 1usize;

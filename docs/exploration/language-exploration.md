@@ -83,8 +83,9 @@ table, or per-node list identity to use a list. Section 6.9 defines this target.
 The main open contract is safe access through persistent aliases after individual
 destruction. Automatic unlinking alone does not solve it. The earlier combination
 of forbidden stored borrows and unsafe raw dereferences forced a pool workaround.
-That combination is not a complete language design for this target. Compare a
-small static contract with opt-in checked pointers; keep their costs explicit.
+That combination is not a complete language design for this target. Establish a
+static contract that erases to ordinary pointers. Runtime observer metadata is
+excluded from this experiment.
 
 The local borrow interface also needs a test. A ban on borrowed returns forces
 callbacks, which can add calls and obscure control flow. Compare it with a narrow
@@ -119,10 +120,18 @@ A checked array access has a possible branch. A resource must be released.
 An optional value may need a tag. These costs do not disappear because a feature
 has a useful name. List them and measure them.
 
-Opt-in checks are permitted. That permission does not select a pool architecture.
-Use direct C/C++ as the primary representation and operation baseline. For a
-checked-pointer or handle experiment, also measure equivalent checked C.
-Report every metadata field, check, allocation, and pointer update it adds.
+The revised ownership requirement excludes runtime pointer-validity checks,
+pointer tags, reference counts, generation tables, and hidden cleanup flags.
+Null checks before release and debug-only bounds checks are permitted. Required
+unlink writes and destructor calls are program behavior, not proof bookkeeping.
+Compare the representation and operations with direct C/C++ before optimization.
+
+Debug-only bounds checks do not establish release-build spatial safety. A static
+ownership proof can prevent use after destruction while an unchecked array index
+still corrupts memory. Claim complete memory safety only when range proofs,
+enforced checks, or checked calling contracts also establish valid accesses.
+The current resource stage emits array-bounds and indirect-call null guards;
+this research does not change those implementation rules.
 
 Code that does not use a feature must not acquire its runtime support.
 For compilation, every language has some shared parser and type-system cost.
@@ -239,6 +248,50 @@ Ownership does not imply address stability. A bytewise move can break
 self-references or intrusive links. Do not permit safe self-references in movable
 records. Use stable owned storage when an address must remain fixed.
 [Rust pinning](https://doc.rust-lang.org/std/pin/index.html)
+
+Rust's pinning documentation uses intrusive doubly linked lists to explain
+stable storage and teardown before reuse. It leaves the actual pointer edits
+to an unsafe implementation. `Pin<Ptr>` preserves the pointer's layout; `Pin::set`
+runs destruction before replacement in the same storage. Address stability must
+therefore permit destruction and reconstruction, not prohibit reuse permanently.
+[Pin layout and replacement](https://doc.rust-lang.org/std/pin/struct.Pin.html)
+
+Five small programs checked with Rust 1.90.0 distinguish these contracts:
+
+| Program | Result |
+|---|---|
+| Save a reference, destroy its owner, then use the reference | Reject with E0505 |
+| Use the reference for the last time, then destroy its owner | Accept |
+| Edit reciprocal `Cell<Option<&Hook>>` links, then clear both links | Accept |
+| Clear both links, destroy one node, then use the other node | Reject with E0505; the containing type still carries the borrowed lifetime |
+| Write an ordinary raw-pointer unlink function without `unsafe` | Reject with E0133 at the neighbor stores |
+
+Thus safe Rust can mutate borrowed links without runtime borrow counters.
+The missing operation is independent reclamation through a verified changing
+graph. More precise borrow endpoints alone do not provide that graph invariant.
+[Nonlexical lifetimes](https://rust-lang.github.io/rfcs/2094-nll.html)
+
+The historical record is a useful constraint on this experiment. Rust credits
+C++ for RAII and moves, Cyclone and ML Kit for regions, and NIL and Hermes for its
+removed typestate system. The 2012 regions proposal froze unique owners during
+temporary borrowing and restricted reference escape. These are useful local
+rules, but do not prove persistent graph updates.
+[Rust influences](https://doc.rust-lang.org/reference/influences.html),
+[Regions-lite proposal](https://smallcultfollowing.com/babysteps/blog/2012/02/15/regions-lite-dot-dot-dot-ish/)
+
+Rust removed its early typestate system after reporting that it was the slowest
+pass except translation and that few programs used it. A separate issue records
+users avoiding cumbersome preconditions. This is evidence against unbounded
+proof inference and difficult annotations, not evidence that every static
+permission system must be slow.
+[Typestate removal](https://github.com/rust-lang/rust/issues/2178),
+[Precondition ergonomics](https://github.com/rust-lang/rust/issues/1805)
+
+Destruction obligations must also survive discarded guards. Rust's old scoped
+thread guard could be forgotten while borrowed stack storage was reclaimed.
+Crust must reject discarding a required obligation or preserve the storage
+obligation with it; a destructor on a forgettable proxy is insufficient.
+[Rust destructor leaks](https://doc.rust-lang.org/nomicon/leaking.html)
 
 ### Zig
 
@@ -389,7 +442,33 @@ reclamation through named locations and store descriptions. Access permission
 is separate from a pointer value. This is a real static alternative, not evidence
 that reclamation always requires runtime metadata. Its recursive and existential
 types still need a usability and compilation experiment for this project.
+The paper excludes pointers into the middle of a block. Embedded hooks require
+an additional checked subobject path and an enclosing construction identity.
 [Alias Types for Recursive Data Structures](https://www.cs.princeton.edu/~dpw/papers/alias-recursion-tr.pdf)
+
+Separation logic supplies local field permissions and procedure contracts.
+VeriFast checks explicit predicate operations and terminating lemma functions;
+its design limits proof search, but still uses an SMT solver. Its published C
+list example is evidence for checking actual pointer edits. Neither source
+establishes Crust's compilation-speed or annotation limits.
+[Separation logic](https://www.cs.cmu.edu/~jcr/seplogic.pdf),
+[VeriFast design](https://people.cs.kuleuven.be/~bart.jacobs/nfm2011.pdf),
+[VeriFast doubly linked list](https://github.com/verifast/verifast/blob/de42db8c2193f18754115f5ee958e6db10f9d226/examples/doubly_linked_list.c)
+
+A recursive list predicate needs a way to expose an arbitrary interior node.
+Repeated unfolding can require a walk through its proof representation. Viper's
+quantified field permissions instead describe graphs and cycles through a set
+of locations. Local edits need only a bounded neighborhood, but the invariant
+still needs proof. Its general solver is not a demonstrated C-speed checker.
+[Viper quantified permissions](https://viper.ethz.ch/tutorial/quantified-permissions.html)
+
+Two historical alternatives fail specific requirements. Cyclone's manual-memory
+study reports that unique pointers could not express Boa's doubly linked request
+structures. Mezzo's adoption and abandon operations use a hidden adopter pointer
+and a dynamic check; its static nesting mechanism cannot reverse the transfer.
+Neither is a complete zero-bookkeeping solution for independently freed hooks.
+[Cyclone manual memory management](https://www.cs.umd.edu/projects/PL/cyclone/scp.pdf),
+[Mezzo, sections 7 and 8](https://gallium.inria.fr/~fpottier/publis/pottier-protzenko-mezzo.pdf)
 
 The `generational-arena` implementation demonstrates another route: a safe Rust
 pool with generation-bearing indices. It forbids unsafe code in its implementation.
@@ -402,6 +481,31 @@ Static fractional ownership is another useful lead. The public
 extra pointer/write costs and experimental cursor mechanisms. Do not call this
 a completed zero-overhead answer.
 [Ghost collections](https://github.com/matthieu-m/ghost-collections)
+
+### Fil-C: address, authority, and construction lifetime
+
+Fil-C separates the address bits of a pointer from an invisible capability.
+Pointer arithmetic retains the capability; accesses check it. Stored pointers
+need auxiliary capability storage and extra loads and stores. Preserving
+`sizeof(pointer)` therefore does not establish zero runtime overhead.
+[Fil-C InvisiCaps](https://fil-c.org/invisicaps)
+
+Release invalidates the capability before physical reclamation. The collector
+can redirect heap capability references to a permanent invalid object, so reuse
+does not revive old pointers. Stack roots can retain freed storage instead.
+This depends on runtime metadata and delayed reclamation, which this experiment
+excludes.
+[Fil-C collector](https://fil-c.org/fugc),
+[Stack-root handling](https://github.com/pizlonator/fil-c/blob/8028dec6f484d67ade089d03fe5a05f25e0736b0/libpas/src/libpas/filc_runtime_inlines.h#L412)
+
+Its allocation identity also differs from a logical construction identity.
+Address calculation preserves the allocation capability. We infer that an
+object destroyed and reconstructed inside one still-live backing allocation
+does not obtain a new capability merely through that operation. Crust must
+track storage, construction lifetime, access permission, and link topology
+separately. Two embedded hooks share a destruction boundary even when their
+addresses differ. This inference is from source inspection, not a Fil-C run.
+[Fil-C address calculation](https://github.com/pizlonator/fil-c/blob/8028dec6f484d67ade089d03fe5a05f25e0736b0/llvm/lib/Transforms/Instrumentation/FilPizlonator.cpp#L14249)
 
 ## 6. Candidate semantics
 
@@ -786,8 +890,8 @@ an explicit membership mechanism.
 
 Plain unlink and insertion must allocate nothing. The two-pointer layout uses
 16 bytes per hook under an ordinary 64-bit pointer ABI. This is a layout target,
-not a measured Crust result. Additional checked-pointer metadata must be specified
-and measured separately. Do not hide it in the allocator or call it free.
+not a measured Crust result. The revised static ownership contract permits no
+additional runtime metadata, including metadata hidden in the allocator.
 
 #### Ownership and automatic cleanup
 
@@ -845,7 +949,7 @@ There are three separate obligations:
 |---|---|
 | Cleanup and stable storage | Run hook cleanup on every normal exit; prevent implicit movement after address-dependent initialization. |
 | Valid link edits | Establish live endpoints and permitted aliasing throughout the edit; restore the library's link invariants. |
-| Saved access after destruction | Reject the access statically, invalidate a tracked observer before reuse, or validate an identity through live metadata. |
+| Saved access after destruction | Reject statically when no proof establishes that the original construction is still live. Address equality after reuse is insufficient. |
 
 A lexical access guard can prevent destruction during a current view. It does
 not invalidate an address saved before that guard. A lock protects the state
@@ -859,14 +963,14 @@ The local-borrow rules in section 6.4 do not yet establish a safe direct-link
 contract. The design must state this gap instead of routing all nodes through
 a pool to avoid it.
 
-Use a bounded comparison to resolve the gap:
+Use this bounded comparison to resolve the gap:
 
 | Candidate | Concrete proof or cost to establish |
 |---|---|
 | Scoped cursors plus static link permissions | Show safe user-written insert, unlink, and destruction with two hooks. Prove the validity of surviving links. A scope token alone is insufficient. |
-| Opt-in tracked observer pointers | Track every relevant alias, invalidate it before reuse, and protect each live access. Include assignments, subobjects, stack exit, callbacks, and metadata lifetime. Test direct field syntax without imposing a pool. |
+| Erased mutation permission plus a graph invariant | Keep liveness and field access in a checked invariant. Require this permission for mutation and destruction; reject conflicting cursor loans. Prove the actual edits. |
 | Plain pointers with RAII | Useful C/C++ reliability baseline. Lifetime preconditions remain on the programmer; this alone does not pass the stronger safe-code requirement. |
-| Generation keys | Optional library choice when stable IDs are useful. Specify live metadata, identity reuse, and lookup cost. Do not make it the language's allocation model. |
+| Tracked observers and generation keys | Historical alternatives only. Their runtime validity metadata violates the revised ownership requirement. |
 
 No candidate in this table has passed the combined safety, simplicity, and
 C-speed gates. First specify a complete contract for one direct two-hook example.
@@ -874,6 +978,151 @@ Test the invalid programs in section 10.2, then measure the checker and generate
 code. Stop that candidate if it needs a global heap solver, hidden alias metadata,
 or a difficult proof language to meet its stated guarantees. Do not add a larger
 container system before this decision.
+
+#### Static ownership candidate and unresolved proof
+
+The research favors a small permission experiment over a second general borrow
+solver. This is a proposed external stage, not an implemented or proved language
+contract. The seed needs no ownership types or list operations.
+
+Separate these compile-time facts:
+
+| Fact | Purpose |
+|---|---|
+| Stable storage | Prevent moves after address-dependent construction; allow movement of an owning handle |
+| Fresh construction name | Distinguish objects constructed at the same address at different times |
+| Subobject path | Relate each hook and payload field to its enclosing object without granting access to sibling fields |
+| Owner permission | Identify the party responsible for teardown and storage release |
+| Field permission | Authorize a read or write, separately from copying address bits |
+| Closed invariant | Establish live link targets and the relationships needed for later operations |
+| Cursor loan | Prevent conflicting access and destruction while a derived view can still be used |
+
+Names, paths, and permissions must erase before emission. They must not become
+hidden arguments, owner fields, domain pointers, or allocations. Object layout
+and calls must match the direct implementation even without optimization.
+Construction names describe fresh lifetimes symbolically; the checker does not
+enumerate runtime allocations or generate a counter for loop iterations.
+
+One possible rule gives each stored edge a linear share of target liveness.
+For a two-pointer hook, reciprocal fields locate the two incoming shares.
+Unlink transfers the outgoing shares to the neighbors and recovers the incoming
+shares in the detached self-links. Fixed named portions suffice for this case;
+general fractional arithmetic is unnecessary. However, the shares alone do not
+prove that the expected neighbors and permissions exist.
+
+A potentially smaller first experiment uses one erased mutation permission for
+a set of cooperating objects. Call this set a permission domain. It selects no
+allocator, reserves no storage, and needs no runtime representative. Stack nodes
+and independent heap allocations can belong to the same domain. Avoid storing
+the exact list identity in each node's static type; splice must not change every
+node or every owner description.
+
+The domain invariant describes the live hooks and their field permissions.
+For circular links, a useful algebraic model is:
+
+```text
+H contains live hook subobjects.
+next maps H bijectively to H.
+prev is the inverse of next.
+Detached(h) means next(h) = h and prev(h) = h.
+```
+
+A useful generic proof exchanges two successors and repairs their inverse
+fields. Exchanging the successors of `prev(h)` and `h` isolates `h`. A second
+proof removes this fixed point from the permutation. Both statements can use
+finite cases on the changed keys and an abstract unchanged remainder. The
+stage must check these proofs; neither is a trusted list primitive.
+
+This model supports a local description of these ordinary stores:
+
+```text
+p = h.prev
+n = h.next
+p.next = n
+n.prev = p
+h.prev = h
+h.next = h
+```
+
+The stage must expose the relevant field permissions, check every assignment,
+and restore the invariant. In the singleton case, `p` and `n` are the same head
+but name different fields. In the detached case all three hooks coincide;
+the proof must not consume the same field permission twice. These are alias
+cases in the proof, not justification for runtime ownership flags.
+
+The permutation model is insufficient by itself. A list also needs a proved
+head and payload-projection contract. Two different heads can occur in the same
+cycle; applying the usual splice can break the inverse relationship or preserve
+it while losing nodes in an orphan cycle. For example, splicing the two supposed
+heads `d` and `s` in `d-e-f-s-b-c-d` can produce `d-b-c-d`, `s-s`, and `e-f-e`.
+All three results are reciprocal, but traversal from either head has lost nodes.
+
+Splice requires disjoint rooted cycles or its declared self-splice case. A root
+predicate must describe the complete set of hooks in its cycle. Splice transfers
+an abstract set between roots without a runtime list ID or a proof expansion per
+node. Unlink without a head argument must update the affected root description
+through a checked general lemma. This is the main unresolved proof. A non-head
+hook must also have the expected enclosing payload before a container projection.
+Neither a different address nor a domain brand proves these facts.
+
+Ordinary cursor views borrow domain access. In the conservative first rule, a
+live shared cursor blocks mutation and destruction anywhere in that domain.
+Use the same domain permission for registered payload access in this first
+experiment; a separate payload-permission protocol is not yet justified.
+Payload projections, returned views, and captured views retain this loan.
+Owner access must obey the
+same permission rule, including access through another embedded hook. Internal
+link reads need named liveness facts; obtaining the domain again must not make
+a saved stale address usable.
+
+Owner cleanup requires the mutation permission and the absence of conflicting
+loans. It detaches every hook, removes the construction from the invariant, and
+then releases storage. Head cleanup detaches surviving nodes before head storage
+ends. The permission cannot go out of scope while registered owners still need
+it for cleanup. These requirements apply equally to stack exit and heap release.
+Moving an owner between scopes must carry its cleanup dependency explicitly.
+The initial witness uses one domain. Combining independent domains needs a
+proved transfer rule and cannot follow from casting one brand to another.
+
+An open invariant cannot cross a callback that can touch the affected objects.
+No normal return or error exit may leave the invariant open.
+Before payload teardown calls user code, all hooks must be detached and the
+invariant closed. A saved successor is not necessarily safe during destruction
+of the current node: a destructor can reach it through another hook or a captured
+owner. Different hook addresses can even share one enclosing object. Reject the
+call unless its complete cleanup effects preserve every retained view. A
+remove-current operation must consume its current view and establish the next
+view after the permitted mutation; it cannot retain an unchecked successor.
+
+The decisive missing mechanism is a checked, reusable proof that exposes a local
+neighborhood from the invariant and restores the invariant after the stores.
+It must preserve facts about all untouched fields. A recursive segment proof
+or an abstract set of field locations can express this, but neither provides
+a cheap checker automatically. Domain permission reduces liveness bookkeeping;
+it does not remove the graph proof. Do not implement both domain permission and
+per-edge shares before this simpler candidate has been tested.
+
+Use explicit procedure contracts and checked proof helpers. Check each body
+independently; reuse a helper's checked contract at its calls. Proof helpers
+must terminate and have no runtime effects. An unchecked axiom named `unlink`,
+an unchecked invariant declaration, or a stage exemption for hook records fails
+the experiment. The generic rules must justify user-defined field relationships.
+
+For compilation speed, start with local permission transfer, explicit invariant
+open and close operations, and bounded equality reasoning. Do not infer arbitrary
+heap shapes, search for proofs, or add a general SMT solver. Independent bodies
+can use the same declared contracts in parallel. Reuse checked helper results
+only with their exact definitions, interfaces, stage, and target-layout inputs;
+caching does not excuse a slow fresh application check.
+
+The first decision point is the complete two-hook witness: unlink, individual
+destruction, exact-address reconstruction, continued use of the remaining list,
+head-first teardown, and constant-work splice. Reject faulty stores and escaped
+views through the same generic rules. Compare emitted operations and annotations
+with the direct baseline, then measure the complete stage. Stop if it requires
+runtime ownership state, trusted list algorithms, per-node splice work, global
+heap solving, or proof code that fails the readability gate in section 10.2.
+No source examined establishes all these properties together.
 
 ### 6.10 Systems programming capability target
 
@@ -1135,7 +1384,7 @@ claim is not speedup evidence. The single-worker C-speed gate still applies.
 | Explicit erased interface | Function table and indirect calls | Ordinary concrete types | No mandatory vtable on records |
 | Parallel compilation | No application cost | Scheduling, synchronization, and worker memory | One-worker execution remains available |
 | Direct hooks with RAII | Pointer fields and required unlink writes | Cleanup and address-stability checks; persistent-pointer contract still to establish | No hook fields on other records |
-| Opt-in checked pointers or handles | Declared metadata and access or assignment checks | Checks for the selected contract | No mandatory pool or metadata on ordinary values |
+| Proposed static link permissions | No proof metadata; ordinary pointer fields and required edits | Local invariant checking, not yet implemented | No graph proof for code without the selected stage |
 
 “Absent” refers to feature-specific work, not the removal of basic parsing and
 type checks. Compare cleanup control flow and layout before making a cost claim.
@@ -1275,16 +1524,15 @@ Require these cases:
 - Detach under a lock followed by cleanup outside that lock.
 
 The direct C/C++ baseline has lifetime preconditions for saved pointers.
-For the proposed safe version, each invalid access must have a stated static
-rejection or defined checked failure. An uncontrolled crash, undefined behavior,
+For the proposed safe version, each invalid lifetime or permission use must have
+a stated static rejection. An uncontrolled crash, undefined behavior,
 or a changed allocation policy does not satisfy that safety gate.
 A no-op for self-insertion is part of the declared valid-operation contract.
 
 Require no unsafe code in the user-written list algorithm. Document every trusted
 primitive. No built-in list operation can hide the algorithm being tested.
-If checked observer pointers are tested, include their complete assignment,
-destruction, subobject, and metadata-lifetime rules. Do not count only the small
-surface program.
+Include assignment, destruction, subobject projection, callback, and permission
+lifetime rules. Count shared proof helpers as well as the small surface program.
 
 Insertion and unlinking should each fit within 40 nonblank lines, excluding shared
 helpers. Count helper code and annotations separately. This is a proposed
@@ -1295,14 +1543,15 @@ Measure hook, head, node, and external metadata sizes. Count allocations, pointe
 writes, dependent loads, validity branches, and bytes retained after destruction.
 Report traversal and mutation costs for working sets inside and outside cache.
 For bulk splice, count touched nodes as the moved list grows.
-With bounded live nodes and saved observers, repeated erase and reuse must retain
-bounded payload and identity storage. Do not retain each destroyed object or
-one permanent metadata record per past allocation.
+Repeated erase and reuse must not retain destroyed payloads or identity storage.
+Construction identities are compile-time facts, not runtime records.
 
-Compare direct C/C++ first. If an opt-in checking policy is used, also compare
-equivalent checked C and report its extra cost against direct C/C++.
-Checks are permitted; mandatory pools, wrapper allocations on insertion, and
-hidden reference counting are not assumed.
+Compare direct C/C++ first. Require two pointer fields per hook, no hidden runtime
+permission arguments, and no ownership checks, counters, or registration writes.
+Null-before-release and debug bounds checks are separate declared behavior.
+Inspect output before optimization; do not depend on removing proof machinery
+through backend optimization. Record library proof size and per-call checking
+work so a constant-work splice does not conceal proof expansion.
 
 The [systems source study](systems-capabilities.md#acceptance-experiments) defines
 the next bounded witnesses: Linux stack waiters and reclamation, GCC operand
@@ -1447,7 +1696,7 @@ safe node reuse, measured compilation, and measured runtime cost.
 | Require a separate successful experiment | Concrete question |
 |---|---|
 | Safe direct-link pointer contract | Can user-written links allow individual reuse without unsafe code, pools, or a large proof system? |
-| Optional checked observers or handles | Can checks keep direct code simple with acceptable explicit cost? |
+| Erased domain and invariant permissions | Can local checked proofs support direct links without runtime state or expensive inference? |
 | Single-source borrowed returns | Can ordinary view APIs stay simple without general lifetime solving? |
 | User generics | Can useful containers avoid both specialization growth and unwanted indirect calls? |
 | Safe thread and retained callback APIs | Can transfer and quiescence be proved without hidden lifetime escape? |

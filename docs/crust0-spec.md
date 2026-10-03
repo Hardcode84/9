@@ -1021,6 +1021,12 @@ The rule must work for user-written direct list code. Mandatory pools and
 renaming raw access do not satisfy it. The concrete path is to specify that
 standard-language rule, implement its smallest list witness, and pass the
 existing correctness and cost gates before expanding the ownership stage.
+Ownership proofs must erase before backend optimization. Runtime pointer-validity
+checks, identity metadata, pointer tags, reference counts, and hidden cleanup
+flags are excluded. Null checks before release and debug-only bounds checks are
+permitted; debug-only checks do not prove release-build spatial safety. The
+[static ownership experiment](exploration/language-exploration.md#static-ownership-candidate-and-unresolved-proof)
+states the candidate and the proof still required. It adds no seed feature.
 
 The experiment tests one claim: ordinary compiled libraries can define language
 rules and backend interfaces while retaining C-level frontend speed. A small

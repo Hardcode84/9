@@ -941,7 +941,8 @@ the stage self-compilation case. It does not establish the C frontend experiment
 The optional [memory stage](../examples/ownership/README.md) checks a complete
 direct two-hook client through its typed operation tree. Its library proof also
 checks init, unlink, insert, and splice over rings of arbitrary length. The
-client checker expands calls and requires a proved end to each unfolded loop.
+client checker expands calls or uses selected concrete effect templates. It
+requires a proved end to each unfolded loop.
 The [resource composition](../examples/intrusive/README.md) also
 checks source lifetimes, owner transfers, and complete cleanup plans. Neither
 closed-program profile consumes modular ownership summaries. Passing
@@ -1045,10 +1046,16 @@ clear store. Reads through all aliases then fail until assignment initializes
 the place again. Plain resource checking requires `unsafe` for pointer moves;
 it does not perform this memory proof. Whole-resource moves retain their
 cleanup obligations and source loan checks.
-Reusable call summaries still require an interface that binds permissions and
-destructive effects to checked bodies and layouts and checks caller
-preconditions. The current executor expands the actual bodies. The existing
-correctness and cost gates apply before adding that interface.
+The root can select straight-line, unit-returning functions for inferred memory
+summaries. Each template is derived from the checked body and resource proof
+view in the current context. It retains access obligations, changed memory
+maps, and written cells. Each call binds fresh proof names to its input state,
+checks the obligations and typed-write separation, and retains cells for later
+destruction checks. Calls, branches, loops, and local storage inside a selected
+body are rejected. Other bodies still expand. There is no saved-summary import.
+These concrete effects do not establish abstract ownership predicates or loop
+invariants. Those require explicit preconditions, postconditions, and frame
+rules checked against both the library body and its callers.
 Ownership proofs must erase before backend optimization. Runtime pointer-validity
 checks, identity metadata, pointer tags, reference counts, and hidden cleanup
 flags are excluded. Null checks before release and debug-only bounds checks are

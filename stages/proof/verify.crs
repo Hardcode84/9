@@ -45,11 +45,8 @@ fn pf_ready(stage: *PfStage, location: *CrustLoc) -> bool {
     return true;
 }
 
-// Verify the actual checked body under the supplied policy. Every solver query
-// must return UNSAT; unsupported operations and exhausted budgets are errors.
-fn pf_verify(stage: *PfStage, declaration: *CrustDecl) -> bool {
-    if !pf_ready(stage, &(*declaration).loc) { return false; }
-    var run: PfRun = make PfRun {
+fn pf_run_init(run: *PfRun, stage: *PfStage, declaration: *CrustDecl) -> unit {
+    *run = make PfRun {
         declarations: make CBuffer {
             status: &(*stage).status, data: null(*u8), size: 0usize, capacity: 0usize
         },
@@ -57,9 +54,18 @@ fn pf_verify(stage: *PfStage, declaration: *CrustDecl) -> bool {
             status: &(*stage).status, data: null(*u8), size: 0usize, capacity: 0usize
         },
         stage: stage, declaration: declaration, before: null(*PfState),
-        parameters: null(*PfBinding), premises: null(*PfTerm), calls: null(*PfCall), projector_depth: 0usize,
+        parameters: null(*PfBinding), premises: null(*PfTerm), calls: null(*PfCall),
+        definitions: null(**PfDefinition), projector_depth: 0usize,
         next_name: 0usize, depth: 0usize, paths: 1usize
     };
+}
+
+// Verify the actual checked body under the supplied policy. Every solver query
+// must return UNSAT; unsupported operations and exhausted budgets are errors.
+fn pf_verify(stage: *PfStage, declaration: *CrustDecl) -> bool {
+    if !pf_ready(stage, &(*declaration).loc) { return false; }
+    var run: PfRun = uninit;
+    pf_run_init(&run, stage, declaration);
     if !pf_function(&run, declaration, &(*declaration).loc) { return false; }
     var state: *PfState = pf_state(&run);
     if state == null(*PfState) { return false; }

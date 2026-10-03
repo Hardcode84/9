@@ -33,7 +33,7 @@ RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources
 RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(RESOURCE)
 RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_prepare_with_access rs_c_body rs_source_import rs_return_from
 PROOF = stages/proof/model.crs stages/proof/base.crs stages/proof/terms.crs stages/proof/state.crs stages/proof/query.crs stages/proof/expression.crs stages/proof/execute.crs stages/proof/verify.crs stages/proof/z3.crs
-MEMORY = stages/memory/options.crs stages/memory/model.crs stages/memory/base.crs stages/memory/plan.crs stages/memory/storage.crs stages/memory/expr.crs stages/memory/foreign.crs stages/memory/statement.crs stages/memory/assign.crs stages/memory/copy.crs stages/memory/program.crs
+MEMORY = stages/memory/options.crs stages/memory/model.crs stages/memory/base.crs stages/memory/plan.crs stages/memory/storage.crs stages/memory/expr.crs stages/memory/foreign.crs stages/memory/statement.crs stages/memory/assign.crs stages/memory/copy.crs stages/memory/summary_plan.crs stages/memory/summary_terms.crs stages/memory/summary.crs stages/memory/program.crs
 MEMORY_LIBRARY = $(C_LIBRARY) $(PROOF) $(MEMORY)
 RESOURCE_MEMORY = stages/resource_memory/model.crs stages/resource_memory/view.crs stages/resource_memory/effects.crs stages/resource_memory/program.crs
 RESOURCE_MEMORY_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(MEMORY) $(RESOURCE_MEMORY)
@@ -53,6 +53,7 @@ OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_res
 .PHONY: amalgamate check-amalgamation FORCE
 .PHONY: memory-stage check-memory check-memory-alloc
 .PHONY: resource-memory-stage check-resource-memory check-resource-memory-alloc
+.PHONY: check-memory-summaries
 all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a $(BUILD)/crust-asm-library.so
 
 $(BUILD):
@@ -186,6 +187,11 @@ check-resource-memory: all resource-stage resource-memory-stage
 
 check-resource-memory-alloc: all c-stage
 	python3 tests/memory_alloc.py --resources --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)'
+
+check-memory-summaries: all memory-stage resource-memory-stage
+	python3 tests/memory_summary.py --build $(BUILD)
+	python3 tests/memory_alloc.py --summaries --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)'
+	python3 tests/memory_alloc.py --summaries --resources --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)'
 
 $(BUILD)/crust-memory-library.o: $(BUILD)/crust-c $(MEMORY_LIBRARY) Makefile
 	$< --library --object --export memory_program --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(MEMORY_LIBRARY)

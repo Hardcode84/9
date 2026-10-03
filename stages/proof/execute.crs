@@ -62,7 +62,7 @@ fn pf_call_results(run: *PfRun, state: *PfState, expression: *CrustExpr, stack: 
     if pf_failed(run) { return null(*PfPath); }
     var frame: PfCall = make PfCall { declaration: declaration, parent: stack, guard: "true" };
     (*called).result = null(*u8);
-    var result: *PfPath = pf_statement(run, called, pf_body((*run).stage, declaration), &frame);
+    var result: *PfPath = pf_invoke(run, called, &frame);
     var path: *PfPath = result;
     while path != null(*PfPath) {
         (*(*path).state).env = (*state).env;
@@ -70,6 +70,13 @@ fn pf_call_results(run: *PfRun, state: *PfState, expression: *CrustExpr, stack: 
         path = (*path).next;
     }
     return result;
+}
+
+fn pf_invoke(run: *PfRun, state: *PfState, frame: *PfCall) -> *PfPath {
+    if (*(*run).stage).invoke != null(fn(*PfRun, *PfState, *PfCall) -> *PfPath) {
+        return (*(*run).stage).invoke(run, state, frame);
+    }
+    return pf_statement(run, state, pf_body((*run).stage, (*frame).declaration), frame);
 }
 
 fn pf_call(run: *PfRun, state: *PfState, expression: *CrustExpr, stack: *PfCall) -> *PfPath {

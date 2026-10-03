@@ -48,6 +48,9 @@ STAGE = [
             "statement",
             "assign",
             "copy",
+            "summary_plan",
+            "summary_terms",
+            "summary",
             "program",
         )
     ],
@@ -96,6 +99,7 @@ def main():
     parser.add_argument("--amalgamation", type=int, choices=(0, 1), default=1)
     parser.add_argument("--z3-flags", default="-lz3")
     parser.add_argument("--resources", action="store_true")
+    parser.add_argument("--summaries", action="store_true")
     parser.add_argument("--case", action="append", default=[])
     parser.add_argument("--no-sanitize", action="store_true")
     parser.add_argument("--work", type=Path)
@@ -120,6 +124,15 @@ def main():
         if args.resources
         else CASES
     )
+    if args.summaries:
+        from memory_summary import accept_cases as summary_cases
+
+        cases = summary_cases(args.resources)
+        names = (
+            "aliased-swap",
+            "new-pointer-cell",
+            "consume-field" if args.resources else "guarded-read",
+        )
     selected = [
         name
         for name in names
@@ -213,7 +226,7 @@ def main():
         for name in selected:
             source = work / f"{name}.crs"
             source.write_text(cases[name])
-            result = run([executable, source])
+            result = run([executable, source, *(["rewrite"] if args.summaries else [])])
             matched = re.fullmatch(
                 rb"memory allocation: ([0-9]+) failure points checked\n", result.stdout
             )

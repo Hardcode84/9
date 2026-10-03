@@ -5,14 +5,15 @@ fn pm_lookup(context: *CrustContext, name: *u8) -> *CrustDecl {
     if interned == null(*CrustName) { return null(*CrustDecl); }
     var symbol: *CrustSymbol = crust_map_get(&(*context).globals, interned as usize) as *CrustSymbol;
     if symbol != null(*CrustSymbol) && (*symbol).decl != null(*CrustDecl) { return (*symbol).decl; }
-    crust_set_error(context, null(*CrustSource), 0usize, "foreign memory contract names an absent declaration");
+    crust_set_error(context, null(*CrustSource), 0usize, "memory policy names an absent declaration");
     return null(*CrustDecl);
 }
 
 fn pm_setup(stage: *PfStage, policy: *PmPolicy, context: *CrustContext, options: *PmOptions) -> bool {
     *policy = make PmPolicy {
         addressed: make CMap { entries: null(*CEntry), count: 0usize, capacity: 0usize },
-        foreign: null(*PmForeign), milliseconds: (*options).milliseconds
+        summaries: make CMap { entries: null(*CEntry), count: 0usize, capacity: 0usize },
+        foreign: null(*PmForeign), first_summary: null(*PmSummary), milliseconds: (*options).milliseconds
     };
     pf_init(stage, context);
     pm_configure(stage, policy);
@@ -30,6 +31,7 @@ fn pm_setup(stage: *PfStage, policy: *PmPolicy, context: *CrustContext, options:
         }
         index = index + 1usize;
     }
+    if success { success = pm_summary_select(stage, options); }
     return success;
 }
 

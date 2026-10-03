@@ -12,6 +12,7 @@ var contracts: [PmForeignSpec; 3] = make [PmForeignSpec; 3] {
     make PmForeignSpec { name: "emit", alignment: 1usize, kind: PM_SCALAR }
 };
 var options: PmOptions = make PmOptions {
+    summaries: null(**u8), summary_count: 0usize,
     foreign: &contracts[0usize], foreign_count: 3usize,
     max_depth: 128usize, max_paths: 256usize, max_iterations: 8usize,
     milliseconds: 10000u32

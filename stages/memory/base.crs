@@ -77,7 +77,7 @@ fn pm_pre(run: *PfRun, state: *PfState) -> bool {
         }
         parameter = (*parameter).next;
     }
-    return true;
+    return pm_summaries(run);
 }
 
 fn pm_access(run: *PfRun, state: *PfState, address: *u8, type: *CrustType,

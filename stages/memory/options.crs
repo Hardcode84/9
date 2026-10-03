@@ -13,6 +13,8 @@ record PmForeignSpec {
 record PmOptions {
     foreign: *PmForeignSpec;
     foreign_count: usize;
+    summaries: **u8;
+    summary_count: usize;
     max_depth: usize;
     max_paths: usize;
     max_iterations: usize;

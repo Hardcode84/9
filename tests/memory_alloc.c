@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-bool memory_alloc_verify(CrustContext *context, CrustSource *source);
+bool memory_alloc_verify(CrustContext *context, CrustSource *source, const char *summary);
 void *__real_crust0_host_alloc(size_t size, size_t alignment);
 void __real_crust0_host_free(void *allocation);
 void *__wrap_crust0_host_alloc(size_t size, size_t alignment);
@@ -66,7 +66,7 @@ static bool valid_result(CrustContext *context, size_t fail_at, bool success)
            context->error[0] != '\0';
 }
 
-static bool attempt(CrustSource *source, size_t fail_at, size_t *calls)
+static bool attempt(CrustSource *source, const char *summary, size_t fail_at, size_t *calls)
 {
     CrustContext context;
     bool success;
@@ -75,7 +75,7 @@ static bool attempt(CrustSource *source, size_t fail_at, size_t *calls)
     memset(&allocation_state, 0, sizeof(allocation_state));
     allocation_state.active = true;
     allocation_state.fail_at = fail_at;
-    success = memory_alloc_verify(&context, source);
+    success = memory_alloc_verify(&context, source, summary);
     allocation_state.active = false;
     *calls = allocation_state.calls;
     valid = valid_result(&context, fail_at, success);
@@ -119,18 +119,18 @@ static bool read_source(const char *path, CrustSource *source)
     return true;
 }
 
-static int check_source(CrustSource *source)
+static int check_source(CrustSource *source, const char *summary)
 {
     size_t count = 0;
     size_t fail_at;
     size_t calls;
-    if (!attempt(source, 0, &count) || count == 0)
+    if (!attempt(source, summary, 0, &count) || count == 0)
         return EXIT_FAILURE;
     for (fail_at = 1; fail_at <= count; ++fail_at) {
-        if (!attempt(source, fail_at, &calls))
+        if (!attempt(source, summary, fail_at, &calls))
             return EXIT_FAILURE;
     }
-    if (!attempt(source, 0, &calls) || calls != count) {
+    if (!attempt(source, summary, 0, &calls) || calls != count) {
         fputs("verification did not recover after injected failures\n", stderr);
         return EXIT_FAILURE;
     }
@@ -142,15 +142,15 @@ int main(int argc, char **argv)
 {
     CrustSource source;
     int result;
-    if (argc != 2) {
-        fputs("usage: memory-alloc SOURCE\n", stderr);
+    if (argc != 2 && argc != 3) {
+        fputs("usage: memory-alloc SOURCE [SUMMARY]\n", stderr);
         return EXIT_FAILURE;
     }
     if (!read_source(argv[1], &source)) {
         fprintf(stderr, "cannot read source: %s\n", argv[1]);
         return EXIT_FAILURE;
     }
-    result = check_source(&source);
+    result = check_source(&source, argc == 3 ? argv[2] : NULL);
     free((void *)source.bytes);
     return result;
 }

@@ -52,7 +52,9 @@ Insertion requires the same condition for the hook that moves. Splice requires
 both arguments to be roots. Equal roots give a no-op. Distinct roots name
 disjoint cycles.
 
-The closed-program check expands actual calls. It does not consume the ring
+The root in this tutorial expands actual calls. The optional inferred summaries
+described in the [RAII tutorial](../intrusive/README.md#connect-the-stages) reuse
+straight-line memory effects from checked bodies. They do not consume the ring
 proof as a call summary. Thus a successful ring proof alone cannot authorize
 a caller to free linked storage. Both checks use the same link source.
 
@@ -108,7 +110,7 @@ The root selects traversal depth, path count, loop unfolding, and a solver searc
 timeout. SMT parsing and query construction are outside that timeout. At the
 last permitted loop iteration, the checker must prove that the
 loop cannot continue. Reaching the budget never counts as success. This profile
-has no loop-invariant or modular-call interface. It rejects a traversal when
+has no loop-invariant interface. It rejects a traversal when
 the remaining continuation cannot be proved unreachable at the selected bound.
 
 Each access obligation retains the assumptions available when it occurred.
@@ -176,10 +178,13 @@ initialized-field permissions after owner transfers. Its emitted C uses the
 same resource body emitter. It checks a complete two-hook client with automatic
 node and head destruction, without `unsafe` regions.
 
-Both closed-program profiles expand actual calls. Reusable call effects need
-verification against the exact implementation and layout, plus caller checks
-for their preconditions and destructive effects. The executor has no consumer
-for those summaries. The separate ring proof does not supply that interface.
+Both profiles accept `PmOptions.summaries` and `summary_count`. Each selected
+declaration must have a straight-line checked body, a unit result, scalar
+operations, no calls, and no local storage. The stage derives a template from
+that body and checks its obligations at each call. Typed writes and consumed
+field permissions remain part of the effect. Other calls expand their bodies.
+These are concrete effect templates, not abstract ownership contracts. The
+separate ring proof does not supply caller storage permissions or loop invariants.
 
 See the [systems source study](../../docs/exploration/systems-capabilities.md#static-model-reassessment)
 for the differences that matter to Linux, GCC, and LLVM.

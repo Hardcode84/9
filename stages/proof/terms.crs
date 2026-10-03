@@ -82,9 +82,22 @@ fn pf_fresh(run: *PfRun, sort: *u8) -> *u8 {
 }
 
 // Name a term without adding a premise. Value can refer to previous global
-// declarations and definitions. It must have no free local SMT variables.
+// declarations and definitions. With definitions set, retain lexical bindings
+// there instead of emitting global definitions. Otherwise no free locals are permitted.
 fn pf_define(run: *PfRun, sort: *u8, value: *u8) -> *u8 {
     var name: *u8 = pf_name(run);
+    if (*run).definitions != null(**PfDefinition) {
+        var definition: *PfDefinition = pf_alloc(run, sizeof(PfDefinition), alignof(PfDefinition)) as *PfDefinition;
+        if definition == null(*PfDefinition) { return null(*u8); }
+        *definition = make PfDefinition { name: name, sort: sort, value: value, next: *(*run).definitions };
+        *(*run).definitions = definition;
+        return name;
+    }
+    pf_definition(run, name, sort, value);
+    return name;
+}
+
+fn pf_definition(run: *PfRun, name: *u8, sort: *u8, value: *u8) -> unit {
     c_buffer_text(&(*run).declarations, "(define-fun ");
     c_buffer_text(&(*run).declarations, name);
     c_buffer_text(&(*run).declarations, " () ");
@@ -92,5 +105,4 @@ fn pf_define(run: *PfRun, sort: *u8, value: *u8) -> *u8 {
     c_buffer_text(&(*run).declarations, " ");
     c_buffer_text(&(*run).declarations, value);
     c_buffer_text(&(*run).declarations, ")\n");
-    return name;
 }

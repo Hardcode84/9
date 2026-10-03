@@ -9,8 +9,18 @@ record PmForeign {
 
 record PmPolicy {
     addressed: CMap;
+    summaries: CMap;
     foreign: *PmForeign;
+    first_summary: *PmSummary;
     milliseconds: u32;
+}
+
+record PmSummary {
+    declaration: *CrustDecl;
+    before: *PfState;
+    after: *PfState;
+    definitions: *PfDefinition;
+    next: *PmSummary;
 }
 
 record PmWorld {

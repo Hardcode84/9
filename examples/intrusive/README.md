@@ -110,6 +110,22 @@ loop, and per-query solver limits. Reaching a limit rejects the compilation;
 it does not permit a memory operation. There are no omitted lifetime, ring,
 allocator, or destructor annotations in the [complete program](program.crs).
 
+The root also selects one inferred call summary:
+
+```crust
+var summarized: *u8 = "unlink";
+var options: PmOptions = make PmOptions {
+    foreign: &contracts[0usize], foreign_count: 3usize,
+    summaries: &summarized, summary_count: 1usize,
+    max_depth: 128usize, max_paths: 256usize, max_iterations: 8usize,
+    milliseconds: 10000u32
+};
+```
+
+This selection grants no memory permission. The stage resolves the name to the
+checked declaration and derives its effects from the complete body. Use
+`summaries: null(**u8), summary_count: 0usize` to expand all calls instead.
+
 ## Connect the stages
 
 Resource lowering hoists C storage and retains cleanup outside the operation
@@ -132,6 +148,20 @@ results to ordinary pointer operations, which the memory stage can check.
 Full calls on assignment right-hand sides execute their actual bodies and keep
 all resulting paths.
 
+For a selected straight-line function, the [summary stage](../../stages/memory/summary.crs)
+executes the proof view once with symbolic input memory and parameters. It
+retains each access obligation, the resulting memory maps, and every written
+cell. Each call binds that template to its actual arguments and memory state.
+It must prove all retained obligations and check typed-write separation from
+the caller's cells. The caller keeps new pointer cells so that later destruction
+checks every surviving link. Consumed-field effects also remain in the template.
+
+The template uses fresh proof names at each call. It emits flat SMT definitions;
+it does not place a large memory result in a nested solver function. Templates
+exist only for the current checked context. There is no disk cache or unchecked
+summary import. Changes to a body, type, layout, or resource plan produce a new
+template in the next compilation. The C99 core has no summary operation.
+
 These views and permissions exist only in the compiler. Emission still uses
 `rs_c_body` and the original checked operations and cleanup plans. The tests
 compare C output from both stages on identical accepted resource input. They
@@ -150,12 +180,26 @@ the explicit trust boundary described in the [memory tutorial](../ownership/READ
 Raw aliases obey the memory-access proof. This does not establish exclusive
 borrowing for every raw pointer value or a concurrency rule.
 
-This profile checks a closed sequential entry. It expands actual calls and must
-prove that each loop stops within the selected unfolding bound. Solver timeout,
+This profile checks a closed sequential entry. It expands calls that the root
+does not select for summaries. It must prove that each loop stops within the
+selected unfolding bound. Solver timeout,
 unknown results, unsupported operations, and allocation failure stop output.
-There is no unchecked fallback. Larger programs need verified call summaries
-and loop invariants to avoid repeated body expansion; neither is consumed here.
-The separate ring proof is not silently substituted for a caller proof.
+There is no unchecked fallback. Selected summaries require unit results,
+scalar parameters and bindings without local storage, scalar assignments,
+and straight-line bodies. Calls, branches, loops, and address-taken locals in
+these bodies produce a diagnostic. This also rejects resource lowering that
+introduces such operations. Omit that selection to check the complete body by
+expansion. The template reuses concrete effects; the solver still checks them
+at each call. Abstract ownership predicates and loop invariants require a
+separate contract and proof rule. The ring proof is not a caller memory proof.
+
+Resource lowering still checks local initialization before the memory stage
+runs. It rejects a read of a local initialized only through an output parameter.
+It does permit taking the uninitialized local's address. The memory stage can check
+initialization of allocated storage through a pointer. To accept that local
+case, the resource interface must delegate plain-value initialization checks
+while retaining owner construction, loan, and cleanup rules. Summary selection
+does not bypass those source rules.
 
 Moves consume initialized-field permissions. Destruction can consume one
 pointer field and continue to use other fields. Subsequent calls, including
@@ -175,6 +219,7 @@ protocol is established by this sequential proof.
 ```sh
 make check-resource-memory Z3_FLAGS=-l:libz3.so.4
 make check-resource-memory-alloc Z3_FLAGS=-l:libz3.so.4
+make check-memory-summaries Z3_FLAGS=-l:libz3.so.4
 python3 tests/resource_memory.py --sanitize
 ```
 
@@ -187,6 +232,11 @@ reentrant reads, field reinitialization, and automatic child cleanup after a
 parent has consumed a child field.
 Native tests use the emitted C and its symbol map. The intrusive test also
 loads the stage through the ordinary compilation-program interface.
+It also removes a backlink store from the selected `unlink` body. The resulting
+summary must fail at the caller's destruction check. Summary tests cover
+aliased arguments, new links, consumed fields, overlapping typed stores,
+invalid accesses, and unchanged C output. Allocation tests inject failures
+during summary construction and application.
 
 ## Raw bootstrap witness
 

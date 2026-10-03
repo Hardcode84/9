@@ -25,6 +25,9 @@ record PfStage {
     // Return all resulting paths, including an empty set. Delegate other nodes
     // explicitly to pf_statement_inner with the current call frame.
     statement: fn(*PfRun, *PfState, *CrustStmt) -> *PfPath;
+    // Parameters are already bound. Handle every path or execute the complete
+    // body with pf_statement. This callback applies to full defined calls.
+    invoke: fn(*PfRun, *PfState, *PfCall) -> *PfPath;
     scope: fn(*PfRun, *PfState, *CrustStmt, bool) -> bool;
     max_depth: usize;
     max_paths: usize;
@@ -43,6 +46,7 @@ record PfRun {
     parameters: *PfBinding;
     premises: *PfTerm;
     calls: *PfCall;
+    definitions: **PfDefinition;
     projector_depth: usize;
     next_name: usize;
     depth: usize;
@@ -74,6 +78,7 @@ record PfBinding {
 }
 
 record PfTerm { value: *u8; next: *PfTerm; }
+record PfDefinition { name: *u8; sort: *u8; value: *u8; next: *PfDefinition; }
 record PfGoal { loc: CrustLoc; value: *u8; assumptions: *u8; next: *PfGoal; proven: bool; }
 record PfPath { state: *PfState; next: *PfPath; }
 record PfCall { declaration: *CrustDecl; parent: *PfCall; guard: *u8; }

@@ -270,7 +270,8 @@ and omit its cost.
 
 The [ownership tutorial](../../examples/ownership/README.md) now checks a
 sequential direct-pointer program with individual reclamation. Its profile
-expands actual calls and proves that each loop stops within a selected bound.
+expands actual calls or reuses selected straight-line effect templates. It
+proves that each loop stops within a selected bound.
 It checks stored aliases, subobject access, and cleanup that changes other nodes.
 It does not supply reusable ownership contracts for callers or a general graph
 model. A plain pointer plus RAII is still insufficient to establish memory

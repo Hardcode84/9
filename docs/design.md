@@ -357,9 +357,12 @@ permissions after owner transfers and consuming pointer reads. A pointer move
 can consume a destructor's node field without a runtime clear store. Alias
 reads must respect the consumed field permission. The profile uses the original
 resource body emitter.
-Calls still expand their actual bodies. Reusable checked effects and caller
-permissions require a summary interface; the combined profile does not consume
-the separate ring proof as such a summary.
+The root can select inferred summaries for straight-line memory functions.
+The stage derives each effect template from the complete checked proof view,
+then checks its obligations and typed-write separation at each call. It retains
+written pointer cells for later destruction checks. Other calls expand their
+actual bodies. These templates do not establish abstract ownership predicates
+or loop invariants. The separate ring proof is not a caller memory summary.
 Native host execution is trusted process code, with no sandbox guarantee.
 
 ## Read next

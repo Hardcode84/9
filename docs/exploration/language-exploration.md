@@ -1264,7 +1264,19 @@ aliases, repeated drop, reentrant reads, and surviving external links reject.
 Pointer moves emit the same C operations as ordinary pointer reads. Other
 fields retain their permissions; no destructor has an exemption from checking.
 The next modular interface must connect owner rights and field permissions to
-verified library contracts. The combined stage currently expands actual bodies.
+verified library contracts. The combined stage can now reuse concrete memory
+effects for selected straight-line, unit-returning functions. It derives the
+template from the current checked body and full resource proof view. Each call
+must still prove the access obligations and typed-write separation. It keeps
+the written pointer cells and consumed-field effects for later lifetime checks.
+The two-hook destructor uses this path for `unlink`. Removing a backlink store
+from that body must fail the caller's destruction check.
+
+This is body-effect reuse, not an abstract ownership contract. An SMT function
+encoding increased solver cost on the actual RAII witness. The selected form
+binds a template with fresh names and emits flat definitions. It leaves emitted
+C unchanged. Timing captures and alternative encodings remain in ignored build
+storage; this result makes no general speedup claim.
 
 Subobject projection needs its own contract. The default VeriFast C model
 rejects subtraction outside a field subobject, even with a known parent. Crust's
@@ -1292,7 +1304,7 @@ Clients should consume checked contracts without repeating the library proof.
 That requires binding a summary to the exact body, types, layout, imports, and
 checker configuration. Such summaries may be cached by an ordinary stage.
 
-The next contract work is to summarize the checked call effects. Every exit
+The next contract work is to abstract the checked call effects and loops. Every exit
 must return its domain
 permission or transfer it explicitly. Every projected or returned view must
 retain its loan. The checker must reject destruction while that loan survives,

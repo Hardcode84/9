@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn pm_summary_world(run: *PfRun, state: *PfState) -> *PmWorld {
+    var world: *PmWorld = pf_alloc(run, sizeof(PmWorld), alignof(PmWorld)) as *PmWorld;
+    if world == null(*PmWorld) { return world; }
+    *world = make PmWorld {
+        live: pf_fresh(run, "(Array Int Bool)"), sizes: pf_fresh(run, "(Array Int Int)"),
+        bases: pf_fresh(run, "(Array Int Int)"), writable: pf_fresh(run, "(Array Int Bool)"),
+        initialized: pf_fresh(run, "(Array Ptr Bool)"), integers: pf_fresh(run, "(Array Ptr Int)"),
+        pointers: pf_fresh(run, "(Array Ptr Ptr)"), representations: pf_fresh(run, "(Array Ptr Int)"),
+        objects: null(*PmObject), cells: null(*PmCell), scope: null(*PmScope)
+    };
+    (*state).data = world as *u8;
+    return world;
+}
+
+// Rebind only the executor's reserved fresh-name prefix. Template terms contain
+// generated SMT atoms, not source text or string literals.
+fn pm_summary_rebind(run: *PfRun, text: *u8, prefix: *u8) -> *u8 {
+    var buffer: CBuffer = uninit;
+    pf_buffer(run, &buffer);
+    var length: usize = c_length(text);
+    var start: usize = 0usize;
+    var position: usize = 0usize;
+    while position + 2usize < length && !pf_failed(run) {
+        if text[position] == 112u8 && text[position + 1usize] == 102u8 && text[position + 2usize] == 33u8 {
+            c_buffer_bytes(&buffer, text + start as isize, position - start);
+            c_buffer_text(&buffer, prefix);
+            position = position + 3usize;
+            start = position;
+        } else { position = position + 1usize; }
+    }
+    c_buffer_bytes(&buffer, text + start as isize, length - start);
+    return c_buffer_end(&buffer);
+}
+
+fn pm_summary_bind(run: *PfRun, name: *u8, sort: *u8, value: *u8, prefix: *u8) -> unit {
+    pf_definition(run, pm_summary_rebind(run, name, prefix), sort, value);
+}
+
+fn pm_summary_inputs(run: *PfRun, summary: *PmSummary, state: *PfState, prefix: *u8) -> unit {
+    var before: *PmWorld = pm_world(run, (*summary).before);
+    var world: *PmWorld = pm_world(run, state);
+    pm_summary_bind(run, (*before).live, "(Array Int Bool)", (*world).live, prefix);
+    pm_summary_bind(run, (*before).sizes, "(Array Int Int)", (*world).sizes, prefix);
+    pm_summary_bind(run, (*before).bases, "(Array Int Int)", (*world).bases, prefix);
+    pm_summary_bind(run, (*before).writable, "(Array Int Bool)", (*world).writable, prefix);
+    pm_summary_bind(run, (*before).initialized, "(Array Ptr Bool)", (*world).initialized, prefix);
+    pm_summary_bind(run, (*before).integers, "(Array Ptr Int)", (*world).integers, prefix);
+    pm_summary_bind(run, (*before).pointers, "(Array Ptr Ptr)", (*world).pointers, prefix);
+    pm_summary_bind(run, (*before).representations, "(Array Ptr Int)", (*world).representations, prefix);
+    var parameter: *CrustParam = (*(*summary).declaration).params;
+    while parameter != null(*CrustParam) && !pf_failed(run) {
+        pm_summary_bind(run, pf_binding((*summary).before, (*parameter).symbol),
+            pm_sort(run, (*parameter).type), pf_binding(state, (*parameter).symbol), prefix);
+        parameter = (*parameter).next;
+    }
+    var definition: *PfDefinition = (*summary).definitions;
+    while definition != null(*PfDefinition) && !pf_failed(run) {
+        pm_summary_bind(run, (*definition).name, (*definition).sort,
+            pm_summary_rebind(run, (*definition).value, prefix), prefix);
+        definition = (*definition).next;
+    }
+}
+
+fn pm_summary_goals(run: *PfRun, summary: *PmSummary, state: *PfState, prefix: *u8) -> unit {
+    var original: *PfGoal = (*(*summary).after).goals;
+    var first: *PfGoal = null(*PfGoal);
+    var tail: **PfGoal = &first;
+    while original != null(*PfGoal) && !pf_failed(run) {
+        var goal: *PfGoal = pf_alloc(run, sizeof(PfGoal), alignof(PfGoal)) as *PfGoal;
+        if goal == null(*PfGoal) { return; }
+        *goal = make PfGoal {
+            loc: (*original).loc, value: pm_summary_rebind(run, (*original).value, prefix),
+            assumptions: pf_and(run, (*state).assumptions,
+                pm_summary_rebind(run, (*original).assumptions, prefix)),
+            next: null(*PfGoal), proven: false
+        };
+        *tail = goal;
+        tail = &(*goal).next;
+        original = (*original).next;
+    }
+    *tail = (*state).goals;
+    (*state).goals = first;
+}

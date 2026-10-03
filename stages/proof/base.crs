@@ -15,6 +15,7 @@ fn pf_init(stage: *PfStage, context: *CrustContext) -> unit {
         external: null(fn(*PfRun, *PfState, *CrustExpr, *u8) -> *u8),
         sort: null(fn(*PfRun, *CrustType) -> *u8),
         statement: null(fn(*PfRun, *PfState, *CrustStmt) -> *PfPath),
+        invoke: null(fn(*PfRun, *PfState, *PfCall) -> *PfPath),
         scope: null(fn(*PfRun, *PfState, *CrustStmt, bool) -> bool),
         max_depth: 128usize, max_paths: 128usize, max_iterations: 32usize, obligations: 0usize, prune: false
     };

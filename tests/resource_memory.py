@@ -408,12 +408,28 @@ def intrusive_cases(build, directory, sanitize):
         path = directory / f"{name}.crs"
         path.write_text(original.replace(old, new, 1))
         result = command(
-            [build / "crust-resource-memory-test", "--check", links, path], 1, timeout=600
+            [build / "crust-resource-memory-test", "--summary", "unlink", "--check", links, path],
+            1,
+            timeout=600,
         )
         if "counterexample" not in result.stderr.decode():
             raise RuntimeError(f"{name}: expected counterexample: {result.stderr!r}")
         print(f"{name}: rejected", flush=True)
-    return 2 + len(mutations)
+    broken = directory / "broken-unlink.crs"
+    link_text = links.read_text()
+    repair = "(*after).prev = before;"
+    if link_text.count(repair) != 1:
+        raise RuntimeError("unlink mutation does not match source")
+    broken.write_text(link_text.replace(repair, "", 1))
+    result = command(
+        [build / "crust-resource-memory-test", "--summary", "unlink", "--check", broken, program],
+        1,
+        timeout=600,
+    )
+    if "counterexample" not in result.stderr.decode():
+        raise RuntimeError(f"broken unlink summary: expected counterexample: {result.stderr!r}")
+    print("broken-unlink-summary: rejected", flush=True)
+    return 3 + len(mutations)
 
 
 def main():

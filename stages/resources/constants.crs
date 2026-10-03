@@ -84,6 +84,7 @@ fn rs_constant_name(stage: *RsStage, expression: *CrustExpr, expected: *CrustTyp
         rs_error(stage, location, "constant initializer cannot retain an unsafe function");
         return;
     }
+    if !rs_check_function_value(stage, (*global).syntax, location) { return; }
     if !rs_same(stage, (*global).syntax, expected) {
         rs_error(stage, location, "constant function value has incompatible source types or borrow modes");
     }

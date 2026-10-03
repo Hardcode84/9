@@ -113,6 +113,67 @@ fn rs_signature(stage: *RsStage, declaration: *CrustDecl) -> *CrustTypeSyntax {
     return signature;
 }
 
+fn rs_return_loan(stage: *RsStage, syntax: *CrustTypeSyntax) -> *RsReturnLoan {
+    if (*syntax).kind != CRUST_T_FUNCTION { return null(*RsReturnLoan); }
+    var result: u32 = (*(*syntax).base).kind;
+    if result != RS_READ && result != RS_MUT { return null(*RsReturnLoan); }
+    return crust_map_get(&(*stage).return_loans, syntax as usize) as *RsReturnLoan;
+}
+
+fn rs_collect_return(stage: *RsStage, global: *RsGlobal) -> bool {
+    var declaration: *CrustDecl = (*global).source;
+    var result: *CrustTypeSyntax = (*declaration).syntax_type;
+    var name: *CrustName = crust_map_get(&(*stage).return_sources, declaration as usize) as *CrustName;
+    var borrowed: bool = (*result).kind == RS_READ || (*result).kind == RS_MUT;
+    if !borrowed {
+        if name != null(*CrustName) {
+            rs_error(stage, &(*result).loc, "from requires a borrowed function result");
+        }
+        return !(*stage).failed;
+    }
+    if name == null(*CrustName) {
+        rs_error(stage, &(*result).loc, "function results cannot be borrowed views without a from parameter");
+        return false;
+    }
+    var parameter: *CrustParam = (*declaration).params;
+    var index: usize = 0usize;
+    while parameter != null(*CrustParam) && (*parameter).name != name {
+        parameter = (*parameter).next;
+        index = index + 1usize;
+    }
+    if parameter == null(*CrustParam) {
+        rs_error(stage, &(*result).loc, "from must name a borrow parameter of this function");
+        return false;
+    }
+    return rs_collect_return_parameter(stage, global, parameter, index);
+}
+
+fn rs_collect_return_parameter(stage: *RsStage, global: *RsGlobal,
+                              parameter: *CrustParam, index: usize) -> bool {
+    var declaration: *CrustDecl = (*global).source;
+    var result: *CrustTypeSyntax = (*declaration).syntax_type;
+    var mode: u32 = (*(*parameter).syntax_type).kind;
+    if mode != RS_READ && mode != RS_MUT {
+        rs_error(stage, &(*parameter).loc, "returned loan source must be a borrow parameter");
+        return false;
+    }
+    if (*result).kind == RS_MUT && mode != RS_MUT {
+        rs_error(stage, &(*result).loc, "mutable result requires a mutable source parameter");
+        return false;
+    }
+    if (*declaration).kind == CRUST_D_EXTERN &&
+       crust_map_get(&(*stage).source_imports, declaration as usize) == null(*u8) {
+        rs_error(stage, &(*declaration).loc, "returned loans require a source ABI import");
+        return false;
+    }
+    var loan: *RsReturnLoan = rs_alloc(stage, sizeof(RsReturnLoan), alignof(RsReturnLoan)) as *RsReturnLoan;
+    if loan == null(*RsReturnLoan) { return false; }
+    (*loan).parameter = (*parameter).name;
+    (*loan).index = index;
+    rs_put(stage, &(*stage).return_loans, (*global).syntax as usize, loan as *u8);
+    return !(*stage).failed;
+}
+
 fn rs_collect(stage: *RsStage) -> bool {
     (*stage).sources = (*(*stage).context).units;
     var unit_value: *CrustUnit = (*stage).sources;
@@ -164,8 +225,9 @@ fn rs_publish(stage: *RsStage) -> bool {
 
 fn rs_lower_function_type(stage: *RsStage, source: *CrustTypeSyntax, target: *CrustTypeSyntax) -> *CrustTypeSyntax {
     var result: *CrustTypeSyntax = (*source).base;
-    if (*result).kind == RS_READ || (*result).kind == RS_MUT {
-        rs_error(stage, &(*result).loc, "function results cannot be borrowed views");
+    if ((*result).kind == RS_READ || (*result).kind == RS_MUT) &&
+       rs_return_loan(stage, source) == null(*RsReturnLoan) {
+        rs_error(stage, &(*result).loc, "function results cannot be borrowed views in indirect function types");
         return null(*CrustTypeSyntax);
     }
     var count: usize = (*source).param_count;
@@ -223,6 +285,7 @@ fn rs_collect_global(stage: *RsStage, declaration: *CrustDecl) -> bool {
     }
     if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_EXTERN {
         (*global).syntax = rs_signature(stage, declaration);
+        if (*stage).failed || !rs_collect_return(stage, global) { return false; }
         (*global).unsafe_call = ((*declaration).kind == CRUST_D_EXTERN &&
             crust_map_get(&(*stage).source_imports, declaration as usize) == null(*u8)) ||
             crust_map_get(&(*stage).unsafe_functions, declaration as usize) != null(*u8);

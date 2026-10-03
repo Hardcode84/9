@@ -20,6 +20,12 @@ extern fn rs_read(stage: *RsStage, source: *CrustSource, begin: usize, end: usiz
 // Return false on allocation failure and retain the context diagnostic.
 extern fn rs_source_import(stage: *RsStage, declaration: *CrustDecl) -> bool = "rs_source_import";
 
+// Name the sole borrow parameter that keeps the returned view live.
+// Register once before preparation, including for a source ABI import.
+// The provider must use the same result mode and source parameter position.
+// Source syntax can supply this contract with `-> read T from parameter`.
+extern fn rs_return_from(stage: *RsStage, declaration: *CrustDecl, parameter: *CrustName) -> bool = "rs_return_from";
+
 // Prepare once after all source units have been read successfully.
 // On success, context.units contains typed operations; the stage retains cleanup plans.
 // Emit with rs_c_body or another consumer of both operations and plans. Ordinary seed

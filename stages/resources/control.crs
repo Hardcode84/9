@@ -358,6 +358,7 @@ fn rs_lower_return(function: *RsFunction, source: *CrustStmt, output: *RsStateme
         if (*source).expr == null(*CrustExpr) { rs_error(stage, location, "return requires a value"); return; }
         var value: *RsValue = rs_expr(function, (*source).expr, effects);
         if !rs_require_value(function, value, result_type, location) { return; }
+        if !rs_check_return_loan(function, value, location) { return; }
         var destination: *CrustExpr = null(*CrustExpr);
         if (*function).output != null(*CrustName) {
             destination = rs_unary(stage, CRUST_OP_DEREF, rs_named(stage, (*function).output, location), location);
@@ -374,6 +375,22 @@ fn rs_lower_return(function: *RsFunction, source: *CrustStmt, output: *RsStateme
     rs_leave_scope(function);
     rs_append(output, rs_block(stage, effects, location));
     return;
+}
+
+fn rs_check_return_loan(function: *RsFunction, value: *RsValue, location: *CrustLoc) -> bool {
+    var stage: *RsStage = (*function).stage;
+    var contract: *RsReturnLoan = rs_return_loan(stage, (*(*function).global).syntax);
+    if contract == null(*RsReturnLoan) { return true; }
+    var parameter: *RsLocal = crust_map_get(&(*function).locals, (*contract).parameter as usize) as *RsLocal;
+    var ancestor: *RsLocal = (*value).local;
+    while ancestor != null(*RsLocal) && ancestor != parameter {
+        ancestor = (*ancestor).parent_loan;
+    }
+    if ancestor == null(*RsLocal) {
+        rs_error(stage, location, "returned loan does not derive from its declared source parameter");
+        return false;
+    }
+    return true;
 }
 
 fn rs_lower_assignment(function: *RsFunction, source: *CrustStmt, effects: *RsStatements) -> unit {

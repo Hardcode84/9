@@ -28,14 +28,32 @@ fn rs_read_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
             rr_error(reader, (*reader).token.offset, "expected fn after unsafe declaration modifier");
             return null(*CrustDecl);
         }
-        var declaration: *CrustDecl = rr_function(reader);
+        var declaration: *CrustDecl = rs_read_function(reader, stage);
         if !(*reader).failed {
             rs_put(stage, &(*stage).unsafe_functions, declaration as usize, declaration as *u8);
             if (*stage).failed { (*reader).failed = true; }
         }
         return declaration;
     }
+    if (*reader).token.kind == RR_FN || (*reader).token.kind == RR_EXTERN {
+        return rs_read_function(reader, stage);
+    }
     return null(*CrustDecl);
+}
+
+fn rs_read_function(reader: *CrustReader, stage: *RsStage) -> *CrustDecl {
+    var declaration: *CrustDecl = rr_function_header(reader);
+    if declaration == null(*CrustDecl) { return declaration; }
+    if rr_is_name(reader, "from") {
+        rr_next(reader);
+        var parameter: *CrustName = rr_name(reader);
+        if (*reader).failed { return null(*CrustDecl); }
+        if !rs_return_from(stage, declaration, parameter) {
+            (*reader).failed = true;
+            return null(*CrustDecl);
+        }
+    }
+    return rr_function_end(reader, declaration);
 }
 
 fn rs_read_statement(reader: *CrustReader, user: *u8) -> *CrustStmt {

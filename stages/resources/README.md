@@ -163,6 +163,11 @@ scope exit; temporary call loans last through the call. A field or element
 loan reserves its complete root binding. The checker does not infer shorter
 last-use lifetimes or independent loans for disjoint fields.
 
+The [returned-view example](../../examples/resources/returned/README.md) adds a
+field accessor whose result retains its input loan. Its `from` clause names the
+source parameter. The caller cannot move or change the owner while that view
+is live. The [reference](reference.md#returned-views) gives the exact rules.
+
 ## 4. Follow the compiler state
 
 Read the implementation in this order:

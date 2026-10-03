@@ -55,6 +55,20 @@ fn rs_place_base(function: *RsFunction, source: *CrustExpr,
     return value;
 }
 
+fn rs_borrow_place(function: *RsFunction, source: *CrustExpr,
+                   output: *RsStatements, write: bool) -> *RsValue {
+    while (*source).kind == CRUST_E_GROUP { source = (*source).left; }
+    if (*source).kind != CRUST_E_CALL { return rs_place(function, source, output, write, false); }
+    var value: *RsValue = rs_place_base(function, source, output);
+    if (*(*function).stage).failed { return null(*RsValue); }
+    if (*value).mode != RS_READ && (*value).mode != RS_MUT {
+        rs_error((*function).stage, &(*source).loc, "borrow requires a checked place or returned view");
+        return null(*RsValue);
+    }
+    rs_place_access(function, value, write, &(*source).loc);
+    return value;
+}
+
 fn rs_place_pointer(function: *RsFunction, value: *RsValue, output: *RsStatements,
                      location: *CrustLoc) -> *RsValue {
     var stage: *RsStage = (*function).stage;

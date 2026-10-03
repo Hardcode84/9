@@ -52,7 +52,8 @@ resource fields and elements. Other values retain Crust0 copy semantics.
   Arrays drop elements in reverse order.
 - A `read` loan permits shared access. A `mut` loan permits exclusive access.
   All field and element loans reserve the whole root. Reborrowing reserves the
-  parent loan. Loan types cannot occur in stored fields or function results.
+  parent loan. Loan types cannot occur in stored fields. A function can return
+  a loan tied to one named borrow parameter with `from`, as described below.
   A borrow mode applies to a value type; modes cannot be stacked.
   Constants and their fields and elements permit `read` loans. Their storage
   lives for the whole program. They do not permit `mut` loans.
@@ -73,6 +74,32 @@ resource fields and elements. Other values retain Crust0 copy semantics.
   statement. Parentheses around `true` do not change this rule. Other loop
   conditions can reach the next statement; the checker does not evaluate
   constant expressions for this decision.
+
+### Returned views
+
+```crust
+record Pair { first: i32; second: i32; }
+fn first(value: read Pair) -> read i32 from value {
+    return read value.first;
+}
+```
+
+`from value` ties the result to that input loan. Each return must derive from
+the named parameter, including returns through other checked calls. A local,
+an unrelated parameter, or a raw pointer cannot supply the result. A `mut`
+result requires a `mut` source. The caller keeps the source loan until the
+returned view ends. Other temporary argument loans end with the call.
+
+The view uses the same pointer representation as a local loan. The dependency
+exists only in compiler state. Named views still last until scope exit and
+reserve the whole root. This rule does not add stored views or independent
+loans for disjoint fields.
+
+Functions with returned views require direct calls. A function value cannot
+carry the `from` dependency in the current source type grammar. Such a
+conversion is rejected, including in `unsafe` code. The overload reader does
+not accept the `from` clause; that adapter must preserve the result mode and
+source parameter index in its declaration contract before it can accept it.
 
 Only whole bindings have initialization facts. A partially initialized record
 or array cannot be read through a checked place. An unsafe raw address can name
@@ -128,6 +155,11 @@ declaration with the complete source signature and native link name, then calls
 `rs_source_import` before `rs_prepare`. This marker permits source aggregates and
 borrow modes. It does not apply to a native C declaration. Unmarked `extern fn`
 declarations still require scalar foreign signatures and unsafe calls.
+
+For a returned-view import, call `rs_return_from(stage, declaration, name)`
+before `rs_prepare`. `name` identifies the source parameter in that declaration.
+The provider contract compares parameter positions, so names can differ across
+the import boundary. Omitting or changing this dependency rejects the import.
 
 Caller and provider must use the same source ABI, record definitions, resource
 drop clauses, and unsafe function contracts. A source import is safe unless its
@@ -191,7 +223,11 @@ The [measurements](../../benchmarks/resources/README.md) separate frontend work
 from final target GCC compilation and linking. They also report emitted size
 and cleanup growth. Passing resource tests alone is not a speed result.
 
-The stage proves local ownership and loan rules. Persistent intrusive-list links
+The stage proves local ownership and loan rules, including returned views.
+The separate [memory proof tutorial](../../examples/ownership/README.md) checks
+complete seed programs and direct pointer accesses. It does not consume this
+stage's cleanup plans and cannot verify a resource program from its lowered
+tree alone. Persistent intrusive-list links in the resource profile
 need an additional observer-validity contract across unlink, destruction, and
 storage reuse. The current source types do not express that contract. The
 [static ownership experiment](../../docs/exploration/language-exploration.md#executable-experiments-and-model-selection)

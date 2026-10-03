@@ -118,6 +118,21 @@ fn rs_end_loan(function: *RsFunction, local: *RsLocal) -> unit {
     rs_live(function, local, false);
 }
 
+fn rs_return_loan_parent(function: *RsFunction, argument: *RsLocal) -> *RsLocal {
+    var parent: *RsLocal = (*argument).parent_loan;
+    rs_end_loan(function, argument);
+    rs_live(function, argument, false);
+    while parent != null(*RsLocal) && (*parent).name == null(*CrustName) &&
+          ((*parent).mode == RS_READ || (*parent).mode == RS_MUT) {
+        if (*parent).readers != 0usize || (*parent).exclusive { break; }
+        var ancestor: *RsLocal = (*parent).parent_loan;
+        rs_end_loan(function, parent);
+        rs_live(function, parent, false);
+        parent = ancestor;
+    }
+    return parent;
+}
+
 fn rs_release_scope(function: *RsFunction, scope: *RsScope) -> unit {
     var local: *RsLocal = (*scope).first;
     while local != null(*RsLocal) && !(*(*function).stage).failed {
@@ -209,18 +224,23 @@ fn rs_assign(function: *RsFunction, output: *RsStatements, place: *CrustExpr, va
     if statement != null(*CrustStmt) { (*statement).expr = place; (*statement).value = value; rs_append(output, statement); }
 }
 
+fn rs_capture_allowed(stage: *RsStage, value: *RsValue, location: *CrustLoc) -> bool {
+    if rs_owns(stage, (*value).syntax) && !(*value).owned {
+        rs_error(stage, location, "copy of a resource requires an explicit move");
+        return false;
+    }
+    if (*value).unsafe_call {
+        rs_error(stage, location, "unsafe functions can only be called directly");
+        return false;
+    }
+    return rs_check_function_value(stage, (*value).syntax, location);
+}
+
 fn rs_capture(function: *RsFunction, output: *RsStatements, value: *RsValue, location: *CrustLoc) -> *RsValue {
     var stage: *RsStage = (*function).stage;
     if (*stage).failed || value == null(*RsValue) { return null(*RsValue); }
     if (*(*value).syntax).kind == CRUST_T_UNIT { return value; }
-    if rs_owns(stage, (*value).syntax) && !(*value).owned {
-        rs_error(stage, location, "copy of a resource requires an explicit move");
-        return null(*RsValue);
-    }
-    if (*value).unsafe_call {
-        rs_error(stage, location, "unsafe functions can only be called directly");
-        return null(*RsValue);
-    }
+    if !rs_capture_allowed(stage, value, location) { return null(*RsValue); }
     var local: *RsLocal = rs_local(function, null(*CrustName), (*value).syntax, null(*CrustParam), location);
     if local == null(*RsLocal) { return null(*RsValue); }
     var place: *CrustExpr = rs_named(stage, (*local).storage, location);

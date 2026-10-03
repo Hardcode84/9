@@ -3,6 +3,7 @@
 fn rs_require_value(function: *RsFunction, value: *RsValue, expected: *CrustTypeSyntax, location: *CrustLoc) -> bool {
     var stage: *RsStage = (*function).stage;
     if (*stage).failed || value == null(*RsValue) { return false; }
+    if !rs_check_function_value(stage, (*value).syntax, location) { return false; }
     if !rs_same(stage, (*value).syntax, expected) {
         rs_error(stage, location, "source value has an incompatible type or borrow mode");
         return false;
@@ -92,7 +93,6 @@ fn rs_call(function: *RsFunction, source: *CrustExpr, output: *RsStatements, def
     (*call).args = rs_alloc(stage, (*call).arg_count * sizeof(*CrustExpr), alignof(*CrustExpr)) as **CrustExpr;
     if (*stage).failed { return null(*RsValue); }
     if !rs_call_arguments(function, source, signature, call, values, output) { return null(*RsValue); }
-    var result: *RsValue = null(*RsValue);
     var result_local: *RsLocal = null(*RsLocal);
     if rs_indirect(result_type) {
         result_local = rs_local(function, null(*CrustName), result_type, null(*CrustParam), &(*source).loc);
@@ -107,9 +107,46 @@ fn rs_call(function: *RsFunction, source: *CrustExpr, output: *RsStatements, def
         return rs_defer_call(function, call, guard, result_type, deferred, &(*source).loc);
     }
     rs_append(output, guard);
-    result = rs_call_result(function, call, result_type, result_local, output, &(*source).loc);
-    rs_end_call_loans(function, values, count);
+    return rs_finish_call(function, signature, call, result_local, values, output, &(*source).loc);
+}
+
+fn rs_finish_call(function: *RsFunction, signature: *CrustTypeSyntax, call: *CrustExpr,
+                  result_local: *RsLocal, values: **RsValue, output: *RsStatements,
+                  location: *CrustLoc) -> *RsValue {
+    var loan: *RsReturnLoan = rs_return_loan((*function).stage, signature);
+    var result: *RsValue = null(*RsValue);
+    if loan != null(*RsReturnLoan) {
+        result = rs_call_loan(function, call, (*signature).base, values[(*loan).index], output, location);
+    } else {
+        result = rs_call_result(function, call, (*signature).base, result_local, output, location);
+    }
+    rs_end_call_loans(function, values, (*signature).param_count);
     return result;
+}
+
+fn rs_call_loan(function: *RsFunction, call: *CrustExpr, syntax: *CrustTypeSyntax,
+                argument: *RsValue, output: *RsStatements, location: *CrustLoc) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var local: *RsLocal = rs_local(function, null(*CrustName), syntax, null(*CrustParam), location);
+    if local == null(*RsLocal) { return null(*RsValue); }
+    var parent: *RsLocal = rs_return_loan_parent(function, (*argument).local);
+    if (*stage).failed { return null(*RsValue); }
+    if parent != null(*RsLocal) { rs_lend(function, parent, (*syntax).kind, location); }
+    if (*stage).failed { return null(*RsValue); }
+    (*local).parent_loan = parent;
+    (*local).initialized = true;
+    rs_assign(function, output, rs_named(stage, (*local).storage, location), call, location);
+    var value: *RsValue = rs_value(function, syntax, rs_named(stage, (*local).storage, location));
+    if value != null(*RsValue) { (*value).local = local; (*value).mode = (*syntax).kind; }
+    return value;
+}
+
+fn rs_check_function_value(stage: *RsStage, syntax: *CrustTypeSyntax, location: *CrustLoc) -> bool {
+    if rs_return_loan(stage, syntax) != null(*RsReturnLoan) {
+        rs_error(stage, location, "functions with returned loans can only be called directly");
+        return false;
+    }
+    return true;
 }
 
 fn rs_short_circuit(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
@@ -244,7 +281,7 @@ fn rs_borrow_expression(function: *RsFunction, source: *CrustExpr, output: *RsSt
     var stage: *RsStage = (*function).stage;
     var location: *CrustLoc = &(*source).loc;
     var kind: u32 = (*source).kind;
-    var place: *RsValue = rs_place(function, (*source).left, output, kind == RS_MUT, false);
+    var place: *RsValue = rs_borrow_place(function, (*source).left, output, kind == RS_MUT);
     if (*stage).failed { return null(*RsValue); }
     if (*place).local != null(*RsLocal) { rs_lend(function, (*place).local, kind, location); }
     else { if (*place).mode != RS_READ && (*function).unsafe_depth == 0usize {
@@ -400,6 +437,7 @@ fn rs_operation_value(function: *RsFunction, source: *CrustExpr, output: *RsStat
     var stage: *RsStage = (*function).stage;
     var value: *RsValue = rs_expr(function, source, output);
     if (*stage).failed { return null(*RsValue); }
+    if !rs_check_function_value(stage, (*value).syntax, location) { return null(*RsValue); }
     if rs_owns(stage, (*value).syntax) || (*value).mode != 0u32 || (*value).unsafe_call {
         rs_error(stage, location, "operation cannot copy or erase a resource or borrowed view");
         return null(*RsValue);

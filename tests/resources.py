@@ -532,6 +532,30 @@ def runtime_cases():
             b"",
         ),
         (
+            "array-dynamic-index-read-traps",
+            program("var values:[i32;1]=make [i32;1] {65i32}; " "emit(values[argc as usize]);"),
+            None,
+        ),
+        (
+            "array-dynamic-index-write-traps",
+            program(
+                "var values:[i32;1]=make [i32;1] {65i32}; "
+                "values[argc as usize]=66i32; emit(values[0usize]);"
+            ),
+            None,
+        ),
+        (
+            "array-dynamic-index-evaluated-once",
+            program(
+                "var values:[i32;2]=make [i32;2] {65i32,67i32}; "
+                "var calls:usize=0usize; values[next(mut calls)]=66i32; "
+                "var selected:i32=values[next(mut calls)]; "
+                "if calls!=2usize {return 1i32;} emit(values[0usize]); emit(selected);",
+                "fn next(calls:mut usize)->usize {calls=calls+1usize; return calls-1usize;}",
+            ),
+            b"BC",
+        ),
+        (
             "null-function-call-traps",
             program("var selected:fn()->unit=null(fn()->unit); selected();"),
             None,
@@ -597,6 +621,76 @@ def reject_cases():
             "double-move",
             program("var a:Token=token(65i32); consume(move a); consume(move a);", consume),
             "uninitialized or has been moved",
+        ),
+        (
+            "double-move-in-call-arguments",
+            program(
+                "var value:Token=token(65i32);\n" "// expect-error\nboth(move value,move value);",
+                "fn both(first:Token,second:Token)->unit {}",
+            ),
+            "uninitialized or has been moved",
+        ),
+        (
+            "double-move-in-record-initializers",
+            program(
+                "var value:Token=token(65i32);\n"
+                "// expect-error\nvar pair:Pair=make Pair {first:move value,last:move value};",
+                "record Pair {first:Token; last:Token;}",
+            ),
+            "uninitialized or has been moved",
+        ),
+        (
+            "use-after-equal-branch-moves",
+            program(
+                "var value:Token=token(65i32);\n"
+                "if argc>0i32 {consume(move value);} else {consume(move value); }\n"
+                "// expect-error\nobserve(read value);",
+                consume + observe,
+            ),
+            "uninitialized or has been moved",
+        ),
+        (
+            "use-after-continuing-branch-move",
+            program(
+                "var value:Token=token(65i32);\n"
+                "if argc>0i32 {return 0i32;} else {consume(move value); }\n"
+                "// expect-error\nobserve(read value);",
+                consume + observe,
+            ),
+            "uninitialized or has been moved",
+        ),
+        (
+            "use-after-loop-move-before-restoration",
+            program(
+                "var value:Token=token(65i32);\n"
+                "while argc>0i32 {consume(move value);\n"
+                "// expect-error\nobserve(read value);\nvalue=token(66i32); break;}",
+                consume + observe,
+            ),
+            "uninitialized or has been moved",
+        ),
+        (
+            "unsafe-does-not-end-owner-loan",
+            program(
+                "var value:Token=token(65i32); var view:read Token=read value;\n"
+                "unsafe {\n// expect-error\nconsume(move value);}",
+                consume,
+            ),
+            "active borrow",
+        ),
+        (
+            "unsafe-does-not-revive-moved-owner",
+            program(
+                "var value:Token=token(65i32); consume(move value);\n"
+                "unsafe {\n// expect-error\nobserve(read value);}",
+                consume + observe,
+            ),
+            "uninitialized or has been moved",
+        ),
+        (
+            "unsafe-cast-cannot-forge-borrow",
+            program("unsafe {\n// expect-error\nvar view:read i32=0usize as read i32;}"),
+            "casts cannot construct resources or borrowed views",
         ),
         (
             "mut-borrow-of-constant",

@@ -27,6 +27,25 @@ fn rs_source_import(stage: *RsStage, declaration: *CrustDecl) -> bool {
     return !(*stage).failed;
 }
 
+// Name the sole borrow parameter that keeps the returned view live.
+// Register once before preparation, including for a source ABI import.
+fn rs_return_from(stage: *RsStage, declaration: *CrustDecl, parameter: *CrustName) -> bool {
+    if (*declaration).kind != CRUST_D_FUNCTION && (*declaration).kind != CRUST_D_EXTERN {
+        rs_error(stage, &(*declaration).loc, "returned loan contract requires a function declaration");
+        return false;
+    }
+    if crust_map_get(&(*stage).return_sources, declaration as usize) != null(*u8) {
+        rs_error(stage, &(*declaration).loc, "returned loan already has a source parameter");
+        return false;
+    }
+    if parameter == null(*CrustName) {
+        rs_error(stage, &(*declaration).loc, "returned loan requires a named source parameter");
+        return false;
+    }
+    rs_put(stage, &(*stage).return_sources, declaration as usize, parameter as *u8);
+    return !(*stage).failed;
+}
+
 fn rs_name(stage: *RsStage) -> *CrustName {
     var bytes: [u8; 32] = uninit;
     var end: usize = 32usize;

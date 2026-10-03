@@ -13,31 +13,38 @@ record RsResource {
     next: *RsResource;
 }
 
+record RsReturnLoan {
+    parameter: *CrustName;
+    index: usize;
+}
+
 record RsGlobal {
+    fields: CrustMap;
     source: *CrustDecl;
     lowered: *CrustDecl;
     syntax: *CrustTypeSyntax;
     resource: *RsResource;
-    fields: CrustMap;
-    unsafe_call: bool;
-    drop_only: bool;
     drop: *RsGlobal;
     drop_helper: *CrustDecl;
     next: *RsGlobal;
+    unsafe_call: bool;
+    drop_only: bool;
 }
 
 record RsStage {
-    context: *CrustContext;
-    sources: *CrustUnit;
-    resources: *RsResource;
     globals: CrustMap;
-    first_global: *RsGlobal;
-    last_global: *RsGlobal;
     unsafe_functions: CrustMap;
     source_imports: CrustMap;
     lowered_types: CrustMap;
     ownership: CrustMap;
     functions: CrustMap;
+    return_sources: CrustMap;
+    return_loans: CrustMap;
+    context: *CrustContext;
+    sources: *CrustUnit;
+    resources: *RsResource;
+    first_global: *RsGlobal;
+    last_global: *RsGlobal;
     helpers: *CrustUnit;
     last_helper: *CrustDecl;
     next_helper_identity: u64;
@@ -56,16 +63,16 @@ record RsLocal {
     name: *CrustName;
     syntax: *CrustTypeSyntax;
     storage: *CrustName;
-    indirect: bool;
-    initialized: bool;
-    owning: bool;
-    mode: u32;
     readers: usize;
-    exclusive: bool;
     parent_loan: *RsLocal;
     stamp: usize;
     scope: *RsScope;
     next: *RsLocal;
+    mode: u32;
+    indirect: bool;
+    initialized: bool;
+    owning: bool;
+    exclusive: bool;
 }
 
 record RsValue {
@@ -81,8 +88,8 @@ record RsValue {
 record RsAction {
     owner: *RsLocal;
     statement: *CrustStmt;
-    validated: bool;
     next: *RsAction;
+    validated: bool;
 }
 
 record RsChain {
@@ -100,10 +107,10 @@ record RsExit {
 
 record RsChange {
     local: *RsLocal;
-    initialized: bool;
     readers: usize;
-    exclusive: bool;
     next: *RsChange;
+    initialized: bool;
+    exclusive: bool;
 }
 
 record RsLoop {
@@ -116,9 +123,13 @@ record RsLoop {
 }
 
 record RsFunction {
+    locals: CrustMap;
+    exits: CrustMap;
+    loop_targets: CrustMap;
+    seed_blocks: CrustMap;
+    chain_map: CrustMap;
     stage: *RsStage;
     global: *RsGlobal;
-    locals: CrustMap;
     scope: *RsScope;
     loop: *RsLoop;
     changes: *RsChange;
@@ -126,10 +137,6 @@ record RsFunction {
     last_declaration: *CrustStmt;
     validation: *CrustStmt;
     last_validation: *CrustStmt;
-    exits: CrustMap;
-    loop_targets: CrustMap;
-    seed_blocks: CrustMap;
-    chain_map: CrustMap;
     chains: *RsChain;
     next_label: usize;
     result: *RsLocal;

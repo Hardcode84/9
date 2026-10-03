@@ -340,7 +340,70 @@ in memory. These endpoints are different. Exclude target GCC compilation
 and linking from the current frontend measurements. Passing a functional
 test does not establish C-level compilation speed for that configuration.
 
-Safety claims also follow the selected stages. Raw seed pointers do not
+## Checked ownership target
+
+Checked Crust has two requirements: no whole-program ownership analysis, and a
+user-facing ownership model no more complex than Rust's. These are design
+requirements. The current memory proof stages do not implement this model.
+
+Check each function against its declared contract. Use its body, declared type
+and field contracts, and the interfaces of called functions. Local flow analysis
+and local inference are permitted. A caller must not inspect a callee body or
+depend on a selected program entry to establish safety. Library checking must
+not require a client or a `main` function. Recursive calls use declared contracts;
+they must not require call expansion.
+
+All conditions that cross a function boundary belong in the published interface:
+
+| Declaration | Facts that it must express when required |
+| --- | --- |
+| Function | Access rights, ownership transfer, returned or retained loan relationships, and initialization and destruction effects |
+| Type and field | Ownership or borrowing of stored values, lifetime relationships, access rights, and required address stability |
+
+These are required facts, not proposed keywords. Infer local details where the
+interface permits it. A body must establish its declared result and preserve the
+type's field rules. Destructors and intrusive-link operations receive the same
+checks as other functions. Foreign contracts remain an explicit trust boundary;
+a trusted unlink operation cannot replace a checked implementation.
+
+A caller's safety result depends on the published contract, not the callee's
+implementation. A changed implementation must still pass its own check. Once
+interfaces are available, independent bodies can be checked in parallel. Cache
+each body result against its source, imported contracts, types, and checker
+configuration. Do not use a saved closed-program proof as a library contract.
+
+Rust's [lifetime signatures](https://doc.rust-lang.org/book/ch10-03-lifetime-syntax.html#in-function-signatures)
+give a comparison for caller-visible lifetime relationships. The complexity
+limit applies to both applications and container implementations. Compare
+the concepts, annotations, and error recovery for the same operations; a keyword
+count alone is insufficient. Ordinary ownership code must not require manual
+SMT terms, ghost lemmas, loop proofs, or a custom proof policy for each container.
+Checker internals can use stronger analysis, but must obey the function boundary.
+Memory safety must not require proof that every loop terminates.
+
+The next acceptance gate is one direct intrusive-list library and a separate
+client with a runtime number of nodes:
+
+1. Check each library function without the client. Check the client using only
+   the verified interfaces, without reading or expanding library bodies.
+2. Exercise two hooks, traversal, individual unlink and destruction, storage
+   reuse, and head cleanup while another owner remains live. Keep ordinary
+   pointer fields, with no pool requirement, runtime ownership metadata, or
+   `unsafe` region in the list implementation or client.
+3. Reject stale cursors, destruction with a live conflicting loan, invalid moves
+   of linked storage, and invalid contract implementations. An unfolding budget
+   must not substitute for a contract that works at arbitrary list lengths.
+4. Compare source obligations with Rust for both library and client. Check
+   emitted code and measure library and client checking separately. Do not
+   extend the model if this witness needs more complex user proofs.
+
+The current resource stage does not provide this reusable list contract. Keep
+the existing proof experiments as evidence. Do not expand their heap-graph
+machinery as a substitute for passing this gate.
+
+## Current safety stages
+
+Safety claims follow the selected stages. Raw seed pointers do not
 justify ownership guarantees or exclusive-access metadata. The resource
 stage checks local owners, loans, and returned views tied to a named input.
 The optional [memory proof stage](../examples/ownership/README.md) checks

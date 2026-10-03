@@ -39,6 +39,17 @@ requires it.
   validity checks, reference counts, or hidden cleanup flags. Null checks before
   release and debug bounds checks are permitted. A cheaper checking profile
   must reject unsupported proofs, not silently weaken its declared guarantees.
+- The checked ownership model must not require whole-program analysis. Check
+  each function from its body, declared function and field contracts, and
+  callee interfaces. Local flow analysis is permitted. Do not expand callees
+  or inspect callers to obtain missing safety conditions. Check definitions
+  against their contracts before using them as verified library code.
+- Keep the user-facing ownership model no more complex than Rust's, for both
+  application and container authors. Do not hide required solver predicates,
+  ghost lemmas, or custom proof scripts in libraries and call the model simple.
+  The existing closed-program proofs are experiments, not acceptance of this
+  modular model. Apply the [ownership acceptance gate](docs/design.md#checked-ownership-target)
+  before extending the model.
 
 ## Communication and documentation
 

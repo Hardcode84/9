@@ -16,6 +16,10 @@ including the shared [link functions](../ownership/links.crs), pass the memory
 checker.
 The selected stage combines the resource rules with that check. An `unsafe`
 region in its input would not bypass the proof.
+This is a closed-program proof tutorial. It does not meet the
+[modular ownership target](../../docs/design.md#checked-ownership-target), which
+requires separate function checks from published contracts and a user-facing
+model no more complex than Rust's.
 
 ## Build and run
 

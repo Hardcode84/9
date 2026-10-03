@@ -22,6 +22,13 @@ separate compiled language stages. Their removal from the seed is deliberate.
 The complete checked Crust language requires the direct-list lifetime contract
 identified in the [research](exploration/language-exploration.md#69-intrusive-lists-with-individual-destruction-and-reuse).
 This specification does not replace that requirement with unchecked list code.
+The ownership model must not require whole-program analysis. Function interfaces
+and type and field declarations must encode all safety conditions needed across
+function boundaries. Check each body against those contracts, with local flow
+analysis. The user-facing model must be no more complex than Rust's for both
+application and container authors. The [checked ownership target](design.md#checked-ownership-target)
+defines the acceptance gate. The current closed-program memory stage does not
+meet that gate. These requirements add no ownership feature to the seed.
 
 This document controls Crust0 version 0.1. The earlier documents remain research
 and capability requirements. Their proposed syntax is not additional Crust0 syntax.

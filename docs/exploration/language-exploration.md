@@ -7,6 +7,11 @@ Date: 2026-09-30. Updated: 2026-10-03. Status: research and executable experimen
 The [Crust0 specification](../crust0-spec.md) now defines the bootstrap language.
 The richer syntax and checked rules below remain research candidates, not seed
 features. Module management is a library stage under that specification.
+The [checked ownership target](../design.md#checked-ownership-target) now requires
+function and field contracts without whole-program analysis. Its user-facing
+model must be no more complex than Rust's, including container implementations.
+This target supersedes the broader proof work proposed below. Retain the
+experiments as evidence; they do not establish acceptance of the modular model.
 
 Reading guide: [recommendation](#1-recommendation),
 [language research](#3-lessons-from-existing-languages),
@@ -983,8 +988,9 @@ usability contract. Do not add a larger container system before this decision.
 
 #### Static ownership candidate and unresolved proof
 
-The experiments support an external stage based on permissions and explicit
-contracts. The following model is selected for the next implementation step.
+The experiments support investigation of an external stage based on permissions
+and explicit contracts. The model below is a research candidate. It must pass
+the current modularity and simplicity gate before further implementation.
 The current resource stage does not implement it. The seed needs no ownership
 types or list operations.
 

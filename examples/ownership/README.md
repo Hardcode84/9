@@ -10,6 +10,10 @@ This tutorial checks such code before the C backend runs. The checks use the
 typed Crust tree. There is no second parser and no list operation in the C99
 core. The application has ordinary pointers. Proof identities, field maps,
 and validity facts exist only during compilation.
+The checks below are proof experiments. They do not meet the
+[modular ownership target](../../docs/design.md#checked-ownership-target): callers
+must be checkable from published contracts without expanding callee bodies, and
+the user-facing model must be no more complex than Rust's.
 
 ## Build and run
 

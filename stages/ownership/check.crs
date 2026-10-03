@@ -53,7 +53,7 @@ fn os_validate_field(check: *OsCheck, contract: *OsRecord, field: *CrustField) -
         os_validate_hook(check, contract, field, anchor); return;
     }
     if rs_owns((*(*check).stage).resources, (*field).syntax_type) {
-        os_error(check, &(*field).loc, "embedded resources require a field destruction interface"); return;
+        os_validate_embedded(check, contract, field); return;
     }
     if (*(*field).syntax_type).kind == CRUST_T_POINTER || (*(*field).syntax_type).kind == CRUST_T_FUNCTION ||
        (*(*field).syntax_type).kind == CRUST_T_ARRAY {
@@ -126,7 +126,7 @@ fn os_parameter(check: *OsCheck, state: *OsState, parameter: *CrustParam) -> uni
     if (*base).kind == CRUST_T_NAME {
         object = os_object(check, state, base, null(*OsObject), (*state).scope, true);
         if object == null(*OsObject) { return; }
-        os_abstract_parameter(check, state, object);
+        os_abstract_value(check, state, object, false);
     }
     var value: *OsValue = os_value(check, syntax, object, (*syntax).kind == CRUST_T_POINTER);
     if value == null(*OsValue) { return; }
@@ -140,19 +140,21 @@ fn os_parameter(check: *OsCheck, state: *OsState, parameter: *CrustParam) -> uni
     (*slot).next = (*(*state).scope).locals;
     (*(*state).scope).locals = slot;
     os_set(check, state, slot as *u8, value, OS_READY);
+    os_loan_parameter(check, state, slot, value);
     if (*slot).authority && object != null(*OsObject) {
         os_mark(check, state, object, os_flags(state, object) | OS_RETIRING);
     }
 }
 
-fn os_abstract_parameter(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
+fn os_abstract_value(check: *OsCheck, state: *OsState, object: *OsObject, uncertain: bool) -> unit {
     if !os_enter(check, &(*(*object).syntax).loc) { return; }
     (*object).abstract = true;
+    (*object).uncertain = (*object).uncertain || uncertain;
     var slot: *OsSlot = (*object).fields;
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
         if value != null(*OsValue) && (*value).object != null(*OsObject) {
-            os_abstract_parameter(check, state, (*value).object);
+            os_abstract_value(check, state, (*value).object, uncertain);
         }
         slot = (*slot).next;
     }
@@ -179,7 +181,7 @@ fn os_function_exit(check: *OsCheck, state: *OsState, location: *CrustLoc) -> un
 fn os_check_function(stage: *OsStage, global: *RsGlobal, contract: *OsFunction) -> unit {
     var declaration: *CrustDecl = (*global).source;
     var check: OsCheck = make OsCheck {
-        stage: stage, function: contract, objects: null(*OsObject), depth: 0usize, loop_depth: 0usize,
+        stage: stage, function: contract, objects: null(*OsObject), loans: null(*OsLoan), depth: 0usize, loop_depth: 0usize,
         drop: (*global).drop_only
     };
     if (*contract).foreign != 0u32 { os_validate_foreign(&check, contract); return; }
@@ -210,20 +212,30 @@ fn os_validate_borrows(check: *OsCheck, declaration: *CrustDecl) -> unit {
     var parameter: *CrustParam = (*declaration).params;
     while parameter != null(*CrustParam) && !os_failed(check) {
         var kind: u32 = (*(*parameter).syntax_type).kind;
-        if kind == RS_READ && ((*(*check).function).effect != OS_READ ||
-            (*(*check).function).domain == null(*CrustName)) {
-            os_error(check, &(*parameter).loc, "read parameters require a read-only domain interface");
-        }
-        if kind == RS_MUT && (!(*check).drop || (*(*check).function).effect != OS_RECLAIM) {
-            os_error(check, &(*parameter).loc, "mutable parameters require registered destructor authority");
-        }
+        if kind == RS_READ || kind == RS_MUT { os_validate_borrow_parameter(check, parameter); }
         parameter = (*parameter).next;
+    }
+}
+
+fn os_validate_borrow_parameter(check: *OsCheck, parameter: *CrustParam) -> unit {
+    var syntax: *CrustTypeSyntax = (*parameter).syntax_type;
+    var schema: *OsRecord = os_record((*check).stage, (*syntax).base);
+    var effect: u32 = (*(*check).function).effect;
+    if schema != null(*OsRecord) && (*schema).domain != null(*CrustName) {
+        if (*schema).domain != (*(*check).function).domain || effect == 0u32 {
+            os_error(check, &(*parameter).loc, "borrowed value requires its declared domain authority"); return;
+        }
+    }
+    if (*check).drop { return; }
+    if ((*syntax).kind == RS_READ && effect > OS_READ) ||
+       ((*syntax).kind == RS_MUT && effect == OS_RECLAIM) {
+        os_error(check, &(*parameter).loc, "borrowed parameters cannot grant reclamation authority");
     }
 }
 
 fn os_check(stage: *OsStage) -> bool {
     var check: OsCheck = make OsCheck {
-        stage: stage, function: null(*OsFunction), objects: null(*OsObject), depth: 0usize, loop_depth: 0usize, drop: false
+        stage: stage, function: null(*OsFunction), objects: null(*OsObject), loans: null(*OsLoan), depth: 0usize, loop_depth: 0usize, drop: false
     };
     var global: *RsGlobal = (*(*stage).resources).first_global;
     while global != null(*RsGlobal) && !os_failed(&check) {

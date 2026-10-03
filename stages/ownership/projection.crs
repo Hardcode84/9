@@ -68,26 +68,6 @@ fn os_associate(check: *OsCheck, state: *OsState, target: *OsObject, source: *Os
     }
 }
 
-fn os_projection_shape(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {
-    if !os_enter(check, &(*syntax).loc) { return false; }
-    var schema: *OsRecord = os_record((*check).stage, syntax);
-    var valid: bool = true;
-    if rs_owns((*(*check).stage).resources, syntax) || (*syntax).kind == CRUST_T_POINTER {
-        os_error(check, &(*syntax).loc, "projection of pointer or owner fields requires a field-borrow contract");
-        valid = false;
-    } else { if schema != null(*OsRecord) {
-        var field: *CrustField = (*(*schema).declaration).fields;
-        while field != null(*CrustField) && valid {
-            if os_field((*schema).members, (*field).name) == null(*OsField) {
-                valid = os_projection_shape(check, (*field).syntax_type);
-            }
-            field = (*field).next;
-        }
-    } }
-    (*check).depth = (*check).depth - 1usize;
-    return valid && !os_failed(check);
-}
-
 fn os_projection_view(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
     if !os_enter(check, &(*(*object).syntax).loc) { return; }
     (*object).readonly = true;
@@ -104,7 +84,7 @@ fn os_projection_view(check: *OsCheck, state: *OsState, object: *OsObject) -> un
 }
 
 fn os_projection_member(check: *OsCheck, state: *OsState, object: *OsObject,
-                        field: *OsField, location: *CrustLoc) -> bool {
+                        field: *OsField, loan: *OsLoan, location: *CrustLoc) -> bool {
     if object == null(*OsObject) || (*object).family != field || (*object).anchor {
         os_error(check, location, "parent requires the exact declared member family");
         return false;
@@ -117,7 +97,7 @@ fn os_projection_member(check: *OsCheck, state: *OsState, object: *OsObject,
         os_error(check, location, "parent requires a fully initialized containing value");
         return false;
     }
-    return os_access(check, state, object, false, location);
+    return os_access_through(check, state, object, loan, false, location);
 }
 
 fn os_projection(check: *OsCheck, state: *OsState, expression: *CrustExpr,
@@ -135,19 +115,23 @@ fn os_projection(check: *OsCheck, state: *OsState, expression: *CrustExpr,
         os_error(check, &(*expression).loc, "parent requires a pointer to a member hook");
         return null(*OsValue);
     }
-    if !os_projection_member(check, state, (*cursor).object, field, &(*expression).loc) {
+    if !os_projection_member(check, state, (*cursor).object, field, (*cursor).loan, &(*expression).loc) {
         return null(*OsValue);
     }
-    if !os_projection_shape(check, (*projection).syntax) { return null(*OsValue); }
     if (*cursor).borrow_scope != null(*OsScope) && !os_scope_contains((*cursor).borrow_scope, (*state).scope) {
         os_error(check, &(*expression).loc, "member cursor outlived its access scope");
         return null(*OsValue);
     }
-    var object: *OsObject = os_object(check, state, (*projection).syntax, null(*OsObject), (*state).scope, true);
-    if object == null(*OsObject) { return null(*OsValue); }
-    os_projection_view(check, state, object);
+    var object: *OsObject = (*(*cursor).object).parent;
+    if object == null(*OsObject) {
+        object = os_object(check, state, (*projection).syntax, null(*OsObject), (*state).scope, true);
+        if object == null(*OsObject) { return null(*OsValue); }
+        os_projection_view(check, state, object);
+        (*object).view_origin = (*cursor).object;
+    }
     var result: *OsValue = os_value(check, (*expression).syntax_type, object, true);
     if result != null(*OsValue) {
+        (*result).loan = (*cursor).loan;
         (*result).borrow_scope = (*cursor).borrow_scope;
         if (*result).borrow_scope == null(*OsScope) { (*result).borrow_scope = (*state).scope; }
     }

@@ -46,9 +46,15 @@ fn os_mark(check: *OsCheck, state: *OsState, object: *OsObject, flags: u32) -> u
 }
 
 fn os_bound(state: *OsState, slot: *OsSlot) -> *OsValue {
+    slot = os_original(slot);
     var fact: *OsFact = os_fact(state, slot as *u8);
     if fact == null(*OsFact) { return null(*OsValue); }
     return (*fact).value;
+}
+
+fn os_original(slot: *OsSlot) -> *OsSlot {
+    if slot != null(*OsSlot) && (*slot).original != null(*OsSlot) { return (*slot).original; }
+    return slot;
 }
 
 fn os_value(check: *OsCheck, syntax: *CrustTypeSyntax, object: *OsObject, pointer: bool) -> *OsValue {

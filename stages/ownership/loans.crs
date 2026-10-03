@@ -1,0 +1,211 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_borrowed(syntax: *CrustTypeSyntax) -> bool {
+    return syntax != null(*CrustTypeSyntax) && ((*syntax).kind == RS_READ || (*syntax).kind == RS_MUT);
+}
+
+fn os_loan_flags(state: *OsState, loan: *OsLoan) -> u32 {
+    var fact: *OsFact = os_fact(state, loan as *u8);
+    if fact == null(*OsFact) { return 0u32; }
+    return (*fact).flags;
+}
+
+fn os_loan_ancestor(ancestor: *OsLoan, loan: *OsLoan) -> bool {
+    while loan != null(*OsLoan) {
+        if loan == ancestor { return true; }
+        loan = (*loan).parent;
+    }
+    return false;
+}
+
+fn os_owner(state: *OsState, object: *OsObject) -> *OsObject {
+    var fact: *OsFact = os_fact(state, &(*object).owner as *u8);
+    if fact == null(*OsFact) { return (*object).owner; }
+    if (*fact).value == null(*OsValue) { return null(*OsObject); }
+    return (*(*fact).value).object;
+}
+
+fn os_set_owner(check: *OsCheck, state: *OsState, object: *OsObject, owner: *OsObject) -> unit {
+    var value: *OsValue = null(*OsValue);
+    if owner != null(*OsObject) { value = os_value(check, (*owner).syntax, owner, false); }
+    os_set(check, state, &(*object).owner as *u8, value, 0u32);
+}
+
+fn os_owner_root(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> *OsObject {
+    var depth: usize = 0usize;
+    while object != null(*OsObject) {
+        object = os_root(object);
+        var owner: *OsObject = os_owner(state, object);
+        if owner == null(*OsObject) { return object; }
+        object = owner;
+        depth = depth + 1usize;
+        if depth >= 128usize { os_error(check, location, "ownership ancestry exceeds 128"); return null(*OsObject); }
+    }
+    return object;
+}
+
+fn os_loan_overlap(check: *OsCheck, state: *OsState, a: *OsObject, b: *OsObject, location: *CrustLoc) -> bool {
+    if a == null(*OsObject) || b == null(*OsObject) { return false; }
+    var possible: bool = (*os_root(a)).uncertain || (*os_root(b)).uncertain;
+    var left: *OsObject = os_owner_root(check, state, a, location);
+    var right: *OsObject = os_owner_root(check, state, b, location);
+    if left == right { return true; }
+    if left == null(*OsObject) || right == null(*OsObject) { return false; }
+    if (*left).domain == null(*CrustName) || (*left).domain != (*right).domain { return false; }
+    return possible || (*left).readonly || (*right).readonly ||
+        ((*left).abstract && (*left).family != null(*OsField)) ||
+        ((*right).abstract && (*right).family != null(*OsField));
+}
+
+fn os_loan_access(check: *OsCheck, state: *OsState, object: *OsObject,
+                  through: *OsLoan, write: bool, location: *CrustLoc) -> bool {
+    if through != null(*OsLoan) && (os_loan_flags(state, through) & OS_LIVE) == 0u32 {
+        os_error(check, location, "access uses an expired payload loan"); return false;
+    }
+    if through != null(*OsLoan) && write && (*through).mode != RS_MUT {
+        os_error(check, location, "shared loan cannot grant mutable access"); return false;
+    }
+    var loan: *OsLoan = (*check).loans;
+    while loan != null(*OsLoan) && !os_failed(check) {
+        if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && !os_loan_ancestor(loan, through) &&
+           (write || (*loan).mode == RS_MUT) && os_loan_overlap(check, state, object, (*loan).object, location) {
+            os_error(check, location, "access conflicts with an active payload loan"); return false;
+        }
+        loan = (*loan).next;
+    }
+    return !os_failed(check);
+}
+
+fn os_loan_new(check: *OsCheck, state: *OsState, value: *OsValue,
+               mode: u32, location: *CrustLoc) -> *OsLoan {
+    var object: *OsObject = (*value).object;
+    if object == null(*OsObject) && (*value).place != null(*OsSlot) { object = (*(*value).place).object; }
+    if object == null(*OsObject) && (*value).place == null(*OsSlot) {
+        os_error(check, location, "loan requires checked storage"); return null(*OsLoan);
+    }
+    if object != null(*OsObject) && !os_access_through(check, state, object, (*value).loan, mode == RS_MUT, location) {
+        return null(*OsLoan);
+    }
+    if !os_loan_place_access(check, state, (*value).place, (*value).loan, mode == RS_MUT, location) { return null(*OsLoan); }
+    var loan: *OsLoan = os_alloc(check, sizeof(OsLoan), alignof(OsLoan)) as *OsLoan;
+    if loan == null(*OsLoan) { return loan; }
+    (*loan).object = object;
+    (*loan).place = os_original((*value).place);
+    if (*loan).place == null(*OsSlot) {
+        (*loan).place = os_slot(check, (*value).syntax, null(*CrustName), null(*OsObject), (*state).scope);
+        if (*loan).place == null(*OsSlot) { return null(*OsLoan); }
+        os_set(check, state, (*loan).place as *u8, value, OS_READY);
+    }
+    (*loan).parent = (*value).loan;
+    (*loan).scope = (*state).scope;
+    (*loan).mode = mode;
+    (*loan).next = (*check).loans;
+    (*check).loans = loan;
+    os_set(check, state, loan as *u8, null(*OsValue), OS_LIVE);
+    return loan;
+}
+
+fn os_loan_place_access(check: *OsCheck, state: *OsState, slot: *OsSlot,
+                        through: *OsLoan, write: bool, location: *CrustLoc) -> bool {
+    if slot == null(*OsSlot) { return true; }
+    slot = os_original(slot);
+    var loan: *OsLoan = (*check).loans;
+    while loan != null(*OsLoan) && !os_failed(check) {
+        if (*loan).place == slot && (os_loan_flags(state, loan) & OS_LIVE) != 0u32 &&
+           !os_loan_ancestor(loan, through) && (write || (*loan).mode == RS_MUT) {
+            os_error(check, location, "place conflicts with an active payload loan"); return false;
+        }
+        loan = (*loan).next;
+    }
+    return !os_failed(check);
+}
+
+fn os_loan_keep(check: *OsCheck, state: *OsState, value: *OsValue) -> unit {
+    if (*value).pointer && (*value).loan != null(*OsLoan) &&
+       (os_loan_flags(state, (*value).loan) & OS_READY) == 0u32 {
+        os_error(check, &(*(*value).syntax).loc, "stored cursor requires a named source loan"); return;
+    }
+    if !os_borrowed((*value).syntax) || (*value).loan == null(*OsLoan) { return; }
+    os_set(check, state, (*value).loan as *u8, null(*OsValue), OS_LIVE | OS_READY);
+}
+
+fn os_loan_end(check: *OsCheck, state: *OsState, value: *OsValue) -> unit {
+    if !os_borrowed((*value).syntax) || (*value).loan == null(*OsLoan) { return; }
+    os_set(check, state, (*value).loan as *u8, null(*OsValue), 0u32);
+}
+
+fn os_end_expression(check: *OsCheck, state: *OsState, before: *OsLoan) -> unit {
+    var loan: *OsLoan = (*check).loans;
+    while loan != before && loan != null(*OsLoan) && !os_failed(check) {
+        if os_loan_flags(state, loan) == OS_LIVE { os_set(check, state, loan as *u8, null(*OsValue), 0u32); }
+        loan = (*loan).next;
+    }
+}
+
+fn os_loan_slot(check: *OsCheck, slot: *OsSlot, loan: *OsLoan) -> *OsSlot {
+    if slot == null(*OsSlot) || loan == null(*OsLoan) { return slot; }
+    var result: *OsSlot = os_alloc(check, sizeof(OsSlot), alignof(OsSlot)) as *OsSlot;
+    if result != null(*OsSlot) { *result = *slot; (*result).original = os_original(slot); (*result).loan = loan; }
+    return result;
+}
+
+fn os_loan_parameter(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue) -> unit {
+    if !os_borrowed((*slot).syntax) || (*slot).authority { return; }
+    var target: *OsSlot = os_slot(check, (*(*slot).syntax).base, null(*CrustName), null(*OsObject), (*state).scope);
+    var storage: *OsValue = os_value(check, (*(*slot).syntax).base, (*value).object, false);
+    if target == null(*OsSlot) || storage == null(*OsValue) { return; }
+    os_set(check, state, target as *u8, storage, OS_READY);
+    (*value).place = target;
+    (*value).loan = os_loan_new(check, state, value, (*(*slot).syntax).kind, &(*(*slot).syntax).loc);
+    if (*value).loan != null(*OsLoan) { os_loan_keep(check, state, value); }
+}
+
+fn os_loan_scalar(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> *OsValue {
+    if (*value).loan == null(*OsLoan) || (*(*value).loan).place == null(*OsSlot) {
+        os_error(check, location, "dereference requires a live loan or checked pointer"); return null(*OsValue);
+    }
+    var place: *OsSlot = (*(*value).loan).place;
+    if !os_loan_place_access(check, state, place, (*value).loan, false, location) { return null(*OsValue); }
+    var result: *OsValue = os_copy(check, value);
+    if result != null(*OsValue) {
+        (*result).syntax = (*(*value).syntax).base;
+        (*result).place = os_loan_slot(check, place, (*value).loan);
+        (*result).object = null(*OsObject);
+        (*result).pointer = false;
+    }
+    return result;
+}
+
+fn os_edit_loan_source(loan: *OsLoan, arguments: **OsValue, count: usize) -> bool {
+    var index: usize = 0usize;
+    while index < count {
+        if os_loan_ancestor(loan, (*arguments[index]).loan) { return true; }
+        index = index + 1usize;
+    }
+    return false;
+}
+
+fn os_edit_loans(check: *OsCheck, state: *OsState, arguments: **OsValue,
+                       count: usize, location: *CrustLoc) -> bool {
+    var loan: *OsLoan = (*check).loans;
+    while loan != null(*OsLoan) && !os_failed(check) {
+        if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && (*loan).object != null(*OsObject) &&
+           (*(*loan).object).domain == (*state).domain && !os_edit_loan_source(loan, arguments, count) {
+            os_error(check, location, "edit authority conflicts with an active domain loan"); return false;
+        }
+        loan = (*loan).next;
+    }
+    return !os_failed(check);
+}
+
+fn os_no_domain_loans(check: *OsCheck, state: *OsState, domain: *CrustName, location: *CrustLoc) -> bool {
+    var loan: *OsLoan = (*check).loans;
+    while loan != null(*OsLoan) && !os_failed(check) {
+        if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && (*loan).object != null(*OsObject) &&
+           (*(*loan).object).domain == domain {
+            os_error(check, location, "reclamation conflicts with an active domain loan"); return false;
+        }
+        loan = (*loan).next;
+    }
+    return !os_failed(check);
+}

@@ -30,10 +30,7 @@ build/crust-ownership-test --library --check examples/intrusive/links.crs
 ```
 
 The compilation root takes compiler arguments when arguments are supplied.
-All provider definitions are checked before emission. This stage does not import
-unchecked link declarations from object files. A saved interface would need to
-bind the checked contract to its exact provider artifact before such an import
-could be accepted.
+All provider definitions are checked before emission.
 
 ## Declare storage and access
 
@@ -209,32 +206,123 @@ normal scope exit, return, and discarded owner results. It rejects borrowed
 fields of anonymous owner temporaries. Such a view would require an explicit
 expression lifetime because the resource lowering destroys that temporary.
 
-The accepted source subset is deliberate. Stored raw pointers need an owner or
-reciprocal-field contract. Pointer results need a result-lifetime interface.
-Embedded resources need a field destruction interface. These shapes reject.
-So do unsupported deferred actions and loop-carried changes to owners. A changing
-cursor needs the read-loop family and head invariant above. A `read` parameter
-requires an `access(read, Domain)` function. A caller can pass `read place`
-directly to that function. It must evaluate nested argument calls first. Stored
-`read` and `mut` loans are rejected. A `mut` parameter is accepted only for a
-registered resource destructor. General payload loans need an access-origin
-contract that prevents other cursors from conflicting with the loan. These conditions must be
-expressed at boundaries, not recovered by inspecting callers or expanding bodies.
-The broader [ownership acceptance gate](../../docs/design.md#checked-ownership-target)
-still applies.
+## Borrow payload and return a view
+
+A named `read T` loan permits shared reads until its scope ends. A named `mut T`
+loan permits exclusive access. A reborrow prevents conflicting use of its parent
+until the child scope ends. Ordinary helpers can accept either mode. A domain read parameter requires a
+read-only function effect. Mutable helpers can read or edit; resource callbacks
+receive destruction authority. Evaluate nested calls before passing borrow
+arguments. Scalar copies do not retain the source loan.
+
+A returned view declares its origin with the existing `from` clause:
+
+```crust
+fn node_view(owner: read Owner) -> read Node access(read, Graph) from owner.node {
+    if owner.node == null(*Node) { trap; }
+    return read *owner.node;
+}
+
+fn value_mut(node: mut Node) -> mut i64 access(edit, Graph) from node.value {
+    return mut node.value;
+}
+```
+
+Each definition must prove that origin on every return. A caller uses the
+signature and keeps the input loan alive for the result. The source syntax
+accesses a view directly:
+
+```crust
+edit Graph {
+    var value: mut i64 = value_mut(mut *second.node);
+    value = 66i64;
+}
+read Graph {
+    var node: read Node = node_view(read second);
+    if node.value != 66i64 { trap; }
+}
+```
+
+`first_hook` returns `read Hook from head.hook.next`. Its result can include the
+head. `first_node` uses the same path with result type `read Node`; its body must
+exclude the head and prove the exact member field before projection. A reciprocal
+path names a family and ring origin, not a fixed list length or position. A
+caller can take the address of the returned hook view and traverse that ring.
+The complete program exercises both interfaces.
+
+Payload loans retain allocation and field identity through owned pointers.
+Projections can read embedded resources and their owned payload. An arbitrary
+member projection grants shared access; it cannot transfer an owner. Mutable
+access uses an exclusive loan from checked storage. A link edit can touch
+neighbors, so direct edits and `access(edit, Domain)` calls exclude other live
+loans in that domain, except the loans passed to the operation. Reclamation
+excludes every active domain loan, including a view of one scalar field.
+
+A mutable helper can exchange owned pointer fields. Its caller discards prior
+pointer facts and must check nullable fields again before access. An owner
+returned from a by-value owner input can reuse that input's storage. The checker
+retains that possible alias relationship with earlier cursors. It does not
+inspect the helper body to derive either rule.
+
+## Destroy embedded resources
+
+[fields.crs](fields.crs) adds two resource payloads to a node. Each payload owns
+an allocation. [fields-main.crs](fields-main.crs) selects the same stage:
+
+```sh
+build/crust examples/intrusive/fields-main.crs
+build/intrusive-fields
+```
+
+The output is `BABAOK` and a newline. Each node destroys its second payload before
+its first. The example destroys one node explicitly and a replacement at scope
+exit while the head stays live. It also reads an owned payload through a checked
+member projection.
+
+The node destructor first detaches both hooks, then uses:
+
+```crust
+drop *node;
+release(node as *u8);
+```
+
+`drop *node` destroys the stored value in place. It does not release the outer
+allocation. The resource callback runs first; embedded resources then drop in
+reverse field order. A callback must consume its raw owned pointers and leave
+embedded resource values initialized for this automatic field cleanup.
+
+`drop owner;` consumes a whole local owner and prevents a second scope-exit drop.
+Dropping a field separately is rejected: the containing value still has an
+unconditional field cleanup obligation. A heap value with resource fields must
+be destroyed before release. Linked hooks, active loans, partial initialization,
+and a second destruction reject. These checks add no target flags, pointer tags,
+or validity checks. They reuse the original cleanup emitter.
+
+## Keep the interface boundary explicit
+
+Stored raw pointer fields still require an owner or reciprocal-field contract.
+Borrowed record fields require a declared stored-lifetime relationship; the stage
+has no such field form and rejects them. Raw pointer results must instead use a
+borrowed result with `from`. Deferred actions and changes to loop-carried owner
+sets also reject. Accepting changing owner sets requires a local loop invariant
+for ownership and initialization; the read-cursor invariant supplies only
+traversal. No whole-program proof fills in these missing interfaces.
 
 For the Rust comparison, clients use affine moves, scoped loans, and address
-stability. Container authors add inverse fields and role/effect/result contracts.
-They write no solver terms, ghost lemmas, or per-container checker. Lexical cursor
-scopes are more conservative than Rust's inferred last-use lifetimes. This slice
-does not establish the complexity ceiling for returned views, nested resources,
-or general container APIs.
+stability. Container authors add inverse fields and role, effect, and result
+contracts. They write no solver terms or ghost lemmas. Lexical scopes and domain
+exclusion can reject code that Rust accepts with narrower inferred loans. The
+intrusive program now covers returned views and nested resources. The runtime-sized owner-creation and broader container comparison in
+the [acceptance gate](../../docs/design.md#checked-ownership-target) remain
+necessary before adding another ownership mechanism.
 
 ## Test the boundary
 
 ```sh
 make check-ownership Z3_FLAGS=-l:libz3.so.4
 python3 tests/ownership.py --sanitize
+python3 tests/ownership_fields.py --sanitize
+python3 tests/ownership_loans.py --sanitize
 make check-ownership-alloc Z3_FLAGS=-l:libz3.so.4
 ```
 

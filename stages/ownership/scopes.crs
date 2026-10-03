@@ -50,7 +50,7 @@ fn os_scope_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> unit {
 }
 
 fn os_end_local(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue, location: *CrustLoc) -> unit {
-    if (*slot).argument && ((*(*slot).syntax).kind == RS_READ || (*(*slot).syntax).kind == RS_MUT) { return; }
+    if os_borrowed((*slot).syntax) { os_loan_end(check, state, value); return; }
     if (*value).pointer {
         if (*slot).owns && (*value).object != null(*OsObject) &&
            (os_flags(state, (*value).object) & OS_ABSENT) == 0u32 {
@@ -71,16 +71,10 @@ fn os_drop_object(check: *OsCheck, state: *OsState, object: *OsObject, location:
     if !os_initialized(check, state, object) {
         os_error(check, location, "resource destruction requires initialized owner fields"); return;
     }
-    var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*object).syntax).name);
-    if global == null(*RsGlobal) || (*global).resource == null(*RsResource) {
-        os_error(check, location, "owning aggregates require a declared resource destructor"); return;
-    }
-    var destructor: *OsFunction = os_function((*check).stage, (*(*global).resource).drop_name);
-    if destructor == null(*OsFunction) || (*destructor).effect != OS_RECLAIM {
-        os_error(check, location, "resource destructor requires a reclamation contract"); return;
-    }
-    if !os_call_effect(check, state, destructor, location) { return; }
-    os_havoc(check, state, (*destructor).domain, null(*OsField));
+    if !os_loan_access(check, state, object, null(*OsLoan), true, location) { return; }
+    os_drop_contract(check, state, object, location);
+    if os_failed(check) { return; }
+    os_havoc(check, state, (*object).domain, null(*OsField));
     os_expire_owned(check, state, object, location);
 }
 
@@ -91,24 +85,31 @@ fn os_expire_owned(check: *OsCheck, state: *OsState, object: *OsObject, location
         var value: *OsValue = os_bound(state, slot);
         if value != null(*OsValue) && (*value).object != null(*OsObject) {
             if (*slot).owns && (*value).pointer {
-                os_mark(check, state, (*value).object, os_flags(state, (*value).object) & ~OS_LIVE);
+                os_expire_owned(check, state, (*value).object, location);
             } else { if !(*value).pointer { os_expire_owned(check, state, (*value).object, location); } }
         }
+        os_set(check, state, slot as *u8, null(*OsValue), 0u32);
         slot = (*slot).next;
     }
-    os_mark(check, state, object, os_flags(state, object) & ~OS_LIVE);
+    os_mark(check, state, object, (os_flags(state, object) & ~OS_LIVE) | OS_DESTROYED | OS_ISOLATED);
     (*check).depth = (*check).depth - 1usize;
 }
 
 fn os_destructor_end(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
     var slot: *OsSlot = (*object).fields;
     while slot != null(*OsSlot) && !os_failed(check) {
-        if (*slot).owns && os_bound(state, slot) != null(*OsValue) {
+        var value: *OsValue = os_bound(state, slot);
+        if (*slot).owns && (*(*slot).syntax).kind == CRUST_T_POINTER && value != null(*OsValue) {
             os_error(check, location, "destructor must consume each owned field"); return;
+        }
+        if rs_owns((*(*check).stage).resources, (*slot).syntax) {
+            if value == null(*OsValue) || !os_initialized(check, state, (*value).object) {
+                os_error(check, location, "destructor must leave embedded resources initialized for field cleanup"); return;
+            }
         }
         slot = (*slot).next;
     }
-    if !os_isolated(check, state, object) {
+    if !os_unmanaged_isolated(check, state, object, location) {
         os_error(check, location, "destructor must isolate all embedded hooks before storage expires");
     }
 }

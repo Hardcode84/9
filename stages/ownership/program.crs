@@ -47,6 +47,7 @@ fn os_relation_interfaces(stage: *OsStage, relations: *RlStage) -> bool {
 fn os_lower(stage: *OsStage, relations: *RlStage) -> bool {
     var resources: *RsStage = (*stage).resources;
     (*resources).delegate_memory = true;
+    (*resources).delegate_return_loans = true;
     if !rs_collect(resources) || !rs_publish(resources) { return false; }
     if !os_relation_interfaces(stage, relations) { return false; }
     var global: *RsGlobal = (*resources).first_global;

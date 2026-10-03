@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: Apache-2.0
+extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
+extern fn release(pointer: *u8) -> unit foreign(release) = "free";
+extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
+record Data { value:i64; } domain(Graph);
+resource Payload { data:*Data; } owns(data) domain(Graph) drop payload_drop;
+record Node { ready:Hook; active:Hook; first:Payload; second:Payload; value:i64; }
+    members(ready,active) domain(Graph);
+resource Owner { node:*Node; } owns(node) domain(Graph) drop owner_drop;
+resource ReadyHead { hook:Hook; } anchor(hook,Node.ready) domain(Graph) drop ready_drop;
+fn payload_new(value:i64)->Payload access(reclaim,Graph) {
+    var data:*Data=allocate(sizeof(Data)) as *Data;
+    if data!=null(*Data) {(*data).value=value;}
+    return make Payload {data:move data};
+}
+fn payload_drop(payload:mut Payload)->unit access(reclaim,Graph) {
+    var data:*Data=move payload.data;
+    if data!=null(*Data) {emit((*data).value as i32); release(data as *u8);}
+}
+fn owner_new()->Owner access(reclaim,Graph) {
+    var node:*Node=allocate(sizeof(Node)) as *Node;
+    if node!=null(*Node) {
+        (*node).first=payload_new(65i64);
+        (*node).second=payload_new(66i64);
+        (*node).value=7i64;
+        hook_init(&(*node).ready);
+        hook_init(&(*node).active);
+    }
+    return make Owner {node:move node};
+}
+fn owner_drop(owner:mut Owner)->unit access(reclaim,Graph) {
+    var node:*Node=move owner.node;
+    if node!=null(*Node) {
+        edit Graph {unlink(&(*node).ready); unlink(&(*node).active);}
+        drop *node;
+        release(node as *u8);
+    }
+}
+fn ready_drop(head:mut ReadyHead)->unit access(reclaim,Graph) {
+    edit Graph {while head.hook.next!=&head.hook {unlink(head.hook.next);}}
+}
+fn main(argc:i32,argv:**u8)->i32 access(reclaim,Graph) {
+    var head:ReadyHead=make ReadyHead {hook:make Hook {prev:null(*Hook),next:null(*Hook)}};
+    hook_init(&head.hook);
+    {
+        var owner:Owner=owner_new();
+        if owner.node==null(*Node) {return 1i32;}
+        if (*owner.node).first.data==null(*Data) || (*owner.node).second.data==null(*Data) {return 1i32;}
+        edit Graph {insert_after(&head.hook,&(*owner.node).ready);}
+        read Graph {
+            var cursor:*Hook=head.hook.next;
+            if cursor==&head.hook {trap;}
+            var node:*Node=parent(Node.ready,cursor);
+            if (*node).first.data!=null(*Data) {if (*(*node).first.data).value!=65i64 {trap;}}
+        }
+        drop owner;
+    }
+    {
+        var replacement:Owner=owner_new();
+        if replacement.node==null(*Node) {return 1i32;}
+        if (*replacement.node).first.data==null(*Data) || (*replacement.node).second.data==null(*Data) {return 1i32;}
+        edit Graph {insert_after(&head.hook,&(*replacement.node).ready);}
+    }
+    emit(79i32);emit(75i32);emit(10i32);
+    return 0i32;
+}

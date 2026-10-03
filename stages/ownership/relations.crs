@@ -20,7 +20,10 @@ fn os_relation_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, co
         family = (*(*arguments[index]).object).family;
         parameter = (*parameter).next;
     }
-    if (*relation).effect == RL_EDIT { os_havoc(check, state, (*state).domain, family); }
+    if (*relation).effect == RL_EDIT {
+        if !os_edit_loans(check, state, arguments, (*expression).arg_count, &(*expression).loc) { return null(*OsValue); }
+        os_havoc(check, state, (*state).domain, family);
+    }
     parameter = (*relation).parameters;
     index = 0usize;
     while parameter != null(*RlParam) && !os_failed(check) {
@@ -51,7 +54,7 @@ fn os_relation_argument(check: *OsCheck, state: *OsState, relation: *RlContract,
     if family != null(*OsField) && (*object).family != family {
         os_error(check, location, "relation arguments use different member families"); return;
     }
-    if !os_access(check, state, object, (*relation).effect == RL_EDIT, location) { return; }
+    if !os_access_through(check, state, object, (*value).loan, (*relation).effect == RL_EDIT, location) { return; }
     if (*parameter).role == RL_CONSTRUCT { os_construct_argument(check, state, object, location); return; }
     if (os_flags(state, object) & OS_READY) == 0u32 {
         os_error(check, location, "relation cursor requires an initialized hook"); return;
@@ -112,8 +115,7 @@ fn os_relation_result(check: *OsCheck, state: *OsState, relation: *RlContract,
     }
     if (*parameter).role == RL_CONSTRUCT {
         os_mark(check, state, object, os_flags(state, object) | OS_READY);
-        var root: *OsObject = os_root(object);
-        os_mark(check, state, root, os_flags(state, root) | OS_PINNED);
+        os_pin(check, state, object);
     }
     if isolated { os_mark(check, state, object, os_flags(state, object) | OS_ISOLATED); }
 }

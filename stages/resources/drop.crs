@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn rs_drop_local(function: *RsFunction, source: *CrustExpr, place: *RsValue) -> bool {
+    while (*source).kind == CRUST_E_GROUP { source = (*source).left; }
+    var local: *RsLocal = (*place).local;
+    return (*source).kind == CRUST_E_NAME && local != null(*RsLocal) && (*local).mode == 0u32;
+}
+
+fn rs_lower_drop(function: *RsFunction, source: *CrustStmt, output: *RsStatements) -> bool {
+    var stage: *RsStage = (*function).stage;
+    var effects: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    rs_scope(function);
+    var place: *RsValue = rs_place(function, (*source).expr, &effects, true, false);
+    if (*stage).failed { return false; }
+    if (*(*place).syntax).kind != CRUST_T_NAME || !rs_owns(stage, (*place).syntax) {
+        rs_error(stage, &(*source).loc, "drop requires a resource or a record with resource fields"); return false;
+    }
+    var local: bool = rs_drop_local(function, (*source).expr, place);
+    if !local && (*function).unsafe_depth == 0usize {
+        rs_error(stage, &(*source).loc, "drop requires a whole owner or checked destruction authority"); return false;
+    }
+    var action: *CrustStmt = rs_drop_tree(function, (*place).syntax, (*place).expression);
+    if (*stage).failed { return false; }
+    rs_append(&effects, action);
+    // Record the consumed place from the actual checked cleanup call.
+    rs_transfer_place(function, action, (*(*(*action).expr).args[0usize]).left);
+    if local { rs_live(function, (*place).local, false); }
+    rs_append(output, rs_expression_scope(function, &effects, &(*source).loc));
+    return !(*stage).failed;
+}

@@ -96,7 +96,14 @@ fn os_hook_field(check: *OsCheck, state: *OsState, child: *OsObject,
         (*child).anchor = true;
     }
     if (*child).family != null(*OsField) && initialized {
-        os_mark(check, state, os_root(child), os_flags(state, os_root(child)) | OS_PINNED);
+        os_pin(check, state, child);
+    }
+}
+
+fn os_pin(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
+    while object != null(*OsObject) && !os_failed(check) {
+        os_mark(check, state, object, os_flags(state, object) | OS_PINNED);
+        object = (*object).parent;
     }
 }
 
@@ -107,6 +114,7 @@ fn os_field_value(check: *OsCheck, state: *OsState, slot: *OsSlot) -> *OsValue {
         target = os_object(check, state, (*syntax).base, null(*OsObject), null(*OsScope), true);
         if target == null(*OsObject) { return null(*OsValue); }
         (*target).heap = true;
+        (*target).owner = (*slot).object;
         os_mark(check, state, target, os_flags(state, target) & ~OS_NONNULL);
     }
     var result: *OsValue = os_value(check, syntax, target, (*syntax).kind == CRUST_T_POINTER);
@@ -138,6 +146,7 @@ fn os_local(state: *OsState, name: *CrustName) -> *OsSlot {
 
 fn os_initialized(check: *OsCheck, state: *OsState, object: *OsObject) -> bool {
     if object == null(*OsObject) { return true; }
+    if (os_flags(state, object) & OS_DESTROYED) != 0u32 { return false; }
     if !os_enter(check, &(*(*object).syntax).loc) { return false; }
     var valid: bool = true;
     if (*object).family != null(*OsField) { valid = (os_flags(state, object) & OS_READY) != 0u32; }

@@ -58,7 +58,7 @@ void __wrap_crust0_host_free(void *allocation)
 
 static bool valid_result(CrustContext *context, size_t fail_at, bool success)
 {
-    if (allocation_state.live != 0 || allocation_state.host_failed || context->failure != NULL)
+    if (allocation_state.host_failed || context->failure != NULL)
         return false;
     if (fail_at == 0)
         return success && !allocation_state.rejected && context->error_count == 0;
@@ -66,17 +66,29 @@ static bool valid_result(CrustContext *context, size_t fail_at, bool success)
            context->error[0] != '\0';
 }
 
+static void *context_allocate(void *user, size_t size)
+{
+    (void)user;
+    return __wrap_crust0_host_alloc(size, 16);
+}
+
+static void context_release(void *user, void *allocation)
+{
+    (void)user;
+    __wrap_crust0_host_free(allocation);
+}
+
 static bool attempt(CrustSource *source, const char *summary, size_t fail_at, size_t *calls)
 {
     CrustContext context;
+    const CrustAllocator allocator = {NULL, context_allocate, context_release};
     bool success;
     bool valid = false;
-    crust_context_init(&context, NULL);
     memset(&allocation_state, 0, sizeof(allocation_state));
     allocation_state.active = true;
     allocation_state.fail_at = fail_at;
+    crust_context_init(&context, &allocator);
     success = memory_alloc_verify(&context, source, summary);
-    allocation_state.active = false;
     *calls = allocation_state.calls;
     valid = valid_result(&context, fail_at, success);
     if (!valid) {
@@ -84,6 +96,12 @@ static bool attempt(CrustSource *source, const char *summary, size_t fail_at, si
                 source->path, fail_at, context.error);
     }
     crust_context_destroy(&context);
+    allocation_state.active = false;
+    if (allocation_state.live != 0) {
+        fprintf(stderr, "%s: allocation %zu: compiler allocations were not released\n",
+                source->path, fail_at);
+        valid = false;
+    }
     return valid;
 }
 

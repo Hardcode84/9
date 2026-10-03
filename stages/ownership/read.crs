@@ -162,6 +162,7 @@ fn os_read_function(reader: *CrustReader, stage: *OsStage) -> *CrustDecl {
         rr_next(reader);
         var name: *CrustName = rr_name(reader);
         if !rs_return_from((*stage).resources, declaration, name) { (*reader).failed = true; }
+        os_read_result_path(reader, function);
     }
     return rr_function_end(reader, declaration);
 }

@@ -30,6 +30,7 @@ fn os_call_effect(check: *OsCheck, state: *OsState, contract: *OsFunction, locat
 }
 
 fn os_no_cursors(check: *OsCheck, state: *OsState, domain: *CrustName, location: *CrustLoc) -> bool {
+    if !os_no_domain_loans(check, state, domain, location) { return false; }
     var scope: *OsScope = (*state).scope;
     while scope != null(*OsScope) && !os_failed(check) {
         var slot: *OsSlot = (*scope).locals;
@@ -85,7 +86,7 @@ fn os_release(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract
             os_error(check, &(*expression).loc, "release requires every member hook to be isolated");
             return null(*OsValue);
         }
-        os_destructor_end(check, state, object, &(*expression).loc);
+        os_release_fields(check, state, object, &(*expression).loc);
         os_mark(check, state, object, os_flags(state, object) & ~OS_LIVE);
     }
     if (*value).place != null(*OsSlot) { os_set(check, state, (*value).place as *u8, null(*OsValue), 0u32); }
@@ -93,6 +94,7 @@ fn os_release(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract
 }
 
 fn os_reclaim(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
+    if !os_loan_access(check, state, object, null(*OsLoan), true, location) { return false; }
     if (*os_root(object)).readonly {
         os_error(check, location, "member projection has no reclamation authority");
         return false;
@@ -123,7 +125,7 @@ fn os_scalar_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, cont
 fn os_call_argument(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
     var source: *CrustExpr = expression;
     while (*source).kind == CRUST_E_GROUP { source = (*source).left; }
-    if (*source).kind == RS_READ { return os_borrow(check, state, source); }
+    if (*source).kind == RS_READ || (*source).kind == RS_MUT { return os_borrow(check, state, source); }
     return os_expr(check, state, expression);
 }
 
@@ -131,29 +133,90 @@ fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contr
     if !os_call_effect(check, state, contract, &(*expression).loc) { return null(*OsValue); }
     if !os_argument_effects(check, expression, contract) { return null(*OsValue); }
     var parameter: *CrustParam = (*(*contract).declaration).params;
+    var source_name: *CrustName = os_result_parameter(check, contract);
+    var source: *OsValue = null(*OsValue);
+    var arguments: **OsValue = os_alloc(check, (*expression).arg_count * sizeof(*OsValue), alignof(*OsValue)) as **OsValue;
+    if (*expression).arg_count != 0usize && arguments == null(**OsValue) { return null(*OsValue); }
     var index: usize = 0usize;
     while parameter != null(*CrustParam) && !os_failed(check) {
         if index >= (*expression).arg_count { os_error(check, &(*expression).loc, "missing ownership argument"); return null(*OsValue); }
         var value: *OsValue = os_call_argument(check, state, (*expression).args[index]);
         os_argument(check, state, contract, parameter, value, &(*expression).loc);
+        arguments[index] = value;
+        if (*parameter).name == source_name { source = value; }
         parameter = (*parameter).next;
         index = index + 1usize;
     }
     if os_failed(check) { return null(*OsValue); }
+    if (*contract).effect >= OS_EDIT && !os_edit_loans(check, state, arguments, (*expression).arg_count, &(*expression).loc) {
+        return null(*OsValue);
+    }
+    os_mutable_call(check, state, contract, arguments, &(*expression).loc);
     if (*contract).effect >= OS_EDIT { os_havoc(check, state, (*contract).domain, null(*OsField)); }
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
-    if (*syntax).kind == CRUST_T_POINTER || (*syntax).kind == RS_READ || (*syntax).kind == RS_MUT {
-        os_error(check, &(*expression).loc, "pointer results require a declared cursor lifetime");
+    if os_borrowed(syntax) { return os_call_view(check, state, contract, source, &(*expression).loc); }
+    return os_call_owned(check, state, contract, &(*expression).loc);
+}
+
+fn os_call_owned(check: *OsCheck, state: *OsState, contract: *OsFunction, location: *CrustLoc) -> *OsValue {
+    var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
+    if (*syntax).kind == CRUST_T_POINTER {
+        os_error(check, location, "pointer results require a declared cursor lifetime");
         return null(*OsValue);
     }
     var object: *OsObject = null(*OsObject);
     if (*syntax).kind == CRUST_T_NAME {
         object = os_object(check, state, syntax, null(*OsObject), (*state).scope, true);
-        if object != null(*OsObject) { os_abstract_parameter(check, state, object); }
+        if object != null(*OsObject) { os_abstract_value(check, state, object, os_result_reuses(check, contract)); }
     }
     var result: *OsValue = os_value(check, syntax, object, false);
     if result != null(*OsValue) { (*result).owner = rs_owns((*(*check).stage).resources, syntax); (*result).fresh = true; }
     return result;
+}
+
+fn os_result_reuses(check: *OsCheck, contract: *OsFunction) -> bool {
+    var parameter: *CrustParam = (*(*contract).declaration).params;
+    while parameter != null(*CrustParam) {
+        if rs_owns((*(*check).stage).resources, (*parameter).syntax_type) { return true; }
+        parameter = (*parameter).next;
+    }
+    return false;
+}
+
+fn os_mutable_call(check: *OsCheck, state: *OsState, contract: *OsFunction,
+                    arguments: **OsValue, location: *CrustLoc) -> unit {
+    var parameter: *CrustParam = (*(*contract).declaration).params;
+    var index: usize = 0usize;
+    while parameter != null(*CrustParam) && !os_failed(check) {
+        var value: *OsValue = arguments[index];
+        if (*(*parameter).syntax_type).kind == RS_MUT && (*value).object != null(*OsObject) {
+            os_mutable_fields(check, state, (*value).object, location);
+        }
+        parameter = (*parameter).next;
+        index = index + 1usize;
+    }
+}
+
+fn os_mutable_fields(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+    if !os_enter(check, location) { return; }
+    var slot: *OsSlot = (*object).fields;
+    while slot != null(*OsSlot) && !os_failed(check) {
+        var value: *OsValue = os_bound(state, slot);
+        if value != null(*OsValue) && (*value).object != null(*OsObject) {
+            if (*slot).owns && (*value).pointer { os_mutable_owner(check, state, slot, value); }
+            else { if !(*value).pointer { os_mutable_fields(check, state, (*value).object, location); } }
+        }
+        slot = (*slot).next;
+    }
+    (*check).depth = (*check).depth - 1usize;
+}
+
+fn os_mutable_owner(check: *OsCheck, state: *OsState, slot: *OsSlot, old: *OsValue) -> unit {
+    (*(*old).object).uncertain = true;
+    var value: *OsValue = os_field_value(check, state, slot);
+    if value == null(*OsValue) || (*value).object == null(*OsObject) { return; }
+    os_abstract_value(check, state, (*value).object, true);
+    os_set(check, state, slot as *u8, value, OS_READY);
 }
 
 fn os_argument_effects(check: *OsCheck, expression: *CrustExpr, contract: *OsFunction) -> bool {
@@ -213,11 +276,11 @@ fn os_argument(check: *OsCheck, state: *OsState, contract: *OsFunction, paramete
 
 fn os_borrow_argument(check: *OsCheck, state: *OsState, contract: *OsFunction,
                       syntax: *CrustTypeSyntax, value: *OsValue, location: *CrustLoc) -> unit {
-    if (*value).object == null(*OsObject) || (*(*value).syntax).kind != (*syntax).kind {
+    if (*value).loan == null(*OsLoan) || (*(*value).syntax).kind != (*syntax).kind {
         os_error(check, location, "borrow parameter requires an explicit checked borrow"); return;
     }
-    if !os_access(check, state, (*value).object, (*syntax).kind == RS_MUT, location) { return; }
-    if !os_initialized(check, state, (*value).object) {
+    if (*value).object != null(*OsObject) && !os_access_through(check, state, (*value).object, (*value).loan, (*syntax).kind == RS_MUT, location) { return; }
+    if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
         os_error(check, location, "borrowed argument must be fully initialized"); return;
     }
     if (*syntax).kind == RS_MUT && (*contract).effect == OS_RECLAIM {

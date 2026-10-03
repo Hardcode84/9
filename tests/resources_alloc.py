@@ -30,6 +30,7 @@ STAGE = [
             "constants",
             "state",
             "cleanup",
+            "drop",
             "places",
             "expr",
             "control",

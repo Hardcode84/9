@@ -19,10 +19,7 @@ fn os_expr_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *O
     if kind == CRUST_E_CAST { return os_cast(check, state, expression); }
     if kind == CRUST_E_BINARY { return os_binary(check, state, expression); }
     if kind == CRUST_E_UNARY { return os_unary(check, state, expression); }
-    if kind == RS_READ || kind == RS_MUT {
-        os_error(check, &(*expression).loc, "borrow expressions require a direct read call argument");
-        return null(*OsValue);
-    }
+    if kind == RS_READ || kind == RS_MUT { return os_borrow(check, state, expression); }
     return os_literal(check, expression);
 }
 
@@ -45,8 +42,21 @@ fn os_unary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValu
     if operation == CRUST_OP_ADDRESS { return os_address(check, state, expression); }
     var value: *OsValue = os_expr(check, state, (*expression).left);
     if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
-    if operation == CRUST_OP_DEREF {
-        if !(*value).pointer || !os_access(check, state, (*value).object, false, &(*expression).loc) { return null(*OsValue); }
+    if operation == CRUST_OP_DEREF { return os_dereference(check, state, expression, value); }
+    if (*value).pointer || (*value).object != null(*OsObject) {
+        os_error(check, &(*expression).loc, "unary operation cannot erase ownership provenance");
+    }
+    return value;
+}
+
+fn os_dereference(check: *OsCheck, state: *OsState, expression: *CrustExpr, value: *OsValue) -> *OsValue {
+        if !(*value).pointer && !os_borrowed((*value).syntax) {
+            os_error(check, &(*expression).loc, "dereference requires a pointer or loan"); return null(*OsValue);
+        }
+        if (*value).object != null(*OsObject) && !os_access_through(check, state, (*value).object, (*value).loan, false, &(*expression).loc) {
+            return null(*OsValue);
+        }
+        if (*value).object == null(*OsObject) { return os_loan_scalar(check, state, value, &(*expression).loc); }
         if !rs_same((*(*check).stage).resources, (*(*value).syntax).base, (*(*value).object).syntax) {
             os_error(check, &(*expression).loc, "dereference cannot reinterpret checked storage"); return null(*OsValue);
         }
@@ -56,13 +66,10 @@ fn os_unary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValu
             (*result).pointer = false;
             (*result).fresh = false;
             (*result).place = null(*OsSlot);
+            if os_borrowed((*value).syntax) && (*value).loan != null(*OsLoan) { (*result).place = (*(*value).loan).place; }
+            if (*(*result).syntax).kind != CRUST_T_NAME { (*result).object = null(*OsObject); }
         }
         return result;
-    }
-    if (*value).pointer || (*value).object != null(*OsObject) {
-        os_error(check, &(*expression).loc, "unary operation cannot erase ownership provenance");
-    }
-    return value;
 }
 
 fn os_borrow(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
@@ -71,14 +78,20 @@ fn os_borrow(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVal
     if (*value).owner {
         os_error(check, &(*expression).loc, "borrow cannot consume a temporary owner"); return null(*OsValue);
     }
-    if (*value).pointer || (*value).object == null(*OsObject) {
-        os_error(check, &(*expression).loc, "borrow requires a checked record place");
+    if (*value).pointer || ((*value).object == null(*OsObject) && (*value).place == null(*OsSlot)) {
+        os_error(check, &(*expression).loc, "borrow requires a checked value place");
         return null(*OsValue);
     }
-    if !os_access(check, state, (*value).object, (*expression).kind == RS_MUT, &(*expression).loc) { return null(*OsValue); }
+    var loan: *OsLoan = os_loan_new(check, state, value, (*expression).kind, &(*expression).loc);
+    if loan == null(*OsLoan) { return null(*OsValue); }
     var syntax: *CrustTypeSyntax = os_syntax(check, (*expression).kind, &(*expression).loc);
-    if syntax != null(*CrustTypeSyntax) { (*syntax).base = (*value).syntax; }
+    if syntax != null(*CrustTypeSyntax) {
+        (*syntax).base = (*value).syntax;
+        if os_borrowed((*value).syntax) { (*syntax).base = (*(*value).syntax).base; }
+    }
     (*value).syntax = syntax;
+    (*value).loan = loan;
+    (*value).borrow_scope = (*state).scope;
     return value;
 }
 

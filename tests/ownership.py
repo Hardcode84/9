@@ -115,8 +115,8 @@ def adversarial_cases():
             "{var pointer:*Node=first.node; var view:read Node=read *pointer; "
             "edit Graph {(*pointer).value=7i64;}} " + early,
         ),
-        "ordinary-mutable-helper": source
-        + "\nfn forbidden(node:mut Node)->unit access(edit,Graph) {node.value=7i64;}\n",
+        "write-through-read-helper": source
+        + "\nfn forbidden(node:read Node)->unit access(edit,Graph) {node.value=7i64;}\n",
         "read-parameter-reclaims": source
         + "\nfn forbidden(node:read Node)->unit access(reclaim,Graph) {}\n",
         "borrow-argument-with-nested-reclaim": replace(

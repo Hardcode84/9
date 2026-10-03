@@ -6,6 +6,7 @@ const RS_MOVE: u32 = 102u32;
 const RS_DEFER: u32 = 103u32;
 const RS_UNSAFE: u32 = 104u32;
 const RS_FORGET: u32 = 105u32;
+const RS_DROP: u32 = 106u32;
 
 record RsResource {
     declaration: *CrustDecl;
@@ -50,6 +51,7 @@ record RsStage {
     next_helper_identity: u64;
     next_name: usize;
     delegate_memory: bool;
+    delegate_return_loans: bool;
     failed: bool;
 }
 

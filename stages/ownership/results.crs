@@ -1,0 +1,131 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_read_result_path(reader: *CrustReader, function: *OsFunction) -> unit {
+    var last: *OsField = null(*OsField);
+    while (*reader).token.kind == 46u32 && !(*reader).failed {
+        rr_next(reader);
+        var field: *OsField = rr_alloc(reader, sizeof(OsField), alignof(OsField)) as *OsField;
+        if field == null(*OsField) { return; }
+        (*field).name = rr_name(reader);
+        if last == null(*OsField) { (*function).result_path = field; }
+        else { (*last).next = field; }
+        last = field;
+    }
+}
+
+fn os_result_parameter(check: *OsCheck, contract: *OsFunction) -> *CrustName {
+    return crust_map_get(&(*(*(*check).stage).resources).return_sources, (*contract).declaration as usize) as *CrustName;
+}
+
+fn os_result_step(check: *OsCheck, state: *OsState, value: *OsValue,
+                   field: *OsField, location: *CrustLoc) -> *OsValue {
+    if (*value).object == null(*OsObject) {
+        os_error(check, location, "returned view path requires record storage"); return null(*OsValue);
+    }
+    var slot: *OsSlot = os_object_slot((*value).object, (*field).name);
+    if slot == null(*OsSlot) { os_error(check, location, "returned view path names an absent field"); return null(*OsValue); }
+    var result: *OsValue = null(*OsValue);
+    if (*(*slot).object).family != null(*OsField) {
+        result = os_hook_load(check, state, (*slot).object, (*slot).syntax, location);
+    } else { result = os_copy(check, os_bound(state, slot)); }
+    if result == null(*OsValue) { os_error(check, location, "returned view path is uninitialized"); return result; }
+    (*result).place = slot;
+    (*result).loan = (*value).loan;
+    (*result).owner = false;
+    return result;
+}
+
+fn os_result_path(check: *OsCheck, state: *OsState, contract: *OsFunction,
+                   source: *OsValue, location: *CrustLoc) -> *OsValue {
+    var value: *OsValue = os_copy(check, source);
+    if value == null(*OsValue) { return value; }
+    var field: *OsField = (*contract).result_path;
+    while field != null(*OsField) && !os_failed(check) {
+        value = os_result_step(check, state, value, field, location);
+        if value == null(*OsValue) { return value; }
+        field = (*field).next;
+    }
+    return value;
+}
+
+fn os_result_hook_matches(state: *OsState, actual: *OsObject, expected: *OsObject) -> bool {
+    if actual == expected { return true; }
+    if actual == null(*OsObject) || expected == null(*OsObject) { return false; }
+    if (*actual).family == null(*OsField) || (*actual).family != (*expected).family { return false; }
+    var a: *OsObject = os_result_anchor(state, actual);
+    var b: *OsObject = os_result_anchor(state, expected);
+    return a != null(*OsObject) && a == b;
+}
+
+fn os_result_anchor(state: *OsState, object: *OsObject) -> *OsObject {
+    if (*object).anchor { return object; }
+    if (os_flags(state, object) & OS_ASSOCIATED) != 0u32 { return (*object).association; }
+    return null(*OsObject);
+}
+
+fn os_result_matches(check: *OsCheck, state: *OsState, actual: *OsValue,
+                      expected: *OsValue, location: *CrustLoc) -> bool {
+    if (*actual).object == (*expected).object && os_original((*actual).place) == os_original((*expected).place) { return true; }
+    var object: *OsObject = (*actual).object;
+    if object != null(*OsObject) && (*object).view_origin != null(*OsObject) { object = (*object).view_origin; }
+    if object == null(*OsObject) || (*expected).object == null(*OsObject) {
+        os_error(check, location, "returned loan does not match its declared field path"); return false;
+    }
+    if !os_result_hook_matches(state, object, (*expected).object) {
+        os_error(check, location, "returned loan does not match its declared storage or ring"); return false;
+    }
+    return true;
+}
+
+fn os_return_view(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> bool {
+    var contract: *OsFunction = (*check).function;
+    var name: *CrustName = os_result_parameter(check, contract);
+    var slot: *OsSlot = os_local(state, name);
+    var source: *OsValue = os_bound(state, slot);
+    if source == null(*OsValue) || (*source).loan == null(*OsLoan) ||
+       !os_loan_ancestor((*source).loan, (*value).loan) {
+        os_error(check, location, "returned loan does not derive from its declared source parameter"); return false;
+    }
+    var expected: *OsValue = os_result_path(check, state, contract, source, location);
+    if expected == null(*OsValue) { return false; }
+    return os_result_matches(check, state, value, expected, location);
+}
+
+fn os_call_view(check: *OsCheck, state: *OsState, contract: *OsFunction,
+                  source: *OsValue, location: *CrustLoc) -> *OsValue {
+    if source == null(*OsValue) { os_error(check, location, "returned view requires its source loan"); return null(*OsValue); }
+    var result: *OsValue = os_result_path(check, state, contract, source, location);
+    if result == null(*OsValue) { return result; }
+    var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
+    if !os_result_type(check, state, result, (*syntax).base, location) { return null(*OsValue); }
+    if (*result).object != null(*OsObject) {
+        os_mark(check, state, (*result).object, (os_flags(state, (*result).object) | OS_NONNULL) & ~OS_ABSENT);
+    }
+    if (*result).pointer { (*result).place = null(*OsSlot); }
+    (*result).pointer = false;
+    (*result).syntax = (*syntax).base;
+    (*result).loan = os_loan_new(check, state, result, (*syntax).kind, location);
+    (*result).syntax = syntax;
+    (*result).borrow_scope = (*source).borrow_scope;
+    return result;
+}
+
+fn os_result_type(check: *OsCheck, state: *OsState, value: *OsValue,
+                   syntax: *CrustTypeSyntax, location: *CrustLoc) -> bool {
+    var current: *CrustTypeSyntax = (*value).syntax;
+    if (*value).pointer || os_borrowed(current) { current = (*current).base; }
+    if rs_same((*(*check).stage).resources, syntax, current) { return true; }
+    var hook: *OsObject = (*value).object;
+    var schema: *OsRecord = os_record((*check).stage, syntax);
+    if hook == null(*OsObject) || schema == null(*OsRecord) || (*hook).family == null(*OsField) ||
+       os_field((*schema).members, (*(*hook).family).name) != (*hook).family {
+        os_error(check, location, "returned view type does not match its field path"); return false;
+    }
+    var object: *OsObject = os_object(check, state, syntax, null(*OsObject), (*state).scope, true);
+    if object == null(*OsObject) { return false; }
+    (*object).view_origin = hook;
+    os_projection_view(check, state, object);
+    (*value).object = object;
+    (*value).place = null(*OsSlot);
+    return !os_failed(check);
+}

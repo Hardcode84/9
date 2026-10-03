@@ -585,18 +585,19 @@ and applies declared interfaces at calls. Both hook families support individual
 destruction and allocation reuse. Payload projection checks the associated head
 and exact field origin. Proof state adds no emitted C or symbol-map bytes.
 
-This is a bounded implementation of the candidate. The source subset rejects
-returned cursor interfaces and embedded resource destruction because it has no
-contract for their retained loans or child cleanup. Projection of owner-bearing
-payload needs field-loan identity. A `read` parameter requires a read-only domain
-effect. Read loans are accepted only as direct call arguments; nested argument
-calls must be evaluated first. Stored loans and ordinary mutable helper
-parameters are rejected. Resource destructors use their declared destruction
-authority. General payload loans need an access-origin contract that excludes
-conflicting cursors. These relationships must be added at the interface,
-not inferred from callee bodies. The general container and Rust complexity gate
-remains separate from the current native witness. No general compilation-speed
-result follows from a passing proof.
+This implementation now includes named lexical read and mutable loans, returned
+views with dotted input-origin paths, and embedded resource destruction. A
+consuming `drop` destroys a stored value before its allocation is released.
+Projection keeps field-loan identity, including owned payload pointers. Mutable
+calls discard stale ownership origins, and returned owners can retain aliases
+to their input storage. Each rule uses declared interfaces and local flow facts.
+
+Borrowed record fields still need a stored-lifetime contract. Allocation inside
+repeated bodies and changes to loop-carried owners need an ownership invariant
+for that loop. These forms reject. The existing read-loop contract proves
+traversal; it does not prove a changing owner set. The general container and Rust
+complexity gate remains separate from this native witness. No general
+compilation-speed result follows from a passing proof.
 
 The useful precedents each supply only part of the model.
 [GhostCell](https://plv.mpi-sws.org/rustbelt/ghostcell/paper.pdf) separates access

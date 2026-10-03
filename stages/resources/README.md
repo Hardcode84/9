@@ -120,6 +120,21 @@ The standalone `build/crust-resource` command takes target declarations,
 not a root compilation program. It calls the same stage library as the
 source-controlled root.
 
+### Destroy a value before scope exit
+
+`drop value;` runs the same cleanup as scope exit and consumes the whole local
+owner. A later use or second drop rejects. The binding can then receive a new
+owner. No runtime flag selects which cleanup to run.
+
+`drop *pointer;` destroys a resource value, including its embedded resources,
+without freeing the allocation. The ordinary resource stage requires `unsafe`
+for this operation. A composed memory stage must prove unique destruction
+authority and prevent later reads of the destroyed value. The modular ownership
+stage checks that contract before it accepts a following `release(pointer)`.
+Explicit drop accepts a resource record or a record with resource fields.
+Partial field destruction does not suppress a containing record's automatic
+cleanup and is rejected by the modular stage.
+
 ## 3. Observe a rejected move
 
 Create a version that moves `first` twice:
@@ -181,6 +196,7 @@ Read the implementation in this order:
 | [expr.crs](expr.crs) | Move and call checking, capture order, temporary lifetimes, and defer |
 | [control.crs](control.crs) | Branch joins, loop edges, return capture, and `rs_prepare` |
 | [cleanup.crs](cleanup.crs) | Shared record drop functions and reverse array loops |
+| [drop.crs](drop.crs) | Explicit value destruction and consumed-place facts |
 | [emit.crs](emit.crs) | `rs_c_body` emits function bodies with cleanup branches |
 
 The reader extends ordinary identifier tokens with library rules. For
@@ -293,6 +309,12 @@ their source checks. Their states must still agree at continuing control-flow
 edges. The [intrusive tutorial](../../examples/intrusive/README.md) describes
 the modular checker and the earlier complete proof views. Plain `rs_prepare` retains
 whole-binding initialization checks and its explicit `unsafe` requirement.
+
+`RsStage.delegate_return_loans` separately delegates proof of returned-view
+origins. A stage that sets it must check each returned loan against the declared
+input and any field path. Memory delegation alone keeps the original source
+loan check. The modular ownership stage sets this option and checks field-origin
+contracts; the closed-program memory stage does not set it.
 
 ## 6. Check the proof and cost boundaries
 

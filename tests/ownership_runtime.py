@@ -8,11 +8,14 @@ import subprocess
 from memory import command
 
 
-def check_runtime(build, directory, root, sanitize):
+def check_runtime(build, directory, root, sanitize, source_path=None, outputs=None):
+    if source_path is None:
+        source_path = root / "examples/intrusive/program.crs"
+    if outputs is None:
+        outputs = (b"OK\n", b"", b"", b"")
     source = directory / "allocator-program.crs"
     source.write_text(
-        (root / "examples/intrusive/program.crs")
-        .read_text()
+        source_path.read_text()
         .replace('= "malloc";', '= "ownership_test_allocate";')
         .replace('= "free";', '= "ownership_test_release";')
     )
@@ -40,15 +43,11 @@ def check_runtime(build, directory, root, sanitize):
         command(["gcc", *flags, "-c", generated, "-o", original])
         command(["objcopy", f"@{symbols}", original, renamed])
         command(["gcc", *flags, renamed, root / "tests/ownership_runtime.c", "-o", executable])
-        for failure in range(4):
+        for failure, output in enumerate(outputs):
             environment = dict(os.environ, CRUST_TEST_ALLOCATION_FAILURE=str(failure))
             result = subprocess.run([executable], env=environment, capture_output=True, timeout=15)
             expected = 1 if failure else 0
-            if (
-                result.returncode != expected
-                or result.stdout != (b"" if failure else b"OK\n")
-                or result.stderr
-            ):
+            if result.returncode != expected or result.stdout != output or result.stderr:
                 raise RuntimeError(
                     f"allocation {failure}: {result.returncode}, {result.stdout!r}, {result.stderr!r}"
                 )

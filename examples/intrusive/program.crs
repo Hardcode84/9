@@ -71,6 +71,33 @@ fn active_count(head: read ActiveHead) -> usize access(read, Graph) {
     }
 }
 
+fn node_view(owner: read Owner) -> read Node access(read, Graph) from owner.node {
+    if owner.node == null(*Node) { trap; }
+    return read *owner.node;
+}
+
+fn value_view(node: read Node) -> read i64 access(read, Graph) from node.value {
+    return read node.value;
+}
+
+fn value_mut(node: mut Node) -> mut i64 access(edit, Graph) from node.value {
+    return mut node.value;
+}
+
+fn increment(node: mut Node) -> unit access(edit, Graph) {
+    node.value = node.value + 1i64;
+}
+
+fn first_hook(head: read ReadyHead) -> read Hook access(read, Graph) from head.hook.next {
+    return read *head.hook.next;
+}
+
+fn first_node(head: read ReadyHead) -> read Node access(read, Graph) from head.hook.next {
+    var cursor: *Hook = head.hook.next;
+    if cursor == &head.hook { trap; }
+    return read *parent(Node.ready, cursor);
+}
+
 fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Graph) {
     var first: Owner = owner_new(65i64);
     var second: Owner = owner_new(66i64);
@@ -92,6 +119,13 @@ fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Graph) {
         var ready_total: usize = ready_count(read ready);
         var active_total: usize = active_count(read active);
         if ready_total != 2usize || active_total != 2usize { trap; }
+        read Graph {
+            var begin: read Hook = first_hook(read ready);
+            var cursor: *Hook = &begin;
+            if cursor == &ready.hook { trap; }
+            var node: read Node = first_node(read ready);
+            if node.value != 65i64 { trap; }
+        }
         { var early: Owner = move first; }
         read Graph {
             if ready.hook.next != &(*second.node).ready || active.hook.next != &(*second.node).active { trap; }
@@ -118,6 +152,16 @@ fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Graph) {
     read Graph {
         if (*second.node).ready.next != &(*second.node).ready || (*second.node).active.prev != &(*second.node).active { trap; }
         if (*second.node).value != 66i64 { trap; }
+    }
+    edit Graph {
+        increment(mut *second.node);
+        var value: mut i64 = value_mut(mut *second.node);
+        value = 66i64;
+    }
+    read Graph {
+        var node: read Node = node_view(read second);
+        var value: read i64 = value_view(read node);
+        if value != 66i64 { trap; }
     }
     emit(79i32);
     emit(75i32);

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Fail each host arena allocation during the actual memory proof stage."""
+"""Fail each host and context arena allocation during the selected proof stage."""
 
 import argparse
 import fnmatch
@@ -80,6 +80,7 @@ def resource_stage():
                 "constants",
                 "state",
                 "cleanup",
+                "drop",
                 "places",
                 "expr",
                 "control",
@@ -162,6 +163,7 @@ def main():
         cases = {
             "links": links,
             "intrusive": links + (ROOT / "examples/intrusive/program.crs").read_text(),
+            "fields": links + (ROOT / "examples/intrusive/fields.crs").read_text(),
         }
         names = tuple(cases)
     selected = [

@@ -147,6 +147,7 @@ fn rs_lower_statement(function: *RsFunction, source: *CrustStmt, output: *RsStat
     if kind == CRUST_S_VAR {
         return rs_lower_variable(function, source, output);
     }
+    if kind == RS_DROP { return rs_lower_drop(function, source, output); }
     return rs_lower_effect(function, source, output);
 }
 
@@ -398,6 +399,7 @@ fn rs_lower_return(function: *RsFunction, source: *CrustStmt, output: *RsStateme
 
 fn rs_check_return_loan(function: *RsFunction, value: *RsValue, location: *CrustLoc) -> bool {
     var stage: *RsStage = (*function).stage;
+    if (*stage).delegate_return_loans { return true; }
     var contract: *RsReturnLoan = rs_return_loan(stage, (*(*function).global).syntax);
     if contract == null(*RsReturnLoan) { return true; }
     var parameter: *RsLocal = crust_map_get(&(*function).locals, (*contract).parameter as usize) as *RsLocal;

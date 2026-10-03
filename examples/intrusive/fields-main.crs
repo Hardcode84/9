@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "../../api/crust0_stage.crs");
+host_source(run, "../../stages/ownership/api.crs");
+host_source(run, "../../stages/ownership/build.crs");
+host_link(run, "../../build/crust-ownership-library.so");
+
+if (*run).argc != 0i32 {
+    return ownership_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv);
+};
+var arguments: [*u8; 4] = make [*u8; 4] {
+    "-o", host_path(run, "../../build/intrusive-fields"),
+    host_path(run, "links.crs"), host_path(run, "fields.crs")
+};
+return ownership_build((*run).source, (*run).cursor, 4i32, &arguments[0usize]);

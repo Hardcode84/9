@@ -61,7 +61,8 @@ fn rs_read_statement(reader: *CrustReader, user: *u8) -> *CrustStmt {
     if rr_is_name(reader, "defer") { kind = RS_DEFER; }
     else { if rr_is_name(reader, "unsafe") { kind = RS_UNSAFE; }
     else { if rr_is_name(reader, "forget") { kind = RS_FORGET; }
-    else { return null(*CrustStmt); } } }
+    else { if rr_is_name(reader, "drop") { kind = RS_DROP; }
+    else { return null(*CrustStmt); } } } }
     var statement: *CrustStmt = rr_new_stmt(reader, kind, (*reader).token.offset);
     rr_next(reader);
     if (*reader).failed { return null(*CrustStmt); }

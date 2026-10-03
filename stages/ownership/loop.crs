@@ -39,7 +39,7 @@ fn os_loop_widen(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *Cru
         return null(*OsValue);
     }
     var object: *OsObject = (*value).object;
-    if !os_access(check, state, object, false, location) { return null(*OsValue); }
+    if !os_access_through(check, state, object, (*value).loan, false, location) { return null(*OsValue); }
     if (*object).family == null(*OsField) || (os_flags(state, object) & OS_READY) == 0u32 ||
        !rs_same((*(*check).stage).resources, (*(*value).syntax).base, (*object).syntax) {
         os_error(check, location, "read loop cursor requires initialized reciprocal storage");
@@ -53,7 +53,7 @@ fn os_loop_widen(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *Cru
     (*target).abstract = true;
     os_mark(check, state, target, OS_LIVE | OS_NONNULL | OS_READY | OS_ASSOCIATED);
     var result: *OsValue = os_value(check, (*value).syntax, target, true);
-    if result != null(*OsValue) { (*result).borrow_scope = (*value).borrow_scope; }
+    if result != null(*OsValue) { (*result).borrow_scope = (*value).borrow_scope; (*result).loan = (*value).loan; }
     return result;
 }
 
@@ -93,9 +93,10 @@ fn os_loop_cursor_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
         os_error(check, location, "read loop backedge must retain a live hook cursor"); return;
     }
     var object: *OsObject = (*after).object;
-    if !os_access(check, body, object, false, location) { return; }
+    if !os_access_through(check, body, object, (*after).loan, false, location) { return; }
     if (*object).family != (*(*before).object).family || os_loop_head(body, after) != os_loop_head(entry, before) ||
-       (*after).borrow_scope != (*before).borrow_scope || (os_flags(body, object) & OS_READY) == 0u32 {
+       (*after).borrow_scope != (*before).borrow_scope || (*after).loan != (*before).loan ||
+       (os_flags(body, object) & OS_READY) == 0u32 {
         os_error(check, location, "read loop backedge must preserve cursor family, anchor, and access lifetime");
     }
 }

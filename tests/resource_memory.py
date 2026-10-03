@@ -43,6 +43,14 @@ def source(body, declarations=""):
 
 def accept_cases():
     return {
+        "explicit-drop": (source("var owner:Box=box_new();drop owner;emit(65i32);"), b"DA"),
+        "explicit-pointer-drop": (
+            source(
+                "var storage:*Box=allocate(sizeof(Box)) as *Box;"
+                "if storage!=null(*Box) {*storage=box_new();drop *storage;release(storage as *u8);}"
+            ),
+            b"D",
+        ),
         "defer-borrow": (source("var owner:Box=box_new();defer see(read owner);"), b"SD"),
         "defer-move": (source("var owner:Box=box_new();defer consume(move owner);"), b"SD"),
         "owner-move": (
@@ -244,6 +252,11 @@ def reject_cases():
 
 def pointer_move_rejections():
     return {
+        "explicit-drop-stale-field": source(
+            "var storage:*Box=allocate(sizeof(Box)) as *Box;"
+            "if storage!=null(*Box) {*storage=box_new();drop *storage;"
+            "var stale:*u8=(*storage).pointer;release(storage as *u8);}"
+        ),
         "pointer-local-reread": source("var p:*u8=null(*u8);var q:*u8=move p;var stale:*u8=p;"),
         "pointer-field-reread": source("var owner:Box=box_new();").replace(
             "release(p);", "var stale:*u8=value.pointer;release(p);"

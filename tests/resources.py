@@ -63,6 +63,19 @@ def cleanup_tree_source(depth):
 def runtime_cases():
     return [
         (
+            "explicit-drop-once-and-reinitialize",
+            program("var value:Token=token(65i32); drop value; emit(66i32); value=token(67i32);"),
+            b"ABC",
+        ),
+        (
+            "explicit-drop-field-order",
+            program(
+                "var pair:Pair=make Pair {first:token(65i32),last:token(66i32)}; drop pair; emit(67i32);",
+                "record Pair {first:Token;last:Token;}",
+            ),
+            b"BAC",
+        ),
+        (
             "else-if-cleanup-scopes",
             program(
                 "var outer:Token=token(65i32);"
@@ -576,6 +589,24 @@ def reject_cases():
     observe = "fn observe(value:read Token)->unit {}"
     condition = "fn condition(value:Token)->bool { return true; }"
     return [
+        (
+            "explicit-drop-twice",
+            program("var value:Token=token(65i32); drop value; drop value;"),
+            "uninitialized",
+        ),
+        (
+            "explicit-drop-borrowed",
+            program("var value:Token=token(65i32); var loan:read Token=read value; drop value;"),
+            "borrow",
+        ),
+        (
+            "explicit-drop-partial",
+            program(
+                "var pair:Pair=make Pair {first:token(65i32),last:token(66i32)}; drop pair.first;",
+                "record Pair {first:Token;last:Token;}",
+            ),
+            "whole owner",
+        ),
         (
             "duplicate-record-field",
             program("", "record Duplicate {value:i32; value:i32;}", common=False),

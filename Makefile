@@ -29,7 +29,7 @@ ASM_LIBRARY = api/crust0.crs stages/asm/model.crs stages/asm/output.crs stages/a
 READER = stages/reader/model.crs stages/reader/lex.crs stages/reader/parse.crs
 HIGHLIGHT = api/crust0.crs api/crust0_host.crs stages/reader/model.crs stages/reader/lex.crs stages/highlight/model.crs stages/highlight/scan.crs stages/highlight/output.crs stages/highlight/program.crs
 CCN = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/ccn/count.crs stages/ccn/read.crs stages/ccn/report.crs stages/ccn/program.crs
-RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources/read.crs stages/resources/types.crs stages/resources/constants.crs stages/resources/state.crs stages/resources/cleanup.crs stages/resources/places.crs stages/resources/expr.crs stages/resources/control.crs stages/resources/emit.crs stages/resources/program.crs stages/resources/build.crs
+RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources/read.crs stages/resources/types.crs stages/resources/constants.crs stages/resources/state.crs stages/resources/cleanup.crs stages/resources/drop.crs stages/resources/places.crs stages/resources/expr.crs stages/resources/control.crs stages/resources/emit.crs stages/resources/program.crs stages/resources/build.crs
 RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(RESOURCE)
 RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_prepare_delegated rs_c_body rs_source_import rs_return_from
 PROOF = stages/proof/model.crs stages/proof/base.crs stages/proof/terms.crs stages/proof/state.crs stages/proof/query.crs stages/proof/expression.crs stages/proof/execute.crs stages/proof/verify.crs stages/proof/z3.crs
@@ -38,7 +38,7 @@ MEMORY_LIBRARY = $(C_LIBRARY) $(PROOF) $(MEMORY)
 RESOURCE_MEMORY = stages/resource_memory/model.crs stages/resource_memory/view.crs stages/resource_memory/effects.crs stages/resource_memory/program.crs
 RESOURCE_MEMORY_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(MEMORY) $(RESOURCE_MEMORY)
 RELATIONS = stages/relations/model.crs stages/relations/base.crs stages/relations/invariant.crs stages/relations/check.crs stages/relations/calls.crs stages/relations/read.crs
-OWNERSHIP = stages/ownership/model.crs stages/ownership/base.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/calls.crs stages/ownership/relations.crs stages/ownership/projection.crs stages/ownership/scopes.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/program.crs
+OWNERSHIP = stages/ownership/model.crs stages/ownership/base.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/fields.crs stages/ownership/loans.crs stages/ownership/results.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/calls.crs stages/ownership/relations.crs stages/ownership/projection.crs stages/ownership/scopes.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/program.crs
 OWNERSHIP_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(RELATIONS) $(OWNERSHIP)
 MEMORY_CONTRACT = stages/memory/contract.crs
 INTRUSIVE_CONTRACT = examples/intrusive/contract-options.crs examples/intrusive/contract.crs
@@ -210,6 +210,8 @@ ownership-stage: $(BUILD)/crust-ownership-test $(BUILD)/crust-ownership-library.
 
 check-ownership: all ownership-stage $(BUILD)/crust-ownership-erasure
 	python3 tests/ownership.py --build $(BUILD)
+	python3 tests/ownership_fields.py --build $(BUILD)
+	python3 tests/ownership_loans.py --build $(BUILD)
 
 check-ownership-alloc: all c-stage
 	python3 tests/memory_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)' --ownership

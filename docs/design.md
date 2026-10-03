@@ -375,6 +375,13 @@ This form supports branches in scalar, loop-free unit functions. It adds proof
 work and still uses concrete memory effects at call sites. It supplies no
 abstract graph predicate or inductive loop rule. All contract code and its
 preparation callback are in ordinary Crust stages.
+The optional [traversal stage](../examples/intrusive/README.md#check-a-runtime-sized-traversal)
+adds loop induction through the existing statement callback. It derives the
+modified scalar bindings, proves invariant entry and preservation, and proves
+a decreasing natural-number variant. It retains checked exits and requires
+unchanged memory maps. This permits runtime-sized traversal followed by RAII
+unlink and storage retirement. Memory-changing loops reject. They require a
+frame rule for changed storage and retained links. Proof terms add no target code.
 Native host execution is trusted process code, with no sandbox guarantee.
 
 ## Read next

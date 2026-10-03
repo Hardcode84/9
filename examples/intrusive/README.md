@@ -194,9 +194,9 @@ or unchecked imported contract is used.
 
 This is an exact contract for a finite memory effect. It adds an independent
 body check and can increase compilation time. It does not summarize an
-arbitrary owned graph or provide a loop invariant. Those require predicates
-that describe an unbounded set of cells, a rule for separating that set from
-the caller's memory, and inductive checks for the loop or recursive body.
+arbitrary owned graph. That requires predicates for an unbounded set of cells
+and a rule for separating that set from the caller's memory. Runtime-sized
+read-only loops use the separate inductive rule below.
 Caller formulas in this implementation still grow with the selected calls.
 
 The example compiles ordinary Crust sources into its own library. Its entry
@@ -217,6 +217,91 @@ The selected target body is checked rather than trusted.
 The emitted C is byte-identical to the output with inferred effects. Native
 tests run it at `-O0` and `-O2`, including sanitizer builds. The body proof,
 contract maps, permissions, and frame checks add no target operations.
+
+### Check a runtime-sized traversal
+
+The [traversal root](walk-main.crs) selects an inductive check for the loop in
+[walk.crs](walk.crs). The target walks the same embedded links, then uses RAII
+to unlink a stack node before its storage expires. It walks the surviving head
+again after cleanup. The trip count comes from a runtime argument. The default
+bounded checker rejects this program.
+
+```sh
+make memory-loop-stage Z3_FLAGS=-l:libz3.so.4
+build/crust examples/intrusive/walk-main.crs
+build/intrusive-walk
+```
+
+The output is `OK`. These are all the annotations on the traversal itself:
+
+```crust
+fn walk(cursor: *Hook, remaining: usize) -> *Hook {
+    while remaining != 0usize {
+        cursor = (*cursor).next;
+        remaining = remaining - 1usize;
+    }
+    return cursor;
+}
+```
+
+The [stage](walk-stage.crs) supplies the proof separately. The root names the
+function and link field with `make WalkNames { function_name: "walk", next: "next" }`.
+The stage gets parameter symbols, field offsets, and the complete body from
+checked declarations. It requires one loop, a hook pointer parameter, and a
+`usize` count parameter. These are this example's selection rules. The generic
+[loop checker](../../stages/memory/loop.crs) has no function, field, or source
+names.
+
+The invariant requires:
+
+- The remaining count is between zero and its value before the loop.
+- The cursor has live, aligned storage for a hook.
+- The next field contains an initialized pointer with a compatible stored type.
+
+The decreasing value, or variant, is the remaining count. This is the counter
+already used by the program. The proof adds no runtime counter or loop bound.
+It proves the invariant before entry. It then gives every modified outer
+scalar binding an arbitrary value of its declared type, assumes the invariant,
+and executes one complete iteration. Each continuation must preserve the
+invariant and strictly decrease the nonnegative variant. This also checks that
+the next cursor can safely read its link. Ring membership and reciprocal
+topology require separate predicates.
+
+`pm_loop_execute` accepts a statement, current proof state, and a predicate
+callback. The callback receives the entry and arbitrary loop-head states. It
+returns one Boolean invariant and one integer variant in `PmLoopTerms`.
+It runs once. The checker retains immutable functions over the modified
+bindings and applies them at entry and each continuation. `pf_define` terms
+have lexical scope within those functions. Predicate nesting uses the proof
+depth budget. The callback must only construct terms; it must not change proof
+state or add premises. As with call contracts, the policy and solver are
+trusted compiler code.
+
+The checker derives modified bindings from the complete body, including both
+arms of each branch. It supports scalar declarations, scalar assignments,
+branches, `break`, `continue`, and terminating traps. Memory reads and array
+bounds guards are allowed. Addressed bindings, aggregate storage, memory stores,
+calls, nested loops, and returns in the
+selected body reject. A deferred call in the cleanup view also rejects.
+Modified outer bindings must be initialized before entry. Uninitialized
+iteration-local scalars are permitted when every read follows initialization.
+
+All eight memory maps must remain equal after each iteration or break.
+This includes initialized permissions: a consuming pointer read cannot remove
+a field permission and then disappear at the loop boundary. The checker proves
+access obligations before it discards a continuation or assumes an invariant.
+It retains checked condition-false, break, and trap paths for the caller. Cleanup
+after the loop uses the ordinary resource-memory checker.
+
+This form permits arbitrarily many iterations over the memory already proved
+by the closed-program profile. A loop that changes a graph or allocates nodes
+requires a frame rule for its changed cells, allocation identities, and
+retained links. The read-only frame cannot authorize those effects.
+Other loops keep their selected unfolding bound.
+
+The emitted C and symbol names match ordinary resource lowering before
+optimization. The root uses the existing preparation and statement callbacks.
+The C99 core, target pointers, and runtime cleanup representation are unchanged.
 
 ## Connect the stages
 
@@ -316,8 +401,9 @@ Raw aliases obey the memory-access proof. This does not establish exclusive
 borrowing for every raw pointer value or a concurrency rule.
 
 This profile checks a closed sequential entry. It expands calls that the root
-does not select for summaries. It must prove that each loop stops within the
-selected unfolding bound. Solver timeout,
+does not select for summaries. The default loop check must prove that each loop
+stops within the selected unfolding bound. The optional traversal stage above
+uses induction for its selected loop. Solver timeout,
 unknown results, unsupported operations, and allocation failure stop output.
 There is no unchecked fallback. Selected summaries require unit results,
 scalar parameters and bindings without local storage, scalar assignments,
@@ -325,8 +411,9 @@ and straight-line bodies. Calls, branches, loops, and address-taken locals in
 these bodies produce a diagnostic. This also rejects resource lowering that
 introduces such operations. Omit that selection to check the complete body by
 expansion. The template reuses concrete effects; the solver still checks them
-at each call. Abstract ownership predicates and loop invariants require a
-separate contract and proof rule. The ring proof is not a caller memory proof.
+at each call. Abstract ownership predicates require a rule for separating an
+unbounded set of cells from caller memory. The ring proof is not a caller
+memory proof.
 
 An output write can occur in an expanded call, a selected effect template, or
 cleanup. All three use the same memory state. Deferred arguments are still
@@ -356,9 +443,11 @@ make check-resource-memory Z3_FLAGS=-l:libz3.so.4
 make check-resource-memory-alloc Z3_FLAGS=-l:libz3.so.4
 make check-memory-summaries Z3_FLAGS=-l:libz3.so.4
 make check-memory-contracts Z3_FLAGS=-l:libz3.so.4
+make check-memory-loops Z3_FLAGS=-l:libz3.so.4
 python3 tests/resource_memory.py --sanitize
 python3 tests/resource_initialization.py --sanitize
 python3 tests/memory_contract.py --sanitize
+python3 tests/memory_loop.py --sanitize
 ```
 
 The suite covers deferred owners and loans, nested owned fields, owned arrays,
@@ -382,6 +471,11 @@ Declared-contract tests also cover unused incorrect bodies, aliased parameters,
 conditional implementations, restored writes outside the contract, inconsistent
 input conditions, invalid callers, retained pointer cells, and allocation
 failure during registration and application.
+Loop tests check entry, invariant preservation, progress, scalar type ranges,
+modified bindings in branches, intermediate invalid accesses, break and
+continue paths, retained cursors after cleanup, and unchanged C output.
+They reject consumed link permissions and unsupported effects. Allocation
+tests inject host arena failures into scalar loops and the complete traversal.
 
 ## Raw bootstrap witness
 

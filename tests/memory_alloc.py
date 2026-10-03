@@ -103,11 +103,12 @@ def main():
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--summaries", action="store_true")
     selection.add_argument("--contracts", action="store_true")
+    selection.add_argument("--loops", action="store_true")
     parser.add_argument("--case", action="append", default=[])
     parser.add_argument("--no-sanitize", action="store_true")
     parser.add_argument("--work", type=Path)
     args = parser.parse_args()
-    if args.contracts:
+    if args.contracts or args.loops:
         args.resources = True
     compiler = args.build.resolve() / "crust-c"
     if not compiler.is_file():
@@ -147,6 +148,12 @@ def main():
         models = {name: item[0] for name, item in contract_cases().items()}
         cases = {name: item[1] for name, item in contract_cases().items()}
         names = ("aliased-swap", "conditional-body", "new-pointer-cell")
+    if args.loops:
+        from memory_loop import accept_cases as loop_cases
+
+        models = {name: item[0] for name, item in loop_cases().items()}
+        cases = {name: item[1] for name, item in loop_cases().items()}
+        names = ("countdown", "continue", "break", "walk")
     selected = [
         name
         for name in names
@@ -186,6 +193,15 @@ def main():
                 "stages/memory/contract.crs",
                 "tests/memory_contract_models.crs",
                 "tests/memory_contract_alloc.crs",
+            ]
+        if args.loops:
+            sources = [
+                *sources[:-1],
+                "stages/memory/loop.crs",
+                "examples/intrusive/walk-options.crs",
+                "examples/intrusive/walk-stage.crs",
+                "tests/memory_loop_models.crs",
+                "tests/memory_loop_alloc.crs",
             ]
         generated = work / "fixture.c"
         response = work / "fixture.rsp"
@@ -248,9 +264,7 @@ def main():
         for name in selected:
             source = work / f"{name}.crs"
             source.write_text(cases[name])
-            selected_model = (
-                [models[name]] if args.contracts else (["rewrite"] if args.summaries else [])
-            )
+            selected_model = [models[name]] if models else (["rewrite"] if args.summaries else [])
             result = run([executable, source, *selected_model])
             matched = re.fullmatch(
                 rb"memory allocation: ([0-9]+) failure points checked\n", result.stdout

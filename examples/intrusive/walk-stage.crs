@@ -1,0 +1,120 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record WalkPolicy {
+    resource: RmPolicy;
+    target: *CrustStmt;
+    type: *CrustType;
+    next: *CrustField;
+    cursor: *CrustSymbol;
+    remaining: *CrustSymbol;
+}
+
+fn walk_readable(run: *PfRun, state: *PfState, policy: *WalkPolicy, pointer: *u8) -> *u8 {
+    var probe: PfState = *state;
+    probe.goals = null(*PfGoal); probe.assumptions = "true";
+    var location: *CrustLoc = &(*(*policy).target).loc;
+    pm_access(run, &probe, pointer, (*policy).type, "true", false, location);
+    var next: *CrustField = (*policy).next;
+    pm_load(run, &probe, pm_subobject(run, pointer, (*next).offset), (*next).type, "true", location);
+    var result: *u8 = "true";
+    var goal: *PfGoal = probe.goals;
+    while goal != null(*PfGoal) && !pf_failed(run) {
+        result = pf_and(run, result, (*goal).value); goal = (*goal).next;
+    }
+    return result;
+}
+
+fn walk_describe(run: *PfRun, before: *PfState, head: *PfState, user: *u8, terms: *PmLoopTerms) -> unit {
+    var policy: *WalkPolicy = user as *WalkPolicy;
+    var remaining: *u8 = pf_binding(head, (*policy).remaining);
+    var original: *u8 = pf_binding(before, (*policy).remaining);
+    var cursor: *u8 = pf_binding(head, (*policy).cursor);
+    var range: *u8 = pf_and(run, pf_binary(run, ">=", remaining, "0"), pf_binary(run, "<=", remaining, original));
+    (*terms).invariant = pf_and(run, range, walk_readable(run, head, policy, cursor));
+    (*terms).variant = remaining;
+}
+
+fn walk_find(stage: *PfStage, node: *CrustStmt, target: **CrustStmt, depth: usize) -> unit {
+    while node != null(*CrustStmt) && !(*stage).status.failed {
+        if !pm_plan_enter(stage, depth, &(*node).loc) { return; }
+        if (*node).kind == CRUST_S_WHILE {
+            if *target != null(*CrustStmt) {
+                pf_error(stage, &(*node).loc, "walk contract requires one loop"); return;
+            }
+            *target = node;
+        }
+        walk_find(stage, (*node).body, target, depth + 1usize);
+        walk_find(stage, (*node).otherwise, target, depth + 1usize);
+        node = (*node).next;
+    }
+}
+
+fn walk_statement(run: *PfRun, state: *PfState, node: *CrustStmt) -> *PfPath {
+    var policy: *WalkPolicy = (*(*run).stage).user as *WalkPolicy;
+    if node == (*policy).target { return pm_loop_execute(run, state, node, walk_describe, policy as *u8); }
+    return rm_statement(run, state, node);
+}
+
+fn walk_parameter(stage: *PfStage, declaration: *CrustDecl) -> *CrustParam {
+    if (*declaration).kind != CRUST_D_FUNCTION || (*declaration).param_count != 2usize {
+        pf_error(stage, &(*declaration).loc, "walk contract requires a hook pointer and a usize count");
+        return null(*CrustParam);
+    }
+    var first: *CrustParam = (*declaration).params;
+    var type: *CrustType = (*first).type;
+    if (*type).kind != CRUST_T_POINTER || (*(*type).base).kind != CRUST_T_RECORD ||
+       (*(*(*first).next).type).kind != CRUST_T_USIZE {
+        pf_error(stage, &(*declaration).loc, "walk contract requires a hook pointer and a usize count");
+        return null(*CrustParam);
+    }
+    return first;
+}
+
+fn walk_field(stage: *PfStage, type: *CrustType, name: *u8) -> *CrustField {
+    var declaration: *CrustDecl = (*type).record_decl;
+    var field: *CrustField = (*declaration).fields;
+    while field != null(*CrustField) {
+        if c_equal((*(*field).name).text, name) {
+            var pointer: *CrustType = (*field).type;
+            if (*pointer).kind == CRUST_T_POINTER && (*pointer).base == type { return field; }
+            break;
+        }
+        field = (*field).next;
+    }
+    pf_error(stage, &(*declaration).loc, "walk contract requires a pointer field to its hook record");
+    return null(*CrustField);
+}
+
+fn walk_prepare(stage: *PfStage, user: *u8) -> bool {
+    var names: *WalkNames = user as *WalkNames;
+    var declaration: *CrustDecl = pm_lookup((*stage).status.context, (*names).function_name);
+    if declaration == null(*CrustDecl) { return false; }
+    var policy: *WalkPolicy = c_alloc(&(*stage).status, sizeof(WalkPolicy), alignof(WalkPolicy)) as *WalkPolicy;
+    if policy == null(*WalkPolicy) { return false; }
+    var first: *CrustParam = walk_parameter(stage, declaration);
+    if first == null(*CrustParam) { return false; }
+    *policy = make WalkPolicy {
+        resource: *((*stage).user as *RmPolicy),
+        target: null(*CrustStmt), type: (*(*first).type).base,
+        next: null(*CrustField), cursor: (*first).symbol, remaining: (*(*first).next).symbol
+    };
+    (*policy).next = walk_field(stage, (*policy).type, (*names).next);
+    walk_find(stage, pf_body(stage, declaration), &(*policy).target, 0usize);
+    if (*stage).status.failed { return false; }
+    if (*policy).target == null(*CrustStmt) {
+        pf_error(stage, &(*declaration).loc, "walk contract requires one loop"); return false;
+    }
+    // The selected while has ordinary control semantics. Transfers on its body
+    // still run through rm_statement and must pass the read-only frame check.
+    if c_map_get(&(*policy).resource.transfers, (*policy).target as usize) != 0usize {
+        pf_error(stage, &(*(*policy).target).loc, "walk condition cannot consume a value"); return false;
+    }
+    (*stage).user = policy as *u8;
+    (*stage).statement = walk_statement;
+    return !(*stage).status.failed;
+}
+
+// Check the named traversal and the complete resource client before emission.
+fn intrusive_walk_program(request: *CrustBuild, options: *PmOptions, names: *WalkNames) -> i32 {
+    return resource_memory_program_with(request, options, walk_prepare, names as *u8);
+}

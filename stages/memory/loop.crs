@@ -1,0 +1,216 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record PmLoopPlan { changed: CMap; locals: CMap; }
+record PmLoopTerms { invariant: *u8; variant: *u8; }
+record PmLoopVariable { symbol: *CrustSymbol; name: *u8; next: *PmLoopVariable; }
+record PmLoopProof { variables: *PmLoopVariable; invariant: *u8; variant: *u8; }
+
+fn pm_loop_node(run: *PfRun, node: *CrustStmt, plan: *PmLoopPlan) -> unit {
+    var kind: u32 = (*node).kind;
+    if kind == CRUST_S_BLOCK || kind == CRUST_S_IF {
+        pm_loop_scan(run, (*node).body, plan);
+        pm_loop_scan(run, (*node).otherwise, plan);
+    } else if kind == CRUST_S_VAR {
+        pm_summary_local(run, (*node).symbol, &(*node).loc);
+        c_map_set(&(*(*run).stage).status, &(*plan).locals, (*node).symbol as usize, 1usize);
+    } else if kind == CRUST_S_ASSIGN {
+        var target: *CrustExpr = pf_ungroup(run, (*node).expr);
+        if pf_failed(run) { return; }
+        if (*target).kind != CRUST_E_NAME {
+            pf_error((*run).stage, &(*node).loc, "loop invariant requires read-only memory");
+            return;
+        }
+        pm_summary_local(run, (*target).symbol, &(*node).loc);
+        c_map_set(&(*(*run).stage).status, &(*plan).changed, (*target).symbol as usize, (*target).symbol as usize);
+    } else if kind != CRUST_S_BREAK && kind != CRUST_S_CONTINUE && kind != CRUST_S_TRAP {
+        pf_error((*run).stage, &(*node).loc, "loop invariant does not support this statement");
+    }
+}
+
+fn pm_loop_scan(run: *PfRun, node: *CrustStmt, plan: *PmLoopPlan) -> unit {
+    while node != null(*CrustStmt) && !pf_failed(run) {
+        if !pf_enter(run, &(*node).loc) { return; }
+        pm_summary_expression(run, (*node).expr);
+        pm_summary_expression(run, (*node).value);
+        pm_loop_node(run, node, plan);
+        (*run).depth = (*run).depth - 1usize;
+        node = (*node).next;
+    }
+}
+
+fn pm_loop_variables(run: *PfRun, state: *PfState, node: *CrustStmt, plan: *PmLoopPlan) -> *PmLoopVariable {
+    var first: *PmLoopVariable = null(*PmLoopVariable);
+    var index: usize = 0usize;
+    while index < (*plan).changed.capacity && !pf_failed(run) {
+        var symbol: *CrustSymbol = (*plan).changed.entries[index].key as *CrustSymbol;
+        if (*plan).changed.entries[index].key != 0usize &&
+           c_map_get(&(*plan).locals, symbol as usize) == 0usize {
+            if pf_binding(state, symbol) == null(*u8) {
+                pf_error((*run).stage, &(*node).loc, "loop invariant requires initialized modified bindings");
+                return null(*PmLoopVariable);
+            }
+            var item: *PmLoopVariable = pf_alloc(run, sizeof(PmLoopVariable), alignof(PmLoopVariable)) as *PmLoopVariable;
+            if item == null(*PmLoopVariable) { return item; }
+            *item = make PmLoopVariable { symbol: symbol, name: pf_fresh(run, pm_sort(run, (*symbol).type)), next: first };
+            first = item;
+            pf_bind(run, state, symbol, (*item).name);
+            if crust_type_integer((*symbol).type) {
+                pf_assume(run, state, pf_eq(run, (*item).name, pm_wrap(run, (*item).name, (*symbol).type)));
+            }
+        }
+        index = index + 1usize;
+    }
+    return first;
+}
+
+fn pm_loop_function(run: *PfRun, variables: *PmLoopVariable, definitions: *PfDefinition,
+                     sort: *u8, value: *u8) -> *u8 {
+    // Formals shadow the fresh head constants. Keep captured definitions inside
+    // this scope so each application substitutes the complete modified state.
+    var name: *u8 = pf_name(run);
+    var out: *CBuffer = &(*run).declarations;
+    c_buffer_text(out, "(define-fun "); c_buffer_text(out, name); c_buffer_text(out, " (");
+    var item: *PmLoopVariable = variables;
+    while item != null(*PmLoopVariable) && !pf_failed(run) {
+        c_buffer_text(out, "("); c_buffer_text(out, (*item).name); c_buffer_text(out, " ");
+        c_buffer_text(out, pm_sort(run, (*(*item).symbol).type)); c_buffer_text(out, ")");
+        item = (*item).next;
+    }
+    c_buffer_text(out, ") "); c_buffer_text(out, sort); c_buffer_text(out, " ");
+    var definition: *PfDefinition = definitions;
+    var count: usize = 0usize;
+    while definition != null(*PfDefinition) && !pf_failed(run) {
+        c_buffer_text(out, "(let (("); c_buffer_text(out, (*definition).name); c_buffer_text(out, " ");
+        c_buffer_text(out, (*definition).value); c_buffer_text(out, ")) ");
+        definition = (*definition).next;
+        count = count + 1usize;
+        if count > (*(*run).stage).max_depth {
+            pf_error((*run).stage, &(*(*run).declaration).loc, "loop predicate exceeds the proof depth budget");
+            return null(*u8);
+        }
+    }
+    c_buffer_text(out, value);
+    while count != 0usize { c_buffer_text(out, ")"); count = count - 1usize; }
+    c_buffer_text(out, ")\n");
+    return name;
+}
+
+fn pm_loop_describe(run: *PfRun, before: *PfState, head: *PfState, proof: *PmLoopProof,
+                    describe: fn(*PfRun, *PfState, *PfState, *u8, *PmLoopTerms) -> unit, user: *u8) -> unit {
+    var definitions: *PfDefinition = null(*PfDefinition);
+    var terms: PmLoopTerms = make PmLoopTerms { invariant: null(*u8), variant: null(*u8) };
+    (*run).definitions = &definitions;
+    describe(run, before, head, user, &terms);
+    (*run).definitions = null(**PfDefinition);
+    if pf_failed(run) { return; }
+    if terms.invariant == null(*u8) || terms.variant == null(*u8) {
+        pf_error((*run).stage, &(*(*run).declaration).loc, "loop contract requires an invariant and an integer variant");
+        return;
+    }
+    var ordered: *PfDefinition = null(*PfDefinition);
+    while definitions != null(*PfDefinition) {
+        var next: *PfDefinition = (*definitions).next;
+        (*definitions).next = ordered; ordered = definitions; definitions = next;
+    }
+    (*proof).invariant = pm_loop_function(run, (*proof).variables, ordered, "Bool", terms.invariant);
+    (*proof).variant = pm_loop_function(run, (*proof).variables, ordered, "Int", terms.variant);
+}
+
+fn pm_loop_term(run: *PfRun, state: *PfState, variables: *PmLoopVariable, name: *u8) -> *u8 {
+    if variables == null(*PmLoopVariable) { return name; }
+    var out: CBuffer = uninit; pf_buffer(run, &out);
+    c_buffer_text(&out, "("); c_buffer_text(&out, name);
+    while variables != null(*PmLoopVariable) && !pf_failed(run) {
+        c_buffer_text(&out, " "); c_buffer_text(&out, pf_binding(state, (*variables).symbol));
+        variables = (*variables).next;
+    }
+    c_buffer_text(&out, ")"); return c_buffer_end(&out);
+}
+
+fn pm_loop_frame(run: *PfRun, state: *PfState, before: *PfState, location: *CrustLoc) -> unit {
+    var actual: *PmWorld = pm_world(run, state);
+    var expected: *PmWorld = pm_world(run, before);
+    pf_goal(run, state, pf_eq(run, (*actual).live, (*expected).live), location);
+    pf_goal(run, state, pf_eq(run, (*actual).sizes, (*expected).sizes), location);
+    pf_goal(run, state, pf_eq(run, (*actual).bases, (*expected).bases), location);
+    pf_goal(run, state, pf_eq(run, (*actual).writable, (*expected).writable), location);
+    pf_goal(run, state, pf_eq(run, (*actual).initialized, (*expected).initialized), location);
+    pf_goal(run, state, pf_eq(run, (*actual).integers, (*expected).integers), location);
+    pf_goal(run, state, pf_eq(run, (*actual).pointers, (*expected).pointers), location);
+    pf_goal(run, state, pf_eq(run, (*actual).representations, (*expected).representations), location);
+}
+
+fn pm_loop_backedge(run: *PfRun, state: *PfState, proof: *PmLoopProof, old: *u8, location: *CrustLoc) -> unit {
+    pf_goal(run, state, pm_loop_term(run, state, (*proof).variables, (*proof).invariant), location);
+    var variant: *u8 = pm_loop_term(run, state, (*proof).variables, (*proof).variant);
+    pf_goal(run, state, pf_and(run, pf_binary(run, ">=", variant, "0"), pf_binary(run, "<", variant, old)), location);
+}
+
+fn pm_loop_body(run: *PfRun, before: *PfState, head: *PfState, node: *CrustStmt, proof: *PmLoopProof) -> *PfPath {
+    var variant: *u8 = pm_loop_term(run, head, (*proof).variables, (*proof).variant);
+    pf_goal(run, head, pf_binary(run, ">=", variant, "0"), &(*node).loc);
+    var path: *PfPath = pf_statement(run, head, (*node).body, (*run).calls);
+    var exits: *PfPath = null(*PfPath);
+    while path != null(*PfPath) && !pf_failed(run) {
+        var next: *PfPath = (*path).next;
+        var state: *PfState = (*path).state;
+        pm_loop_frame(run, state, before, &(*node).loc);
+        if (*state).flow == PF_NORMAL || (*state).flow == PF_CONTINUE {
+            pm_loop_backedge(run, state, proof, variant, &(*node).loc);
+        }
+        if !pf_prove_goals(run, state) { return null(*PfPath); }
+        if (*state).flow == PF_BREAK || (*state).flow == PF_TRAP {
+            if (*state).flow == PF_BREAK { (*state).flow = PF_NORMAL; }
+            (*path).next = exits; exits = path;
+        }
+        path = next;
+    }
+    return exits;
+}
+
+// Check an invariant and a decreasing integer variant for a checked while node.
+// Describe immutable SMT terms once from entry and arbitrary loop-head bindings.
+// The policy must preserve ordinary memory and statement semantics. The body may
+// read memory and change unaddressed scalar bindings. All other effects reject.
+// Return checked exit paths; add no target operations. Retain callback data until return.
+fn pm_loop_execute(run: *PfRun, state: *PfState, node: *CrustStmt,
+                    describe: fn(*PfRun, *PfState, *PfState, *u8, *PmLoopTerms) -> unit, user: *u8) -> *PfPath {
+    if (*node).kind != CRUST_S_WHILE || describe == null(fn(*PfRun, *PfState, *PfState, *u8, *PmLoopTerms) -> unit) {
+        pf_error((*run).stage, &(*node).loc, "loop proof requires a while node and a predicate callback");
+        return null(*PfPath);
+    }
+    var plan: PmLoopPlan = make PmLoopPlan {
+        changed: make CMap { entries: null(*CEntry), count: 0usize, capacity: 0usize },
+        locals: make CMap { entries: null(*CEntry), count: 0usize, capacity: 0usize }
+    };
+    pm_summary_expression(run, (*node).expr);
+    pm_loop_scan(run, (*node).body, &plan);
+    var head: *PfState = pf_fork(run, state);
+    if pf_failed(run) { return null(*PfPath); }
+    var proof: PmLoopProof = make PmLoopProof {
+        variables: pm_loop_variables(run, head, node, &plan), invariant: null(*u8), variant: null(*u8)
+    };
+    if pf_failed(run) { return null(*PfPath); }
+    pm_loop_describe(run, state, head, &proof, describe, user);
+    if pf_failed(run) { return null(*PfPath); }
+    // Entry and prefix obligations must pass before the invariant becomes a premise.
+    pf_goal(run, state, pm_loop_term(run, state, proof.variables, proof.invariant), &(*node).loc);
+    if !pf_prove_goals(run, state) { return null(*PfPath); }
+    pf_assume(run, head, pm_loop_term(run, head, proof.variables, proof.invariant));
+    var condition: *u8 = pf_expression(run, head, (*node).expr, "true");
+    if !pf_prove_goals(run, head) { return null(*PfPath); }
+    var exit: *PfState = pf_fork(run, head);
+    if pf_failed(run) { return null(*PfPath); }
+    pf_assume(run, exit, pf_not(run, condition));
+    pf_assume(run, head, condition);
+    var exits: *PfPath = null(*PfPath);
+    var exit_live: bool = pf_reachable(run, exit, &(*node).loc);
+    var body_live: bool = pf_reachable(run, head, &(*node).loc);
+    if pf_failed(run) { return null(*PfPath); }
+    if exit_live && body_live && !pf_split(run, &(*node).loc) { return null(*PfPath); }
+    if exit_live { exits = pf_path(run, exit); }
+    if body_live {
+        exits = pf_join_paths(exits, pm_loop_body(run, state, head, node, &proof));
+    }
+    return exits;
+}

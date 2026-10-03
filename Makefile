@@ -39,6 +39,8 @@ RESOURCE_MEMORY = stages/resource_memory/model.crs stages/resource_memory/view.c
 RESOURCE_MEMORY_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(MEMORY) $(RESOURCE_MEMORY)
 MEMORY_CONTRACT = stages/memory/contract.crs
 INTRUSIVE_CONTRACT = examples/intrusive/contract-options.crs examples/intrusive/contract.crs
+MEMORY_LOOP = stages/memory/loop.crs
+INTRUSIVE_WALK = examples/intrusive/walk-options.crs examples/intrusive/walk-stage.crs
 Z3_LIBDIR ?=
 Z3_FLAGS = -lz3
 ifneq ($(strip $(Z3_LIBDIR)),)
@@ -57,6 +59,7 @@ OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_res
 .PHONY: resource-memory-stage check-resource-memory check-resource-memory-alloc
 .PHONY: check-memory-summaries
 .PHONY: memory-contract-stage check-memory-contracts
+.PHONY: memory-loop-stage check-memory-loops
 all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a $(BUILD)/crust-asm-library.so
 
 $(BUILD):
@@ -199,6 +202,21 @@ memory-contract-stage: $(BUILD)/crust-memory-contract-test $(BUILD)/crust-intrus
 check-memory-contracts: all resource-memory-stage memory-contract-stage
 	python3 tests/memory_contract.py --build $(BUILD)
 	python3 tests/memory_alloc.py --contracts --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)'
+
+$(BUILD)/crust-memory-loop-test: $(BUILD)/crust-c $(RESOURCE_MEMORY_LIBRARY) $(MEMORY_LOOP) $(INTRUSIVE_WALK) tests/memory_loop_models.crs tests/memory_loop_driver.crs Makefile
+	$< -o $@ $(RESOURCE_MEMORY_LIBRARY) $(MEMORY_LOOP) $(INTRUSIVE_WALK) tests/memory_loop_models.crs tests/memory_loop_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+$(BUILD)/crust-intrusive-walk-library.o: $(BUILD)/crust-c $(RESOURCE_MEMORY_LIBRARY) $(MEMORY_LOOP) $(INTRUSIVE_WALK) Makefile
+	$< --library --object --export intrusive_walk_program --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(RESOURCE_MEMORY_LIBRARY) $(MEMORY_LOOP) $(INTRUSIVE_WALK)
+
+$(BUILD)/crust-intrusive-walk-library.so: $(BUILD)/crust-intrusive-walk-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(Z3_FLAGS) $(LDFLAGS) -o $@
+
+memory-loop-stage: $(BUILD)/crust-memory-loop-test $(BUILD)/crust-intrusive-walk-library.so
+
+check-memory-loops: all resource-memory-stage memory-loop-stage
+	python3 tests/memory_loop.py --build $(BUILD)
+	python3 tests/memory_alloc.py --loops --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)'
 
 check-resource-memory: all resource-stage resource-memory-stage
 	python3 tests/resource_memory.py --build $(BUILD)

@@ -952,6 +952,10 @@ An optional finite-effect contract proves a selected body independently and
 checks its callers against declared input conditions, exact output maps, and
 a writable-cell set. It does not establish an abstract ownership predicate for
 an arbitrary graph or replace bounded loop execution.
+An optional read-only loop stage checks an inductive invariant and a decreasing
+integer variant. It checks runtime-sized intrusive traversal and subsequent
+resource cleanup. Loops with memory writes or allocation require a different
+frame rule and reject this form.
 
 The first implementation must establish these cases before adding language
 facilities:
@@ -1073,9 +1077,23 @@ frame. Inconsistent input conditions reject registration. This form supports
 loop-free unit functions with scalar parameters and bindings without local
 storage. It checks branches but rejects calls, loops, traps, and aggregate
 copies in the selected body. Abstract graph predicates still require a rule
-for separating an unbounded set of cells from caller memory. Unbounded loops
-also require inductive invariants. The [contract tutorial](../examples/intrusive/README.md#check-a-declared-call-contract)
+for separating an unbounded set of cells from caller memory. The [contract tutorial](../examples/intrusive/README.md#check-a-declared-call-contract)
 provides the complete source and selectable compilation root.
+The optional [loop stage](../examples/intrusive/README.md#check-a-runtime-sized-traversal)
+checks read-only memory with scalar updates through the existing statement
+callback. It derives modified bindings from the complete body and checks an
+immutable invariant at entry and after an arbitrary iteration. Every
+continuation must decrease a nonnegative integer variant. Condition-false and
+break paths retain the checked exit state. Every access is checked, and all
+memory maps, including initialized permissions, must remain unchanged.
+The selected body permits branches, scalar locals, break, continue, and traps.
+It checks accesses before each terminating trap, including array bounds guards.
+It rejects calls, nested loops, memory stores, addressed bindings, aggregate
+storage, and returns. Other loops use bounded execution. Mutable graphs
+and runtime allocation loops require invariants with a sound frame for changed
+storage, fresh allocation identities, and retained links; this read-only rule
+does not supply that frame. The loop checker and its selection policy are
+ordinary Crust code. They add no seed operation or target instruction.
 Ownership proofs must erase before backend optimization. Runtime pointer-validity
 checks, identity metadata, pointer tags, reference counts, and hidden cleanup
 flags are excluded. Null checks before release and debug-only bounds checks are

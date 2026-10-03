@@ -400,6 +400,10 @@ client with a runtime number of nodes:
 The current resource stage does not provide this reusable list contract. Keep
 the existing proof experiments as evidence. Do not expand their heap-graph
 machinery as a substitute for passing this gate.
+The [modular candidate](exploration/resource-metastage.md#7-modular-ownership-candidate)
+combines stable individual owners, scoped access, and reciprocal field contracts.
+Its restricted internal group rule addresses sentinel and payload types. It is
+a candidate for this gate, not a claim that the stage is implemented.
 
 ## Current safety stages
 

@@ -12,6 +12,9 @@ function and field contracts without whole-program analysis. Its user-facing
 model must be no more complex than Rust's, including container implementations.
 This target supersedes the broader proof work proposed below. Retain the
 experiments as evidence; they do not establish acceptance of the modular model.
+The current [modular candidate](resource-metastage.md#7-modular-ownership-candidate)
+uses reciprocal field contracts and scoped access. It separates memory safety
+from full rooted-list correctness and keeps proof terms out of user code.
 
 Reading guide: [recommendation](#1-recommendation),
 [language research](#3-lessons-from-existing-languages),

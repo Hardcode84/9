@@ -82,8 +82,10 @@ $(BUILD)/crust0_amalg.o: crust0_amalg.c | $(BUILD)
 
 # A mode change must relink even when the other mode's objects already exist.
 $(BUILD)/core-mode: FORCE | $(BUILD)
-	@printf '%s\n' '$(AMALGAMATION)' > $@.tmp
-	@if cmp -s $@.tmp $@; then rm $@.tmp; else mv $@.tmp $@; fi
+	@set -e; crust_mode_tmp='$@.tmp.'$$$$; \
+	trap 'rm -f "$$crust_mode_tmp"' 0; \
+	printf '%s\n' '$(AMALGAMATION)' > "$$crust_mode_tmp"; \
+	if ! cmp -s "$$crust_mode_tmp" '$@'; then mv "$$crust_mode_tmp" '$@'; fi
 
 $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a: $(BUILD)/core-mode
 

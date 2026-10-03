@@ -1,0 +1,96 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Keep stage at one address until destruction. Context and checked ASTs are borrowed.
+fn pf_init(stage: *PfStage, context: *CrustContext) -> unit {
+    (*stage) = make PfStage {
+        status: make CStatus { context: context, blocks: null(*CBlock), failed: false },
+        user: null(*u8), preamble: "", solve: null(fn(*PfStage, *u8, *CrustLoc) -> i32),
+        pre: null(fn(*PfRun, *PfState) -> bool),
+        access: null(fn(*PfRun, *PfState, *CrustField, *u8, bool, *CrustLoc) -> *u8),
+        post: null(fn(*PfRun, *PfState) -> bool),
+        value: null(fn(*PfRun, *PfState, *CrustExpr, *u8) -> *u8),
+        place: null(fn(*PfRun, *PfState, *CrustExpr, *u8) -> *u8),
+        store: null(fn(*PfRun, *PfState, *CrustExpr, *u8, *u8, *CrustLoc) -> bool),
+        external: null(fn(*PfRun, *PfState, *CrustExpr, *u8) -> *u8),
+        sort: null(fn(*PfRun, *CrustType) -> *u8),
+        statement: null(fn(*PfRun, *PfState, *CrustStmt) -> u32),
+        scope: null(fn(*PfRun, *PfState, *CrustStmt, bool) -> bool),
+        max_depth: 128usize, max_paths: 128usize, max_iterations: 32usize, obligations: 0usize, prune: false
+    };
+}
+
+// Release proof storage. Retain the context and failure state.
+fn pf_destroy(stage: *PfStage) -> unit {
+    var context: *CrustContext = (*stage).status.context;
+    var failed: bool = (*stage).status.failed;
+    var block: *CBlock = (*stage).status.blocks;
+    while block != null(*CBlock) {
+        var next: *CBlock = (*block).next;
+        crust0_host_free(block as *u8);
+        block = next;
+    }
+    pf_init(stage, context);
+    (*stage).status.failed = failed;
+}
+
+fn pf_error(stage: *PfStage, location: *CrustLoc, message: *u8) -> unit {
+    c_error(&(*stage).status, (*location).source, (*location).offset, message);
+}
+
+fn pf_buffer(run: *PfRun, buffer: *CBuffer) -> unit {
+    *buffer = make CBuffer {
+        status: &(*(*run).stage).status, data: null(*u8), size: 0usize, capacity: 0usize
+    };
+}
+
+fn pf_alloc(run: *PfRun, size: usize, alignment: usize) -> *u8 {
+    return c_alloc(&(*(*run).stage).status, size, alignment);
+}
+
+fn pf_failed(run: *PfRun) -> bool { return (*(*run).stage).status.failed; }
+
+fn pf_enter(run: *PfRun, location: *CrustLoc) -> bool {
+    if pf_failed(run) { return false; }
+    if (*run).depth >= (*(*run).stage).max_depth {
+        pf_error((*run).stage, location, "proof traversal depth budget exceeded");
+        return false;
+    }
+    (*run).depth = (*run).depth + 1usize;
+    return true;
+}
+
+fn pf_sort(type: *CrustType) -> *u8 {
+    if (*type).kind == CRUST_T_POINTER { return "Int"; }
+    if (*type).kind == CRUST_T_BOOL { return "Bool"; }
+    return null(*u8);
+}
+
+fn pf_value_sort(run: *PfRun, type: *CrustType) -> *u8 {
+    if (*(*run).stage).sort != null(fn(*PfRun, *CrustType) -> *u8) {
+        var sort: *u8 = (*(*run).stage).sort(run, type);
+        if sort != null(*u8) || pf_failed(run) { return sort; }
+    }
+    return pf_sort(type);
+}
+
+fn pf_policy_result(run: *PfRun, success: bool, location: *CrustLoc, message: *u8) -> bool {
+    var stage: *PfStage = (*run).stage;
+    if success && !pf_failed(run) && (*(*stage).status.context).error_count == 0usize { return true; }
+    if (*(*stage).status.context).error_count == 0usize { pf_error(stage, location, message); }
+    (*stage).status.failed = true;
+    return false;
+}
+
+
+fn pf_ungroup(run: *PfRun, expression: *CrustExpr) -> *CrustExpr {
+    var depth: usize = 0usize;
+    while (*expression).kind == CRUST_E_GROUP {
+        if depth >= (*(*run).stage).max_depth {
+            pf_error((*run).stage, &(*expression).loc, "proof group depth budget exceeded");
+            return null(*CrustExpr);
+        }
+        expression = (*expression).left;
+        depth = depth + 1usize;
+    }
+    return expression;
+}

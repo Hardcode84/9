@@ -938,8 +938,13 @@ must fail explicitly; it must not omit a check or accept partial output.
 The current repository implements seed syntax, execution, and root control.
 Its stage libraries provide bounded construction witnesses. The C backend passes
 the stage self-compilation case. It does not establish the C frontend experiment.
-The checked direct intrusive-list witness is also absent. Passing the seed tests does not complete
-compiler-construction or checked-language acceptance.
+The optional [memory stage](../examples/ownership/README.md) checks a complete
+direct two-hook client through its typed operation tree. Its library proof also
+checks init, unlink, insert, and splice over rings of arbitrary length. The
+client checker expands calls and requires a proved end to each unfolded loop.
+It does not use modular ownership summaries or resource cleanup plans. Passing
+these checks does not complete compiler-construction or checked-language
+acceptance.
 
 The first implementation must establish these cases before adding language
 facilities:
@@ -1021,12 +1026,19 @@ target. Linux, GCC, and LLVM cases require explicit storage, layout, callbacks,
 relocation, and synchronization. The seed provides basic mechanisms to implement
 compiler libraries; it does not yet claim to compile those source trees.
 
-The safe direct-list contract still needs a rule that permits individual
-destruction and reuse while preventing access through a surviving stale pointer.
-The rule must work for user-written direct list code. Mandatory pools and
-renaming raw access do not satisfy it. The concrete path is to specify that
-standard-language rule, implement its smallest list witness, and pass the
-existing correctness and cost gates before expanding the ownership stage.
+The optional memory stage assigns each allocation a fresh proof identity.
+Pointer offsets retain that identity; numeric address equality cannot make a
+retired identity live. Release requires a live heap base with no incoming
+persistent links. These checks apply to user-written direct pointer operations,
+without a pool or trusted unlink operation. They establish a closed sequential
+program profile, not the full modular ownership contract.
+
+The next composition boundary is explicit: resource checking retains cleanup
+chains outside its lowered tree and moves local declarations to function entry.
+A combined checker must consume those chains and preserve source storage
+lifetimes. Reusable call summaries must also bind permissions and destructive
+effects to checked bodies and layouts. The existing correctness and cost gates
+apply before expanding that interface.
 Ownership proofs must erase before backend optimization. Runtime pointer-validity
 checks, identity metadata, pointer tags, reference counts, and hidden cleanup
 flags are excluded. Null checks before release and debug-only bounds checks are

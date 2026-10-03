@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn memory_alloc_verify(context:*CrustContext, entry:*CrustDecl)->bool {
+    var contracts:[PmForeignSpec;3] = make [PmForeignSpec;3] {
+        make PmForeignSpec {name:"allocate", alignment:16usize, kind:PM_ALLOCATE},
+        make PmForeignSpec {name:"release", alignment:1usize, kind:PM_RELEASE},
+        make PmForeignSpec {name:"emit", alignment:1usize, kind:PM_SCALAR}
+    };
+    var options:PmOptions = make PmOptions {
+        foreign:&contracts[0usize], foreign_count:3usize, max_depth:128usize,
+        max_paths:64usize, max_iterations:4usize, milliseconds:10000u32
+    };
+    return pm_verify(context, entry, &options);
+}

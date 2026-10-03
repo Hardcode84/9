@@ -1,0 +1,138 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record RingNames {
+    record_name: *u8;
+    previous: *u8;
+    next: *u8;
+    initialize: *u8;
+    unlink: *u8;
+    insert: *u8;
+    splice: *u8;
+    milliseconds: u32;
+}
+
+fn ring_lookup(context: *CrustContext, name: *u8, kind: u32) -> *CrustDecl {
+    var interned: *CrustName = crust_try_intern(context, name, c_length(name));
+    if interned == null(*CrustName) { return null(*CrustDecl); }
+    var symbol: *CrustSymbol = crust_map_get(&(*context).globals, interned as usize) as *CrustSymbol;
+    if symbol != null(*CrustSymbol) && (*symbol).decl != null(*CrustDecl) {
+        var declaration: *CrustDecl = (*symbol).decl;
+        if (*declaration).kind == kind { return declaration; }
+    }
+    crust_set_error(context, null(*CrustSource), 0usize, "ring contract declaration is absent or has the wrong kind");
+    return null(*CrustDecl);
+}
+
+fn ring_field(context: *CrustContext, record_value: *CrustDecl, name: *u8) -> *CrustField {
+    var field: *CrustField = (*record_value).fields;
+    while field != null(*CrustField) {
+        if c_equal((*(*field).name).text, name) {
+            var type: *CrustType = (*field).type;
+            if (*type).kind == CRUST_T_POINTER && (*(*type).base).kind == CRUST_T_RECORD &&
+               (*(*type).base).record_decl == record_value { return field; }
+            break;
+        }
+        field = (*field).next;
+    }
+    crust_set_error(context, (*record_value).loc.source, (*record_value).loc.offset,
+        "ring contract field must be a pointer to its enclosing hook record");
+    return null(*CrustField);
+}
+
+fn ring_signature(context: *CrustContext, declaration: *CrustDecl,
+                  record_value: *CrustDecl, count: usize) -> bool {
+    if declaration == null(*CrustDecl) { return false; }
+    var parameter: *CrustParam = (*declaration).params;
+    var valid: bool = (*(*declaration).type).base == &(*context).builtins[CRUST_T_UNIT as usize] &&
+                      (*declaration).param_count == count;
+    while parameter != null(*CrustParam) && valid {
+        var type: *CrustType = (*parameter).type;
+        valid = (*type).kind == CRUST_T_POINTER && (*(*type).base).kind == CRUST_T_RECORD &&
+                (*(*type).base).record_decl == record_value;
+        parameter = (*parameter).next;
+    }
+    if !valid {
+        crust_set_error(context, (*declaration).loc.source, (*declaration).loc.offset,
+            "ring procedure signature does not match its proof contract");
+    }
+    return valid;
+}
+
+fn ring_configure(context: *CrustContext, names: *RingNames, policy: *RingProof) -> bool {
+    var record_value: *CrustDecl = ring_lookup(context, (*names).record_name, CRUST_D_RECORD);
+    if record_value == null(*CrustDecl) { return false; }
+    (*policy).previous = ring_field(context, record_value, (*names).previous);
+    (*policy).next = ring_field(context, record_value, (*names).next);
+    if (*context).error_count != 0usize { return false; }
+    if (*policy).previous == (*policy).next {
+        crust_set_error(context, (*record_value).loc.source, (*record_value).loc.offset,
+            "ring contract requires two different link fields");
+        return false;
+    }
+    (*policy).milliseconds = (*names).milliseconds;
+    (*policy).initialize = ring_lookup(context, (*names).initialize, CRUST_D_FUNCTION);
+    (*policy).unlink = ring_lookup(context, (*names).unlink, CRUST_D_FUNCTION);
+    (*policy).insert = ring_lookup(context, (*names).insert, CRUST_D_FUNCTION);
+    (*policy).splice = ring_lookup(context, (*names).splice, CRUST_D_FUNCTION);
+    if (*context).error_count != 0usize { return false; }
+    return ring_signature(context, (*policy).initialize, record_value, 1usize) &&
+        ring_signature(context, (*policy).unlink, record_value, 1usize) &&
+        ring_signature(context, (*policy).insert, record_value, 2usize) &&
+        ring_signature(context, (*policy).splice, record_value, 2usize);
+}
+
+fn ring_verify(context: *CrustContext, names: *RingNames) -> bool {
+    var policy: RingProof = uninit;
+    if !ring_configure(context, names, &policy) { return false; }
+    var stage: PfStage = uninit;
+    pf_init(&stage, context);
+    stage.user = &policy as *u8;
+    stage.solve = ring_solve;
+    stage.pre = ring_pre;
+    stage.access = ring_access;
+    stage.post = ring_post;
+    var unit_value: *CrustUnit = (*context).units;
+    var success: bool = true;
+    while unit_value != null(*CrustUnit) && success {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) && success {
+            if (*declaration).kind != CRUST_D_RECORD { success = pf_verify(&stage, declaration); }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    pf_destroy(&stage);
+    return success;
+}
+
+fn ring_emit(cli: *CCli, names: *RingNames) -> i32 {
+    var context: *CrustContext = (*cli).stage.status.context;
+    if !c_cli_read(cli) { return 1i32; }
+    if !crust_collect(context) || !crust_resolve(context) || !crust_check(context) { return 1i32; }
+    if !ring_verify(context, names) { return 1i32; }
+    if !c_driver_exports(cli) { return 1i32; }
+    if (*cli).mode == 3u32 { return 0i32; }
+    if !c_driver_names(&(*cli).driver) { return 1i32; }
+    if (*cli).mode == 4u32 {
+        if c_emit(&(*cli).stage, null(*CrustDecl)) { return 0i32; }
+        return 1i32;
+    }
+    return c_backend_build(context, null(*CrustDecl), &(*cli).options);
+}
+
+// Prove every ring procedure before the selected backend can emit the same trees.
+// The caller retains source storage through return and selects the procedure names.
+fn ring_program(request: *CrustBuild, names: *RingNames) -> i32 {
+    var cli: CCli = uninit;
+    var context: *CrustContext = (*request).context;
+    var success: bool = c_driver_init(&cli, context, (*request).argc);
+    cli.root = (*request).source;
+    cli.target_begin = (*request).target_begin;
+    cli.library = true;
+    var result: i32 = 1i32;
+    if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
+        result = ring_emit(&cli, names);
+    }
+    c_stage_destroy(&cli.stage);
+    return result;
+}

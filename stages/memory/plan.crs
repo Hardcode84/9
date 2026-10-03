@@ -1,0 +1,69 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn pm_plan_enter(stage: *PfStage, depth: usize, location: *CrustLoc) -> bool {
+    if (*stage).status.failed { return false; }
+    if depth >= (*stage).max_depth {
+        pf_error(stage, location, "memory storage traversal depth budget exceeded");
+        return false;
+    }
+    return true;
+}
+
+fn pm_plan_address(stage: *PfStage, policy: *PmPolicy, expression: *CrustExpr) -> unit {
+    while (*expression).kind == CRUST_E_GROUP { expression = (*expression).left; }
+    if (*expression).kind == CRUST_E_NAME {
+        c_map_set(&(*stage).status, &(*policy).addressed, (*expression).symbol as usize, 1usize);
+    }
+}
+
+fn pm_plan_expression(stage: *PfStage, policy: *PmPolicy, expression: *CrustExpr, depth: usize) -> unit {
+    if expression == null(*CrustExpr) { return; }
+    if !pm_plan_enter(stage, depth, &(*expression).loc) { return; }
+    pm_plan_expression(stage, policy, (*expression).left, depth + 1usize);
+    pm_plan_expression(stage, policy, (*expression).right, depth + 1usize);
+    var index: usize = 0usize;
+    while index < (*expression).arg_count && !(*stage).status.failed {
+        pm_plan_expression(stage, policy, (*expression).args[index], depth + 1usize);
+        index = index + 1usize;
+    }
+    var item: *CrustInit = (*expression).inits;
+    while item != null(*CrustInit) && !(*stage).status.failed {
+        pm_plan_expression(stage, policy, (*item).value, depth + 1usize);
+        item = (*item).next;
+    }
+    if (*stage).status.failed { return; }
+    if (*expression).kind == CRUST_E_UNARY && (*expression).op == CRUST_OP_ADDRESS {
+        pm_plan_address(stage, policy, (*expression).left);
+    }
+}
+
+fn pm_plan_statement(stage: *PfStage, policy: *PmPolicy, statement: *CrustStmt, depth: usize) -> unit {
+    while statement != null(*CrustStmt) && !(*stage).status.failed {
+        if !pm_plan_enter(stage, depth, &(*statement).loc) { return; }
+        pm_plan_expression(stage, policy, (*statement).expr, depth + 1usize);
+        pm_plan_expression(stage, policy, (*statement).value, depth + 1usize);
+        pm_plan_statement(stage, policy, (*statement).body, depth + 1usize);
+        pm_plan_statement(stage, policy, (*statement).otherwise, depth + 1usize);
+        statement = (*statement).next;
+    }
+}
+
+fn pm_plan(stage: *PfStage, policy: *PmPolicy) -> bool {
+    var source_unit: *CrustUnit = (*(*stage).status.context).units;
+    while source_unit != null(*CrustUnit) && !(*stage).status.failed {
+        var declaration: *CrustDecl = (*source_unit).declarations;
+        while declaration != null(*CrustDecl) && !(*stage).status.failed {
+            pm_plan_statement(stage, policy, (*declaration).body, 0usize);
+            declaration = (*declaration).next;
+        }
+        source_unit = (*source_unit).next;
+    }
+    return !(*stage).status.failed;
+}
+
+fn pm_needs_storage(run: *PfRun, symbol: *CrustSymbol) -> bool {
+    var kind: u32 = (*(*symbol).type).kind;
+    if kind == CRUST_T_RECORD || kind == CRUST_T_ARRAY { return true; }
+    var policy: *PmPolicy = (*(*run).stage).user as *PmPolicy;
+    return c_map_get(&(*policy).addressed, symbol as usize) != 0usize;
+}

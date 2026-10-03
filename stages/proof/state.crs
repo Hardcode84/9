@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn pf_state(run: *PfRun) -> *PfState {
+    var state: *PfState = pf_alloc(run, sizeof(PfState), alignof(PfState)) as *PfState;
+    if state != null(*PfState) {
+        (*state) = make PfState {
+            fields: null(*PfField), env: null(*PfBinding), assumptions: "true",
+            goals: null(*PfGoal), terms: null(*PfTerm), data: null(*u8),
+            result: null(*u8), flow: PF_NORMAL
+        };
+    }
+    return state;
+}
+
+fn pf_fork(run: *PfRun, state: *PfState) -> *PfState {
+    var result: *PfState = pf_alloc(run, sizeof(PfState), alignof(PfState)) as *PfState;
+    if result != null(*PfState) { *result = *state; }
+    return result;
+}
+
+fn pf_term(run: *PfRun, value: *u8, next: *PfTerm) -> *PfTerm {
+    var term: *PfTerm = pf_alloc(run, sizeof(PfTerm), alignof(PfTerm)) as *PfTerm;
+    if term != null(*PfTerm) { *term = make PfTerm { value: value, next: next }; }
+    return term;
+}
+
+// Add a path fact for subsequent obligations on this path.
+fn pf_assume(run: *PfRun, state: *PfState, value: *u8) -> unit {
+    (*state).assumptions = pf_define(run, "Bool", pf_and(run, (*state).assumptions, value));
+}
+
+// Add a trusted fact from the initial contract. It must hold before every
+// source operation. Do not use this for path conditions or allocation results.
+fn pf_premise(run: *PfRun, value: *u8) -> unit {
+    (*run).premises = pf_term(run, value, (*run).premises);
+}
+
+fn pf_observe(run: *PfRun, state: *PfState, value: *u8) -> unit {
+    (*state).terms = pf_term(run, value, (*state).terms);
+}
+
+// Capture the current path facts. Later path facts cannot discharge this goal.
+fn pf_goal(run: *PfRun, state: *PfState, value: *u8, location: *CrustLoc) -> unit {
+    var goal: *PfGoal = pf_alloc(run, sizeof(PfGoal), alignof(PfGoal)) as *PfGoal;
+    if goal == null(*PfGoal) { return; }
+    *goal = make PfGoal {
+        loc: *location, value: value, assumptions: (*state).assumptions, next: (*state).goals, proven: false
+    };
+    (*state).goals = goal;
+}
+
+fn pf_binding(state: *PfState, symbol: *CrustSymbol) -> *u8 {
+    var binding: *PfBinding = (*state).env;
+    while binding != null(*PfBinding) {
+        if (*binding).symbol == symbol { return (*binding).value; }
+        binding = (*binding).next;
+    }
+    return null(*u8);
+}
+
+fn pf_bind(run: *PfRun, state: *PfState, symbol: *CrustSymbol, value: *u8) -> unit {
+    var binding: *PfBinding = pf_alloc(run, sizeof(PfBinding), alignof(PfBinding)) as *PfBinding;
+    if binding == null(*PfBinding) { return; }
+    *binding = make PfBinding { symbol: symbol, value: value, next: (*state).env };
+    (*state).env = binding;
+}
+
+fn pf_parameter(run: *PfRun, index: usize) -> *u8 {
+    var parameter: *CrustParam = (*(*run).declaration).params;
+    while parameter != null(*CrustParam) && index != 0usize {
+        parameter = (*parameter).next;
+        index = index - 1usize;
+    }
+    if parameter == null(*CrustParam) {
+        pf_error((*run).stage, &(*(*run).declaration).loc, "proof parameter index is out of range");
+        return null(*u8);
+    }
+    var binding: *PfBinding = (*run).parameters;
+    while binding != null(*PfBinding) {
+        if (*binding).symbol == (*parameter).symbol { return (*binding).value; }
+        binding = (*binding).next;
+    }
+    pf_error((*run).stage, &(*parameter).loc, "proof parameter has no symbolic value");
+    return null(*u8);
+}
+
+fn pf_field(run: *PfRun, state: *PfState, field: *CrustField) -> *PfField {
+    var entry: *PfField = (*state).fields;
+    while entry != null(*PfField) {
+        if (*entry).field == field { return entry; }
+        entry = (*entry).next;
+    }
+    pf_error((*run).stage, &(*field).loc, "proof field has no state contract");
+    return null(*PfField);
+}
+
+fn pf_field_set(run: *PfRun, state: *PfState, field: *CrustField,
+                value: *u8, initialized: *u8) -> unit {
+    var entry: *PfField = pf_alloc(run, sizeof(PfField), alignof(PfField)) as *PfField;
+    if entry == null(*PfField) { return; }
+    *entry = make PfField {
+        field: field, value: value, initialized: initialized, next: (*state).fields
+    };
+    (*state).fields = entry;
+}
+
+fn pf_path(run: *PfRun, state: *PfState) -> *PfPath {
+    var path: *PfPath = pf_alloc(run, sizeof(PfPath), alignof(PfPath)) as *PfPath;
+    if path != null(*PfPath) { *path = make PfPath { state: state, next: null(*PfPath) }; }
+    return path;
+}
+
+fn pf_scope(run: *PfRun, state: *PfState, block: *CrustStmt, entering: bool) -> bool {
+    var stage: *PfStage = (*run).stage;
+    if (*stage).scope == null(fn(*PfRun, *PfState, *CrustStmt, bool) -> bool) { return true; }
+    return pf_policy_result(run, (*stage).scope(run, state, block, entering),
+                            &(*block).loc, "proof policy rejected a scope lifetime");
+}

@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn proof_solver_case(query: *u8, expected: i32, error: bool) -> bool {
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var location: CrustLoc = make CrustLoc { source: null(*CrustSource), offset: 0usize };
+    var result: i32 = proof_z3_query(&context, query, &location, 1000u32);
+    var good: bool = result == expected && (context.error_count != 0usize) == error;
+    crust_context_destroy(&context);
+    return good;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if !proof_solver_case("(check-sat)", 1i32, false) { return 1i32; }
+    if !proof_solver_case("(assert false)(check-sat)", 0i32, false) { return 2i32; }
+    if !proof_solver_case(
+        "(set-option :rlimit 1)(declare-const x Int)(assert (> x 0))(check-sat)",
+        -1i32, true) { return 3i32; }
+    if !proof_solver_case("(assert missing)(check-sat)", -1i32, true) { return 4i32; }
+    if !proof_solver_case("(check-sat)(check-sat)", -1i32, true) { return 5i32; }
+    return 0i32;
+}

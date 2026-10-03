@@ -1,0 +1,85 @@
+// SPDX-License-Identifier: Apache-2.0
+
+const PF_NORMAL: u32 = 0u32;
+const PF_RETURN: u32 = 1u32;
+const PF_BREAK: u32 = 2u32;
+const PF_CONTINUE: u32 = 3u32;
+const PF_TRAP: u32 = 4u32;
+const PF_DELEGATE: u32 = 0u32;
+const PF_HANDLED: u32 = 1u32;
+const PF_REJECT: u32 = 2u32;
+
+record PfStage {
+    status: CStatus;
+    user: *u8;
+    preamble: *u8;
+    // Query strings are borrowed only for the duration of each callback.
+    // Return 0 for UNSAT, 1 for SAT, and -1 for error or unknown.
+    solve: fn(*PfStage, *u8, *CrustLoc) -> i32;
+    pre: fn(*PfRun, *PfState) -> bool;
+    access: fn(*PfRun, *PfState, *CrustField, *u8, bool, *CrustLoc) -> *u8;
+    post: fn(*PfRun, *PfState) -> bool;
+    value: fn(*PfRun, *PfState, *CrustExpr, *u8) -> *u8;
+    place: fn(*PfRun, *PfState, *CrustExpr, *u8) -> *u8;
+    store: fn(*PfRun, *PfState, *CrustExpr, *u8, *u8, *CrustLoc) -> bool;
+    external: fn(*PfRun, *PfState, *CrustExpr, *u8) -> *u8;
+    sort: fn(*PfRun, *CrustType) -> *u8;
+    statement: fn(*PfRun, *PfState, *CrustStmt) -> u32;
+    scope: fn(*PfRun, *PfState, *CrustStmt, bool) -> bool;
+    max_depth: usize;
+    max_paths: usize;
+    // Zero requires each loop condition to be false before its first iteration.
+    max_iterations: usize;
+    obligations: usize;
+    prune: bool;
+}
+
+record PfRun {
+    declarations: CBuffer;
+    query: CBuffer;
+    stage: *PfStage;
+    declaration: *CrustDecl;
+    before: *PfState;
+    parameters: *PfBinding;
+    premises: *PfTerm;
+    calls: *PfCall;
+    projector_depth: usize;
+    next_name: usize;
+    depth: usize;
+    paths: usize;
+}
+
+record PfState {
+    fields: *PfField;
+    env: *PfBinding;
+    assumptions: *u8;
+    goals: *PfGoal;
+    terms: *PfTerm;
+    data: *u8;
+    result: *u8;
+    flow: u32;
+}
+
+record PfField {
+    field: *CrustField;
+    value: *u8;
+    initialized: *u8;
+    next: *PfField;
+}
+
+record PfBinding {
+    symbol: *CrustSymbol;
+    value: *u8;
+    next: *PfBinding;
+}
+
+record PfTerm { value: *u8; next: *PfTerm; }
+record PfGoal { loc: CrustLoc; value: *u8; assumptions: *u8; next: *PfGoal; proven: bool; }
+record PfPath { state: *PfState; next: *PfPath; }
+record PfCall { declaration: *CrustDecl; parent: *PfCall; guard: *u8; }
+record PfLoop { active: *PfPath; exits: *PfPath; }
+
+record PfPlace {
+    field: *PfField;
+    target: *u8;
+}

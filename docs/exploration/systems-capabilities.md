@@ -268,17 +268,24 @@ A safe persistent-pointer contract can require more work. Measure that work
 inside the full frontend boundary. Do not move it to a linker or runtime service
 and omit its cost.
 
-The present research has not proved a small safe direct-pointer model with
-individual reclamation. The exact missing contract must cover stored aliases,
-subobject validity, and cleanup that changes other nodes. A plain pointer plus
-RAII is a useful baseline, but cannot be called fully memory safe. An optional
-checked pointer need not dictate allocation; it must still expose its metadata,
-assignment, access, and destruction costs.
+The [ownership tutorial](../../examples/ownership/README.md) now checks a
+sequential direct-pointer program with individual reclamation. Its profile
+expands actual calls and proves that each loop stops within a selected bound.
+It checks stored aliases, subobject access, and cleanup that changes other nodes.
+It does not supply reusable ownership contracts for callers or a general graph
+model. A plain pointer plus RAII is still insufficient to establish memory
+safety. The selected checks use compilation state and add no runtime pointer
+metadata or validity checks.
 
 ## Acceptance experiments
 
 Freeze small source-derived cases before adding more language machinery.
-These are proposed tests. No Crust compiler or translation of these cases exists.
+The ownership tutorial implements a sequential two-hook witness with stack and
+heap nodes, splice, individual destruction, and a replacement allocation while
+the lists remain live. Its proof permits address reuse; the native test does not
+force the allocator to reuse an address. The Linux, GCC, and LLVM protocol tests
+below still require translations that preserve their synchronization,
+relocation, and callback behavior.
 
 | Case | Required visible result and failure tests |
 |---|---|
@@ -295,7 +302,66 @@ Measure one-worker check and backend-handoff time before parallel speedup.
 Use the pass rules in the [language proposal](language-exploration.md#10-production-witness-and-acceptance-gates).
 
 Stop a candidate when it cannot express its case without a hidden unsafe
-operation, an imposed allocation model, excessive annotations, or a failed
-C-speed gate. The next step is then a specific change to that access contract
+operation, an imposed allocation model, or excessive annotations. A selected
+stronger proof profile can cost more compilation time. Measure that cost and
+state its capability. The next step is a specific change to the access contract
 and the same test. A successful two-node example does not authorize a general
 graph framework.
+
+## Static model reassessment
+
+Date: 2026-10-03. This inspection uses the Linux and GCC revisions above and
+LLVM commit [9a85fa532ec67903041ac26154c068afae90b51b](https://github.com/llvm/llvm-project/tree/9a85fa532ec67903041ac26154c068afae90b51b).
+The judgments below concern source changes and proof obligations. They are not
+results from compiling these projects with Crust.
+
+| Source pattern | Cost of adapting the model | Required rule |
+|---|---|---|
+| Ordinary list, two hooks, independent destruction | Small source change if link algorithms remain ordinary pointer stores | Prove live storage for every access and detach every incoming persistent link before release |
+| Stack marker during mutable traversal | Moderate; a whole-list shared loan would force an algorithm change | Separate the marker's storage lifetime from edit authority and short payload views |
+| Pointer-to-pointer back links | Small source change; preserve the existing representation | Permit a typed pointer to a pointer slot and track that slot's storage |
+| Operand growth and relocation | Substantial proof contract, even when the source operation stays small | Transfer initialized contents and links, retire the old allocation, and invalidate its views |
+| Self-removing callbacks during destruction | Substantial; ordinary lexical loans do not describe the protocol | Specify permitted surviving subobjects and which views each callback invalidates |
+| Locks, RCU, and reference pins | A separate concurrency profile is required | Keep storage lifetime, field write permission, and synchronization distinct |
+
+GCC's SSA iterator publishes a stack marker and removes it during cleanup.
+LLVM's value-handle notification also inserts a temporary marker while callbacks
+can change the chain. A shared view that freezes the entire graph rejects both
+patterns. An edit cursor must permit link changes and short payload access.
+[GCC iterator](https://github.com/gcc-mirror/gcc/blob/b71f1de6e9cf7181a288c0f39f9b1ef6580cf5c8/gcc/ssa-iterators.h#L20-L104),
+[LLVM notification](https://github.com/llvm/llvm-project/blob/9a85fa532ec67903041ac26154c068afae90b51b/llvm/lib/IR/Value.cpp#L1244-L1333)
+
+LLVM `Use::Prev` points to the predecessor's pointer slot. It is not another
+node pointer. `growHungoffUses` replaces operand storage while the `User` stays
+alive. GCC also relocates PHI operands and moves the last argument into a removed
+argument's slot. A live parent does not establish the lifetime of an old child
+address. These operations need checked relocation and explicit invalidation.
+[Use slots](https://github.com/llvm/llvm-project/blob/9a85fa532ec67903041ac26154c068afae90b51b/llvm/include/llvm/IR/Use.h#L80-L104),
+[operand growth](https://github.com/llvm/llvm-project/blob/9a85fa532ec67903041ac26154c068afae90b51b/llvm/lib/IR/User.cpp#L54-L95),
+[PHI relocation](https://github.com/gcc-mirror/gcc/blob/b71f1de6e9cf7181a288c0f39f9b1ef6580cf5c8/gcc/tree-phinodes.cc#L237-L314),
+[argument removal](https://github.com/gcc-mirror/gcc/blob/b71f1de6e9cf7181a288c0f39f9b1ef6580cf5c8/gcc/tree-phinodes.cc#L388-L416)
+
+`ReplaceInstWithInst` keeps the new instruction's iterator across replacement of
+uses and erasure of the old instruction. An edit must preserve unaffected
+identities. Leaving an edit scope must not make a stale identity valid again.
+Function teardown disconnects references before deleting blocks. A list
+transfer can also update parents and symbol tables for each node; constant
+boundary-link work does not remove that required metadata work.
+[Replacement](https://github.com/llvm/llvm-project/blob/9a85fa532ec67903041ac26154c068afae90b51b/llvm/lib/Transforms/Utils/BasicBlockUtils.cpp#L620-L650),
+[teardown](https://github.com/llvm/llvm-project/blob/9a85fa532ec67903041ac26154c068afae90b51b/llvm/lib/IR/Function.cpp#L606-L615),
+[transfer](https://github.com/llvm/llvm-project/blob/9a85fa532ec67903041ac26154c068afae90b51b/llvm/lib/IR/SymbolTableListTraitsImpl.h#L66-L119)
+
+Linux completion waiters retain stack storage across unlock and sleep. Inode
+writeback moves from a queue lock to RCU protection and then to a reference pin.
+The LRU walker can discard its saved successor and restart after a callback
+releases the lock. These are different lifetime and synchronization events.
+The application's explicit locks, grace periods, and reference counts remain
+runtime costs. Erased language permissions cannot remove those operations.
+[Completion](https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/kernel/sched/completion.c#L75-L98),
+[writeback](https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/fs/fs-writeback.c#L2621-L2690),
+[LRU restart](https://github.com/torvalds/linux/blob/adc218676eef25575469234709c2d87185ca223a/mm/list_lru.c#L210-L271)
+
+The next source-derived witnesses are mutable SSA traversal with a stack marker
+and removal of the current node, then operand growth with rejection of a stale
+operand view. The sequential closed-program checker does not establish lock,
+RCU, atomic access, or partial-destruction contracts.

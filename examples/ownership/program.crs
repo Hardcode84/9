@@ -1,0 +1,77 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn allocate(size: usize) -> *u8 = "malloc";
+extern fn release(storage: *u8) -> unit = "free";
+extern fn emit(character: i32) -> i32 = "putchar";
+
+record Payload { code: i64; serial: i64; }
+record Node { payload: Payload; ready: Hook; active: Hook; }
+
+fn clear(head: *Hook) -> unit {
+    while (*head).next != head { unlink((*head).next); }
+}
+
+fn node_ready(hook: *Hook) -> *Node {
+    return ((hook as *u8) - (offsetof(Node, ready) as isize)) as *Node;
+}
+
+fn node_active(hook: *Hook) -> *Node {
+    return ((hook as *u8) - (offsetof(Node, active) as isize)) as *Node;
+}
+
+fn construct(node: *Node, code: i64) -> unit {
+    (*node).payload.code = code;
+    (*node).payload.serial = code;
+    hook_init(&(*node).ready);
+    hook_init(&(*node).active);
+}
+
+fn destroy(node: *Node) -> unit {
+    unlink(&(*node).ready);
+    unlink(&(*node).active);
+    release(node as *u8);
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    var first: *Node = allocate(sizeof(Node)) as *Node;
+    if first == null(*Node) { return 1i32; }
+    var second: *Node = allocate(sizeof(Node)) as *Node;
+    if second == null(*Node) { release(first as *u8); return 2i32; }
+    construct(first, 65i64);
+    construct(second, 66i64);
+    var stack: Node = uninit;
+    construct(&stack, 67i64);
+    {
+        var ready: Hook = uninit;
+        var active: Hook = uninit;
+        var source: Hook = uninit;
+        hook_init(&ready);
+        hook_init(&active);
+        hook_init(&source);
+        insert_after(&ready, &(*first).ready);
+        insert_after(&source, &(*second).ready);
+        splice_init(&ready, &source);
+        insert_after(&(*second).ready, &stack.ready);
+        insert_after(&active, &(*first).active);
+        insert_after(&(*first).active, &(*second).active);
+        insert_after(&(*second).active, &stack.active);
+        destroy(first);
+        var replacement: *Node = allocate(sizeof(Node)) as *Node;
+        if replacement != null(*Node) {
+            construct(replacement, 68i64);
+            insert_after(&ready, &(*replacement).ready);
+            insert_after(&active, &(*replacement).active);
+            if (*replacement).payload.code != 68i64 { trap; }
+            destroy(replacement);
+        }
+        if node_ready(ready.next) != second || node_active(active.next) != second { trap; }
+        clear(&ready);
+        clear(&active);
+    }
+    if (*second).ready.next != &(*second).ready || (*second).active.prev != &(*second).active { trap; }
+    if (*second).payload.code != 66i64 { trap; }
+    if stack.ready.next != &stack.ready || stack.active.prev != &stack.active { trap; }
+    if stack.payload.code != 67i64 { trap; }
+    destroy(second);
+    return (emit(79i32) < 0i32 || emit(75i32) < 0i32 || emit(10i32) < 0i32) as i32;
+}

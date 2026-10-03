@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn pf_z3_config() -> *u8 = "Z3_mk_config";
+extern fn pf_z3_parameter(config: *u8, name: *u8, value: *u8) -> unit = "Z3_set_param_value";
+extern fn pf_z3_config_drop(config: *u8) -> unit = "Z3_del_config";
+extern fn pf_z3_context(config: *u8) -> *u8 = "Z3_mk_context";
+extern fn pf_z3_context_drop(context: *u8) -> unit = "Z3_del_context";
+extern fn pf_z3_errors(context: *u8, handler: fn(*u8, u32) -> unit) -> unit = "Z3_set_error_handler";
+extern fn pf_z3_evaluate(context: *u8, text: *u8) -> *u8 = "Z3_eval_smtlib2_string";
+extern fn pf_z3_error(context: *u8) -> u32 = "Z3_get_error_code";
+extern fn pf_z3_message(context: *u8, code: u32) -> *u8 = "Z3_get_error_msg";
+
+fn pf_z3_failure(context: *CrustContext, location: *CrustLoc, message: *u8) -> i32 {
+    crust_set_error(context, (*location).source, (*location).offset, message);
+    return -1i32;
+}
+
+fn pf_z3_budget(config: *u8, milliseconds: u32) -> unit {
+    var digits: [u8; 11] = uninit;
+    var position: usize = 10usize;
+    digits[position] = 0u8;
+    while true {
+        position = position - 1usize;
+        digits[position] = 48u8 + (milliseconds % 10u32) as u8;
+        milliseconds = milliseconds / 10u32;
+        if milliseconds == 0u32 { break; }
+    }
+    pf_z3_parameter(config, "timeout", &digits[position]);
+}
+
+fn pf_z3_result(context: *CrustContext, solver: *u8, output: *u8, location: *CrustLoc) -> i32 {
+    var code: u32 = pf_z3_error(solver);
+    if code != 0u32 { return pf_z3_failure(context, location, pf_z3_message(solver, code)); }
+    if output == null(*u8) {
+        return pf_z3_failure(context, location, "proof solver returned no result");
+    }
+    if c_equal(output, "unsat\n") || c_equal(output, "unsat") { return 0i32; }
+    if c_equal(output, "sat\n") || c_equal(output, "sat") { return 1i32; }
+    if c_equal(output, "unknown\n") || c_equal(output, "unknown") {
+        var reason: *u8 = pf_z3_evaluate(solver, "(get-info :reason-unknown)");
+        if reason != null(*u8) { return pf_z3_failure(context, location, reason); }
+        return pf_z3_failure(context, location, "proof solver returned unknown");
+    }
+    return pf_z3_failure(context, location, "proof solver returned an invalid response");
+}
+
+// Check one complete SMT-LIB query with exactly one check-sat command.
+// Return 0 for UNSAT, 1 for SAT, and -1 for an error or unknown result.
+// Retain diagnostics in context on every error or unknown result.
+// The caller selects a nonzero solver search timeout in milliseconds.
+// SMT parsing and query construction are outside this timeout.
+fn proof_z3_query(context: *CrustContext, query: *u8, location: *CrustLoc, milliseconds: u32) -> i32 {
+    if milliseconds == 0u32 {
+        return pf_z3_failure(context, location, "proof timeout must be nonzero");
+    }
+    var config: *u8 = pf_z3_config();
+    if config == null(*u8) { return pf_z3_failure(context, location, "cannot allocate proof solver configuration"); }
+    pf_z3_budget(config, milliseconds);
+    var solver: *u8 = pf_z3_context(config);
+    pf_z3_config_drop(config);
+    if solver == null(*u8) { return pf_z3_failure(context, location, "cannot allocate proof solver context"); }
+    pf_z3_errors(solver, null(fn(*u8, u32) -> unit));
+    var output: *u8 = pf_z3_evaluate(solver, query);
+    var result: i32 = pf_z3_result(context, solver, output, location);
+    pf_z3_context_drop(solver);
+    return result;
+}

@@ -342,9 +342,19 @@ test does not establish C-level compilation speed for that configuration.
 
 Safety claims also follow the selected stages. Raw seed pointers do not
 justify ownership guarantees or exclusive-access metadata. The resource
-stage checks local owners and loans. Persistent intrusive links require an
-additional observer-validity contract across unlink, destruction, and
-storage reuse; the current resource types do not express that relation.
+stage checks local owners, loans, and returned views tied to a named input.
+The optional [memory proof stage](../examples/ownership/README.md) checks
+closed sequential entries through the typed seed tree. It gives allocations
+distinct proof identities, checks accesses and destruction, and proves that
+loops cannot continue beyond the selected unfolding bound. These identities
+do not occur in emitted code.
+
+The memory profile is separate from the resource profile. Resource cleanup
+also exists in retained exit plans, so its lowered operation tree alone is not
+an input that the memory profile can verify correctly. A combined profile
+must preserve source lifetimes, check those exit plans, and connect proved
+library effects to caller permissions. The current resource types do not
+express persistent intrusive-link permissions across destruction and reuse.
 Native host execution is trusted process code, with no sandbox guarantee.
 
 ## Read next

@@ -1192,12 +1192,12 @@ prove that two constructions within one continuously allocated block receive
 distinct lifetime permissions. The executable lifetime model tests that rule;
 the Crust source checker must still enforce it.
 
-The Crust experiment is a real compiler path. An ordinary Crust stage reads
+The first Crust experiment is a real compiler path. An ordinary Crust stage reads
 source through the existing APIs, exports resolved operation identities, invokes
 the selected checker, and emits from the same unchanged context after success.
 It has no additional source parser, list-name exemption, or trusted unlink
 operation. A scratch Python executor constructs solver queries from that tree;
-it is not yet a Crust implementation of the ownership checker.
+it is not itself a Crust implementation of the ownership checker.
 
 The library supplies its invariant and function contracts separately from the
 generic operation executor. Declaration and field identities bind them to the
@@ -1221,8 +1221,43 @@ backend output before target optimization. A native client exercises two hooks,
 stack and separate heap storage, individual destruction, head-first cleanup,
 constant-work splice, and reconstruction at the exact address. It passes
 unoptimized, optimized, and address/undefined-behavior sanitizer runs. This
-client supplies runtime evidence; it is not checked by the Crust lifetime model.
+client supplies runtime evidence; it is not checked by that Crust lifetime model.
 No frontend speed claim follows from these checks.
+
+#### Implemented optional proof profile
+
+The [static memory tutorial](../../examples/ownership/README.md) now contains a
+separate complete checked client. Its executor, memory policy, and ring policy
+are ordinary Crust code. They consume the existing typed tree and call the Z3
+C API directly. The seed has no new syntax, ownership state, or solver operation.
+
+The memory profile tracks allocation identity, byte extent, alignment,
+initialization, and live storage. It checks each actual load and store. Before
+release or scope exit, other live objects must not retain persistent pointers
+into the retiring storage. Scalar aliases can remain but cannot access that
+storage. A later allocation can have the same numeric address; it receives a
+different proof identity. The emitted application has ordinary pointer fields.
+
+The direct client uses the same link bodies as the unbounded library proof.
+It checks two hooks, individual heap destruction, head-first cleanup, and typed
+payload projection. Accepted C text must match ordinary backend output byte
+for byte. Mutation tests remove required unlink or head cleanup operations.
+Other tests cover null access, double release, stack escape, uninitialized
+reads, bounds, alignment, pointer-to-pointer backlinks, and stale aliases under
+possible equal-address reuse. Allocation failure tests exercise stage cleanup.
+
+This profile expands direct calls and unfolds loops under explicit budgets.
+At the bound it must prove that the loop cannot continue. Unsupported cases,
+counterexamples, and solver uncertainty stop output. The library proof is a
+separate conditional check; callers do not consume it as a permission summary.
+There is no claim of C-speed proof checking or completed modular ownership.
+
+The resource stage separately supports a result view tied to one input loan.
+Its moves, RAII, and `defer` still use retained cleanup plans. Those plans and
+the original lexical storage lifetimes must enter the memory proof before the
+two stages can share a safety claim. A check of the resource stage's lowered
+tree alone would omit cleanup calls. The next modular interface must also
+connect owner rights and field permissions to the verified library contract.
 
 Subobject projection needs its own contract. The default VeriFast C model
 rejects subtraction outside a field subobject, even with a known parent. Crust's
@@ -1256,8 +1291,9 @@ permission or transfer it explicitly. Every projected or returned view must
 retain its loan. The checker must reject destruction while that loan survives,
 including through callbacks and another hook. The current experiments establish
 the field-edit and permission foundations; they do not replace these source
-checks. Keep the experiment artifacts in ignored build storage until that
-connection is ready. The C99 core remains unchanged.
+checks. Keep the research-only exporters, alternate verifier inputs, and timing
+artifacts in ignored build storage. The executable tutorial and its regression
+tests are source-controlled. The C99 core remains unchanged.
 
 ### 6.10 Systems programming capability target
 

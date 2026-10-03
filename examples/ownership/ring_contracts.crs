@@ -1,0 +1,292 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record RingProof {
+    previous: *CrustField;
+    next: *CrustField;
+    initialize: *CrustDecl;
+    unlink: *CrustDecl;
+    insert: *CrustDecl;
+    splice: *CrustDecl;
+    milliseconds: u32;
+}
+
+record RingFacts {
+    live: *u8;
+    storage: *u8;
+    next: *u8;
+    previous: *u8;
+    root: *u8;
+    rank: *u8;
+    length: *u8;
+}
+
+fn ring_initial(result: *RingFacts) -> unit {
+    *result = make RingFacts {
+        live: "live", storage: "storage", next: "next", previous: "previous",
+        root: "root", rank: "rank", length: "length"
+    };
+}
+
+fn ring_solve(stage: *PfStage, query: *u8, location: *CrustLoc) -> i32 {
+    var policy: *RingProof = (*stage).user as *RingProof;
+    return proof_z3_query((*stage).status.context, query, location, (*policy).milliseconds);
+}
+
+fn ring_declarations(run: *PfRun) -> unit {
+    pf_declare(run, "live", "(Array Int Bool)");
+    pf_declare(run, "storage", "(Array Int Bool)");
+    pf_declare(run, "next", "(Array Int Int)");
+    pf_declare(run, "previous", "(Array Int Int)");
+    pf_declare(run, "root", "(Array Int Int)");
+    pf_declare(run, "rank", "(Array Int Int)");
+    pf_declare(run, "length", "(Array Int Int)");
+    pf_declare(run, "witness", "Int");
+    pf_declare(run, "other", "Int");
+}
+
+fn ring_pre(run: *PfRun, state: *PfState) -> bool {
+    var policy: *RingProof = (*(*run).stage).user as *RingProof;
+    var declaration: *CrustDecl = (*run).declaration;
+    if declaration != (*policy).initialize && declaration != (*policy).unlink &&
+       declaration != (*policy).insert && declaration != (*policy).splice {
+        pf_error((*run).stage, &(*declaration).loc, "function has no checked ring contract");
+        return false;
+    }
+    ring_declarations(run);
+    pf_field_set(run, state, (*policy).previous, "previous", "live");
+    pf_field_set(run, state, (*policy).next, "next", "live");
+    pf_assume(run, state, pf_not(run, pf_select(run, "live", "0")));
+    var first: *u8 = pf_parameter(run, 0usize);
+    if declaration == (*policy).initialize {
+        pf_assume(run, state, pf_select(run, "storage", first));
+        pf_assume(run, state, pf_not(run, pf_select(run, "live", first)));
+        pf_assume(run, state, pf_not(run, pf_eq(run, first, "0")));
+        return true;
+    }
+    pf_assume(run, state, pf_select(run, "live", first));
+    if declaration == (*policy).unlink {
+        ring_member(run, state, first);
+        return true;
+    }
+    var second: *u8 = pf_parameter(run, 1usize);
+    pf_assume(run, state, pf_select(run, "live", second));
+    if declaration == (*policy).insert { ring_member(run, state, second); }
+    else {
+        pf_assume(run, state, pf_eq(run, pf_select(run, "root", first), first));
+        pf_assume(run, state, pf_eq(run, pf_select(run, "root", second), second));
+    }
+    return true;
+}
+
+fn ring_member(run: *PfRun, state: *PfState, member: *u8) -> unit {
+    pf_assume(run, state, pf_or(run,
+        pf_not(run, pf_eq(run, member, pf_select(run, "root", member))),
+        pf_eq(run, member, pf_select(run, "next", member))));
+}
+
+fn ring_access(run: *PfRun, state: *PfState, field: *CrustField,
+               target: *u8, write: bool, location: *CrustLoc) -> *u8 {
+    var policy: *RingProof = (*(*run).stage).user as *RingProof;
+    var live: *u8 = pf_select(run, "live", target);
+    if (*run).declaration == (*policy).initialize {
+        live = pf_or(run, live, pf_eq(run, target, pf_parameter(run, 0usize)));
+    }
+    return pf_and(run, pf_select(run, "storage", target), live);
+}
+
+fn ring_link_clause(run: *PfRun, facts: *RingFacts, hook: *u8, index: usize) -> *u8 {
+    var next: *u8 = pf_select(run, (*facts).next, hook);
+    var previous: *u8 = pf_select(run, (*facts).previous, hook);
+    if index == 0usize { return pf_select(run, (*facts).storage, hook); }
+    if index == 1usize { return pf_select(run, (*facts).live, next); }
+    if index == 2usize { return pf_select(run, (*facts).live, previous); }
+    if index == 3usize { return pf_eq(run, pf_select(run, (*facts).previous, next), hook); }
+    return pf_eq(run, pf_select(run, (*facts).next, previous), hook);
+}
+
+fn ring_rank_clause(run: *PfRun, facts: *RingFacts, hook: *u8, index: usize) -> *u8 {
+    var root: *u8 = pf_select(run, (*facts).root, hook);
+    var rank: *u8 = pf_select(run, (*facts).rank, hook);
+    var length: *u8 = pf_select(run, (*facts).length, root);
+    if index == 5usize { return pf_select(run, (*facts).live, root); }
+    if index == 6usize { return pf_eq(run, pf_select(run, (*facts).root, root), root); }
+    if index == 7usize { return pf_eq(run, pf_select(run, (*facts).rank, root), "0"); }
+    if index == 8usize { return pf_binary(run, ">=", length, "0"); }
+    if index == 9usize { return pf_binary(run, ">=", rank, "0"); }
+    if index == 10usize { return pf_binary(run, "<=", rank, length); }
+    if index == 11usize { return pf_eq(run, pf_eq(run, rank, "0"), pf_eq(run, hook, root)); }
+    var next: *u8 = pf_select(run, (*facts).next, hook);
+    if index == 12usize { return pf_eq(run, pf_select(run, (*facts).root, next), root); }
+    return pf_eq(run, pf_select(run, (*facts).rank, next),
+        pf_ite(run, pf_eq(run, rank, length), "0", pf_binary(run, "+", rank, "1")));
+}
+
+fn ring_clause(run: *PfRun, facts: *RingFacts, hook: *u8, index: usize) -> *u8 {
+    var value: *u8 = null(*u8);
+    if index < 5usize { value = ring_link_clause(run, facts, hook, index); }
+    else { value = ring_rank_clause(run, facts, hook, index); }
+    return pf_implies(run, pf_select(run, (*facts).live, hook), value);
+}
+
+fn ring_unique(run: *PfRun, facts: *RingFacts, a: *u8, b: *u8) -> *u8 {
+    var same: *u8 = pf_and(run,
+        pf_eq(run, pf_select(run, (*facts).root, a), pf_select(run, (*facts).root, b)),
+        pf_eq(run, pf_select(run, (*facts).rank, a), pf_select(run, (*facts).rank, b)));
+    var live: *u8 = pf_and(run, pf_select(run, (*facts).live, a), pf_select(run, (*facts).live, b));
+    return pf_implies(run, pf_and(run, live, same), pf_eq(run, a, b));
+}
+
+fn ring_unlink_facts(run: *PfRun, before: *RingFacts, hook: *u8, result: *RingFacts) -> unit {
+    *result = *before;
+    var next: *u8 = pf_select(run, (*before).next, hook);
+    var previous: *u8 = pf_select(run, (*before).previous, hook);
+    var root: *u8 = pf_select(run, (*before).root, hook);
+    var rank: *u8 = pf_select(run, (*before).rank, hook);
+    var at_root: *u8 = pf_eq(run, pf_select(run, (*before).root, "k"), root);
+    var after: *u8 = pf_binary(run, ">", pf_select(run, (*before).rank, "k"), rank);
+    var shifted: *u8 = pf_binary(run, "-", pf_select(run, (*before).rank, "k"),
+        pf_ite(run, pf_and(run, at_root, after), "1", "0"));
+    (*result).next = pf_store(run, pf_store(run, (*before).next, previous, next), hook, hook);
+    (*result).previous = pf_store(run, pf_store(run, (*before).previous, next, previous), hook, hook);
+    (*result).root = pf_store(run, (*before).root, hook, hook);
+    (*result).rank = pf_unary(run, "lambda ((k Int))", pf_ite(run, pf_eq(run, "k", hook), "0", shifted));
+    var length: *u8 = pf_binary(run, "-", pf_select(run, (*before).length, root),
+        pf_ite(run, pf_eq(run, next, hook), "0", "1"));
+    (*result).length = pf_store(run, pf_store(run, (*before).length, root, length), hook, "0");
+}
+
+fn ring_insert_facts(run: *PfRun, before: *RingFacts, at: *u8, hook: *u8, result: *RingFacts) -> unit {
+    *result = *before;
+    var root: *u8 = pf_select(run, (*before).root, at);
+    var rank: *u8 = pf_select(run, (*before).rank, at);
+    var next: *u8 = pf_select(run, (*before).next, at);
+    var at_root: *u8 = pf_eq(run, pf_select(run, (*before).root, "k"), root);
+    var after: *u8 = pf_binary(run, ">", pf_select(run, (*before).rank, "k"), rank);
+    var shifted: *u8 = pf_binary(run, "+", pf_select(run, (*before).rank, "k"),
+        pf_ite(run, pf_and(run, at_root, after), "1", "0"));
+    (*result).next = pf_store(run, pf_store(run, (*before).next, hook, next), at, hook);
+    (*result).previous = pf_store(run, pf_store(run, (*before).previous, hook, at), next, hook);
+    (*result).root = pf_store(run, (*before).root, hook, root);
+    (*result).rank = pf_unary(run, "lambda ((k Int))",
+        pf_ite(run, pf_eq(run, "k", hook), pf_binary(run, "+", rank, "1"), shifted));
+    (*result).length = pf_store(run, (*before).length, root,
+        pf_binary(run, "+", pf_select(run, (*before).length, root), "1"));
+}
+
+fn ring_splice_facts(run: *PfRun, before: *RingFacts, destination: *u8, source: *u8, result: *RingFacts) -> unit {
+    *result = *before;
+    var source_length: *u8 = pf_select(run, (*before).length, source);
+    var moved: *u8 = pf_and(run,
+        pf_eq(run, pf_select(run, (*before).root, "k"), source),
+        pf_not(run, pf_eq(run, "k", source)));
+    (*result).root = pf_unary(run, "lambda ((k Int))",
+        pf_ite(run, moved, destination, pf_select(run, (*before).root, "k")));
+    var shifted: *u8 = pf_and(run,
+        pf_eq(run, pf_select(run, (*before).root, "k"), destination),
+        pf_not(run, pf_eq(run, "k", destination)));
+    var rank: *u8 = pf_select(run, (*before).rank, "k");
+    (*result).rank = pf_unary(run, "lambda ((k Int))",
+        pf_ite(run, shifted, pf_binary(run, "+", rank, source_length), rank));
+    (*result).length = pf_store(run, pf_store(run, (*before).length, destination,
+        pf_binary(run, "+", pf_select(run, (*before).length, destination), source_length)), source, "0");
+}
+
+fn ring_choose_facts(run: *PfRun, condition: *u8, yes: *RingFacts, no: *RingFacts, result: *RingFacts) -> unit {
+    *result = make RingFacts {
+        live: pf_ite(run, condition, (*yes).live, (*no).live),
+        storage: pf_ite(run, condition, (*yes).storage, (*no).storage),
+        next: pf_ite(run, condition, (*yes).next, (*no).next),
+        previous: pf_ite(run, condition, (*yes).previous, (*no).previous),
+        root: pf_ite(run, condition, (*yes).root, (*no).root),
+        rank: pf_ite(run, condition, (*yes).rank, (*no).rank),
+        length: pf_ite(run, condition, (*yes).length, (*no).length)
+    };
+}
+
+fn ring_post_facts(run: *PfRun, result: *RingFacts) -> unit {
+    var policy: *RingProof = (*(*run).stage).user as *RingProof;
+    var before: RingFacts = uninit;
+    ring_initial(&before);
+    var first: *u8 = pf_parameter(run, 0usize);
+    if (*run).declaration == (*policy).initialize {
+        var created: RingFacts = before;
+        created.live = pf_store(run, before.live, first, "true");
+        created.root = pf_store(run, before.root, first, first);
+        created.rank = pf_store(run, before.rank, first, "0");
+        created.length = pf_store(run, before.length, first, "0");
+        *result = created;
+        return;
+    }
+    if (*run).declaration == (*policy).unlink { ring_unlink_facts(run, &before, first, result); return; }
+    var second: *u8 = pf_parameter(run, 1usize);
+    var changed: RingFacts = uninit;
+    var unchanged: *u8 = pf_eq(run, first, second);
+    if (*run).declaration == (*policy).insert {
+        var detached: RingFacts = uninit;
+        ring_unlink_facts(run, &before, second, &detached);
+        ring_insert_facts(run, &detached, first, second, &changed);
+    } else {
+        ring_splice_facts(run, &before, first, second, &changed);
+        unchanged = pf_or(run, unchanged, pf_eq(run, pf_select(run, before.next, second), second));
+    }
+    ring_choose_facts(run, unchanged, &before, &changed, result);
+}
+
+fn ring_instances(run: *PfRun, state: *PfState, facts: *RingFacts) -> unit {
+    pf_observe(run, state, "witness");
+    pf_observe(run, state, "other");
+    var parameters: *CrustParam = (*(*run).declaration).params;
+    while parameters != null(*CrustParam) {
+        pf_observe(run, state, pf_binding((*run).before, (*parameters).symbol));
+        parameters = (*parameters).next;
+    }
+    var original: *PfTerm = (*state).terms;
+    var item: *PfTerm = original;
+    while item != null(*PfTerm) {
+        pf_observe(run, state, pf_select(run, (*facts).next, (*item).value));
+        pf_observe(run, state, pf_select(run, (*facts).previous, (*item).value));
+        pf_observe(run, state, pf_select(run, (*facts).root, (*item).value));
+        item = (*item).next;
+    }
+    item = (*state).terms;
+    while item != null(*PfTerm) {
+        var index: usize = 0usize;
+        while index < 14usize {
+            pf_premise(run, ring_clause(run, facts, (*item).value, index));
+            index = index + 1usize;
+        }
+        ring_unique_instances(run, state, facts, (*item).value);
+        item = (*item).next;
+    }
+}
+
+fn ring_unique_instances(run: *PfRun, state: *PfState, facts: *RingFacts, value: *u8) -> unit {
+    var item: *PfTerm = (*state).terms;
+    while item != null(*PfTerm) {
+        pf_premise(run, ring_unique(run, facts, value, (*item).value));
+        item = (*item).next;
+    }
+}
+
+fn ring_post(run: *PfRun, state: *PfState) -> bool {
+    var policy: *RingProof = (*(*run).stage).user as *RingProof;
+    var after: RingFacts = uninit;
+    ring_post_facts(run, &after);
+    var previous: *PfField = pf_field(run, state, (*policy).previous);
+    var next: *PfField = pf_field(run, state, (*policy).next);
+    if (*(*run).stage).status.failed { return false; }
+    after.previous = (*previous).value;
+    after.next = (*next).value;
+    var before: RingFacts = uninit;
+    ring_initial(&before);
+    ring_instances(run, state, &before);
+    var location: *CrustLoc = &(*(*run).declaration).loc;
+    var index: usize = 0usize;
+    while index < 14usize {
+        pf_goal(run, state, ring_clause(run, &after, "witness", index), location);
+        index = index + 1usize;
+    }
+    pf_goal(run, state, ring_unique(run, &after, "witness", "other"), location);
+    pf_goal(run, state, pf_not(run, pf_select(run, after.live, "0")), location);
+    return !(*(*run).stage).status.failed;
+}

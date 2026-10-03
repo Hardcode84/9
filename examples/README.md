@@ -24,6 +24,7 @@ and commands to inspect the result.
 | 6 | [Modules](../stages/modules/README.md) | Separate contexts, selected imports, native exports, and provider lifetimes |
 | 7 | [Native bootstrap](../stages/native/README.md) | Build stages from source and hand following compilation code to native execution |
 | 8 | [Cyclomatic complexity](../stages/ccn/README.md) | Count decisions with the public AST and reject functions before backend emission |
+| 9 | [Static memory checks](ownership/README.md) | Check direct pointer programs and intrusive link invariants before emission |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -47,6 +48,8 @@ Each example has its own directory and README.
 | [highlight](highlight/README.md) | Classify source with ordinary Crust stages | Highlighted HTML or JSON tokens |
 | [ccn](ccn/README.md) | Measure function complexity and select a compilation limit | CCN report or checked executable |
 | [resources/hello](resources/hello/README.md) | Select ownership, RAII, and defer in the same source file | `Hello, resources!` |
+| [resources/returned](resources/returned/README.md) | Return a field view tied to a source loan | `42` |
+| [ownership](ownership/README.md) | Select static memory checking for two intrusive hooks | `OK` |
 | [resources/sqlite](resources/sqlite/README.md) | Own SQLite connections and statements; borrow column bytes | Typed rows and separate error codes |
 | [overload/hello](overload/hello/README.md) | Select overloads and a typed function value in the same file | Two greeting lines |
 | [overload/separate](overload/separate/README.md) | Link overloaded functions from a separate native object | `types: 42` |
@@ -71,6 +74,7 @@ reader and inline-target errors. `make check` and `make check-c` also check the
 custom assembly stage.
 
 Run `make check-resources` for the resource hello and resource language tests.
+Run `make check-memory` with a Z3 library for the optional static memory tutorial.
 The SQLite verifier checks the native application against its frozen C baseline.
 Run `make check-overload` for the overload examples, native symbols, separate
 objects, and resource composition tests.

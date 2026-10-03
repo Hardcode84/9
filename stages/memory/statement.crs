@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn pm_initialize(run: *PfRun, state: *PfState, address: *u8, type: *CrustType,
+                 source: *CrustExpr, location: *CrustLoc) -> bool {
+    if !pf_enter(run, location) { return false; }
+    var result: bool = pm_initialize_inner(run, state, address, type, source, location);
+    (*run).depth = (*run).depth - 1usize;
+    return result;
+}
+
+fn pm_initialize_inner(run: *PfRun, state: *PfState, address: *u8, type: *CrustType,
+                       source: *CrustExpr, location: *CrustLoc) -> bool {
+    while (*source).kind == CRUST_E_GROUP { source = (*source).left; }
+    if (*source).kind == CRUST_E_RECORD {
+        var item: *CrustInit = (*source).inits;
+        while item != null(*CrustInit) && !pf_failed(run) {
+            var field: *CrustField = (*item).field;
+            var offset: *u8 = pf_binary(run, "+", pm_offset(run, address), pm_number(run, (*field).offset));
+            var destination: *u8 = pm_pointer(run, pm_origin(run, address), offset);
+            if !pm_initialize(run, state, destination, (*field).type, (*item).value, location) { return false; }
+            item = (*item).next;
+        }
+        return !pf_failed(run);
+    }
+    if (*source).kind == CRUST_E_ARRAY {
+        return pm_initialize_array(run, state, address, type, source, location);
+    }
+    var value: *u8 = pf_expression(run, state, source, "true");
+    if pf_failed(run) { return false; }
+    return pm_write(run, state, address, type, value, true, location);
+}
+
+fn pm_initialize_array(run: *PfRun, state: *PfState, address: *u8, type: *CrustType,
+                       source: *CrustExpr, location: *CrustLoc) -> bool {
+    var index: usize = 0usize;
+    var element: *CrustType = (*type).base;
+    while index < (*source).arg_count && !pf_failed(run) {
+        var offset: *u8 = pf_binary(run, "+", pm_offset(run, address), pm_number(run, index as u64 * (*element).size));
+        var destination: *u8 = pm_pointer(run, pm_origin(run, address), offset);
+        if !pm_initialize(run, state, destination, element, (*source).args[index], location) { return false; }
+        index = index + 1usize;
+    }
+    return !pf_failed(run);
+}
+
+fn pm_variable(run: *PfRun, state: *PfState, statement: *CrustStmt) -> bool {
+    var type: *CrustType = (*(*statement).symbol).type;
+    if !pm_needs_storage(run, (*statement).symbol) {
+        var value: *u8 = null(*u8);
+        if !(*statement).uninitialized { value = pf_expression(run, state, (*statement).value, "true"); }
+        pf_bind(run, state, (*statement).symbol, value);
+        return !pf_failed(run);
+    }
+    var address: *u8 = pm_local_slot(run, state, (*statement).symbol, &(*statement).loc);
+    if address == null(*u8) { return false; }
+    if (*statement).uninitialized { return true; }
+    if (*type).kind == CRUST_T_RECORD || (*type).kind == CRUST_T_ARRAY {
+        return pm_initialize(run, state, address, type, (*statement).value, &(*statement).loc);
+    }
+    var value: *u8 = pf_expression(run, state, (*statement).value, "true");
+    if pf_failed(run) { return false; }
+    return pm_write(run, state, address, type, value, false, &(*statement).loc);
+}
+
+fn pm_statement(run: *PfRun, state: *PfState, statement: *CrustStmt) -> u32 {
+    if (*statement).kind == CRUST_S_VAR {
+        if pm_variable(run, state, statement) { return PF_HANDLED; }
+        return PF_REJECT;
+    }
+    if (*statement).kind == CRUST_S_ASSIGN {
+        var target: *CrustExpr = pf_ungroup(run, (*statement).expr);
+        if pf_failed(run) { return PF_REJECT; }
+        if (*target).kind == CRUST_E_NAME && !pm_needs_storage(run, (*target).symbol) { return PF_DELEGATE; }
+        var address: *u8 = pm_place(run, state, (*statement).expr, "true");
+        var value: *u8 = null(*u8);
+        if !pf_failed(run) { value = pf_expression(run, state, (*statement).value, "true"); }
+        if pf_failed(run) { return PF_REJECT; }
+        if pm_store(run, state, (*statement).expr, address, value, &(*statement).loc) { return PF_HANDLED; }
+        return PF_REJECT;
+    }
+    return PF_DELEGATE;
+}
+
+fn pm_post(run: *PfRun, state: *PfState) -> bool {
+    if (*state).flow == PF_TRAP { return true; }
+    var world: *PmWorld = pm_world(run, state);
+    var object: *PmObject = (*world).objects;
+    while object != null(*PmObject) && !pf_failed(run) {
+        if (*object).heap {
+            pm_require(run, state, "true", pf_not(run, pf_select(run, (*world).live, (*object).identity)),
+                &(*(*run).declaration).loc);
+        }
+        object = (*object).next;
+    }
+    return !pf_failed(run);
+}
+
+// Select allocation, storage, and pointer checks for one closed executable entry.
+// The caller supplies foreign contracts and proof budgets before pf_verify.
+fn pm_configure(stage: *PfStage, policy: *PmPolicy) -> unit {
+    (*stage).user = policy as *u8;
+    (*stage).preamble = "(declare-datatypes () ((Ptr (ptr (origin Int) (offset Int)))))\n";
+    (*stage).solve = pm_solver;
+    (*stage).prune = true;
+    (*stage).pre = pm_pre;
+    (*stage).post = pm_post;
+    (*stage).sort = pm_sort;
+    (*stage).value = pm_value;
+    (*stage).place = pm_place;
+    (*stage).store = pm_store;
+    (*stage).external = pm_external;
+    (*stage).statement = pm_statement;
+    (*stage).scope = pm_scope;
+}

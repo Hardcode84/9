@@ -1,0 +1,299 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record GenericTest {
+    stage: GsStage;
+    provider: CrustContext;
+    alias_provider: CrustContext;
+    consumer: CrustContext;
+    definition: *GsDefinition;
+}
+
+fn test_length(text: *u8) -> usize {
+    var size: usize = 0usize;
+    while text[size] != 0u8 { size = size + 1usize; }
+    return size;
+}
+
+fn test_equal(left: *u8, right: *u8) -> bool {
+    var index: usize = 0usize;
+    while left[index] == right[index] {
+        if left[index] == 0u8 { return true; }
+        index = index + 1usize;
+    }
+    return false;
+}
+
+fn test_require(context: *CrustContext, condition: bool, message: *u8) -> bool {
+    if !condition { crust_set_error(context, null(*CrustSource), 0usize, message); }
+    return condition;
+}
+
+fn test_source(context: *CrustContext, path: *u8, identity: u64) -> *CrustSource {
+    var source: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+    if source == null(*CrustSource) { return source; }
+    (*source).path = crust_try_copy_string(context, path, test_length(path));
+    (*source).identity = identity;
+    var bytes: *u8 = null(*u8);
+    var size: usize = 0usize;
+    if (*source).path == null(*u8) { return null(*CrustSource); }
+    if crust0_host_read_file(path, &bytes, &size) != 0i32 {
+        crust_set_error(context, source, 0usize, "cannot read generics test input");
+        return null(*CrustSource);
+    }
+    (*source).bytes = crust_try_copy_string(context, bytes, size);
+    (*source).size = size;
+    crust0_host_free(bytes);
+    if (*source).bytes == null(*u8) { return null(*CrustSource); }
+    return source;
+}
+
+fn test_unit(context: *CrustContext, path: *u8, identity: u64) -> bool {
+    var source: *CrustSource = test_source(context, path, identity);
+    var unit_value: *CrustUnit = null(*CrustUnit);
+    return source != null(*CrustSource) && crust_read(context, source, &unit_value) &&
+           crust_collect(context) && crust_resolve(context) && crust_check(context);
+}
+
+fn test_find(context: *CrustContext, text: *u8) -> *CrustDecl {
+    var name: *CrustName = crust_try_intern(context, text, test_length(text));
+    if name == null(*CrustName) { return null(*CrustDecl); }
+    var symbol: *CrustSymbol = crust_map_get(&(*context).globals, name as usize) as *CrustSymbol;
+    if !test_require(context, symbol != null(*CrustSymbol), "missing test declaration") { return null(*CrustDecl); }
+    return (*symbol).decl;
+}
+
+fn test_diagnostic(context: *CrustContext) -> unit {
+    if (*context).error_count == 0usize { return; }
+    var source: *CrustSource = (*context).error_loc.source;
+    if source != null(*CrustSource) {
+        if crust0_host_write_stream(2u32, (*source).path, test_length((*source).path)) != 0i32 ||
+           crust0_host_write_stream(2u32, ": ", 2usize) != 0i32 { trap; }
+    }
+    var text: *u8 = &(*context).error[0usize];
+    if crust0_host_write_stream(2u32, text, test_length(text)) != 0i32 ||
+       crust0_host_write_stream(2u32, "\n", 1usize) != 0i32 { trap; }
+}
+
+fn test_define(test: *GenericTest, path: *u8, mode: *u8) -> bool {
+    var inputs: CrustContext = uninit;
+    crust_context_init(&inputs, null(*CrustAllocator));
+    var source: *CrustSource = test_source(&inputs, path, 20u64);
+    var spelling: *u8 = "T";
+    if test_equal(mode, "keyword-parameter") { spelling = "while"; }
+    if test_equal(mode, "builtin-parameter") { spelling = "i32"; }
+    if test_equal(mode, "invalid-parameter") { spelling = "T /*comment*/"; }
+    var parameter: *u8 = crust_try_copy_string(&inputs, spelling, test_length(spelling));
+    var captured: *u8 = crust_try_copy_string(&inputs, "captured", 8usize);
+    var parameters: [*u8; 2] = make [*u8; 2] { parameter, parameter };
+    var capture: GsBinding = make GsBinding {
+        name: captured, declaration: test_find(&(*test).provider, "provider_hook")
+    };
+    var count: usize = 1usize;
+    if test_equal(mode, "duplicate-parameters") { count = 2usize; }
+    if test_equal(mode, "named-parameters") {
+        parameters[0usize] = "Key";
+        parameters[1usize] = "Value";
+        count = 2usize;
+    }
+    if test_equal(mode, "capture-parameter") { capture.name = parameter; }
+    var ok: bool = source != null(*CrustSource) && parameter != null(*u8) && captured != null(*u8);
+    if ok {
+        (*test).definition = gs_define(&(*test).stage, source, 0usize, (*source).size,
+                                      &parameters[0usize], count, &capture, 1usize);
+        ok = (*test).definition != null(*GsDefinition);
+    }
+    test_diagnostic(&inputs);
+    // Definition inputs are copied; declaration facts remain borrowed from provider.
+    crust_context_destroy(&inputs);
+    return ok;
+}
+
+fn test_evaluate(context: *CrustContext, declaration: *CrustDecl, expected: i32) -> bool {
+    if declaration == null(*CrustDecl) { return false; }
+    var evaluator: *u8 = crust_eval_create(context, null(*CrustEvalOptions));
+    if evaluator == null(*u8) { return false; }
+    var result: i32 = 0i32;
+    var success: bool = crust_eval_call(evaluator, declaration, null(**u8), 0usize, &result as *u8);
+    crust_eval_destroy(evaluator);
+    return success && test_require(context, result == expected, "specialization produced the wrong value");
+}
+
+fn test_decimal(text: *u8) -> i32 {
+    var result: i32 = 0i32;
+    var index: usize = 0usize;
+    while text[index] != 0u8 {
+        if text[index] < 48u8 || text[index] > 57u8 { trap; }
+        result = result * 10i32 + (text[index] - 48u8) as i32;
+        index = index + 1usize;
+    }
+    return result;
+}
+
+fn test_arguments(test: *GenericTest, mode: *u8, arguments: **CrustType) -> *GsInstance {
+    var count: usize = 1usize;
+    if test_equal(mode, "zero-arguments") { count = 0usize; }
+    if test_equal(mode, "extra-arguments") { count = 2usize; }
+    if test_equal(mode, "null-argument") { arguments[0usize] = null(*CrustType); }
+    if test_equal(mode, "unit-argument") {
+        arguments[0usize] = (*(*test_find(&(*test).provider, "unit_type")).type).base;
+    }
+    return gs_apply((*test).definition, arguments, count);
+}
+
+fn test_instances(test: *GenericTest, first: *GsInstance, arguments: **CrustType,
+                  expected_first: i32, expected_second: i32) -> *GsInstance {
+    var context: *CrustContext = &(*test).stage.context;
+    var alias: *CrustDecl = test_find(&(*test).alias_provider, "P");
+    if alias == null(*CrustDecl) { return null(*GsInstance); }
+    arguments[0usize] = (*alias).type;
+    var repeated: *GsInstance = gs_apply((*test).definition, arguments, 1usize);
+    if !test_require(context, repeated == first, "nominal aliases must reuse one specialization") { return null(*GsInstance); }
+    var second_type: *CrustDecl = test_find(&(*test).provider, "Q");
+    if second_type == null(*CrustDecl) { return null(*GsInstance); }
+    arguments[0usize] = (*second_type).type;
+    var second: *GsInstance = gs_apply((*test).definition, arguments, 1usize);
+    if second == null(*GsInstance) { return second; }
+    if !test_require(context, first != second, "distinct nominal arguments must stay distinct") { return null(*GsInstance); }
+    if !test_evaluate(&(*first).context, gs_find(first, "run"), expected_first) ||
+       !test_evaluate(&(*second).context, gs_find(second, "run"), expected_second) { return null(*GsInstance); }
+    var original: *CrustDecl = test_find(&(*test).provider, "P");
+    arguments[0usize] = (*original).type;
+    repeated = gs_apply((*test).definition, arguments, 1usize);
+    if !test_require(context, repeated == first, "argument array mutation changed an earlier instance") { return null(*GsInstance); }
+    return second;
+}
+
+fn test_consumer(test: *GenericTest, first: *GsInstance, second: *GsInstance,
+                 path: *u8, mode: *u8, expected: i32) -> bool {
+    var context: *CrustContext = &(*test).consumer;
+    if test_equal(mode, "missing-export") { return gs_find(first, "captured") != null(*CrustDecl); }
+    if !gs_bind(context, first, "Item", "First") || !gs_bind(context, first, "Item", "Alias") ||
+       !gs_bind(context, second, "Item", "Other") || !gs_bind(context, first, "run", "generated") { return false; }
+    if test_equal(mode, "duplicate-export") { return gs_bind(context, first, "Item", "First"); }
+    return test_unit(context, path, 30u64) && test_evaluate(context, test_find(context, "consumer"), expected);
+}
+
+fn test_alias_callback(test: *GenericTest, source: *CrustType) -> *CrustType {
+    var context: *CrustContext = &(*test).provider;
+    var copy: *CrustType = crust_try_alloc(context, sizeof(CrustType), alignof(CrustType)) as *CrustType;
+    var pointer: *CrustType = crust_try_alloc(context, sizeof(CrustType), alignof(CrustType)) as *CrustType;
+    var params: **CrustType = crust_try_alloc(context, 2usize * sizeof(*CrustType), alignof(*CrustType)) as **CrustType;
+    if copy == null(*CrustType) || pointer == null(*CrustType) || params == null(**CrustType) { return null(*CrustType); }
+    *copy = *source;
+    *pointer = *(*source).params[1usize];
+    (*pointer).base = (*test_find(&(*test).alias_provider, "P")).type;
+    params[0usize] = (*source).params[0usize];
+    params[1usize] = pointer;
+    (*copy).params = params;
+    return copy;
+}
+
+fn test_core_types(test: *GenericTest) -> bool {
+    var shapes: *CrustDecl = test_find(&(*test).provider, "Shapes");
+    if shapes == null(*CrustDecl) { return false; }
+    var field: *CrustField = (*shapes).fields;
+    var expected: [i32; 4] = make [i32; 4] { 24i32, 24i32, 40i32, 24i32 };
+    var index: usize = 0usize;
+    while field != null(*CrustField) {
+        var argument: *CrustType = (*field).type;
+        if index == 3usize { argument = test_alias_callback(test, argument); }
+        if argument == null(*CrustType) { return false; }
+        var instance: *GsInstance = gs_apply((*test).definition, &argument, 1usize);
+        if instance == null(*GsInstance) || !test_evaluate(&(*instance).context, gs_find(instance, "run"), expected[index]) { return false; }
+        var original: *CrustType = (*field).type;
+        if !test_require(&(*test).stage.context, gs_apply((*test).definition, &original, 1usize) == instance,
+                         "equivalent composite arguments must reuse one instance") { return false; }
+        field = (*field).next;
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn test_additional(test: *GenericTest, first: *GsInstance, argv: **u8) -> bool {
+    var mode: *u8 = argv[1usize];
+    if test_equal(mode, "core-types") { return test_core_types(test); }
+    if test_equal(mode, "nested-instance") {
+        var argument: *CrustType = (*gs_find(first, "Item")).type;
+        var nested: *GsInstance = gs_apply((*test).definition, &argument, 1usize);
+        return nested != null(*GsInstance) && test_evaluate(&(*nested).context, gs_find(nested, "run"), 40i32);
+    }
+    if test_equal(mode, "independent-definition") {
+        if !test_define(test, argv[3usize], mode) { return false; }
+        var argument: *CrustType = (*test_find(&(*test).provider, "P")).type;
+        var other: *GsInstance = gs_apply((*test).definition, &argument, 1usize);
+        if other == null(*GsInstance) { return false; }
+        var equal: bool = false;
+        if !crust_try_type_equal(&(*test).stage.context, (*gs_find(first, "Item")).type, (*gs_find(other, "Item")).type, &equal) { return false; }
+        return test_require(&(*test).stage.context, !equal, "independent definitions must have distinct nominal results");
+    }
+    return true;
+}
+
+fn test_named_parameters(test: *GenericTest, arguments: **CrustType,
+                         expected_first: i32, expected_second: i32) -> bool {
+    var first: *GsInstance = gs_apply((*test).definition, arguments, 2usize);
+    if first == null(*GsInstance) ||
+       !test_evaluate(&(*first).context, gs_find(first, "run"), expected_first) { return false; }
+    var key: *CrustType = arguments[0usize];
+    arguments[0usize] = arguments[1usize];
+    arguments[1usize] = key;
+    var second: *GsInstance = gs_apply((*test).definition, arguments, 2usize);
+    if second == null(*GsInstance) ||
+       !test_evaluate(&(*second).context, gs_find(second, "run"), expected_second) { return false; }
+    if !test_require(&(*test).stage.context, first != second,
+                     "argument order must distinguish specializations") { return false; }
+    arguments[1usize] = arguments[0usize];
+    arguments[0usize] = key;
+    return test_require(&(*test).stage.context,
+                        gs_apply((*test).definition, arguments, 2usize) == first,
+                        "repeated ordered arguments must reuse their specialization");
+}
+
+fn test_run(test: *GenericTest, argv: **u8) -> bool {
+    if !test_unit(&(*test).provider, argv[2usize], 10u64) ||
+       !test_unit(&(*test).alias_provider, argv[2usize], 10u64) { return false; }
+    var hook: *CrustDecl = test_find(&(*test).provider, "provider_hook");
+    if hook == null(*CrustDecl) { return false; }
+    (*hook).link_name = "generic_test_provider_hook";
+    if !test_define(test, argv[3usize], argv[1usize]) { return false; }
+    var p: *CrustDecl = test_find(&(*test).provider, "P");
+    var q: *CrustDecl = test_find(&(*test).provider, "Q");
+    if p == null(*CrustDecl) || q == null(*CrustDecl) { return false; }
+    var arguments: [*CrustType; 2] = make [*CrustType; 2] { (*p).type, (*q).type };
+    if test_equal(argv[1usize], "named-parameters") {
+        return test_named_parameters(test, &arguments[0usize],
+                                     test_decimal(argv[5usize]), test_decimal(argv[6usize]));
+    }
+    var first: *GsInstance = test_arguments(test, argv[1usize], &arguments[0usize]);
+    if first == null(*GsInstance) { return false; }
+    var expected: i32 = test_decimal(argv[5usize]);
+    var second: *GsInstance = test_instances(test, first, &arguments[0usize], expected, test_decimal(argv[6usize]));
+    return second != null(*GsInstance) && test_additional(test, first, argv) &&
+           test_consumer(test, first, second, argv[4usize], argv[1usize], expected);
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 7i32 { return 2i32; }
+    var test: GenericTest = uninit;
+    gs_init(&test.stage, null(*CrustAllocator), 10000u64);
+    crust_context_init(&test.provider, null(*CrustAllocator));
+    crust_context_init(&test.alias_provider, null(*CrustAllocator));
+    crust_context_init(&test.consumer, null(*CrustAllocator));
+    test.definition = null(*GsDefinition);
+    var success: bool = test_run(&test, argv);
+    test_diagnostic(&test.stage.context);
+    test_diagnostic(&test.provider);
+    test_diagnostic(&test.alias_provider);
+    test_diagnostic(&test.consumer);
+    var instance: *GsInstance = test.stage.instances;
+    while instance != null(*GsInstance) {
+        test_diagnostic(&(*instance).context);
+        instance = (*instance).next;
+    }
+    crust_context_destroy(&test.consumer);
+    gs_destroy(&test.stage);
+    crust_context_destroy(&test.alias_provider);
+    crust_context_destroy(&test.provider);
+    if success { return 0i32; }
+    return 1i32;
+}

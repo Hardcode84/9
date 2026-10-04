@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn gs_capture_instance(instance: *GsInstance) -> bool {
+    var context: *CrustContext = &(*instance).context;
+    var definition: *GsDefinition = (*instance).definition;
+    var index: usize = 0usize;
+    while index < (*definition).capture_count {
+        var capture: *GsBinding = &(*definition).captures[index];
+        var name: *CrustName = crust_try_intern(context, (*capture).name, gs_length((*capture).name));
+        if name == null(*CrustName) || !crust_bind(context, name, (*capture).declaration) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn gs_instance_names(instance: *GsInstance) -> bool {
+    var stage: *GsStage = (*(*instance).definition).stage;
+    var context: *CrustContext = &(*instance).context;
+    var declaration: *CrustDecl = (*(*instance).unit_value).declarations;
+    while declaration != null(*CrustDecl) {
+        if (*stage).next_identity == ~0u64 {
+            gs_error(context, &(*declaration).loc, "generic declaration identity space exhausted");
+            return false;
+        }
+        (*stage).next_identity = (*stage).next_identity + 1u64;
+        (*declaration).unit_identity = (*stage).namespace;
+        (*declaration).identity = (*stage).next_identity;
+        if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_CONST {
+            (*declaration).link_name = gs_number_name(context, "crust_g_", (*stage).namespace, (*declaration).identity);
+            if (*declaration).link_name == null(*u8) { return false; }
+        }
+        declaration = (*declaration).next;
+    }
+    return true;
+}
+
+fn gs_make_instance(definition: *GsDefinition, arguments: **CrustType, count: usize) -> *GsInstance {
+    var stage: *GsStage = (*definition).stage;
+    var context: *CrustContext = &(*stage).context;
+    var instance: *GsInstance = crust_try_alloc(context, sizeof(GsInstance), alignof(GsInstance)) as *GsInstance;
+    if instance == null(*GsInstance) { return instance; }
+    (*instance).definition = definition;
+    crust_context_init(&(*instance).context, &(*context).arena.allocator);
+    (*instance).next = (*stage).instances;
+    (*stage).instances = instance;
+    (*instance).arguments = crust_try_grow_array(context, arguments as *u8, count, count,
+                                                sizeof(*CrustType), alignof(*CrustType)) as **CrustType;
+    (*instance).argument_count = count;
+    if (*context).error_count != 0usize { return null(*GsInstance); }
+    if !gs_capture_instance(instance) { gs_instance_error(instance); return null(*GsInstance); }
+    (*instance).unit_value = gs_clone_unit(instance, (*definition).unit_value);
+    if gs_instance_error(instance) { return null(*GsInstance); }
+    (*instance).context.units = (*instance).unit_value;
+    (*instance).context.last_unit = (*instance).unit_value;
+    if !gs_instance_names(instance) || !crust_collect(&(*instance).context) ||
+       !crust_resolve(&(*instance).context) || !crust_check(&(*instance).context) {
+        gs_instance_error(instance);
+        return null(*GsInstance);
+    }
+    return instance;
+}
+
+// Arguments borrow complete, immutable target type facts. Each successful new
+// instance receives concrete seed checks. Equal requests return the same handle.
+fn gs_apply(definition: *GsDefinition, arguments: **CrustType, count: usize) -> *GsInstance {
+    var stage: *GsStage = (*definition).stage;
+    var context: *CrustContext = &(*stage).context;
+    if (*context).error_count != 0usize { return null(*GsInstance); }
+    (*stage).requests = (*stage).requests + 1usize;
+    if count != (*definition).parameter_count {
+        var loc: CrustLoc = make CrustLoc { source: (*(*definition).unit_value).source, offset: 0usize };
+        gs_error(context, &loc, "generic argument count does not match parameter count");
+        return null(*GsInstance);
+    }
+    var key: usize = gs_argument_key(definition, arguments, count);
+    if (*context).error_count != 0usize { return null(*GsInstance); }
+    var previous: *GsInstance = crust_map_get(&(*definition).instances, key) as *GsInstance;
+    var found: *GsInstance = previous;
+    while found != null(*GsInstance) {
+        if gs_arguments_equal(context, found, arguments) {
+            (*stage).hits = (*stage).hits + 1usize;
+            return found;
+        }
+        if (*context).error_count != 0usize { return null(*GsInstance); }
+        found = (*found).bucket_next;
+    }
+    var instance: *GsInstance = gs_make_instance(definition, arguments, count);
+    if instance == null(*GsInstance) { return instance; }
+    (*instance).bucket_next = previous;
+    if !crust_try_map_set(context, &(*definition).instances, key, instance as *u8) { return null(*GsInstance); }
+    (*stage).specializations = (*stage).specializations + 1usize;
+    return instance;
+}
+
+// Find an owned declaration. Report an error when the requested name is absent.
+fn gs_find(instance: *GsInstance, name: *u8) -> *CrustDecl {
+    if gs_instance_error(instance) { return null(*CrustDecl); }
+    var context: *CrustContext = &(*instance).context;
+    var interned: *CrustName = crust_try_intern(context, name, gs_length(name));
+    if interned == null(*CrustName) { gs_instance_error(instance); return null(*CrustDecl); }
+    var declaration: *CrustDecl = (*(*instance).unit_value).declarations;
+    while declaration != null(*CrustDecl) {
+        if (*declaration).name == interned { return declaration; }
+        declaration = (*declaration).next;
+    }
+    var loc: CrustLoc = make CrustLoc { source: (*(*instance).unit_value).source, offset: 0usize };
+    gs_error(context, &loc, "generic instance declaration was not found");
+    gs_instance_error(instance);
+    return null(*CrustDecl);
+}
+
+// Bind an instance declaration under a consumer name. Destroy the consumer first.
+fn gs_bind(consumer: *CrustContext, instance: *GsInstance, name: *u8, alias: *u8) -> bool {
+    var declaration: *CrustDecl = gs_find(instance, name);
+    if declaration == null(*CrustDecl) { return false; }
+    var interned: *CrustName = crust_try_intern(consumer, alias, gs_length(alias));
+    return interned != null(*CrustName) && crust_bind(consumer, interned, declaration);
+}

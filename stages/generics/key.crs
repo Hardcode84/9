@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn gs_mix(hash: usize, value: u64) -> usize {
+    return (hash ^ value as usize) * 1099511628211usize;
+}
+
+fn gs_hash_type(context: *CrustContext, value: *CrustType, loc: *CrustLoc, depth: usize) -> usize {
+    if (*context).error_count != 0usize { return 0usize; }
+    if value == null(*CrustType) || depth == 256usize {
+        gs_error(context, loc, "generic argument requires a complete type with nesting below 256");
+        return 0usize;
+    }
+    var hash: usize = gs_mix(14695981039346656037usize, (*value).kind as u64);
+    var kind: u32 = (*value).kind;
+    if kind <= CRUST_T_UNIT { return hash; }
+    if kind == CRUST_T_RECORD { return gs_hash_record(context, value, loc, hash); }
+    if kind == CRUST_T_POINTER || kind == CRUST_T_ARRAY || kind == CRUST_T_FUNCTION {
+        hash = gs_mix(hash, gs_hash_type(context, (*value).base, loc, depth + 1usize) as u64);
+        return gs_hash_components(context, value, loc, hash, depth);
+    }
+    gs_error(context, loc, "generic argument requires a resolved seed type");
+    return 0usize;
+}
+
+fn gs_hash_record(context: *CrustContext, value: *CrustType, loc: *CrustLoc, hash: usize) -> usize {
+    var declaration: *CrustDecl = (*value).record_decl;
+    if declaration == null(*CrustDecl) {
+        gs_error(context, loc, "generic argument requires a resolved record");
+        return 0usize;
+    }
+    if (*declaration).resolve_state != 2u32 || (*declaration).identity == 0u64 || (*declaration).type != value {
+        gs_error(context, loc, "generic argument requires a resolved record");
+        return 0usize;
+    }
+    return gs_mix(gs_mix(hash, (*declaration).unit_identity), (*declaration).identity);
+}
+
+fn gs_hash_components(context: *CrustContext, value: *CrustType, loc: *CrustLoc,
+                      hash: usize, depth: usize) -> usize {
+    if (*value).kind == CRUST_T_ARRAY { return gs_mix(hash, (*value).count); }
+    if (*value).kind != CRUST_T_FUNCTION { return hash; }
+    hash = gs_mix(hash, (*value).param_count as u64);
+    var index: usize = 0usize;
+    while index < (*value).param_count && (*context).error_count == 0usize {
+        hash = gs_mix(hash, gs_hash_type(context, (*value).params[index], loc, depth + 1usize) as u64);
+        index = index + 1usize;
+    }
+    return hash;
+}
+
+fn gs_argument_key(definition: *GsDefinition, arguments: **CrustType, count: usize) -> usize {
+    var context: *CrustContext = &(*(*definition).stage).context;
+    var loc: CrustLoc = make CrustLoc { source: (*(*definition).unit_value).source, offset: 0usize };
+    var hash: usize = gs_mix(14695981039346656037usize, count as u64);
+    var index: usize = 0usize;
+    while index < count && (*context).error_count == 0usize {
+        hash = gs_mix(hash, gs_hash_type(context, arguments[index], &loc, 0usize) as u64);
+        index = index + 1usize;
+    }
+    if hash == 0usize { hash = 1usize; }
+    return hash;
+}
+
+fn gs_arguments_equal(context: *CrustContext, instance: *GsInstance, arguments: **CrustType) -> bool {
+    var index: usize = 0usize;
+    while index < (*instance).argument_count {
+        var equal: bool = false;
+        if !crust_try_type_equal(context, (*instance).arguments[index], arguments[index], &equal) || !equal {
+            return false;
+        }
+        index = index + 1usize;
+    }
+    return true;
+}

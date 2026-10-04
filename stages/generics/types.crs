@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn gs_depth(instance: *GsInstance, location: *CrustLoc, depth: u32) -> bool {
+    var context: *CrustContext = &(*instance).context;
+    if (*context).error_count != 0usize { return false; }
+    if depth < 256u32 { return true; }
+    gs_error(context, location, "generic syntax depth limit of 256 exceeded");
+    return false;
+}
+
+fn gs_array_storage(instance: *GsInstance, count: usize, size: usize,
+                    alignment: usize, location: *CrustLoc) -> *u8 {
+    var context: *CrustContext = &(*instance).context;
+    if count == 0usize || (*context).error_count != 0usize { return null(*u8); }
+    if count > 18446744073709551615usize / size {
+        gs_error(context, location, "generic syntax array size overflow");
+        return null(*u8);
+    }
+    return crust_try_alloc(context, count * size, alignment);
+}
+
+fn gs_record_name(instance: *GsInstance, declaration: *CrustDecl) -> *CrustName {
+    var context: *CrustContext = &(*instance).context;
+    var name: *CrustName = crust_map_get(&(*instance).records, declaration as usize) as *CrustName;
+    if name != null(*CrustName) { return name; }
+    var text: *u8 = gs_number_name(context, "$type_", (*declaration).unit_identity, (*declaration).identity);
+    if text == null(*u8) { return null(*CrustName); }
+    name = crust_try_intern(context, text, gs_length(text));
+    if name == null(*CrustName) { return name; }
+    if crust_map_get(&(*context).globals, name as usize) == null(*u8) {
+        if !crust_bind(context, name, declaration) { return null(*CrustName); }
+    }
+    if !crust_try_map_set(context, &(*instance).records, declaration as usize, name as *u8) {
+        return null(*CrustName);
+    }
+    return name;
+}
+
+fn gs_concrete_parameters(instance: *GsInstance, source: *CrustType,
+                          target: *CrustTypeSyntax, depth: u32) -> unit {
+    (*target).param_count = (*source).param_count;
+    (*target).params = gs_array_storage(instance, (*source).param_count,
+        sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax), &(*target).loc) as **CrustTypeSyntax;
+    var index: usize = 0usize;
+    while index < (*source).param_count && (*instance).context.error_count == 0usize {
+        (*target).params[index] = gs_concrete_type(instance, (*source).params[index], &(*target).loc, depth + 1u32);
+        index = index + 1usize;
+    }
+}
+
+// Produce concrete syntax in the instance namespace. Record facts remain borrowed.
+fn gs_concrete_type(instance: *GsInstance, source: *CrustType,
+                     location: *CrustLoc, depth: u32) -> *CrustTypeSyntax {
+    if !gs_depth(instance, location, depth) { return null(*CrustTypeSyntax); }
+    var context: *CrustContext = &(*instance).context;
+    var target: *CrustTypeSyntax = crust_try_alloc(context, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
+    if target == null(*CrustTypeSyntax) { return target; }
+    (*target).loc = *location;
+    (*target).kind = (*source).kind;
+    (*target).count = (*source).count;
+    if (*source).kind == CRUST_T_RECORD {
+        (*target).kind = CRUST_T_NAME;
+        (*target).name = gs_record_name(instance, (*source).record_decl);
+    } else {
+        if (*source).base != null(*CrustType) {
+            (*target).base = gs_concrete_type(instance, (*source).base, location, depth + 1u32);
+        }
+        if (*source).kind == CRUST_T_FUNCTION { gs_concrete_parameters(instance, source, target, depth); }
+    }
+    if (*context).error_count != 0usize { return null(*CrustTypeSyntax); }
+    return target;
+}
+
+fn gs_clone_parameters(instance: *GsInstance, source: *CrustTypeSyntax,
+                       target: *CrustTypeSyntax, depth: u32) -> unit {
+    (*target).param_count = (*source).param_count;
+    (*target).params = gs_array_storage(instance, (*source).param_count,
+        sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax), &(*source).loc) as **CrustTypeSyntax;
+    var index: usize = 0usize;
+    while index < (*source).param_count && (*instance).context.error_count == 0usize {
+        (*target).params[index] = gs_clone_type(instance, (*source).params[index], depth + 1u32);
+        index = index + 1usize;
+    }
+}
+
+fn gs_clone_type(instance: *GsInstance, source: *CrustTypeSyntax, depth: u32) -> *CrustTypeSyntax {
+    if source == null(*CrustTypeSyntax) { return null(*CrustTypeSyntax); }
+    if !gs_depth(instance, &(*source).loc, depth) { return null(*CrustTypeSyntax); }
+    if (*source).kind == CRUST_T_NAME {
+        var parameter: *GsParameter = crust_map_get(&(*(*instance).definition).parameters,
+            (*source).name as usize) as *GsParameter;
+        if parameter != null(*GsParameter) {
+            return gs_concrete_type(instance, (*instance).arguments[(*parameter).index], &(*source).loc, depth);
+        }
+    }
+    var context: *CrustContext = &(*instance).context;
+    var target: *CrustTypeSyntax = crust_try_alloc(context, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
+    if target == null(*CrustTypeSyntax) { return target; }
+    (*target).loc = (*source).loc;
+    (*target).kind = (*source).kind;
+    (*target).count = (*source).count;
+    (*target).name = gs_name(context, (*source).name);
+    (*target).base = gs_clone_type(instance, (*source).base, depth + 1u32);
+    gs_clone_parameters(instance, source, target, depth);
+    if (*context).error_count != 0usize { return null(*CrustTypeSyntax); }
+    return target;
+}

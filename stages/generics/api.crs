@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Load model.crs first. Definitions own source copies. Type and declaration
+// arguments borrow immutable provider facts; providers outlive the stage.
+extern fn gs_init(stage: *GsStage, allocator: *CrustAllocator, namespace: u64) -> unit = "gs_init";
+extern fn gs_destroy(stage: *GsStage) -> unit = "gs_destroy";
+extern fn gs_define(stage: *GsStage, source: *CrustSource, begin: usize, end: usize,
+                    parameters: **u8, count: usize, captures: *GsBinding, capture_count: usize) -> *GsDefinition = "gs_define";
+extern fn gs_apply(definition: *GsDefinition, arguments: **CrustType, count: usize) -> *GsInstance = "gs_apply";
+extern fn gs_find(instance: *GsInstance, name: *u8) -> *CrustDecl = "gs_find";
+extern fn gs_bind(consumer: *CrustContext, instance: *GsInstance, name: *u8, alias: *u8) -> bool = "gs_bind";

@@ -1,0 +1,37 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record GsBinding { name: *u8; declaration: *CrustDecl; }
+record GsParameter { name: *CrustName; index: usize; }
+
+record GsStage {
+    context: CrustContext;
+    definitions: *GsDefinition;
+    instances: *GsInstance;
+    namespace: u64;
+    next_identity: u64;
+    requests: usize;
+    hits: usize;
+    specializations: usize;
+}
+
+record GsDefinition {
+    parameters: CrustMap;
+    instances: CrustMap;
+    stage: *GsStage;
+    unit_value: *CrustUnit;
+    captures: *GsBinding;
+    parameter_count: usize;
+    capture_count: usize;
+    next: *GsDefinition;
+}
+
+record GsInstance {
+    context: CrustContext;
+    records: CrustMap;
+    definition: *GsDefinition;
+    unit_value: *CrustUnit;
+    arguments: **CrustType;
+    argument_count: usize;
+    next: *GsInstance;
+    bucket_next: *GsInstance;
+}

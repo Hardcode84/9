@@ -31,6 +31,7 @@ separates application rules from container-author obligations.
 | 9 | [Intrusive lists](intrusive/README.md) | Use a trusted opaque provider with checked traversal, destruction, and reuse |
 | 10 | [Owning tree](ownership-graphs/README.md) | Transfer child ownership behind the same checked interface |
 | 11 | [One-way index](ownership-index/README.md) | Retire a symbol with incoming aliases and check local views from separate inputs |
+| 12 | [Generics](generics/README.md) | Supply type arguments through ordinary compilation calls and reuse concrete instances |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -47,6 +48,7 @@ Each example has its own directory and README.
 | [arguments](arguments/README.md) | Separate compiler arguments from target arguments | Each target argument on its own line |
 | [multiple-files](multiple-files/README.md) | Select and compile two target files | `Hello from another source file!` |
 | [modules](modules/README.md) | Compile separate namespaces and import selected names | `modules: 42` |
+| [generics](generics/README.md) | Specialize a shared pair definition for two payload types | `generics: OK` |
 | [native](native/README.md) | Bootstrap stages and execute compilation functions natively | `Hello from a bootstrapped native stage!` |
 | [intrusive](intrusive/README.md) | Check two intrusive memberships with node and head destructors | `OK` |
 | [ownership-graphs](ownership-graphs/README.md) | Detach a child owner and destroy an owned subtree | `OK` |
@@ -67,6 +69,7 @@ The root files select their compiler libraries explicitly. Resource examples
 require `make resource-stage`. The SQLite example also needs its pinned native
 SQLite input; its README gives the command.
 Overload examples require `make overload-stage`.
+The generics example requires `make generics-stage`.
 The intrusive, ownership-basics, ownership-graphs, and ownership-index examples require
 `make ownership-stage`. The intrusive `raw-main.crs` root contains the unchecked seed-language bootstrap witness.
 Paths passed to `host_source`, `host_input`, and `host_path` are relative to the
@@ -94,6 +97,7 @@ objects, and resource composition tests.
 Run `make check-highlight` for the highlighter roots and native service.
 Run `make check-vscode` with Bun for the editor adapter tests.
 Run `make check-modules` for module bindings, exports, and allocation failures.
+Run `make check-generics` for specialization, bindings, type identity, and allocation failures.
 Run `make check-native` for native bootstrap, handoff, and cleanup. This example
 uses the assembly library from `make all` and builds its executor on each
 invocation. Run `make check-cache` for source-only startup, artifact reuse,

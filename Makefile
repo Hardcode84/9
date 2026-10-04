@@ -124,6 +124,24 @@ $(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
 $(BUILD)/crust-asm-library.so: $(BUILD)/crust-asm-library.o
 	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
 
+GENERICS = stages/generics/model.crs stages/generics/base.crs stages/generics/definition.crs stages/generics/key.crs stages/generics/types.crs stages/generics/clone.crs stages/generics/instances.crs
+
+$(BUILD)/generics-exports: $(BUILD)/crust stages/modules/library.crs stages/modules/exports.crs stages/generics/api.crs Makefile
+	$< stages/modules/exports.crs stages/generics/api.crs > $@.tmp
+	mv $@.tmp $@
+
+$(BUILD)/crust-generics-library.o: $(BUILD)/crust-c $(GENERICS) $(BUILD)/generics-exports Makefile
+	crust_exports=$$(cat $(BUILD)/generics-exports) && $< --library --object $$crust_exports --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ api/crust0.crs $(GENERICS)
+
+$(BUILD)/crust-generics-library.so: $(BUILD)/crust-generics-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(LDFLAGS) -o $@
+
+.PHONY: generics-stage check-generics
+generics-stage: $(BUILD)/crust-generics-library.so
+
+check-generics: all c-stage generics-stage
+	python3 tests/generics.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+
 c-stage: $(BUILD)/crust-c $(BUILD)/crust-c-library.so
 
 $(BUILD)/crust-highlight: $(BUILD)/crust-c $(HIGHLIGHT) stages/highlight/main.crs

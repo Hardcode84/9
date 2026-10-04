@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record Position { x: i64; y: i64; }
+record Sample { value: i32; tag: u8; }

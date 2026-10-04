@@ -500,6 +500,12 @@ select functions by their argument types and assign native names. The
 [combined example](../examples/overload/resources/README.md) shows the order
 needed to combine overload selection with resource checking and cleanup.
 
+The [generics tutorial](../examples/generics/README.md) uses ordinary root calls
+to supply types to a shared definition. It builds typed pairs for two record
+types, selects their client names, and emits concrete functions. The root can
+choose definitions and request instances with its usual functions and control
+flow.
+
 ## Change the syntax of later source
 
 The root's `read`, `execute`, and `user` fields select how to read and execute

@@ -1,0 +1,236 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn cost_clock_ns() -> u64 = "ownership_clock_ns";
+
+record CostStats {
+    times: [u64; 8];
+    generic_bytes: usize;
+    baseline_bytes: usize;
+    reuse_bytes: usize;
+    requests: usize;
+    hits: usize;
+    instances: usize;
+}
+
+record CostGeneric {
+    stage: GsStage;
+    types: CrustContext;
+    target: CrustContext;
+    positions: *GsInstance;
+    samples: *GsInstance;
+}
+
+fn cost_diagnostic(context: *CrustContext) -> bool {
+    if (*context).error_count == 0usize { return true; }
+    var text: *u8 = &(*context).error[0usize];
+    return crust0_host_write_stream(2u32, text, gs_length(text)) == 0i32 &&
+           crust0_host_write_stream(2u32, "\n", 1usize) == 0i32;
+}
+
+fn cost_check(context: *CrustContext, source: *CrustSource) -> bool {
+    var unit_value: *CrustUnit = null(*CrustUnit);
+    return crust_read(context, source, &unit_value) && crust_collect(context) &&
+           crust_resolve(context) && crust_check(context);
+}
+
+fn cost_find(context: *CrustContext, text: *u8) -> *CrustDecl {
+    var name: *CrustName = crust_try_intern(context, text, gs_length(text));
+    if name == null(*CrustName) { return null(*CrustDecl); }
+    var symbol: *CrustSymbol = crust_map_get(&(*context).globals, name as usize) as *CrustSymbol;
+    if symbol == null(*CrustSymbol) {
+        crust_set_error(context, null(*CrustSource), 0usize, "measurement payload type is absent");
+        return null(*CrustDecl);
+    }
+    return (*symbol).decl;
+}
+
+fn cost_bind(run: *CostGeneric) -> bool {
+    var context: *CrustContext = &(*run).target;
+    var position: *CrustDecl = cost_find(&(*run).types, "Position");
+    var sample: *CrustDecl = cost_find(&(*run).types, "Sample");
+    var pn: *CrustName = crust_try_intern(context, "Position", 8usize);
+    var sn: *CrustName = crust_try_intern(context, "Sample", 6usize);
+    if pn == null(*CrustName) || sn == null(*CrustName) { return false; }
+    return crust_bind(context, pn, position) && crust_bind(context, sn, sample) &&
+        gs_bind(context, (*run).positions, "Pair", "PositionPair") &&
+        gs_bind(context, (*run).positions, "pair_init", "position_pair_init") &&
+        gs_bind(context, (*run).positions, "pair_swap", "position_pair_swap") &&
+        gs_bind(context, (*run).positions, "pair_first", "position_pair_first") &&
+        gs_bind(context, (*run).samples, "Pair", "SamplePair") &&
+        gs_bind(context, (*run).samples, "pair_init", "sample_pair_init") &&
+        gs_bind(context, (*run).samples, "pair_swap", "sample_pair_swap") &&
+        gs_bind(context, (*run).samples, "pair_first", "sample_pair_first");
+}
+
+fn cost_specialize(run: *CostGeneric, source: *CrustSource, stats: *CostStats) -> bool {
+    var parameters: [*u8; 1] = make [*u8; 1] { "T" };
+    var start: u64 = cost_clock_ns();
+    var definition: *GsDefinition = gs_define(&(*run).stage, source, 0usize, (*source).size,
+        &parameters[0usize], 1usize, null(*GsBinding), 0usize);
+    (*stats).times[1usize] = (*stats).times[1usize] + cost_clock_ns() - start;
+    if definition == null(*GsDefinition) { return false; }
+    start = cost_clock_ns();
+    var position: *CrustDecl = cost_find(&(*run).types, "Position");
+    var sample: *CrustDecl = cost_find(&(*run).types, "Sample");
+    if position == null(*CrustDecl) || sample == null(*CrustDecl) { return false; }
+    var argument: *CrustType = (*position).type;
+    (*run).positions = gs_apply(definition, &argument, 1usize);
+    if (*run).positions == null(*GsInstance) { return false; }
+    argument = (*sample).type;
+    (*run).samples = gs_apply(definition, &argument, 1usize);
+    (*stats).times[2usize] = (*stats).times[2usize] + cost_clock_ns() - start;
+    return (*run).samples != null(*GsInstance);
+}
+
+fn cost_bytes(run: *CostGeneric) -> usize {
+    return (*run).stage.context.arena.bytes_reserved + (*run).types.arena.bytes_reserved +
+        (*run).target.arena.bytes_reserved + (*(*run).positions).context.arena.bytes_reserved +
+        (*(*run).samples).context.arena.bytes_reserved;
+}
+
+fn cost_reuse(run: *CostGeneric, stats: *CostStats, count: usize) -> bool {
+    var before: usize = cost_bytes(run);
+    if before > (*stats).generic_bytes { (*stats).generic_bytes = before; }
+    var index: usize = 0usize;
+    var start: u64 = cost_clock_ns();
+    while index < count {
+        var instance: *GsInstance = (*run).positions;
+        if index % 2usize != 0usize { instance = (*run).samples; }
+        var reused: *GsInstance = gs_apply((*instance).definition, (*instance).arguments, 1usize);
+        if reused == null(*GsInstance) { return false; }
+        if reused != instance {
+            crust_set_error(&(*run).stage.context, null(*CrustSource), 0usize,
+                            "repeated specialization changed its instance identity");
+            return false;
+        }
+        index = index + 1usize;
+    }
+    (*stats).times[4usize] = (*stats).times[4usize] + cost_clock_ns() - start;
+    var growth: usize = cost_bytes(run) - before;
+    if growth > (*stats).reuse_bytes { (*stats).reuse_bytes = growth; }
+    (*stats).requests = (*stats).requests + (*run).stage.requests;
+    (*stats).hits = (*stats).hits + (*run).stage.hits;
+    (*stats).instances = (*stats).instances + (*run).stage.specializations;
+    return true;
+}
+
+fn cost_generic(sources: *CrustSource, stats: *CostStats, repeats: usize) -> bool {
+    var run: CostGeneric = uninit;
+    gs_init(&run.stage, null(*CrustAllocator), 100u64);
+    crust_context_init(&run.types, null(*CrustAllocator));
+    crust_context_init(&run.target, null(*CrustAllocator));
+    var start: u64 = cost_clock_ns();
+    var success: bool = cost_check(&run.types, &sources[0usize]);
+    (*stats).times[0usize] = (*stats).times[0usize] + cost_clock_ns() - start;
+    if success { success = cost_specialize(&run, &sources[1usize], stats); }
+    if success {
+        start = cost_clock_ns();
+        success = cost_bind(&run) && cost_check(&run.target, &sources[2usize]);
+        (*stats).times[3usize] = (*stats).times[3usize] + cost_clock_ns() - start;
+    }
+    if success { success = cost_reuse(&run, stats, repeats); }
+    if !success {
+        if !cost_diagnostic(&run.types) || !cost_diagnostic(&run.stage.context) ||
+           !cost_diagnostic(&run.target) { success = false; }
+    }
+    start = cost_clock_ns();
+    crust_context_destroy(&run.target);
+    gs_destroy(&run.stage);
+    crust_context_destroy(&run.types);
+    (*stats).times[5usize] = (*stats).times[5usize] + cost_clock_ns() - start;
+    return success;
+}
+
+fn cost_baseline(source: *CrustSource, stats: *CostStats) -> bool {
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var start: u64 = cost_clock_ns();
+    var success: bool = cost_check(&context, source);
+    (*stats).times[6usize] = (*stats).times[6usize] + cost_clock_ns() - start;
+    if context.arena.bytes_reserved > (*stats).baseline_bytes {
+        (*stats).baseline_bytes = context.arena.bytes_reserved;
+    }
+    if !success && !cost_diagnostic(&context) { success = false; }
+    start = cost_clock_ns();
+    crust_context_destroy(&context);
+    (*stats).times[7usize] = (*stats).times[7usize] + cost_clock_ns() - start;
+    return success;
+}
+
+fn cost_number(value: u64) -> bool {
+    var buffer: [u8; 21] = uninit;
+    var size: usize = gs_digits(&buffer[0usize], value);
+    buffer[size] = 32u8;
+    return crust0_host_write_stream(1u32, &buffer[0usize], size + 1usize) == 0i32;
+}
+
+fn cost_report(stats: *CostStats) -> bool {
+    var index: usize = 0usize;
+    while index < 8usize {
+        if !cost_number((*stats).times[index]) { return false; }
+        index = index + 1usize;
+    }
+    return cost_number((*stats).generic_bytes as u64) && cost_number((*stats).baseline_bytes as u64) &&
+        cost_number((*stats).reuse_bytes as u64) && cost_number((*stats).requests as u64) &&
+        cost_number((*stats).hits as u64) && cost_number((*stats).instances as u64) &&
+        crust0_host_write_stream(1u32, "\n", 1usize) == 0i32;
+}
+
+fn cost_count(text: *u8) -> usize {
+    var result: usize = 0usize;
+    var index: usize = 0usize;
+    while text[index] != 0u8 {
+        if text[index] < 48u8 || text[index] > 57u8 || result > 10000usize { return 0usize; }
+        result = result * 10usize + (text[index] - 48u8) as usize;
+        index = index + 1usize;
+    }
+    return result;
+}
+
+fn cost_capture(source: *CrustSource, path: *u8, identity: u64) -> bool {
+    (*source) = make CrustSource { path: path, bytes: null(*u8), size: 0usize, identity: identity };
+    if crust0_host_read_file(path, &(*source).bytes, &(*source).size) == 0i32 { return true; }
+    if crust0_host_write_stream(2u32, "cannot read measurement input: ", 31usize) != 0i32 ||
+       crust0_host_write_stream(2u32, path, gs_length(path)) != 0i32 ||
+       crust0_host_write_stream(2u32, "\n", 1usize) != 0i32 { return false; }
+    return false;
+}
+
+fn cost_measure(sources: *CrustSource, rounds: usize, repeats: usize) -> bool {
+    var stats: CostStats = make CostStats {
+        times: make [u64; 8] { 0u64, 0u64, 0u64, 0u64, 0u64, 0u64, 0u64, 0u64 },
+        generic_bytes: 0usize, baseline_bytes: 0usize, reuse_bytes: 0usize,
+        requests: 0usize, hits: 0usize, instances: 0usize
+    };
+    var index: usize = 0usize;
+    while index < rounds {
+        if index % 2usize == 0usize {
+            if !cost_generic(sources, &stats, repeats) || !cost_baseline(&sources[3usize], &stats) { return false; }
+        } else {
+            if !cost_baseline(&sources[3usize], &stats) || !cost_generic(sources, &stats, repeats) { return false; }
+        }
+        index = index + 1usize;
+    }
+    return cost_report(&stats);
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 7i32 { return 2i32; }
+    var rounds: usize = cost_count(argv[5usize]);
+    var repeats: usize = cost_count(argv[6usize]);
+    if rounds == 0usize || repeats == 0usize { return 2i32; }
+    var sources: [CrustSource; 4] = uninit;
+    var captured: usize = 0usize;
+    while captured < 4usize {
+        if !cost_capture(&sources[captured], argv[captured + 1usize], captured as u64 + 1u64) { break; }
+        captured = captured + 1usize;
+    }
+    var success: bool = captured == 4usize;
+    if success { success = cost_measure(&sources[0usize], rounds, repeats); }
+    while captured != 0usize {
+        captured = captured - 1usize;
+        crust0_host_free(sources[captured].bytes);
+    }
+    if success { return 0i32; }
+    return 1i32;
+}

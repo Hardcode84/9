@@ -167,6 +167,7 @@ Code changes: `make all`, then applicable checks:
 | Overloads/resource composition | `check-overload check-overload-alloc` |
 | Compilation examples | `check-examples` |
 | Modules/bindings/exports | `check-modules` |
+| Generic definitions/instances | `check-generics` |
 | Native jobs | `check-parallel` |
 | Highlight/editor | `check-highlight check-vscode` |
 | Crust CCN | `check-ccn` |

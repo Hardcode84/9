@@ -1,0 +1,130 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn gs_source(stage: *GsStage, source: *CrustSource) -> *CrustSource {
+    var context: *CrustContext = &(*stage).context;
+    var copy: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+    if copy == null(*CrustSource) { return copy; }
+    *copy = *source;
+    (*copy).path = crust_try_copy_string(context, (*source).path, gs_length((*source).path));
+    if (*copy).path == null(*u8) { return null(*CrustSource); }
+    (*copy).bytes = crust_try_copy_string(context, (*source).bytes, (*source).size);
+    if (*copy).bytes == null(*u8) { return null(*CrustSource); }
+    return copy;
+}
+
+fn gs_identifier_source(context: *CrustContext, text: *u8, size: usize,
+                         loc: *CrustLoc) -> *CrustSource {
+    var suffix: *u8 = " {field:u8;}";
+    var suffix_size: usize = gs_length(suffix);
+    if size > ~0usize - suffix_size - 8usize {
+        gs_error(context, loc, "generic binding name size overflow");
+        return null(*CrustSource);
+    }
+    var source: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+    if source == null(*CrustSource) { return source; }
+    (*source).path = "<generic binding>";
+    (*source).size = size + 7usize + suffix_size;
+    (*source).bytes = crust_try_alloc(context, (*source).size + 1usize, 1usize);
+    if (*source).bytes == null(*u8) { return null(*CrustSource); }
+    var prefix: *u8 = "record ";
+    var index: usize = 0usize;
+    while index < 7usize { (*source).bytes[index] = prefix[index]; index = index + 1usize; }
+    index = 0usize;
+    while index < size {
+        (*source).bytes[index + 7usize] = text[index];
+        index = index + 1usize;
+    }
+    index = 0usize;
+    while index < suffix_size {
+        (*source).bytes[size + 7usize + index] = suffix[index];
+        index = index + 1usize;
+    }
+    return source;
+}
+
+fn gs_identifier(context: *CrustContext, text: *u8, loc: *CrustLoc) -> *CrustName {
+    if (*context).error_count != 0usize { return null(*CrustName); }
+    var size: usize = gs_length(text);
+    var source: *CrustSource = gs_identifier_source(context, text, size, loc);
+    if source == null(*CrustSource) { return null(*CrustName); }
+    var action: CrustAction = uninit;
+    if !crust_read_one(context, source, 0usize, (*source).size, &action) {
+        (*context).error_loc = *loc;
+        return null(*CrustName);
+    }
+    var declaration: *CrustDecl = action.declaration;
+    if declaration == null(*CrustDecl) || action.end != (*source).size || (*(*declaration).name).size != size {
+        gs_error(context, loc, "generic binding requires an identifier");
+        return null(*CrustName);
+    }
+    return (*declaration).name;
+}
+
+fn gs_unique(context: *CrustContext, names: *CrustMap, name: *CrustName, loc: *CrustLoc) -> bool {
+    if name == null(*CrustName) { return false; }
+    if crust_map_get(names, name as usize) != null(*u8) {
+        gs_error(context, loc, "duplicate name in generic definition environment");
+        return false;
+    }
+    return crust_try_map_set(context, names, name as usize, name as *u8);
+}
+
+fn gs_parameters(definition: *GsDefinition, parameters: **u8, count: usize, names: *CrustMap) -> bool {
+    var context: *CrustContext = &(*(*definition).stage).context;
+    var loc: CrustLoc = make CrustLoc { source: (*(*definition).unit_value).source, offset: 0usize };
+    var index: usize = 0usize;
+    while index < count {
+        var name: *CrustName = gs_identifier(context, parameters[index], &loc);
+        if !gs_unique(context, names, name, &loc) { return false; }
+        var parameter: *GsParameter = crust_try_alloc(context, sizeof(GsParameter), alignof(GsParameter)) as *GsParameter;
+        if parameter == null(*GsParameter) { return false; }
+        (*parameter).name = name;
+        (*parameter).index = index;
+        if !crust_try_map_set(context, &(*definition).parameters, name as usize, parameter as *u8) { return false; }
+        index = index + 1usize;
+    }
+    (*definition).parameter_count = count;
+    return true;
+}
+
+fn gs_captures(definition: *GsDefinition, captures: *GsBinding, count: usize, names: *CrustMap) -> bool {
+    var context: *CrustContext = &(*(*definition).stage).context;
+    var loc: CrustLoc = make CrustLoc { source: (*(*definition).unit_value).source, offset: 0usize };
+    (*definition).captures = crust_try_grow_array(context, null(*u8), 0usize, count, sizeof(GsBinding), alignof(GsBinding)) as *GsBinding;
+    if (*context).error_count != 0usize { return false; }
+    var index: usize = 0usize;
+    while index < count {
+        var name: *CrustName = gs_identifier(context, captures[index].name, &loc);
+        if !gs_unique(context, names, name, &loc) { return false; }
+        (*definition).captures[index].name = (*name).text;
+        (*definition).captures[index].declaration = captures[index].declaration;
+        index = index + 1usize;
+    }
+    (*definition).capture_count = count;
+    return true;
+}
+
+// Copy the source and binding names. Captured declarations remain borrowed,
+// complete, and immutable until the stage and all its consumers are destroyed.
+fn gs_define(stage: *GsStage, source: *CrustSource, begin: usize, end: usize,
+             parameters: **u8, count: usize, captures: *GsBinding, capture_count: usize) -> *GsDefinition {
+    var context: *CrustContext = &(*stage).context;
+    if (*context).error_count != 0usize { return null(*GsDefinition); }
+    var copy: *CrustSource = gs_source(stage, source);
+    if copy == null(*CrustSource) { return null(*GsDefinition); }
+    var definition: *GsDefinition = crust_try_alloc(context, sizeof(GsDefinition), alignof(GsDefinition)) as *GsDefinition;
+    if definition == null(*GsDefinition) { return definition; }
+    (*definition).stage = stage;
+    if !crust_read_range(context, copy, begin, end, &(*definition).unit_value) { return null(*GsDefinition); }
+    var names: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    if !gs_parameters(definition, parameters, count, &names) ||
+       !gs_captures(definition, captures, capture_count, &names) { return null(*GsDefinition); }
+    var declaration: *CrustDecl = (*(*definition).unit_value).declarations;
+    while declaration != null(*CrustDecl) {
+        if !gs_unique(context, &names, (*declaration).name, &(*declaration).loc) { return null(*GsDefinition); }
+        declaration = (*declaration).next;
+    }
+    (*definition).next = (*stage).definitions;
+    (*stage).definitions = definition;
+    return definition;
+}

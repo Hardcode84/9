@@ -2,9 +2,13 @@
 
 # Generics through compilation programs
 
-Date: 2026-10-04. Status: proposed external-stage design. The APIs below are
-sketches, not implemented interfaces. The [seed specification](../crust0-spec.md)
-and [ownership contract](../ownership-model.md) still define current behavior.
+Date: 2026-10-04. Status: design with a standalone implementation.
+The [generics stage](../../stages/generics/README.md) implements source capture,
+type substitution, isolated concrete checking, and instance reuse. The
+[tutorial](../../examples/generics/README.md) gives its current API.
+The ownership composition and abstract-checking APIs below remain proposals.
+The [seed specification](../crust0-spec.md) and
+[ownership contract](../ownership-model.md) define their current behavior.
 
 ## Decision
 
@@ -123,6 +127,185 @@ Arbitrary root calls retain source-order effects.
 [Rossberg, Russo, and Dreyer, F-ing Modules](https://people.mpi-sws.org/~rossberg/f-ing/).
 
 ## The programming model
+
+### Proposed source syntax
+
+Status: selected syntax design. The implemented standalone stage currently
+exposes the procedural API in the [stage reference](../../stages/generics/README.md).
+The reader and application lowering described here require implementation.
+
+Declare parameters at each generic declaration:
+
+```crust
+record Pair!(Element) {
+    first: Element;
+    second: Element;
+}
+
+fn pair_swap!(Element)(pair: *Pair!(Element)) -> unit {
+    var saved: Element = (*pair).first;
+    (*pair).first = (*pair).second;
+    (*pair).second = saved;
+}
+```
+
+The declaration's `!(Element)` list binds `Element` as a type parameter in that
+declaration. Parameter names are ordinary identifiers: `T`, `Element`, and
+`Payload` follow the same rule. `record Entry!(Key, Value)` declares two ordered
+parameters. Names must be distinct within the parameter list. Reject a parameter
+that collides with another name declared in the same declaration scope.
+
+The record and function have separate parameter scopes. The function's
+`Pair!(Element)` refers to the provider's `Pair` definition with the function's
+current type argument. Instance identity is the definition plus ordered type
+arguments, so this reference selects the same record as other `Pair!(Element)`
+requests. Free names resolve in the definition's environment.
+
+Use the same application spelling in types and expressions:
+
+```crust
+var pair: Pair!(i32) = make Pair!(i32) {
+    first: 10i32, second: 20i32
+};
+pair_swap!(i32)(&pair);
+```
+
+`Pair!(i32)` selects a concrete record type. `pair_swap!(i32)` selects a
+concrete function; the following `(&pair)` supplies its runtime arguments.
+The provider declares the parameter names. The user supplies concrete arguments
+at each use. The root selects the stage and source inputs; it needs no central
+parameter list or `configure` callback.
+
+The grammar extends the seed productions:
+
+```text
+TypeParameters = "!" "(" Identifier ("," Identifier)* ","? ")" ;
+TypeArguments  = "!" "(" Type ("," Type)* ","? ")" ;
+
+RecordDeclaration = "record" Identifier TypeParameters? RecordBody ;
+FunctionDeclaration = "fn" Identifier TypeParameters? FunctionParameters
+                      "->" Type FunctionBody ;
+
+NamedType      = Identifier TypeArguments? ;
+NameExpression = Identifier TypeArguments? ;
+```
+
+The declaration header is the binder position. Each other occurrence of `!(...)`
+is an argument list. Existing expression postfix rules supply calls, indexing,
+and field access after `NameExpression`. `Type` includes the seed types and
+recursively includes applied named types. `Pair!(Pair!(i32))` is a nested type
+application. The same type production applies in `make`, `null`, casts,
+`sizeof`, `alignof`, and `offsetof`.
+
+The first grammar accepts one or more type parameters and requires the exact
+number of explicit type arguments. Parentheses are mandatory; a trailing comma
+follows the seed's list convention. Defaults, parameter packs, inference, value
+parameters, constraints, and specialized overload declarations are outside this
+grammar. Unsupported forms receive a diagnostic. Ordinary compilation functions
+remain available for conditions, loops, reflection, and constructing new
+definitions.
+
+Each source generic declaration has its own definition and instance cache.
+Referencing a generic record alone requests that record's instance. A generic
+function is specialized when requested. The procedural API can still construct
+a definition containing several declarations when a factory needs that result.
+The source syntax needs no separate generic-group construct or namespace.
+
+### Parsing rules and cost
+
+The existing lexer already supplies `!`, `(`, `)`, and `,`. After a declaration
+name, `!` selects a type-parameter list. After a name in a type or expression,
+`!` selects a type-argument list. The parser then requires `(`. Prefix `!`
+retains logical negation; `!=` remains a distinct token. Whitespace and comments
+follow the ordinary token rules.
+
+Parsing requires fixed token lookahead. The declaration parser reads names in
+binder lists; the application parser reads types in argument lists. Neither
+queries a symbol table to choose a production. Reading tokens runs no factory
+and computes no layout. Comparisons, shifts, indexing, and ordinary calls keep
+their existing grammar. In particular:
+
+```crust
+pair_swap!(i32)(&pair);   // Specialization, then call.
+value != other;          // Inequality.
+!flag;                   // Logical negation.
+value < other;           // Comparison.
+value >> 1u32;           // Shift.
+items[index];            // Indexing.
+```
+
+Nested applications close with `)`, so the lexer has no generic-specific `>>`
+rule. Each token is consumed once, apart from bounded lookahead. These
+properties support linear parsing; elapsed time still needs measurement.
+Specialization and type checking remain separate costs.
+
+### Syntax lessons from other languages
+
+| Language | Useful mechanism | Crust decision |
+| --- | --- | --- |
+| D | Declaration-local parameters and explicit `Name!(Args)` application | Use the explicit marker and require parentheses |
+| Rust | Explicit binders; `::<...>` separates expression arguments from comparison | Use one marked application spelling in types and expressions |
+| Zig | Generic construction uses ordinary functions and compile-time type values | Keep construction and compiler control in ordinary Crust functions |
+| Jai | Public demonstrations expose compiler control and specialization work | Keep the compiler interface programmable; distinguish public evidence from a complete grammar |
+
+D's grammar distinguishes explicit instantiation with `!`. Rust's reference
+states that `::` before `<` removes ambiguity with comparison in expression
+paths. Rust also restricts unbraced constant arguments. This supports an explicit
+delimiter and a type-only argument grammar for the initial stage.
+[D grammar](https://dlang.org/spec/template.html#explicit_template_instantiation),
+[Rust path grammar](https://doc.rust-lang.org/reference/paths.html#paths-in-expressions).
+
+Zig's ordinary generic calls rely on its compile-time type values and unified
+expression model. Crust's current seed has separate type syntax and value
+expressions; its compilation program uses explicit type descriptors. The
+chosen syntax lowers to those ordinary stage operations. Conditions and
+reflection retain the host language's expression rules.
+[Zig compile-time parameters](https://ziglang.org/documentation/0.15.2/#Compile-Time-Parameters).
+
+The inspected Jai keynote supplies evidence about compiler control and
+specialization costs. A complete current grammar was not established from
+author-controlled sources, so the syntax choice does not depend on a claim
+about Jai's precise parameter spelling.
+[Jonathan Blow, LambdaConf 2025](https://www.youtube.com/watch?v=IdpD5QIVOKQ).
+
+### Syntax implementation boundary
+
+Implement this reader and lowering in Crust. Keep the C99 seed unchanged.
+Source loading must freeze a provider once and let its definitions share that
+snapshot. Calling the current `gs_define` separately on every range copies
+whole source bytes per definition; that path must change before reading a file
+with many generic declarations.
+
+The reader records parameterized declarations and applications. A later stage
+resolves argument types, requests instances, and replaces applications with
+ordinary concrete bindings. Preserve definition-scope references and source
+locations. Forward dependencies and active instance requests require explicit
+resolution state; parsing must stay independent of that state.
+
+The current external reader has declaration, type, and prefix hooks. Use its
+declaration hooks for the parameter list. Extract the expression postfix loop
+into a general helper so a specialized function expression can receive normal
+calls, indexing, and field selection. These changes stay in the external reader
+library. Retain generic nodes as stage-owned data until lowering. Only ordinary
+concrete AST nodes may reach seed checking.
+
+The current `gs_define` invokes the seed reader, and `gs_apply` checks its clone
+immediately. Source syntax requires a parsed-definition entry point and a
+normalization step before concrete checking. The function's `Pair!(Element)`
+already requires that step; a definition-local parameter list alone is
+insufficient. Same-unit argument types can require dependency resolution before
+`gs_apply`, which accepts complete type facts. These are concrete implementation
+requirements; the procedural stage alone does not implement the surface grammar.
+
+Validate source-local `Element` and `Key, Value` binders, repeated application,
+nested applications, same-unit forward references, definition-scope capture,
+and pointer-recursive records. Include every named-type position, malformed
+delimiters, and ordinary comparison, shift, negation, call, and indexing
+expressions. Measure many declarations in one source to detect repeated source
+copies. Report parsing, resolution, instance construction, and instance lookup
+separately.
+
+### Compilation-program values
 
 Types, definitions, and instances are handles to stage-owned data. A handle is
 an ordinary pointer or record in compilation code. It represents a target type;

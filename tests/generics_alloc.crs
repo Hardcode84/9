@@ -1,0 +1,104 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record GenericAllocation { calls: usize; fail_at: usize; live: usize; }
+
+fn test_allocate(user: *u8, size: usize) -> *u8 {
+    var counts: *GenericAllocation = user as *GenericAllocation;
+    (*counts).calls = (*counts).calls + 1usize;
+    if (*counts).calls == (*counts).fail_at { return null(*u8); }
+    var bytes: *u8 = crust0_host_alloc(size, 16usize);
+    if bytes == null(*u8) { trap; }
+    (*counts).live = (*counts).live + 1usize;
+    return bytes;
+}
+
+fn test_release(user: *u8, bytes: *u8) -> unit {
+    var counts: *GenericAllocation = user as *GenericAllocation;
+    if bytes == null(*u8) || (*counts).live == 0usize { trap; }
+    (*counts).live = (*counts).live - 1usize;
+    crust0_host_free(bytes);
+}
+
+fn test_length(text: *u8) -> usize {
+    var size: usize = 0usize;
+    while text[size] != 0u8 { size = size + 1usize; }
+    return size;
+}
+
+fn test_read(context: *CrustContext, text: *u8, identity: u64) -> *CrustUnit {
+    var source: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+    if source == null(*CrustSource) { return null(*CrustUnit); }
+    *source = make CrustSource { path: "allocation-input", bytes: text, size: test_length(text), identity: identity };
+    var unit_value: *CrustUnit = null(*CrustUnit);
+    if !crust_read(context, source, &unit_value) || !crust_collect(context) ||
+       !crust_resolve(context) || !crust_check(context) { return null(*CrustUnit); }
+    return unit_value;
+}
+
+fn test_instances(stage: *GsStage, definition: *GsDefinition, unit_value: *CrustUnit,
+                  consumer: *CrustContext) -> bool {
+    var declaration: *CrustDecl = (*unit_value).declarations;
+    var argument: *CrustType = (*declaration).type;
+    var first: *GsInstance = gs_apply(definition, &argument, 1usize);
+    if first == null(*GsInstance) { return false; }
+    argument = (*(*declaration).next).type;
+    var second: *GsInstance = gs_apply(definition, &argument, 1usize);
+    if second == null(*GsInstance) { return false; }
+    argument = (*declaration).type;
+    var repeated: *GsInstance = gs_apply(definition, &argument, 1usize);
+    if repeated == null(*GsInstance) { return false; }
+    if repeated != first || second == first { trap; }
+    if !gs_bind(consumer, first, "Item", "First") || !gs_bind(consumer, first, "Item", "Alias") ||
+       !gs_bind(consumer, second, "Item", "Other") { return false; }
+    return test_read(consumer, "fn use(value:*First)->*Alias{return value;}", 30u64) != null(*CrustUnit);
+}
+
+fn test_prepare(stage: *GsStage, provider: *CrustContext, consumer: *CrustContext,
+                 source: *CrustSource) -> bool {
+    var unit_value: *CrustUnit = test_read(provider,
+        "record Payload { value:i64; } record Other { value:u8; }", 10u64);
+    if unit_value == null(*CrustUnit) { return false; }
+    var parameter: *u8 = "T";
+    var capture: GsBinding = make GsBinding { name: "Fixed", declaration: (*unit_value).declarations };
+    var definition: *GsDefinition = gs_define(stage, source, 0usize, (*source).size, &parameter, 1usize, &capture, 1usize);
+    return definition != null(*GsDefinition) && test_instances(stage, definition, unit_value, consumer);
+}
+
+fn test_sweep(source: *CrustSource) -> unit {
+    var fail_at: usize = 1usize;
+    while true {
+        var counts: GenericAllocation = make GenericAllocation { calls: 0usize, fail_at: fail_at, live: 0usize };
+        var allocator: CrustAllocator = make CrustAllocator {
+            user: &counts as *u8, allocate: test_allocate, release: test_release
+        };
+        var provider: CrustContext = uninit;
+        var consumer: CrustContext = uninit;
+        var stage: GsStage = uninit;
+        crust_context_init(&provider, &allocator);
+        crust_context_init(&consumer, &allocator);
+        gs_init(&stage, &allocator, 10000u64);
+        var success: bool = test_prepare(&stage, &provider, &consumer, source);
+        var diagnosed: bool = stage.context.error_count != 0usize || provider.error_count != 0usize || consumer.error_count != 0usize;
+        crust_context_destroy(&consumer);
+        gs_destroy(&stage);
+        crust_context_destroy(&provider);
+        if counts.live != 0usize || success == diagnosed { trap; }
+        if success {
+            if counts.calls >= fail_at { trap; }
+            return;
+        }
+        if counts.calls != fail_at { trap; }
+        fail_at = fail_at + 1usize;
+    }
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 2i32 { return 1i32; }
+    var source: CrustSource = make CrustSource {
+        path: argv[1usize], bytes: null(*u8), size: 0usize, identity: 20u64
+    };
+    if crust0_host_read_file(source.path, &source.bytes, &source.size) != 0i32 { return 2i32; }
+    test_sweep(&source);
+    crust0_host_free(source.bytes);
+    return 0i32;
+}

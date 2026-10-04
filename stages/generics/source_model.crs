@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record GpParameters { names: **CrustName; count: usize; }
+
+record GpDefinition {
+    instances: CrustMap;
+    bindings: CrustMap;
+    parameters: *GpParameters;
+    source: *CrustDecl;
+    next: *GpDefinition;
+}
+
+record GpInstance {
+    definition: *GpDefinition;
+    arguments: **CrustTypeSyntax;
+    count: usize;
+    declaration: *CrustDecl;
+    next: *GpInstance;
+    bucket_next: *GpInstance;
+    generation: u32;
+}
+
+record GsProgram {
+    syntax: CrustContext;
+    context: CrustContext;
+    parameters: CrustMap;
+    declarations: CrustMap;
+    first: *GpDefinition;
+    last: *GpDefinition;
+    instances: *GpInstance;
+    last_instance: *GpInstance;
+    output_tail: *CrustDecl;
+    namespace: u64;
+    next_identity: u64;
+    requests: usize;
+    hits: usize;
+    specializations: usize;
+    state: u32;
+}
+
+record GpEnvironment {
+    program: *GsProgram;
+    definition: *GpDefinition;
+    arguments: **CrustTypeSyntax;
+    generation: u32;
+}

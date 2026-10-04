@@ -1,163 +1,57 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// This example's C build driver owns providers until emission and linking finish.
-record GenericBuild {
-    stage: GsStage;
-    types: CrustModule;
-    target: CrustModule;
-    root: *CrustRun;
-}
-
-// Read one type-parameter definition from a root-relative path.
-fn generic_definition(build: *GenericBuild, path: *u8, parameter: *u8) -> *GsDefinition {
-    var source: *CrustSource = host_input((*build).root, path, 3u64);
-    if source == null(*CrustSource) { return null(*GsDefinition); }
-    return gs_define(&(*build).stage, source, 0usize, (*source).size,
-                     &parameter, 1usize, null(*GsBinding), 0usize);
-}
-
-// Specialize with a record from this build's type source.
-fn generic_instance(build: *GenericBuild, definition: *GsDefinition, name: *u8) -> *GsInstance {
-    var declaration: *CrustDecl = module_find(&(*build).types, name);
-    if declaration == null(*CrustDecl) {
-        crust_set_error(&(*build).types.context, null(*CrustSource), 0usize, "generic argument type was not found");
-        return null(*GsInstance);
+fn generic_equal(left: *u8, right: *u8) -> bool {
+    var index: usize = 0usize;
+    while left[index] == right[index] {
+        if left[index] == 0u8 { return true; }
+        index = index + 1usize;
     }
-    var argument: *CrustType = (*declaration).type;
-    return gs_apply(definition, &argument, 1usize);
+    return false;
 }
 
-fn generic_types(build: *GenericBuild, path: *u8) -> bool {
-    var resolved: *u8 = host_path((*build).root, path);
-    if resolved == null(*u8) { return false; }
-    var types: *CrustModule = &(*build).types;
-    if !module_read(types, resolved, 1u64) || !module_check(types) { return false; }
-    var declaration: *CrustDecl = (*(*types).context.units).declarations;
-    while declaration != null(*CrustDecl) {
-        if (*declaration).kind != CRUST_D_RECORD {
-            crust_set_error(&(*types).context, (*declaration).loc.source, (*declaration).loc.offset,
-                            "this build driver expects records in the type source");
-            return false;
-        }
-        if !module_export(types, (*(*declaration).name).text, "") ||
-           !crust_bind(&(*build).target.context, (*declaration).name, declaration) { return false; }
-        declaration = (*declaration).next;
+fn generic_read(root: *CrustRun, program: *GsProgram, paths: **u8, count: usize) -> bool {
+    var index: usize = 0usize;
+    while index < count {
+        var source: *CrustSource = host_input(root, paths[index], index as u64 + 1u64);
+        if source == null(*CrustSource) || !gp_read(program, source) { return false; }
+        index = index + 1usize;
     }
-    return true;
-}
-
-fn generic_target(build: *GenericBuild, path: *u8) -> bool {
-    var resolved: *u8 = host_path((*build).root, path);
-    if resolved == null(*u8) { return false; }
-    return module_read(&(*build).target, resolved, 2u64) &&
-           module_check(&(*build).target) && module_export(&(*build).target, "main", "generics_main");
-}
-
-fn generic_output(root: *CrustRun, index: usize, suffix: *u8) -> *u8 {
-    var prefix: *u8 = "../../build/generics-";
-    var text: *u8 = crust_try_alloc((*root).context, module_length(prefix) + 21usize + module_length(suffix), 1usize);
-    if text == null(*u8) { return text; }
-    var digits: [u8; 20] = uninit;
-    var begin: usize = 20usize;
-    while true {
-        begin = begin - 1usize;
-        digits[begin] = (index % 10usize) as u8 + 48u8;
-        index = index / 10usize;
-        if index == 0usize { break; }
-    }
-    var used: usize = module_length(prefix);
-    crust0_host_move_bytes(text, prefix, used);
-    crust0_host_move_bytes(text + used as isize, &digits[begin], 20usize - begin);
-    used = used + 20usize - begin;
-    crust0_host_move_bytes(text + used as isize, suffix, module_length(suffix) + 1usize);
-    return host_path(root, text);
+    return gp_check(program);
 }
 
 fn generic_emit(context: *CrustContext, entry: *CrustDecl, options: *CBackendOptions) -> i32 {
     return c_backend_build(context, entry, options);
 }
 
-fn generic_emit_instances(build: *GenericBuild, options: *CBackendOptions, objects: **u8) -> i32 {
-    var root: *CrustRun = (*build).root;
-    var instance: *GsInstance = (*build).stage.instances;
-    var index: usize = 0usize;
-    while instance != null(*GsInstance) {
-        var suffix: *u8 = ".o";
-        if (*options).mode == 2u32 { suffix = ".c"; }
-        (*options).output = generic_output(root, index + 1usize, suffix);
-        if (*options).output == null(*u8) { return 1i32; }
-        if (*options).mode == 2u32 {
-            (*options).symbols = generic_output(root, index + 1usize, ".rsp");
-            if (*options).symbols == null(*u8) { return 1i32; }
-        }
-        var status: i32 = generic_emit(&(*instance).context, null(*CrustDecl), options);
-        if status != 0i32 { return status; }
-        objects[index] = (*options).output;
-        index = index + 1usize;
-        instance = (*instance).next;
-    }
-    return 0i32;
-}
-
-fn generic_emit_build(build: *GenericBuild) -> i32 {
-    var root: *CrustRun = (*build).root;
+fn generic_output(root: *CrustRun, program: *GsProgram) -> i32 {
     var options: CBackendOptions = make CBackendOptions {
-        mode: 1u32, output: null(*u8), symbols: null(*u8),
+        mode: 0u32, output: host_path(root, "../../build/generics"), symbols: null(*u8),
         cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
     };
-    if (*root).argc == 1i32 { options.mode = 2u32; }
-    var count: usize = (*build).stage.specializations;
-    var objects: **u8 = crust_try_grow_array((*root).context, null(*u8), 0usize, count, sizeof(*u8), alignof(*u8)) as **u8;
-    if (*(*root).context).error_count != 0usize { return 1i32; }
-    var status: i32 = generic_emit_instances(build, &options, objects);
-    if status != 0i32 { return status; }
-    options.symbols = null(*u8);
-    if options.mode == 2u32 {
-        options.output = host_path(root, "../../build/generics-program.c");
-        options.symbols = host_path(root, "../../build/generics-program.rsp");
+    if (*root).argc == 1i32 {
+        options.mode = 2u32;
+        options.output = host_path(root, "../../build/generics.c");
+        options.symbols = host_path(root, "../../build/generics.rsp");
         if options.symbols == null(*u8) { return 1i32; }
-    } else {
-        options.mode = 0u32;
-        options.output = host_path(root, "../../build/generics");
-        options.ldflags = objects;
-        options.ldflag_count = count;
     }
     if options.output == null(*u8) { return 1i32; }
-    return generic_emit(&(*build).target.context, module_find(&(*build).target, "main"), &options);
+    var entry: *CrustDecl = gp_find(program, "main");
+    if entry == null(*CrustDecl) { return 1i32; }
+    return generic_emit(&(*program).context, entry, &options);
 }
 
-fn generic_diagnostics(build: *GenericBuild) -> unit {
-    if (*build).stage.context.error_count != 0usize { crust_run_diagnostic(&(*build).stage.context); }
-    else {
-        var instance: *GsInstance = (*build).stage.instances;
-        while instance != null(*GsInstance) {
-            if (*instance).context.error_count != 0usize { crust_run_diagnostic(&(*instance).context); }
-            instance = (*instance).next;
-        }
-    }
-    if (*build).types.context.error_count != 0usize { crust_run_diagnostic(&(*build).types.context); }
-    if (*build).target.context.error_count != 0usize { crust_run_diagnostic(&(*build).target.context); }
-}
-
-// Build selected instances and one target. Accept no arguments or --emit-c.
-fn generic_build(root: *CrustRun, types_path: *u8, target_path: *u8,
-                  configure: fn(*GenericBuild) -> bool) -> i32 {
-    if (*root).argc > 1i32 || ((*root).argc == 1i32 && !module_equal((*root).argv[0usize], "--emit-c")) {
+// Read the selected inputs in one module and build its main function.
+fn generic_build(root: *CrustRun, paths: **u8, count: usize) -> i32 {
+    if (*root).argc > 1i32 || ((*root).argc == 1i32 && !generic_equal((*root).argv[0usize], "--emit-c")) {
         crust_set_error((*root).context, (*root).source, (*root).cursor, "expected no arguments or --emit-c");
         return 1i32;
     }
-    var build: GenericBuild = uninit;
-    build.root = root;
-    gs_init(&build.stage, null(*CrustAllocator), 100u64);
-    module_init(&build.types, null(*CrustAllocator));
-    module_init(&build.target, null(*CrustAllocator));
+    var program: GsProgram = uninit;
+    gp_init(&program, null(*CrustAllocator), 100u64);
     var status: i32 = 1i32;
-    if generic_types(&build, types_path) && configure(&build) && generic_target(&build, target_path) {
-        status = generic_emit_build(&build);
-    }
-    generic_diagnostics(&build);
-    module_destroy(&build.target);
-    gs_destroy(&build.stage);
-    module_destroy(&build.types);
+    if generic_read(root, &program, paths, count) { status = generic_output(root, &program); }
+    if program.syntax.error_count != 0usize { crust_run_diagnostic(&program.syntax); }
+    if program.context.error_count != 0usize { crust_run_diagnostic(&program.context); }
+    gp_destroy(&program);
     return status;
 }

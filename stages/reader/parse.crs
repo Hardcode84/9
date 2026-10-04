@@ -220,6 +220,11 @@ fn rr_primary(reader:*CrustReader)->*CrustExpr {
 fn rr_postfix(reader:*CrustReader)->*CrustExpr {
     var expression:*CrustExpr=rr_primary(reader);
     if expression==null(*CrustExpr) { return expression; }
+    return rr_postfix_after(reader,expression);
+}
+
+// Consume standard postfix operations after a successful primary expression.
+fn rr_postfix_after(reader:*CrustReader,expression:*CrustExpr)->*CrustExpr {
     while !(*reader).failed {
         var offset:usize=(*reader).token.offset;
         var next:*CrustExpr=null(*CrustExpr);
@@ -458,6 +463,11 @@ fn rr_record(reader:*CrustReader)->*CrustDecl {
     var result:*CrustDecl=rr_new_decl(reader,CRUST_D_RECORD,(*reader).token.offset);
     if result==null(*CrustDecl) || !rr_expect(reader,RR_RECORD,"expected 'record'") { return null(*CrustDecl); }
     (*result).name=rr_name(reader);
+    return rr_record_body(reader,result);
+}
+
+// Consume the fields and closing brace after a successful record name.
+fn rr_record_body(reader:*CrustReader,result:*CrustDecl)->*CrustDecl {
     if !rr_expect(reader,123u32,"expected '{'") { return null(*CrustDecl); }
     var tail:**CrustField=&(*result).fields;
     while !(*reader).failed {
@@ -490,6 +500,11 @@ fn rr_function_header(reader:*CrustReader)->*CrustDecl {
     if result==null(*CrustDecl) || !rr_next(reader) { return null(*CrustDecl); }
     if kind==CRUST_D_EXTERN && !rr_expect(reader,RR_FN,"expected 'fn'") { return null(*CrustDecl); }
     (*result).name=rr_name(reader);
+    return rr_function_signature(reader,result);
+}
+
+// Consume the parameter list and result type after a successful function name.
+fn rr_function_signature(reader:*CrustReader,result:*CrustDecl)->*CrustDecl {
     if !rr_expect(reader,40u32,"expected '('") { return null(*CrustDecl); }
     if !rr_function_parameters(reader,result) { return null(*CrustDecl); }
     if !rr_expect(reader,41u32,"expected ')'") || !rr_expect(reader,RR_ARROW,"expected '->'") { return null(*CrustDecl); }
@@ -600,28 +615,33 @@ fn rr_read(context:*CrustContext,source:*CrustSource,begin:usize,end:usize,hooks
 
 fn rr_function_type(reader:*CrustReader,result:*CrustTypeSyntax)->*CrustTypeSyntax {
     (*result).kind=CRUST_T_FUNCTION;
-    if !rr_expect(reader,40u32,"expected '('") { return null(*CrustTypeSyntax); }
+    if !rr_expect(reader,40u32,"expected '('") || !rr_type_parameters(reader,result) {
+        return null(*CrustTypeSyntax);
+    }
+    if !rr_expect(reader,RR_ARROW,"expected '->'") { return null(*CrustTypeSyntax); }
+    (*result).base=rr_type(reader);
+    if (*reader).failed { return null(*CrustTypeSyntax); }
+    return result;
+}
+
+// Consume comma-separated types and the closing ')' after an opening '('.
+fn rr_type_parameters(reader:*CrustReader,result:*CrustTypeSyntax)->bool {
     var capacity:usize=0usize;
     while (*reader).token.kind!=41u32 && !(*reader).failed {
         if (*result).param_count==capacity {
             capacity=rr_capacity(reader,capacity);
-            if (*reader).failed { return null(*CrustTypeSyntax); }
+            if (*reader).failed { return false; }
             (*result).params=crust_try_grow_array((*reader).context,(*result).params as *u8,
                 (*result).param_count,capacity,sizeof(*CrustTypeSyntax),alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
-            if (*result).params==null(**CrustTypeSyntax) { rr_allocation_failed(reader);return null(*CrustTypeSyntax); }
+            if (*result).params==null(**CrustTypeSyntax) { rr_allocation_failed(reader);return false; }
         }
         var parameter:*CrustTypeSyntax=rr_type(reader);
-        if parameter==null(*CrustTypeSyntax) { return null(*CrustTypeSyntax); }
+        if parameter==null(*CrustTypeSyntax) { return false; }
         (*result).params[(*result).param_count]=parameter;
         (*result).param_count=(*result).param_count+1usize;
         if !rr_take(reader,44u32) { break; }
     }
-    if !rr_expect(reader,41u32,"expected ')'") || !rr_expect(reader,RR_ARROW,"expected '->'") {
-        return null(*CrustTypeSyntax);
-    }
-    (*result).base=rr_type(reader);
-    if (*reader).failed { return null(*CrustTypeSyntax); }
-    return result;
+    return rr_expect(reader,41u32,"expected ')'");
 }
 
 fn rr_primary_compound(reader:*CrustReader,token:*CrustReaderToken)->*CrustExpr {
@@ -669,9 +689,11 @@ fn rr_offset_expression(reader:*CrustReader,token:*CrustReaderToken)->*CrustExpr
     if !rr_next(reader) { return null(*CrustExpr); }
     result=rr_new_expr(reader,CRUST_E_OFFSETOF,(*token).offset);
     if result==null(*CrustExpr) || !rr_expect(reader,40u32,"expected '('") { return null(*CrustExpr); }
-    (*result).syntax_type=rr_new_type(reader,CRUST_T_NAME,(*reader).token.offset);
+    if (*reader).token.kind!=RR_NAME {
+        rr_error(reader,(*reader).token.offset,"expected an identifier");return null(*CrustExpr);
+    }
+    (*result).syntax_type=rr_type(reader);
     if (*result).syntax_type==null(*CrustTypeSyntax) { return null(*CrustExpr); }
-    (*(*result).syntax_type).name=rr_name(reader);
     if !rr_expect(reader,44u32,"expected ','") { return null(*CrustExpr); }
     (*result).field_name=rr_name(reader);
     if !rr_expect(reader,41u32,"expected ')'") { return null(*CrustExpr); }

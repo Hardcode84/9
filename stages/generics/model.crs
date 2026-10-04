@@ -3,6 +3,13 @@
 record GsBinding { name: *u8; declaration: *CrustDecl; }
 record GsParameter { name: *CrustName; index: usize; }
 
+record GsClone {
+    context: *CrustContext;
+    user: *u8;
+    type_syntax: fn(*GsClone,*CrustTypeSyntax,u32)->*CrustTypeSyntax;
+    expression: fn(*GsClone,*CrustExpr,u32)->*CrustExpr;
+}
+
 record GsStage {
     context: CrustContext;
     definitions: *GsDefinition;

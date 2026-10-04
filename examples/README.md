@@ -31,7 +31,7 @@ separates application rules from container-author obligations.
 | 9 | [Intrusive lists](intrusive/README.md) | Use a trusted opaque provider with checked traversal, destruction, and reuse |
 | 10 | [Owning tree](ownership-graphs/README.md) | Transfer child ownership behind the same checked interface |
 | 11 | [One-way index](ownership-index/README.md) | Retire a symbol with incoming aliases and check local views from separate inputs |
-| 12 | [Generics](generics/README.md) | Supply type arguments through ordinary compilation calls and reuse concrete instances |
+| 12 | [Generics](generics/README.md) | Declare type parameters beside records and functions; use explicit type arguments |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage

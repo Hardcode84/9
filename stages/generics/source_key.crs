@@ -1,0 +1,67 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn gp_type_hash(program: *GsProgram, syntax: *CrustTypeSyntax, depth: u32, remaining: *usize) -> usize {
+    if !gs_depth(&(*program).context, &(*syntax).loc, depth) { return 0usize; }
+    if *remaining == 0usize {
+        gs_error(&(*program).context, &(*syntax).loc, "generic type expansion limit of 65536 exceeded");
+        return 0usize;
+    }
+    *remaining = *remaining - 1usize;
+    var kind: u32 = (*syntax).kind;
+    var hash: usize = gs_mix(14695981039346656037usize, kind as u64);
+    if kind <= CRUST_T_UNIT { return hash; }
+    if kind == CRUST_T_NAME { return gs_mix(hash, (*syntax).name as usize as u64); }
+    hash = gs_mix(hash, gp_type_hash(program, (*syntax).base, depth + 1u32, remaining) as u64);
+    if kind == CRUST_T_ARRAY { return gs_mix(hash, (*syntax).count); }
+    if kind != CRUST_T_FUNCTION { return hash; }
+    hash = gs_mix(hash, (*syntax).param_count as u64);
+    var index: usize = 0usize;
+    while index < (*syntax).param_count && (*program).context.error_count == 0usize {
+        hash = gs_mix(hash, gp_type_hash(program, (*syntax).params[index], depth + 1u32, remaining) as u64);
+        index = index + 1usize;
+    }
+    return hash;
+}
+
+// Both trees have passed the bounded hash traversal and stay immutable.
+fn gp_type_equal(left: *CrustTypeSyntax, right: *CrustTypeSyntax) -> bool {
+    if left == right { return true; }
+    var kind: u32 = (*left).kind;
+    if kind != (*right).kind { return false; }
+    if kind <= CRUST_T_UNIT { return true; }
+    if kind == CRUST_T_NAME { return (*left).name == (*right).name; }
+    if kind == CRUST_T_ARRAY && (*left).count != (*right).count { return false; }
+    if !gp_type_equal((*left).base, (*right).base) { return false; }
+    if kind != CRUST_T_FUNCTION { return true; }
+    if (*left).param_count != (*right).param_count { return false; }
+    var index: usize = 0usize;
+    while index < (*left).param_count {
+        if !gp_type_equal((*left).params[index], (*right).params[index]) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn gp_arguments_hash(program: *GsProgram, arguments: **CrustTypeSyntax,
+                     count: usize, location: *CrustLoc) -> usize {
+    if !gs_depth(&(*program).context, location, 0u32) { return 0usize; }
+    var hash: usize = gs_mix(14695981039346656037usize, count as u64);
+    var remaining: usize = 65536usize;
+    var index: usize = 0usize;
+    while index < count && (*program).context.error_count == 0usize {
+        hash = gs_mix(hash, gp_type_hash(program, arguments[index], 0u32, &remaining) as u64);
+        index = index + 1usize;
+    }
+    if hash == 0usize { hash = 1usize; }
+    return hash;
+}
+
+fn gp_arguments_equal(instance: *GpInstance, arguments: **CrustTypeSyntax, count: usize) -> bool {
+    if (*instance).count != count { return false; }
+    var index: usize = 0usize;
+    while index < count {
+        if !gp_type_equal((*instance).arguments[index], arguments[index]) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}

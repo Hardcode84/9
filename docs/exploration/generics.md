@@ -2,10 +2,10 @@
 
 # Generics through compilation programs
 
-Date: 2026-10-04. Status: design with a standalone implementation.
+Date: 2026-10-05. Status: source generics implemented; ownership composition proposed.
 The [generics stage](../../stages/generics/README.md) implements source capture,
-type substitution, isolated concrete checking, and instance reuse. The
-[tutorial](../../examples/generics/README.md) gives its current API.
+declaration-local type parameters, concrete checking, and instance reuse. The
+[tutorial](../../examples/generics/README.md) shows setup, definitions, and use.
 The ownership composition and abstract-checking APIs below remain proposals.
 The [seed specification](../crust0-spec.md) and
 [ownership contract](../ownership-model.md) define their current behavior.
@@ -128,11 +128,10 @@ Arbitrary root calls retain source-order effects.
 
 ## The programming model
 
-### Proposed source syntax
+### Source syntax
 
-Status: selected syntax design. The implemented standalone stage currently
-exposes the procedural API in the [stage reference](../../stages/generics/README.md).
-The reader and application lowering described here require implementation.
+Status: implemented by the external generics reader and lowering stage. The
+[stage reference](../../stages/generics/README.md) defines the source and procedural APIs.
 
 Declare parameters at each generic declaration:
 
@@ -270,40 +269,37 @@ about Jai's precise parameter spelling.
 
 ### Syntax implementation boundary
 
-Implement this reader and lowering in Crust. Keep the C99 seed unchanged.
-Source loading must freeze a provider once and let its definitions share that
-snapshot. Calling the current `gs_define` separately on every range copies
-whole source bytes per definition; that path must change before reading a file
-with many generic declarations.
+The reader and lowering are ordinary Crust code. The C99 seed is unchanged.
+`gp_read` copies each source once. Its declarations share that snapshot and
+retain source locations. The reader records parameter lists and applications.
+It performs no type lookup, layout computation, or specialization.
 
-The reader records parameterized declarations and applications. A later stage
-resolves argument types, requests instances, and replaces applications with
-ordinary concrete bindings. Preserve definition-scope references and source
-locations. Forward dependencies and active instance requests require explicit
-resolution state; parsing must stay independent of that state.
+`gp_lower` collects declaration names across the selected input files. It
+normalizes argument syntax, reuses instances by definition and argument identity,
+and copies each new declaration with fresh checking state. It puts each instance
+in the reuse table before it expands its body. A work list handles references to
+other instances and recursive requests. The output contains ordinary seed AST
+nodes in one context. `gp_check` collects, resolves, and checks this context and
+validates every type argument, including arguments unused by a body.
 
-The current external reader has declaration, type, and prefix hooks. Use its
-declaration hooks for the parameter list. Extract the expression postfix loop
-into a general helper so a specialized function expression can receive normal
-calls, indexing, and field selection. These changes stay in the external reader
-library. Retain generic nodes as stage-owned data until lowering. Only ordinary
-concrete AST nodes may reach seed checking.
+The external reader supplies general declaration, type, and prefix hooks.
+`rr_postfix_after` continues calls, indexing, and field selection after an
+extension expression. Record-body, function-signature, and type-list helpers
+let the generics reader reuse the seed productions. Application metadata stays
+in the external stage until lowering removes it.
 
-The current `gs_define` invokes the seed reader, and `gs_apply` checks its clone
-immediately. Source syntax requires a parsed-definition entry point and a
-normalization step before concrete checking. The function's `Pair!(Element)`
-already requires that step; a definition-local parameter list alone is
-insufficient. Same-unit argument types can require dependency resolution before
-`gs_apply`, which accepts complete type facts. These are concrete implementation
-requirements; the procedural stage alone does not implement the surface grammar.
+The procedural `gs_define` and `gs_apply` interface remains available for
+compilation programs that supply complete type facts and explicit captures.
+The source interface works from normalized type syntax until all concrete
+declarations are available. It therefore handles forward references and
+pointer-recursive records before their layouts are known.
 
-Validate source-local `Element` and `Key, Value` binders, repeated application,
-nested applications, same-unit forward references, definition-scope capture,
-and pointer-recursive records. Include every named-type position, malformed
-delimiters, and ordinary comparison, shift, negation, call, and indexing
-expressions. Measure many declarations in one source to detect repeated source
-copies. Report parsing, resolution, instance construction, and instance lookup
-separately.
+`make check-generics` covers source-local binders, repeated and nested
+applications, forward references, definition-scope names, recursive records,
+all type positions, malformed delimiters, concrete bodies, both backends, and
+allocation failures. The cost harness separates parsing, lowering with cache
+reuse, concrete checks, cleanup, and native preparation. Input bytes and hashes
+are retained with each measurement.
 
 ### Compilation-program values
 

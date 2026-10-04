@@ -2,159 +2,120 @@
 
 # Tutorial: generics
 
-Write the pair operations once. The compilation program selects the element
-types and gives each instance names that the application can use.
+A pair stores two values of the same type. Write its record and operations once,
+then use them with the types that your program needs.
+
+This example uses pairs of positions and pairs of samples. The source selects
+those types at each use. The compilation program loads the generics stage and
+passes it the input files.
 
 | File | Purpose |
 | --- | --- |
-| [main.crs](main.crs) | Select the generic definition, arguments, and application names |
-| [pair.crs](pair.crs) | Define the shared record and functions |
+| [main.crs](main.crs) | Select the stages and input files |
+| [pair.crs](pair.crs) | Define the generic record and functions |
 | [types.crs](types.crs) | Define the element types |
-| [program.crs](program.crs) | Use the concrete pairs |
+| [program.crs](program.crs) | Use the pairs and check their values and layout |
 | [setup.crs](setup.crs), [build.crs](build.crs) | Load the libraries and run the build |
 
-## 1. Include the stage
+## 1. Load the stage
 
-Start [main.crs](main.crs) with:
+[main.crs](main.crs) is the compilation program:
 
 ```crust
 host_source(run, "setup.crs");
-load_example_stages(run);
+if !load_example_stages(run) { return 1i32; };
 host_source(run, "build.crs");
+
+var inputs: [*u8; 3] = make [*u8; 3] { "types.crs", "pair.crs", "program.crs" };
+return generic_build(run, &inputs[0usize], 3usize);
 ```
 
-[setup.crs](setup.crs) loads the libraries. Its generics-stage calls are:
+Keep [setup.crs](setup.crs) and [build.crs](build.crs) beside this file. They are
+ordinary compilation code supplied by the example. `setup.crs` loads the C
+backend and the generics stage. Its generics calls are:
 
 ```crust
-host_source(root, "../../stages/generics/model.crs");
-host_source(root, "../../stages/generics/api.crs");
+host_source(root, "../../stages/generics/source_model.crs");
+host_source(root, "../../stages/generics/source_api.crs");
 host_link(root, "../../build/crust-generics-library.so");
 ```
 
-[build.crs](build.crs) supplies the build helpers used below. It reads the input
-files, reports errors, and passes the checked program to the C backend. These
-helpers are ordinary code supplied by this example.
+`generic_build` reads the selected inputs into one module, checks the program,
+and passes the resulting declarations to the backend. Names are visible across
+these files, including references to declarations that appear later.
 
-## 2. Define the shared code
+## 2. Define the generic code
 
-The compilation program declares the parameter name explicitly:
-
-```crust
-generic_definition(build, "pair.crs", "T");
-```
-
-The last argument registers `T` as a type parameter for this definition. In
-[pair.crs](pair.crs), use that name for the element type:
+Declare type parameters after the name with `!(...)`. In [pair.crs](pair.crs):
 
 ```crust
-record Pair { first: T; second: T; }
+record Pair!(Element) { first: Element; second: Element; }
 
-fn pair_init(pair: *Pair, first: *T, second: *T) -> unit {
-    (*pair).first = *first;
-    (*pair).second = *second;
-}
-
-fn exchange(left: *T, right: *T) -> unit {
-    var saved: T = *left;
+fn exchange!(Element)(left: *Element, right: *Element) -> unit {
+    var saved: Element = *left;
     *left = *right;
     *right = saved;
 }
 
-fn pair_swap(pair: *Pair) -> unit {
-    exchange(&(*pair).first, &(*pair).second);
-}
-
-fn pair_first(pair: *Pair) -> *T {
-    return &(*pair).first;
+fn pair_swap!(Element)(pair: *Pair!(Element)) -> unit {
+    exchange!(Element)(&(*pair).first, &(*pair).second);
 }
 ```
 
-The definition uses ordinary records, functions, pointers, and assignments.
-The compilation program supplies the concrete type for `T` before the seed
-checks the code.
+Each declaration owns its parameter list. `Element` names a type throughout that
+record or function. `Pair!(Element)` refers to the pair for that type.
+`exchange!(Element)` selects a function; the following parentheses supply its
+ordinary arguments.
 
-Parameter names can contain multiple letters. For example, pass `"Element"`
-to `generic_definition` and write `Element` in the shared source:
+Parameter names can be any valid identifiers. A declaration can have more than
+one parameter:
 
 ```crust
-record Pair { first: Element; second: Element; }
+record Entry!(Key, Value) { key: Key; value: Value; }
 ```
 
-Use any valid identifier and use the same spelling in both places. An
-unregistered type name must resolve to a record declared in the definition or
-to an explicitly captured external record. Otherwise, checking the instance
-reports an unknown name. The example helper accepts one type parameter; the
-stage's `gs_define` API accepts a list, such as `Key` and `Value`.
+Arguments are explicit types in parameter order. For example,
+`Entry!(i32, *u8)` has an integer key and a pointer value.
 
-[types.crs](types.crs) defines the two element types:
+The type must support the operations in the requested function. `exchange`
+copies values. The source stage substitutes the selected type, then the seed
+checks the concrete function. An unused generic function contributes no concrete
+function body. Repeated uses of one declaration with the same types share an
+instance.
+
+## 3. Use the generic code
+
+[types.crs](types.crs) defines ordinary element types:
 
 ```crust
 record Position { x: i64; y: i64; }
 record Sample { value: i32; tag: u8; }
 ```
 
-## 3. Create instances and select names
-
-Add this configuration after the loading calls in `main.crs`:
-
-```crust
-fn configure(build: *GenericBuild) -> bool {
-    var pair: *GsDefinition = generic_definition(build, "pair.crs", "T");
-    if pair == null(*GsDefinition) { return false; }
-    var positions: *GsInstance = generic_instance(build, pair, "Position");
-    if positions == null(*GsInstance) { return false; }
-    var samples: *GsInstance = generic_instance(build, pair, "Sample");
-    if samples == null(*GsInstance) { return false; }
-
-    var target: *CrustContext = &(*build).target.context;
-    return gs_bind(target, positions, "Pair", "PositionPair") &&
-           gs_bind(target, positions, "pair_init", "position_pair_init") &&
-           gs_bind(target, positions, "pair_swap", "position_pair_swap") &&
-           gs_bind(target, positions, "pair_first", "position_pair_first") &&
-           gs_bind(target, samples, "Pair", "SamplePair") &&
-           gs_bind(target, samples, "pair_init", "sample_pair_init") &&
-           gs_bind(target, samples, "pair_swap", "sample_pair_swap") &&
-           gs_bind(target, samples, "pair_first", "sample_pair_first");
-}
-
-return generic_build(run, "types.crs", "program.crs", configure);
-```
-
-`generic_definition` reads the shared source with one named type parameter.
-`generic_instance` selects an element type from `types.crs` and calls the
-stage's `gs_apply` operation. The stage substitutes the type and checks the
-resulting declarations. A repeated request for the same definition and type
-reuses the instance.
-
-`gs_bind` makes a selected declaration available to the application. Here the
-two instances become `PositionPair` and `SamplePair`, with separate function
-names. The shared helper `exchange` remains inside each instance.
-
-`generic_build` loads the element types before it calls `configure`. It then
-checks `program.crs` with the selected names and builds the executable.
-
-## 4. Use the concrete types
-
-The application calls ordinary functions. For example:
+Use `Pair!(Position)` as a type and `pair_swap!(Position)` as a function:
 
 ```crust
 fn main(argc: i32, argv: **u8) -> i32 {
-    var a: Position = make Position { x: 10i64, y: 20i64 };
-    var b: Position = make Position { x: 30i64, y: 40i64 };
-    var pair: PositionPair = uninit;
-    position_pair_init(&pair, &a, &b);
-    position_pair_swap(&pair);
-    var first: *Position = position_pair_first(&pair);
-    if (*first).x != 30i64 || pair.second.x != 10i64 { trap; }
+    var pair: Pair!(Position) = make Pair!(Position) {
+        first: make Position { x: 10i64, y: 20i64 },
+        second: make Position { x: 30i64, y: 40i64 }
+    };
+    pair_swap!(Position)(&pair);
+    if pair.first.x != 30i64 || pair.second.x != 10i64 { trap; }
     return 0i32;
 }
 ```
 
-[program.crs](program.crs) checks both element types and their pair layouts.
-The helpers copy values through raw pointers. Supply valid addresses and keep
-the pointed-to storage live. Ownership contracts require the ownership stage.
+[program.crs](program.crs) also calls `pair_init` and `pair_first`, which
+[pair.crs](pair.crs) defines with the same syntax. It checks both element types,
+the pair sizes, alignments, and field positions. Each compiled pair has two
+ordinary element fields. Each compiled operation is a direct function call.
 
-## 5. Build and run
+The helpers use raw pointers. Supply valid addresses and keep the storage live
+while a helper uses it. Their assignments copy values; resource transfer requires
+ownership contracts and the ownership stage.
+
+## 4. Build and run
 
 Run from the repository root:
 
@@ -170,15 +131,17 @@ The program prints:
 generics: OK
 ```
 
-To inspect the generated C without target compilation or linking, run:
+To inspect the generated C, run:
 
 ```sh
 build/crust examples/generics/main.crs --emit-c
 ```
 
-The example writes C files and symbol maps under `build/`.
-[handwritten.crs](handwritten.crs) contains the same operations written for
-each element type, with the same value and layout checks.
+This writes `build/generics.c` and its symbol map, `build/generics.rsp`.
+[handwritten.crs](handwritten.crs) contains the same operations written for each
+element type, with the same value and layout checks. The tests compile both
+versions and compare their output. They also pass the generic program to the ASM
+backend.
 
-See the [stage reference](../../stages/generics/README.md) for direct API use,
-external bindings, supported type arguments, and provider lifetimes.
+See the [stage reference](../../stages/generics/README.md) for the source API,
+checking rules, and direct use from compilation code.

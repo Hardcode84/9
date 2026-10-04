@@ -1,0 +1,144 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn gp_reader_application(reader: *CrustReader, application: *CrustTypeSyntax) -> bool {
+    if !rr_expect(reader, 33u32, "expected '!'") ||
+       !rr_expect(reader, 40u32, "expected '(' after '!'") { return false; }
+    if (*reader).token.kind == 41u32 {
+        rr_error(reader, (*reader).token.offset, "generic application requires a type argument");
+        return false;
+    }
+    return rr_type_parameters(reader, application);
+}
+
+fn gp_reader_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax {
+    if (*reader).token.kind != RR_NAME { return null(*CrustTypeSyntax); }
+    var result: *CrustTypeSyntax = rr_new_type(reader, CRUST_T_NAME, (*reader).token.offset);
+    if result == null(*CrustTypeSyntax) { return result; }
+    (*result).name = rr_name(reader);
+    if (*reader).token.kind == 33u32 && !gp_reader_application(reader, result) {
+        return null(*CrustTypeSyntax);
+    }
+    if (*reader).failed { return null(*CrustTypeSyntax); }
+    return result;
+}
+
+fn gp_reader_prefix(reader: *CrustReader, user: *u8) -> *CrustExpr {
+    if (*reader).token.kind != RR_NAME { return null(*CrustExpr); }
+    var result: *CrustExpr = rr_primary(reader);
+    if result == null(*CrustExpr) { return result; }
+    if (*reader).token.kind == 33u32 {
+        var application: *CrustTypeSyntax = rr_new_type(reader, CRUST_T_NAME, (*result).loc.offset);
+        if application == null(*CrustTypeSyntax) { return null(*CrustExpr); }
+        (*application).name = (*result).name;
+        if !gp_reader_application(reader, application) { return null(*CrustExpr); }
+        (*result).syntax_type = application;
+    }
+    return rr_postfix_after(reader, result);
+}
+
+fn gp_reader_parameter(reader: *CrustReader, names: *CrustMap,
+                       declaration: *CrustDecl) -> *CrustName {
+    var offset: usize = (*reader).token.offset;
+    var name: *CrustName = rr_name(reader);
+    if name == null(*CrustName) { return name; }
+    if name == (*declaration).name {
+        rr_error(reader, offset, "generic parameter conflicts with its declaration name");
+        return null(*CrustName);
+    }
+    if crust_map_get(names, name as usize) != null(*u8) {
+        rr_error(reader, offset, "duplicate generic parameter");
+        return null(*CrustName);
+    }
+    if !crust_try_map_set((*reader).context, names, name as usize, name as *u8) {
+        rr_allocation_failed(reader);
+        return null(*CrustName);
+    }
+    return name;
+}
+
+fn gp_reader_parameter_list(reader: *CrustReader, declaration: *CrustDecl,
+                            parameters: *GpParameters) -> bool {
+    var capacity: usize = 0usize;
+    var names: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    while (*reader).token.kind != 41u32 && !(*reader).failed {
+        if (*parameters).count == capacity {
+            capacity = rr_capacity(reader, capacity);
+            if (*reader).failed { return false; }
+            (*parameters).names = crust_try_grow_array((*reader).context, (*parameters).names as *u8,
+                (*parameters).count, capacity, sizeof(*CrustName), alignof(*CrustName)) as **CrustName;
+            if (*parameters).names == null(**CrustName) { rr_allocation_failed(reader); return false; }
+        }
+        var name: *CrustName = gp_reader_parameter(reader, &names, declaration);
+        if name == null(*CrustName) { return false; }
+        (*parameters).names[(*parameters).count] = name;
+        (*parameters).count = (*parameters).count + 1usize;
+        if !rr_take(reader, 44u32) { break; }
+    }
+    return rr_expect(reader, 41u32, "expected ')'");
+}
+
+fn gp_reader_parameters(reader: *CrustReader, program: *GsProgram, declaration: *CrustDecl) -> bool {
+    if !rr_take(reader, 33u32) { return !(*reader).failed; }
+    if (*declaration).kind == CRUST_D_EXTERN {
+        rr_error(reader, (*declaration).loc.offset, "extern functions cannot have generic parameters");
+        return false;
+    }
+    if !rr_expect(reader, 40u32, "expected '(' after '!'") { return false; }
+    if (*reader).token.kind == 41u32 {
+        rr_error(reader, (*reader).token.offset, "generic declaration requires a type parameter");
+        return false;
+    }
+    var parameters: *GpParameters = rr_alloc(reader, sizeof(GpParameters), alignof(GpParameters)) as *GpParameters;
+    if parameters == null(*GpParameters) || !gp_reader_parameter_list(reader, declaration, parameters) { return false; }
+    if !crust_try_map_set((*reader).context, &(*program).parameters, declaration as usize, parameters as *u8) {
+        rr_allocation_failed(reader);
+        return false;
+    }
+    return true;
+}
+
+fn gp_reader_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
+    var token: u32 = (*reader).token.kind;
+    if token != RR_RECORD && token != RR_FN && token != RR_EXTERN { return null(*CrustDecl); }
+    var kind: u32 = CRUST_D_FUNCTION;
+    if token == RR_RECORD { kind = CRUST_D_RECORD; }
+    if token == RR_EXTERN { kind = CRUST_D_EXTERN; }
+    var declaration: *CrustDecl = rr_new_decl(reader, kind, (*reader).token.offset);
+    if declaration == null(*CrustDecl) || !rr_next(reader) { return null(*CrustDecl); }
+    if kind == CRUST_D_EXTERN && !rr_expect(reader, RR_FN, "expected 'fn'") { return null(*CrustDecl); }
+    (*declaration).name = rr_name(reader);
+    if (*reader).failed || !gp_reader_parameters(reader, user as *GsProgram, declaration) { return null(*CrustDecl); }
+    if kind == CRUST_D_RECORD { return rr_record_body(reader, declaration); }
+    if rr_function_signature(reader, declaration) == null(*CrustDecl) { return null(*CrustDecl); }
+    return rr_function_end(reader, declaration);
+}
+
+fn gp_source(program: *GsProgram, source: *CrustSource) -> *CrustSource {
+    var context: *CrustContext = &(*program).syntax;
+    var copy: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+    if copy == null(*CrustSource) { return copy; }
+    *copy = *source;
+    (*copy).path = crust_try_copy_string(context, (*source).path, gs_length((*source).path));
+    if (*copy).path == null(*u8) { return null(*CrustSource); }
+    (*copy).bytes = crust_try_copy_string(context, (*source).bytes, (*source).size);
+    if (*copy).bytes == null(*u8) { return null(*CrustSource); }
+    return copy;
+}
+
+// Copy and parse one source. Keep the program live through lowering and checking.
+fn gp_read(program: *GsProgram, source: *CrustSource) -> bool {
+    if (*program).syntax.error_count != 0usize || (*program).context.error_count != 0usize { return false; }
+    if (*program).state != 0u32 {
+        crust_set_error(&(*program).syntax, null(*CrustSource), 0usize,
+            "source input is closed after lowering starts");
+        return false;
+    }
+    var copy: *CrustSource = gp_source(program, source);
+    if copy == null(*CrustSource) { return false; }
+    var hooks: CrustReaderHooks = make CrustReaderHooks {
+        user: program as *u8, declaration: gp_reader_declaration,
+        statement: null(fn(*CrustReader, *u8)->*CrustStmt),
+        prefix: gp_reader_prefix, type_syntax: gp_reader_type
+    };
+    return rr_read(&(*program).syntax, copy, 0usize, (*copy).size, &hooks) != null(*CrustUnit);
+}

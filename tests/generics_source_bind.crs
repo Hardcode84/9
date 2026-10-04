@@ -1,0 +1,152 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn bind_length(text: *u8) -> usize {
+    var size: usize = 0usize;
+    while text[size] != 0u8 { size = size + 1usize; }
+    return size;
+}
+
+fn bind_text_equal(left: *u8, right: *u8) -> bool {
+    var index: usize = 0usize;
+    while left[index] == right[index] {
+        if left[index] == 0u8 { return true; }
+        index = index + 1usize;
+    }
+    return false;
+}
+
+fn bind_provider(context: *CrustContext) -> bool {
+    var text: *u8 = "record P {value:i64;} record Q {value:i64;} extern fn get(value:*P)->i64=\"provided_get\";";
+    var source: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+    if source == null(*CrustSource) { return false; }
+    *source = make CrustSource { path: "generic-binding-provider", bytes: text, size: bind_length(text), identity: 70u64 };
+    var parsed: *CrustUnit = null(*CrustUnit);
+    return crust_read(context, source, &parsed) && crust_collect(context) &&
+           crust_resolve(context) && crust_check(context);
+}
+
+fn bind_find(context: *CrustContext, text: *u8) -> *CrustDecl {
+    var name: *CrustName = crust_try_intern(context, text, bind_length(text));
+    if name == null(*CrustName) { return null(*CrustDecl); }
+    var symbol: *CrustSymbol = crust_map_get(&(*context).globals, name as usize) as *CrustSymbol;
+    if symbol == null(*CrustSymbol) { return null(*CrustDecl); }
+    return (*symbol).decl;
+}
+
+fn bind_alias(context: *CrustContext, text: *u8, declaration: *CrustDecl) -> bool {
+    if declaration == null(*CrustDecl) { return false; }
+    var name: *CrustName = crust_try_intern(context, text, bind_length(text));
+    return name != null(*CrustName) && crust_bind(context, name, declaration);
+}
+
+fn bind_inputs(program: *GsProgram, provider: *CrustContext, right: *CrustDecl) -> bool {
+    return bind_alias(&(*program).context, "Left", bind_find(provider, "P")) &&
+           bind_alias(&(*program).context, "Right", right) &&
+           bind_alias(&(*program).context, "imported_get", bind_find(provider, "get"));
+}
+
+fn bind_read(program: *GsProgram, text: *u8, identity: u64) -> bool {
+    var source: CrustSource = make CrustSource {
+        path: "generic-binding-consumer", bytes: text, size: bind_length(text), identity: identity
+    };
+    return gp_read(program, &source);
+}
+
+fn bind_consumer(program: *GsProgram, provider: *CrustContext, right: *CrustDecl) -> bool {
+    return bind_inputs(program, provider, right) && bind_read(program,
+        "record Box!(Element) {value:Element;} fn captured(value:*Left)->i64 {return imported_get(value);}",
+        80u64);
+}
+
+fn bind_records(program: *GsProgram) -> usize {
+    var count: usize = 0usize;
+    var unit_value: *CrustUnit = (*program).context.units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) {
+            if (*declaration).kind == CRUST_D_RECORD { count = count + 1usize; }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    return count;
+}
+
+fn bind_signature(program: *GsProgram) -> bool {
+    var declaration: *CrustDecl = gp_find(program, "same");
+    if declaration == null(*CrustDecl) || !(*declaration).checked { return false; }
+    var type: *CrustType = (*declaration).type;
+    var equal: bool = false;
+    return (*type).param_count == 1usize &&
+           crust_try_type_equal(&(*program).context, (*type).params[0usize], (*type).base, &equal) && equal;
+}
+
+fn bind_same(provider: *CrustContext, right: *CrustDecl) -> bool {
+    var program: GsProgram = uninit;
+    gp_init(&program, null(*CrustAllocator), 10000u64);
+    var success: bool = bind_consumer(&program, provider, right) && bind_read(&program,
+        "fn same(value:*Box!(Left))->*Box!(Right) {return value;}", 81u64) && gp_check(&program);
+    if success {
+        success = program.requests == 2usize && program.hits == 1usize &&
+                  program.specializations == 1usize && bind_records(&program) == 1usize &&
+                  bind_signature(&program);
+    }
+    gp_destroy(&program);
+    return success;
+}
+
+fn bind_distinct_types(program: *GsProgram) -> bool {
+    var left: *CrustDecl = gp_find(program, "left");
+    var right: *CrustDecl = gp_find(program, "right");
+    if left == null(*CrustDecl) || right == null(*CrustDecl) { return false; }
+    var first: *CrustType = (*(*left).type).base;
+    var second: *CrustType = (*(*right).type).base;
+    var equal: bool = true;
+    return (*(*first).base).size == (*(*second).base).size &&
+           crust_try_type_equal(&(*program).context, first, second, &equal) && !equal;
+}
+
+fn bind_distinct(provider: *CrustContext) -> bool {
+    var program: GsProgram = uninit;
+    gp_init(&program, null(*CrustAllocator), 10000u64);
+    var success: bool = bind_consumer(&program, provider, bind_find(provider, "Q")) && bind_read(&program,
+        "fn left(value:*Box!(Left))->*Box!(Left) {return value;} fn right(value:*Box!(Right))->*Box!(Right) {return value;}",
+        81u64) && gp_check(&program);
+    if success {
+        success = program.requests == 4usize && program.hits == 2usize &&
+                  program.specializations == 2usize && bind_records(&program) == 2usize &&
+                  bind_distinct_types(&program);
+    }
+    gp_destroy(&program);
+    return success;
+}
+
+fn bind_mismatch(provider: *CrustContext) -> bool {
+    var program: GsProgram = uninit;
+    gp_init(&program, null(*CrustAllocator), 10000u64);
+    var success: bool = bind_consumer(&program, provider, bind_find(provider, "Q")) && bind_read(&program,
+        "fn same(value:*Box!(Left))->*Box!(Right) {return value;}", 81u64) && gp_lower(&program);
+    if success {
+        success = !gp_check(&program) && program.syntax.error_count == 0usize &&
+                  program.context.error_count != 0usize && program.specializations == 2usize &&
+                  bind_text_equal(&program.context.error[0usize], "type mismatch");
+    }
+    gp_destroy(&program);
+    return success;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 1i32 { return 1i32; }
+    var provider: CrustContext = uninit;
+    var reconstructed: CrustContext = uninit;
+    crust_context_init(&provider, null(*CrustAllocator));
+    crust_context_init(&reconstructed, null(*CrustAllocator));
+    var success: bool = bind_provider(&provider) && bind_provider(&reconstructed) &&
+        bind_same(&provider, bind_find(&provider, "P")) &&
+        bind_same(&provider, bind_find(&reconstructed, "P")) &&
+        bind_distinct(&provider) && bind_mismatch(&provider);
+    crust_context_destroy(&reconstructed);
+    crust_context_destroy(&provider);
+    if success { return 0i32; }
+    return 1i32;
+}

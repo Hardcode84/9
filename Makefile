@@ -125,13 +125,14 @@ $(BUILD)/crust-asm-library.so: $(BUILD)/crust-asm-library.o
 	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
 
 GENERICS = stages/generics/model.crs stages/generics/base.crs stages/generics/definition.crs stages/generics/key.crs stages/generics/types.crs stages/generics/clone.crs stages/generics/instances.crs
+GENERICS_SOURCE = $(READER) stages/generics/source_model.crs stages/generics/read.crs stages/generics/source_key.crs stages/generics/normalize.crs stages/generics/source.crs
 
-$(BUILD)/generics-exports: $(BUILD)/crust stages/modules/library.crs stages/modules/exports.crs stages/generics/api.crs Makefile
-	$< stages/modules/exports.crs stages/generics/api.crs > $@.tmp
+$(BUILD)/generics-exports: $(BUILD)/crust stages/modules/library.crs stages/modules/exports.crs stages/generics/api.crs stages/generics/source_api.crs Makefile
+	$< stages/modules/exports.crs stages/generics/api.crs stages/generics/source_api.crs > $@.tmp
 	mv $@.tmp $@
 
-$(BUILD)/crust-generics-library.o: $(BUILD)/crust-c $(GENERICS) $(BUILD)/generics-exports Makefile
-	crust_exports=$$(cat $(BUILD)/generics-exports) && $< --library --object $$crust_exports --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ api/crust0.crs $(GENERICS)
+$(BUILD)/crust-generics-library.o: $(BUILD)/crust-c $(GENERICS) $(GENERICS_SOURCE) $(BUILD)/generics-exports Makefile
+	crust_exports=$$(cat $(BUILD)/generics-exports) && $< --library --object $$crust_exports --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ api/crust0.crs $(GENERICS) $(GENERICS_SOURCE)
 
 $(BUILD)/crust-generics-library.so: $(BUILD)/crust-generics-library.o
 	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(LDFLAGS) -o $@
@@ -141,6 +142,7 @@ generics-stage: $(BUILD)/crust-generics-library.so
 
 check-generics: all c-stage generics-stage
 	python3 tests/generics.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+	python3 tests/generics_source.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
 c-stage: $(BUILD)/crust-c $(BUILD)/crust-c-library.so
 

@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Load source_model.crs first. Read all source inputs before lowering or checking.
+// Bound declaration providers and the program remain live through emission.
+extern fn gp_init(program: *GsProgram, allocator: *CrustAllocator, namespace: u64) -> unit = "gp_init";
+extern fn gp_destroy(program: *GsProgram) -> unit = "gp_destroy";
+extern fn gp_read(program: *GsProgram, source: *CrustSource) -> bool = "gp_read";
+extern fn gp_lower(program: *GsProgram) -> bool = "gp_lower";
+extern fn gp_check(program: *GsProgram) -> bool = "gp_check";
+extern fn gp_find(program: *GsProgram, name: *u8) -> *CrustDecl = "gp_find";

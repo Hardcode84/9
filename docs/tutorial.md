@@ -500,11 +500,12 @@ select functions by their argument types and assign native names. The
 [combined example](../examples/overload/resources/README.md) shows the order
 needed to combine overload selection with resource checking and cleanup.
 
-The [generics tutorial](../examples/generics/README.md) uses ordinary root calls
-to supply types to a shared definition. It builds typed pairs for two record
-types, selects their client names, and emits concrete functions. The root can
-choose definitions and request instances with its usual functions and control
-flow.
+The [generics tutorial](../examples/generics/README.md) declares a shared pair
+as `record Pair!(Element)` and uses it as `Pair!(Position)` and `Pair!(Sample)`.
+Functions declare their own parameters and use explicit arguments such as
+`pair_swap!(Position)(&pair)`. The root selects the stage and input files;
+definitions and applications stay in those files. The stage emits concrete
+records and functions.
 
 ## Change the syntax of later source
 

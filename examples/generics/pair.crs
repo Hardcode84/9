@@ -1,22 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record Pair { first: T; second: T; }
+record Pair!(Element) { first: Element; second: Element; }
 
-fn pair_init(pair: *Pair, first: *T, second: *T) -> unit {
+fn pair_init!(Element)(pair: *Pair!(Element), first: *Element, second: *Element) -> unit {
     (*pair).first = *first;
     (*pair).second = *second;
 }
 
-fn exchange(left: *T, right: *T) -> unit {
-    var saved: T = *left;
+fn exchange!(Element)(left: *Element, right: *Element) -> unit {
+    var saved: Element = *left;
     *left = *right;
     *right = saved;
 }
 
-fn pair_swap(pair: *Pair) -> unit {
-    exchange(&(*pair).first, &(*pair).second);
+fn pair_swap!(Element)(pair: *Pair!(Element)) -> unit {
+    exchange!(Element)(&(*pair).first, &(*pair).second);
 }
 
-fn pair_first(pair: *Pair) -> *T {
+fn pair_first!(Element)(pair: *Pair!(Element)) -> *Element {
     return &(*pair).first;
 }

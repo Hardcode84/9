@@ -48,7 +48,11 @@ fn gs_make_instance(definition: *GsDefinition, arguments: **CrustType, count: us
     (*instance).argument_count = count;
     if (*context).error_count != 0usize { return null(*GsInstance); }
     if !gs_capture_instance(instance) { gs_instance_error(instance); return null(*GsInstance); }
-    (*instance).unit_value = gs_clone_unit(instance, (*definition).unit_value);
+    var clone: GsClone = make GsClone {
+        context: &(*instance).context, user: instance as *u8,
+        type_syntax: gs_instance_type, expression: null(fn(*GsClone,*CrustExpr,u32)->*CrustExpr)
+    };
+    (*instance).unit_value = gs_clone_unit(&clone, (*definition).unit_value);
     if gs_instance_error(instance) { return null(*GsInstance); }
     (*instance).context.units = (*instance).unit_value;
     (*instance).context.last_unit = (*instance).unit_value;

@@ -1,26 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 host_source(run, "setup.crs");
-load_example_stages(run);
+if !load_example_stages(run) { return 1i32; };
 host_source(run, "build.crs");
 
-fn configure(build: *GenericBuild) -> bool {
-    var pair: *GsDefinition = generic_definition(build, "pair.crs", "T");
-    if pair == null(*GsDefinition) { return false; }
-    var positions: *GsInstance = generic_instance(build, pair, "Position");
-    if positions == null(*GsInstance) { return false; }
-    var samples: *GsInstance = generic_instance(build, pair, "Sample");
-    if samples == null(*GsInstance) { return false; }
-
-    var target: *CrustContext = &(*build).target.context;
-    return gs_bind(target, positions, "Pair", "PositionPair") &&
-           gs_bind(target, positions, "pair_init", "position_pair_init") &&
-           gs_bind(target, positions, "pair_swap", "position_pair_swap") &&
-           gs_bind(target, positions, "pair_first", "position_pair_first") &&
-           gs_bind(target, samples, "Pair", "SamplePair") &&
-           gs_bind(target, samples, "pair_init", "sample_pair_init") &&
-           gs_bind(target, samples, "pair_swap", "sample_pair_swap") &&
-           gs_bind(target, samples, "pair_first", "sample_pair_first");
-}
-
-return generic_build(run, "types.crs", "program.crs", configure);
+var inputs: [*u8; 3] = make [*u8; 3] { "types.crs", "pair.crs", "program.crs" };
+return generic_build(run, &inputs[0usize], 3usize);

@@ -3,9 +3,8 @@
 fn load_example_stages(root: *CrustRun) -> bool {
     return host_source(root, "../../api/crust0_stage.crs") &&
            host_source(root, "../../stages/c/api.crs") &&
-           host_source(root, "../../stages/modules/library.crs") &&
-           host_source(root, "../../stages/generics/model.crs") &&
-           host_source(root, "../../stages/generics/api.crs") &&
+           host_source(root, "../../stages/generics/source_model.crs") &&
+           host_source(root, "../../stages/generics/source_api.crs") &&
            host_link(root, "../../build/crust-c-library.so") &&
            host_link(root, "../../build/crust-generics-library.so");
 }

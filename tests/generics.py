@@ -33,8 +33,11 @@ def build_driver(suite, filename, evaluator=False):
     if evaluator:
         sources.append(ROOT / "api/crust0_eval.crs")
     sources += [
-        path for path in sorted((ROOT / "stages/generics").glob("*.crs")) if path.name != "api.crs"
+        path
+        for path in sorted((ROOT / "stages/generics").glob("*.crs"))
+        if path.name not in ("api.crs", "source_api.crs")
     ]
+    sources += [ROOT / "stages/reader" / name for name in ("model.crs", "lex.crs", "parse.crs")]
     output = suite.work / filename
     flags = [item for flag in suite.cflags for item in ("--cflag", flag)]
     libraries = [suite.build / "libcrust0.a", suite.build / "libcrust0_host.a"]
@@ -213,26 +216,22 @@ def tutorial_package(suite):
 
 
 def tutorial_objects(suite, output, optimization):
-    objects = []
-    for name in ("1", "2", "program"):
-        stem = output / f"generics-{name}"
-        raw = output / f"{name}-{optimization}-raw.o"
-        obj = output / f"{name}-{optimization}.o"
-        suite.command(
-            [
-                *suite.cc,
-                "-std=c99",
-                "-pedantic-errors",
-                f"-{optimization}",
-                "-c",
-                stem.with_suffix(".c"),
-                "-o",
-                raw,
-            ]
-        )
-        suite.command(["objcopy", f"@{stem.with_suffix('.rsp')}", raw, obj])
-        objects.append(obj)
-    return objects
+    raw = output / f"generics-{optimization}-raw.o"
+    obj = output / f"generics-{optimization}.o"
+    suite.command(
+        [
+            *suite.cc,
+            "-std=c99",
+            "-pedantic-errors",
+            f"-{optimization}",
+            "-c",
+            output / "generics.c",
+            "-o",
+            raw,
+        ]
+    )
+    suite.command(["objcopy", f"@{output / 'generics.rsp'}", raw, obj])
+    return [obj]
 
 
 def check_tutorial_assembly(suite, package):
@@ -253,8 +252,7 @@ def check_tutorial_assembly(suite, package):
     call = "return c_backend_build(context, entry, options);"
     assert source.count(call) == 1
     source = source.replace(call, "return test_asm(context, entry, (*options).output);")
-    source = source.replace('suffix = ".c";', 'suffix = ".s";')
-    source = source.replace("generics-program.c", "generics-program.s")
+    source = source.replace("generics.c", "generics.s")
     declarations = """
 extern fn test_open(path:*u8, mode:*u8)->*u8="fopen";
 extern fn test_close(file:*u8)->i32="fclose";
@@ -270,12 +268,9 @@ fn test_asm(context:*CrustContext,entry:*CrustDecl,path:*u8)->i32 {
     helper.write_text(source + declarations)
     suite.command([suite.runner, root, "--emit-c"], cwd=suite.work)
     output = package / "build"
-    objects = []
-    for name in ("1", "2", "program"):
-        assembly = output / f"generics-{name}.s"
-        obj = output / f"{name}-asm.o"
-        suite.command(["as", "--64", assembly, "-o", obj])
-        objects.append(obj)
+    obj = output / "generics-asm.o"
+    suite.command(["as", "--64", output / "generics.s", "-o", obj])
+    objects = [obj]
     executable = output / "generics-asm"
     suite.command([*suite.cc, "-no-pie", *objects, *suite.ldflags, "-o", executable])
     assert suite.command([executable]).stdout == b"generics: OK\n"

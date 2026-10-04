@@ -1,0 +1,218 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Use a namespace distinct from all source and imported declaration identities.
+fn gp_init(program: *GsProgram, allocator: *CrustAllocator, namespace: u64) -> unit {
+    crust_context_init(&(*program).syntax, allocator);
+    crust_context_init(&(*program).context, allocator);
+    (*program).parameters = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*program).declarations = (*program).parameters;
+    (*program).first = null(*GpDefinition);
+    (*program).last = null(*GpDefinition);
+    (*program).instances = null(*GpInstance);
+    (*program).last_instance = null(*GpInstance);
+    (*program).output_tail = null(*CrustDecl);
+    (*program).namespace = namespace;
+    (*program).next_identity = 0u64;
+    (*program).requests = 0usize;
+    (*program).hits = 0usize;
+    (*program).specializations = 0usize;
+    (*program).state = 0u32;
+}
+
+// Destroy consumers first. Keep imported declaration providers live until return.
+fn gp_destroy(program: *GsProgram) -> unit {
+    crust_context_destroy(&(*program).context);
+    crust_context_destroy(&(*program).syntax);
+}
+
+fn gp_parameter_bindings(program: *GsProgram, definition: *GpDefinition) -> bool {
+    var parameters: *GpParameters = (*definition).parameters;
+    if parameters == null(*GpParameters) { return true; }
+    var context: *CrustContext = &(*program).context;
+    var index: usize = 0usize;
+    while index < (*parameters).count {
+        var binding: *GsParameter = crust_try_alloc(context, sizeof(GsParameter), alignof(GsParameter)) as *GsParameter;
+        if binding == null(*GsParameter) { return false; }
+        (*binding).name = (*parameters).names[index];
+        (*binding).index = index;
+        if !crust_try_map_set(context, &(*definition).bindings, (*binding).name as usize, binding as *u8) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn gp_register(program: *GsProgram, declaration: *CrustDecl) -> bool {
+    var context: *CrustContext = &(*program).context;
+    var name: *CrustName = gs_name(context, (*declaration).name);
+    if name == null(*CrustName) { return false; }
+    if crust_map_get(&(*program).declarations, (*declaration).name as usize) != null(*u8) ||
+       crust_map_get(&(*context).globals, name as usize) != null(*u8) {
+        gs_error(context, &(*declaration).loc, "duplicate declaration in generic source inputs");
+        return false;
+    }
+    var definition: *GpDefinition = crust_try_alloc(context, sizeof(GpDefinition), alignof(GpDefinition)) as *GpDefinition;
+    if definition == null(*GpDefinition) { return false; }
+    (*definition).source = declaration;
+    (*definition).parameters = crust_map_get(&(*program).parameters, declaration as usize) as *GpParameters;
+    if !gp_parameter_bindings(program, definition) ||
+       !crust_try_map_set(context, &(*program).declarations, (*declaration).name as usize, definition as *u8) { return false; }
+    if (*program).last == null(*GpDefinition) { (*program).first = definition; }
+    else { (*(*program).last).next = definition; }
+    (*program).last = definition;
+    return true;
+}
+
+fn gp_declarations(program: *GsProgram) -> bool {
+    var unit_value: *CrustUnit = (*program).syntax.units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) {
+            if !gp_register(program, declaration) { return false; }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    return true;
+}
+
+fn gp_local_name(program: *GsProgram, definition: *GpDefinition,
+                  name: *CrustName, loc: *CrustLoc) -> bool {
+    if crust_map_get(&(*definition).bindings, name as usize) != null(*u8) {
+        gs_error(&(*program).context, loc, "value declaration conflicts with a generic type parameter");
+        return false;
+    }
+    if crust_map_get(&(*program).declarations, name as usize) != null(*u8) {
+        gs_error(&(*program).context, loc, "local name conflicts with a top-level declaration");
+        return false;
+    }
+    return true;
+}
+
+fn gp_local_statements(program: *GsProgram, definition: *GpDefinition,
+                       statement: *CrustStmt, depth: u32) -> bool {
+    while statement != null(*CrustStmt) {
+        if !gs_depth(&(*program).context, &(*statement).loc, depth) { return false; }
+        if (*statement).kind == CRUST_S_VAR &&
+           !gp_local_name(program, definition, (*statement).name, &(*statement).loc) { return false; }
+        if !gp_local_statements(program, definition, (*statement).body, depth + 1u32) ||
+           !gp_local_statements(program, definition, (*statement).otherwise, depth + 1u32) { return false; }
+        statement = (*statement).next;
+    }
+    return true;
+}
+
+fn gp_locals(program: *GsProgram, definition: *GpDefinition) -> bool {
+    var parameter: *CrustParam = (*(*definition).source).params;
+    while parameter != null(*CrustParam) {
+        if !gp_local_name(program, definition, (*parameter).name, &(*parameter).loc) { return false; }
+        parameter = (*parameter).next;
+    }
+    return gp_local_statements(program, definition, (*(*definition).source).body, 0u32);
+}
+
+fn gp_append(program: *GsProgram, declaration: *CrustDecl) -> unit {
+    if (*program).output_tail == null(*CrustDecl) { (*(*program).context.units).declarations = declaration; }
+    else { (*(*program).output_tail).next = declaration; }
+    (*program).output_tail = declaration;
+}
+
+fn gp_clone_definition(program: *GsProgram, definition: *GpDefinition,
+                       arguments: **CrustTypeSyntax, generation: u32) -> *CrustDecl {
+    var environment: GpEnvironment = make GpEnvironment {
+        program: program, definition: definition, arguments: arguments, generation: generation
+    };
+    var clone: GsClone = make GsClone {
+        context: &(*program).context, user: &environment as *u8,
+        type_syntax: gp_clone_type, expression: gp_clone_expression
+    };
+    return gs_clone_declaration(&clone, (*definition).source);
+}
+
+fn gp_lower_ordinary(program: *GsProgram) -> bool {
+    var definition: *GpDefinition = (*program).first;
+    while definition != null(*GpDefinition) {
+        if !gp_locals(program, definition) { return false; }
+        if (*definition).parameters == null(*GpParameters) {
+            var declaration: *CrustDecl = gp_clone_definition(program, definition, null(**CrustTypeSyntax), 0u32);
+            if declaration == null(*CrustDecl) { return false; }
+            (*declaration).identity = (*(*definition).source).identity;
+            (*declaration).unit_identity = (*(*definition).source).unit_identity;
+            if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_CONST {
+                (*declaration).link_name = "";
+            }
+            gp_append(program, declaration);
+        }
+        definition = (*definition).next;
+    }
+    return true;
+}
+
+fn gp_lower_instances(program: *GsProgram) -> bool {
+    var instance: *GpInstance = (*program).instances;
+    while instance != null(*GpInstance) {
+        var declaration: *CrustDecl = gp_clone_definition(program, (*instance).definition,
+            (*instance).arguments, (*instance).generation);
+        if declaration == null(*CrustDecl) { return false; }
+        var target: *CrustDecl = (*instance).declaration;
+        (*declaration).name = (*target).name;
+        (*declaration).unit_identity = (*target).unit_identity;
+        (*declaration).identity = (*target).identity;
+        (*declaration).link_name = (*target).link_name;
+        *target = *declaration;
+        gp_append(program, target);
+        instance = (*instance).next;
+    }
+    return true;
+}
+
+// Close source input and produce ordinary seed declarations in program.context.
+fn gp_lower(program: *GsProgram) -> bool {
+    var context: *CrustContext = &(*program).context;
+    if (*program).syntax.error_count != 0usize || (*context).error_count != 0usize { return false; }
+    if (*program).state != 0u32 { return true; }
+    (*program).state = 1u32;
+    if !gp_declarations(program) { return false; }
+    var output: *CrustUnit = crust_try_alloc(context, sizeof(CrustUnit), alignof(CrustUnit)) as *CrustUnit;
+    if output == null(*CrustUnit) { return false; }
+    if (*program).syntax.units != null(*CrustUnit) { (*output).source = (*(*program).syntax.units).source; }
+    (*context).units = output;
+    (*context).last_unit = output;
+    return gp_lower_ordinary(program) && gp_lower_instances(program);
+}
+
+fn gp_check_arguments(program: *GsProgram) -> bool {
+    var instance: *GpInstance = (*program).instances;
+    while instance != null(*GpInstance) {
+        var index: usize = 0usize;
+        while index < (*instance).count {
+            if crust_try_resolve_type(&(*program).context, (*instance).arguments[index]) == null(*CrustType) { return false; }
+            index = index + 1usize;
+        }
+        instance = (*instance).next;
+    }
+    return true;
+}
+
+// Lower, then check concrete declarations and every supplied type argument.
+fn gp_check(program: *GsProgram) -> bool {
+    if !gp_lower(program) { return false; }
+    if (*program).state == 2u32 { return true; }
+    if !crust_collect(&(*program).context) || !crust_resolve(&(*program).context) ||
+       !gp_check_arguments(program) || !crust_check(&(*program).context) { return false; }
+    (*program).state = 2u32;
+    return true;
+}
+
+// Return a checked ordinary declaration, or retain a diagnostic when absent.
+fn gp_find(program: *GsProgram, name: *u8) -> *CrustDecl {
+    var context: *CrustContext = &(*program).context;
+    if (*program).syntax.error_count != 0usize || (*context).error_count != 0usize { return null(*CrustDecl); }
+    if (*program).state == 2u32 {
+        var interned: *CrustName = crust_try_intern(context, name, gs_length(name));
+        if interned == null(*CrustName) { return null(*CrustDecl); }
+        var symbol: *CrustSymbol = crust_map_get(&(*context).globals, interned as usize) as *CrustSymbol;
+        if symbol != null(*CrustSymbol) { return (*symbol).decl; }
+    }
+    crust_set_error(context, null(*CrustSource), 0usize, "expected a checked declaration in generic program");
+    return null(*CrustDecl);
+}

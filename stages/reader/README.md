@@ -42,9 +42,24 @@ this token and consume its own suffix. To use the standard suffix, pass a
 successful header result to `rr_function_end`: it consumes the function body
 or the extern `= "native";` suffix. `rr_function` calls both helpers.
 
+A declaration hook can extend a header after its name. `rr_record_body` reads
+from the opening brace through the closing brace. `rr_function_signature`
+reads the parameter list and result type. Both functions take a declaration
+with its kind, name, and location already set. Use `rr_function_end` after a
+successful function signature.
+
+`rr_type_parameters` reads a comma-separated type list and consumes its closing
+`)`. Call it after consuming `(`. The supplied type syntax node must have null
+`params` and zero `param_count`. It sets both fields. An empty list and a trailing
+comma are accepted.
+Each type uses the type hook. `offsetof` also uses the type hook for its record
+name.
+
 `rr_block` consumes both braces. `rr_expression` reads a full expression;
 `rr_prefix` reads one complete unary operand. Each helper leaves the next
-token current.
+token current. `rr_postfix_after` reads call, index, and field operations after
+an expression that the hook has already read. A prefix hook can pass its result
+to this helper to support these operations.
 
 `rr_alloc` returns zeroed context storage. `rr_new_expr`, `rr_new_stmt`,
 `rr_new_type`, and `rr_new_decl` take a kind and original offset. These helpers

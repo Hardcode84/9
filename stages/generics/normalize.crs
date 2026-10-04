@@ -1,0 +1,206 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn gp_named_type(context: *CrustContext, source: *CrustTypeSyntax,
+                  name: *CrustName) -> *CrustTypeSyntax {
+    if name == null(*CrustName) { return null(*CrustTypeSyntax); }
+    var result: *CrustTypeSyntax = crust_try_alloc(context, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
+    if result != null(*CrustTypeSyntax) {
+        (*result).loc = (*source).loc;
+        (*result).kind = CRUST_T_NAME;
+        (*result).name = name;
+    }
+    return result;
+}
+
+fn gp_imported_record(program: *GsProgram, source: *CrustTypeSyntax,
+                       name: *CrustName) -> *CrustName {
+    var context: *CrustContext = &(*program).context;
+    var symbol: *CrustSymbol = crust_map_get(&(*context).globals, name as usize) as *CrustSymbol;
+    if symbol == null(*CrustSymbol) {
+        gs_error(context, &(*source).loc, "unknown record type or generic type parameter");
+        return null(*CrustName);
+    }
+    if (*symbol).kind != CRUST_SYM_RECORD {
+        gs_error(context, &(*source).loc, "expected a record type");
+        return null(*CrustName);
+    }
+    var declaration: *CrustDecl = (*symbol).decl;
+    var text: *u8 = gs_number_name(context, "$type_", (*declaration).unit_identity, (*declaration).identity);
+    if text == null(*u8) { return null(*CrustName); }
+    var canonical: *CrustName = crust_try_intern(context, text, gs_length(text));
+    if canonical == null(*CrustName) { return canonical; }
+    if crust_map_get(&(*context).globals, canonical as usize) == null(*u8) &&
+       !crust_bind(context, canonical, declaration) { return null(*CrustName); }
+    return canonical;
+}
+
+fn gp_record_name(program: *GsProgram, source: *CrustTypeSyntax) -> *CrustName {
+    var context: *CrustContext = &(*program).context;
+    var name: *CrustName = gs_name(context, (*source).name);
+    if name == null(*CrustName) { return name; }
+    var definition: *GpDefinition = crust_map_get(&(*program).declarations, (*source).name as usize) as *GpDefinition;
+    if definition == null(*GpDefinition) { return gp_imported_record(program, source, name); }
+    if (*definition).parameters != null(*GpParameters) {
+        gs_error(context, &(*source).loc, "generic declaration requires explicit !(...) type arguments");
+        return null(*CrustName);
+    }
+    if (*(*definition).source).kind != CRUST_D_RECORD {
+        gs_error(context, &(*source).loc, "expected a record type");
+        return null(*CrustName);
+    }
+    return name;
+}
+
+fn gp_application_definition(environment: *GpEnvironment, source: *CrustTypeSyntax,
+                              kind: u32) -> *GpDefinition {
+    var program: *GsProgram = (*environment).program;
+    var context: *CrustContext = &(*program).context;
+    if crust_map_get(&(*(*environment).definition).bindings, (*source).name as usize) != null(*u8) {
+        gs_error(context, &(*source).loc, "a type parameter cannot take generic arguments");
+        return null(*GpDefinition);
+    }
+    var definition: *GpDefinition = crust_map_get(&(*program).declarations, (*source).name as usize) as *GpDefinition;
+    if definition == null(*GpDefinition) || (*definition).parameters == null(*GpParameters) {
+        gs_error(context, &(*source).loc, "generic application requires a generic declaration");
+        return null(*GpDefinition);
+    }
+    if (*(*definition).source).kind != kind {
+        gs_error(context, &(*source).loc, "generic declaration has the wrong kind for this use");
+        return null(*GpDefinition);
+    }
+    if (*(*definition).parameters).count != (*source).param_count {
+        gs_error(context, &(*source).loc, "generic argument count does not match parameter count");
+        return null(*GpDefinition);
+    }
+    return definition;
+}
+
+fn gp_instance_declaration(program: *GsProgram, source: *CrustDecl) -> *CrustDecl {
+    var context: *CrustContext = &(*program).context;
+    if (*program).next_identity == ~0u64 {
+        gs_error(context, &(*source).loc, "generic declaration identity space exhausted");
+        return null(*CrustDecl);
+    }
+    (*program).next_identity = (*program).next_identity + 1u64;
+    var result: *CrustDecl = crust_try_alloc(context, sizeof(CrustDecl), alignof(CrustDecl)) as *CrustDecl;
+    if result == null(*CrustDecl) { return result; }
+    (*result).loc = (*source).loc;
+    (*result).kind = (*source).kind;
+    (*result).unit_identity = (*program).namespace;
+    (*result).identity = (*program).next_identity;
+    var text: *u8 = gs_number_name(context, "$generic_", (*result).unit_identity, (*result).identity);
+    if text == null(*u8) { return null(*CrustDecl); }
+    (*result).name = crust_try_intern(context, text, gs_length(text));
+    if (*result).name == null(*CrustName) { return null(*CrustDecl); }
+    if (*result).kind == CRUST_D_FUNCTION {
+        (*result).link_name = gs_number_name(context, "crust_g_", (*result).unit_identity, (*result).identity);
+        if (*result).link_name == null(*u8) { return null(*CrustDecl); }
+    }
+    return result;
+}
+
+fn gp_new_instance(environment: *GpEnvironment, definition: *GpDefinition,
+                    arguments: **CrustTypeSyntax, source: *CrustTypeSyntax) -> *GpInstance {
+    var program: *GsProgram = (*environment).program;
+    var context: *CrustContext = &(*program).context;
+    if (*environment).generation >= 256u32 {
+        gs_error(context, &(*source).loc, "generic specialization dependency limit of 256 exceeded");
+        return null(*GpInstance);
+    }
+    var instance: *GpInstance = crust_try_alloc(context, sizeof(GpInstance), alignof(GpInstance)) as *GpInstance;
+    if instance == null(*GpInstance) { return instance; }
+    (*instance).definition = definition;
+    (*instance).arguments = arguments;
+    (*instance).count = (*source).param_count;
+    (*instance).generation = (*environment).generation + 1u32;
+    (*instance).declaration = gp_instance_declaration(program, (*definition).source);
+    if (*instance).declaration == null(*CrustDecl) { return null(*GpInstance); }
+    if (*program).last_instance == null(*GpInstance) { (*program).instances = instance; }
+    else { (*(*program).last_instance).next = instance; }
+    (*program).last_instance = instance;
+    return instance;
+}
+
+fn gp_cached_instance(environment: *GpEnvironment, definition: *GpDefinition,
+                       arguments: **CrustTypeSyntax, source: *CrustTypeSyntax) -> *GpInstance {
+    var program: *GsProgram = (*environment).program;
+    var context: *CrustContext = &(*program).context;
+    (*program).requests = (*program).requests + 1usize;
+    var hash: usize = gp_arguments_hash(program, arguments, (*source).param_count, &(*source).loc);
+    if (*context).error_count != 0usize { return null(*GpInstance); }
+    var previous: *GpInstance = crust_map_get(&(*definition).instances, hash) as *GpInstance;
+    var instance: *GpInstance = previous;
+    while instance != null(*GpInstance) {
+        if gp_arguments_equal(instance, arguments, (*source).param_count) {
+            (*program).hits = (*program).hits + 1usize;
+            return instance;
+        }
+        instance = (*instance).bucket_next;
+    }
+    instance = gp_new_instance(environment, definition, arguments, source);
+    if instance == null(*GpInstance) { return instance; }
+    (*instance).bucket_next = previous;
+    if !crust_try_map_set(context, &(*definition).instances, hash, instance as *u8) { return null(*GpInstance); }
+    (*program).specializations = (*program).specializations + 1usize;
+    return instance;
+}
+
+fn gp_application(clone: *GsClone, source: *CrustTypeSyntax,
+                   depth: u32, kind: u32) -> *CrustDecl {
+    var environment: *GpEnvironment = (*clone).user as *GpEnvironment;
+    var definition: *GpDefinition = gp_application_definition(environment, source, kind);
+    if definition == null(*GpDefinition) { return null(*CrustDecl); }
+    var arguments: **CrustTypeSyntax = gs_array_storage((*clone).context, (*source).param_count,
+        sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax), &(*source).loc) as **CrustTypeSyntax;
+    if arguments == null(**CrustTypeSyntax) { return null(*CrustDecl); }
+    var index: usize = 0usize;
+    while index < (*source).param_count {
+        arguments[index] = gs_clone_type(clone, (*source).params[index], depth + 1u32);
+        if arguments[index] == null(*CrustTypeSyntax) { return null(*CrustDecl); }
+        index = index + 1usize;
+    }
+    var instance: *GpInstance = gp_cached_instance(environment, definition, arguments, source);
+    if instance == null(*GpInstance) { return null(*CrustDecl); }
+    return (*instance).declaration;
+}
+
+fn gp_clone_type(clone: *GsClone, source: *CrustTypeSyntax, depth: u32) -> *CrustTypeSyntax {
+    if (*source).kind != CRUST_T_NAME { return gs_clone_standard_type(clone, source, depth); }
+    var environment: *GpEnvironment = (*clone).user as *GpEnvironment;
+    if (*source).param_count != 0usize {
+        var declaration: *CrustDecl = gp_application(clone, source, depth, CRUST_D_RECORD);
+        if declaration == null(*CrustDecl) { return null(*CrustTypeSyntax); }
+        return gp_named_type((*clone).context, source, (*declaration).name);
+    }
+    var parameter: *GsParameter = crust_map_get(&(*(*environment).definition).bindings, (*source).name as usize) as *GsParameter;
+    if parameter != null(*GsParameter) { return (*environment).arguments[(*parameter).index]; }
+    return gp_named_type((*clone).context, source, gp_record_name((*environment).program, source));
+}
+
+fn gp_clone_name(clone: *GsClone, source: *CrustExpr, depth: u32) -> *CrustExpr {
+    var declaration: *CrustDecl = gp_application(clone, (*source).syntax_type, depth, CRUST_D_FUNCTION);
+    if declaration == null(*CrustDecl) { return null(*CrustExpr); }
+    var result: *CrustExpr = crust_try_alloc((*clone).context, sizeof(CrustExpr), alignof(CrustExpr)) as *CrustExpr;
+    if result != null(*CrustExpr) {
+        (*result).kind = CRUST_E_NAME;
+        (*result).name = (*declaration).name;
+        (*result).loc = (*source).loc;
+    }
+    return result;
+}
+
+fn gp_clone_expression(clone: *GsClone, source: *CrustExpr, depth: u32) -> *CrustExpr {
+    if (*source).kind != CRUST_E_NAME { return gs_clone_standard_expression(clone, source, depth); }
+    if (*source).syntax_type != null(*CrustTypeSyntax) { return gp_clone_name(clone, source, depth); }
+    var environment: *GpEnvironment = (*clone).user as *GpEnvironment;
+    if crust_map_get(&(*(*environment).definition).bindings, (*source).name as usize) != null(*u8) {
+        gs_error((*clone).context, &(*source).loc, "a generic type parameter is not a value");
+        return null(*CrustExpr);
+    }
+    var definition: *GpDefinition = crust_map_get(&(*(*environment).program).declarations, (*source).name as usize) as *GpDefinition;
+    if definition != null(*GpDefinition) && (*definition).parameters != null(*GpParameters) {
+        gs_error((*clone).context, &(*source).loc, "generic declaration requires explicit !(...) type arguments");
+        return null(*CrustExpr);
+    }
+    return gs_clone_standard_expression(clone, source, depth);
+}

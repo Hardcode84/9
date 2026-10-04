@@ -9,7 +9,7 @@ is used. Backend construction and automatic cache validation are separate costs.
 
 ```sh
 make build/ownership-cost
-python3 benchmarks/ownership/measure.py --work build/ownership-cost-run
+python3 benchmarks/ownership/measure.py --pairs 20 --work build/ownership-cost-run
 ```
 
 Run without concurrent builds or checks. On Linux, prefix the Python command
@@ -30,3 +30,21 @@ stage sources. Keep machine-specific results under ignored `build/` storage.
 Do not overwrite earlier captures or commit timing numbers. The script also publishes a trusted provider and measures a source-free client.
 It reports artifact capture and validation separately. Provider publication
 includes native object compilation and is reported outside the frontend gate.
+
+The report also measures each tutorial through a fresh compilation root. These
+samples include interface input, explicit trust selection, library loading,
+checking, and complete C and symbol files. The emitted programs must run at
+`-O0` and `-O2`. The erasure check must produce identical C before and after
+ownership verification. These root costs have no independent C-speed claim.
+
+A separate stress case puts 32, 64, and 128 live loans and branches in one
+function. It measures branch-join growth rather than independent-body scaling.
+The checker currently visits all visible slots and objects at each join and
+publishes facts even for unchanged slots. This case can exceed the independent
+body budget. Reducing that cost requires merging only changed facts while
+preserving initialization, ownership, and loan facts on both continuing paths.
+The report records this cost separately and does not classify it as C-level.
+
+All samples include child CPU time. A separate observation records peak RSS
+for each route. At least 20 paired samples are required. The source-free client
+also contributes to the acceptance result.

@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn checksum(view: read Bytes, context: mut QueryContext) -> i32 {
+    unsafe {
+        var index: usize = 0usize;
+        var sum: u64 = context.rows;
+        while index < view.size {
+            sum = sum + view.data[index] as u64;
+            index = index + 1usize;
+        }
+        context.rows = sum;
+    }
+    return SQL_OK;
+}
+
+fn repeat_columns(statement: mut Statement, context: mut QueryContext) -> i32 {
+    var result: i32 = statement_step(mut statement);
+    if result != SQL_ROW { return result; }
+    var index: u64 = 0u64;
+    while index < 500000u64 {
+        result = with_blob(mut statement, 0i32, mut context, checksum);
+        if result != SQL_OK { return result; }
+        index = index + 1u64;
+    }
+    return SQL_OK;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    var database: Db = db_empty();
+    var context: QueryContext = make QueryContext {
+        rows: 0u64, operation: 0i32, finalized: 0i32, closed: 0i32
+    };
+    unsafe { database = db_acquire(":memory:", mut context); }
+    if context.operation == SQL_OK {
+        unsafe {
+            context.operation = with_statement(mut database,
+                "SELECT x'000102030405060708090a0b0c0d0e0f'", mut context, repeat_columns);
+        }
+    }
+    context.closed = db_close(mut database);
+    if context.operation != SQL_OK || context.finalized != SQL_OK || context.closed != SQL_OK {
+        write_errors(read context);
+        return 1i32;
+    }
+    if context.rows != 60000000u64 { return 2i32; }
+    return write_summary(read context);
+}

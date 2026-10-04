@@ -284,10 +284,11 @@ metadata or validity checks.
 ## Acceptance experiments
 
 Freeze small source-derived cases before adding more language machinery.
-The ownership tutorial implements a sequential two-hook witness with stack and
-heap nodes, splice, individual destruction, and a replacement allocation while
-the lists remain live. Its proof permits address reuse; the native test does not
-force the allocator to reuse an address. The Linux, GCC, and LLVM protocol tests
+The ownership tutorial uses a trusted direct-pointer provider and a checked
+client. It tests two hooks, stable stack heads, individual destruction, and
+replacement allocations while the lists remain live. The native test now forces
+exact-address reuse and checks allocation failures. The owning tree and one-way
+index test the same generic client rules. The Linux, GCC, and LLVM protocol tests
 below still require translations that preserve their synchronization,
 relocation, and callback behavior.
 
@@ -367,5 +368,7 @@ runtime costs. Erased language permissions cannot remove those operations.
 
 The next source-derived witnesses are mutable SSA traversal with a stack marker
 and removal of the current node, then operand growth with rejection of a stale
-operand view. The sequential closed-program checker does not establish lock,
-RCU, atomic access, or partial-destruction contracts.
+operand view. The local ownership stage does not establish lock, RCU, atomic
+access, or partial-destruction contracts. Those programs require explicit
+provider interfaces and a defined synchronization boundary before their checks
+or timing results can establish those capabilities.

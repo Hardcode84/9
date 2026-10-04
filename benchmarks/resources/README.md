@@ -83,10 +83,51 @@ execution, and cleanup. Target GCC compilation and linking are outside these
 endpoints. Record native stage preparation separately and include it in a cold
 request comparison.
 
-SQLite C includes its public header and system headers. The Crust source declares
-only the foreign functions that it uses. This difference prevents a general
-language-speed claim from the application ratio. Generated cleanup controls
-have a narrower, explicit comparison boundary.
+The older `measure.py` report uses full SQLite headers for C and only used
+foreign declarations for Crust. Do not use that ratio as a language-speed claim.
+Use the matched gate below for the application comparison.
+
+## Matched check and handoff gate
+
+```sh
+python3 benchmarks/resources/verify.py --output build/sqlite-baseline-run.json
+python3 benchmarks/resources/gate.py --cpu 6 --rounds 20 \
+  --baseline build/sqlite-baseline-run.json --work build/resource-gate-run
+```
+
+Select an allowed CPU and new report and work paths. The gate starts a fresh
+compilation root for each sample. It includes interface checks, library loading,
+resource checks, cleanup lowering, and complete C and symbol files. It excludes
+target GCC compilation and linking. No application result is reused.
+
+The C controls use the SQLite and POSIX declarations in [ffi.h](ffi.h).
+The gate checks these declarations against the pinned public headers before
+timing. Both languages process the functions used by the application. The
+unchanged C sources with full headers remain separate controls; their ratios
+are not eligible for the matched-interface claim. Original benchmark files are
+not changed. The report retains the generated controls and input snapshots.
+
+Check time is compared with the fastest GCC or Clang syntax check. Handoff is
+compared with Clang IR output with LLVM passes disabled. Both handoff endpoints
+include text serialization. The gate checks SQLite success and failure output,
+and all cleanup exits, before timing. It then collects at least 20 randomized
+paired rounds with wall time, CPU time, peak RSS, and confidence intervals.
+Exit status 2 means a matched frontend comparison failed its speed rule.
+
+## In-memory column cost
+
+```sh
+python3 benchmarks/resources/gate.py --runtime --cpu 6 --rounds 20 \
+  --work build/column-runtime-run
+```
+
+[columns.crs](columns.crs) uses the tutorial's statement and byte-view callbacks.
+[columns.c](columns.c) uses the C callback control. Each program reads one
+in-memory SQLite column repeatedly, computes a checksum, finalizes the statement,
+and closes the database. It writes one summary after the loop. Both use the same
+SQLite object and GCC options. The report includes disassembly and binary hashes.
+Exit status 2 means the runtime ratio or its upper confidence bound exceeds 1.
+This is a runtime measurement, separate from the frontend gate.
 
 Use new output paths when repeating a run. Keep raw samples and machine details
 in ignored storage, not in this guide.

@@ -222,7 +222,9 @@ on the selected target. It adds no allocation registry, generation counter,
 reference count, or garbage collector to user programs.
 
 Named scalar reads use direct C reads into separate temporaries. Raw loads
-and stores use byte copies. Address arithmetic uses `uintptr_t`
+and stores use byte copies. A field address uses a byte offset inside its
+record. Forming that place already requires storage for the complete record.
+Raw pointer arithmetic and integer-to-pointer conversions use `uintptr_t`
 and a tied input/output register in an empty `__asm__` expression. This gives
 GCC an opaque pointer result. It supports a pointer to an embedded list link
 and recovery of the containing allocation. A plain pointer/integer cast alone
@@ -235,6 +237,11 @@ constraints and lost optimizer facts can still affect surrounding code.
 Required traps and aggregate copies also have costs. Native output must be
 measured before a claim of runtime parity with handwritten C. Raw Crust0 memory
 preconditions still apply; this backend adds no ownership checker.
+
+The [column checksum benchmark](../benchmarks/resources/README.md#in-memory-column-cost)
+checks a hot callback loop without database output in the loop. Its disassembly
+also shows whether field addresses cause repeated loads of the view's data
+pointer and size.
 
 ## Native runtime contract
 

@@ -110,6 +110,24 @@ fn c_load(stage: *CStage, input: *CrustType, address: usize) -> usize {
     return result;
 }
 
+fn c_member_address(stage: *CStage, input: *CrustExpr, base: usize, temporary: bool, index: usize) -> usize {
+    var field: bool = (*input).kind == CRUST_E_FIELD;
+    var result: usize = c_address_temp(stage);
+    // A field stays inside its record. Raw index arithmetic retains its allocation origin.
+    if field { c_text(stage, "=(void*)((unsigned char*)"); }
+    else { c_text(stage, "=r_addr((uintptr_t)"); }
+    if temporary { c_text(stage, "&"); }
+    c_value(stage, base);
+    c_text(stage, "+");
+    if field { c_number(stage, (*(*input).field).offset); c_text(stage, "u"); }
+    else {
+        c_text(stage, "(uintptr_t)"); c_value(stage, index);
+        c_text(stage, "*"); c_number(stage, (*(*input).type).size); c_text(stage, "u");
+    }
+    c_text(stage, ");\n");
+    return result;
+}
+
 fn c_place(stage: *CStage, input: *CrustExpr) -> usize {
     if (*stage).status.failed { return 0usize; }
     var kind: u32 = (*input).kind;
@@ -138,18 +156,7 @@ fn c_place(stage: *CStage, input: *CrustExpr) -> usize {
         }
         var index: usize = 0usize;
         if kind == CRUST_E_INDEX { index = c_expression(stage, (*input).right); }
-        var result: usize = c_address_temp(stage);
-        c_text(stage, "=r_addr((uintptr_t)");
-        if temporary { c_text(stage, "&"); }
-        c_value(stage, base);
-        c_text(stage, "+");
-        if kind == CRUST_E_FIELD { c_number(stage, (*(*input).field).offset); c_text(stage, "u"); }
-        else {
-            c_text(stage, "(uintptr_t)"); c_value(stage, index);
-            c_text(stage, "*"); c_number(stage, (*(*input).type).size); c_text(stage, "u");
-        }
-        c_text(stage, ");\n");
-        return result;
+        return c_member_address(stage, input, base, temporary, index);
     }
     trap;
 }

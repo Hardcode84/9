@@ -22,6 +22,7 @@ removed during cleanup also has an unchanged local copy under
 | Independent module jobs and dependency chains | [Parallel measurements](parallel/README.md) |
 | Backend preparation and artifact reuse | [Cache measurements](backend-cache/README.md) |
 | Ownership and cleanup | [Resource measurements](resources/README.md) |
+| Local ownership, checked clients, and branch joins | [Ownership measurements](ownership/README.md) |
 | Overload selection and field lookup | [Overload measurements](overload/README.md) |
 | Highlighting and editor transport | [Highlight measurements](highlight/README.md) |
 
@@ -37,3 +38,19 @@ report confidence intervals. Collect instrumented profiles separately because
 the profiler changes the work. The [specification](../docs/crust0-spec.md#14-conformance-and-performance-gates)
 defines the performance gate; these tools do not establish a result without a
 run on the selected inputs and builds.
+
+The current compilation matrix covers raw arrays, arithmetic, branches, records,
+increasing declaration counts, the SQLite resource client, cleanup exits,
+checked intrusive lists, owning trees, one-way observers, native handles, and
+stored views. The parallel driver covers wide and deep graphs and body,
+signature, and layout edits. Allocation and illegal-borrow tests are correctness
+checks; C does not supply an equivalent borrow-rejection contract.
+
+These cases do not implement the complete Linux waiter, GCC SSA relocation,
+or LLVM replacement protocols in the
+[source study](../docs/exploration/systems-capabilities.md#acceptance-experiments).
+Those comparisons require executable providers and clients that retain the
+original synchronization, observer, and relocation rules. A sequential list or
+index cannot substitute for them. The C frontend extension and LLVM adapter
+also require their own consumers and measurements. Do not treat this matrix as
+full language conformance.

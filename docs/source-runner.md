@@ -367,8 +367,10 @@ The [measurement guide](../benchmarks/source-order/README.md) explains paired
 rounds, output controls, and separate preparation costs. Store raw samples,
 commands, tool versions, hashes, and confidence intervals in ignored reports.
 A historical prepared-stage result cannot establish current checkout speed or
-the full specification performance gate. The complete gate remains
-unestablished; these benchmark tools cover only part of its required matrix.
+the full specification performance gate. The
+[benchmark matrix](../benchmarks/README.md) identifies the implemented consumers
+and the protocol cases that still require executable translations. Resource
+and ownership profiles have separate capability and cost claims.
 
 ### Compiled-backend application gate
 

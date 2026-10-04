@@ -378,6 +378,41 @@ def main():
     command([executable("runtime", inputs=["tests/runtime.crs"], libraries=[native])])
     intrusive = executable("intrusive", inputs=["examples/intrusive/raw.crs"])
     assert command([intrusive]).stdout == b"intrusive: ok\n"
+    command(
+        [
+            executable(
+                "field-origin",
+                """
+record Pair { first:u64; second:u64; }
+record Outer { prefix:[u64;2]; pair:Pair; }
+fn enclosing(field:*u64)->*Outer {
+    var offset:usize=offsetof(Outer,pair)+offsetof(Pair,second);
+    return ((field as *u8)-(offset as isize)) as *Outer;
+}
+fn aliased(pair:*Pair,field:*u64)->u64 {
+    (*pair).first=7u64;
+    *field=19u64;
+    return (*pair).first;
+}
+fn main(argc:i32,argv:**u8)->i32 {
+    var value:Outer=make Outer{prefix:make [u64;2]{3u64,5u64},
+        pair:make Pair{first:11u64,second:13u64}};
+    var field:*u64=&value.pair.second;
+    var tagged:usize=(field as usize) | 1usize;
+    var restored:*u64=(tagged & ~1usize) as *u64;
+    var whole:*Outer=enclosing(restored);
+    (*whole).prefix[1usize]=23u64;
+    *restored=29u64;
+    if whole!=&value || value.prefix[1usize]!=23u64 || value.pair.second!=29u64 {return 1i32;}
+    if aliased(&value.pair,&value.pair.first)!=19u64 {return 2i32;}
+    var copy:Pair=value.pair;
+    if copy.first!=19u64 || copy.second!=29u64 {return 3i32;}
+    return 0i32;
+}
+""",
+            )
+        ]
+    )
 
     dynamic = """
 extern fn native_i32(value:i32)->i32="native_i32";

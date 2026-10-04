@@ -164,8 +164,10 @@ def main():
     report["application_process_checks"] = 2 * (len(cases) + 1)
     report["source_sha256"] = {
         str(path): sha(path)
-        for path in sorted(Path("benchmarks/resources").glob("*"))
-        if path.suffix in (".c", ".h", ".py")
+        for path in (
+            Path("benchmarks/resources") / name
+            for name in ("direct.c", "callbacks.c", "contracts.c", "common.h", "verify.py")
+        )
     }
     report["binary_sha256"] = {
         str(args.work / name): sha(args.work / name)

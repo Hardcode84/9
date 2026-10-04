@@ -6,17 +6,11 @@ This comparison covers the implemented modular Crust stage and ordinary Rust.
 It separates application code from container implementation. Read the
 [ownership tutorial](ownership.md) first if the terms are new.
 
-For ordinary resources, both models use owners, moves, shared views, exclusive
-views, and scope cleanup. Crust currently needs more explicit contracts and
-accepts fewer borrowing patterns. The intrusive-list results come from a
-dedicated verifier for reciprocal pointer fields. That verifier is part of the
-comparison's implementation cost. Its proofs do not establish a generic
-ownership capability or a model no more complex than Rust's.
-
-The [generic replacement design](ownership-model.md) removes topology-specific
-checker rules. It still requires a separate source-complexity comparison after
-its bounded implementation; this page does not attribute those proposals to
-the current compiler.
+Both models use owners, moves, shared views, exclusive views, and scope cleanup.
+Crust uses explicit field and function conditions for retained mutable references.
+These conditions are checked by the selected stage and add no runtime state.
+The [stage contract](ownership-model.md) describes their source notation.
+This comparison does not establish that Crust is easier to use than Rust.
 
 ## How Rust organizes the learning material
 
@@ -208,110 +202,33 @@ runs cleanup in the frames it exits. The failure-path guarantees also differ.
 
 ## Direct intrusive lists: client and implementer
 
-The required operation is a direct intrusive doubly-linked list: two hook
-families in each node, independent owners, unlink before destruction, and node
-allocation reuse while other owners and heads remain live. An index arena or
-reference-counted graph changes that requirement.
+A safe Rust API can hide a pointer-based intrusive implementation. Its author
+must justify pointer validity, aliasing, address stability, and destruction.
+The [standard pinning guide](https://doc.rust-lang.org/std/pin/index.html#an-intrusive-doubly-linked-list)
+describes these obligations and the role of `Drop` for intrusive links.
 
-Crust's actual declarations and client are in the
-[intrusive tutorial](../examples/intrusive/README.md). Rust's standard-library
-[pinning guide](https://doc.rust-lang.org/std/pin/index.html#an-intrusive-doubly-linked-list)
-uses an intrusive doubly-linked list to explain stable addresses and the need
-to detach before storage invalidation.
+Crust's [intrusive tutorial](../examples/intrusive/README.md) declares a closed
+storage schema, retained pointer fields, and Boolean field conditions. The
+implementation uses normal field stores. The stage verifies each function
+against its precondition, postcondition, and changed field classes.
 
-| Obligation | Crust container author | Rust container author using pinned raw links |
+| Obligation | Crust stage | Rust implementation |
 | --- | --- | --- |
-| Keep node addresses stable | Declare hook members; initialize in final storage. Checked moves reject afterward. | Use an address-stability contract, commonly `Pin` with a `!Unpin` node; preserve it in unsafe code. |
-| Maintain inverse links | Declare `reciprocal(prev, next)`; link bodies must prove it. | Maintain the invariant in the implementation; the borrow checker does not prove raw pointer equations. |
-| Select the correct containing field | Declare `members` and `anchor`; checked `parent(Node.ready, cursor)` excludes a sentinel and the wrong family. | Define the adapter or containing-field projection and justify its offset, provenance, and type. |
-| Detach before freeing | Destructor must establish isolation of every hook before release. | Destructor must detach before deallocation; raw-link validity depends on this implementation contract. |
-| Protect a returned payload view | Declare its origin and domain access; conflicting edits or reclamation reject. | Give the safe API a lifetime/access design that prevents deletion or conflicting writes while the view is live. Pinning alone does not provide this. |
-| Use the container | Explicit owners, domain scopes, and checked calls. | A sound library can expose safe calls and hide its unsafe implementation. |
+| Keep the node address fixed | Publication prevents relocation of the storage and its containing record. | An address-sensitive implementation can use `Pin` and a type that is not `Unpin`. |
+| Preserve pointer equations | Ordinary `invariant` expressions are checked after edits. | The author of raw-pointer operations must maintain the data structure's invariants. |
+| Access payload | The tutorial uses typed `Node` pointers and full-node sentinels. | The chosen node and sentinel representation determines whether pointer recovery is needed. |
+| Reclaim one node | Consume its owner and prove the absence of surviving retained references. | The implementation must discharge its safety obligations before it frees storage. |
+| Keep an old cursor across release | Reclaim access excludes active cursors and loans. | A safe API must prevent a borrowed reference from outliving its target. |
+| Reuse a checked library | Import its verified interface and object receipt. | Call its safe public API under the library's documented contract. |
 
-These are different ways to express and discharge obligations. Rust's
-[`unsafe` chapter](https://doc.rust-lang.org/book/ch20-01-unsafe-rust.html)
-explicitly separates an unsafe implementation from a safe public abstraction.
-Requiring unsafe pointer operations inside a library does not imply that Rust
-application code must use `unsafe`.
+A full-node sentinel uses more head storage than a link-only sentinel. That
+cost is visible in the Crust example's source. Ownership verification adds
+no pointer metadata, runtime validity checks, or allocation registry.
 
-### Compare one pointer-edit operation
-
-Crust's checked link function is ordinary pointer code with a contract:
-
-```crust
-fn unlink(h: *Hook) -> unit links(edit, Hook) cursor(h) isolated(h) {
-    var before: *Hook = (*h).prev;
-    var after: *Hook = (*h).next;
-    (*before).next = after;
-    (*after).prev = before;
-    (*h).prev = h;
-    (*h).next = h;
-}
-```
-
-The corresponding Rust raw operation can use the same fields and stores:
-
-```rust
-#[repr(C)]
-struct Hook { prev: *mut Hook, next: *mut Hook }
-
-/// # Safety
-/// The links form a valid reciprocal ring of live, initialized hooks.
-/// Each touched field permits raw writes, with no conflicting references
-/// or concurrent access. The storage remains stable throughout this call.
-/// On return, h is isolated and the remaining ring is reciprocal.
-unsafe fn unlink(h: *mut Hook) {
-    unsafe {
-        let before = (*h).prev;
-        let after = (*h).next;
-        (*before).next = after;
-        (*after).prev = before;
-        (*h).prev = h;
-        (*h).next = h;
-    }
-}
-```
-
-The Rust function's documentation is a caller obligation. Rust checks its types
-and unsafe-operation rules; it does not prove the ring contract. Crust checks
-the declared result. Removing the `(*after).prev = before` store compiles as Rust
-but fails Crust's relation proof. Never run the broken Rust body on the strength
-of compilation alone.
-
-This comparison checks one operation. It does not present that unsafe function
-as a complete safe Rust container. A complete wrapper must enforce its
-preconditions on every public path, including destruction and returned views.
-Neither spelling has a runtime validity check or link tag.
-
-### Safe borrowed links have a different lifetime contract
-
-Rust can also store shared references in `Cell` without reference counting or
-dynamic borrow checks:
-
-```rust
-use std::cell::Cell;
-
-struct Hook<'a> {
-    prev: Cell<Option<&'a Hook<'a>>>,
-    next: Cell<Option<&'a Hook<'a>>>,
-}
-
-fn main() {
-    let left = Box::new(Hook { prev: Cell::new(None), next: Cell::new(None) });
-    let right = Box::new(Hook { prev: Cell::new(None), next: Cell::new(None) });
-    left.next.set(Some(&right));
-    right.prev.set(Some(&left));
-    assert!(std::ptr::eq(left.next.get().unwrap(), &*right));
-}
-```
-
-The [`Cell` API](https://doc.rust-lang.org/std/cell/struct.Cell.html) permits
-interior mutation through shared access. This small borrowed graph is safe
-Rust. Insert `drop(right);` before the assertion and Rust rejects E0505: the
-node is still borrowed by the link. It does not establish the required
-independent destruction-and-reuse API. A fixed common lifetime, a different
-owning representation, and an encapsulated pinned raw implementation must be
-compared as different designs.
+These models put different work on a container author. Crust requires explicit
+storage and field conditions. Rust requires safety reasoning for an unsafe
+pointer implementation. The amount of annotation in a real container, the
+quality of diagnostics, and the accepted programs determine usability.
 
 ## Recursive owners
 
@@ -343,40 +260,22 @@ The Crust example uses recursive construction and cleanup. Its stack use grows
 with the node count. Rust can also express an iterative owner transfer with
 `Option::take`; Crust's current owner-loop rule rejects a changed outer owner
 identity. A helper that receives both Crust heads also encounters domain-wide
-loan exclusion when it edits just one hook family. The example uses two attach
+loan exclusion when it edits just one set of fields. The example uses two attach
 passes. These are concrete costs in the container-author comparison.
 
 ## What the comparison establishes
 
-For ordinary application code, Crust has familiar ownership concepts but more
-explicit syntax and more conservative acceptance. Lexical scopes, whole-binding
-loan restrictions, domain-wide exclusion, mandatory returned origins, and
-branch-state agreement all impose visible work on the user. Calling the
-current model simpler than Rust would omit that work.
+The basic examples compare the same resource operations and native output.
+The intrusive example exercises direct pointers, two memberships, individual
+release, reuse, and payload loans. Its implementation and annotations are
+available for inspection.
 
-For the implemented intrusive operations, the specialized Crust verifier checks
-reciprocal pointer invariants from declarations. Authors do not supply solver
-terms or ghost lemmas. They still learn member and anchor roles, domain effects,
-isolation results, and exact field origins. Rust authors instead discharge the
-corresponding address, aliasing, and destructor obligations inside an unsafe
-implementation and design a safe API around it. Counting keywords alone would
-not compare those tasks.
+The ordinary owner and loan rules remain narrower than Rust's borrowing model.
+For example, named Crust loans use lexical scopes, and borrowed record fields
+need a stored-lifetime interface that this stage does not accept. A field
+condition cannot substitute for such a lifetime contract. The stage rejects
+that input instead of treating the borrowed field as an unchecked pointer.
 
-The current candidate fails the generality part of the
-[acceptance gate](design.md#checked-ownership-target). Its implementation builds
-in two inverse fields, member families, anchor roles, and isolation. A tree
-parent reference or one-way non-owning link cannot use that topology contract.
-Moving these rules behind another stage interface would retain the same
-specialization. The next candidate must check these shapes and stored borrowed
-views with the same ownership rules.
-
-The complete acceptance gate remains open.
-Crust has no accepted general contract for creating a runtime-sized owner set
-across iterations, and it cannot yet supply the same range of stored-view
-interfaces. The direct-list library/client comparison therefore does not cover
-the complete required API. That prevents a claim that the overall complexity
-ceiling has passed. This document adds no ownership mechanism to bypass it.
-
-The examples establish source behavior, not compilation-speed equivalence.
-Rust compiler timings are not measured here. Crust's target GCC and linker
-costs must remain separate from frontend and ownership checking measurements.
+The generic field checker supports conditions expressed by its source grammar.
+It does not verify arbitrary user logic or infer a missing contract from caller
+bodies. Solver errors and unknown results reject the program.

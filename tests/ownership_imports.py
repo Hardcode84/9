@@ -70,14 +70,16 @@ def tamper_checks(args, environment, receipt):
     sidecar = artifact.with_name("checksum")
     original_checksum = sidecar.read_bytes()
     start, end, interface = unpack(original)
-    assert "fn owner_drop" in interface and "fn unlink" in interface
+    assert "fn owner_drop" in interface and "fn ready_unlink" in interface
     assert "from owner.node" in interface and "from node.value" in interface
-    assert "from head.hook.next" in interface
+    assert "from head.node.next" in interface
     assert "var " not in interface and "while " not in interface
     mutations = {
         "function contract": original.replace(b"access(read, Graph)", b"access(edit, Graph)", 1),
         "type layout": original.replace(b"value: i64", b"value: i32", 1),
-        "reciprocal contract": original.replace(b"isolated(h)", b"cursor(h)  ", 1),
+        "write contract": original.replace(
+            b"modifies(Node.prev, Node.next)", b"modifies(Node.next, Node.next)", 1
+        ),
         "object": original[:end] + bytes([original[end] ^ 1]) + original[end + 1 :],
         "truncated object": original[:-1],
         "trailing bytes": original + b"unbound bytes",
@@ -141,7 +143,7 @@ def capture_race(directory, args, environment, receipt, output):
 def source_checks(directory, driver, cache, links, library, client, environment, receipt):
     original = library.read_text()
     bad = directory / "bad-provider.crs"
-    bad.write_text(original.replace("unlink(&(*node).active);", "", 1))
+    bad.write_text(original.replace("active_unlink(node);", "", 1))
     command([driver, "publish", str(cache), str(links), str(bad)], success=False)
     changed = directory / "changed-provider.crs"
     changed.write_text(original + "\nfn additional(value:i32)->i32 { return value; }\n")
@@ -184,7 +186,7 @@ def run(build):
     driver = str(build / "crust-ownership-import-test")
     scratch = build / "ownership-contracts"
     scratch.mkdir(exist_ok=True)
-    environment = dict(os.environ, CRUST_TEST_NO_SOLVER="1")
+    environment = dict(os.environ)
     with tempfile.TemporaryDirectory(prefix="imports-", dir=scratch) as temporary:
         directory = Path(temporary)
         cache = directory / "cache"
@@ -234,7 +236,7 @@ def run(build):
         )
         assert not list(cache.glob(".build-*")), "private import/publication files leaked"
     print(
-        f"ownership imports: separate provider/client, zero solver calls, captured linking, {rejected} rejections passed"
+        f"ownership imports: source-free provider/client, captured linking, {rejected} rejections passed"
     )
 
 

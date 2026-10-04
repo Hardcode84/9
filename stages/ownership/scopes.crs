@@ -61,21 +61,29 @@ fn os_end_local(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue
     var object: *OsObject = (*value).object;
     if object == null(*OsObject) { return; }
     if (*slot).owns { os_drop_object(check, state, object, location); }
-    else { if !os_isolated(check, state, object) {
-        os_error(check, location, "stack storage cannot expire while a member hook is linked");
-    } }
+    else { os_heap_retire(check, state, object, location); }
     os_mark(check, state, object, os_flags(state, object) & ~OS_LIVE);
 }
 
 fn os_drop_object(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+    if !os_enter(check, location) { return; }
     if !os_initialized(check, state, object) {
-        os_error(check, location, "resource destruction requires initialized owner fields"); return;
+        os_error(check, location, "resource destruction requires initialized owner fields");
     }
-    if !os_loan_access(check, state, object, null(*OsLoan), true, location) { return; }
-    os_drop_contract(check, state, object, location);
-    if os_failed(check) { return; }
-    os_havoc(check, state, (*object).domain, null(*OsField));
-    os_expire_owned(check, state, object, location);
+    if !os_failed(check) && os_loan_access(check, state, object, null(*OsLoan), true, location) {
+        os_unfold(check, state, object);
+        var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*object).syntax).name);
+        if (*global).resource != null(*RsResource) { os_drop_callback(check, state, object, location); }
+        else {
+            os_heap_retire(check, state, object, location);
+            os_drop_fields(check, state, object, location);
+        }
+        if !os_failed(check) {
+            os_expire_owned(check, state, object, location);
+            os_snapshot(check, state);
+        }
+    }
+    (*check).depth = (*check).depth - 1usize;
 }
 
 fn os_expire_owned(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
@@ -91,7 +99,8 @@ fn os_expire_owned(check: *OsCheck, state: *OsState, object: *OsObject, location
         os_set(check, state, slot as *u8, null(*OsValue), 0u32);
         slot = (*slot).next;
     }
-    os_mark(check, state, object, (os_flags(state, object) & ~(OS_LIVE | OS_SUMMARY)) | OS_DESTROYED | OS_ISOLATED);
+    os_heap_forget(check, state, object);
+    os_mark(check, state, object, (os_flags(state, object) & ~(OS_LIVE | OS_SUMMARY)) | OS_DESTROYED);
     (*check).depth = (*check).depth - 1usize;
 }
 
@@ -109,7 +118,7 @@ fn os_destructor_end(check: *OsCheck, state: *OsState, object: *OsObject, locati
         }
         slot = (*slot).next;
     }
-    if !os_unmanaged_isolated(check, state, object, location) {
-        os_error(check, location, "destructor must isolate all embedded hooks before storage expires");
-    }
+    if !os_close(check, state, location) { return; }
+    os_heap_retire(check, state, object, location);
+    os_drop_fields(check, state, object, location);
 }

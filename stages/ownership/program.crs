@@ -23,66 +23,23 @@ fn os_driver_read(cli: *CCli, stage: *OsStage) -> bool {
     return true;
 }
 
-fn os_relation_interfaces(stage: *OsStage, relations: *RlStage) -> bool {
-    var syntax: *RlSyntax = (*stage).relations;
-    while syntax != null(*RlSyntax) {
-        if (*(*syntax).declaration).kind == CRUST_D_RECORD {
-            if !rls_resolve_family(relations, (*stage).resources, syntax) { return false; }
-        }
-        syntax = (*syntax).next;
-    }
-    syntax = (*stage).relations;
-    while syntax != null(*RlSyntax) {
-        if (*(*syntax).declaration).kind != CRUST_D_RECORD {
-            if (*(*syntax).declaration).kind == CRUST_D_EXTERN && !os_imported(stage, (*syntax).declaration) {
-                rs_error((*stage).resources, &(*(*syntax).declaration).loc,
-                         "external link contracts require a verified library import");
-                return false;
-            }
-            var contract: *RlContract = rls_resolve_function(relations, (*stage).resources, syntax);
-            if contract == null(*RlContract) { return false; }
-            var function: *OsFunction = crust_map_get(&(*stage).functions, (*syntax).declaration as usize) as *OsFunction;
-            (*function).relation = contract;
-        }
-        syntax = (*syntax).next;
-    }
-    return true;
-}
-
-fn os_lower(stage: *OsStage, relations: *RlStage) -> bool {
+fn os_lower(stage: *OsStage) -> bool {
     var resources: *RsStage = (*stage).resources;
     (*resources).delegate_memory = true;
     (*resources).delegate_return_loans = true;
     if !rs_collect(resources) || !rs_publish(resources) { return false; }
-    if !os_relation_interfaces(stage, relations) { return false; }
     var global: *RsGlobal = (*resources).first_global;
     while global != null(*RsGlobal) && !(*resources).failed {
-        if (*(*global).source).kind == CRUST_D_FUNCTION {
-            var function: *OsFunction = crust_map_get(&(*stage).functions, (*global).source as usize) as *OsFunction;
-            if (*function).relation != null(*RlContract) {
-                // Link contracts accept only plain checked bodies, with no cleanup effects.
-                (*(*global).lowered).body = (*(*global).source).body;
-            } else { if !rs_function(resources, global) { return false; } }
-        }
+        if (*(*global).source).kind == CRUST_D_FUNCTION && !rs_function(resources, global) { return false; }
         global = (*global).next;
     }
     if (*resources).failed || !crust_check((*resources).context) { return false; }
-    return rs_check_constants(resources);
+    if !rs_check_constants(resources) { return false; }
+    os_erase_domains(stage);
+    return true;
 }
 
-fn os_verify(stage: *OsStage, relations: *RlStage) -> bool {
-    var resources: *RsStage = (*stage).resources;
-    var global: *RsGlobal = (*resources).first_global;
-    while global != null(*RsGlobal) {
-        var function: *OsFunction = crust_map_get(&(*stage).functions, (*global).source as usize) as *OsFunction;
-        if function != null(*OsFunction) && (*function).relation != null(*RlContract) &&
-           !os_imported(stage, (*global).source) {
-            if !rl_verify(relations, (*function).relation) { return false; }
-        }
-        global = (*global).next;
-    }
-    return os_check(stage);
-}
+fn os_verify(stage: *OsStage) -> bool { return os_check(stage); }
 
 fn os_driver_emit(cli: *CCli, resources: *RsStage) -> i32 {
     if !c_driver_exports(cli) { return 1i32; }
@@ -105,13 +62,11 @@ fn os_driver_build(cli: *CCli) -> i32 {
     rs_init(&resources, (*cli).stage.status.context);
     var stage: OsStage = uninit;
     os_init(&stage, &resources);
-    var relations: RlStage = uninit;
-    rl_init(&relations, resources.context);
     var result: i32 = 1i32;
-    if os_driver_read(cli, &stage) && os_lower(&stage, &relations) && os_verify(&stage, &relations) {
+    if os_driver_read(cli, &stage) && os_lower(&stage) && os_verify(&stage) {
         result = os_driver_emit(cli, &resources);
     }
-    rl_destroy(&relations);
+    pf_destroy(&stage.proof);
     return result;
 }
 
@@ -128,4 +83,19 @@ fn ownership_program(request: *CrustBuild) -> i32 {
     }
     c_stage_destroy(&cli.stage);
     return result;
+}
+
+fn os_erase_domains(stage: *OsStage) -> unit {
+    // Domain declarations remain in the source interface, with no target storage.
+    var unit_value: *CrustUnit = (*(*(*stage).resources).context).units;
+    while unit_value != null(*CrustUnit) {
+        var position: **CrustDecl = &(*unit_value).declarations;
+        while *position != null(*CrustDecl) {
+            var declaration: *CrustDecl = *position;
+            if crust_map_get(&(*stage).domains, (*declaration).name as usize) != null(*u8) {
+                *position = (*declaration).next;
+            } else { position = &(*declaration).next; }
+        }
+        unit_value = (*unit_value).next;
+    }
 }

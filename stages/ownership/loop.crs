@@ -13,16 +13,6 @@ fn os_cursor_scope(state: *OsState, object: *OsObject) -> *OsScope {
     return scope;
 }
 
-fn os_loop_head(state: *OsState, value: *OsValue) -> *OsObject {
-    if value == null(*OsValue) || !(*value).pointer || (*value).object == null(*OsObject) {
-        return null(*OsObject);
-    }
-    var object: *OsObject = (*value).object;
-    if (*object).anchor { return object; }
-    if (os_flags(state, object) & OS_ASSOCIATED) != 0u32 { return (*object).association; }
-    return null(*OsObject);
-}
-
 fn os_loop_find(cursors: *OsLoopCursor, slot: *OsSlot) -> *OsLoopCursor {
     while cursors != null(*OsLoopCursor) {
         if (*cursors).slot == slot { return cursors; }
@@ -33,25 +23,30 @@ fn os_loop_find(cursors: *OsLoopCursor, slot: *OsSlot) -> *OsLoopCursor {
 
 fn os_loop_widen(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> *OsValue {
     var value: *OsValue = os_bound(state, slot);
-    var head: *OsObject = os_loop_head(state, value);
-    if (*slot).owns || head == null(*OsObject) {
-        os_error(check, location, "read loop cursor requires an initialized hook and its anchor association");
-        return null(*OsValue);
+    if value == null(*OsValue) || (*slot).owns || os_borrowed((*slot).syntax) {
+        os_error(check, location, "loop assignment requires an initialized scalar or domain cursor"); return null(*OsValue);
+    }
+    if !(*value).pointer { return os_value(check, (*slot).syntax, null(*OsObject), false); }
+    if (*value).object == null(*OsObject) || !os_tracked((*(*value).object).contract) {
+        os_error(check, location, "loop cursor requires a declared storage schema"); return null(*OsValue);
     }
     var object: *OsObject = (*value).object;
-    if !os_access_through(check, state, object, (*value).loan, false, location) { return null(*OsValue); }
-    if (*object).family == null(*OsField) || (os_flags(state, object) & OS_READY) == 0u32 ||
-       !rs_same((*(*check).stage).resources, (*(*value).syntax).base, (*object).syntax) {
-        os_error(check, location, "read loop cursor requires initialized reciprocal storage");
+    if !os_prove(check, state, os_nullable_live(check, state, object), location, "loop cursor may refer to unpublished storage") {
         return null(*OsValue);
     }
-    var target: *OsObject = os_object(check, state, (*object).syntax, null(*OsObject), (*value).borrow_scope, true);
+    var nonnull: bool = os_entails(check, state,
+        pf_not(&(*check).proof, pf_eq(&(*check).proof, (*object).term, "0")), location);
+    var target: *OsObject = os_object_header(check, state, (*object).syntax, null(*OsObject), (*value).borrow_scope, true);
     if target == null(*OsObject) { return null(*OsValue); }
-    (*target).family = (*object).family;
-    (*target).domain = (*object).domain;
-    (*target).association = head;
     (*target).abstract = true;
-    os_mark(check, state, target, OS_LIVE | OS_NONNULL | OS_READY | OS_ASSOCIATED);
+    (*target).cursor = true;
+    os_observe(check, state, (*target).term);
+    os_mark(check, state, target, OS_LIVE | OS_READY | OS_SUMMARY | OS_PUBLISHED | OS_PINNED);
+    os_assume(check, state, os_nullable_live(check, state, target));
+    if nonnull {
+        os_mark(check, state, target, os_flags(state, target) | OS_NONNULL);
+        os_assume(check, state, pf_not(&(*check).proof, pf_eq(&(*check).proof, (*target).term, "0")));
+    }
     var result: *OsValue = os_value(check, (*value).syntax, target, true);
     if result != null(*OsValue) { (*result).borrow_scope = (*value).borrow_scope; (*result).loan = (*value).loan; }
     return result;
@@ -62,8 +57,7 @@ fn os_loop_assignment(check: *OsCheck, state: *OsState, expression: *CrustExpr,
     while (*expression).kind == CRUST_E_GROUP { expression = (*expression).left; }
     if (*expression).kind != CRUST_E_NAME { return; }
     var slot: *OsSlot = os_local(state, (*expression).name);
-    if slot == null(*OsSlot) || (*(*slot).syntax).kind != CRUST_T_POINTER ||
-       os_loop_find(*cursors, slot) != null(*OsLoopCursor) { return; }
+    if slot == null(*OsSlot) || os_loop_find(*cursors, slot) != null(*OsLoopCursor) { return; }
     var value: *OsValue = os_loop_widen(check, state, slot, &(*expression).loc);
     if value == null(*OsValue) { return; }
     var cursor: *OsLoopCursor = os_alloc(check, sizeof(OsLoopCursor), alignof(OsLoopCursor)) as *OsLoopCursor;
@@ -89,16 +83,23 @@ fn os_loop_bindings(check: *OsCheck, state: *OsState, statement: *CrustStmt,
 
 fn os_loop_cursor_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
                            before: *OsValue, after: *OsValue, location: *CrustLoc) -> unit {
-    if after == null(*OsValue) || (*after).owner || !(*after).pointer || (*after).object == null(*OsObject) {
-        os_error(check, location, "read loop backedge must retain a live hook cursor"); return;
+    if after == null(*OsValue) || (*after).owner || (*after).borrow_scope != (*before).borrow_scope ||
+       (*after).loan != (*before).loan {
+        os_error(check, location, "loop backedge must preserve initialized values and borrow lifetimes"); return;
     }
-    var object: *OsObject = (*after).object;
-    if !os_access_through(check, body, object, (*after).loan, false, location) { return; }
-    if (*object).family != (*(*before).object).family || os_loop_head(body, after) != os_loop_head(entry, before) ||
-       (*after).borrow_scope != (*before).borrow_scope || (*after).loan != (*before).loan ||
-       (os_flags(body, object) & OS_READY) == 0u32 {
-        os_error(check, location, "read loop backedge must preserve cursor family, anchor, and access lifetime");
+    if !(*before).pointer { return; }
+    if (*after).object == null(*OsObject) {
+        if (os_flags(entry, (*before).object) & OS_NONNULL) != 0u32 {
+            os_error(check, location, "loop backedge must preserve a nonnull domain cursor");
+        }
+        return;
     }
+    var valid: *u8 = os_nullable_live(check, body, (*after).object);
+    if (os_flags(entry, (*before).object) & OS_NONNULL) != 0u32 {
+        valid = os_live_term(check, body, (*(*after).object).contract, (*(*after).object).term);
+    }
+    os_prove(check, body, valid, location,
+        "loop backedge must preserve a live or null domain cursor");
 }
 
 fn os_loop_read_slot(check: *OsCheck, entry: *OsState, body: *OsState, slot: *OsSlot,
@@ -130,10 +131,14 @@ fn os_loop_read_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
     }
 }
 
-fn os_read_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if !os_pure(check, (*statement).expr) { return; }
+fn os_checked_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    if !os_pure(check, (*statement).expr) || !os_close(check, state, &(*statement).loc) { return; }
     var cursors: *OsLoopCursor = null(*OsLoopCursor);
     os_loop_bindings(check, state, (*statement).body, &cursors);
+    if (*state).effect >= OS_EDIT {
+        os_heap_havoc(check, state, (*state).domain, (*check).function, (*check).parameters);
+        os_snapshot(check, state);
+    }
     if os_failed(check) { return; }
     os_expr(check, state, (*statement).expr);
     var body: OsState = *state;
@@ -143,8 +148,11 @@ fn os_read_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit
     (*check).loop_depth = (*check).loop_depth - 1usize;
     if os_failed(check) { return; }
     if body.flow != PF_NORMAL && body.flow != PF_TRAP {
-        os_error(check, &(*statement).loc, "read loop requires a normal invariant-preserving backedge"); return;
+        os_error(check, &(*statement).loc, "loop requires a normal invariant-preserving backedge"); return;
     }
-    if body.flow == PF_NORMAL { os_loop_read_backedge(check, state, &body, cursors, &(*statement).loc); }
+    if body.flow == PF_NORMAL {
+        os_loop_read_backedge(check, state, &body, cursors, &(*statement).loc);
+        os_close(check, &body, &(*statement).loc);
+    }
     os_refine(check, state, (*statement).expr, false);
 }

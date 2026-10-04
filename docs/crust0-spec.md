@@ -27,12 +27,10 @@ and type and field declarations must encode all safety conditions needed across
 function boundaries. Check each body against those contracts, with local flow
 analysis. The user-facing model must be no more complex than Rust's for both
 application and container authors. The [checked ownership target](design.md#checked-ownership-target)
-defines the acceptance gate. The current closed-program memory stage does not
-meet that gate. The separate [modular stage](../examples/intrusive/README.md)
-implements a bounded source subset through public compiler interfaces. Its
-reciprocal-list rules do not meet the generality requirement. The
-[generic ownership proposal](ownership-model.md) defines a replacement design,
-not an implemented extension to this specification.
+defines the acceptance gate. The [ownership stage contract](ownership-model.md)
+describes an external implementation based on closed storage schemas and
+ordinary field and function conditions. The [intrusive tutorial](../examples/intrusive/README.md)
+uses those rules without container-specific stage logic.
 These requirements add no ownership feature to the seed.
 
 This document controls Crust0 version 0.1. The earlier documents remain research
@@ -955,7 +953,7 @@ direct two-hook client through its typed operation tree. Its library proof also
 checks init, unlink, insert, and splice over rings of arbitrary length. The
 client checker expands calls or uses selected concrete effect templates. It
 requires a proved end to each unfolded loop.
-The [closed-program resource composition](../examples/intrusive/README.md#closed-program-proof-examples) also
+The [closed-program resource composition](../examples/intrusive/README.md#other-proof-profiles) also
 checks source lifetimes, owner transfers, and complete cleanup plans. Neither
 closed-program profile consumes modular ownership summaries. Passing
 these checks does not complete compiler-construction or checked-language
@@ -970,12 +968,11 @@ resource cleanup. Loops with memory writes or allocation require a different
 frame rule and reject this form.
 
 The separate [modular ownership stage](../examples/intrusive/README.md) checks
-each source body against declared field and function contracts. It supports
-individual owners, two reciprocal hook families, scoped cursors, checked payload
-projection, and head cleanup over arbitrary list sizes. It does not expand
-callees or inspect clients when checking a library body. Inferred proof state
-erases before emission. Unexpressed lifetime and field destruction relationships
-reject; this bounded subset does not establish the full checked-language gate.
+each source body against declared storage and function contracts. It supports
+individual owners, scoped cursors, typed payload access, field conditions,
+and cleanup over arbitrary list sizes. Calls use verified interfaces; they do
+not expand callee bodies. Proof state erases before emission. The complete
+checked-language gate also requires the other ownership acceptance cases.
 
 The first implementation must establish these cases before adding language
 facilities:
@@ -1097,9 +1094,9 @@ frame. Inconsistent input conditions reject registration. This form supports
 loop-free unit functions with scalar parameters and bindings without local
 storage. It checks branches but rejects calls, loops, traps, and aggregate
 copies in the selected body. Abstract graph predicates still require a rule
-for separating an unbounded set of cells from caller memory. The [contract tutorial](../examples/intrusive/README.md#check-a-declared-call-contract)
+for separating an unbounded set of cells from caller memory. The [contract tutorial](../examples/intrusive/README.md#other-proof-profiles)
 provides the complete source and selectable compilation root.
-The optional [loop stage](../examples/intrusive/README.md#check-a-runtime-sized-traversal)
+The optional [loop stage](../examples/intrusive/README.md#other-proof-profiles)
 checks read-only memory with scalar updates through the existing statement
 callback. It derives modified bindings from the complete body and checks an
 immutable invariant at entry and after an arbitrary iteration. Every

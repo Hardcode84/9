@@ -10,6 +10,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from memory import accept_cases
@@ -109,7 +110,15 @@ def main():
     parser.add_argument("--case", action="append", default=[])
     parser.add_argument("--no-sanitize", action="store_true")
     parser.add_argument("--work", type=Path)
+    parser.add_argument("--jobs", type=int, default=1, help="independent allocation sweep shards")
+    parser.add_argument(
+        "--timeout", type=float, default=180, help="seconds per exhaustive input sweep shard"
+    )
     args = parser.parse_args()
+    if args.jobs < 1:
+        parser.error("--jobs must be positive")
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
     if args.ownership and (args.resources or args.summaries or args.contracts or args.loops):
         parser.error("--ownership selects its own stage and inputs")
     if args.contracts or args.loops:
@@ -160,8 +169,19 @@ def main():
         names = ("countdown", "continue", "break", "walk")
     if args.ownership:
         links = (ROOT / "examples/intrusive/links.crs").read_text()
+        program = (ROOT / "examples/intrusive/program.crs").read_text()
+        node = program.split("record Node", 1)[1].split("resource Owner", 1)[0]
+        types = "domain Graph(Node);\nrecord Node" + node
         cases = {
-            "links": links,
+            "scalar-call": "domain D(Flag); record Flag {value:bool;} domain(D); "
+            "fn set(flag:mut Flag)->unit access(edit,D) {flag.value=true;} "
+            "fn main()->i32 access(reclaim,D) {var flag:Flag=make Flag{value:false}; "
+            "set(mut flag); if flag.value {return 1i32;} return 0i32;}",
+            "reference-only": "domain D(Cell); record Cell {next:*Cell;} domain(D) references(next); "
+            "fn initialize(p:*Cell)->unit access(edit,D) initializes(p) requires(p!=null(*Cell)) "
+            "{(*p).next=null(*Cell);}",
+            "links": types + links,
+            "graph": (ROOT / "examples/ownership-graphs/program.crs").read_text(),
             "intrusive": links + (ROOT / "examples/intrusive/program.crs").read_text(),
             "fields": links + (ROOT / "examples/intrusive/fields.crs").read_text(),
             "recursive": links + (ROOT / "examples/intrusive/recursive/program.crs").read_text(),
@@ -221,10 +241,6 @@ def main():
                 path
                 for path in resource_stage()[:-1]
                 if not path.startswith(("stages/memory/", "stages/resource_memory/"))
-            ]
-            sources += [
-                str(path.relative_to(ROOT))
-                for path in sorted((ROOT / "stages/relations").glob("*.crs"))
             ]
             sources += [
                 str(path.relative_to(ROOT))
@@ -303,18 +319,25 @@ def main():
         for name in selected:
             source = work / f"{name}.crs"
             source.write_text(cases[name])
-            selected_model = [models[name]] if models else (["rewrite"] if args.summaries else [])
-            result = run([executable, source, *selected_model])
-            matched = re.fullmatch(
-                rb"memory allocation: ([0-9]+) failure points checked\n", result.stdout
-            )
-            if matched is None or result.stderr:
-                raise RuntimeError(
-                    f"unexpected output for {name}: {result.stdout!r} {result.stderr!r}"
+            model = models[name] if models else ("rewrite" if args.summaries else "")
+
+            def sweep(shard, source=source, model=model, name=name):
+                result = run([executable, source, model, shard, args.jobs], timeout=args.timeout)
+                matched = re.fullmatch(
+                    rb"memory allocation: ([0-9]+) of ([0-9]+) failure points checked\n",
+                    result.stdout,
                 )
-            count = int(matched.group(1))
-            if count == 0:
-                raise RuntimeError(f"no allocation failure was exercised for {name}")
+                if matched is None or result.stderr:
+                    raise RuntimeError(
+                        f"unexpected output for {name}: {result.stdout!r} {result.stderr!r}"
+                    )
+                return tuple(map(int, matched.groups()))
+
+            with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+                results = list(pool.map(sweep, range(1, args.jobs + 1)))
+            count = sum(checked for checked, _ in results)
+            if count == 0 or any(expected != count for _, expected in results):
+                raise RuntimeError(f"allocation shards did not cover all failure points for {name}")
             total += count
             print(f"{name}: {count} allocation failures checked", flush=True)
         print(

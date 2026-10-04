@@ -12,9 +12,9 @@ function and field contracts without whole-program analysis. Its user-facing
 model must be no more complex than Rust's, including container implementations.
 This target supersedes the broader proof work proposed below. Retain the
 experiments as evidence; they do not establish acceptance of the modular model.
-The current [modular candidate](resource-metastage.md#7-modular-ownership-candidate)
-uses reciprocal field contracts and scoped access. It separates memory safety
-from full rooted-list correctness and keeps proof terms out of user code.
+The [modular stage](../ownership-model.md) uses ordinary field conditions and
+function contracts in a closed storage schema. Its proof terms stay out of
+user source and generated code.
 
 Reading guide: [recommendation](#1-recommendation),
 [language research](#3-lessons-from-existing-languages),
@@ -272,7 +272,7 @@ Five small programs checked with Rust 1.90.0 distinguish these contracts:
 |---|---|
 | Save a reference, destroy its owner, then use the reference | Reject with E0505 |
 | Use the reference for the last time, then destroy its owner | Accept |
-| Edit reciprocal `Cell<Option<&Hook>>` links, then clear both links | Accept |
+| Edit inverse `Cell<Option<&Hook>>` links, then clear both links | Accept |
 | Clear both links, destroy one node, then use the other node | Reject with E0505; the containing type still carries the borrowed lifetime |
 | Write an ordinary raw-pointer unlink function without `unsafe` | Reject with E0133 at the neighbor stores |
 
@@ -1016,7 +1016,7 @@ Construction names describe fresh lifetimes symbolically; the checker does not
 enumerate runtime allocations or generate a counter for loop iterations.
 
 One possible rule gives each stored edge a linear share of target liveness.
-For a two-pointer hook, reciprocal fields locate the two incoming shares.
+For a two-pointer hook, inverse fields locate the two incoming shares.
 Unlink transfers the outgoing shares to the neighbors and recovers the incoming
 shares in the detached self-links. Fixed named portions suffice for this case;
 general fractional arithmetic is unnecessary. However, the shares alone do not
@@ -1067,7 +1067,7 @@ head and payload-projection contract. Two different heads can occur in the same
 cycle; applying the usual splice can break the inverse relationship or preserve
 it while losing nodes in an orphan cycle. For example, splicing the two supposed
 heads `d` and `s` in `d-e-f-s-b-c-d` can produce `d-b-c-d`, `s-s`, and `e-f-e`.
-All three results are reciprocal, but traversal from either head has lost nodes.
+All three results are inverse, but traversal from either head has lost nodes.
 
 Splice requires disjoint rooted cycles or its declared self-splice case. A root
 predicate must describe the complete set of hooks in its cycle. Splice transfers
@@ -1263,7 +1263,7 @@ There is no claim of C-speed proof checking or completed modular ownership.
 
 The resource stage supports a result view tied to one input loan. Its moves,
 RAII, and `defer` use retained cleanup plans. The
-[closed-program stage](../../examples/intrusive/README.md#closed-program-proof-examples) brings those
+[closed-program stage](../../examples/intrusive/README.md#other-proof-profiles) brings those
 plans, source storage scopes, deferred captures, and owner transfers into the
 memory proof. A check of the lowered tree alone would still omit cleanup calls.
 The same transfer facts support consuming pointer reads with `move place`.

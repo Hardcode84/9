@@ -38,14 +38,12 @@ fn os_publish_build(cli: *CCli, directory: *u8, result: *OwnershipLibrary) -> bo
     rs_init(&resources, context);
     var stage: OsStage = uninit;
     os_init(&stage, &resources);
-    var relations: RlStage = uninit;
-    rl_init(&relations, context);
     var work: OsLibraryWork = uninit;
     var success: bool = os_library_begin(context, directory, &work) &&
-        os_driver_read(cli, &stage) && os_lower(&stage, &relations) && os_verify(&stage, &relations);
+        os_driver_read(cli, &stage) && os_lower(&stage) && os_verify(&stage);
     if success { success = os_publish_bundle(cli, &stage, directory, &work, result); }
     if !cache_cleanup(context, &work.files) { success = false; }
-    rl_destroy(&relations);
+    pf_destroy(&stage.proof);
     return success;
 }
 

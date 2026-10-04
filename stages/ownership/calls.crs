@@ -12,7 +12,6 @@ fn os_call(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
         os_error(check, &(*expression).loc, "call has no ownership interface");
         return null(*OsValue);
     }
-    if (*contract).relation != null(*RlContract) { return os_relation_call(check, state, expression, contract); }
     if (*contract).foreign == OS_ALLOCATE { return os_allocate(check, state, expression, contract); }
     if (*contract).foreign == OS_RELEASE { return os_release(check, state, expression, contract); }
     if (*contract).foreign == OS_SCALAR { return os_scalar_call(check, state, expression, contract); }
@@ -58,7 +57,7 @@ fn os_allocate(check: *OsCheck, state: *OsState, expression: *CrustExpr, contrac
     }
     var syntax: *CrustTypeSyntax = (*(*expression).args[0usize]).syntax_type;
     if os_record((*check).stage, syntax) == null(*OsRecord) {
-        os_error(check, &(*expression).loc, "checked allocation requires a record with field contracts");
+        os_error(check, &(*expression).loc, "checked allocation requires a schema with field contracts");
         return null(*OsValue);
     }
     var object: *OsObject = os_object(check, state, syntax, null(*OsObject), null(*OsScope), false);
@@ -82,10 +81,7 @@ fn os_release(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract
             return null(*OsValue);
         }
         if !os_reclaim(check, state, object, &(*expression).loc) { return null(*OsValue); }
-        if !os_isolated(check, state, object) {
-            os_error(check, &(*expression).loc, "release requires every member hook to be isolated");
-            return null(*OsValue);
-        }
+        if !os_heap_retire(check, state, object, &(*expression).loc) { return null(*OsValue); }
         os_release_fields(check, state, object, &(*expression).loc);
         os_mark(check, state, object, os_flags(state, object) & ~OS_LIVE);
     }
@@ -96,7 +92,7 @@ fn os_release(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract
 fn os_reclaim(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
     if !os_loan_access(check, state, object, null(*OsLoan), true, location) { return false; }
     if (*os_root(object)).readonly {
-        os_error(check, location, "member projection has no reclamation authority");
+        os_error(check, location, "shared storage has no reclamation authority");
         return false;
     }
     if (*state).effect != OS_RECLAIM || (*state).domain != (*object).domain {
@@ -151,8 +147,8 @@ fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contr
     if (*contract).effect >= OS_EDIT && !os_edit_loans(check, state, arguments, (*expression).arg_count, &(*expression).loc) {
         return null(*OsValue);
     }
+    os_apply_contract(check, state, contract, arguments, &(*expression).loc);
     os_mutable_call(check, state, contract, arguments, &(*expression).loc);
-    if (*contract).effect >= OS_EDIT { os_havoc(check, state, (*contract).domain, null(*OsField)); }
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
     if os_borrowed(syntax) { return os_call_view(check, state, contract, source, &(*expression).loc); }
     return os_call_owned(check, state, contract, &(*expression).loc);
@@ -190,22 +186,24 @@ fn os_mutable_call(check: *OsCheck, state: *OsState, contract: *OsFunction,
     while parameter != null(*CrustParam) && !os_failed(check) {
         var value: *OsValue = arguments[index];
         if (*(*parameter).syntax_type).kind == RS_MUT && (*value).object != null(*OsObject) {
-            os_mutable_fields(check, state, (*value).object, location);
+            os_mutable_fields(check, state, (*value).object, contract, location);
         }
         parameter = (*parameter).next;
         index = index + 1usize;
     }
 }
 
-fn os_mutable_fields(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+fn os_mutable_fields(check: *OsCheck, state: *OsState, object: *OsObject, contract: *OsFunction, location: *CrustLoc) -> unit {
     if !os_enter(check, location) { return; }
     var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
         if value != null(*OsValue) {
-            if (*slot).owns && (*value).pointer { os_mutable_owner(check, state, slot, value); }
+            if (*slot).owns && (*value).pointer {
+                if !(*contract).has_modifies || os_writes(contract, (*slot).field) { os_mutable_owner(check, state, slot, value); }
+            }
             else { if !(*value).pointer && (*value).object != null(*OsObject) {
-                os_mutable_fields(check, state, (*value).object, location);
+                os_mutable_fields(check, state, (*value).object, contract, location);
             } }
         }
         slot = (*slot).next;
@@ -266,7 +264,8 @@ fn os_argument(check: *OsCheck, state: *OsState, contract: *OsFunction, paramete
         os_borrow_argument(check, state, contract, syntax, value, location);
         return;
     }
-    if (*value).pointer { os_error(check, location, "raw pointer argument has no cursor contract"); return; }
+    if (*value).pointer { os_cursor_argument(check, state, contract, parameter, value, location); return; }
+    if (*value).object != null(*OsObject) { os_publish_value(check, state, (*value).object, location); }
     if !os_transferable(check, state, value, location) { return; }
     if rs_owns((*(*check).stage).resources, syntax) && !(*value).owner {
         os_error(check, location, "owner argument requires an explicit move");
@@ -285,18 +284,8 @@ fn os_borrow_argument(check: *OsCheck, state: *OsState, contract: *OsFunction,
     if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
         os_error(check, location, "borrowed argument must be fully initialized"); return;
     }
+    if (*value).object != null(*OsObject) { os_publish_value(check, state, (*value).object, location); }
     if (*syntax).kind == RS_MUT && (*contract).effect == OS_RECLAIM {
         os_error(check, location, "explicit mutable calls cannot carry destruction authority");
-    }
-}
-
-fn os_havoc(check: *OsCheck, state: *OsState, domain: *CrustName, family: *OsField) -> unit {
-    var object: *OsObject = (*check).objects;
-    while object != null(*OsObject) && !os_failed(check) {
-        if (*object).family != null(*OsField) && (*object).domain == domain &&
-           (family == null(*OsField) || (*object).family == family) {
-            os_mark(check, state, object, os_flags(state, object) & ~(OS_ISOLATED | OS_ASSOCIATED));
-        }
-        object = (*object).next;
     }
 }

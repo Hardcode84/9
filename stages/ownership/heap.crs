@@ -1,0 +1,329 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_heap(state: *OsState, schema: *OsRecord) -> *OsHeap {
+    var heap: *OsHeap = (*state).heaps;
+    while heap != null(*OsHeap) {
+        if (*heap).schema == schema { return heap; }
+        heap = (*heap).next;
+    }
+    return null(*OsHeap);
+}
+
+fn os_live_term(check: *OsCheck, state: *OsState, schema: *OsRecord, address: *u8) -> *u8 {
+    var heap: *OsHeap = os_heap(state, schema);
+    if heap == null(*OsHeap) { return "false"; }
+    return pf_and(&(*check).proof, pf_not(&(*check).proof, pf_eq(&(*check).proof, address, "0")),
+        pf_select(&(*check).proof, (*heap).live, address));
+}
+
+fn os_set_heap(check: *OsCheck, state: *OsState, schema: *OsRecord, live: *u8) -> unit {
+    var heap: *OsHeap = os_alloc(check, sizeof(OsHeap), alignof(OsHeap)) as *OsHeap;
+    if heap == null(*OsHeap) { return; }
+    *heap = make OsHeap { schema: schema, live: live, next: (*state).heaps };
+    (*state).heaps = heap;
+}
+
+fn os_heap_start(check: *OsCheck, state: *OsState) -> unit {
+    var global: *RsGlobal = (*(*(*check).stage).resources).first_global;
+    while global != null(*RsGlobal) && !os_failed(check) {
+        var schema: *OsRecord = crust_map_get(&(*(*check).stage).records, (*global).source as usize) as *OsRecord;
+        if os_tracked(schema) {
+            var live: *u8 = pf_fresh(&(*check).proof, "(Array Int Bool)");
+            os_set_heap(check, state, schema, live);
+            os_assume(check, state, pf_not(&(*check).proof, pf_select(&(*check).proof, live, "0")));
+            os_heap_fields(check, state, schema, live);
+        }
+        global = (*global).next;
+    }
+    os_snapshot(check, state);
+}
+
+fn os_heap_fields(check: *OsCheck, state: *OsState, schema: *OsRecord, initialized: *u8) -> unit {
+    var field: *CrustField = (*(*schema).declaration).fields;
+    while field != null(*CrustField) && !os_failed(check) {
+        pf_field_set(&(*check).proof, &(*state).proof, field,
+            pf_fresh(&(*check).proof, os_array_sort(check, (*field).syntax_type)), initialized);
+        field = (*field).next;
+    }
+}
+
+fn os_snapshot(check: *OsCheck, state: *OsState) -> unit {
+    var snapshot: *OsSnapshot = os_alloc(check, sizeof(OsSnapshot), alignof(OsSnapshot)) as *OsSnapshot;
+    if snapshot == null(*OsSnapshot) { return; }
+    *snapshot = make OsSnapshot {
+        fields: (*state).proof.fields, heaps: (*state).heaps, guard: (*state).proof.assumptions, next: null(*OsSnapshot)
+    };
+    (*state).snapshots = snapshot;
+    (*state).grounded = null(*OsGround);
+}
+
+fn os_instance(check: *OsCheck, state: *OsState, snapshot: *OsSnapshot,
+                schema: *OsRecord, address: *u8) -> unit {
+    var before: OsState = *state;
+    before.proof.fields = (*snapshot).fields;
+    before.heaps = (*snapshot).heaps;
+    var premise: *u8 = pf_implies(&(*check).proof,
+        os_live_term(check, &before, schema, address), os_record_term(check, &before, schema, address));
+    os_assume(check, state, pf_implies(&(*check).proof, (*snapshot).guard, premise));
+}
+
+fn os_ground_address(check: *OsCheck, state: *OsState, snapshot: *OsSnapshot, address: *u8) -> unit {
+    var view: OsState = *state;
+    view.heaps = (*snapshot).heaps;
+    var heap: *OsHeap = (*snapshot).heaps;
+    while heap != null(*OsHeap) && !os_failed(check) {
+        if os_heap(&view, (*heap).schema) == heap {
+            os_instance(check, state, snapshot, (*heap).schema, address);
+            var field: *CrustField = (*(*(*heap).schema).declaration).fields;
+            while field != null(*CrustField) && !os_failed(check) {
+                if (*(*field).syntax_type).kind == CRUST_T_POINTER {
+                    var before: OsState = *state;
+                    before.proof.fields = (*snapshot).fields;
+                    var entry: *PfField = os_field_state(&before, field);
+                    var target: *OsRecord = os_record((*check).stage, (*(*field).syntax_type).base);
+                    if os_tracked(target) {
+                        os_instance(check, state, snapshot, target,
+                            pf_select(&(*check).proof, (*entry).value, address));
+                    }
+                }
+                field = (*field).next;
+            }
+        }
+        heap = (*heap).next;
+    }
+}
+
+fn os_ground(check: *OsCheck, state: *OsState) -> unit {
+    var snapshot: *OsSnapshot = (*state).snapshots;
+    while snapshot != null(*OsSnapshot) && !os_failed(check) {
+        var previous: *OsGround = (*state).grounded;
+        while previous != null(*OsGround) && (*previous).snapshot != snapshot { previous = (*previous).next; }
+        var stop: *PfTerm = null(*PfTerm);
+        if previous != null(*OsGround) { stop = (*previous).terms; }
+        var term: *PfTerm = (*state).proof.terms;
+        while term != stop && term != null(*PfTerm) && !os_failed(check) {
+            os_ground_address(check, state, snapshot, (*term).value);
+            term = (*term).next;
+        }
+        var mark: *OsGround = os_alloc(check, sizeof(OsGround), alignof(OsGround)) as *OsGround;
+        if mark == null(*OsGround) { return; }
+        *mark = make OsGround { snapshot: snapshot, terms: (*state).proof.terms, next: (*state).grounded };
+        (*state).grounded = mark;
+        snapshot = (*snapshot).next;
+    }
+}
+
+fn os_close(check: *OsCheck, state: *OsState, location: *CrustLoc) -> bool {
+    if os_closed(state) { return !os_failed(check); }
+    var query: OsState = *state;
+    var address: *u8 = pf_fresh(&(*check).proof, "Int");
+    pf_observe(&(*check).proof, &query.proof, address);
+    var condition: *u8 = "true";
+    var global: *RsGlobal = (*(*(*check).stage).resources).first_global;
+    while global != null(*RsGlobal) && !os_failed(check) {
+        var schema: *OsRecord = crust_map_get(&(*(*check).stage).records, (*global).source as usize) as *OsRecord;
+        if os_tracked(schema) {
+            condition = pf_and(&(*check).proof, condition, pf_implies(&(*check).proof,
+                os_live_term(check, state, schema, address), os_record_term(check, state, schema, address)));
+        }
+        global = (*global).next;
+    }
+    if os_failed(check) { return false; }
+    if c_equal(condition, "true") { return true; }
+    if !os_prove(check, &query, condition, location, "function does not preserve its declared field invariants") { return false; }
+    os_snapshot(check, state);
+    return true;
+}
+
+fn os_symbolic_slot(slot: *OsSlot) -> bool {
+    return (*slot).object != null(*OsObject) && os_tracked((*(*slot).object).contract) &&
+           (*slot).field != null(*CrustField) && !(*slot).owns &&
+           (*(*slot).syntax).kind != CRUST_T_NAME && !os_borrowed((*slot).syntax);
+}
+
+fn os_heap_assume_object(check: *OsCheck, state: *OsState, object: *OsObject, nullable: bool) -> unit {
+    os_observe(check, state, (*object).term);
+    if !os_tracked((*object).contract) { return; }
+    var term: *u8 = os_live_term(check, state, (*object).contract, (*object).term);
+    if nullable { term = pf_or(&(*check).proof, pf_eq(&(*check).proof, (*object).term, "0"), term); }
+    os_assume(check, state, term);
+    os_mark(check, state, object, os_flags(state, object) | OS_PUBLISHED | OS_PINNED);
+}
+
+fn os_heap_uninitialized(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
+    os_observe(check, state, (*object).term);
+    if !os_tracked((*object).contract) { return; }
+    var heap: *OsHeap = os_heap(state, (*object).contract);
+    os_assume(check, state, pf_not(&(*check).proof, pf_select(&(*check).proof, (*heap).live, (*object).term)));
+    var field: *CrustField = (*(*(*object).contract).declaration).fields;
+    while field != null(*CrustField) && !os_failed(check) {
+        var entry: *PfField = os_field_state(state, field);
+        pf_field_set(&(*check).proof, &(*state).proof, field, (*entry).value,
+            pf_store(&(*check).proof, (*entry).initialized, (*object).term, "false"));
+        field = (*field).next;
+    }
+}
+
+fn os_heap_load(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> *OsValue {
+    var entry: *PfField = os_field_state(state, (*slot).field);
+    var at: *u8 = (*(*slot).object).term;
+    if (os_flags(state, (*slot).object) & OS_PUBLISHED) == 0u32 {
+        if !os_prove(check, state, pf_select(&(*check).proof, (*entry).initialized, at),
+                      location, "field may be uninitialized") { return null(*OsValue); }
+    }
+    var term: *u8 = pf_select(&(*check).proof, (*entry).value, at);
+    var syntax: *CrustTypeSyntax = (*slot).syntax;
+    var object: *OsObject = null(*OsObject);
+    if (*syntax).kind == CRUST_T_POINTER {
+        object = os_object_header(check, state, (*syntax).base, null(*OsObject), (*state).scope, true);
+        if object == null(*OsObject) { return null(*OsValue); }
+        (*object).term = term;
+        (*object).cursor = true;
+        (*object).abstract = true;
+        os_mark(check, state, object, OS_LIVE | OS_READY | OS_SUMMARY | OS_PUBLISHED | OS_PINNED);
+        os_observe(check, state, term);
+    }
+    var result: *OsValue = os_value(check, syntax, object, (*syntax).kind == CRUST_T_POINTER);
+    if result != null(*OsValue) {
+        (*result).term = term;
+        (*result).place = slot;
+        (*result).loan = (*slot).loan;
+        if object != null(*OsObject) { (*result).borrow_scope = os_cursor_scope(state, object); }
+    }
+    return result;
+}
+
+fn os_heap_store(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue, location: *CrustLoc) -> unit {
+    if (*slot).object == null(*OsObject) { return; }
+    if !os_field_write(check, slot, location) || !os_tracked((*(*slot).object).contract) { return; }
+    var entry: *PfField = os_field_state(state, (*slot).field);
+    var at: *u8 = (*(*slot).object).term;
+    pf_field_set(&(*check).proof, &(*state).proof, (*slot).field,
+        pf_define(&(*check).proof, os_array_sort(check, (*slot).syntax),
+            pf_store(&(*check).proof, (*entry).value, at, os_term(check, value))),
+        pf_define(&(*check).proof, "(Array Int Bool)", pf_store(&(*check).proof, (*entry).initialized, at, "true")));
+}
+
+fn os_heap_publish(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
+    if !os_tracked((*object).contract) || (os_flags(state, object) & OS_PUBLISHED) != 0u32 { return true; }
+    if !os_initialized(check, state, object) {
+        os_error(check, location, "publication requires all fields to be initialized"); return false;
+    }
+    var heap: *OsHeap = os_heap(state, (*object).contract);
+    var published: OsState = *state;
+    var absent: *u8 = pf_eq(&(*check).proof, (*object).term, "0");
+    os_set_heap(check, &published, (*object).contract,
+        pf_ite(&(*check).proof, absent, (*heap).live,
+            pf_store(&(*check).proof, (*heap).live, (*object).term, "true")));
+    var predicate: *u8 = os_record_term(check, &published, (*object).contract, (*object).term);
+    if !os_prove(check, state, pf_or(&(*check).proof, absent, predicate), location, "construction does not establish its record invariant") { return false; }
+    (*state).heaps = published.heaps;
+    os_mark(check, state, object, os_flags(state, object) | OS_PUBLISHED | OS_READY);
+    os_pin(check, state, object);
+    return true;
+}
+
+fn os_outside(check: *OsCheck, root: *OsObject, schema: *OsRecord, address: *u8) -> *u8 {
+    var term: *u8 = "true";
+    var object: *OsObject = (*check).objects;
+    while object != null(*OsObject) {
+        if os_root(object) == root && (*object).contract == schema {
+            term = pf_and(&(*check).proof, term,
+                pf_not(&(*check).proof, pf_eq(&(*check).proof, address, (*object).term)));
+        }
+        object = (*object).next;
+    }
+    return term;
+}
+
+fn os_incoming(check: *OsCheck, state: *OsState, victim: *OsObject, location: *CrustLoc) -> bool {
+    var query: OsState = *state;
+    var address: *u8 = pf_fresh(&(*check).proof, "Int");
+    pf_observe(&(*check).proof, &query.proof, address);
+    var global: *RsGlobal = (*(*(*check).stage).resources).first_global;
+    while global != null(*RsGlobal) && !os_failed(check) {
+        var schema: *OsRecord = crust_map_get(&(*(*check).stage).records, (*global).source as usize) as *OsRecord;
+        if schema != null(*OsRecord) { os_incoming_record(check, &query, victim, schema, address, location); }
+        global = (*global).next;
+    }
+    return !os_failed(check);
+}
+
+fn os_incoming_record(check: *OsCheck, state: *OsState, victim: *OsObject,
+                       schema: *OsRecord, address: *u8, location: *CrustLoc) -> unit {
+    var field: *CrustField = (*(*schema).declaration).fields;
+    while field != null(*CrustField) && !os_failed(check) {
+        if os_field((*schema).references, (*field).name) != null(*OsField) &&
+           os_record((*check).stage, (*(*field).syntax_type).base) == (*victim).contract {
+            var entry: *PfField = os_field_state(state, field);
+            var outside: *u8 = pf_and(&(*check).proof, os_live_term(check, state, schema, address),
+                os_outside(check, os_root(victim), schema, address));
+            var term: *u8 = pf_implies(&(*check).proof, outside,
+                pf_not(&(*check).proof, pf_eq(&(*check).proof,
+                    pf_select(&(*check).proof, (*entry).value, address), (*victim).term)));
+            os_prove(check, state, term, location, "cannot destroy storage: a surviving reference field may still point into it");
+        }
+        field = (*field).next;
+    }
+}
+
+fn os_heap_retire(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
+    if !os_enter(check, location) { return false; }
+    if os_tracked((*object).contract) && (os_flags(state, object) & OS_ABSENT) == 0u32 {
+        os_incoming(check, state, object, location);
+        if !os_failed(check) { os_heap_forget(check, state, object); }
+    }
+    var slot: *OsSlot = os_fields(state, object);
+    while slot != null(*OsSlot) && !os_failed(check) {
+        var value: *OsValue = os_bound(state, slot);
+        if value != null(*OsValue) && !(*value).pointer && (*value).object != null(*OsObject) {
+            os_heap_retire(check, state, (*value).object, location);
+        }
+        slot = (*slot).next;
+    }
+    (*check).depth = (*check).depth - 1usize;
+    return !os_failed(check);
+}
+
+fn os_heap_forget(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
+    var heap: *OsHeap = os_heap(state, (*object).contract);
+    if heap == null(*OsHeap) { return; }
+    os_set_heap(check, state, (*object).contract,
+        pf_define(&(*check).proof, "(Array Int Bool)", pf_store(&(*check).proof, (*heap).live, (*object).term, "false")));
+    os_mark(check, state, object, os_flags(state, object) & ~OS_PUBLISHED);
+}
+
+fn os_nullable_live(check: *OsCheck, state: *OsState, object: *OsObject) -> *u8 {
+    return pf_or(&(*check).proof, pf_eq(&(*check).proof, (*object).term, "0"),
+        os_live_term(check, state, (*object).contract, (*object).term));
+}
+
+fn os_publish_value(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+    if !os_enter(check, location) { return; }
+    os_heap_publish(check, state, object, location);
+    var slot: *OsSlot = os_fields(state, object);
+    while slot != null(*OsSlot) && !os_failed(check) {
+        var value: *OsValue = os_bound(state, slot);
+        if value != null(*OsValue) && (*value).object != null(*OsObject) && !(*value).pointer {
+            os_publish_value(check, state, (*value).object, location);
+        }
+        slot = (*slot).next;
+    }
+    (*check).depth = (*check).depth - 1usize;
+}
+
+fn os_closed(state: *OsState) -> bool {
+    var snapshot: *OsSnapshot = (*state).snapshots;
+    return snapshot != null(*OsSnapshot) && (*snapshot).fields == (*state).proof.fields &&
+        (*snapshot).heaps == (*state).heaps;
+}
+
+fn os_withdraw_owner(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+    while object != null(*OsObject) && !os_failed(check) {
+        if os_tracked((*object).contract) && (os_flags(state, object) & OS_PUBLISHED) != 0u32 {
+            if !os_reclaim(check, state, object, location) || !os_incoming(check, state, object, location) { return; }
+            os_heap_forget(check, state, object);
+        }
+        object = (*object).parent;
+    }
+}

@@ -6,25 +6,23 @@ This example retains a runtime number of heap nodes. Each node belongs to two
 intrusive lists. The program removes one node, allocates a replacement, and
 then destroys both list heads while the nodes remain alive.
 
-Read the [basic intrusive tutorial](../README.md) first. This example uses the
-same specialized list verifier and ownership stage. Recursive owned fields
-add no syntax or compiler-core API. The combined example still depends on
-reciprocal fields and anchor roles, so it does not pass the
-[generic ownership gate](../../../docs/design.md#checked-ownership-target).
+Read the [basic intrusive tutorial](../README.md) first. This example uses
+the same storage schemas, ordinary field conditions, and function interfaces.
+Recursive owned fields add no syntax or compiler-core API.
 
 ## Build and run
 
 Run from the repository root:
 
 ```sh
-make all ownership-stage Z3_FLAGS=-l:libz3.so.4
+make all ownership-stage
 build/crust examples/intrusive/recursive/main.crs
 build/intrusive-recursive one two three
 ```
 
 Each argument requests one node. The argument text is not read. The output is
 `OK` and a newline. No arguments selects an empty chain. Allocation failure
-returns status 1 after cleanup. Use `Z3_FLAGS=-lz3` with the development library.
+returns status 1 after cleanup. Install the Z3 development library before the build.
 
 ## Separate ownership from membership
 
@@ -32,27 +30,32 @@ The [target program](program.crs) declares:
 
 ```crust
 resource Chain { node: *Node; } owns(node) domain(Graph) drop chain_drop;
-resource Node { ready: Hook; active: Hook; owned_next: *Node; value: i64; }
-    owns(owned_next) members(ready, active) domain(Graph) drop node_drop;
+resource Node { prev: *Node; next: *Node; active_prev: *Node; active_next: *Node; owned_next: *Node; value: i64; }
+    owns(owned_next) domain(Graph)
+    references(prev, next, active_prev, active_next)
+    invariant((*self).prev != null(*Node) && (*self).next != null(*Node) &&
+              (*(*self).prev).next == self && (*(*self).next).prev == self)
+    invariant((*self).active_prev != null(*Node) && (*self).active_next != null(*Node) &&
+              (*(*self).active_prev).active_next == self && (*(*self).active_next).active_prev == self) drop node_drop;
 ```
 
 `Chain.node` owns the first allocation. `Node.owned_next` owns the next
 allocation. A null pointer ends the chain. This recursive field uses the same
 `owns` contract as a non-recursive field.
 
-The `ready` and `active` hooks each contain ordinary `prev` and `next` pointers.
+The `prev`/`next` and `active_prev`/`active_next` fields are ordinary pointers.
 They describe list membership. They do not own allocations. Head cleanup can
 therefore detach all members without destroying the owner chain.
 
 `owned_next` is an explicit data-structure choice. It costs one pointer per
-node in addition to the two hooks. The stage does not insert it. This example
-does not establish that a container can own all nodes through a reciprocal
-hook alone. There is no pool, node tag, reference count, or runtime owner flag.
+node in addition to the four list pointers. The stage does not insert it.
+A retained pointer does not carry a destruction duty. There is no pool, node
+tag, reference count, or runtime owner flag.
 
 ## Build and remove nodes
 
 `chain_new(count)` constructs the tail through a recursive call. `chain_push`
-then allocates the next node, transfers the tail, and initializes both hooks
+then allocates the next node, transfers the tail, and initializes both link sets
 at their final address. Each function is checked against its declared types
 and effects. The checker does not expand the recursive call.
 
@@ -61,9 +64,10 @@ input and returns an empty chain. `chain_new` propagates this result, so a
 nonzero request produces either the complete chain or an empty chain. The
 client checks for null before attaching nodes.
 
-`chain_pop` transfers the tail into a new handle:
+`chain_pop` first detaches the node, then transfers the tail into a new handle:
 
 ```crust
+edit Graph { ready_unlink(node); active_unlink(node); }
 var rest: Chain = make Chain { node: move (*node).owned_next };
 (*node).owned_next = null(*Node);
 drop *node;
@@ -72,13 +76,14 @@ return move rest;
 ```
 
 The null assignment leaves the node ready for its destructor. `drop *node`
-runs the callback, which detaches both hooks. `release` then frees that one
+runs the callback. Its removal calls also accept a detached node. `release` frees that one
 allocation. The remaining chain stays alive. The example inserts a replacement
 while both heads remain live.
 
-A full chain drop uses the same contracts. `node_drop` destroys the owned tail
-and then detaches its own hooks. The callback must consume `owned_next` and
-leave both hooks isolated. Releasing a linked node or leaving an owned field
+A full chain drop uses the same contracts. `node_drop` detaches its own link
+sets before it transfers and destroys the tail. A transfer cannot leave a
+retained reference to an incomplete node. The callback must consume `owned_next` and
+leave both link sets detached. Releasing a linked node or leaving an owned field
 unconsumed is rejected.
 
 ## Check a recursive type with finite state
@@ -107,10 +112,10 @@ owner identity and rejects that operation. Recursive types do not supply that
 loop rule.
 
 The stage also excludes active loans across a whole domain. A helper that
-receives both heads cannot edit one family while it holds the unused loan to
+receives both heads cannot edit one set of fields while it holds the unused loan to
 the other head. This source uses separate `attach_ready` and `attach_active`
-passes. Narrower family effects would need to specify all storage that a call
-can change, including storage reached through reciprocal links.
+passes. The attachment functions declare exactly which Node fields they change.
+Those declarations preserve the owning field across recursive calls.
 
 The [Rust comparison](../../../docs/ownership-rust.md#recursive-owners) explains
 which parts correspond to `Option<Box<Node>>`. It does not claim a complete
@@ -119,9 +124,9 @@ safe Rust implementation of the same intrusive API.
 ## Validate the contracts
 
 ```sh
-make check-ownership check-ownership-imports Z3_FLAGS=-l:libz3.so.4
+make check-ownership check-ownership-imports
 python3 tests/ownership_recursive.py --sanitize
-make check-ownership-alloc Z3_FLAGS=-l:libz3.so.4
+make check-ownership-alloc
 ```
 
 The tests execute empty and nonempty chains at `-O0` and `-O2`. The count can
@@ -129,6 +134,7 @@ exceed the source nesting limit. They check exact-address reuse, allocation
 failure cleanup, emitted-code erasure, and rejected lifetime errors.
 
 A separate test publishes the provider, deletes its source files, and checks
-the client from the retained interface and object. It disables solver calls
-for that client. The import must still reject a saved cursor across node
+the client from the retained interface and object. The client checks its own
+code against the imported conditions.
+The import must reject a saved cursor across node
 reclamation. Compiler allocation tests also cover the recursive input.

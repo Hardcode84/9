@@ -3,6 +3,7 @@
 #include "crust0.h"
 #include "crust0_host.h"
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -137,38 +138,60 @@ static bool read_source(const char *path, CrustSource *source)
     return true;
 }
 
-static int check_source(CrustSource *source, const char *summary)
+static int check_source(CrustSource *source, const char *summary, size_t first, size_t stride)
 {
     size_t count = 0;
     size_t fail_at;
     size_t calls;
+    size_t checked = 0;
     if (!attempt(source, summary, 0, &count) || count == 0)
         return EXIT_FAILURE;
-    for (fail_at = 1; fail_at <= count; ++fail_at) {
+    for (fail_at = first; fail_at <= count; fail_at += stride) {
         if (!attempt(source, summary, fail_at, &calls))
             return EXIT_FAILURE;
+        ++checked;
     }
     if (!attempt(source, summary, 0, &calls) || calls != count) {
         fputs("verification did not recover after injected failures\n", stderr);
         return EXIT_FAILURE;
     }
-    printf("memory allocation: %zu failure points checked\n", count);
+    printf("memory allocation: %zu of %zu failure points checked\n", checked, count);
     return EXIT_SUCCESS;
+}
+
+static bool shard_index(const char *text, size_t *index)
+{
+    char *end;
+    unsigned long value;
+    errno = 0;
+    value = strtoul(text, &end, 10);
+    if (errno != 0 || *text < '0' || *text > '9' || *end != '\0' || value == 0 ||
+        (unsigned long)(size_t)value != value)
+        return false;
+    *index = (size_t)value;
+    return true;
 }
 
 int main(int argc, char **argv)
 {
     CrustSource source;
     int result;
-    if (argc != 2 && argc != 3) {
-        fputs("usage: memory-alloc SOURCE [SUMMARY]\n", stderr);
+    size_t first = 1;
+    size_t stride = 1;
+    if (argc != 2 && argc != 3 && argc != 5) {
+        fputs("usage: memory-alloc SOURCE [SUMMARY [SHARD SHARDS]]\n", stderr);
+        return EXIT_FAILURE;
+    }
+    if (argc == 5 &&
+        (!shard_index(argv[3], &first) || !shard_index(argv[4], &stride) || first > stride)) {
+        fputs("invalid allocation shard\n", stderr);
         return EXIT_FAILURE;
     }
     if (!read_source(argv[1], &source)) {
         fprintf(stderr, "cannot read source: %s\n", argv[1]);
         return EXIT_FAILURE;
     }
-    result = check_source(&source, argc == 3 ? argv[2] : NULL);
+    result = check_source(&source, argc >= 3 && argv[2][0] != '\0' ? argv[2] : NULL, first, stride);
     free((void *)source.bytes);
     return result;
 }

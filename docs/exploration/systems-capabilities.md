@@ -52,7 +52,7 @@ Define self-insertion before mutation. Keep synchronization and saved-pointer
 lifetimes explicit. A raw-pointer precondition is not a proved safe-code rule.
 
 Source defect: `InsertBefore(node, node)` detaches the hook, then uses that same
-hook as its insertion anchor. Reciprocal links become inconsistent. A self-case
+hook as its insertion anchor. Inverse links become inconsistent. A self-case
 check before detach can make this operation a no-op.
 
 ## Linux callers

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+domain Demo(Ticket);
+
 extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
 
 resource Ticket { code: i32; } domain(Demo) drop ticket_drop;

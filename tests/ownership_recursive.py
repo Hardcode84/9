@@ -3,7 +3,6 @@
 """Check finite owner summaries against recursive native containers and imports."""
 
 import argparse
-import os
 import tempfile
 from pathlib import Path
 
@@ -25,8 +24,8 @@ def cases(source):
             "destructor must consume each owned field",
         ),
         "linked-release": (
-            replace(source, "unlink(&node.active);", ""),
-            "destructor must isolate all embedded hooks",
+            replace(source, "active_unlink(&node);", ""),
+            "cannot destroy storage: a surviving reference field",
         ),
         "drop-before-restoration": (
             replace(source, "(*node).owned_next = null(*Node);", ""),
@@ -34,7 +33,7 @@ def cases(source):
         ),
         "skip-value-drop": (
             replace(source, "drop *node; release(node as *u8);", "release(node as *u8);"),
-            "release requires every member hook to be isolated",
+            "cannot destroy storage: a surviving reference field",
         ),
         "double-release": (
             replace(source, "release(node as *u8);", "release(node as *u8); release(node as *u8);"),
@@ -72,17 +71,17 @@ def cases(source):
             replace(source, "chain = chain_pop(move chain);", "var copied:Node=*chain.node;"),
             "copy of a resource requires an explicit move",
         ),
-        "projection-steals-tail": (
+        "cursor-steals-tail": (
             source
             + """
 fn steal(head:read ReadyHead)->unit access(read,Graph) {
-    var cursor:*Hook=head.hook.next;
-    if cursor==&head.hook {return;}
-    var node:*Node=parent(Node.ready,cursor);
+    var cursor:*Node=head.node.next;
+    if cursor==&head.node {return;}
+    var node:*Node=cursor;
     var owned:*Node=move (*node).owned_next;
 }
 """,
-            "member projection cannot transfer ownership",
+            "owner transfer requires an ownership origin",
         ),
         "branch-null-fact": (
             source
@@ -107,9 +106,9 @@ fn bad(chain:Chain,choice:bool)->Chain access(reclaim,Graph) {
     return move chain;
 }
 """,
-            "continuing paths must preserve initialized owned storage",
+            "cannot destroy storage: a surviving reference field",
         ),
-        "recursive-owner-cycle": (
+        "cursor-owner-cycle": (
             source
             + """
 fn bad()->unit access(reclaim,Graph) {
@@ -121,7 +120,7 @@ fn bad()->unit access(reclaim,Graph) {
     chain.node=null(*Node);
 }
 """,
-            "owner field requires a fully initialized allocation",
+            "reclamation conflicts with an active domain cursor",
         ),
         "null-owner-after-mut": (
             source
@@ -162,6 +161,7 @@ fn inspect(chain:read Chain,choice:bool)->unit access(read,Graph) {
         "two-branches": source
         + common.replace("BRANCH", "else {var pointer:*Node=(*chain.node).owned_next;}"),
         "mutual-types": """// SPDX-License-Identifier: Apache-2.0
+domain Graph(Chain, Node);
 extern fn release(pointer:*u8)->unit foreign(release)="free";
 resource Chain { node:*Node; } owns(node) domain(Graph) drop chain_drop;
 record Node { rest:Chain; value:i64; } domain(Graph);
@@ -217,7 +217,7 @@ def separate(build, directory, source):
     receipt = publish(driver, cache, [links, provider])
     links.unlink()
     provider.unlink()
-    environment = dict(os.environ, CRUST_TEST_NO_SOLVER="1")
+    environment = None
     output = directory / "imported"
     args = import_arguments(driver, cache, receipt, client, output)
     import_command(args, env=environment)
@@ -241,7 +241,14 @@ def run(build, sanitize):
         for name, code in branch_cases(source).items():
             path = directory / f"{name}.crs"
             path.write_text(code)
-            command([build / "crust-ownership-test", "--check", LINKS, path])
+            command(
+                [
+                    build / "crust-ownership-test",
+                    "--check",
+                    *([] if name == "mutual-types" else [LINKS]),
+                    path,
+                ]
+            )
         for name, (code, diagnostic) in cases(source).items():
             path = directory / f"{name}.crs"
             path.write_text(code)

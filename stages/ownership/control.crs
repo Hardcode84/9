@@ -84,6 +84,7 @@ fn os_if(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
 }
 
 fn os_join(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState, location: *CrustLoc) -> unit {
+    os_join_heap(check, target, left, right);
     var scope: *OsScope = (*target).scope;
     while scope != null(*OsScope) && !os_failed(check) {
         var slot: *OsSlot = (*scope).locals;
@@ -192,10 +193,7 @@ fn os_join_slot(check: *OsCheck, target: *OsState, left: *OsState, right: *OsSta
     }
     if a == b { os_set(check, target, slot as *u8, a, 0u32); return; }
     if a == null(*OsValue) || b == null(*OsValue) { os_join_absent(check, target, left, right, slot, a, b, location); return; }
-    if (*a).object != (*b).object || (*a).pointer != (*b).pointer || (*a).borrow_scope != (*b).borrow_scope {
-        os_error(check, location, "continuing paths must agree on storage origins and cursor lifetimes"); return;
-    }
-    os_set(check, target, slot as *u8, a, 0u32);
+    os_join_value(check, target, left, right, slot, a, b, location);
 }
 
 fn os_join_absent(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
@@ -212,45 +210,16 @@ fn os_join_absent(check: *OsCheck, target: *OsState, left: *OsState, right: *OsS
 }
 
 fn os_while(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if (*state).effect == OS_READ { os_read_loop(check, state, statement); return; }
-    if !os_pure(check, (*statement).expr) { return; }
-    var entry: OsState = *state;
-    os_havoc(check, state, (*state).domain, null(*OsField));
-    os_expr(check, state, (*statement).expr);
-    var body: OsState = *state;
-    os_refine(check, &body, (*statement).expr, true);
-    (*check).loop_depth = (*check).loop_depth + 1usize;
-    os_statement(check, &body, (*statement).body);
-    (*check).loop_depth = (*check).loop_depth - 1usize;
-    if os_failed(check) { return; }
-    if body.flow != PF_NORMAL && body.flow != PF_TRAP {
-        os_error(check, &(*statement).loc, "ownership loop requires a normal invariant-preserving backedge"); return;
-    }
-    if body.flow == PF_NORMAL { os_loop_owners(check, state, &body, &(*statement).loc); }
-    os_join(check, state, &entry, &body, &(*statement).loc);
-    os_refine(check, state, (*statement).expr, false);
-}
-
-fn os_loop_owners(check: *OsCheck, entry: *OsState, body: *OsState, location: *CrustLoc) -> unit {
-    var scope: *OsScope = (*entry).scope;
-    while scope != null(*OsScope) && !os_failed(check) {
-        var slot: *OsSlot = (*scope).locals;
-        while slot != null(*OsSlot) && !os_failed(check) {
-            var before: *OsValue = os_bound(entry, slot);
-            var after: *OsValue = os_bound(body, slot);
-            if before != after && ((*slot).owns || (before != null(*OsValue) && (*before).pointer)) {
-                os_error(check, location, "loop backedge must preserve outer owners and cursor origins");
-            }
-            slot = (*slot).next;
-        }
-        scope = (*scope).parent;
-    }
+    os_checked_loop(check, state, statement);
 }
 
 fn os_return(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     if (*statement).expr != null(*CrustExpr) {
         var value: *OsValue = os_expr(check, state, (*statement).expr);
         if value == null(*OsValue) || os_failed(check) { return; }
+        if (*value).object != null(*OsObject) && !(*value).pointer && !os_borrowed((*value).syntax) {
+            os_publish_value(check, state, (*value).object, &(*statement).loc);
+        }
         if !os_transferable(check, state, value, &(*statement).loc) { return; }
         if os_borrowed((*value).syntax) {
             if !os_return_view(check, state, value, &(*statement).loc) { return; }
@@ -265,6 +234,7 @@ fn os_return(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     while (*state).scope != null(*OsScope) && !os_failed(check) {
         os_scope_end(check, state, &(*statement).loc);
     }
+    os_contract_end(check, state, &(*statement).loc);
     (*state).flow = PF_RETURN;
 }
 

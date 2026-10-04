@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+domain Cells(Cell, CellOwner);
+
 extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
 extern fn release(pointer: *u8) -> unit foreign(release) = "free";
 extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";

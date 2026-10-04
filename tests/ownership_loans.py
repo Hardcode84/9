@@ -23,7 +23,7 @@ fn loan_swap(a: mut Owner, b: mut Owner) -> unit access(edit, Graph) {
     a.node = move b.node;
     b.node = move saved;
 }
-fn loan_unlink(node: mut Node) -> unit access(edit, Graph) { unlink(&node.ready); }
+fn loan_unlink(node: mut Node) -> unit access(edit, Graph) { ready_unlink(&node); }
 """
 
 
@@ -91,14 +91,14 @@ def positives():
         ),
         "cursor-result": source(
             """
-        var head: ReadyHead = make ReadyHead {hook: make Hook {prev: null(*Hook), next: null(*Hook)}};
-        hook_init(&head.hook);
-        edit Graph { insert_after(&head.hook, &(*first.node).ready); insert_after(&head.hook, &(*second.node).ready); }
+        var head: ReadyHead = make ReadyHead {node: make Node {prev:null(*Node),next:null(*Node),active_prev:null(*Node),active_next:null(*Node),value:0i64}};
+        node_init(&head.node,0i64);
+        edit Graph { ready_insert(&head.node,first.node); ready_insert(&head.node,second.node); }
         read Graph {
-            var begin: read Hook = first_hook(read head);
-            var cursor: *Hook = &begin;
+            var begin: read Node = first_node_view(read head);
+            var cursor: *Node = &begin;
             var count: usize = 0usize;
-            while cursor != &head.hook { count = count + 1usize; cursor = (*cursor).next; }
+            while cursor != &head.node { count = count + 1usize; cursor = (*cursor).next; }
             if count != 2usize { trap; }
             var member: read Node = first_node(read head);
             if member.value != 66i64 { trap; }
@@ -122,11 +122,11 @@ def negatives():
         "owner-result-exclusive-alias": "var p:*Node=first.node;var moved:Owner=loan_identity(move first);if moved.node==null(*Node){trap;} edit Graph {var view:mut Node=mut *moved.node;var n:i64=(*p).value;} p=null(*Node);",
         "swap-alias": "edit Graph {var p:*Node=first.node;loan_swap(mut first,mut second);if second.node==null(*Node){trap;}var view:mut Node=mut *second.node;var n:i64=(*p).value;}",
         "loan-escape": "var escaped:*Node=null(*Node);{var view:read Node=node_view(read first);escaped=&view;}",
-        "domain-relation-alias": "edit Graph {var p:*Node=first.node;var view:read i64=read (*p).value;unlink(&(*second.node).ready);}",
+        "domain-call-alias": "edit Graph {var p:*Node=first.node;var view:read i64=read (*p).value;ready_unlink(second.node);}",
         "domain-helper-alias": "edit Graph {var p:*Node=first.node;var view:read i64=read (*p).value;loan_unlink(mut *second.node);}",
     }
     result = {name: source(body) for name, body in cases.items()}
-    result["wrong-field-result"] = source("").replace("from node.value", "from node.ready", 1)
+    result["wrong-field-result"] = source("").replace("from node.value", "from node.prev", 1)
     result["local-result"] = source("").replace(
         "return read node.value;", "var local:i64=7i64;return read local;", 1
     )
@@ -138,9 +138,8 @@ fn wrong(a:read Owner,b:read Owner)->read Node access(read,Graph) from a.node {
 }
 """,
     )
-    result["sentinel-result"] = source("").replace("if cursor == &head.hook { trap; }", "", 1)
-    result["wrong-family-result"] = source("").replace(
-        "return read *parent(Node.ready, cursor)", "return read *parent(Node.active, cursor)", 1
+    result["wrong-cursor-result"] = source("").replace(
+        "return read *cursor;", "return read *(*cursor).next;", 1
     )
     return result
 

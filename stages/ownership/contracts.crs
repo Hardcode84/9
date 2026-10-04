@@ -1,0 +1,142 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_read_condition(reader: *CrustReader, list: **OsCondition) -> unit {
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' before contract expression");
+    var item: *OsCondition = rr_alloc(reader, sizeof(OsCondition), alignof(OsCondition)) as *OsCondition;
+    if item == null(*OsCondition) { return; }
+    (*item).expression = rr_expression(reader);
+    (*item).next = *list;
+    *list = item;
+    rr_expect(reader, 41u32, "expected ')' after contract expression");
+}
+
+fn os_read_modifies(reader: *CrustReader, list: **OsField) -> unit {
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' before modified fields");
+    while !(*reader).failed && (*reader).token.kind != 41u32 {
+        var item: *OsField = rr_alloc(reader, sizeof(OsField), alignof(OsField)) as *OsField;
+        if item == null(*OsField) { return; }
+        (*item).record_name = rr_name(reader);
+        rr_expect(reader, 46u32, "expected '.' between schema and modified field");
+        (*item).name = rr_name(reader);
+        (*item).next = *list;
+        *list = item;
+        if (*reader).token.kind != 44u32 { break; }
+        rr_next(reader);
+    }
+    rr_expect(reader, 41u32, "expected ')' after modified fields");
+}
+
+fn os_read_schema(reader: *CrustReader, stage: *OsStage) -> *CrustDecl {
+    var offset: usize = (*reader).token.offset;
+    rr_next(reader);
+    var declaration: *CrustDecl = rr_new_decl(reader, CRUST_D_CONST, offset);
+    var schema: *OsDomain = rr_alloc(reader, sizeof(OsDomain), alignof(OsDomain)) as *OsDomain;
+    if declaration == null(*CrustDecl) || schema == null(*OsDomain) { return null(*CrustDecl); }
+    (*declaration).name = rr_name(reader);
+    (*schema).declaration = declaration;
+    rr_expect(reader, 40u32, "expected '(' before domain storage types");
+    while !(*reader).failed && (*reader).token.kind != 41u32 {
+        os_read_field(reader, &(*schema).records);
+        if (*reader).token.kind != 44u32 { break; }
+        rr_next(reader);
+    }
+    rr_expect(reader, 41u32, "expected ')' after domain storage types");
+    rr_expect(reader, 59u32, "expected ';' after domain schema");
+    (*declaration).syntax_type = rr_new_type(reader, CRUST_T_BOOL, offset);
+    (*declaration).init = rr_new_expr(reader, CRUST_E_BOOL, offset);
+    if (*declaration).init == null(*CrustExpr) { return null(*CrustDecl); }
+    (*(*declaration).init).integer = 1u64;
+    rs_put((*stage).resources, &(*stage).domains, (*declaration).name as usize, schema as *u8);
+    return declaration;
+}
+
+fn os_tracked(schema: *OsRecord) -> bool {
+    return schema != null(*OsRecord) && (*schema).tracked;
+}
+
+fn os_resolve_field(check: *OsCheck, name: *CrustName, field: *CrustName, location: *CrustLoc) -> *CrustField {
+    var global: *RsGlobal = rs_global((*(*check).stage).resources, name);
+    if global == null(*RsGlobal) || (*(*global).source).kind != CRUST_D_RECORD {
+        os_error(check, location, "field contract requires a declared schema"); return null(*CrustField);
+    }
+    var result: *CrustField = crust_map_get(&(*global).fields, field as usize) as *CrustField;
+    if result == null(*CrustField) { os_error(check, location, "contract names an absent field"); }
+    return result;
+}
+
+fn os_resolve_modifies(check: *OsCheck, contract: *OsFunction) -> unit {
+    var item: *OsField = (*contract).modifies;
+    while item != null(*OsField) && !os_failed(check) {
+        (*item).field = os_resolve_field(check, (*item).record_name, (*item).name, &(*(*contract).declaration).loc);
+        var global: *RsGlobal = rs_global((*(*check).stage).resources, (*item).record_name);
+        if global != null(*RsGlobal) {
+            var schema: *OsRecord = crust_map_get(&(*(*check).stage).records, (*global).source as usize) as *OsRecord;
+            if schema == null(*OsRecord) || (*schema).domain != (*contract).domain || (*contract).effect < OS_EDIT {
+                os_error(check, &(*(*contract).declaration).loc, "modified fields require edit access to their domain");
+            }
+        }
+        item = (*item).next;
+    }
+}
+
+fn os_writes(contract: *OsFunction, field: *CrustField) -> bool {
+    var item: *OsField = (*contract).modifies;
+    while item != null(*OsField) {
+        if (*item).field == field { return true; }
+        item = (*item).next;
+    }
+    return false;
+}
+
+fn os_validate_schema(check: *OsCheck, schema: *OsRecord) -> unit {
+    if (*schema).domain == null(*CrustName) { return; }
+    var domain: *OsDomain = crust_map_get(&(*(*check).stage).domains, (*schema).domain as usize) as *OsDomain;
+    if domain == null(*OsDomain) || os_field((*domain).records, (*(*schema).declaration).name) == null(*OsField) {
+        os_error(check, &(*(*schema).declaration).loc, "record is absent from its declared domain schema");
+    }
+}
+
+fn os_validate_domains(check: *OsCheck) -> unit {
+    var global: *RsGlobal = (*(*(*check).stage).resources).first_global;
+    while global != null(*RsGlobal) && !os_failed(check) {
+        var schema: *OsDomain = crust_map_get(&(*(*check).stage).domains, (*(*global).source).name as usize) as *OsDomain;
+        if schema != null(*OsDomain) { os_validate_domain(check, schema); }
+        global = (*global).next;
+    }
+}
+
+fn os_validate_domain(check: *OsCheck, domain: *OsDomain) -> unit {
+    var item: *OsField = (*domain).records;
+    while item != null(*OsField) && !os_failed(check) {
+        var global: *RsGlobal = rs_global((*(*check).stage).resources, (*item).name);
+        var schema: *OsRecord = null(*OsRecord);
+        if global != null(*RsGlobal) {
+            schema = crust_map_get(&(*(*check).stage).records, (*global).source as usize) as *OsRecord;
+        }
+        if schema == null(*OsRecord) || (*schema).domain != (*(*domain).declaration).name {
+            os_error(check, &(*(*domain).declaration).loc, "domain schema types must declare that same domain");
+        }
+        item = (*item).next;
+    }
+}
+
+fn os_field_write(check: *OsCheck, slot: *OsSlot, location: *CrustLoc) -> bool {
+    if (*slot).object == null(*OsObject) || (*(*slot).object).domain == null(*CrustName) { return true; }
+    if (*(*check).function).has_modifies && !os_writes((*check).function, (*slot).field) {
+        os_error(check, location, "field write is absent from the function modifies contract"); return false;
+    }
+    return true;
+}
+
+fn os_validate_conditions(check: *OsCheck) -> unit {
+    var state: OsState = uninit;
+    os_state_init(&state, null(*OsFunction));
+    os_heap_start(check, &state);
+    var heap: *OsHeap = state.heaps;
+    while heap != null(*OsHeap) && !os_failed(check) {
+        os_record_term(check, &state, (*heap).schema, pf_fresh(&(*check).proof, "Int"));
+        heap = (*heap).next;
+    }
+}

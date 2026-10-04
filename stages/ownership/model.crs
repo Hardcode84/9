@@ -8,37 +8,47 @@ const OS_RELEASE: u32 = 2u32;
 const OS_SCALAR: u32 = 3u32;
 
 record OsStage {
+    proof: PfStage;
     records: CrustMap;
     functions: CrustMap;
     blocks: CrustMap;
-    projections: CrustMap;
     imports: CrustMap;
+    domains: CrustMap;
     resources: *RsStage;
-    relations: *RlSyntax;
+    solver: *u8;
+    sent: usize;
 }
 
 record OsField {
     name: *CrustName;
     record_name: *CrustName;
-    member_name: *CrustName;
+    field: *CrustField;
     next: *OsField;
 }
+
+record OsDomain { declaration: *CrustDecl; records: *OsField; }
+record OsCondition { expression: *CrustExpr; next: *OsCondition; }
 
 record OsRecord {
     declaration: *CrustDecl;
     domain: *CrustName;
     owns: *OsField;
-    members: *OsField;
-    anchors: *OsField;
+    references: *OsField;
+    conditions: *OsCondition;
+    tracked: bool;
 }
 
 record OsFunction {
     declaration: *CrustDecl;
     domain: *CrustName;
-    relation: *RlContract;
     result_path: *OsField;
+    initializes: *OsField;
+    modifies: *OsField;
+    requires: *OsCondition;
+    ensures: *OsCondition;
     effect: u32;
     foreign: u32;
+    has_modifies: bool;
 }
 
 record OsAccess { domain: *CrustName; effect: u32; }
@@ -47,35 +57,32 @@ const OS_LIVE: u32 = 1u32;
 const OS_NONNULL: u32 = 2u32;
 const OS_PINNED: u32 = 4u32;
 const OS_READY: u32 = 8u32;
-const OS_ISOLATED: u32 = 16u32;
+const OS_PUBLISHED: u32 = 16u32;
 const OS_ABSENT: u32 = 32u32;
 const OS_RETIRING: u32 = 64u32;
-const OS_ASSOCIATED: u32 = 128u32;
-const OS_MEMBER: u32 = 256u32;
-const OS_DESTROYED: u32 = 512u32;
-const OS_SUMMARY: u32 = 1024u32;
+const OS_DESTROYED: u32 = 128u32;
+const OS_SUMMARY: u32 = 256u32;
 
 record OsObject {
     syntax: *CrustTypeSyntax;
     contract: *OsRecord;
     parent: *OsObject;
     owner: *OsObject;
-    association: *OsObject;
-    view_origin: *OsObject;
-    family: *OsField;
     domain: *CrustName;
     scope: *OsScope;
+    term: *u8;
     next: *OsObject;
-    anchor: bool;
     heap: bool;
     abstract: bool;
     readonly: bool;
     uncertain: bool;
+    cursor: bool;
 }
 
 record OsSlot {
     syntax: *CrustTypeSyntax;
     name: *CrustName;
+    field: *CrustField;
     object: *OsObject;
     scope: *OsScope;
     next: *OsSlot;
@@ -90,10 +97,10 @@ record OsValue {
     syntax: *CrustTypeSyntax;
     object: *OsObject;
     place: *OsSlot;
-    hook_source: *OsObject;
     allocation_type: *CrustTypeSyntax;
     borrow_scope: *OsScope;
     loan: *OsLoan;
+    term: *u8;
     owner: bool;
     pointer: bool;
     unknown: bool;
@@ -118,9 +125,18 @@ record OsLoan {
 }
 
 record OsScope { parent: *OsScope; locals: *OsSlot; domain: *CrustName; effect: u32; access: bool; }
+record OsHeap { schema: *OsRecord; live: *u8; next: *OsHeap; }
+record OsSnapshot { fields: *PfField; heaps: *OsHeap; guard: *u8; next: *OsSnapshot; }
+record OsGround { snapshot: *OsSnapshot; terms: *PfTerm; next: *OsGround; }
+record OsTerm { syntax: *CrustTypeSyntax; value: *u8; valid: *u8; }
+record OsBinding { term: OsTerm; name: *CrustName; value: *OsValue; next: *OsBinding; }
 
 record OsState {
+    proof: PfState;
     facts: *OsFact;
+    heaps: *OsHeap;
+    snapshots: *OsSnapshot;
+    grounded: *OsGround;
     scope: *OsScope;
     domain: *CrustName;
     effect: u32;
@@ -128,10 +144,12 @@ record OsState {
 }
 
 record OsCheck {
+    proof: PfRun;
     stage: *OsStage;
     function: *OsFunction;
     objects: *OsObject;
     loans: *OsLoan;
+    parameters: *OsBinding;
     depth: usize;
     loop_depth: usize;
     drop: bool;

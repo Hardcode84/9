@@ -116,7 +116,8 @@ requires it.
   implementation needs. Do not build a portability framework for hypothetical
   ports.
 - Always order members of project-defined structs and records by decreasing
-  size. Records that mirror a foreign ABI must match that ABI's member order.
+  size. Keep equal-size members in a clear logical order. Records that mirror
+  a foreign ABI must match that ABI's member order.
 - Use arenas for compiler-owned nodes, types, names, and temporary tables.
   Allocate arena blocks through the context allocator. Do not allocate and
   free individual compiler objects. Give external buffers and native
@@ -197,7 +198,7 @@ Build with `make all`. Use the checks that cover the change:
 | Root execution and reader extensions | `make check-stage check-reader` |
 | Native bootstrap and execution handoff | `make check-native` |
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |
-| Ownership and reciprocal-list experiment | `make check-ownership check-ownership-alloc` with Z3 |
+| Ownership and field contracts | `make check-ownership check-ownership-alloc` with Z3 |
 | Verified ownership provider imports | `make check-ownership-imports` with Z3 |
 | Memory proofs, initialization, and call effects | `make check-memory check-resource-memory check-memory-summaries` with Z3 |
 | Declared memory call contracts | `make check-memory-contracts` with Z3 |

@@ -26,7 +26,8 @@ separates application rules from container-author obligations.
 | 7 | [Native bootstrap](../stages/native/README.md) | Build stages from source and hand following compilation code to native execution |
 | 8 | [Cyclomatic complexity](../stages/ccn/README.md) | Count decisions with the public AST and reject functions before backend emission |
 | 9 | [Static memory checks](ownership/README.md) | Check direct pointer programs and intrusive link invariants before emission |
-| 10 | [Intrusive-list verification](intrusive/README.md) | Run the specialized reciprocal-list proof, scoped traversal, destruction, and reuse |
+| 10 | [Intrusive-list verification](intrusive/README.md) | Use ordinary field contracts for scoped traversal, destruction, and reuse |
+| 11 | [Pointer graphs](ownership-graphs/README.md) | Check parent and child fields with the same contracts |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -44,7 +45,9 @@ Each example has its own directory and README.
 | [multiple-files](multiple-files/README.md) | Select and compile two target files | `Hello from another source file!` |
 | [modules](modules/README.md) | Compile separate namespaces and import selected names | `modules: 42` |
 | [native](native/README.md) | Bootstrap stages and execute compilation functions natively | `Hello from a bootstrapped native stage!` |
-| [intrusive](intrusive/README.md) | Check two intrusive hooks with node and head destructors | `OK` |
+| [intrusive](intrusive/README.md) | Check two intrusive memberships with node and head destructors | `OK` |
+| [intrusive/recursive](intrusive/recursive/README.md) | Retain a runtime-sized chain of node owners | `OK` |
+| [ownership-graphs](ownership-graphs/README.md) | Destroy a parent while its child owner stays live | `OK` |
 | [cached-backend](cached-backend/README.md) | Bootstrap native stages from source and reuse the library | Native ASM/C handoff and hello output |
 | [reader-switch](reader-switch/README.md) | Replace the reader and executor from the root | Two lines read with a new grammar |
 | [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
@@ -62,7 +65,7 @@ The root files select their compiler libraries explicitly. Resource examples
 require `make resource-stage`. The SQLite example also needs its pinned native
 SQLite input; its README gives the command.
 Overload examples require `make overload-stage`.
-The modular intrusive and ownership-basics examples require
+The intrusive, ownership-basics, and ownership-graphs examples require
 `make ownership-stage` and Z3.
 The intrusive `closed-main.crs` proof example requires
 `make resource-memory-stage` and Z3.

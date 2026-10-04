@@ -16,20 +16,18 @@ fn erasure_check(cli: *CCli) -> bool {
     rs_init(&resources, context);
     var ownership: OsStage = uninit;
     os_init(&ownership, &resources);
-    var relations: RlStage = uninit;
-    rl_init(&relations, context);
     var before: CStage = uninit;
     var after: CStage = uninit;
     c_stage_init(&before, context);
     c_stage_init(&after, context);
-    var valid: bool = os_driver_read(cli, &ownership) && os_lower(&ownership, &relations);
+    var valid: bool = os_driver_read(cli, &ownership) && os_lower(&ownership);
     var entry: *CrustDecl = null(*CrustDecl);
     if valid {
         entry = resource_driver_entry(cli, &resources);
         valid = entry != null(*CrustDecl) && c_driver_names(&(*cli).driver);
     }
     if valid { valid = c_emit_with_body(&before, entry, rs_c_body, &resources as *u8); }
-    if valid { valid = os_verify(&ownership, &relations); }
+    if valid { valid = os_verify(&ownership); }
     if valid { valid = c_emit_with_body(&after, entry, rs_c_body, &resources as *u8); }
     if valid {
         valid = erasure_equal(&before.header, &after.header) &&
@@ -37,7 +35,7 @@ fn erasure_check(cli: *CCli) -> bool {
     }
     c_stage_destroy(&after);
     c_stage_destroy(&before);
-    rl_destroy(&relations);
+    pf_destroy(&ownership.proof);
     return valid;
 }
 

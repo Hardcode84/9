@@ -113,17 +113,15 @@ fn os_import_build(cli: *CCli, imports: *OwnershipImports) -> i32 {
     rs_init(&resources, context);
     var stage: OsStage = uninit;
     os_init(&stage, &resources);
-    var relations: RlStage = uninit;
-    rl_init(&relations, context);
     var work: OsLibraryWork = uninit;
     var loaded: *OsLoadedLibrary = null(*OsLoadedLibrary);
     var result: i32 = 1i32;
     if os_import_read(cli, &stage, imports, &work, &loaded) && os_driver_read(cli, &stage) &&
-       os_lower(&stage, &relations) && os_verify(&stage, &relations) {
+       os_lower(&stage) && os_verify(&stage) {
         result = os_driver_emit(cli, &resources);
     }
     if !os_import_cleanup(context, &work, loaded) { result = 1i32; }
-    rl_destroy(&relations);
+    pf_destroy(&stage.proof);
     return result;
 }
 

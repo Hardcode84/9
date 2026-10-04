@@ -1,42 +1,51 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record Hook { prev: *Hook; next: *Hook; } reciprocal(prev, next);
-
-fn hook_init(h: *Hook) -> unit links(edit, Hook) construct(h) {
-    (*h).prev = h;
-    (*h).next = h;
-}
-
-fn unlink(h: *Hook) -> unit links(edit, Hook) cursor(h) isolated(h) {
-    var before: *Hook = (*h).prev;
-    var after: *Hook = (*h).next;
+fn ready_unlink(node: *Node) -> unit access(edit, Graph)
+    modifies(Node.prev, Node.next)
+    requires(node != null(*Node))
+    ensures((*node).prev == node && (*node).next == node) {
+    var before: *Node = (*node).prev;
+    var after: *Node = (*node).next;
     (*before).next = after;
     (*after).prev = before;
-    (*h).prev = h;
-    (*h).next = h;
+    (*node).prev = node;
+    (*node).next = node;
 }
 
-fn insert_after(at: *Hook, h: *Hook) -> unit
-    links(edit, Hook) cursor(at) member(h) {
-    if at == h { return; }
-    unlink(h);
-    var after: *Hook = (*at).next;
-    (*h).prev = at;
-    (*h).next = after;
-    (*after).prev = h;
-    (*at).next = h;
+fn ready_insert(at: *Node, node: *Node) -> unit access(edit, Graph)
+    modifies(Node.prev, Node.next)
+    requires(at != null(*Node) && node != null(*Node))
+    ensures(at == node || (*at).next == node) {
+    if at == node { return; }
+    ready_unlink(node);
+    var after: *Node = (*at).next;
+    (*node).prev = at;
+    (*node).next = after;
+    (*after).prev = node;
+    (*at).next = node;
 }
 
-fn splice_init(at: *Hook, source: *Hook) -> unit
-    links(edit, Hook) anchor(at) anchor(source) isolated(source) unless_same(source, at) {
-    if at == source || (*source).next == source { return; }
-    var first: *Hook = (*source).next;
-    var last: *Hook = (*source).prev;
-    var after: *Hook = (*at).next;
-    (*at).next = first;
-    (*first).prev = at;
-    (*last).next = after;
-    (*after).prev = last;
-    (*source).prev = source;
-    (*source).next = source;
+fn active_unlink(node: *Node) -> unit access(edit, Graph)
+    modifies(Node.active_prev, Node.active_next)
+    requires(node != null(*Node))
+    ensures((*node).active_prev == node && (*node).active_next == node) {
+    var before: *Node = (*node).active_prev;
+    var after: *Node = (*node).active_next;
+    (*before).active_next = after;
+    (*after).active_prev = before;
+    (*node).active_prev = node;
+    (*node).active_next = node;
+}
+
+fn active_insert(at: *Node, node: *Node) -> unit access(edit, Graph)
+    modifies(Node.active_prev, Node.active_next)
+    requires(at != null(*Node) && node != null(*Node))
+    ensures(at == node || (*at).active_next == node) {
+    if at == node { return; }
+    active_unlink(node);
+    var after: *Node = (*at).active_next;
+    (*node).active_prev = at;
+    (*node).active_next = after;
+    (*after).active_prev = node;
+    (*at).active_next = node;
 }

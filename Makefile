@@ -37,10 +37,9 @@ MEMORY = stages/memory/options.crs stages/memory/model.crs stages/memory/base.cr
 MEMORY_LIBRARY = $(C_LIBRARY) $(PROOF) $(MEMORY)
 RESOURCE_MEMORY = stages/resource_memory/model.crs stages/resource_memory/view.crs stages/resource_memory/effects.crs stages/resource_memory/program.crs
 RESOURCE_MEMORY_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(MEMORY) $(RESOURCE_MEMORY)
-RELATIONS = stages/relations/model.crs stages/relations/base.crs stages/relations/invariant.crs stages/relations/check.crs stages/relations/calls.crs stages/relations/read.crs
-OWNERSHIP = stages/ownership/model.crs stages/ownership/base.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/fields.crs stages/ownership/loans.crs stages/ownership/results.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/calls.crs stages/ownership/relations.crs stages/ownership/projection.crs stages/ownership/scopes.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/program.crs
+OWNERSHIP = stages/ownership/model.crs stages/ownership/base.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/fields.crs stages/ownership/loans.crs stages/ownership/results.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/calls.crs stages/ownership/entry.crs stages/ownership/flow.crs stages/ownership/contracts.crs stages/ownership/symbols.crs stages/ownership/predicates.crs stages/ownership/heap.crs stages/ownership/effects.crs stages/ownership/scopes.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/program.crs
 OWNERSHIP_IMPORTS = api/crust0_eval.crs api/crust0_run.crs stages/native/model.crs stages/native/linux.crs stages/cache/model.crs stages/cache/linux.crs stages/cache/artifact.crs stages/cache/inputs.crs stages/ownership/library_model.crs stages/ownership/interface.crs stages/ownership/artifact.crs stages/ownership/publish.crs stages/ownership/imports.crs
-OWNERSHIP_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(RELATIONS) $(OWNERSHIP) $(OWNERSHIP_IMPORTS)
+OWNERSHIP_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(OWNERSHIP) $(OWNERSHIP_IMPORTS)
 MEMORY_CONTRACT = stages/memory/contract.crs
 INTRUSIVE_CONTRACT = examples/intrusive/contract-options.crs examples/intrusive/contract.crs
 MEMORY_LOOP = stages/memory/loop.crs
@@ -206,11 +205,8 @@ $(BUILD)/crust-ownership-library.so: $(BUILD)/crust-ownership-library.o
 $(BUILD)/crust-ownership-erasure: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) tests/ownership_erasure.crs Makefile
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_erasure.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-$(BUILD)/ownership_import_solver.o: tests/ownership_import_solver.c Makefile | $(BUILD)
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -c $< -o $@
-
-$(BUILD)/crust-ownership-import-test: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) tests/ownership_import_driver.crs $(BUILD)/ownership_import_solver.o Makefile
-	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_import_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a --ldflag $(BUILD)/ownership_import_solver.o --ldflag=-Wl,--wrap=Z3_mk_config $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/crust-ownership-import-test: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) tests/ownership_import_driver.crs Makefile
+	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_import_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 .PHONY: check-ownership-imports
 check-ownership-imports: $(BUILD)/crust-ownership-import-test
@@ -221,12 +217,13 @@ ownership-stage: $(BUILD)/crust-ownership-test $(BUILD)/crust-ownership-library.
 
 check-ownership: all ownership-stage $(BUILD)/crust-ownership-erasure $(BUILD)/crust-ownership-import-test
 	python3 tests/ownership.py --build $(BUILD)
+	python3 tests/ownership_contracts.py --build $(BUILD)
 	python3 tests/ownership_fields.py --build $(BUILD)
 	python3 tests/ownership_loans.py --build $(BUILD)
 	python3 tests/ownership_recursive.py --build $(BUILD)
 
 check-ownership-alloc: all c-stage
-	python3 tests/memory_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)' --ownership
+	python3 tests/memory_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --z3-flags='$(Z3_FLAGS)' --ownership --jobs 4 --timeout 36000
 
 $(BUILD)/crust-memory-contract-test: $(BUILD)/crust-c $(RESOURCE_MEMORY_LIBRARY) $(MEMORY_CONTRACT) $(INTRUSIVE_CONTRACT) tests/memory_contract_models.crs tests/memory_contract_driver.crs Makefile
 	$< -o $@ $(RESOURCE_MEMORY_LIBRARY) $(MEMORY_CONTRACT) $(INTRUSIVE_CONTRACT) tests/memory_contract_models.crs tests/memory_contract_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(Z3_LINK) $(foreach flag,$(LDFLAGS),--ldflag $(flag))

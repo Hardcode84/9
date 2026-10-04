@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Check embedded cleanup, heap value destruction, and payload projection."""
+"""Check embedded cleanup, heap value destruction, and payload access."""
 
 import argparse
 import tempfile
@@ -18,12 +18,17 @@ TUTORIAL = ROOT / "examples/intrusive"
 def rejection_cases(source):
     return {
         "missing-value-destruction": replace(source, "drop *node;", ""),
+        "implicit-field-precondition": replace(
+            source,
+            "access(reclaim,Graph) modifies(Payload.data) {",
+            "access(reclaim,Graph) modifies(Payload.data) requires(false) {",
+        ),
         "double-value-destruction": replace(source, "drop *node;", "drop *node; drop *node;"),
         "read-destroyed-value": replace(
             source, "drop *node;", "drop *node; emit((*node).value as i32);"
         ),
         "partially-initialized-value": replace(source, "(*node).second=payload_new(66i64);", ""),
-        "still-linked-value": replace(source, "unlink(&(*node).ready);", ""),
+        "still-linked-value": replace(source, "ready_unlink(node);", ""),
         "copied-field-owner": replace(
             source, "drop owner;", "var copy:Payload=(*owner.node).first; drop owner;"
         ),
@@ -39,20 +44,20 @@ def rejection_cases(source):
         "borrowed-scalar-drop": replace(
             source, "drop owner;", "var held:read i64=read (*owner.node).value; drop owner;"
         ),
-        "projected-field-move": replace(
+        "cursor-field-move": replace(
             source,
             "if (*node).first.data!=null(*Data)",
             "var stolen:*Data=move (*node).first.data; if (*node).first.data!=null(*Data)",
         ),
-        "projected-field-write": replace(
+        "cursor-field-write": replace(
             source,
             "if (*(*node).first.data).value!=65i64",
             "(*(*node).first.data).value=7i64; if (*(*node).first.data).value!=65i64",
         ),
-        "projected-field-loan-alias": replace(
+        "cursor-field-loan-alias": replace(
             source.replace("read Graph {", "edit Graph {"),
-            "var node:*Node=parent(Node.ready,cursor);",
-            "var node:*Node=parent(Node.ready,cursor); var held:read Payload=read (*node).first; edit Graph {(*(*owner.node).first.data).value=7i64;}",
+            "var node:*Node=cursor;",
+            "var node:*Node=cursor; var held:read Payload=read (*node).first; edit Graph {(*(*owner.node).first.data).value=7i64;}",
         ),
         "conditional-destruction": replace(
             source, "drop *node;", "if (*node).value==7i64 {drop *node;}"

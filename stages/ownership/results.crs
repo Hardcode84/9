@@ -20,14 +20,13 @@ fn os_result_parameter(check: *OsCheck, contract: *OsFunction) -> *CrustName {
 fn os_result_step(check: *OsCheck, state: *OsState, value: *OsValue,
                    field: *OsField, location: *CrustLoc) -> *OsValue {
     if (*value).object == null(*OsObject) {
-        os_error(check, location, "returned view path requires record storage"); return null(*OsValue);
+        os_error(check, location, "returned view path requires schema storage"); return null(*OsValue);
     }
     var slot: *OsSlot = os_object_slot(check, state, (*value).object, (*field).name);
     if slot == null(*OsSlot) { os_error(check, location, "returned view path names an absent field"); return null(*OsValue); }
     var result: *OsValue = null(*OsValue);
-    if (*(*slot).object).family != null(*OsField) {
-        result = os_hook_load(check, state, (*slot).object, (*slot).syntax, location);
-    } else { result = os_copy(check, os_bound(state, slot)); }
+    if os_symbolic_slot(slot) { result = os_heap_load(check, state, slot, location); }
+    else { result = os_copy(check, os_bound(state, slot)); }
     if result == null(*OsValue) { os_error(check, location, "returned view path is uninitialized"); return result; }
     (*result).place = slot;
     (*result).loan = (*value).loan;
@@ -48,33 +47,23 @@ fn os_result_path(check: *OsCheck, state: *OsState, contract: *OsFunction,
     return value;
 }
 
-fn os_result_hook_matches(state: *OsState, actual: *OsObject, expected: *OsObject) -> bool {
-    if actual == expected { return true; }
-    if actual == null(*OsObject) || expected == null(*OsObject) { return false; }
-    if (*actual).family == null(*OsField) || (*actual).family != (*expected).family { return false; }
-    var a: *OsObject = os_result_anchor(state, actual);
-    var b: *OsObject = os_result_anchor(state, expected);
-    return a != null(*OsObject) && a == b;
-}
-
-fn os_result_anchor(state: *OsState, object: *OsObject) -> *OsObject {
-    if (*object).anchor { return object; }
-    if (os_flags(state, object) & OS_ASSOCIATED) != 0u32 { return (*object).association; }
-    return null(*OsObject);
-}
-
 fn os_result_matches(check: *OsCheck, state: *OsState, actual: *OsValue,
                       expected: *OsValue, location: *CrustLoc) -> bool {
     if (*actual).object == (*expected).object && os_original((*actual).place) == os_original((*expected).place) { return true; }
-    var object: *OsObject = (*actual).object;
-    if object != null(*OsObject) && (*object).view_origin != null(*OsObject) { object = (*object).view_origin; }
-    if object == null(*OsObject) || (*expected).object == null(*OsObject) {
-        os_error(check, location, "returned loan does not match its declared field path"); return false;
+    var a: *OsObject = (*actual).object;
+    var b: *OsObject = (*expected).object;
+    if a == null(*OsObject) && b == null(*OsObject) {
+        var x: *OsSlot = os_original((*actual).place);
+        var y: *OsSlot = os_original((*expected).place);
+        if x != null(*OsSlot) && y != null(*OsSlot) && (*x).field == (*y).field {
+            a = (*x).object; b = (*y).object;
+        }
     }
-    if !os_result_hook_matches(state, object, (*expected).object) {
-        os_error(check, location, "returned loan does not match its declared storage or ring"); return false;
+    if a == null(*OsObject) || b == null(*OsObject) {
+        os_error(check, location, "returned loan does not match its declared storage path"); return false;
     }
-    return true;
+    return os_prove(check, state, pf_eq(&(*check).proof, (*a).term, (*b).term),
+                    location, "returned loan does not match its declared storage path");
 }
 
 fn os_return_view(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> bool {
@@ -115,17 +104,6 @@ fn os_result_type(check: *OsCheck, state: *OsState, value: *OsValue,
     var current: *CrustTypeSyntax = (*value).syntax;
     if (*value).pointer || os_borrowed(current) { current = (*current).base; }
     if rs_same((*(*check).stage).resources, syntax, current) { return true; }
-    var hook: *OsObject = (*value).object;
-    var schema: *OsRecord = os_record((*check).stage, syntax);
-    if hook == null(*OsObject) || schema == null(*OsRecord) || (*hook).family == null(*OsField) ||
-       os_field((*schema).members, (*(*hook).family).name) != (*hook).family {
-        os_error(check, location, "returned view type does not match its field path"); return false;
-    }
-    var object: *OsObject = os_object(check, state, syntax, null(*OsObject), (*state).scope, true);
-    if object == null(*OsObject) { return false; }
-    (*object).view_origin = hook;
-    os_projection_view(check, state, object);
-    (*value).object = object;
-    (*value).place = null(*OsSlot);
-    return !os_failed(check);
+    os_error(check, location, "returned view type does not match its field path");
+    return false;
 }

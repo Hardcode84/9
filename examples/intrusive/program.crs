@@ -4,18 +4,33 @@ extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
 extern fn release(pointer: *u8) -> unit foreign(release) = "free";
 extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
 
-record Node { ready: Hook; active: Hook; value: i64; }
-    members(ready, active) domain(Graph);
+domain Graph(Node, Owner, ReadyHead, ActiveHead);
+record Node { prev: *Node; next: *Node; active_prev: *Node; active_next: *Node; value: i64; }
+    domain(Graph)
+    references(prev, next, active_prev, active_next)
+    invariant((*self).prev != null(*Node) && (*self).next != null(*Node) &&
+              (*(*self).prev).next == self && (*(*self).next).prev == self)
+    invariant((*self).active_prev != null(*Node) && (*self).active_next != null(*Node) &&
+              (*(*self).active_prev).active_next == self && (*(*self).active_next).active_prev == self);
 resource Owner { node: *Node; } owns(node) domain(Graph) drop owner_drop;
-resource ReadyHead { hook: Hook; } anchor(hook, Node.ready) domain(Graph) drop ready_drop;
-resource ActiveHead { hook: Hook; } anchor(hook, Node.active) domain(Graph) drop active_drop;
+resource ReadyHead { node: Node; } domain(Graph) drop ready_drop;
+resource ActiveHead { node: Node; } domain(Graph) drop active_drop;
+
+fn node_init(node: *Node, value: i64) -> unit access(edit, Graph) initializes(node)
+    requires(node != null(*Node))
+    ensures((*node).prev == node && (*node).next == node &&
+            (*node).active_prev == node && (*node).active_next == node && (*node).value == value) {
+    (*node).prev = node;
+    (*node).next = node;
+    (*node).active_prev = node;
+    (*node).active_next = node;
+    (*node).value = value;
+}
 
 fn owner_new(value: i64) -> Owner access(reclaim, Graph) {
     var node: *Node = allocate(sizeof(Node)) as *Node;
     if node != null(*Node) {
-        (*node).value = value;
-        hook_init(&(*node).ready);
-        hook_init(&(*node).active);
+        node_init(node, value);
     }
     return make Owner { node: move node };
 }
@@ -24,8 +39,8 @@ fn owner_drop(owner: mut Owner) -> unit access(reclaim, Graph) {
     var node: *Node = move owner.node;
     if node != null(*Node) {
         edit Graph {
-            unlink(&(*node).ready);
-            unlink(&(*node).active);
+            ready_unlink(node);
+            active_unlink(node);
         }
         release(node as *u8);
     }
@@ -33,22 +48,24 @@ fn owner_drop(owner: mut Owner) -> unit access(reclaim, Graph) {
 
 fn ready_drop(head: mut ReadyHead) -> unit access(reclaim, Graph) {
     edit Graph {
-        while head.hook.next != &head.hook { unlink(head.hook.next); }
+        while head.node.next != &head.node { ready_unlink(head.node.next); }
+        active_unlink(&head.node);
     }
 }
 
 fn active_drop(head: mut ActiveHead) -> unit access(reclaim, Graph) {
     edit Graph {
-        while head.hook.next != &head.hook { unlink(head.hook.next); }
+        while head.node.active_next != &head.node { active_unlink(head.node.active_next); }
+        ready_unlink(&head.node);
     }
 }
 
 fn ready_count(head: read ReadyHead) -> usize access(read, Graph) {
     read Graph {
         var count: usize = 0usize;
-        var cursor: *Hook = head.hook.next;
-        while cursor != &head.hook {
-            var node: *Node = parent(Node.ready, cursor);
+        var cursor: *Node = head.node.next;
+        while cursor != &head.node {
+            var node: *Node = cursor;
             if (*node).value < 0i64 { trap; }
             count = count + 1usize;
             cursor = (*cursor).next;
@@ -60,12 +77,12 @@ fn ready_count(head: read ReadyHead) -> usize access(read, Graph) {
 fn active_count(head: read ActiveHead) -> usize access(read, Graph) {
     read Graph {
         var count: usize = 0usize;
-        var cursor: *Hook = head.hook.prev;
-        while cursor != &head.hook {
-            var node: *Node = parent(Node.active, cursor);
+        var cursor: *Node = head.node.active_prev;
+        while cursor != &head.node {
+            var node: *Node = cursor;
             if (*node).value < 0i64 { trap; }
             count = count + 1usize;
-            cursor = (*cursor).prev;
+            cursor = (*cursor).active_prev;
         }
         return count;
     }
@@ -88,14 +105,14 @@ fn increment(node: mut Node) -> unit access(edit, Graph) {
     node.value = node.value + 1i64;
 }
 
-fn first_hook(head: read ReadyHead) -> read Hook access(read, Graph) from head.hook.next {
-    return read *head.hook.next;
+fn first_node_view(head: read ReadyHead) -> read Node access(read, Graph) from head.node.next {
+    return read *head.node.next;
 }
 
-fn first_node(head: read ReadyHead) -> read Node access(read, Graph) from head.hook.next {
-    var cursor: *Hook = head.hook.next;
-    if cursor == &head.hook { trap; }
-    return read *parent(Node.ready, cursor);
+fn first_node(head: read ReadyHead) -> read Node access(read, Graph) from head.node.next {
+    var cursor: *Node = head.node.next;
+    if cursor == &head.node { trap; }
+    return read *cursor;
 }
 
 fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Graph) {
@@ -103,37 +120,37 @@ fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Graph) {
     var second: Owner = owner_new(66i64);
     if first.node == null(*Node) || second.node == null(*Node) { return 1i32; }
     {
-        var ready: ReadyHead = make ReadyHead { hook: make Hook { prev: null(*Hook), next: null(*Hook) } };
-        var active: ActiveHead = make ActiveHead { hook: make Hook { prev: null(*Hook), next: null(*Hook) } };
+        var ready: ReadyHead = make ReadyHead { node: make Node { prev: null(*Node), next: null(*Node), active_prev: null(*Node), active_next: null(*Node), value: 0i64 } };
+        var active: ActiveHead = make ActiveHead { node: make Node { prev: null(*Node), next: null(*Node), active_prev: null(*Node), active_next: null(*Node), value: 0i64 } };
         // Set self-links after each head reaches its final address.
-        hook_init(&ready.hook);
-        hook_init(&active.hook);
+        node_init(&ready.node, 0i64);
+        node_init(&active.node, 0i64);
         var empty: usize = ready_count(read ready);
         if empty != 0usize { trap; }
         edit Graph {
-            insert_after(&ready.hook, &(*first.node).ready);
-            insert_after(&(*first.node).ready, &(*second.node).ready);
-            insert_after(&active.hook, &(*first.node).active);
-            insert_after(&(*first.node).active, &(*second.node).active);
+            ready_insert(&ready.node, first.node);
+            ready_insert(first.node, second.node);
+            active_insert(&active.node, first.node);
+            active_insert(first.node, second.node);
         }
         var ready_total: usize = ready_count(read ready);
         var active_total: usize = active_count(read active);
         if ready_total != 2usize || active_total != 2usize { trap; }
         read Graph {
-            var begin: read Hook = first_hook(read ready);
-            var cursor: *Hook = &begin;
-            if cursor == &ready.hook { trap; }
+            var begin: read Node = first_node_view(read ready);
+            var cursor: *Node = &begin;
+            if cursor == &ready.node { trap; }
             var node: read Node = first_node(read ready);
             if node.value != 65i64 { trap; }
         }
         { var early: Owner = move first; }
         read Graph {
-            if ready.hook.next != &(*second.node).ready || active.hook.next != &(*second.node).active { trap; }
-            var ready_cursor: *Hook = ready.hook.next;
-            var active_cursor: *Hook = active.hook.next;
-            if ready_cursor == &ready.hook || active_cursor == &active.hook { trap; }
-            var from_ready: *Node = parent(Node.ready, ready_cursor);
-            var from_active: *Node = parent(Node.active, active_cursor);
+            if ready.node.next != second.node || active.node.active_next != second.node { trap; }
+            var ready_cursor: *Node = ready.node.next;
+            var active_cursor: *Node = active.node.active_next;
+            if ready_cursor == &ready.node || active_cursor == &active.node { trap; }
+            var from_ready: *Node = ready_cursor;
+            var from_active: *Node = active_cursor;
             if (*from_ready).value != 66i64 || (*from_active).value != 66i64 { trap; }
         }
         ready_total = ready_count(read ready);
@@ -144,13 +161,13 @@ fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Graph) {
             var replacement: Owner = owner_new(67i64);
             if replacement.node == null(*Node) { return 1i32; }
             edit Graph {
-                insert_after(&ready.hook, &(*replacement.node).ready);
-                insert_after(&active.hook, &(*replacement.node).active);
+                ready_insert(&ready.node, replacement.node);
+                active_insert(&active.node, replacement.node);
             }
         }
     }
     read Graph {
-        if (*second.node).ready.next != &(*second.node).ready || (*second.node).active.prev != &(*second.node).active { trap; }
+        if (*second.node).next != second.node || (*second.node).active_prev != second.node { trap; }
         if (*second.node).value != 66i64 { trap; }
     }
     edit Graph {

@@ -3,55 +3,36 @@
 fn os_validate_embedded(check: *OsCheck, contract: *OsRecord, field: *CrustField) -> unit {
     var child: *OsRecord = os_record((*check).stage, (*field).syntax_type);
     if child == null(*OsRecord) || (*child).domain != (*contract).domain {
-        os_error(check, &(*field).loc, "embedded resource and containing record must share a declared domain");
+        os_error(check, &(*field).loc, "embedded resource and containing schema must share a declared domain");
     }
-}
-
-fn os_unmanaged_isolated(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
-    os_unfold(check, state, object);
-    if (*object).family != null(*OsField) { return os_isolated(check, state, object); }
-    if !os_enter(check, location) { return false; }
-    var valid: bool = true;
-    var slot: *OsSlot = os_fields(state, object);
-    while slot != null(*OsSlot) && valid && !os_failed(check) {
-        var value: *OsValue = os_bound(state, slot);
-        if !(*slot).owns && value != null(*OsValue) && !(*value).pointer && (*value).object != null(*OsObject) {
-            valid = os_unmanaged_isolated(check, state, (*value).object, location);
-        }
-        slot = (*slot).next;
-    }
-    (*check).depth = (*check).depth - 1usize;
-    return valid && !os_failed(check);
 }
 
 fn os_drop_callback(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
     var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*object).syntax).name);
-    if (*global).resource == null(*RsResource) {
-        if !os_unmanaged_isolated(check, state, object, location) {
-            os_error(check, location, "field destruction requires all unmanaged member hooks to be isolated");
-        }
-        return;
-    }
     var destructor: *OsFunction = os_function((*check).stage, (*(*global).resource).drop_name);
     if destructor == null(*OsFunction) || (*destructor).effect != OS_RECLAIM {
         os_error(check, location, "resource destructor requires a reclamation contract"); return;
     }
-    os_call_effect(check, state, destructor, location);
+    if !os_call_effect(check, state, destructor, location) { return; }
+    os_publish_value(check, state, object, location);
+    if os_failed(check) { return; }
+    var parameter: *CrustParam = (*(*destructor).declaration).params;
+    var bindings: *OsBinding = os_binding(check, (*parameter).name, (*object).syntax,
+        (*object).term, null(*OsBinding));
+    if !os_check_precondition(check, state, destructor, bindings, location) ||
+       !os_call_frame(check, destructor, location) { return; }
+    os_heap_havoc(check, state, (*object).domain, destructor, bindings);
 }
 
-fn os_drop_contract(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
-    os_unfold(check, state, object);
-    if !os_enter(check, location) { return; }
-    os_drop_callback(check, state, object, location);
+fn os_drop_fields(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
     var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
         if (*slot).owns && value != null(*OsValue) && !(*value).pointer && (*value).object != null(*OsObject) {
-            os_drop_contract(check, state, (*value).object, location);
+            os_drop_object(check, state, (*value).object, location);
         }
         slot = (*slot).next;
     }
-    (*check).depth = (*check).depth - 1usize;
 }
 
 fn os_release_fields(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
@@ -72,7 +53,7 @@ fn os_drop_pointer(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> 
     if !os_access(check, state, object, true, &(*expression).loc) ||
        !os_reclaim(check, state, object, &(*expression).loc) { return; }
     if !rs_owns((*(*check).stage).resources, (*object).syntax) {
-        os_error(check, &(*expression).loc, "drop requires a resource or a record with resource fields"); return;
+        os_error(check, &(*expression).loc, "drop requires a resource or a schema with resource fields"); return;
     }
     os_drop_object(check, state, object, &(*expression).loc);
     if !os_failed(check) { os_mark(check, state, object, os_flags(state, object) | OS_LIVE); }

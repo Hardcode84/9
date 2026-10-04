@@ -7,12 +7,9 @@ before that cleanup? Crust checks these rules during compilation. An owner can
 transfer a value. A borrower can use it for a shorter time. Destruction must
 wait until conflicting uses have ended.
 
-This tutorial teaches the implemented ownership stage. It includes general
-owner and loan operations, plus a specialized intrusive-list verifier. The
-stage fails the [generic ownership design requirement](design.md#checked-ownership-target):
-it cannot express ordinary stored borrows and depends on list-specific rules
-for persistent non-owning links. The examples describe this implementation;
-they do not specify an accepted generic ownership model.
+This tutorial teaches the ownership stage. It combines owners and loans with
+explicit storage schemas and ordinary field and function conditions. The
+[stage contract](ownership-model.md) defines the rules used by the examples.
 
 Start here if you can already write a function and a record. You do not need
 to know the compiler implementation or a proof language.
@@ -32,8 +29,7 @@ Read the sections in order:
 The [Rust comparison](ownership-rust.md) explains corresponding concepts,
 differences in accepted code, and obligations for container authors.
 
-The [generic ownership proposal](ownership-model.md) specifies the replacement
-design. Its syntax is not implemented by this tutorial.
+The [stage contract](ownership-model.md) gives the declaration and checking rules.
 
 ## 1. Select the stage and run a program
 
@@ -74,6 +70,7 @@ A `resource` is a record with automatic cleanup. The example uses a small
 resource whose destructor prints one character:
 
 ```crust
+domain Demo(Ticket);
 resource Ticket { code: i32; } domain(Demo) drop ticket_drop;
 
 fn ticket_drop(ticket: mut Ticket) -> unit access(reclaim, Demo) {
@@ -253,10 +250,9 @@ drop ticket;
 ```
 
 The read block ends before `drop ticket`. A helper that returns `mut T` needs
-an exclusive input and a matching result origin. Returned hook views use the
-same syntax; their path identifies a declared hook family and head relationship.
-The [intrusive tutorial](../examples/intrusive/README.md#borrow-payload-and-return-a-view)
-shows the additional sentinel check for a returned node view.
+an exclusive input and a matching result origin. A node view uses the same
+syntax. The [intrusive tutorial](../examples/intrusive/README.md#traverse-and-borrow-payload)
+shows views returned through typed pointer fields.
 
 ## 6. Own a heap allocation
 
@@ -264,6 +260,7 @@ A resource can own a pointer field. The [heap example](../examples/ownership-bas
 declares the handle and its allocation separately:
 
 ```crust
+domain Cells(Cell, CellOwner);
 record Cell { value: i64; } domain(Cells);
 resource CellOwner { cell: *Cell; } owns(cell) domain(Cells) drop cell_drop;
 ```
@@ -317,66 +314,30 @@ does not make a cursor from the old allocation valid again.
 
 ## 7. Keep intrusive nodes at a stable address
 
-An intrusive list stores its links inside the payload allocation. A node can
-have two independent link fields:
+A retained pointer field uses `references(field)`. Its record belongs to a
+closed domain schema. Each pointer must be null or refer to live storage of
+its declared type. Record conditions state additional facts:
 
 ```crust
-record Hook { prev: *Hook; next: *Hook; } reciprocal(prev, next);
-record Node { ready: Hook; active: Hook; value: i64; }
-    members(ready, active) domain(Graph);
-resource Owner { node: *Node; } owns(node) domain(Graph) drop owner_drop;
-resource ReadyHead { hook: Hook; }
-    anchor(hook, Node.ready) domain(Graph) drop ready_drop;
+record Entry { peer: *Entry; } domain(Links) references(peer)
+    invariant((*self).peer == null(*Entry) || (*(*self).peer).peer == self);
 ```
 
-These declarations belong to the [complete intrusive example](../examples/intrusive/program.crs),
-together with its [link library](../examples/intrusive/links.crs).
+Declare `domain Links(Entry);` with this record. An edit function must preserve
+its condition for every live entry. The function can declare `requires`,
+`ensures`, and `modifies` conditions on ordinary fields. Destruction must prove
+that no surviving retained reference points into the released storage.
 
-`reciprocal` requires the paired links to agree. `members` identifies the exact
-fields that can be payload hooks. `anchor` identifies a sentinel for one such
-field. A sentinel is a list boundary; it is not a `Node` payload.
+The [intrusive example](../examples/intrusive/README.md) uses this rule for two
+sets of pointer fields in a `Node`. Its insertion and removal functions are
+ordinary source functions. Each allocated node has an independent owner.
+The same owner can unlink, release, and replace a node while other owners
+remain live.
 
-Initializing a hook with `hook_init` makes its links point to itself. Its
-address must then stay stable, even while it is detached from other nodes.
-Moving an `Owner` handle preserves the allocation address. Copying or moving
-the initialized `Node`, `Hook`, or head storage would invalidate links and is
-rejected. Initialize stack heads in their final local storage.
-
-During traversal, exclude the sentinel before converting a hook to its node:
-
-```crust
-read Graph {
-    var cursor: *Hook = head.hook.next;
-    if cursor != &head.hook {
-        var node: *Node = parent(Node.ready, cursor);
-        if (*node).value < 0i64 { trap; }
-    }
-}
-```
-
-This fragment assumes an initialized `ReadyHead` named `head`. `parent` checks
-the declared containing field and the cursor's origin. A hook from `Node.active`
-does not become a `Node.ready` hook merely because their layouts match.
-
-End the access block before destruction. A node destructor detaches **both**
-hooks, then releases the node. A head destructor detaches its members but does
-not destroy their owners. Thus a head and its members can have different
-lifetimes, and one node can be destroyed while other owners remain live.
-
-Domain exclusion is deliberately broad. A saved scalar view of one node can
-block a link edit or reclamation elsewhere in the same domain. The stage does
-not infer that arbitrary pointer updates affect only your chosen node.
-
-Continue with the [intrusive tutorial](../examples/intrusive/README.md) to build
-and inspect the full two-hook program. No `unsafe` region is needed in that
-checked list implementation or its client.
-
-The [recursive owner tutorial](../examples/intrusive/recursive/README.md)
-retains a runtime number of nodes. An explicit owned pointer links each node
-to the next owner. It uses the same `owns` contract and recursive functions.
-The two intrusive hooks still use direct pointers. This source uses a call
-stack proportional to the node count; it does not establish an iterative
-owner-loop rule.
+The example uses full typed nodes as sentinels. Traversal accesses payload
+through `*Node` directly. Publication fixes the node's address; moves of that
+storage or its containing record are rejected. Read and edit cursors cannot
+outlive their access scope or cross reclamation.
 
 ## 8. Destroy embedded resources
 
@@ -400,7 +361,7 @@ leave them initialized for that cleanup and consume its raw owned pointers.
 Dropping one field separately is rejected because its containing value still
 has a field-cleanup obligation. Releasing resource storage before value cleanup
 is also rejected. These rules avoid hidden runtime flags for partial cleanup.
-See the [nested-resource example](../examples/intrusive/README.md#destroy-embedded-resources)
+See the [nested-resource example](../examples/intrusive/README.md#embedded-and-recursive-ownership)
 for allocation failure paths and the `BABAOK` cleanup trace.
 
 ## 9. Use library contracts
@@ -415,7 +376,7 @@ A separately published library can supply verified interfaces and object code.
 Its client needs no provider source and does not repeat proofs for imported
 bodies. The compilation program retains the trusted publication receipt.
 Changing contracts, object bytes, or checker images invalidates that receipt.
-The [library-import instructions](../examples/intrusive/README.md#reuse-a-verified-library)
+The [library-import instructions](../examples/intrusive/README.md#verify-the-emitted-program-and-the-boundary)
 give the compilation API and trust boundary.
 
 ## Choose code that this stage can check
@@ -427,10 +388,10 @@ The following distinctions matter when you design an interface:
 | Borrow a value within a block | Use `read` or `mut`; named views end with the block. |
 | Return a view | Declare its input origin with `from`. |
 | Store a borrowed field in a record | Rejected: there is no stored-lifetime field contract. |
-| Store a persistent raw pointer | Declare an owned field or a reciprocal link role. |
+| Store a persistent raw pointer | Declare `owns` or `references` in a closed storage schema. |
 | Return an unchecked raw pointer | Rejected: use a borrowed result with an origin. |
 | Create or change an owner set across loop iterations | Rejected when no local owner-state invariant can be established. Changing the outer owner identity needs a loop invariant; recursive construction uses ordinary function contracts. |
-| Traverse or detach an intrusive ring | Use its checked family contracts; traversal has no fixed node-count bound. |
+| Traverse or detach an intrusive ring | Use ordinary field conditions and function contracts; traversal has no fixed node-count bound. |
 | Register `defer` in this modular stage | Rejected. The separate resource stage supports it, but this stage has no deferred-effect contract. |
 
 These rejections are not a request to add `unsafe`. Change the interface or

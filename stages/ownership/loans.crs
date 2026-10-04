@@ -53,8 +53,7 @@ fn os_loan_overlap(check: *OsCheck, state: *OsState, a: *OsObject, b: *OsObject,
     if left == null(*OsObject) || right == null(*OsObject) { return false; }
     if (*left).domain == null(*CrustName) || (*left).domain != (*right).domain { return false; }
     return possible || (*left).readonly || (*right).readonly ||
-        ((*left).abstract && (*left).family != null(*OsField)) ||
-        ((*right).abstract && (*right).family != null(*OsField));
+        (*left).cursor || (*right).cursor;
 }
 
 fn os_loan_access(check: *OsCheck, state: *OsState, object: *OsObject,

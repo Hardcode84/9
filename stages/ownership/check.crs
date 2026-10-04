@@ -1,29 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn os_reciprocal(stage: *OsStage, declaration: *CrustDecl) -> bool {
-    var syntax: *RlSyntax = (*stage).relations;
-    while syntax != null(*RlSyntax) {
-        if (*syntax).declaration == declaration && (*declaration).kind == CRUST_D_RECORD { return true; }
-        syntax = (*syntax).next;
-    }
-    return false;
-}
-
 fn os_validate_record(check: *OsCheck, global: *RsGlobal) -> unit {
     var declaration: *CrustDecl = (*global).source;
-    if os_reciprocal((*check).stage, declaration) { return; }
     var contract: *OsRecord = crust_map_get(&(*(*check).stage).records, declaration as usize) as *OsRecord;
-    if contract == null(*OsRecord) { os_error(check, &(*declaration).loc, "record requires an ownership schema"); return; }
-    if ((*contract).owns != null(*OsField) || (*contract).members != null(*OsField) ||
-        (*contract).anchors != null(*OsField)) && (*contract).domain == null(*CrustName) {
-        os_error(check, &(*declaration).loc, "ownership and hook fields require a domain"); return;
+    if contract == null(*OsRecord) { os_error(check, &(*declaration).loc, "schema requires an ownership schema"); return; }
+    if ((*contract).owns != null(*OsField) || (*contract).references != null(*OsField) ||
+        (*contract).conditions != null(*OsCondition)) && (*contract).domain == null(*CrustName) {
+        os_error(check, &(*declaration).loc, "stored pointer contracts require a declared domain"); return;
     }
     if (*contract).owns != null(*OsField) && (*global).resource == null(*RsResource) {
         os_error(check, &(*declaration).loc, "owned pointer fields require a resource destructor"); return;
     }
+    os_validate_schema(check, contract);
+    (*contract).tracked = (*contract).tracked || (*contract).references != null(*OsField) || (*contract).conditions != null(*OsCondition);
     os_validate_names(check, global, (*contract).owns);
-    os_validate_names(check, global, (*contract).members);
-    os_validate_names(check, global, (*contract).anchors);
+    os_validate_names(check, global, (*contract).references);
     var field: *CrustField = (*declaration).fields;
     while field != null(*CrustField) && !os_failed(check) {
         os_validate_field(check, contract, field);
@@ -42,22 +33,19 @@ fn os_validate_names(check: *OsCheck, global: *RsGlobal, fields: *OsField) -> un
 
 fn os_validate_field(check: *OsCheck, contract: *OsRecord, field: *CrustField) -> unit {
     var owner: *OsField = os_field((*contract).owns, (*field).name);
-    var member: *OsField = os_field((*contract).members, (*field).name);
-    var anchor: *OsField = os_field((*contract).anchors, (*field).name);
-    if (owner != null(*OsField) && (member != null(*OsField) || anchor != null(*OsField))) ||
-       (member != null(*OsField) && anchor != null(*OsField)) {
-        os_error(check, &(*field).loc, "field contracts cannot assign multiple ownership roles"); return;
+    var reference: *OsField = os_field((*contract).references, (*field).name);
+    if owner != null(*OsField) && reference != null(*OsField) {
+        os_error(check, &(*field).loc, "field cannot both own and borrow its target"); return;
     }
     if owner != null(*OsField) { os_validate_owner(check, contract, field); return; }
-    if member != null(*OsField) || anchor != null(*OsField) {
-        os_validate_hook(check, contract, field, anchor); return;
-    }
+    if reference != null(*OsField) { os_validate_reference(check, contract, field); return; }
+    if os_borrowed((*field).syntax_type) { return; }
     if rs_owns((*(*check).stage).resources, (*field).syntax_type) {
         os_validate_embedded(check, contract, field); return;
     }
     if (*(*field).syntax_type).kind == CRUST_T_POINTER || (*(*field).syntax_type).kind == CRUST_T_FUNCTION ||
        (*(*field).syntax_type).kind == CRUST_T_ARRAY {
-        os_error(check, &(*field).loc, "persistent pointers require an owner or reciprocal field contract");
+        os_error(check, &(*field).loc, "persistent pointers require an owns or references field contract");
     }
 }
 
@@ -72,25 +60,16 @@ fn os_validate_owner(check: *OsCheck, contract: *OsRecord, field: *CrustField) -
     }
 }
 
-fn os_validate_hook(check: *OsCheck, contract: *OsRecord, field: *CrustField, anchor: *OsField) -> unit {
+fn os_validate_reference(check: *OsCheck, contract: *OsRecord, field: *CrustField) -> unit {
     var syntax: *CrustTypeSyntax = (*field).syntax_type;
-    if (*syntax).kind != CRUST_T_NAME {
-        os_error(check, &(*field).loc, "member and anchor roles require an embedded reciprocal record"); return;
+    if (*syntax).kind != CRUST_T_POINTER {
+        os_error(check, &(*field).loc, "references requires a pointer field"); return;
     }
-    var global: *RsGlobal = rs_global((*(*check).stage).resources, (*syntax).name);
-    if !os_reciprocal((*check).stage, (*global).source) {
-        os_error(check, &(*field).loc, "member and anchor roles require a reciprocal record"); return;
+    var target: *OsRecord = os_record((*check).stage, (*syntax).base);
+    if target == null(*OsRecord) || (*target).domain != (*contract).domain {
+        os_error(check, &(*field).loc, "retained references must target a schema in the same domain"); return;
     }
-    if anchor != null(*OsField) {
-        var family: *OsField = os_member_family(check, anchor, &(*field).loc);
-        if family == null(*OsField) { return; }
-        var origin: *RsGlobal = rs_global((*(*check).stage).resources, (*anchor).record_name);
-        var schema: *OsRecord = crust_map_get(&(*(*check).stage).records, (*origin).source as usize) as *OsRecord;
-        var member: *CrustField = crust_map_get(&(*origin).fields, (*family).name as usize) as *CrustField;
-        if (*schema).domain != (*contract).domain || !rs_same((*(*check).stage).resources, syntax, (*member).syntax_type) {
-            os_error(check, &(*field).loc, "anchor must use the member's domain and reciprocal storage type");
-        }
-    }
+    (*target).tracked = true;
 }
 
 fn os_validate_foreign(check: *OsCheck, contract: *OsFunction) -> unit {
@@ -120,30 +99,23 @@ fn os_validate_foreign(check: *OsCheck, contract: *OsFunction) -> unit {
 fn os_parameter(check: *OsCheck, state: *OsState, parameter: *CrustParam) -> unit {
     var syntax: *CrustTypeSyntax = (*parameter).syntax_type;
     var base: *CrustTypeSyntax = syntax;
-    var borrowed: bool = (*syntax).kind == RS_READ || (*syntax).kind == RS_MUT;
-    if borrowed { base = (*syntax).base; }
+    var borrowed: bool = os_borrowed(syntax);
+    var pointer: bool = (*syntax).kind == CRUST_T_POINTER;
+    if borrowed || pointer { base = (*syntax).base; }
+    var output: bool = os_field((*(*check).function).initializes, (*parameter).name) != null(*OsField);
     var object: *OsObject = null(*OsObject);
     if (*base).kind == CRUST_T_NAME {
-        object = os_object(check, state, base, null(*OsObject), (*state).scope, true);
+        if pointer { object = os_cursor_parameter(check, state, parameter, output); }
+        else { object = os_object(check, state, base, null(*OsObject), (*state).scope, true); }
         if object == null(*OsObject) { return; }
         os_abstract_value(check, state, object, false);
-    }
-    var value: *OsValue = os_value(check, syntax, object, (*syntax).kind == CRUST_T_POINTER);
+    } else { if output { os_error(check, &(*parameter).loc, "initializes requires a schema pointer parameter"); return; } }
+    var value: *OsValue = os_value(check, syntax, object, pointer);
     if value == null(*OsValue) { return; }
     (*value).owner = !borrowed && rs_owns((*(*check).stage).resources, syntax);
-    (*value).unknown = (*syntax).kind == CRUST_T_POINTER;
+    (*value).unknown = pointer && object == null(*OsObject);
     (*value).fresh = true;
-    var slot: *OsSlot = os_slot(check, syntax, (*parameter).name, null(*OsObject), (*state).scope);
-    if slot == null(*OsSlot) { return; }
-    (*slot).argument = true;
-    (*slot).authority = (*check).drop && borrowed;
-    (*slot).next = (*(*state).scope).locals;
-    (*(*state).scope).locals = slot;
-    os_set(check, state, slot as *u8, value, OS_READY);
-    os_loan_parameter(check, state, slot, value);
-    if (*slot).authority && object != null(*OsObject) {
-        os_mark(check, state, object, os_flags(state, object) | OS_RETIRING);
-    }
+    os_parameter_bind(check, state, parameter, value, borrowed);
 }
 
 fn os_abstract_value(check: *OsCheck, state: *OsState, object: *OsObject, uncertain: bool) -> unit {
@@ -181,21 +153,18 @@ fn os_function_exit(check: *OsCheck, state: *OsState, location: *CrustLoc) -> un
 fn os_check_function(stage: *OsStage, global: *RsGlobal, contract: *OsFunction) -> unit {
     if os_imported(stage, (*global).source) { return; }
     var declaration: *CrustDecl = (*global).source;
-    var check: OsCheck = make OsCheck {
-        stage: stage, function: contract, objects: null(*OsObject), loans: null(*OsLoan), depth: 0usize, loop_depth: 0usize,
-        drop: (*global).drop_only
-    };
+    var check: OsCheck = uninit;
+    os_check_init(&check, stage, contract);
+    check.drop = (*global).drop_only;
     if (*contract).foreign != 0u32 { os_validate_foreign(&check, contract); return; }
-    if (*contract).relation != null(*RlContract) { return; }
     if (*declaration).kind != CRUST_D_FUNCTION {
         os_error(&check, &(*declaration).loc, "external call requires a declared foreign effect"); return;
     }
     os_validate_borrows(&check, declaration);
     if os_failed(&check) { return; }
-    var state: OsState = make OsState {
-        facts: null(*OsFact), scope: null(*OsScope), domain: (*contract).domain,
-        effect: (*contract).effect, flow: PF_NORMAL
-    };
+    var state: OsState = uninit;
+    os_state_init(&state, contract);
+    os_heap_start(&check, &state);
     os_scope(&check, &state);
     if os_failed(&check) { return; }
     var parameter: *CrustParam = (*declaration).params;
@@ -203,10 +172,13 @@ fn os_check_function(stage: *OsStage, global: *RsGlobal, contract: *OsFunction) 
         os_parameter(&check, &state, parameter);
         parameter = (*parameter).next;
     }
+    os_conditions(&check, &state, (*contract).ensures, check.parameters);
+    os_assume(&check, &state, os_conditions(&check, &state, (*contract).requires, check.parameters));
     os_statement(&check, &state, (*declaration).body);
     if os_failed(&check) { return; }
     if state.flow == PF_NORMAL { os_function_exit(&check, &state, &(*declaration).loc); }
     if state.flow == PF_NORMAL { os_scope_end(&check, &state, &(*declaration).loc); }
+    if state.flow == PF_NORMAL { os_contract_end(&check, &state, &(*declaration).loc); }
 }
 
 fn os_validate_borrows(check: *OsCheck, declaration: *CrustDecl) -> unit {
@@ -235,21 +207,28 @@ fn os_validate_borrow_parameter(check: *OsCheck, parameter: *CrustParam) -> unit
 }
 
 fn os_check(stage: *OsStage) -> bool {
-    var check: OsCheck = make OsCheck {
-        stage: stage, function: null(*OsFunction), objects: null(*OsObject), loans: null(*OsLoan), depth: 0usize, loop_depth: 0usize, drop: false
-    };
+    var check: OsCheck = uninit;
+    os_check_init(&check, stage, null(*OsFunction));
     var global: *RsGlobal = (*(*stage).resources).first_global;
     while global != null(*RsGlobal) && !os_failed(&check) {
         if (*(*global).source).kind == CRUST_D_RECORD { os_validate_record(&check, global); }
         global = (*global).next;
     }
+    os_validate_domains(&check);
+    os_resolve_functions(&check);
+    os_validate_conditions(&check);
+    pf_destroy(&(*stage).proof);
     global = (*(*stage).resources).first_global;
     while global != null(*RsGlobal) && !os_failed(&check) {
         var declaration: *CrustDecl = (*global).source;
         if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_EXTERN {
             var contract: *OsFunction = crust_map_get(&(*stage).functions, declaration as usize) as *OsFunction;
             if contract == null(*OsFunction) { os_error(&check, &(*declaration).loc, "function requires an ownership interface"); }
-            else { os_check_function(stage, global, contract); }
+            else {
+                os_check_function(stage, global, contract);
+                os_solver_drop(stage);
+                pf_destroy(&(*stage).proof);
+            }
         }
         global = (*global).next;
     }

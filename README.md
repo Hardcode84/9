@@ -45,6 +45,7 @@ the third runs it.
 
 ## Documentation
 
+- [Getting started: language, execution, and stages](docs/tutorial.md)
 - [Core design and compilation flow](docs/design.md)
 - [Language specification](docs/crust0-spec.md)
 - [Solver-free ownership design](docs/ownership-design.md)

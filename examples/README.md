@@ -10,6 +10,9 @@ make all c-stage
 
 ## Tutorials
 
+The [getting started guide](../docs/tutorial.md) teaches the core language and
+compilation stages through one program that you can build and extend.
+
 Start with Hello World, then read the [ownership guide](../docs/ownership.md)
 for the user-facing rules. The stage tutorials explain implementation and
 commands to inspect compilation. The [Rust comparison](../docs/ownership-rust.md)

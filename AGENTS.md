@@ -2,253 +2,193 @@
 
 # Crust
 
-Crust is a small systems language with a C99 bootstrap compiler. Keep the core
-small and the basic compilation path fast. Users can select stronger checking
-stages with higher compilation cost. Measure that cost; it is not a veto on an
-explicitly selected capability. Do not add a feature before a concrete program
-requires it.
+Core small. Default compilation fast. New feature requires a concrete program.
+User-selected checks may cost more compilation time. Measure cost; cost alone
+does not veto the selected capability.
 
 ## Design
 
-- Keep the seed reader, checker, evaluator, and runner in C99. Keep backend
-  implementations and artifact caching in ordinary Crust stages. The seed
-  must build without a native backend. Test source bootstrap and successive
-  generations of the stage libraries.
-- Read the [language specification](docs/crust0-spec.md),
-  [bootstrap guide](docs/bootstrap.md), and
-  [runner contract](docs/source-runner.md) before changing their contracts.
-  Research documents contain proposals, not additional implemented features.
-- Source files use `.crs`. The command is `crust main.crs`. The root program
-  selects inputs, stages, and outputs through ordinary calls.
-- Keep the seed evaluator simple. An early explicit root action prepares the
-  selected backend and hands subsequent compilation code to its execution
-  stage. Keep bootstrap and execution policy in Crust stages. Preserve the
-  native handoff witness before expanding the C99 evaluator for stage speed.
-- Keep module management, ownership, cleanup, overloads, syntax extensions,
-  and backend adapters in user stages. Compiler interfaces must be general.
-  Do not add special cases for a stage name, source path, or example.
-- Keep root actions in source order. Allow independent work to run in
-  parallel. Make dependencies explicit; do not add shared mutable state or
-  global ordering without a semantic requirement.
-- Unused features must have no runtime cost. Do not add implicit allocation,
-  reference counting, checks, or cleanup to the raw seed.
-- Raw-pointer examples do not prove memory safety. Validate a safety claim
-  through the stage that enforces its rules and the final program behavior.
-- Keep ownership proof state out of generated programs. Stronger static checks
-  can cost more compiler time, but must not add runtime identity metadata,
-  validity checks, reference counts, or hidden cleanup flags. Null checks before
-  release and debug bounds checks are permitted. A cheaper checking profile
-  must reject unsupported proofs, not silently weaken its declared guarantees.
-- The target ownership stage must not depend on Z3. Do not add another
-  general-purpose theorem prover or build an equivalent solver to preserve
-  every accepted predicate. Use a bounded set of local checking rules.
-  Apply the [replacement gate](docs/ownership-design.md#9-replacement-gate):
-  demonstrate a trusted direct-pointer provider and checked client, individual
-  destruction and reuse, rejected client lifetime errors, independent imports,
-  unchanged emitted code, and the compilation-cost budget. Keep this gate as a
-  regression requirement. Do not add graph solvers.
-- A small explicitly trusted container implementation is permitted behind an
-  opaque checked API. The root must select the trust boundary. Trusted pointer
-  bodies must obey their declared retention and retirement contracts, but are
-  not compiler-verified ownership proofs. Test their native behavior separately
-  from client rejection tests. Never turn a failed check into implicit trust.
-  All client invalidation paths, including automatic cleanup, must enforce the
-  destructor's access requirements. Do not permit an undeclared retainer or a
-  raw release call to bypass retirement.
-- The checked ownership model must not require whole-program analysis. Check
-  each function from its body, declared function and field contracts, and
-  callee interfaces. Local flow analysis is permitted. Do not expand callees
-  or inspect callers to obtain missing safety conditions. Check definitions
-  against their contracts before using them as verified library code. Imported
-  interfaces must distinguish checked bodies from explicitly trusted bodies.
-- Develop generic ownership rules. A container example is a test, not the
-  definition of the model. Do not add topology-specific ownership keywords,
-  roles, state, or proof callbacks to make that example pass. Specialized
-  verification stages can exist, but their results do not establish generic
-  ownership. The same rules must cover stored views, owned trees with parent
-  references, one-way non-owning links, and the direct intrusive-list witness.
-  Do not hide a container-specific checker behind a general stage interface.
-- Keep the user-facing ownership model no more complex than Rust's, for both
-  application and container authors. Do not hide required solver predicates,
-  ghost lemmas, or custom proof scripts in libraries and call the model simple.
-  Use the [solver-free design](docs/ownership-design.md) and the implemented
-  [stage contract](docs/ownership-model.md). Do not treat proposed extensions
-  as accepted syntax.
+- Before contract changes, read [spec](docs/crust0-spec.md),
+  [bootstrap](docs/bootstrap.md), [runner](docs/source-runner.md).
+  Research proposals are not implemented contracts or accepted syntax.
+- Sources: `.crs`. Command: `crust main.crs`. Root selects inputs, stages,
+  outputs through ordinary calls.
+- C99 seed: reader, checker, evaluator, runner. Seed builds without a backend.
+  Backends, caching, bootstrap, execution policy: ordinary Crust stages.
+  Test source bootstrap and successive stage generations.
+- Keep evaluator simple. Early explicit root action prepares selected backend
+  and hands later compilation code to its executor. Preserve native handoff
+  witness before expanding C99 evaluator for stage speed.
+- Modules, ownership, cleanup, overloads, syntax extensions, backend adapters:
+  user stages. General APIs. No stage-name, path, or example special cases.
+- Root actions stay in source order. Dependencies explicit. Independent work
+  may run in parallel. Shared mutation or global order needs a semantic reason.
+- Unused features: zero runtime cost. Raw seed: no implicit allocation,
+  reference counting, checks, or cleanup.
+- Safety claims require enforcing-stage checks and final program behavior.
+  Raw-pointer examples alone prove no memory safety.
 
-## Communication and documentation
+## Ownership
 
-- Use short, direct, factual language in replies, comments, and commit
-  messages. Dry humor is welcome. Omit praise, filler, and unsupported claims.
-- Lead with the result. State what changed, why it changed, and what was
-  checked. Identify any check that was not run and the reason.
-- For a concrete question, give concrete failure points: the operation,
-  location, violated contract, and observed effect. Do not substitute a
-  general architecture description for an explanation.
-- Complete authorized work. Do not stop at a plan or ask again for permission
-  that the user already gave. Report a blocker with its exact cause and the
-  action needed to remove it.
-- Write technical documentation in ASD-STE100. Use repository-relative
-  links. Do not put local absolute paths or issue tracker IDs in repo docs.
-- Do not create review reports or review documents unless the user requests
-  them. Record actionable findings in Beads and report results in the reply.
-  Keep necessary scratch files and generated test outputs in the ignored
-  build directory. Do not commit temporary investigation artifacts. Correct
-  existing product documentation when its claims or contracts need a change.
-- Function and type documentation describes user-visible behavior and
-  preconditions and postconditions. Local comments explain non-obvious
-  intent or invariants. Do not repeat the code in comments.
-- When a reviewer cannot understand an important decision, fix the code or
-  add a useful comment at that location. A reply alone does not fix the code.
-- Update affected specifications and guides in the same commit as a contract
-  change. Before replacing a design document, write the new version and
-  compare it with the old version. Remove the old text only after that check.
+- Follow [design](docs/ownership-design.md) and [contract](docs/ownership-model.md).
+  User model complexity <= Rust, for application and container authors.
+  No hidden proof scripts, ghost lemmas, or solver predicates.
+- Bounded local rules. No Z3, general theorem prover, equivalent solver, or graph
+  solver. No whole-program analysis. Check each body using function/field
+  contracts and callee interfaces. Local flow analysis allowed. No callee
+  expansion or caller inspection to recover missing safety conditions.
+- Verify definitions against contracts before treating library code as checked.
+  Imports distinguish checked bodies from explicitly trusted bodies.
+- Generic rules must cover stored views, owning trees with parent references,
+  one-way observers, and intrusive lists. No topology-specific keywords, roles,
+  state, proof callbacks, or disguised container checkers. Specialized stages
+  may exist; their results prove only their specialized claims.
+- Root may explicitly trust a small container behind an opaque checked API.
+  Trusted bodies obey retention/retirement contracts. Trust is not a verified
+  pointer-body proof. Test native provider behavior and client rejections
+  separately. Failed checks never grant implicit trust.
+- Every invalidation path, including automatic cleanup, enforces destructor
+  access requirements. Undeclared retainers and raw release cannot bypass
+  retirement.
+- Erase proof state. No runtime identity metadata, validity checks, reference
+  counts, hidden cleanup flags. Allowed: null checks before release; debug
+  bounds checks. Cheap profiles reject unsupported proofs; preserve guarantees.
+- Keep [replacement gate](docs/ownership-design.md#9-replacement-gate) as a
+  regression: trusted direct-pointer provider + checked client; individual
+  destruction/reuse; rejected lifetime errors; independent imports; identical
+  emitted code; compilation-cost budget.
 
-## C code and platform boundaries
+## Communication and docs
 
-- Edit the maintained files in `src/`, not `crust0_amalg.c`. Run `make
-  amalgamate` after a core source change. The pre-commit hook also regenerates
-  this file; inspect and stage the result. Use `CRUST_STATIC` for private
-  helpers shared within the amalgamation. Helpers used by separate platform
-  or runner files must retain external linkage.
-- The default build amalgamates the core, reader, and checker. Keep
-  `AMALGAMATION=0` builds working. Keep the runner and platform adapters
-  separate. Check both modes after a core or build-system change.
-- Use pedantic ISO C99. The build uses `-std=c99 -pedantic-errors -Wall
-  -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla`.
-  Do not weaken these checks.
-- Do not use non-standard C syntax, including `typeof`, `__attribute__`,
-  statement expressions, zero-length arrays, or inline assembly. Platform
-  adapters must also compile as pedantic C99.
-- Minimize platform-specific code. All OS-, architecture-, and ABI-specific
-  code must be isolated in separate implementation files. Use private
-  platform headers only where necessary.
-- Keep OS headers, feature-test macros, filesystem extensions, process
-  control, dynamic loading, and native ABI adaptation in those files. Keep
-  target-specific code generation in dedicated backend files.
-- Shared headers expose portable C99 types. Portable compiler algorithms
-  and command-line policy must not contain platform calls or OS conditionals.
-  Select platform implementations in the build, not with scattered `#ifdef`
-  branches. Reject unsupported profiles explicitly.
-- Use the existing Makefile. Add only the platform operations that a current
-  implementation needs. Do not build a portability framework for hypothetical
-  ports.
-- Always order members of project-defined structs and records by decreasing
-  size. Keep equal-size members in a clear logical order. Records that mirror
-  a foreign ABI must match that ABI's member order.
-- Use arenas for compiler-owned nodes, types, names, and temporary tables.
-  Allocate arena blocks through the context allocator. Do not allocate and
-  free individual compiler objects. Give external buffers and native
-  resources an explicit owner and release path.
-- No global state in the language C99 core. Keep mutable compiler state in
-  explicit contexts or caller-owned objects. Do not use mutable file-scope
-  variables, mutable function-local statics, or thread-local storage. Immutable
-  constant tables are allowed. Separate contexts must remain safe to use
-  from separate threads.
-- Bound recursion on source-controlled input. Enforce the depth bound or use
-  iteration. Do not rely on the host stack size.
-- Keep function cyclomatic complexity at CCN 15 or less in `src/`,
-  `include/`, and `runtime/` with Lizard. Apply the same limit to Crust
-  functions in `api/`, `stages/`, and `tests/` with the Crust CCN stage.
-  Split functions by responsibility. Do not bypass either check with
-  exclusions or altered counting rules.
-- Never install Node.js or npm on this machine.
-- Use a single `SPDX-License-Identifier: Apache-2.0` comment at the start of
-  source, configuration, and documentation files, after any shebang. Keep
-  generated headers in their generators. Preserve archived benchmark bytes.
+- Short, direct, factual replies, comments, commits. Result first. State change,
+  reason, checks, skipped checks and reasons. Dry humor allowed. No praise,
+  filler, unsupported claims.
+- Concrete question: name operation, location, broken contract, observed effect.
+- Finish authorized work. No plan-only stop or repeated permission request.
+  Blocked: exact cause + action needed.
+- Technical docs: ASD-STE100; repo-relative links; no local absolute paths or
+  tracker IDs. Correct stale claims and contracts.
+- Review docs only on user request. Findings go in Beads; results in reply.
+  Scratch/test output goes in ignored `build/`. Never commit investigation junk.
+- Function/type docs: public behavior, preconditions, postconditions. Local
+  comments: non-obvious intent/invariants. No comments that repeat code.
+- Unclear decision: fix code or comment at that location. Reply alone is insufficient.
+- Contract change: update specs/guides in same commit. Design-doc replacement:
+  write candidate, compare old/new, then remove old text. Lose no requirements.
 
-## Engineering discipline
+## Implementation
 
-- Classify the path before adding machinery: hot path, cold path, test
-  helper, compatibility path, shutdown or error path, or experiment. Match
-  its costs and complexity to that role.
-- Treat performance, memory layout, cache behavior, synchronization, and
-  security as design properties. Do not add a scan over all allocated state
-  inside a frequent operation without a demonstrated need and measurements.
-- Establish the trust boundary. Validate external input at public parsing
-  and API boundaries. Internal consumers can trust verified compiler state.
-  Fix a producer that breaks its contract instead of adding repeated checks.
-- An infallible internal operation returns a value or `void`, not a failure
-  status. A status must represent a possible input, allocation, I/O, or
-  platform failure. Use assertions only for non-obvious invariants.
-- Prefer fewer valid states. Each flag, branch, retry, or fallback must serve
-  a named invariant. Do not add flags or side tables to carry facts that are
-  already available in the program representation.
-- Handle failures explicitly. Do not discard errors or invent fallback
-  behavior. Handle a case completely or reject it with a diagnostic.
-- Investigate every failure found during the task. Its age is not a reason
-  to ignore it. Fix it or explain the exact mechanism and required fix.
-  Do not use "known limitation" or "future work" as a substitute.
-- Before substantial optimization or architecture work, establish a real
-  program, a controlled baseline, and a measurable success criterion. Bound
-  an unproven idea as an experiment with a stop condition.
-- Before extending or landing a replacement architecture, demonstrate its
-  hardest ownership boundary and final output in a real program. Review the
-  evidence before adding another layer. Passing tests alone do not prove a
-  performance benefit.
-- Keep frontend, stage execution, emission, and target toolchain costs
-  separate in measurements. Exclude target GCC compilation and linking from
-  frontend results. Record the commands, inputs, build flags, and baseline.
-- Preserve recorded benchmark inputs and reports. Their hashes identify the
-  measured bytes. Keep these captures in ignored storage. If removing a
-  tracked capture, first retain and verify an unchanged local copy. Write new
-  evidence separately when the implementation changes.
-- Do not commit binary files or archives. Keep new raw performance results
-  in the ignored build directory. Commit benchmark tools and measurement
-  instructions, not machine-specific timing numbers in documentation. Do not
-  commit generated reports, profiler logs, downloaded dependency trees, or
-  third-party lockfiles under `benchmarks/`.
+- Core edits: `src/`. Regenerate `crust0_amalg.c` with `make amalgamate` after core
+  edits. Inspect/stage generated changes, including hook edits. Never hand-edit
+  the amalgamation. Private shared helpers: `CRUST_STATIC`. Helpers called by
+  separate platform/runner files: external linkage.
+- Default: amalgamated core/reader/checker. Keep runner/platform adapters
+  separate. Core/build changes: test default and `AMALGAMATION=0`.
+- All C, including platform adapters: pedantic ISO C99. Keep flags:
+  `-std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes
+  -Wmissing-prototypes -Wshadow -Wvla`. No GNU syntax, `typeof`, `__attribute__`,
+  statement expressions, zero-length arrays, inline assembly. Never weaken checks.
+- Isolate OS/architecture/ABI code in separate implementation files. Keep OS
+  headers, feature-test macros, filesystem/process/loading operations, native
+  ABI adapters there. Private platform headers only when needed. Target code
+  generation stays in dedicated backend files.
+- Shared headers: portable C99 types. Portable algorithms and CLI policy:
+  no platform calls or OS conditionals. Build selects platform files. No
+  scattered `#ifdef`. Reject unsupported profiles.
+- Use existing Makefile. Add platform operations only for current needs.
+  No framework for hypothetical ports.
+- Struct/record members: decreasing size; equal sizes in logical order.
+  Foreign ABI mirrors: exact ABI order.
+- Nodes/types/names/temporary tables: arenas. Arena blocks use context allocator.
+  No individual compiler-object allocation/free. External buffers/native
+  resources need explicit owners and release paths.
+- C99 core: no mutable globals, mutable function-local statics, or thread-local
+  storage. Mutable state belongs to contexts/caller-owned objects. Immutable tables
+  allowed. Separate contexts must support concurrent use on separate threads.
+- Source-controlled recursion: enforce depth limit or iterate. Host stack size
+  is not a bound.
+- CCN <= 15. Lizard: `src/`, `include/`, `runtime/`. Crust CCN stage:
+  `api/`, `stages/`, `tests/`. Split responsibilities. No exclusions/counting tricks.
+- Never install Node.js or npm.
+- Source/config/docs: one `SPDX-License-Identifier: Apache-2.0` comment at file
+  start, after shebang if present. Change generators for generated headers.
+  Preserve archived benchmark bytes.
 
-## Validation
+## Engineering
 
-Tests must exercise production contracts. Do not weaken an interface to make
-a test easier. Cover successful behavior and relevant rejection, allocation,
-and cleanup paths. Do not add tests that only repeat the implementation.
+- Before machinery: classify hot, cold, test, compatibility, shutdown/error,
+  or experiment path. Match cost/complexity to role.
+- Design for performance, layout, caches, synchronization, security. Frequent
+  scans of all allocated state require demonstrated need and measurements.
+- Validate external input at parsing/API boundaries. Internal consumers trust
+  verified state. Fix broken producers instead of repeating validation.
+- Infallible internal operations return value/`void`. Status requires a possible
+  input/allocation/I/O/platform failure. Assertions only for non-obvious invariants.
+- Minimize valid states. Every flag/branch/retry/fallback needs a named invariant.
+  No duplicate facts in flags or side tables.
+- Handle failures completely or reject with diagnostic. No swallowed errors,
+  invented fallbacks, partial success.
+- Investigate every discovered failure, regardless of age. Fix it or explain
+  exact mechanism and required fix. No "known limitation"/"future work" dismissal.
+- Before major optimization/architecture: real program, controlled baseline,
+  measurable success criterion. Unproven idea: bounded experiment + stop condition.
+- Before extending/landing replacement architecture: prove hardest ownership
+  boundary and final output in a real program. Review evidence before next layer.
+  Performance claims require measurements.
+- Measure frontend, stage execution, emission, target toolchain separately.
+  Exclude target GCC compilation/linking from frontend. Record commands, inputs,
+  flags, baseline.
+- Preserve measured inputs/reports and hashes in ignored storage. Before removing
+  tracked capture, retain and verify an identical local copy. New implementation:
+  new evidence; preserve old captures.
+- Commit benchmark tools/instructions. Raw results stay in ignored `build/`.
+  Never commit binaries/archives. No machine-specific timing numbers in docs.
+  Under `benchmarks/`: no generated reports, profiler logs, downloaded dependency
+  trees, or third-party lockfiles.
 
-Build with `make all`. Use the checks that cover the change:
+## Checks
 
-| Area | Checks |
+Test production contracts. Cover success and relevant rejection/allocation/cleanup
+paths. Never weaken interfaces for tests or write tests that mirror implementation.
+
+Code changes: `make all`, then applicable checks:
+
+| Area | `make` targets |
 |---|---|
-| Core, reader, checker, evaluator, x86 backend | `make check` |
-| C backend | `make check-c` |
-| Assembly stage self-compilation | `make check-asm` |
-| Artifact cache and source-only backend bootstrap | `make check-cache` |
-| Root execution and reader extensions | `make check-stage check-reader` |
-| Native bootstrap and execution handoff | `make check-native` |
-| Ownership, RAII, and defer | `make check-resources check-resource-alloc` |
-| Ownership and field contracts | `make check-ownership check-ownership-alloc` |
-| Verified ownership provider imports | `make check-ownership-imports` |
-| Overloads and resource composition | `make check-overload check-overload-alloc` |
-| Compilation program examples | `make check-examples` |
-| Module selection, bindings, and exports | `make check-modules` |
-| Independent native stage jobs | `make check-parallel` |
-| Highlighting and editor integration | `make check-highlight check-vscode` |
-| Crust cyclomatic complexity stage | `make check-ccn` |
+| Core/reader/checker/evaluator/x86 | `check` |
+| C backend | `check-c` |
+| ASM self-compilation | `check-asm` |
+| Cache/source bootstrap | `check-cache` |
+| Root/reader extensions | `check-stage check-reader` |
+| Native bootstrap/handoff | `check-native` |
+| Ownership/RAII/defer | `check-resources check-resource-alloc` |
+| Ownership/field contracts | `check-ownership check-ownership-alloc` |
+| Verified ownership imports | `check-ownership-imports` |
+| Overloads/resource composition | `check-overload check-overload-alloc` |
+| Compilation examples | `check-examples` |
+| Modules/bindings/exports | `check-modules` |
+| Native jobs | `check-parallel` |
+| Highlight/editor | `check-highlight check-vscode` |
+| Crust CCN | `check-ccn` |
 
-A core or shared API change requires the full matrix. Run the relevant
-sanitizer checks when allocation, native calls, or resource lifetimes change.
-Once the required checks pass, repeat them only after a change, failure, or
-new concern. A documentation-only change needs the applicable hooks and link
-checks; it does not require a compiler rebuild.
+- Core/shared API changes: full table. Allocation/native-call/lifetime changes:
+  relevant sanitizers. Repeat passed checks only after changes, failures, or
+  new concerns. Docs-only: hooks + links; compiler rebuild unnecessary.
+- C API authority: `include/`. API changes: `make api`, then
+  `python3 tools/api.py --check`; update stage consumers. Never hand-edit
+  generated API declarations or prelude.
 
-The headers in `include/` define the C API. After an API change, run `make api`
-and `python3 tools/api.py --check`. Do not edit generated API declarations or
-the generated prelude by hand. Update stage consumers with their API changes.
+## Beads and commits
 
-## Issues and commits
+Use `br` (beads_rust) from repo. Database: `../.beads`. Never create/commit
+repo-local `.beads`.
 
-The project uses `br` from beads_rust. Its data is in `../.beads`, outside this
-repository. Run `br` from the repo; do not create or commit a local `.beads`.
-
-1. Run `git status` and `br ready`. Preserve other work in the checkout.
-2. Claim a matching issue with `br update <issue> --status=in_progress`.
-   Create a focused issue if none matches. Track defects found during work.
-3. Implement the change and run its checks.
-4. Stage the intended files, then run `pre-commit run` and
-   `git diff --cached --check`. If a hook changes files, inspect and stage
-   them again. All hooks must pass before the commit.
-5. Close completed issues with `br close <issue>` and run
-   `br sync --flush-only`.
-6. Commit the completed work with `git commit -s`. Keep each commit focused
-   on one logical change. Use a descriptive subject.
-7. Check `git status` and report the commit and validation results. Identify
-   any remaining checkout changes accurately.
+1. `git status`; `br ready`. Preserve others' work.
+2. `br update <issue> --status=in_progress`. Create focused issue if none matches.
+   Track newly found defects.
+3. Implement; run required checks.
+4. Stage intended files. `pre-commit run`; `git diff --cached --check`.
+   Hooks edit files: inspect, restage, rerun. All hooks must pass.
+5. `br close <issue>` for completed work; `br sync --flush-only`.
+6. `git commit -s`. One logical change per commit; descriptive subject.
+7. `git status`. Report commit, validation, remaining checkout changes.

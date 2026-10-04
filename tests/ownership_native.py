@@ -83,6 +83,13 @@ def rejects(provider):
             body(start + "var i:i32=0i32;while i<2i32 {close_fd(move f.handle);i=i+1i32;}"),
             "initialized resource fields",
         ),
+        "replacement-loop-validity": (
+            body(
+                start
+                + "var i:i32=0i32;while i<2i32 {query_fd(f.handle);drop f;f=open_file();i=i+1i32;}"
+            ),
+            "successful acquisition",
+        ),
         "mutable-call-validity": (
             body(
                 start + "edit_file(mut f);query_fd(f.handle);", "fn edit_file(f:mut File)->unit {}"
@@ -242,6 +249,11 @@ def run(build, directory, sanitize):
         + "fn main(argc:i32,argv:**u8)->i32 {var i:i32=0i32;while i<3i32 {var f:File=open_file();if f.handle==-1i32 {trap;}i=i+1i32;}return 0i32;}"
     )
     native(build, directory, loop, b"FFF", sanitize, environment)
+    loop.write_text(
+        provider + "fn main(argc:i32,argv:**u8)->i32 {var f:File=open_file();var i:i32=0i32;"
+        "while i<3i32 {drop f;f=open_file();if f.handle==-1i32 {trap;}i=i+1i32;}return 0i32;}"
+    )
+    native(build, directory, loop, b"FFFF", sanitize, environment)
     failed = directory / "failed.crs"
     failed.write_text(
         provider

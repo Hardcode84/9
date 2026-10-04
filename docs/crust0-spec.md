@@ -976,8 +976,11 @@ The [ownership contract](ownership-model.md#stored-views) defines its lifetime
 and origin rules. [Native resource contracts](ownership-model.md#native-resources)
 apply acquisition, move, borrow, and consumption rules to integers and opaque
 pointers without granting memory access. Native resources need no storage
-domain. Calls use verified interfaces; they do
-not expand callee bodies. Proof state erases before emission. The complete
+domain. Loops can replace initialized, movable owner records. Their declared
+types supply the local invariant; stored loan origins must remain fixed. See
+the [loop rules](ownership-model.md#local-proof-and-loops). Calls use verified
+interfaces; they do not expand callee bodies. Proof state erases before
+emission. The complete
 checked-language gate also requires the other ownership acceptance cases.
 
 The first implementation must establish these cases before adding language

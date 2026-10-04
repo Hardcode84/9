@@ -276,12 +276,17 @@ field roles, domain effects, nullable allocation handling, and callback code.
 The example has one explicit owner pointer per node in addition to both hooks.
 That storage cost belongs to the chosen representation.
 
-The Crust example uses recursive construction and cleanup. Its stack use grows
-with the node count. Rust can also express an iterative owner transfer with
-`Option::take`; Crust's current owner-loop rule rejects a changed outer owner
-identity. A helper that receives both Crust heads also encounters domain-wide
-loan exclusion when it edits just one set of fields. The example uses two attach
-passes. These are concrete costs in the container-author comparison.
+The Crust example uses iterative construction and cleanup. Each loop iteration
+consumes a chain and stores an initialized replacement. Its declared type is
+the loop invariant; the source needs no proof annotation. Stack use does not
+grow with node count. Rust can express the corresponding transfer with
+`Option::take`.
+
+Attachment uses one pass through both hooks. Its cursor parameters require
+declared edit access and live storage. A helper that instead holds unused
+mutable loans into the domain still encounters domain-wide loan exclusion.
+The choice of interface affects the source obligations; the loop rule does
+not split domain permissions or shorten lexical loans.
 
 ## What the comparison establishes
 

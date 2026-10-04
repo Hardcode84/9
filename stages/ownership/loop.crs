@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record OsLoopCursor { slot: *OsSlot; next: *OsLoopCursor; }
+record OsLoopSlot { slot: *OsSlot; next: *OsLoopSlot; }
 
 fn os_cursor_scope(state: *OsState, object: *OsObject) -> *OsScope {
     var scope: *OsScope = (*state).scope;
@@ -13,17 +13,19 @@ fn os_cursor_scope(state: *OsState, object: *OsObject) -> *OsScope {
     return scope;
 }
 
-fn os_loop_find(cursors: *OsLoopCursor, slot: *OsSlot) -> *OsLoopCursor {
-    while cursors != null(*OsLoopCursor) {
-        if (*cursors).slot == slot { return cursors; }
-        cursors = (*cursors).next;
+fn os_loop_find(bindings: *OsLoopSlot, slot: *OsSlot) -> *OsLoopSlot {
+    while bindings != null(*OsLoopSlot) {
+        if (*bindings).slot == slot { return bindings; }
+        bindings = (*bindings).next;
     }
-    return null(*OsLoopCursor);
+    return null(*OsLoopSlot);
 }
 
 fn os_loop_widen(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> *OsValue {
     var value: *OsValue = os_bound(state, slot);
-    if value == null(*OsValue) || (*slot).owns || os_borrowed((*slot).syntax) {
+    if (*slot).owns { return os_loop_owner(check, state, slot, location); }
+    if value == null(*OsValue) || os_borrowed((*slot).syntax) ||
+       ((*value).object != null(*OsObject) && !(*value).pointer) {
         os_error(check, location, "loop assignment requires an initialized scalar or domain cursor"); return null(*OsValue);
     }
     if !(*value).pointer { return os_value(check, (*slot).syntax, null(*OsObject), false); }
@@ -52,8 +54,32 @@ fn os_loop_widen(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *Cru
     return result;
 }
 
+fn os_loop_owner_ready(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> bool {
+    var value: *OsValue = os_bound(state, slot);
+    if value == null(*OsValue) || (*value).object == null(*OsObject) || (*value).pointer ||
+       os_view_mode(check, (*slot).syntax) >= RS_READ {
+        os_error(check, location, "loop owner requires an initialized resource record without stored loans"); return false;
+    }
+    if !os_initialized(check, state, (*value).object) {
+        os_error(check, location, "loop backedge must preserve initialized owner fields"); return false;
+    }
+    os_publish_value(check, state, (*value).object, location);
+    if os_failed(check) { return false; }
+    return os_move_allowed(check, state, slot, value, location);
+}
+
+fn os_loop_owner(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> *OsValue {
+    if !os_loop_owner_ready(check, state, slot, location) { return null(*OsValue); }
+    var object: *OsObject = os_object(check, state, (*slot).syntax, null(*OsObject), (*slot).scope, true);
+    if object == null(*OsObject) { return null(*OsValue); }
+    os_abstract_value(check, state, object, true);
+    var value: *OsValue = os_value(check, (*slot).syntax, object, false);
+    if value != null(*OsValue) { (*value).owner = true; }
+    return value;
+}
+
 fn os_loop_assignment(check: *OsCheck, state: *OsState, expression: *CrustExpr,
-                      cursors: **OsLoopCursor) -> unit {
+                      bindings: **OsLoopSlot) -> unit {
     while (*expression).kind == CRUST_E_GROUP { expression = (*expression).left; }
     if (*expression).kind != CRUST_E_NAME { return; }
     var slot: *OsSlot = os_local(state, (*expression).name);
@@ -61,29 +87,29 @@ fn os_loop_assignment(check: *OsCheck, state: *OsState, expression: *CrustExpr,
         var value: *OsValue = os_bound(state, slot);
         if value != null(*OsValue) && (*value).loan != null(*OsLoan) { slot = (*(*value).loan).place; }
     }
-    os_loop_slot(check, state, slot, cursors, &(*expression).loc);
+    os_loop_slot(check, state, slot, bindings, &(*expression).loc);
 }
 
 fn os_loop_slot(check: *OsCheck, state: *OsState, slot: *OsSlot,
-                 cursors: **OsLoopCursor, location: *CrustLoc) -> unit {
-    if slot == null(*OsSlot) || os_loop_find(*cursors, slot) != null(*OsLoopCursor) { return; }
+                 bindings: **OsLoopSlot, location: *CrustLoc) -> unit {
+    if slot == null(*OsSlot) || os_loop_find(*bindings, slot) != null(*OsLoopSlot) { return; }
     var value: *OsValue = os_loop_widen(check, state, slot, location);
     if value == null(*OsValue) { return; }
-    var cursor: *OsLoopCursor = os_alloc(check, sizeof(OsLoopCursor), alignof(OsLoopCursor)) as *OsLoopCursor;
-    if cursor == null(*OsLoopCursor) { return; }
-    (*cursor).slot = slot;
-    (*cursor).next = *cursors;
-    *cursors = cursor;
+    var binding: *OsLoopSlot = os_alloc(check, sizeof(OsLoopSlot), alignof(OsLoopSlot)) as *OsLoopSlot;
+    if binding == null(*OsLoopSlot) { return; }
+    (*binding).slot = slot;
+    (*binding).next = *bindings;
+    *bindings = binding;
     os_set(check, state, slot as *u8, value, OS_READY);
 }
 
-fn os_loop_scalars(check: *OsCheck, state: *OsState, cursors: **OsLoopCursor, location: *CrustLoc) -> unit {
+fn os_loop_scalars(check: *OsCheck, state: *OsState, bindings: **OsLoopSlot, location: *CrustLoc) -> unit {
     var scope: *OsScope = (*state).scope;
     while scope != null(*OsScope) && !os_failed(check) {
         var slot: *OsSlot = (*scope).locals;
         while slot != null(*OsSlot) && !os_failed(check) {
             if !(*slot).owns && (*(*slot).syntax).kind < CRUST_T_POINTER && os_bound(state, slot) != null(*OsValue) {
-                os_loop_slot(check, state, slot, cursors, location);
+                os_loop_slot(check, state, slot, bindings, location);
             }
             slot = (*slot).next;
         }
@@ -92,13 +118,13 @@ fn os_loop_scalars(check: *OsCheck, state: *OsState, cursors: **OsLoopCursor, lo
 }
 
 fn os_loop_bindings(check: *OsCheck, state: *OsState, statement: *CrustStmt,
-                    cursors: **OsLoopCursor) -> unit {
+                    bindings: **OsLoopSlot) -> unit {
     while statement != null(*CrustStmt) && !os_failed(check) {
         if !os_enter(check, &(*statement).loc) { return; }
-        if (*statement).kind == CRUST_S_ASSIGN { os_loop_assignment(check, state, (*statement).expr, cursors); }
+        if (*statement).kind == CRUST_S_ASSIGN { os_loop_assignment(check, state, (*statement).expr, bindings); }
         // A shadowed name may widen an outer slot; this only discards entry facts.
-        os_loop_bindings(check, state, (*statement).body, cursors);
-        os_loop_bindings(check, state, (*statement).otherwise, cursors);
+        os_loop_bindings(check, state, (*statement).body, bindings);
+        os_loop_bindings(check, state, (*statement).otherwise, bindings);
         (*check).depth = (*check).depth - 1usize;
         statement = (*statement).next;
     }
@@ -125,29 +151,65 @@ fn os_loop_cursor_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
         "loop backedge must preserve a live or null domain cursor");
 }
 
-fn os_loop_read_slot(check: *OsCheck, entry: *OsState, body: *OsState, slot: *OsSlot,
-                     cursors: *OsLoopCursor, location: *CrustLoc) -> unit {
+fn os_loop_check_slot(check: *OsCheck, entry: *OsState, body: *OsState, slot: *OsSlot,
+                     bindings: *OsLoopSlot, location: *CrustLoc) -> unit {
     var before: *OsValue = os_bound(entry, slot);
     var after: *OsValue = os_bound(body, slot);
-    if os_loop_find(cursors, slot) != null(*OsLoopCursor) {
+    if os_loop_find(bindings, slot) != null(*OsLoopSlot) {
+        if (*slot).owns { os_loop_owner_ready(check, body, slot, location); return; }
         os_loop_cursor_backedge(check, entry, body, before, after, location); return;
     }
-    if before == after { return; }
-    if (*slot).owns || (before != null(*OsValue) && ((*before).pointer || (*before).object != null(*OsObject))) {
-        os_error(check, location, "read loop backedge must preserve outer owners and storage"); return;
+    os_loop_fixed_value(check, entry, body, before, after, location);
+}
+
+fn os_loop_fixed_value(check: *OsCheck, entry: *OsState, body: *OsState,
+                        before: *OsValue, after: *OsValue, location: *CrustLoc) -> unit {
+    if before == null(*OsValue) && after == null(*OsValue) { return; }
+    if before == null(*OsValue) || after == null(*OsValue) {
+        os_error(check, location, "loop backedge must preserve initialized resource fields and storage"); return;
     }
-    if before != null(*OsValue) && after == null(*OsValue) {
-        os_error(check, location, "read loop backedge cannot remove initialized storage");
+    if (*before).native != (*after).native || (*before).object != (*after).object ||
+       (*before).loan != (*after).loan || (*before).borrow_scope != (*after).borrow_scope {
+        os_error(check, location, "loop backedge must preserve outer storage and borrow origins"); return;
+    }
+    if ((*after).presence & (*before).presence) != (*before).presence {
+        os_error(check, location, "loop backedge must preserve resource validity"); return;
+    }
+    if (*before).object != null(*OsObject) {
+        os_loop_fixed_object(check, entry, body, (*before).object, location);
     }
 }
 
-fn os_loop_read_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
-                         cursors: *OsLoopCursor, location: *CrustLoc) -> unit {
+fn os_loop_fixed_object(check: *OsCheck, entry: *OsState, body: *OsState,
+                         object: *OsObject, location: *CrustLoc) -> unit {
+    if !os_enter(check, location) { return; }
+    var before: u32 = os_flags(entry, object);
+    var after: u32 = os_flags(body, object);
+    var exact: u32 = OS_LIVE | OS_ABSENT | OS_DESTROYED | OS_PINNED;
+    if ((before ^ after) & exact) != 0u32 || ((after & before) & OS_NONNULL) != (before & OS_NONNULL) ||
+       os_owner(entry, object) != os_owner(body, object) {
+        os_error(check, location, "loop backedge must preserve storage lifetime and ownership");
+    } else { if (before & OS_SUMMARY) != 0u32 {
+        os_summary_initialized(check, body, object, location);
+    } else {
+        var field: *OsSlot = os_fields(entry, object);
+        while field != null(*OsSlot) && !os_failed(check) {
+            if !os_symbolic_slot(field) {
+                os_loop_fixed_value(check, entry, body, os_bound(entry, field), os_bound(body, field), location);
+            }
+            field = (*field).next;
+        }
+    } }
+    (*check).depth = (*check).depth - 1usize;
+}
+
+fn os_loop_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
+                         bindings: *OsLoopSlot, location: *CrustLoc) -> unit {
     var scope: *OsScope = (*entry).scope;
     while scope != null(*OsScope) && !os_failed(check) {
         var slot: *OsSlot = (*scope).locals;
         while slot != null(*OsSlot) && !os_failed(check) {
-            os_loop_read_slot(check, entry, body, slot, cursors, location);
+            os_loop_check_slot(check, entry, body, slot, bindings, location);
             slot = (*slot).next;
         }
         scope = (*scope).parent;
@@ -156,9 +218,9 @@ fn os_loop_read_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
 
 fn os_checked_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     if !os_pure(check, (*statement).expr) || !os_close(check, state, &(*statement).loc) { return; }
-    var cursors: *OsLoopCursor = null(*OsLoopCursor);
-    os_loop_scalars(check, state, &cursors, &(*statement).loc);
-    os_loop_bindings(check, state, (*statement).body, &cursors);
+    var bindings: *OsLoopSlot = null(*OsLoopSlot);
+    os_loop_scalars(check, state, &bindings, &(*statement).loc);
+    os_loop_bindings(check, state, (*statement).body, &bindings);
     if (*state).effect >= OS_EDIT {
         os_heap_havoc(check, state, (*state).domain, (*check).function, (*check).parameters);
         os_snapshot(check, state);
@@ -171,12 +233,8 @@ fn os_checked_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> u
     os_statement(check, &body, (*statement).body);
     (*check).loop_depth = (*check).loop_depth - 1usize;
     if os_failed(check) { return; }
-    if body.flow != PF_NORMAL && body.flow != PF_TRAP {
-        os_error(check, &(*statement).loc, "loop requires a normal invariant-preserving backedge"); return;
-    }
     if body.flow == PF_NORMAL {
-        os_loop_read_backedge(check, state, &body, cursors, &(*statement).loc);
-        os_native_backedge(check, state, &body, &(*statement).loc);
+        os_loop_backedge(check, state, &body, bindings, &(*statement).loc);
         os_close(check, &body, &(*statement).loc);
     }
     os_refine(check, state, (*statement).expr, false);

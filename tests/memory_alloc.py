@@ -174,7 +174,20 @@ def main():
         program = (ROOT / "examples/intrusive/program.crs").read_text()
         node = program.split("record Node", 1)[1].split("resource Owner", 1)[0]
         types = "domain Graph(Node);\nrecord Node" + node
+        heap = (ROOT / "examples/ownership-basics/heap.crs").read_text().split("fn main(", 1)[0]
+        heap = heap.replace(
+            "record Cell { value: i64; } domain(Cells);",
+            "record Cell { value: i64; } domain(Cells) invariant(true);",
+        )
+        native = (
+            (ROOT / "examples/ownership-basics/handles.crs").read_text().split("fn main(", 1)[0]
+        )
         cases = {
+            "owner-loop": heap + "fn main()->i32 access(reclaim,Cells) {"
+            "var owner:CellOwner=cell_new(65i64);var i:usize=0usize;"
+            "while i<3usize {drop owner;owner=cell_new(66i64);i=i+1usize;}return 0i32;}",
+            "native-loop": native + "fn main()->i32 {var f:File=open_file();var i:usize=0usize;"
+            "while i<3usize {drop f;f=open_file();i=i+1usize;}return 0i32;}",
             "views": (ROOT / "examples/ownership-basics/views.crs").read_text(),
             "native": (ROOT / "examples/ownership-basics/handles.crs").read_text(),
             "scalar-flow": SCALAR_FLOW,

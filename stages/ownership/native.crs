@@ -148,24 +148,3 @@ fn os_sentinel_integer(check: *OsCheck, syntax: *CrustTypeSyntax, integer: u64, 
     else { if bits < 64u64 { limit = (1u64 << bits) - 1u64; } }
     return integer <= limit && (!negative || signed);
 }
-
-fn os_native_backedge(check: *OsCheck, entry: *OsState, body: *OsState, location: *CrustLoc) -> unit {
-    var object: *OsObject = (*check).objects;
-    while object != null(*OsObject) && !os_failed(check) {
-        var field: *OsSlot = os_fields(entry, object);
-        while field != null(*OsSlot) && !os_failed(check) {
-            var before: *OsValue = os_bound(entry, field);
-            if before != null(*OsValue) && (*before).native != null(*OsField) {
-                var after: *OsValue = os_bound(body, field);
-                if after == null(*OsValue) || (*after).native != (*before).native {
-                    os_error(check, location, "loop backedge must preserve initialized resource fields"); return;
-                }
-                if ((*after).presence & (*before).presence) != (*before).presence {
-                    os_error(check, location, "loop backedge must preserve resource validity"); return;
-                }
-            }
-            field = (*field).next;
-        }
-        object = (*object).next;
-    }
-}

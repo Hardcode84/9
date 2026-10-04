@@ -19,7 +19,9 @@ resource ActiveHead { node: Node; } domain(Graph) drop active_drop;
 
 fn chain_drop(chain: mut Chain) -> unit access(reclaim, Graph) {
     var node: *Node = move chain.node;
-    if node != null(*Node) { drop *node; release(node as *u8); }
+    if node == null(*Node) { return; }
+    var rest: Chain = make Chain { node: move node };
+    while rest.node != null(*Node) { rest = chain_pop(move rest); }
 }
 
 fn node_drop(node: mut Node) -> unit access(reclaim, Graph) {
@@ -49,10 +51,14 @@ fn chain_push(rest: Chain) -> Chain access(reclaim, Graph) {
 }
 
 fn chain_new(count: usize) -> Chain access(reclaim, Graph) {
-    if count == 0usize { return make Chain { node: null(*Node) }; }
-    var rest: Chain = chain_new(count - 1usize);
-    if count > 1usize && rest.node == null(*Node) { return move rest; }
-    return chain_push(move rest);
+    var chain: Chain = make Chain { node: null(*Node) };
+    var index: usize = 0usize;
+    while index < count {
+        chain = chain_push(move chain);
+        if chain.node == null(*Node) { return move chain; }
+        index = index + 1usize;
+    }
+    return move chain;
 }
 
 fn chain_pop(chain: Chain) -> Chain access(reclaim, Graph) {
@@ -67,16 +73,17 @@ fn chain_pop(chain: Chain) -> Chain access(reclaim, Graph) {
     return move rest;
 }
 
-fn attach_ready(node: mut Node, head: mut ReadyHead) -> unit access(edit, Graph)
-    modifies(Node.prev, Node.next) {
-    ready_insert(&head.node, &node);
-    if node.owned_next != null(*Node) { attach_ready(mut *node.owned_next, mut head); }
-}
-
-fn attach_active(node: mut Node, head: mut ActiveHead) -> unit access(edit, Graph)
-    modifies(Node.active_prev, Node.active_next) {
-    active_insert(&head.node, &node);
-    if node.owned_next != null(*Node) { attach_active(mut *node.owned_next, mut head); }
+fn attach(node: *Node, ready: *Node, active: *Node) -> unit access(edit, Graph)
+    modifies(Node.prev, Node.next, Node.active_prev, Node.active_next)
+    requires(ready != null(*Node) && active != null(*Node)) {
+    edit Graph {
+        var cursor: *Node = node;
+        while cursor != null(*Node) {
+            ready_insert(ready, cursor);
+            active_insert(active, cursor);
+            cursor = (*cursor).owned_next;
+        }
+    }
 }
 
 fn ready_count(head: read ReadyHead) -> usize access(read, Graph) {
@@ -109,12 +116,17 @@ fn active_count(head: read ActiveHead) -> usize access(read, Graph) {
 
 fn chain_detached(chain: read Chain) -> unit access(read, Graph) {
     if chain.node == null(*Node) { return; }
-    nodes_detached(read *chain.node);
+    nodes_detached(chain.node);
 }
 
-fn nodes_detached(node: read Node) -> unit access(read, Graph) {
-    if node.next != &node || node.active_prev != &node { trap; }
-    if node.owned_next != null(*Node) { nodes_detached(read *node.owned_next); }
+fn nodes_detached(node: *Node) -> unit access(read, Graph) {
+    read Graph {
+        var cursor: *Node = node;
+        while cursor != null(*Node) {
+            if (*cursor).next != cursor || (*cursor).active_prev != cursor { trap; }
+            cursor = (*cursor).owned_next;
+        }
+    }
 }
 
 fn report() -> i32 { emit(79i32); emit(75i32); emit(10i32); return 0i32; }
@@ -131,8 +143,7 @@ fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Graph) {
         ready.node.active_prev = &ready.node; ready.node.active_next = &ready.node;
         active.node.prev = &active.node; active.node.next = &active.node;
         active.node.active_prev = &active.node; active.node.active_next = &active.node;
-        attach_ready(mut *chain.node, mut ready);
-        attach_active(mut *chain.node, mut active);
+        attach(chain.node, &ready.node, &active.node);
         var before: usize = ready_count(read ready);
         var active_before: usize = active_count(read active);
         if before != count || active_before != count { trap; }

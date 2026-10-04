@@ -504,7 +504,7 @@ The following distinctions matter when you design an interface:
 | Store a borrowed field in a record | Use `read T` or `mut T` fields in a scoped view record; move the record and declare `from` on a returned view record. |
 | Store a persistent raw pointer | Declare `owns` or `references` in a closed storage schema. |
 | Return an unchecked raw pointer | Rejected: use a borrowed result with an origin. |
-| Create or change an owner set across loop iterations | Rejected when no local owner-state invariant can be established. Changing the outer owner identity needs a loop invariant; recursive construction uses ordinary function contracts. |
+| Replace a local owner across loop iterations | Accepted for initialized, movable resource records without stored loans. The declared type is the loop invariant. Owned targets and validity facts can change; other outer storage retains its state. |
 | Traverse or detach an intrusive ring | Use ordinary field conditions and function contracts; traversal has no fixed node-count bound. |
 | Register `defer` in this modular stage | Rejected. The separate resource stage supports it, but this stage has no deferred-effect contract. |
 

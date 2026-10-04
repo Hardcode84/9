@@ -297,8 +297,31 @@ Loops use an inductive check. The checker forgets local scalar values, including
 scalar loan targets, and widens assigned domain cursors. A helper or a mutable
 loan can change scalar storage without a direct assignment to its name.
 The entry state does not retain those scalar values as loop invariants. The
-checker checks the body and the backedge under that state. It does not choose a maximum list length or expand recursive calls.
-Owner identity and loan lifetimes must remain valid across the backedge.
+checker checks the body and the backedge under that state. It does not choose
+a maximum list length or expand recursive calls.
+
+A loop can replace a local resource record. The record must be initialized and
+movable on entry and at each backedge. The checker uses its declared type as
+the invariant. It forgets the old owned targets and their null or native-handle
+validity facts. Test those values again before use. For example:
+
+```crust
+while chain.node != null(*Node) {
+    chain = chain_pop(move chain);
+}
+```
+
+The callee consumes the old chain and returns an initialized replacement. It
+is checked from its own interface. The loop needs no extra annotation. A
+replacement cannot overwrite a live owner, leave a moved field uninitialized,
+escape a loan, or move address-stable storage. Records with stored loans keep
+their existing origin contracts and cannot use this replacement rule.
+
+Other outer storage keeps its identity, initialization, and loan origins at
+the backedge. This includes fields reached through an owner or a borrowed
+record, not only the outer variable. A field condition must also hold at the
+boundary. An early return checks function exit and cleanup; it has no backedge.
+These checks add no runtime state.
 
 ## Output and verification
 

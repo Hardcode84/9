@@ -54,10 +54,22 @@ tag, reference count, or runtime owner flag.
 
 ## Build and remove nodes
 
-`chain_new(count)` constructs the tail through a recursive call. `chain_push`
-then allocates the next node, transfers the tail, and initializes both link sets
-at their final address. Each function is checked against its declared types
-and effects. The checker does not expand the recursive call.
+`chain_new(count)` starts with an empty chain and replaces it in a loop:
+
+```crust
+var chain: Chain = make Chain { node: null(*Node) };
+var index: usize = 0usize;
+while index < count {
+    chain = chain_push(move chain);
+    if chain.node == null(*Node) { return move chain; }
+    index = index + 1usize;
+}
+return move chain;
+```
+
+`chain_push` allocates the next node, transfers the tail, and initializes both
+link sets at their final address. Each function is checked against its declared
+types and effects. The checker does not expand the call.
 
 `chain_push` consumes its input chain. If allocation fails, it destroys that
 input and returns an empty chain. `chain_new` propagates this result, so a
@@ -80,11 +92,27 @@ runs the callback. Its removal calls also accept a detached node. `release` free
 allocation. The remaining chain stays alive. The example inserts a replacement
 while both heads remain live.
 
-A full chain drop uses the same contracts. `node_drop` detaches its own link
-sets before it transfers and destroys the tail. A transfer cannot leave a
-retained reference to an incomplete node. The callback must consume `owned_next` and
-leave both link sets detached. Releasing a linked node or leaving an owned field
-unconsumed is rejected.
+A full chain drop uses the same operation in a loop:
+
+```crust
+fn chain_drop(chain: mut Chain) -> unit access(reclaim, Graph) {
+    var node: *Node = move chain.node;
+    if node == null(*Node) { return; }
+    var rest: Chain = make Chain { node: move node };
+    while rest.node != null(*Node) { rest = chain_pop(move rest); }
+}
+```
+
+The empty case returns before it constructs a temporary chain. This prevents
+cleanup of an empty temporary from calling itself without end. `chain_pop`
+moves the tail out before it destroys the node. Thus that node's cleanup sees
+an empty owned field. `node_drop` also supports direct destruction of a node
+that still owns a tail: it detaches both link sets, transfers the tail, and
+drops that chain through the same loop.
+
+A transfer cannot leave a retained reference to an incomplete node. The callback
+must consume `owned_next` and leave both link sets detached. Releasing a linked
+node or leaving an owned field unconsumed is rejected.
 
 ## Check a recursive type with finite state
 
@@ -104,18 +132,20 @@ in the source or the target program.
 
 ## Understand the costs of this source
 
-Construction, attachment, and destruction use a call stack proportional to the
-node count. Select this source only when the maximum count fits the available
-stack. A constant-stack version needs a local invariant that permits an outer
-owner to change on each loop iteration. The current loop rule preserves outer
-owner identity and rejects that operation. Recursive types do not supply that
-loop rule.
+Construction, attachment, traversal, and destruction use loops. Their call-stack
+depth does not grow with node count. The type remains recursive.
 
-The stage also excludes active loans across a whole domain. A helper that
-receives both heads cannot edit one set of fields while it holds the unused loan to
-the other head. This source uses separate `attach_ready` and `attach_active`
-passes. The attachment functions declare exactly which Node fields they change.
-Those declarations preserve the owning field across recursive calls.
+At each owner-loop boundary, the chain must hold one initialized resource value.
+The checker forgets its previous target and checks the body with the declared
+type. A consumed chain must receive a valid replacement before the next iteration.
+The loop cannot retain a cursor or loan across reclamation. These rules require
+no loop annotation and insert no runtime owner state.
+
+`attach` receives ordinary checked cursors and edit access. Its one loop updates
+both list memberships. Its `modifies` clause names the four link fields and
+preserves the owning field. The nested access scope bounds cursor lifetime.
+It cannot destroy a node or take ownership through those cursors. A mutable-loan
+interface would also have to obey domain-wide loan exclusion.
 
 The [Rust comparison](../../../docs/ownership-rust.md#recursive-owners) explains
 which parts correspond to `Option<Box<Node>>`. It does not claim a complete
@@ -129,9 +159,10 @@ python3 tests/ownership_recursive.py --sanitize
 make check-ownership-alloc
 ```
 
-The tests execute empty and nonempty chains at `-O0` and `-O2`. The count can
-exceed the source nesting limit. They check exact-address reuse, allocation
-failure cleanup, emitted-code erasure, and rejected lifetime errors.
+The tests execute empty and nonempty chains at `-O0` and `-O2`. A separate native
+run uses a bounded stack with a node count above the source nesting limit. The
+tests check exact-address reuse, allocation failure cleanup, emitted-code erasure,
+and rejected lifetime errors, including incomplete owners at loop boundaries.
 
 A separate test publishes the provider, deletes its source files, and checks
 the client from the retained interface and object. The client checks its own

@@ -3,6 +3,8 @@
 """Check finite owner summaries against recursive native containers and imports."""
 
 import argparse
+import resource
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -32,8 +34,8 @@ def cases(source):
             "resource destruction requires initialized owner fields",
         ),
         "skip-value-drop": (
-            replace(source, "drop *node; release(node as *u8);", "release(node as *u8);"),
-            "cannot destroy storage: a surviving reference field",
+            replace(source, "drop *node;\n    release(node as *u8);", "release(node as *u8);"),
+            "release requires destruction of the stored resource value",
         ),
         "double-release": (
             replace(source, "release(node as *u8);", "release(node as *u8); release(node as *u8);"),
@@ -177,6 +179,122 @@ fn main()->i32 access(reclaim,Graph) {
     }
 
 
+def loop_cases(source):
+    def body(text):
+        return source + "fn bad(chain:Chain,count:usize)->unit access(reclaim,Graph) {" + text + "}"
+
+    return {
+        "loop-lost-owner": (
+            body("while count>0usize {var lost:Chain=move chain;}"),
+            "restore outer initialization and ownership",
+        ),
+        "loop-incomplete-replacement": (
+            body("while count>0usize {drop chain;var partial:Chain=uninit;chain=move partial;}"),
+            "uninitialized or has been moved",
+        ),
+        "loop-copy-owner": (
+            body("while count>0usize {chain=chain_pop(chain);}"),
+            "explicit move",
+        ),
+        "loop-overwrite-owner": (
+            body("while count>0usize {chain=chain_new(1usize);}"),
+            "overwrite a live owner",
+        ),
+        "loop-replace-borrowed": (
+            body(
+                "var loan:read Chain=read chain;while count>0usize {chain=chain_pop(move chain);}"
+            ),
+            "active",
+        ),
+        "loop-replace-with-cursor": (
+            body("var cursor:*Node=chain.node;while count>0usize {chain=chain_pop(move chain);}"),
+            "active domain cursor",
+        ),
+        "loop-empty-backedge": (
+            body("while count>0usize {drop chain;chain=make Chain{node:null(*Node)};drop chain;}"),
+            "restore outer initialization and ownership",
+        ),
+        "loop-partial-backedge": (
+            body(
+                "while count>0usize {chain=chain_push(move chain);var rest:Chain=make Chain{node:move chain.node};}"
+            ),
+            "initialized owner fields",
+        ),
+        "loop-incomplete-field": (
+            body("while count>0usize {var rest:Chain=make Chain{node:move chain.node};}"),
+            "initialized resource fields",
+        ),
+        "loop-changed-unwidened-field": (
+            body(
+                "while count>0usize {var rest:Chain=make Chain{node:move chain.node};chain.node=null(*Node);}"
+            ),
+            "preserve outer storage",
+        ),
+        "loop-replacement-null-fact": (
+            body(
+                "if chain.node==null(*Node) {return;}while count>0usize {var n:i64=(*chain.node).value;chain=chain_pop(move chain);}"
+            ),
+            "live non-null storage",
+        ),
+        "loop-pinned-replacement": (
+            replace(
+                source,
+                "attach(chain.node, &ready.node, &active.node);",
+                "while count>0usize {ready=move ready;}",
+            ),
+            "address-stable storage cannot move",
+        ),
+        "loop-invalid-entry-contract": (
+            replace(
+                source,
+                "attach(chain.node, &ready.node, &active.node);",
+                "ready.node.next=null(*Node);while count>0usize {ready=move ready;}",
+            ),
+            "construction does not establish its record invariant",
+        ),
+        "loop-plain-record-assignment": (
+            source
+            + "record Plain {value:i64;} fn bad(count:usize)->unit {var x:Plain=make Plain{value:0i64};while count>0usize {x=make Plain{value:1i64};}}",
+            "initialized scalar or domain cursor",
+        ),
+    }
+
+
+def loop_accepts(source):
+    return {
+        "loop-owner-swap": source
+        + """
+fn swap(a:Chain,b:Chain,count:usize)->unit access(reclaim,Graph) {
+    var i:usize=0usize;
+    while i<count {var old:Chain=move a;a=move b;b=move old;i=i+1usize;}
+}
+""",
+        "loop-nested-owners": source
+        + """
+fn nested(chain:Chain,count:usize)->Chain access(reclaim,Graph) {
+    var i:usize=0usize;
+    while i<count {
+        while chain.node!=null(*Node) {chain=chain_pop(move chain);}
+        chain=chain_push(move chain);
+        i=i+1usize;
+    }
+    return move chain;
+}
+""",
+        "loop-terminating-return": source
+        + """
+fn first(chain:Chain,count:usize)->Chain access(reclaim,Graph) {
+    while count>0usize {return chain_pop(move chain);}
+    return move chain;
+}
+""",
+    }
+
+
+def small_stack():
+    resource.setrlimit(resource.RLIMIT_STACK, (256 * 1024, 256 * 1024))
+
+
 def native(build, directory, sanitize):
     command([build / "crust-ownership-erasure", LINKS, PROGRAM])
     for optimization in ("-O0", "-O2"):
@@ -192,6 +310,15 @@ def native(build, directory, sanitize):
         command([build / "crust-ownership-test", *flags, "-o", output, LINKS, PROGRAM])
         for count in (0, 1, 2, 17, 257):
             assert command([output, *(["node"] * count)]).stdout == b"OK\n"
+        if not sanitize:
+            result = subprocess.run(
+                [output, *(["node"] * 4096)],
+                preexec_fn=small_stack,
+                capture_output=True,
+                timeout=30,
+                check=True,
+            )
+            assert result.stdout == b"OK\n" and not result.stderr
     check_runtime(
         build,
         directory,
@@ -212,7 +339,15 @@ def separate(build, directory, source):
     body, main = source.split("fn main(", 1)
     links.write_bytes(LINKS.read_bytes())
     provider.write_text(body)
-    client.write_text("// SPDX-License-Identifier: Apache-2.0\nfn main(" + main)
+    client.write_text(
+        "// SPDX-License-Identifier: Apache-2.0\n"
+        "fn drain(chain:Chain)->Chain access(reclaim,Graph) {"
+        "while chain.node!=null(*Node) {chain=chain_pop(move chain);}return move chain;}\n"
+        "fn main("
+        + main.replace(
+            "chain_detached(read chain);", "chain_detached(read chain);chain=drain(move chain);"
+        )
+    )
     driver = str(build / "crust-ownership-import-test")
     receipt = publish(driver, cache, [links, provider])
     links.unlink()
@@ -238,7 +373,7 @@ def run(build, sanitize):
     with tempfile.TemporaryDirectory(prefix="crust-recursive-", dir=build) as temporary:
         directory = Path(temporary)
         native(build, directory, sanitize)
-        for name, code in branch_cases(source).items():
+        for name, code in (branch_cases(source) | loop_accepts(source)).items():
             path = directory / f"{name}.crs"
             path.write_text(code)
             command(
@@ -249,7 +384,8 @@ def run(build, sanitize):
                     path,
                 ]
             )
-        for name, (code, diagnostic) in cases(source).items():
+        failures = cases(source) | loop_cases(source)
+        for name, (code, diagnostic) in failures.items():
             path = directory / f"{name}.crs"
             path.write_text(code)
             result = command([build / "crust-ownership-test", "--check", LINKS, path], expected=1)
@@ -268,7 +404,9 @@ def run(build, sanitize):
         )
         assert command([output, "one", "two"]).stdout == b"OK\n"
     print(
-        "recursive ownership: native counts, erasure, source root, 4 allocation failures, 3 type/branch cases, 16 rejections, and bodyless import passed"
+        f"recursive ownership: iterative native counts, erasure, source root, 4 allocation failures, "
+        f"{len(branch_cases(source)) + len(loop_accepts(source))} type/branch/loop cases, "
+        f"{len(failures)} rejections, and bodyless import passed"
     )
 
 

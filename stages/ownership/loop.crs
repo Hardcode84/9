@@ -57,8 +57,17 @@ fn os_loop_assignment(check: *OsCheck, state: *OsState, expression: *CrustExpr,
     while (*expression).kind == CRUST_E_GROUP { expression = (*expression).left; }
     if (*expression).kind != CRUST_E_NAME { return; }
     var slot: *OsSlot = os_local(state, (*expression).name);
+    if slot != null(*OsSlot) && os_borrowed((*slot).syntax) {
+        var value: *OsValue = os_bound(state, slot);
+        if value != null(*OsValue) && (*value).loan != null(*OsLoan) { slot = (*(*value).loan).place; }
+    }
+    os_loop_slot(check, state, slot, cursors, &(*expression).loc);
+}
+
+fn os_loop_slot(check: *OsCheck, state: *OsState, slot: *OsSlot,
+                 cursors: **OsLoopCursor, location: *CrustLoc) -> unit {
     if slot == null(*OsSlot) || os_loop_find(*cursors, slot) != null(*OsLoopCursor) { return; }
-    var value: *OsValue = os_loop_widen(check, state, slot, &(*expression).loc);
+    var value: *OsValue = os_loop_widen(check, state, slot, location);
     if value == null(*OsValue) { return; }
     var cursor: *OsLoopCursor = os_alloc(check, sizeof(OsLoopCursor), alignof(OsLoopCursor)) as *OsLoopCursor;
     if cursor == null(*OsLoopCursor) { return; }
@@ -66,6 +75,20 @@ fn os_loop_assignment(check: *OsCheck, state: *OsState, expression: *CrustExpr,
     (*cursor).next = *cursors;
     *cursors = cursor;
     os_set(check, state, slot as *u8, value, OS_READY);
+}
+
+fn os_loop_scalars(check: *OsCheck, state: *OsState, cursors: **OsLoopCursor, location: *CrustLoc) -> unit {
+    var scope: *OsScope = (*state).scope;
+    while scope != null(*OsScope) && !os_failed(check) {
+        var slot: *OsSlot = (*scope).locals;
+        while slot != null(*OsSlot) && !os_failed(check) {
+            if (*(*slot).syntax).kind < CRUST_T_POINTER && os_bound(state, slot) != null(*OsValue) {
+                os_loop_slot(check, state, slot, cursors, location);
+            }
+            slot = (*slot).next;
+        }
+        scope = (*scope).parent;
+    }
 }
 
 fn os_loop_bindings(check: *OsCheck, state: *OsState, statement: *CrustStmt,
@@ -134,6 +157,7 @@ fn os_loop_read_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
 fn os_checked_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     if !os_pure(check, (*statement).expr) || !os_close(check, state, &(*statement).loc) { return; }
     var cursors: *OsLoopCursor = null(*OsLoopCursor);
+    os_loop_scalars(check, state, &cursors, &(*statement).loc);
     os_loop_bindings(check, state, (*statement).body, &cursors);
     if (*state).effect >= OS_EDIT {
         os_heap_havoc(check, state, (*state).domain, (*check).function, (*check).parameters);

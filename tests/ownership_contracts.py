@@ -21,6 +21,55 @@ def rejected(compiler, directory, cases):
         assert diagnostic in result.stderr.decode(), f"{name}: {result.stderr}"
 
 
+SCALAR_FLOW = (
+    "fn clear(flag:mut bool)->unit {flag=false;} "
+    "fn branch(flag:mut bool,test:bool)->unit {flag=true;if test {flag=false;}} "
+    "fn finish(flag:mut bool)->unit {while flag {flag=false;}} "
+    "fn main(argc:i32,argv:**u8)->i32 {var flag:bool=true;branch(mut flag,true);"
+    "if flag {trap;}flag=true;while flag {clear(mut flag);}"
+    "flag=true;finish(mut flag);if flag {trap;}return 0i32;}"
+)
+
+
+def scalar_flow_cases():
+    schema = "domain D(Cell);record Cell {value:i64;} domain(D) invariant(true); "
+    null_access = " access(read,D) requires(p==null(*Cell)) "
+    return {
+        "scalar-loan-branch": (
+            schema
+            + "fn bad(flag:mut bool,test:bool,p:*Cell)->i64"
+            + null_access
+            + "{flag=true;if test {flag=false;}if flag {return 0i64;}return (*p).value;}",
+            "pointer access requires live non-null storage",
+        ),
+        "scalar-loan-loop-call": (
+            schema
+            + "fn clear(flag:mut bool)->unit {flag=false;} fn bad(p:*Cell)->i64"
+            + null_access
+            + "{var flag:bool=true;while flag {clear(mut flag);}return (*p).value;}",
+            "pointer access requires live non-null storage",
+        ),
+        "scalar-parameter-loop": (
+            schema
+            + "fn bad(flag:mut bool,p:*Cell)->i64"
+            + null_access
+            + "{flag=true;while flag {flag=false;}return (*p).value;}",
+            "pointer access requires live non-null storage",
+        ),
+    }
+
+
+def scalar_flow_native(build, directory, sanitize):
+    source = directory / "scalar-flow.crs"
+    source.write_text(SCALAR_FLOW)
+    generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
+    command(
+        [build / "crust-ownership-test", "--emit-c", "--symbols", symbols, "-o", generated, source]
+    )
+    command([build / "crust-ownership-erasure", source])
+    execute(generated, symbols, directory, "scalar-flow", sanitize, b"")
+
+
 def run(build, directory, sanitize):
     compiler = build / "crust-ownership-test"
     example = ROOT / "examples/ownership-graphs"
@@ -139,6 +188,8 @@ fn wrap(p:*Cell)->unit access(edit,D) requires(p!=null(*Cell)) {
     }
     for name, code in contract_cases().items():
         cases[name] = (code, expected[name])
+    scalar_flow_native(build, directory, sanitize)
+    cases.update(scalar_flow_cases())
     rejected(compiler, directory, cases)
     print(
         f"ownership contracts: graph native/root/erasure, scalar casts, and {len(cases)} semantic rejections passed"

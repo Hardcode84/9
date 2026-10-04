@@ -180,9 +180,11 @@ the premises. They cannot turn a failed proof into a successful proof.
 A destruction query uses an arbitrary surviving source address, not a list of
 allocations observed in a test run.
 
-Loops use an inductive check. The checker forgets assigned scalar values and
-widens assigned domain cursors. It checks the body and the backedge under that
-state. It does not choose a maximum list length or expand recursive calls.
+Loops use an inductive check. The checker forgets local scalar values, including
+scalar loan targets, and widens assigned domain cursors. A helper or a mutable
+loan can change scalar storage without a direct assignment to its name.
+The entry state does not retain those scalar values as loop invariants. The
+checker checks the body and the backedge under that state. It does not choose a maximum list length or expand recursive calls.
 Owner identity and loan lifetimes must remain valid across the backedge.
 
 ## Output and verification

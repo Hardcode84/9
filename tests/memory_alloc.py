@@ -168,11 +168,14 @@ def main():
         cases = {name: item[1] for name, item in loop_cases().items()}
         names = ("countdown", "continue", "break", "walk")
     if args.ownership:
+        from ownership_contracts import SCALAR_FLOW
+
         links = (ROOT / "examples/intrusive/links.crs").read_text()
         program = (ROOT / "examples/intrusive/program.crs").read_text()
         node = program.split("record Node", 1)[1].split("resource Owner", 1)[0]
         types = "domain Graph(Node);\nrecord Node" + node
         cases = {
+            "scalar-flow": SCALAR_FLOW,
             "scalar-loan": "fn clear(flag:mut bool)->unit {flag=false;} "
             "fn main()->i32 {var flag:bool=true; clear(mut flag); "
             "if flag {return 1i32;} return 0i32;}",

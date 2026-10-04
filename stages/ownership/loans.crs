@@ -150,10 +150,8 @@ fn os_loan_slot(check: *OsCheck, slot: *OsSlot, loan: *OsLoan) -> *OsSlot {
 
 fn os_loan_parameter(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue) -> unit {
     if !os_borrowed((*slot).syntax) || (*slot).authority { return; }
-    var target: *OsSlot = os_slot(check, (*(*slot).syntax).base, null(*CrustName), null(*OsObject), (*state).scope);
-    var storage: *OsValue = os_value(check, (*(*slot).syntax).base, (*value).object, false);
-    if target == null(*OsSlot) || storage == null(*OsValue) { return; }
-    os_set(check, state, target as *u8, storage, OS_READY);
+    var target: *OsSlot = os_loan_storage(check, state, (*(*slot).syntax).base, (*value).object);
+    if target == null(*OsSlot) { return; }
     (*value).place = target;
     (*value).loan = os_loan_new(check, state, value, (*(*slot).syntax).kind, &(*(*slot).syntax).loc);
     if (*value).loan != null(*OsLoan) { os_loan_keep(check, state, value); }
@@ -207,4 +205,17 @@ fn os_no_domain_loans(check: *OsCheck, state: *OsState, domain: *CrustName, loca
         loan = (*loan).next;
     }
     return !os_failed(check);
+}
+
+fn os_loan_storage(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax, object: *OsObject) -> *OsSlot {
+    var slot: *OsSlot = os_slot(check, syntax, null(*CrustName), null(*OsObject), (*state).scope);
+    var value: *OsValue = os_value(check, syntax, object, false);
+    if slot == null(*OsSlot) || value == null(*OsValue) { return null(*OsSlot); }
+    // Scalar loan targets participate in the same joins and loops as named locals.
+    if object == null(*OsObject) {
+        (*slot).next = (*(*state).scope).locals;
+        (*(*state).scope).locals = slot;
+    }
+    os_set(check, state, slot as *u8, value, OS_READY);
+    return slot;
 }

@@ -63,7 +63,44 @@ fn host_source(run: *CrustRun, path: *u8) -> bool {
     (*run).next_identity = (*run).next_identity + 1u64;
     var unit_value: *CrustUnit = null(*CrustUnit);
     if !crust_read((*run).context, captured, &unit_value) { return false; }
+    if !host_api_unit(run, unit_value) { return false; }
     return crust_run_check_unit(run, unit_value);
+}
+
+fn host_api_name(name: *u8) -> bool {
+    var prefix: *u8 = "CRUST_ABI_";
+    var index: usize = 0usize;
+    while index < 10usize {
+        if name[index] != prefix[index] { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn host_api_digest(value: *CrustExpr) -> bool {
+    if value == null(*CrustExpr) || (*value).kind != CRUST_E_STRING || (*value).byte_count != 65usize {
+        return false;
+    }
+    var index: usize = 0usize;
+    while index < 64usize {
+        if (*value).bytes[index] != CRUST_ABI_crust0[index] { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn host_api_unit(run: *CrustRun, unit_value: *CrustUnit) -> bool {
+    var declaration: *CrustDecl = (*unit_value).declarations;
+    while declaration != null(*CrustDecl) {
+        if host_api_name((*(*declaration).name).text) &&
+           ((*declaration).kind != CRUST_D_CONST || !host_api_digest((*declaration).init)) {
+            crust_set_error((*run).context, (*declaration).loc.source, (*declaration).loc.offset,
+                            "native API digest mismatch in host source; regenerate the API declarations");
+            return false;
+        }
+        declaration = (*declaration).next;
+    }
+    return true;
 }
 
 // Load native code from a root-relative path. Keep it live through root completion.

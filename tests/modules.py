@@ -115,7 +115,8 @@ def check_exports(suite):
     symbols = suite.command(
         ["nm", "-D", "--defined-only", suite.build / "crust-c-library.so"]
     ).stdout.split()[2::3]
-    assert set(flags[1::2]) == set(symbols), (flags, symbols)
+    markers = {b"CRUST_ABI_crust0", b"CRUST_ABI_crust0_host", b"CRUST_ABI_crust0_stage"}
+    assert set(flags[1::2]) | markers == set(symbols), (flags, symbols)
     invalid = suite.write("aliased-interface.crs", 'extern fn source()->i32="native";')
     malformed = suite.write("bad-interface.crs", "fn broken(")
     for paths, message in (

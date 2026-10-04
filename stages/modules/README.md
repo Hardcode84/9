@@ -154,11 +154,13 @@ The root reads every supplied path, then emits one `--export NAME` argument
 for each external function declaration. It checks all names before it writes
 output. The Makefile uses this output to select the C backend library exports.
 Changing a consumer declaration changes the next library build's exports.
+The library also exports the generated public API digest constants. The root
+loader checks these constants when it loads the library.
 
 This operation reads syntax; it does not resolve interface types or prove
 ABI compatibility with the implementation. The C backend CLI checks that each
-selected export names a definition. Tests compare the requested names with
-the shared library's actual exported symbols and exercise its consumers.
+selected export names a definition. Tests check the requested names, the API
+digest constants, and the library's consumers.
 
 The CLI's export option uses one name for both source lookup and native
 linkage. Thus this helper rejects interfaces whose source and native names

@@ -232,7 +232,7 @@ The installed Crust helper library provides four operations:
 | `host_path(run, path)` | Root-relative absolute path copied into the host arena |
 | `host_input(run, path, identity)` | Captured source descriptor, path, and bytes in that arena |
 | `host_source(run, path)` | Read and check one complete host declaration unit |
-| `host_link(run, path)` | Load one exact shared-library path for host calls |
+| `host_link(run, path)` | Check the native API digest and load one exact shared-library path for host calls |
 
 Relative paths start at the directory of the root operand. They do not change
 after a host working-directory change. The root operand's directory is used
@@ -245,6 +245,32 @@ search, deduplication, import graph, package resolver, or source execution in
 can use public reads, bindings, and contexts to implement another policy.
 The [module tutorial](../stages/modules/README.md) does this with separate
 contexts, explicit exports, and consumer aliases.
+
+`host_source` checks the digest constants in generated API inputs against the
+installed API before it checks the unit. Generate all API files from the same
+public headers.
+
+Each native input must export `CRUST_ABI_crust0`, a constant pointer to the
+generated digest string. With `--library`, the supplied compilation drivers export
+the `CRUST_ABI_` constants from their source inputs. A custom emitter must preserve
+these exports. Use the digest from the API that the library was compiled
+against. Each image must define its own base marker. A marker in a dependency
+cannot supply it.
+
+For a C library, include the generated header and place this definition in
+one translation unit:
+
+```c
+#include "crust0_abi.h"
+CRUST_ABI_EXPORT;
+```
+
+`host_link` and `crust_run_link` reject a missing marker or a digest mismatch
+before the runner can resolve calls into the library. The diagnostic names the
+library. Rebuild the library with the current generated API. Extra markers for
+other public headers must also match. The check covers the compiler's public
+API. User-defined stage interfaces remain the caller's ABI contract. Native
+libraries are trusted code; system loader constructors run during `dlopen`.
 
 Native libraries use immediate symbol binding and local loader visibility.
 They remain loaded through runner destruction. The default resolver searches

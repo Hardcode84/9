@@ -109,6 +109,30 @@ fn c_driver_names(driver: *CDriver) -> bool {
     return true;
 }
 
+fn c_driver_abi_name(name: *u8) -> bool {
+    var prefix: *u8 = "CRUST_ABI_";
+    var index: usize = 0usize;
+    while index < 10usize {
+        if name[index] != prefix[index] { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn c_driver_abi_exports(context: *CrustContext) -> unit {
+    var unit_value: *CrustUnit = (*context).units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) {
+            if (*declaration).kind == CRUST_D_CONST && c_driver_abi_name((*(*declaration).name).text) {
+                (*declaration).link_name = (*(*declaration).name).text;
+            }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+}
+
 fn c_driver_is_entry(declaration: *CrustDecl) -> bool {
     if (*declaration).kind != CRUST_D_FUNCTION || (*declaration).param_count != 2usize { return false; }
     var parameter: *CrustParam = (*declaration).params;
@@ -170,6 +194,7 @@ fn c_driver_option(argument: *u8, name: *u8) -> bool {
 
 fn c_driver_exports(cli: *CCli) -> bool {
     var context: *CrustContext = (*cli).stage.status.context;
+    if (*cli).library { c_driver_abi_exports(context); }
     var index: usize = 0usize;
     while index < (*cli).export_count {
         var name: *u8 = (*cli).exports[index];

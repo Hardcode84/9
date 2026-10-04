@@ -229,6 +229,7 @@ var result:CacheArtifact=uninit;
                 "cc",
                 "-std=c99",
                 "-pedantic-errors",
+                "-I" + str(ROOT / "include"),
                 "-shared",
                 "-fPIC",
                 "-x",
@@ -237,7 +238,10 @@ var result:CacheArtifact=uninit;
                 "-o",
                 library,
             ],
-            input=f"int provider(void){{return {version};}}\n".encode(),
+            input=(
+                '#include "crust0_abi.h"\nCRUST_ABI_EXPORT;\n'
+                f"int provider(void){{return {version};}}\n"
+            ).encode(),
             check=True,
         )
         assert suite.run(root).stdout == b"miss\n"

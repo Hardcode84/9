@@ -123,14 +123,17 @@ class Suite:
         return result
 
     def native_library(self):
+        abi = self.write("native-abi.c", '#include "crust0_abi.h"\nCRUST_ABI_EXPORT;\n')
         self.command(
             [
                 *self.cc,
                 *RUNTIME.STRICT,
                 *self.cflags,
+                "-I" + str(ROOT / "include"),
                 "-fPIC",
                 "-shared",
                 ROOT / "tests/native.c",
+                abi,
                 *self.ldflags,
                 "-o",
                 self.native,
@@ -662,6 +665,7 @@ def check_foreign_errors(suite):
     for index in range(2):
         path = suite.write(
             f"ambiguous-{index}.c",
+            '#include "crust0_abi.h"\nCRUST_ABI_EXPORT;\n'
             f"int shared_symbol(void);\nint shared_symbol(void){{return {index};}}\n",
         )
         library = path.with_suffix(".plugin")
@@ -670,6 +674,7 @@ def check_foreign_errors(suite):
                 *suite.cc,
                 *RUNTIME.STRICT,
                 *suite.cflags,
+                "-I" + str(ROOT / "include"),
                 "-fPIC",
                 "-shared",
                 path,

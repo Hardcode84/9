@@ -94,11 +94,12 @@ The emitters reject a reference that lacks a native link name. The stage does
 not recompile or relocate previously published values.
 
 Checking adds the new function to the root context. Emission uses a temporary
-context with that function as its sole definition. The checked syntax and type
-facts remain in the root context. After loading succeeds, the stage changes the
-new declaration to an external definition and obtains its native function
-value with `crust_eval_function`. It does not prepare an interpreted callable
-for that function. The first published callable is therefore the native one.
+context with that function and a copy of the root's public API digest constant.
+Each image exports the digest. The root checks it before it accepts the image.
+The checked syntax and type facts remain in the root context. After loading
+succeeds, the stage changes the new declaration to an external definition and
+obtains its native function value with `crust_eval_function`. The first
+published callable is the native one.
 
 Each image has a private temporary directory. The entry's exact native name
 includes that directory. The linker receives `session.libraries` and preceding images as explicit

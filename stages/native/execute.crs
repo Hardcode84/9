@@ -48,13 +48,22 @@ fn native_compile(root: *CrustRun, session: *NativeSession, declaration: *CrustD
     // The private directory gives each published callable a unique link identity.
     (*declaration).link_name = native_join((*root).context, (*image).directory, "/entry");
     if (*declaration).link_name == null(*u8) { return false; }
+    var abi_name: *CrustName = crust_try_intern((*root).context, "CRUST_ABI_crust0", 16usize);
+    if abi_name == null(*CrustName) { return false; }
+    var abi_symbol: *CrustSymbol = crust_map_get(&(*(*root).context).globals, abi_name as usize) as *CrustSymbol;
+    var abi: CrustDecl = *(*abi_symbol).decl;
+    abi.next = null(*CrustDecl);
+    abi.link_name = (*abi.name).text;
+    var abi_unit: CrustUnit = make CrustUnit {
+        source: abi.loc.source, declarations: &abi, next: null(*CrustUnit)
+    };
+    var unit_value: CrustUnit = make CrustUnit {
+        source: (*declaration).loc.source, declarations: declaration, next: &abi_unit
+    };
     var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
-    var unit_value: CrustUnit = make CrustUnit {
-        source: (*declaration).loc.source, declarations: declaration, next: null(*CrustUnit)
-    };
     context.units = &unit_value;
-    context.last_unit = &unit_value;
+    context.last_unit = &abi_unit;
     var success: bool = (*session).compile(&context, session, image);
     if context.error_count != 0usize {
         crust_set_error((*root).context, context.error_loc.source, context.error_loc.offset, &context.error[0usize]);

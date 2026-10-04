@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#define _XOPEN_SOURCE 700
+#define _GNU_SOURCE
+#include "crust0_abi.h"
 #include "run_platform.h"
 
 #include <dlfcn.h>
+#include <link.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -85,10 +87,48 @@ bool crust_run_native_resolve(CrustRun *run, CrustNativeModule *modules, CrustDe
     return true;
 }
 
+static const char *native_abi_error(void *handle)
+{
+    static const char *const names[] = CRUST_ABI_NAMES;
+    struct link_map *map;
+    size_t index;
+    if (dlinfo(handle, RTLD_DI_LINKMAP, &map) != 0)
+        return "cannot inspect native API digest";
+    for (index = 0; index < sizeof(names) / sizeof(names[0]); ++index) {
+        const char *const *digest;
+        Dl_info info;
+        void *symbol = dlsym(handle, names[index]);
+        /* dlsym also searches dependencies. Each image must carry its own base
+           marker; a dependency must not attest to the image that imports it. */
+        if (symbol == NULL || dladdr(symbol, &info) == 0 || info.dli_fbase != (void *)map->l_addr) {
+            if (index == 0)
+                return "missing native API digest; rebuild the library with the current API";
+            continue;
+        }
+        digest = symbol;
+        if (*digest == NULL || strcmp(*digest, CRUST_ABI_DIGEST) != 0)
+            return "native API digest mismatch; rebuild the library with the current API";
+    }
+    return NULL;
+}
+
+static bool native_close(CrustRun *run, void *handle)
+{
+    if (dlclose(handle) != 0) {
+        const char *error = dlerror();
+        char message[512];
+        (void)snprintf(message, sizeof(message), "cannot unload native input: %s",
+                       error == NULL ? "loader failure" : error);
+        return run_error(run, message);
+    }
+    return true;
+}
+
 bool crust_run_native_link(CrustRun *run, CrustNativeModule **modules, const char *path)
 {
     CrustNativeModule *module;
     void *handle;
+    const char *error;
     char message[512];
     if (path == NULL || path[0] == '\0')
         return run_error(run, "native path is empty");
@@ -100,10 +140,18 @@ bool crust_run_native_link(CrustRun *run, CrustNativeModule **modules, const cha
         return false;
     handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
     if (handle == NULL) {
-        const char *error = dlerror();
+        error = dlerror();
         (void)snprintf(message, sizeof(message), "cannot load native input '%s': %s", path,
                        error == NULL ? "loader failure" : error);
         return run_error(run, message);
+    }
+    error = native_abi_error(handle);
+    if (error != NULL) {
+        (void)snprintf(message, sizeof(message), "cannot load native input '%s': %s", path, error);
+        (void)run_error(run, message);
+        if (!native_close(run, handle))
+            crust_run_diagnostic(run->context);
+        return false;
     }
     module->handle = handle;
     module->next = *modules;
@@ -116,12 +164,7 @@ bool crust_run_native_destroy(CrustRun *run, CrustNativeModule *modules)
     CrustNativeModule *module;
     bool success = true;
     for (module = modules; module != NULL; module = module->next) {
-        if (dlclose(module->handle) != 0) {
-            const char *error = dlerror();
-            char message[512];
-            (void)snprintf(message, sizeof(message), "cannot unload native input: %s",
-                           error == NULL ? "loader failure" : error);
-            (void)run_error(run, message);
+        if (!native_close(run, module->handle)) {
             crust_run_diagnostic(run->context);
             success = false;
         }

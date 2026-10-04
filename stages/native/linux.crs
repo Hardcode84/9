@@ -14,6 +14,16 @@ extern fn native_exit(status: i32) -> unit = "_exit";
 extern fn native_fopen(path: *u8, mode: *u8) -> *u8 = "fopen";
 extern fn native_fclose(file: *u8) -> i32 = "fclose";
 
+fn native_abi_name(name: *u8) -> bool {
+    var prefix: *u8 = "CRUST_ABI_";
+    var index: usize = 0usize;
+    while index < 10usize {
+        if name[index] != prefix[index] { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
 fn native_error(context: *CrustContext, message: *u8) -> bool {
     crust_set_error(context, null(*CrustSource), 0usize, message);
     return false;

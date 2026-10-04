@@ -701,6 +701,11 @@ ABI. A caller builds against that package's version. User libraries can use
 their own syntax trees, type systems, and IR, then construct the input of the
 next selected consumer. There is no mandatory universal language IR.
 
+The source runner checks a native library's generated public API digest at
+load time. Missing and different digests are errors. The library must carry
+its own marker. The [runner contract](source-runner.md#files-and-native-inputs)
+defines the marker and build requirements.
+
 Source parsers and artifact loaders validate their input formats. Foreign calls
 obey their declared ABI and memory contracts. Internal operations consume facts
 established by their producers.

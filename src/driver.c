@@ -37,7 +37,7 @@ static void crust_driver_diagnostic(const CrustContext *ctx)
     fprintf(stderr, "%s:%zu:%zu: error: %s\n", source->path, line, column, ctx->error);
 }
 
-static bool crust_driver_names(CrustContext *ctx)
+static bool crust_driver_names(CrustContext *ctx, bool library)
 {
     CrustFailureFrame failure;
     CrustUnit *unit;
@@ -55,6 +55,9 @@ static bool crust_driver_names(CrustContext *ctx)
             if (decl->kind != CRUST_D_RECORD && decl->link_name == NULL) {
                 decl->link_name = private_name;
             }
+            if (library && decl->kind == CRUST_D_CONST &&
+                strncmp(decl->name->text, "CRUST_ABI_", 10) == 0)
+                decl->link_name = decl->name->text;
         }
     }
     ctx->failure = failure.previous;
@@ -214,7 +217,7 @@ static bool compile_program(CrustContext *ctx, const DriverOptions *options, int
     if (options->mode == CHECK) {
         return true;
     }
-    if (!crust_driver_names(ctx))
+    if (!crust_driver_names(ctx, options->library))
         goto compile_error;
     if (!options->library) {
         entry = crust_driver_find(ctx, options->entry_name);

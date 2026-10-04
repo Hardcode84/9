@@ -185,6 +185,22 @@ bindings, storage slots, native symbol roles, and backend operation functions.
 There is no permanent binary ABI. Build a stage against the same package
 version as its compiler libraries.
 
+The API generator computes a SHA-256 digest from the public header tokens and
+the Linux x86-64 LP64 profile identifier. The digest covers record fields,
+enums, macros, and function signatures. Comments and whitespace do not change
+it. `include/crust0_abi.h` and each generated Crust API file contain this digest.
+`make` updates these files when a public header changes. `tools/api.py --check`
+checks the generated declarations and digests.
+
+The supplied C and assembly drivers export each `CRUST_ABI_` constant from
+their input in `--library` mode. The native stage does the same. This prefix is
+reserved for API metadata. The root loader requires the base marker and checks
+all additional API markers in each library against its own digest. A mismatch
+or missing base marker stops the load and reports the library path. The check runs once per
+load. It adds no check to native calls. See the
+[native input contract](source-runner.md#files-and-native-inputs) for C libraries
+and custom emitters.
+
 | Operation | Input and result |
 |---|---|
 | `crust_read` | Source bytes to an owned syntax unit |

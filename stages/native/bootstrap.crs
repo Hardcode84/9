@@ -34,6 +34,9 @@ fn native_exports(context: *CrustContext, exports: **u8, export_count: usize) ->
         var declaration: *CrustDecl = (*unit_value).declarations;
         while declaration != null(*CrustDecl) {
             if (*declaration).kind != CRUST_D_EXTERN { (*declaration).link_name = ""; }
+            if (*declaration).kind == CRUST_D_CONST && native_abi_name((*(*declaration).name).text) {
+                (*declaration).link_name = (*(*declaration).name).text;
+            }
             declaration = (*declaration).next;
         }
         unit_value = (*unit_value).next;

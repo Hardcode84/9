@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn os_read_modifies(reader: *CrustReader, list: **OsField) -> unit {
+fn os_read_modifies(reader: *CrustReader, stage: *OsStage, list: **OsField) -> unit {
     rr_next(reader);
     rr_expect(reader, 40u32, "expected '(' before modified fields");
     while !(*reader).failed && (*reader).token.kind != 41u32 {
         var item: *OsField = rr_alloc(reader, sizeof(OsField), alignof(OsField)) as *OsField;
         if item == null(*OsField) { return; }
-        (*item).record_name = rr_name(reader);
+        (*item).record_name = os_read_reference(reader, stage, CRUST_D_RECORD);
         rr_expect(reader, 46u32, "expected '.' between schema and modified field");
         (*item).name = rr_name(reader);
         (*item).next = *list;
@@ -98,6 +98,10 @@ fn os_resolve_domain(check: *OsCheck, domain: *OsDomain) -> unit {
         var name: *CrustName = (*(*domain).declaration).name;
         if (*schema).domain != null(*CrustName) && (*schema).domain != name {
             os_error(check, &(*(*domain).declaration).loc, "record cannot belong to multiple domains"); return;
+        }
+        if os_imported((*check).stage, (*schema).declaration) &&
+           (*(*schema).declaration).loc.source != (*(*domain).declaration).loc.source {
+            os_error(check, &(*(*domain).declaration).loc, "imported record domain membership is frozen by its provider interface"); return;
         }
         (*schema).domain = name;
         item = (*item).next;

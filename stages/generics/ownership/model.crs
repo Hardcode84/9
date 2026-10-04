@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record OgReference { application: *CrustTypeSyntax; kind: u32; }
+record OgSourceRange { begin: usize; end: usize; }
+
+record OgProgram {
+    generics: GsProgram;
+    parsed_resources: RsStage;
+    resources: RsStage;
+    parsed: OsStage;
+    ownership: OsStage;
+    ranges: CrustMap;
+    references: CrustMap;
+    resource_index: CrustMap;
+    sealed_domains: CrustMap;
+    verified: CrustMap;
+    proof_roots: CrustMap;
+    proof_checks: usize;
+    proof_bytes: usize;
+}

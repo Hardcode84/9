@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
+extern fn release(pointer: *u8) -> unit foreign(release) = "free";
+
+domain Graph(Link, Head, Node, Owner);
+record Link { prev: *Link; next: *Link; } opaque;
+resource Head { link: Link; } opaque stable drop head_drop;
+record Node!(Payload) { ready: Link; active: Link; value: Payload; } opaque;
+resource Owner!(Payload) { node: *Node!(Payload); } opaque drop owner_drop!(Payload);
+
+fn link_init(link: *Link) -> unit access(edit, Graph) {
+    (*link).prev = link;
+    (*link).next = link;
+}
+
+fn link_unlink(link: *Link) -> unit access(edit, Graph) {
+    var before: *Link = (*link).prev;
+    var after: *Link = (*link).next;
+    (*before).next = after;
+    (*after).prev = before;
+    link_init(link);
+}
+
+fn link_insert(at: *Link, link: *Link) -> unit access(edit, Graph) {
+    link_unlink(link);
+    var after: *Link = (*at).next;
+    (*link).prev = at;
+    (*link).next = after;
+    (*after).prev = link;
+    (*at).next = link;
+}
+
+fn head_init(head: *Head) -> unit access(reclaim, Graph) initializes(head) {
+    link_init(&(*head).link);
+}
+
+fn head_drop(head: mut Head) -> unit access(reclaim, Graph) {
+    while head.link.next != &head.link { link_unlink(head.link.next); }
+}
+
+fn head_count(head: read Head) -> usize access(read, Graph) {
+    var count: usize = 0usize;
+    var link: *Link = head.link.next;
+    while link != &head.link {
+        count = count + 1usize;
+        link = (*link).next;
+    }
+    return count;
+}
+
+fn owner_new!(Payload)(value: Payload) -> Owner!(Payload) access(reclaim, Graph) {
+    var node: *Node!(Payload) = allocate(sizeof(Node!(Payload))) as *Node!(Payload);
+    if node == null(*Node!(Payload)) { trap; }
+    link_init(&(*node).ready);
+    link_init(&(*node).active);
+    (*node).value = move value;
+    return make Owner!(Payload) { node: node };
+}
+
+fn owner_drop!(Payload)(owner: mut Owner!(Payload)) -> unit access(reclaim, Graph) {
+    link_unlink(&(*owner.node).ready);
+    link_unlink(&(*owner.node).active);
+    drop *owner.node;
+    release(owner.node as *u8);
+}
+
+fn ready_insert!(Payload)(head: mut Head, owner: read Owner!(Payload)) -> unit access(edit, Graph) {
+    link_insert(&head.link, &(*owner.node).ready);
+}
+
+fn active_insert!(Payload)(head: mut Head, owner: read Owner!(Payload)) -> unit access(edit, Graph) {
+    link_insert(&head.link, &(*owner.node).active);
+}
+
+fn owner_value!(Payload)(owner: read Owner!(Payload)) -> read Payload access(read, Graph) from owner {
+    return read (*owner.node).value;
+}
+
+fn owner_mut!(Payload)(owner: mut Owner!(Payload)) -> mut Payload access(edit, Graph) from owner {
+    return mut (*owner.node).value;
+}

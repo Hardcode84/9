@@ -32,6 +32,7 @@ separates application rules from container-author obligations.
 | 10 | [Owning tree](ownership-graphs/README.md) | Transfer child ownership behind the same checked interface |
 | 11 | [One-way index](ownership-index/README.md) | Retire a symbol with incoming aliases and check local views from separate inputs |
 | 12 | [Generics](generics/README.md) | Declare type parameters beside records and functions; use explicit type arguments |
+| 13 | [Generics with ownership](generics/ownership/README.md) | Check generic payload contracts and use an intrusive container with plain and resource payloads |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -70,6 +71,7 @@ require `make resource-stage`. The SQLite example also needs its pinned native
 SQLite input; its README gives the command.
 Overload examples require `make overload-stage`.
 The generics example requires `make generics-stage`.
+The ownership-generic example requires `make ownership-generics-stage`.
 The intrusive, ownership-basics, ownership-graphs, and ownership-index examples require
 `make ownership-stage`. The intrusive `raw-main.crs` root contains the unchecked seed-language bootstrap witness.
 Paths passed to `host_source`, `host_input`, and `host_path` are relative to the
@@ -98,6 +100,8 @@ Run `make check-highlight` for the highlighter roots and native service.
 Run `make check-vscode` with Bun for the editor adapter tests.
 Run `make check-modules` for module bindings, exports, and allocation failures.
 Run `make check-generics` for specialization, bindings, type identity, and allocation failures.
+Run `make check-ownership-generics` for generic ownership contracts, cleanup,
+native container behavior, and independent imports.
 Run `make check-native` for native bootstrap, handoff, and cleanup. This example
 uses the assembly library from `make all` and builds its executor on each
 invocation. Run `make check-cache` for source-only startup, artifact reuse,

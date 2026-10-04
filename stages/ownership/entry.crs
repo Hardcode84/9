@@ -41,6 +41,7 @@ fn os_pointer_parameter(check: *OsCheck, state: *OsState, parameter: *CrustParam
 }
 
 fn os_parameter_bind(check: *OsCheck, state: *OsState, parameter: *CrustParam, value: *OsValue, borrowed: bool) -> unit {
+    if !os_abstract_local(check, state, (*parameter).name, &(*parameter).loc) { return; }
     var slot: *OsSlot = os_slot(check, (*parameter).syntax_type, (*parameter).name, null(*OsObject), (*state).scope);
     if slot == null(*OsSlot) { return; }
     (*slot).argument = true;

@@ -30,6 +30,10 @@ record GsProgram {
     instances: *GpInstance;
     last_instance: *GpInstance;
     output_tail: *CrustDecl;
+    clone_user: *u8;
+    clone_statement: fn(*GsClone,*CrustStmt,*CrustStmt)->unit;
+    clone_body: fn(*GsClone,*CrustDecl,u32)->*CrustStmt;
+    clone_declaration: fn(*GsClone,*CrustDecl,*CrustDecl)->unit;
     namespace: u64;
     next_identity: u64;
     requests: usize;

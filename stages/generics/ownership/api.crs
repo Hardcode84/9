@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Check generic payload contracts and ownership, then build the selected sources.
+// Input context is empty. Trusted sources are selected by the compilation program.
+extern fn ownership_generics_program(request: *CrustBuild, trusted: *CrustSource, count: usize) -> i32 = "ownership_generics_program";

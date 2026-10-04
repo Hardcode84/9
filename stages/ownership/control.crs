@@ -64,6 +64,8 @@ fn os_access_scope(check: *OsCheck, state: *OsState, access: *OsAccess, location
 }
 
 fn os_variable(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    if !os_abstract_local(check, state, (*statement).name, &(*statement).loc) { return; }
+    if os_abstract_active(check) && !os_abstract_type(check, (*statement).syntax_type, false) { return; }
     var value: *OsValue = null(*OsValue);
     if !(*statement).uninitialized { value = os_expr(check, state, (*statement).value); }
     else { if (*(*statement).syntax_type).kind == CRUST_T_NAME {
@@ -267,22 +269,18 @@ fn os_summary_initialized(check: *OsCheck, state: *OsState, object: *OsObject, l
 }
 
 fn os_return_value(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if (*statement).expr == null(*CrustExpr) { return; }
+    if (*statement).expr == null(*CrustExpr) {
+        os_abstract_empty_return(check, &(*statement).loc); return;
+    }
     var value: *OsValue = os_expr(check, state, (*statement).expr);
     if value == null(*OsValue) || os_failed(check) || !os_plain(check, value, &(*statement).loc) { return; }
+    if !os_abstract_same(check, (*(*(*check).function).declaration).syntax_type, (*value).syntax, &(*statement).loc) { return; }
     if (*value).object != null(*OsObject) && !(*value).pointer && !os_borrowed((*value).syntax) {
         os_publish_value(check, state, (*value).object, &(*statement).loc);
     }
     if !os_transferable(check, state, value, &(*statement).loc) || !os_brand_return(check, state, value, &(*statement).loc) { return; }
-    if !os_borrowed((*value).syntax) && os_view_mode(check, (*value).syntax) >= RS_READ {
-        os_return_view_record(check, state, (*value).object, &(*statement).loc);
-    }
-    if os_borrowed((*value).syntax) {
-        if !os_return_view(check, state, value, &(*statement).loc) { return; }
-    } else { if (*value).pointer {
-        os_error(check, &(*statement).loc, "returning a cursor requires a declared lifetime interface"); return;
-    } }
-    os_result_ready(check, state, value, &(*statement).loc);
+    os_return_lifetime(check, state, value, &(*statement).loc);
+    if !os_failed(check) { os_result_ready(check, state, value, &(*statement).loc); }
 }
 
 fn os_result_ready(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> unit {
@@ -292,4 +290,12 @@ fn os_result_ready(check: *OsCheck, state: *OsState, value: *OsValue, location: 
     if !os_initialized(check, state, (*value).object) {
         os_error(check, location, "return value is not fully initialized"); return;
     }
+}
+
+fn os_return_lifetime(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> unit {
+    if !os_borrowed((*value).syntax) && os_view_mode(check, (*value).syntax) >= RS_READ {
+        os_return_view_record(check, state, (*value).object, location);
+    }
+    if os_borrowed((*value).syntax) { os_return_view(check, state, value, location); }
+    else { if (*value).pointer { os_error(check, location, "returning a cursor requires a declared lifetime interface"); } }
 }

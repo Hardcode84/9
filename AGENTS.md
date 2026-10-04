@@ -168,6 +168,7 @@ Code changes: `make all`, then applicable checks:
 | Compilation examples | `check-examples` |
 | Modules/bindings/exports | `check-modules` |
 | Generic definitions/instances | `check-generics` |
+| Generic ownership/contracts/imports | `check-ownership-generics` |
 | Native jobs | `check-parallel` |
 | Highlight/editor | `check-highlight check-vscode` |
 | Crust CCN | `check-ccn` |

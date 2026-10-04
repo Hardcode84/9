@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn transfer!(Payload)(value: Payload) -> Payload {
+    return move value;
+}
+
+fn discard!(Payload)(value: Payload) -> unit {
+    drop value;
+}

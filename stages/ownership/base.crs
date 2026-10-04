@@ -8,6 +8,10 @@ fn os_init(stage: *OsStage, resources: *RsStage) -> unit {
     (*stage).resources = resources;
     (*stage).domains = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
     (*stage).trusted = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).parameters = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).verified_bodies = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).reference_user = null(*u8);
+    (*stage).read_reference = null(fn(*CrustReader,*u8,u32)->*CrustName);
 }
 
 fn os_failed(check: *OsCheck) -> bool {

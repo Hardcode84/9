@@ -1,0 +1,112 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_abstract_base(syntax: *CrustTypeSyntax) -> *CrustTypeSyntax {
+    if os_borrowed(syntax) { return (*syntax).base; }
+    return syntax;
+}
+
+fn os_abstract_empty_return(check: *OsCheck, location: *CrustLoc) -> unit {
+    if os_abstract_active(check) && (*(*(*(*check).function).declaration).syntax_type).kind != CRUST_T_UNIT {
+        os_error(check, location, "non-unit return requires a value");
+    }
+}
+
+fn os_abstract_condition(check: *OsCheck, value: *OsValue, location: *CrustLoc) -> unit {
+    if !os_abstract_active(check) || value == null(*OsValue) { return; }
+    if (*os_abstract_base((*value).syntax)).kind != CRUST_T_BOOL {
+        os_error(check, location, "condition requires bool");
+    }
+}
+
+fn os_abstract_unary(check: *OsCheck, expression: *CrustExpr, value: *OsValue) -> bool {
+    if !os_abstract_active(check) { return true; }
+    var kind: u32 = (*os_abstract_base((*value).syntax)).kind;
+    var valid: bool = kind < CRUST_T_BOOL;
+    if (*expression).op == CRUST_OP_NOT { valid = kind == CRUST_T_BOOL; }
+    if !valid { os_error(check, &(*expression).loc, "unary operator requires its scalar operand type"); }
+    return valid;
+}
+
+fn os_abstract_binary(check: *OsCheck, expression: *CrustExpr, left: *OsValue, right: *OsValue) -> bool {
+    if !os_abstract_active(check) { return true; }
+    var a: *CrustTypeSyntax = os_abstract_base((*left).syntax);
+    var b: *CrustTypeSyntax = os_abstract_base((*right).syntax);
+    if !os_abstract_same(check, a, b, &(*expression).loc) { return false; }
+    var kind: u32 = (*a).kind;
+    var equality: bool = (*expression).op == CRUST_OP_EQ || (*expression).op == CRUST_OP_NE;
+    if kind < CRUST_T_BOOL || (equality && (kind == CRUST_T_BOOL || kind == CRUST_T_POINTER || kind == CRUST_T_FUNCTION)) { return true; }
+    os_error(check, &(*expression).loc, "operator is unavailable for this abstract operand type");
+    return false;
+}
+
+fn os_abstract_cast(check: *OsCheck, target: *CrustTypeSyntax, source: *CrustTypeSyntax, location: *CrustLoc) -> bool {
+    if !os_abstract_active(check) { return true; }
+    if !os_abstract_type(check, target, false) { return false; }
+    source = os_abstract_base(source);
+    if ((*source).kind < CRUST_T_BOOL && (*target).kind < CRUST_T_BOOL) ||
+       ((*source).kind == CRUST_T_POINTER && (*target).kind == CRUST_T_POINTER) { return true; }
+    os_error(check, location, "cast requires integer types or pointer types with checked storage");
+    return false;
+}
+
+fn os_abstract_make(check: *OsCheck, expression: *CrustExpr) -> bool {
+    if !os_abstract_active(check) { return true; }
+    var syntax: *CrustTypeSyntax = (*expression).syntax_type;
+    if !os_abstract_type(check, syntax, false) { return false; }
+    if (*syntax).kind != CRUST_T_NAME || os_parameter_type((*check).stage, syntax) {
+        os_error(check, &(*expression).loc, "construction requires a declared record with visible fields"); return false;
+    }
+    var fields: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    var item: *CrustInit = (*expression).inits;
+    while item != null(*CrustInit) && !os_failed(check) {
+        if crust_map_get(&fields, (*item).name as usize) != null(*u8) {
+            os_error(check, &(*item).loc, "duplicate record initializer"); return false;
+        }
+        rs_put((*(*check).stage).resources, &fields, (*item).name as usize, item as *u8);
+        item = (*item).next;
+    }
+    return !os_failed(check);
+}
+
+fn os_abstract_literal(check: *OsCheck, expression: *CrustExpr) -> bool {
+    if !os_abstract_active(check) { return true; }
+    var kind: u32 = (*expression).kind;
+    if kind == CRUST_E_NULL {
+        if !os_abstract_type(check, (*expression).syntax_type, false) { return false; }
+        if (*(*expression).syntax_type).kind != CRUST_T_POINTER { os_error(check, &(*expression).loc, "null requires a pointer type"); }
+    } else { if kind == CRUST_E_SIZEOF || kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF {
+        if !os_abstract_type(check, (*expression).syntax_type, false) { return false; }
+        if kind == CRUST_E_OFFSETOF { os_abstract_offset(check, expression); }
+    } }
+    return !os_failed(check);
+}
+
+fn os_abstract_offset(check: *OsCheck, expression: *CrustExpr) -> unit {
+    var syntax: *CrustTypeSyntax = (*expression).syntax_type;
+    var schema: *OsRecord = os_record((*check).stage, syntax);
+    if schema == null(*OsRecord) {
+        os_error(check, &(*expression).loc, "offsetof requires a declared record with visible fields"); return;
+    }
+    var global: *RsGlobal = rs_global((*(*check).stage).resources, (*syntax).name);
+    if crust_map_get(&(*global).fields, (*expression).field_name as usize) == null(*u8) {
+        os_error(check, &(*expression).loc, "offsetof field does not exist");
+    }
+}
+
+fn os_abstract_move_field(check: *OsCheck, slot: *OsSlot, location: *CrustLoc) -> bool {
+    if !os_abstract_active(check) || (*slot).object == null(*OsObject) ||
+       !rs_owns((*(*check).stage).resources, (*slot).syntax) { return true; }
+    var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*(*slot).object).syntax).name);
+    if global != null(*RsGlobal) && (*global).resource != null(*RsResource) {
+        os_error(check, location, "cannot move a field out of a resource with a destructor"); return false;
+    }
+    return true;
+}
+
+fn os_abstract_defer(check: *OsCheck, expression: *CrustExpr, contract: *OsFunction) -> bool {
+    if !os_abstract_active(check) { return true; }
+    if (*(*(*contract).declaration).syntax_type).kind != CRUST_T_UNIT {
+        os_error(check, &(*expression).loc, "deferred function must return unit"); return false;
+    }
+    return os_abstract_arity(check, (*contract).declaration, (*expression).arg_count, &(*expression).loc);
+}

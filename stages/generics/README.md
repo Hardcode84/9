@@ -2,6 +2,9 @@
 
 # Generics stage
 
+The optional [ownership composition](ownership/README.md) adds abstract payload
+contracts, generic cleanup, and ownership-checked clients to the source interface.
+
 The [generics tutorial](../../examples/generics/README.md) builds two typed pairs
 from one source definition. Start there for a complete compilation program.
 

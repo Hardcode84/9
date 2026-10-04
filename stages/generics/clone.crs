@@ -88,6 +88,9 @@ fn gs_clone_statement(clone: *GsClone, source: *CrustStmt, depth: u32) -> *Crust
     (*target).value = gs_clone_expression(clone, (*source).value, depth + 1u32);
     (*target).body = gs_clone_statements(clone, (*source).body, depth + 1u32);
     (*target).otherwise = gs_clone_statements(clone, (*source).otherwise, depth + 1u32);
+    if (*context).error_count == 0usize && (*clone).statement != null(fn(*GsClone,*CrustStmt,*CrustStmt)->unit) {
+        (*clone).statement(clone, source, target);
+    }
     if (*context).error_count != 0usize { return null(*CrustStmt); }
     return target;
 }
@@ -137,7 +140,12 @@ fn gs_clone_declaration(clone: *GsClone, source: *CrustDecl) -> *CrustDecl {
     (*target).syntax_type = gs_clone_type(clone, (*source).syntax_type, 0u32);
     (*target).fields = gs_clone_fields(clone, (*source).fields);
     (*target).params = gs_clone_formals(clone, (*source).params);
-    (*target).body = gs_clone_statements(clone, (*source).body, 0u32);
+    (*target).param_count = (*source).param_count;
+    if (*source).body != null(*CrustStmt) {
+        if (*clone).body == null(fn(*GsClone,*CrustDecl,u32)->*CrustStmt) {
+            (*target).body = gs_clone_statements(clone, (*source).body, 0u32);
+        } else { (*target).body = (*clone).body(clone, source, 0u32); }
+    }
     (*target).init = gs_clone_expression(clone, (*source).init, 0u32);
     if (*context).error_count != 0usize { return null(*CrustDecl); }
     return target;

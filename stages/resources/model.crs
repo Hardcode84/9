@@ -38,6 +38,7 @@ record RsStage {
     source_imports: CrustMap;
     lowered_types: CrustMap;
     ownership: CrustMap;
+    affine_types: CrustMap;
     functions: CrustMap;
     return_sources: CrustMap;
     return_loans: CrustMap;

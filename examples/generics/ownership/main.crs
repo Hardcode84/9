@@ -1,0 +1,17 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "../../../api/crust0_stage.crs");
+host_source(run, "../../../stages/generics/ownership/api.crs");
+host_source(run, "../../../stages/generics/ownership/build.crs");
+host_link(run, "../../../build/crust-ownership-generics-library.so");
+
+var provider: *CrustSource = host_input(run, "provider.crs", 100u64);
+if provider == null(*CrustSource) { return 1i32; };
+if (*run).argc != 0i32 {
+    return ownership_generics_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv, provider, 1usize);
+};
+var arguments: [*u8; 5] = make [*u8; 5] {
+    "-o", host_path(run, "../../../build/generics-ownership"),
+    host_path(run, "payloads.crs"), host_path(run, "checked.crs"), host_path(run, "program.crs")
+};
+return ownership_generics_build(null(*CrustSource), 0usize, 5i32, &arguments[0usize], provider, 1usize);

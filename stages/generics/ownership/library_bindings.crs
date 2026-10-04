@@ -1,0 +1,212 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn og_library_binding_error(scope: *OgLibraryScope, loc: *CrustLoc, message: *u8) -> bool {
+    gs_error(&(*(*scope).program).generics.syntax, loc, message);
+    return false;
+}
+
+fn og_library_global(scope: *OgLibraryScope, name: *CrustName, loc: *CrustLoc) -> bool {
+    if name == null(*CrustName) { return true; }
+    if crust_map_get(&(*scope).globals, name as usize) != null(*u8) { return true; }
+    return og_library_binding_error(scope, loc, "generic library reference must name a declaration in the frozen provider");
+}
+
+fn og_library_type(scope: *OgLibraryScope, syntax: *CrustTypeSyntax, depth: u32) -> bool {
+    if syntax == null(*CrustTypeSyntax) { return true; }
+    var context: *CrustContext = &(*(*scope).program).generics.syntax;
+    if !gs_depth(context, &(*syntax).loc, depth) { return false; }
+    if (*syntax).kind == CRUST_T_NAME &&
+       crust_map_get(&(*scope).parameters, (*syntax).name as usize) == null(*u8) &&
+       !og_library_global(scope, (*syntax).name, &(*syntax).loc) { return false; }
+    if !og_library_type(scope, (*syntax).base, depth + 1u32) { return false; }
+    var index: usize = 0usize;
+    while index < (*syntax).param_count {
+        if !og_library_type(scope, (*syntax).params[index], depth + 1u32) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn og_library_reference(scope: *OgLibraryScope, name: *CrustName, loc: *CrustLoc) -> bool {
+    var reference: *OgReference = crust_map_get(&(*(*scope).program).references, name as usize) as *OgReference;
+    if reference != null(*OgReference) { return og_library_type(scope, (*reference).application, 0u32); }
+    return og_library_global(scope, name, loc);
+}
+
+fn og_library_expression(scope: *OgLibraryScope, expression: *CrustExpr, depth: u32) -> bool {
+    if expression == null(*CrustExpr) { return true; }
+    if !gs_depth(&(*(*scope).program).generics.syntax, &(*expression).loc, depth) { return false; }
+    if (*expression).kind == CRUST_E_NAME &&
+       crust_map_get(&(*scope).locals, (*expression).name as usize) == null(*u8) &&
+       !og_library_global(scope, (*expression).name, &(*expression).loc) { return false; }
+    if !og_library_type(scope, (*expression).syntax_type, depth + 1u32) ||
+       !og_library_expression(scope, (*expression).left, depth + 1u32) ||
+       !og_library_expression(scope, (*expression).right, depth + 1u32) { return false; }
+    var index: usize = 0usize;
+    while index < (*expression).arg_count {
+        if !og_library_expression(scope, (*expression).args[index], depth + 1u32) { return false; }
+        index = index + 1usize;
+    }
+    var item: *CrustInit = (*expression).inits;
+    while item != null(*CrustInit) {
+        if !og_library_expression(scope, (*item).value, depth + 1u32) { return false; }
+        item = (*item).next;
+    }
+    return true;
+}
+
+fn og_library_local(scope: *OgLibraryScope, name: *CrustName, loc: *CrustLoc) -> bool {
+    if name == null(*CrustName) { return true; }
+    if crust_map_get(&(*scope).locals, name as usize) != null(*u8) ||
+       crust_map_get(&(*scope).globals, name as usize) != null(*u8) ||
+       crust_map_get(&(*scope).parameters, name as usize) != null(*u8) {
+        return og_library_binding_error(scope, loc, "generic library local conflicts with a visible name");
+    }
+    var context: *CrustContext = &(*(*scope).program).generics.syntax;
+    var binding: *OgLibraryBinding = crust_try_alloc(context, sizeof(OgLibraryBinding), alignof(OgLibraryBinding)) as *OgLibraryBinding;
+    if binding == null(*OgLibraryBinding) { return false; }
+    *binding = make OgLibraryBinding { name: name, previous: (*scope).bindings };
+    (*scope).bindings = binding;
+    return crust_try_map_set(context, &(*scope).locals, name as usize, name as *u8);
+}
+
+fn og_library_leave(scope: *OgLibraryScope, saved: *OgLibraryBinding) -> bool {
+    while (*scope).bindings != saved {
+        var binding: *OgLibraryBinding = (*scope).bindings;
+        if !crust_try_map_set(&(*(*scope).program).generics.syntax, &(*scope).locals,
+                             (*binding).name as usize, null(*u8)) { return false; }
+        (*scope).bindings = (*binding).previous;
+    }
+    return true;
+}
+
+fn og_library_statements(scope: *OgLibraryScope, statement: *CrustStmt, depth: u32) -> bool {
+    var saved: *OgLibraryBinding = (*scope).bindings;
+    while statement != null(*CrustStmt) {
+        if !og_library_statement(scope, statement, depth) { return false; }
+        statement = (*statement).next;
+    }
+    return og_library_leave(scope, saved);
+}
+
+fn og_library_statement(scope: *OgLibraryScope, statement: *CrustStmt, depth: u32) -> bool {
+    if !gs_depth(&(*(*scope).program).generics.syntax, &(*statement).loc, depth) { return false; }
+    var access: *OsAccess = crust_map_get(&(*(*scope).program).parsed.blocks, statement as usize) as *OsAccess;
+    if access != null(*OsAccess) && !og_library_reference(scope, (*access).domain, &(*statement).loc) { return false; }
+    if !og_library_type(scope, (*statement).syntax_type, depth + 1u32) ||
+       !og_library_expression(scope, (*statement).expr, depth + 1u32) ||
+       !og_library_expression(scope, (*statement).value, depth + 1u32) { return false; }
+    if (*statement).kind == CRUST_S_VAR && !og_library_local(scope, (*statement).name, &(*statement).loc) { return false; }
+    return og_library_statements(scope, (*statement).body, depth + 1u32) &&
+           og_library_statements(scope, (*statement).otherwise, depth + 1u32);
+}
+
+fn og_library_fields(scope: *OgLibraryScope, field: *OsField, globals: bool) -> bool {
+    var loc: *CrustLoc = &(*(*scope).declaration).loc;
+    while field != null(*OsField) {
+        if globals && !og_library_reference(scope, (*field).name, loc) { return false; }
+        if !og_library_reference(scope, (*field).record_name, loc) ||
+           !og_library_expression(scope, (*field).invalid, 0u32) { return false; }
+        field = (*field).next;
+    }
+    return true;
+}
+
+fn og_library_contracts(scope: *OgLibraryScope) -> bool {
+    var program: *OgProgram = (*scope).program;
+    var declaration: *CrustDecl = (*scope).declaration;
+    var loc: *CrustLoc = &(*declaration).loc;
+    var schema: *OsRecord = crust_map_get(&(*program).parsed.records, declaration as usize) as *OsRecord;
+    if schema != null(*OsRecord) && (!og_library_reference(scope, (*schema).domain, loc) ||
+        !og_library_fields(scope, (*schema).owns, false)) { return false; }
+    var domain: *OsDomain = crust_map_get(&(*program).parsed.domains, (*declaration).name as usize) as *OsDomain;
+    if domain != null(*OsDomain) && !og_library_fields(scope, (*domain).records, true) { return false; }
+    var function: *OsFunction = crust_map_get(&(*program).parsed.functions, declaration as usize) as *OsFunction;
+    if function == null(*OsFunction) { return true; }
+    if !og_library_reference(scope, (*function).domain, loc) ||
+       !og_library_fields(scope, (*function).modifies, false) { return false; }
+    var native: *OsNative = (*function).native;
+    while native != null(*OsNative) {
+        if !og_library_reference(scope, (*native).schema, loc) { return false; }
+        native = (*native).next;
+    }
+    return true;
+}
+
+fn og_library_declaration(scope: *OgLibraryScope, declaration: *CrustDecl) -> bool {
+    var program: *OgProgram = (*scope).program;
+    var context: *CrustContext = &(*program).generics.syntax;
+    (*scope).declaration = declaration;
+    (*scope).parameters = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    var parameters: *GpParameters = crust_map_get(&(*program).generics.parameters, declaration as usize) as *GpParameters;
+    if parameters != null(*GpParameters) {
+        var index: usize = 0usize;
+        while index < (*parameters).count {
+            var name: *CrustName = (*parameters).names[index];
+            if !crust_try_map_set(context, &(*scope).parameters, name as usize, name as *u8) { return false; }
+            index = index + 1usize;
+        }
+    }
+    return og_library_declaration_body(scope, declaration);
+}
+
+fn og_library_declaration_body(scope: *OgLibraryScope, declaration: *CrustDecl) -> bool {
+    var saved: *OgLibraryBinding = (*scope).bindings;
+    if !og_library_type(scope, (*declaration).syntax_type, 0u32) { return false; }
+    var field: *CrustField = (*declaration).fields;
+    while field != null(*CrustField) {
+        if !og_library_type(scope, (*field).syntax_type, 0u32) { return false; }
+        field = (*field).next;
+    }
+    var parameter: *CrustParam = (*declaration).params;
+    while parameter != null(*CrustParam) {
+        if !og_library_type(scope, (*parameter).syntax_type, 0u32) ||
+           !og_library_local(scope, (*parameter).name, &(*parameter).loc) { return false; }
+        parameter = (*parameter).next;
+    }
+    if !og_library_contracts(scope) || !og_library_expression(scope, (*declaration).init, 0u32) ||
+       !og_library_statements(scope, (*declaration).body, 0u32) { return false; }
+    return og_library_leave(scope, saved);
+}
+
+fn og_library_globals(scope: *OgLibraryScope) -> bool {
+    var context: *CrustContext = &(*(*scope).program).generics.syntax;
+    var unit_value: *CrustUnit = (*context).units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) {
+            if crust_map_get(&(*scope).globals, (*declaration).name as usize) != null(*u8) {
+                return og_library_binding_error(scope, &(*declaration).loc, "duplicate frozen provider declaration");
+            }
+            if !crust_try_map_set(context, &(*scope).globals, (*declaration).name as usize, declaration as *u8) { return false; }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    return true;
+}
+
+fn og_library_closed(program: *OgProgram) -> bool {
+    var empty: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    var scope: OgLibraryScope = make OgLibraryScope {
+        globals: empty, parameters: empty, locals: empty, program: program,
+        bindings: null(*OgLibraryBinding), declaration: null(*CrustDecl)
+    };
+    if !og_library_globals(&scope) { return false; }
+    var unit_value: *CrustUnit = (*program).generics.syntax.units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) {
+            if !og_library_declaration(&scope, declaration) { return false; }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    var resource: *RsResource = (*program).parsed_resources.resources;
+    while resource != null(*RsResource) {
+        if !og_library_declaration(&scope, (*resource).declaration) ||
+           !og_library_reference(&scope, (*resource).drop_name, &(*(*resource).declaration).loc) { return false; }
+        resource = (*resource).next;
+    }
+    return true;
+}

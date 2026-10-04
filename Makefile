@@ -32,7 +32,7 @@ CCN = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs 
 RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources/read.crs stages/resources/types.crs stages/resources/constants.crs stages/resources/state.crs stages/resources/cleanup.crs stages/resources/drop.crs stages/resources/places.crs stages/resources/outputs.crs stages/resources/expr.crs stages/resources/control.crs stages/resources/emit.crs stages/resources/program.crs stages/resources/build.crs
 RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(RESOURCE)
 RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_prepare_delegated rs_c_body rs_source_import rs_return_from
-OWNERSHIP = stages/ownership/model.crs stages/ownership/trust.crs stages/ownership/base.crs stages/ownership/native_read.crs stages/ownership/native.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/fields.crs stages/ownership/loans.crs stages/ownership/views.crs stages/ownership/view_results.crs stages/ownership/results.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/conditions.crs stages/ownership/calls.crs stages/ownership/entry.crs stages/ownership/flow.crs stages/ownership/contracts.crs stages/ownership/effects.crs stages/ownership/scopes.crs stages/ownership/defer.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/program.crs
+OWNERSHIP = stages/ownership/abstract.crs stages/ownership/abstract_expr.crs stages/ownership/model.crs stages/ownership/trust.crs stages/ownership/base.crs stages/ownership/native_read.crs stages/ownership/native.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/fields.crs stages/ownership/loans.crs stages/ownership/views.crs stages/ownership/view_results.crs stages/ownership/results.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/conditions.crs stages/ownership/calls.crs stages/ownership/entry.crs stages/ownership/flow.crs stages/ownership/contracts.crs stages/ownership/effects.crs stages/ownership/scopes.crs stages/ownership/defer.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/program.crs
 OWNERSHIP_IMPORTS = api/crust0_eval.crs api/crust0_run.crs stages/native/model.crs stages/native/linux.crs stages/cache/model.crs stages/cache/linux.crs stages/cache/artifact.crs stages/cache/inputs.crs stages/ownership/library_model.crs stages/ownership/interface.crs stages/ownership/artifact.crs stages/ownership/publish.crs stages/ownership/imports.crs
 OWNERSHIP_LIBRARY = $(RESOURCE_LIBRARY) $(OWNERSHIP) $(OWNERSHIP_IMPORTS)
 OVERLOAD = stages/overload/model.crs stages/overload/base.crs stages/overload/types.crs stages/overload/collect.crs stages/overload/resolve.crs stages/overload/read.crs stages/overload/program.crs
@@ -127,8 +127,8 @@ $(BUILD)/crust-asm-library.so: $(BUILD)/crust-asm-library.o
 GENERICS = stages/generics/model.crs stages/generics/base.crs stages/generics/definition.crs stages/generics/key.crs stages/generics/types.crs stages/generics/clone.crs stages/generics/instances.crs
 GENERICS_SOURCE = $(READER) stages/generics/source_model.crs stages/generics/read.crs stages/generics/source_key.crs stages/generics/normalize.crs stages/generics/source.crs
 
-$(BUILD)/generics-exports: $(BUILD)/crust stages/modules/library.crs stages/modules/exports.crs stages/generics/api.crs stages/generics/source_api.crs Makefile
-	$< stages/modules/exports.crs stages/generics/api.crs stages/generics/source_api.crs > $@.tmp
+$(BUILD)/generics-exports: $(BUILD)/crust stages/modules/library.crs stages/modules/exports.crs stages/generics/api.crs stages/generics/source_api.crs stages/generics/source_extension.crs Makefile
+	$< stages/modules/exports.crs stages/generics/api.crs stages/generics/source_api.crs stages/generics/source_extension.crs > $@.tmp
 	mv $@.tmp $@
 
 $(BUILD)/crust-generics-library.o: $(BUILD)/crust-c $(GENERICS) $(GENERICS_SOURCE) $(BUILD)/generics-exports Makefile
@@ -136,6 +136,29 @@ $(BUILD)/crust-generics-library.o: $(BUILD)/crust-c $(GENERICS) $(GENERICS_SOURC
 
 $(BUILD)/crust-generics-library.so: $(BUILD)/crust-generics-library.o
 	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(LDFLAGS) -o $@
+
+GENERIC_OWNERSHIP = $(OWNERSHIP_LIBRARY) $(GENERICS) $(filter-out $(READER),$(GENERICS_SOURCE)) stages/generics/ownership/model.crs stages/generics/ownership/read.crs stages/generics/ownership/clone.crs stages/generics/ownership/domains.crs stages/generics/ownership/domains_seal.crs stages/generics/ownership/arguments.crs stages/generics/ownership/proof.crs stages/generics/ownership/check.crs stages/generics/ownership/program.crs stages/generics/ownership/library_model.crs stages/generics/ownership/library_bindings.crs stages/generics/ownership/library_bytes.crs stages/generics/ownership/library.crs
+
+$(BUILD)/crust-ownership-generics-test: $(BUILD)/crust-c $(GENERIC_OWNERSHIP) tests/ownership_input.crs tests/ownership_generics_driver.crs Makefile
+	$< -o $@ $(GENERIC_OWNERSHIP) tests/ownership_input.crs tests/ownership_generics_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+$(BUILD)/crust-ownership-generics-library.o: $(BUILD)/crust-c $(GENERIC_OWNERSHIP) Makefile
+	$< --library --object --export ownership_generics_program --export og_init --export og_read --export og_read_range --export og_prove --export og_check --export og_destroy --export og_library_publish --export og_library_import --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(GENERIC_OWNERSHIP)
+
+$(BUILD)/crust-ownership-generics-library.so: $(BUILD)/crust-ownership-generics-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(LDFLAGS) -o $@
+
+.PHONY: ownership-generics-stage check-ownership-generics
+ownership-generics-stage: $(BUILD)/crust-ownership-generics-library.so
+
+$(BUILD)/crust-ownership-generics-clone: $(BUILD)/crust-c $(GENERIC_OWNERSHIP) tests/ownership_generics_clone.crs Makefile
+	$< -o $@ $(GENERIC_OWNERSHIP) tests/ownership_generics_clone.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+check-ownership-generics: all c-stage ownership-generics-stage $(BUILD)/crust-ownership-generics-test $(BUILD)/crust-ownership-generics-clone
+	$(BUILD)/crust-ownership-generics-clone
+	python3 tests/ownership_generics.py --build $(BUILD) --sanitize
+	python3 tests/generics_ownership_imports.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+	python3 tests/ownership_generics_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --sources $(GENERIC_OWNERSHIP)
 
 .PHONY: generics-stage check-generics
 generics-stage: $(BUILD)/crust-generics-library.so

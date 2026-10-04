@@ -35,7 +35,7 @@ def build_driver(suite, filename, evaluator=False):
     sources += [
         path
         for path in sorted((ROOT / "stages/generics").glob("*.crs"))
-        if path.name not in ("api.crs", "source_api.crs")
+        if path.name not in ("api.crs", "source_api.crs", "source_extension.crs")
     ]
     sources += [ROOT / "stages/reader" / name for name in ("model.crs", "lex.crs", "parse.crs")]
     output = suite.work / filename

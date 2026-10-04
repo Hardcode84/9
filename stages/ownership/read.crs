@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
+fn os_read_reference(reader: *CrustReader, stage: *OsStage, kind: u32) -> *CrustName {
+    if (*stage).read_reference != null(fn(*CrustReader,*u8,u32)->*CrustName) {
+        return (*stage).read_reference(reader, (*stage).reference_user, kind);
+    }
+    return rr_name(reader);
+}
+
 fn os_read_field(reader: *CrustReader, list: **OsField) -> *OsField {
     var field: *OsField = rr_alloc(reader, sizeof(OsField), alignof(OsField)) as *OsField;
     if field == null(*OsField) { return field; }
@@ -45,7 +52,7 @@ fn os_read_drop(reader: *CrustReader, stage: *OsStage, declaration: *CrustDecl) 
     var resource: *RsResource = rr_alloc(reader, sizeof(RsResource), alignof(RsResource)) as *RsResource;
     if resource == null(*RsResource) { return; }
     (*resource).declaration = declaration;
-    (*resource).drop_name = rr_name(reader);
+    (*resource).drop_name = os_read_reference(reader, stage, CRUST_D_FUNCTION);
     (*resource).next = (*(*stage).resources).resources;
     (*(*stage).resources).resources = resource;
     rr_expect(reader, 59u32, "expected ';' after resource drop function");
@@ -55,6 +62,11 @@ fn os_read_record(reader: *CrustReader, stage: *OsStage, resource: bool) -> *Cru
     (*reader).token.kind = RR_RECORD;
     var declaration: *CrustDecl = rr_record(reader);
     if declaration == null(*CrustDecl) { return declaration; }
+    return os_read_record_suffix(reader, stage, declaration, resource);
+}
+
+fn os_read_record_suffix(reader: *CrustReader, stage: *OsStage,
+                         declaration: *CrustDecl, resource: bool) -> *CrustDecl {
     var contract: *OsRecord = rr_alloc(reader, sizeof(OsRecord), alignof(OsRecord)) as *OsRecord;
     if contract == null(*OsRecord) { return null(*CrustDecl); }
     (*contract).declaration = declaration;
@@ -74,21 +86,21 @@ fn os_read_effect(reader: *CrustReader) -> u32 {
     return 0u32;
 }
 
-fn os_read_function_access(reader: *CrustReader, function: *OsFunction) -> unit {
+fn os_read_function_access(reader: *CrustReader, stage: *OsStage, function: *OsFunction) -> unit {
     rr_next(reader);
     rr_expect(reader, 40u32, "expected '(' after access");
     (*function).effect = os_read_effect(reader);
     rr_next(reader);
     rr_expect(reader, 44u32, "expected ',' before access domain");
-    (*function).domain = rr_name(reader);
+    (*function).domain = os_read_reference(reader, stage, CRUST_D_CONST);
     rr_expect(reader, 41u32, "expected ')' after access domain");
 }
 
-fn os_read_foreign(reader: *CrustReader, function: *OsFunction) -> unit {
+fn os_read_foreign(reader: *CrustReader, stage: *OsStage, function: *OsFunction) -> unit {
     rr_next(reader);
     rr_expect(reader, 40u32, "expected '(' after foreign");
     if !rr_is_name(reader, "allocate") && !rr_is_name(reader, "release") && !rr_is_name(reader, "scalar") {
-        os_read_native(reader, function); return;
+        os_read_native(reader, stage, function); return;
     }
     if rr_is_name(reader, "allocate") { (*function).foreign = OS_ALLOCATE; }
     else { if rr_is_name(reader, "release") { (*function).foreign = OS_RELEASE; }
@@ -101,19 +113,19 @@ fn os_read_foreign(reader: *CrustReader, function: *OsFunction) -> unit {
 fn os_read_function_clause(reader: *CrustReader, stage: *OsStage, function: *OsFunction) -> bool {
     if rr_is_name(reader, "access") {
         if (*function).effect != 0u32 { rr_error(reader, (*reader).token.offset, "duplicate access contract"); return true; }
-        os_read_function_access(reader, function);
+        os_read_function_access(reader, stage, function);
         return true;
     }
     if rr_is_name(reader, "foreign") {
         if (*function).foreign != 0u32 { rr_error(reader, (*reader).token.offset, "duplicate foreign contract"); return true; }
-        os_read_foreign(reader, function);
+        os_read_foreign(reader, stage, function);
         return true;
     }
     if rr_is_name(reader, "initializes") { os_read_fields(reader, &(*function).initializes); return true; }
     if rr_is_name(reader, "modifies") {
         if (*function).has_modifies { rr_error(reader, (*reader).token.offset, "duplicate modifies contract"); }
         (*function).has_modifies = true;
-        os_read_modifies(reader, &(*function).modifies); return true;
+        os_read_modifies(reader, stage, &(*function).modifies); return true;
     }
     return false;
 }
@@ -121,6 +133,10 @@ fn os_read_function_clause(reader: *CrustReader, stage: *OsStage, function: *OsF
 fn os_read_function(reader: *CrustReader, stage: *OsStage) -> *CrustDecl {
     var declaration: *CrustDecl = rr_function_header(reader);
     if declaration == null(*CrustDecl) { return declaration; }
+    return os_read_function_suffix(reader, stage, declaration);
+}
+
+fn os_read_function_suffix(reader: *CrustReader, stage: *OsStage, declaration: *CrustDecl) -> *CrustDecl {
     var function: *OsFunction = rr_alloc(reader, sizeof(OsFunction), alignof(OsFunction)) as *OsFunction;
     if function == null(*OsFunction) { return null(*CrustDecl); }
     (*function).declaration = declaration;
@@ -155,7 +171,7 @@ fn os_read_statement(reader: *CrustReader, user: *u8) -> *CrustStmt {
     if (*access).fresh { (*access).effect = OS_RECLAIM; }
     else { (*access).effect = os_read_effect(reader); }
     rr_next(reader);
-    (*access).domain = rr_name(reader);
+    (*access).domain = os_read_reference(reader, stage, CRUST_D_CONST);
     var block: *CrustStmt = rr_block(reader);
     if block != null(*CrustStmt) {
         rs_put((*stage).resources, &(*stage).blocks, block as usize, access as *u8);

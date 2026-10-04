@@ -30,7 +30,7 @@ fn os_native_mode(reader: *CrustReader) -> u32 {
     return 0u32;
 }
 
-fn os_read_native(reader: *CrustReader, function: *OsFunction) -> unit {
+fn os_read_native(reader: *CrustReader, stage: *OsStage, function: *OsFunction) -> unit {
     (*function).foreign = OS_NATIVE;
     while !(*reader).failed {
         var effect: *OsNative = rr_alloc(reader, sizeof(OsNative), alignof(OsNative)) as *OsNative;
@@ -41,7 +41,7 @@ fn os_read_native(reader: *CrustReader, function: *OsFunction) -> unit {
             (*effect).parameter = rr_name(reader);
             rr_expect(reader, 58u32, "expected ':' before owned field type");
         }
-        (*effect).schema = rr_name(reader);
+        (*effect).schema = os_read_reference(reader, stage, CRUST_D_RECORD);
         rr_expect(reader, 46u32, "expected '.' before owned field name");
         (*effect).field = rr_name(reader);
         (*effect).next = (*function).native;

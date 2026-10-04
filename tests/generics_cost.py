@@ -59,7 +59,7 @@ def prepare(args, work):
     sources += [
         path
         for path in sorted((ROOT / "stages/generics").glob("*.crs"))
-        if path.name not in {"api.crs", "source_api.crs"}
+        if path.name not in {"api.crs", "source_api.crs", "source_extension.crs"}
     ]
     sources += [ROOT / "tests/generics_cost.crs"]
     command = [str(args.build / "crust-c"), "-o", str(executable), *map(str, sources)]

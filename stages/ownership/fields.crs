@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn os_validate_embedded(check: *OsCheck, contract: *OsRecord, field: *CrustField) -> unit {
+    if os_parameter_type((*check).stage, (*field).syntax_type) { return; }
     var child: *OsRecord = os_record((*check).stage, (*field).syntax_type);
     if child == null(*OsRecord) || ((*child).domain != null(*CrustName) && (*child).domain != (*contract).domain) {
         os_error(check, &(*field).loc, "embedded resource and containing schema must share a declared domain");

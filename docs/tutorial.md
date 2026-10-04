@@ -507,6 +507,11 @@ Functions declare their own parameters and use explicit arguments such as
 definitions and applications stay in those files. The stage emits concrete
 records and functions.
 
+The [ownership-generic tutorial](../examples/generics/ownership/README.md)
+combines those declarations with resource cleanup and loans. Its parameter
+contract requires a movable record with closed ownership. It checks a generic
+body once and validates each concrete argument against that contract.
+
 ## Change the syntax of later source
 
 The root's `read`, `execute`, and `user` fields select how to read and execute

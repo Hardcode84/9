@@ -97,9 +97,9 @@ fn gp_reader_parameters(reader: *CrustReader, program: *GsProgram, declaration: 
     return true;
 }
 
-fn gp_reader_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
+// Read the declaration kind, name, and optional generic parameter list.
+fn gp_reader_header(reader: *CrustReader, program: *GsProgram) -> *CrustDecl {
     var token: u32 = (*reader).token.kind;
-    if token != RR_RECORD && token != RR_FN && token != RR_EXTERN { return null(*CrustDecl); }
     var kind: u32 = CRUST_D_FUNCTION;
     if token == RR_RECORD { kind = CRUST_D_RECORD; }
     if token == RR_EXTERN { kind = CRUST_D_EXTERN; }
@@ -107,8 +107,16 @@ fn gp_reader_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
     if declaration == null(*CrustDecl) || !rr_next(reader) { return null(*CrustDecl); }
     if kind == CRUST_D_EXTERN && !rr_expect(reader, RR_FN, "expected 'fn'") { return null(*CrustDecl); }
     (*declaration).name = rr_name(reader);
-    if (*reader).failed || !gp_reader_parameters(reader, user as *GsProgram, declaration) { return null(*CrustDecl); }
-    if kind == CRUST_D_RECORD { return rr_record_body(reader, declaration); }
+    if (*reader).failed || !gp_reader_parameters(reader, program, declaration) { return null(*CrustDecl); }
+    return declaration;
+}
+
+fn gp_reader_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
+    var token: u32 = (*reader).token.kind;
+    if token != RR_RECORD && token != RR_FN && token != RR_EXTERN { return null(*CrustDecl); }
+    var declaration: *CrustDecl = gp_reader_header(reader, user as *GsProgram);
+    if declaration == null(*CrustDecl) { return declaration; }
+    if (*declaration).kind == CRUST_D_RECORD { return rr_record_body(reader, declaration); }
     if rr_function_signature(reader, declaration) == null(*CrustDecl) { return null(*CrustDecl); }
     return rr_function_end(reader, declaration);
 }
@@ -125,8 +133,9 @@ fn gp_source(program: *GsProgram, source: *CrustSource) -> *CrustSource {
     return copy;
 }
 
-// Copy and parse one source. Keep the program live through lowering and checking.
-fn gp_read(program: *GsProgram, source: *CrustSource) -> bool {
+// Copy the full source and parse one range with the selected reader productions.
+fn gp_read_range_with_hooks(program: *GsProgram, source: *CrustSource,
+                            begin: usize, end: usize, hooks: *CrustReaderHooks) -> bool {
     if (*program).syntax.error_count != 0usize || (*program).context.error_count != 0usize { return false; }
     if (*program).state != 0u32 {
         crust_set_error(&(*program).syntax, null(*CrustSource), 0usize,
@@ -135,10 +144,20 @@ fn gp_read(program: *GsProgram, source: *CrustSource) -> bool {
     }
     var copy: *CrustSource = gp_source(program, source);
     if copy == null(*CrustSource) { return false; }
+    return rr_read(&(*program).syntax, copy, begin, end, hooks) != null(*CrustUnit);
+}
+
+// Copy and parse one source with the selected reader productions.
+fn gp_read_with_hooks(program: *GsProgram, source: *CrustSource, hooks: *CrustReaderHooks) -> bool {
+    return gp_read_range_with_hooks(program, source, 0usize, (*source).size, hooks);
+}
+
+// Copy and parse one source. Keep the program live through lowering and checking.
+fn gp_read(program: *GsProgram, source: *CrustSource) -> bool {
     var hooks: CrustReaderHooks = make CrustReaderHooks {
         user: program as *u8, declaration: gp_reader_declaration,
         statement: null(fn(*CrustReader, *u8)->*CrustStmt),
         prefix: gp_reader_prefix, type_syntax: gp_reader_type
     };
-    return rr_read(&(*program).syntax, copy, 0usize, (*copy).size, &hooks) != null(*CrustUnit);
+    return gp_read_with_hooks(program, source, &hooks);
 }

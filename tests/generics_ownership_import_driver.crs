@@ -1,0 +1,95 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn gli_read(program: *OgProgram, path: *u8, identity: u64, trusted: bool) -> bool {
+    var source: CrustSource = uninit;
+    if !cache_read(&(*program).generics.syntax, path, &source) { return false; }
+    source.identity = identity;
+    return og_read(program, &source, trusted);
+}
+
+fn gli_read_range(program: *OgProgram, path: *u8) -> bool {
+    var source: CrustSource = uninit;
+    if !cache_read(&(*program).generics.syntax, path, &source) { return false; }
+    source.identity = 4u64;
+    var first: *u8 = cache_strstr(source.bytes, "// target\n");
+    var last: *u8 = cache_strstr(source.bytes, "// end target\n");
+    if first == null(*u8) || last == null(*u8) {
+        return native_error(&(*program).generics.syntax, "ranged test provider requires boundary markers");
+    }
+    var begin: usize = first as usize - source.bytes as usize + 10usize;
+    var end: usize = last as usize - source.bytes as usize;
+    return og_read_range(program, &source, begin, end, false);
+}
+
+fn gli_sources(program: *OgProgram, argc: i32, argv: **u8, begin: i32, trusted: bool) -> bool {
+    var index: i32 = begin;
+    while index < argc {
+        if !gli_read(program, argv[index as usize], index as u64 + 1u64, trusted && index == begin) { return false; }
+        index = index + 1i32;
+    }
+    return true;
+}
+
+fn gli_write(text: *u8) -> bool {
+    return crust0_host_write_stream(1u32, text, gs_length(text)) == 0i32 &&
+           crust0_host_write_stream(1u32, "\n", 1usize) == 0i32;
+}
+
+fn gli_publish(program: *OgProgram, argc: i32, argv: **u8) -> bool {
+    var trusted: bool = c_equal(argv[1usize], "publish-trusted");
+    if c_equal(argv[1usize], "publish-range") {
+        if argc != 4i32 || !gli_read_range(program, argv[3usize]) { return false; }
+    } else { if !gli_sources(program, argc, argv, 3i32, trusted) { return false; } }
+    var library: OwnershipLibrary = uninit;
+    if !og_library_publish(program, argv[2usize], &library) { return false; }
+    var trust: *u8 = "checked";
+    if library.trusted { trust = "trusted"; }
+    if !gli_write(library.artifact) || !gli_write(library.digest) || !gli_write(trust) {
+        return native_error(&(*program).generics.syntax, "cannot write generic library receipt");
+    }
+    return true;
+}
+
+fn gli_emit(program: *OgProgram, output: *u8, symbols: *u8) -> bool {
+    var context: *CrustContext = &(*program).generics.context;
+    var name: *CrustName = crust_try_intern(context, "main", 4usize);
+    if name == null(*CrustName) { return false; }
+    var global: *RsGlobal = rs_global(&(*program).resources, name);
+    if global == null(*RsGlobal) { return native_error(context, "import test client requires main"); }
+    var options: CBackendOptions = make CBackendOptions {
+        mode: 2u32, output: output, symbols: symbols, cflags: null(**u8), cflag_count: 0usize,
+        ldflags: null(**u8), ldflag_count: 0usize
+    };
+    return c_backend_build_with_body(context, (*global).lowered, &options, rs_c_body, &(*program).resources as *u8) == 0i32;
+}
+
+fn gli_import(program: *OgProgram, argc: i32, argv: **u8) -> bool {
+    if argc < 9i32 { return native_error(&(*program).generics.syntax, "import requires cache, artifact, digest, trust, outputs, and client inputs"); }
+    var library: OwnershipLibrary = make OwnershipLibrary {
+        artifact: argv[3usize], digest: argv[4usize], trusted: c_equal(argv[5usize], "trusted")
+    };
+    if !og_library_import(program, argv[2usize], &library) ||
+       !gli_sources(program, argc, argv, 8i32, false) || !og_check(program) { return false; }
+    if (*program).proof_checks != 0usize {
+        return native_error(&(*program).generics.syntax, "imported helper bodies were checked again");
+    }
+    return gli_emit(program, argv[6usize], argv[7usize]);
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc < 4i32 { return 2i32; }
+    var program: OgProgram = uninit;
+    og_init(&program, null(*CrustAllocator), 10000u64);
+    var success: bool = false;
+    if c_equal(argv[1usize], "publish") || c_equal(argv[1usize], "publish-trusted") ||
+       c_equal(argv[1usize], "publish-range") {
+        success = gli_publish(&program, argc, argv);
+    } else { if c_equal(argv[1usize], "import") { success = gli_import(&program, argc, argv); }
+        else { native_error(&program.generics.syntax, "unknown generic library test command"); }
+    }
+    if program.generics.syntax.error_count != 0usize { c_driver_diagnostic(&program.generics.syntax, argv[0usize]); }
+    if program.generics.context.error_count != 0usize { c_driver_diagnostic(&program.generics.context, argv[0usize]); }
+    og_destroy(&program);
+    if success { return 0i32; }
+    return 1i32;
+}

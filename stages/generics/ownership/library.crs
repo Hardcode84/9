@@ -1,0 +1,63 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn og_library_publish_bytes(program: *OgProgram, directory: *u8,
+                            work: *OsLibraryWork, result: *OwnershipLibrary) -> bool {
+    var stage: CStage = uninit;
+    c_stage_init(&stage, &(*program).generics.syntax);
+    var success: bool = og_library_pack(program, &stage.header, (*work).checker);
+    if success {
+        var source: CrustSource = make CrustSource {
+            path: "generic-ownership-library", bytes: stage.header.data, size: stage.header.size, identity: 0u64
+        };
+        (*work).trusted = (*program).parsed.trusted.count != 0usize;
+        success = os_library_publish_bytes(&(*program).generics.syntax, directory, work, &source, result);
+    }
+    c_stage_destroy(&stage);
+    return success;
+}
+
+// Publish a closed provider after checking its bodies and parameter contracts.
+// Retain the returned root receipt and keep the absolute cache directory trusted.
+fn og_library_publish(program: *OgProgram, directory: *u8, result: *OwnershipLibrary) -> bool {
+    *result = make OwnershipLibrary { artifact: null(*u8), digest: null(*u8), trusted: false };
+    if (*program).generics.syntax.units == null(*CrustUnit) {
+        return os_library_error(&(*program).generics.syntax, "generic library publication requires provider sources");
+    }
+    if !og_library_closed(program) || !og_check(program) { return false; }
+    var work: OsLibraryWork = uninit;
+    var success: bool = os_library_begin(&(*program).generics.syntax, directory, &work);
+    if success { success = og_library_publish_bytes(program, directory, &work, result); }
+    if !cache_cleanup(&(*program).generics.syntax, &work.files) { return false; }
+    return success;
+}
+
+fn og_library_capture(program: *OgProgram, directory: *u8, receipt: *OwnershipLibrary,
+                       work: *OsLibraryWork, source: *CrustSource) -> bool {
+    var context: *CrustContext = &(*program).generics.syntax;
+    if !os_library_location(context, directory, receipt) ||
+       !cache_read(context, (*receipt).artifact, source) ||
+       !cache_save(context, (*work).files.artifact, (*source).bytes, (*source).size) { return false; }
+    var digest: *u8 = cache_digest(context, (*work).files.artifact, (*work).files.digest);
+    if digest == null(*u8) { return false; }
+    if cache_memcmp(digest, (*receipt).digest, 64usize) != 0i32 {
+        return os_library_error(context, "generic ownership artifact does not match its trusted digest receipt");
+    }
+    return true;
+}
+
+// Import into a fresh program, then read its client sources. Restore authenticated
+// declaration receipts and frozen bindings without opening provider source paths.
+fn og_library_import(program: *OgProgram, directory: *u8, receipt: *OwnershipLibrary) -> bool {
+    if (*program).generics.syntax.units != null(*CrustUnit) || (*program).generics.state != 0u32 ||
+       (*program).generics.context.globals.count != 0usize {
+        return os_library_error(&(*program).generics.syntax, "generic ownership import requires a fresh program");
+    }
+    var work: OsLibraryWork = uninit;
+    var source: CrustSource = uninit;
+    var success: bool = os_library_begin(&(*program).generics.syntax, directory, &work);
+    if success { success = og_library_capture(program, directory, receipt, &work, &source); }
+    if success { success = og_library_unpack(program, &source, work.checker, (*receipt).trusted); }
+    if success { success = og_seal_domains(program); }
+    if !cache_cleanup(&(*program).generics.syntax, &work.files) { return false; }
+    return success;
+}

@@ -1,0 +1,154 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn og_library_number(buffer: *CBuffer, value: u64) -> unit {
+    c_buffer_bytes(buffer, &value as *u8, 8usize);
+}
+
+fn og_library_declarations(unit_value: *CrustUnit) -> usize {
+    var count: usize = 0usize;
+    var declaration: *CrustDecl = (*unit_value).declarations;
+    while declaration != null(*CrustDecl) { count = count + 1usize; declaration = (*declaration).next; }
+    return count;
+}
+
+fn og_library_status(program: *OgProgram, declaration: *CrustDecl) -> u8 {
+    if os_trusted(&(*program).parsed, declaration) { return 2u8; }
+    if crust_map_get(&(*program).verified, declaration as usize) != null(*u8) { return 1u8; }
+    return 0u8;
+}
+
+fn og_library_pack_unit(program: *OgProgram, buffer: *CBuffer, unit_value: *CrustUnit) -> bool {
+    var source: *CrustSource = (*unit_value).source;
+    og_library_number(buffer, (*source).identity);
+    og_library_number(buffer, gs_length((*source).path) as u64);
+    og_library_number(buffer, (*source).size as u64);
+    og_library_number(buffer, og_library_declarations(unit_value) as u64);
+    var range: *OgSourceRange = crust_map_get(&(*program).ranges, unit_value as usize) as *OgSourceRange;
+    og_library_number(buffer, (*range).begin as u64);
+    og_library_number(buffer, (*range).end as u64);
+    c_buffer_bytes(buffer, (*source).path, gs_length((*source).path));
+    c_buffer_bytes(buffer, (*source).bytes, (*source).size);
+    var declaration: *CrustDecl = (*unit_value).declarations;
+    while declaration != null(*CrustDecl) {
+        var status: u8 = og_library_status(program, declaration);
+        if (*declaration).kind == CRUST_D_FUNCTION && status == 0u8 {
+            gs_error(&(*program).generics.syntax, &(*declaration).loc, "generic library function lacks a checked or root-trusted definition receipt");
+            return false;
+        }
+        c_buffer_bytes(buffer, &status, 1usize);
+        declaration = (*declaration).next;
+    }
+    return !(*(*buffer).status).failed;
+}
+
+fn og_library_pack(program: *OgProgram, buffer: *CBuffer, checker: *u8) -> bool {
+    c_buffer_text(buffer, "crust-generic-ownership-v1-closed-records-linux-x64\n");
+    c_buffer_bytes(buffer, checker, 64usize);
+    var count: usize = 0usize;
+    var unit_value: *CrustUnit = (*program).generics.syntax.units;
+    while unit_value != null(*CrustUnit) { count = count + 1usize; unit_value = (*unit_value).next; }
+    og_library_number(buffer, count as u64);
+    unit_value = (*program).generics.syntax.units;
+    while unit_value != null(*CrustUnit) {
+        if !og_library_pack_unit(program, buffer, unit_value) { return false; }
+        unit_value = (*unit_value).next;
+    }
+    return !(*(*buffer).status).failed;
+}
+
+fn og_library_take(reader: *OgLibraryReader, count: usize) -> *u8 {
+    var source: *CrustSource = (*reader).source;
+    if count > (*source).size - (*reader).offset {
+        os_library_error(&(*(*reader).program).generics.syntax, "truncated generic ownership library");
+        return null(*u8);
+    }
+    var result: *u8 = (*source).bytes + (*reader).offset as isize;
+    (*reader).offset = (*reader).offset + count;
+    return result;
+}
+
+fn og_library_read_number(reader: *OgLibraryReader, result: *u64) -> bool {
+    var bytes: *u8 = og_library_take(reader, 8usize);
+    if bytes == null(*u8) { return false; }
+    native_memcpy(result as *u8, bytes, 8usize);
+    return true;
+}
+
+fn og_library_restore(reader: *OgLibraryReader, statuses: *u8, count: usize) -> bool {
+    var program: *OgProgram = (*reader).program;
+    var declaration: *CrustDecl = (*(*program).generics.syntax.last_unit).declarations;
+    var index: usize = 0usize;
+    while declaration != null(*CrustDecl) && index < count {
+        var status: u8 = statuses[index];
+        if status > 2u8 || (status == 0u8 && (*declaration).kind == CRUST_D_FUNCTION) {
+            gs_error(&(*program).generics.syntax, &(*declaration).loc, "invalid generic definition provenance");
+            return false;
+        }
+        if status == 2u8 {
+            (*reader).trusted = true;
+            if !os_trust(&(*program).parsed, declaration) { return false; }
+        } else { if status == 1u8 {
+            if !crust_try_map_set(&(*program).generics.syntax, &(*program).verified,
+                                 declaration as usize, declaration as *u8) { return false; }
+        } }
+        index = index + 1usize;
+        declaration = (*declaration).next;
+    }
+    if declaration != null(*CrustDecl) || index != count {
+        os_library_error(&(*program).generics.syntax, "generic library declaration count changed");
+        return false;
+    }
+    return true;
+}
+
+fn og_library_unpack_unit(reader: *OgLibraryReader) -> bool {
+    var identity: u64 = 0u64;
+    var path_size: u64 = 0u64;
+    var source_size: u64 = 0u64;
+    var count: u64 = 0u64;
+    var begin: u64 = 0u64;
+    var end: u64 = 0u64;
+    if !og_library_read_number(reader, &identity) || !og_library_read_number(reader, &path_size) ||
+       !og_library_read_number(reader, &source_size) || !og_library_read_number(reader, &count) ||
+       !og_library_read_number(reader, &begin) || !og_library_read_number(reader, &end) { return false; }
+    var path: *u8 = og_library_take(reader, path_size as usize);
+    if path == null(*u8) { return false; }
+    var bytes: *u8 = og_library_take(reader, source_size as usize);
+    if bytes == null(*u8) { return false; }
+    var statuses: *u8 = og_library_take(reader, count as usize);
+    if statuses == null(*u8) { return false; }
+    var program: *OgProgram = (*reader).program;
+    var source: CrustSource = make CrustSource {
+        path: crust_try_copy_string(&(*program).generics.syntax, path, path_size as usize),
+        bytes: bytes, size: source_size as usize, identity: identity
+    };
+    if source.path == null(*u8) || !og_read_range(program, &source, begin as usize, end as usize, false) { return false; }
+    return og_library_restore(reader, statuses, count as usize);
+}
+
+fn og_library_unpack(program: *OgProgram, source: *CrustSource, checker: *u8, trusted: bool) -> bool {
+    var reader: OgLibraryReader = make OgLibraryReader { source: source, program: program, offset: 0usize, trusted: false };
+    var tag: *u8 = "crust-generic-ownership-v1-closed-records-linux-x64\n";
+    var prefix: *u8 = og_library_take(&reader, gs_length(tag) + 64usize);
+    if prefix == null(*u8) { return false; }
+    if cache_memcmp(prefix, tag, gs_length(tag)) != 0i32 {
+        return os_library_error(&(*program).generics.syntax, "invalid generic ownership library format or parameter profile");
+    }
+    if cache_memcmp(prefix + gs_length(tag) as isize, checker, 64usize) != 0i32 {
+        return os_library_error(&(*program).generics.syntax, "generic ownership checker or loaded images changed");
+    }
+    var count: u64 = 0u64;
+    if !og_library_read_number(&reader, &count) { return false; }
+    if count == 0u64 || count > (((*source).size - reader.offset) / 48usize) as u64 {
+        return os_library_error(&(*program).generics.syntax, "invalid generic ownership source count");
+    }
+    var index: u64 = 0u64;
+    while index < count {
+        if !og_library_unpack_unit(&reader) { return false; }
+        index = index + 1u64;
+    }
+    if reader.offset != (*source).size || reader.trusted != trusted {
+        return os_library_error(&(*program).generics.syntax, "generic library extent or root trust receipt differs");
+    }
+    return true;
+}

@@ -8,6 +8,8 @@ record GsClone {
     user: *u8;
     type_syntax: fn(*GsClone,*CrustTypeSyntax,u32)->*CrustTypeSyntax;
     expression: fn(*GsClone,*CrustExpr,u32)->*CrustExpr;
+    statement: fn(*GsClone,*CrustStmt,*CrustStmt)->unit;
+    body: fn(*GsClone,*CrustDecl,u32)->*CrustStmt;
 }
 
 record GsStage {

@@ -80,7 +80,7 @@ fn os_drop_object(check: *OsCheck, state: *OsState, object: *OsObject, location:
     if !os_failed(check) && os_loan_access(check, state, object, null(*OsLoan), true, location) {
         os_unfold(check, state, object);
         var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*object).syntax).name);
-        if (*global).resource != null(*RsResource) { os_drop_callback(check, state, object, location); }
+        if global != null(*RsGlobal) && (*global).resource != null(*RsResource) { os_drop_callback(check, state, object, location); }
         else {
             os_drop_fields(check, state, object, location);
         }

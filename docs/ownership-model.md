@@ -21,6 +21,10 @@ Direct fields of an ordinary record can be borrowed separately. A loan of the
 whole record covers all its fields. Moving, replacing, or destroying a record
 requires every conflicting field loan to have ended.
 
+A plain record can be copied at a value boundary. Its copy has independent
+storage and loan state. An explicit `move` of a movable record consumes the
+old binding, including when that record needs no cleanup.
+
 Taking a raw address of an owner or an inline record inside it fixes that
 storage for the rest of its lifetime. An address taken through a loan follows
 that loan's lifetime instead. Taking an address inside a heap allocation keeps
@@ -48,6 +52,33 @@ registration order. The checker applies mutable effects when the call runs.
 In-place construction cannot be deferred. Wrap a foreign function in a checked
 unit-returning source function before deferring it. This keeps native acquisition
 and consumption in the ordinary checked call path.
+
+## Generic records and functions
+
+The optional [generic ownership stage](../stages/generics/ownership/README.md)
+accepts declaration-local parameters and explicit type arguments:
+
+```crust
+fn transfer!(Value)(value: Value) -> Value { return move value; }
+```
+
+Each parameter has one contract: a sized movable record, closed ownership,
+and complete cleanup without domain access. The checker follows nested fields
+and owned storage. Native owned handles end those paths. Stored loans, opaque
+storage, stable or scoped values, and domain-bound records fail that contract.
+
+The body is checked once with distinct symbolic identities for its parameters.
+Parameter values are affine. Transfers require `move`; shared and exclusive
+loans use the ordinary rules. A parameter exposes no fields or constructors.
+Concrete type arguments are validated before specialization receives a checked
+body receipt. Each specialization still receives seed type and layout checks
+and concrete cleanup generation. Trusted definitions retain their separate
+root-selected status.
+
+See the [generic container tutorial](../examples/generics/ownership/README.md)
+for plain and resource payloads, generic destructors, owner-based loans, and
+independent imports. The standalone ownership entry point retains its ordinary
+record syntax; the combined entry point selects the generic reader too.
 
 ## Native resources
 
@@ -329,6 +360,8 @@ checker images. The root must preserve all three fields. A copied interface or
 an artifact with a different trust flag cannot authorize unchecked bodies.
 Publication requires a target source or root source in the request, in addition
 to any separately supplied trusted implementation sources.
+Imported record domains are fixed by the captured provider interface. A client
+or a second provider cannot assign those records to another domain.
 
 ## Output and verification
 

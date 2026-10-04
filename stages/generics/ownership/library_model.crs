@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record OgLibraryBinding { name: *CrustName; previous: *OgLibraryBinding; }
+
+record OgLibraryScope {
+    globals: CrustMap;
+    parameters: CrustMap;
+    locals: CrustMap;
+    program: *OgProgram;
+    bindings: *OgLibraryBinding;
+    declaration: *CrustDecl;
+}
+
+record OgLibraryReader {
+    source: *CrustSource;
+    program: *OgProgram;
+    offset: usize;
+    trusted: bool;
+}

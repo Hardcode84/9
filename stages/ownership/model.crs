@@ -22,7 +22,11 @@ record OsStage {
     imports: CrustMap;
     domains: CrustMap;
     trusted: CrustMap;
+    parameters: CrustMap;
+    verified_bodies: CrustMap;
     resources: *RsStage;
+    reference_user: *u8;
+    read_reference: fn(*CrustReader,*u8,u32)->*CrustName;
 }
 
 record OsField {

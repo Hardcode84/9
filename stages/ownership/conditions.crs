@@ -25,6 +25,7 @@ fn os_condition_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr,
         }
     }
     var value: *OsValue = os_expr(check, state, expression);
+    os_abstract_condition(check, value, &(*expression).loc);
     os_unused(check, state, value, &(*expression).loc);
     *yes = *state;
     *no = *state;

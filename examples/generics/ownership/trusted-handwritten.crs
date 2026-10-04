@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
+extern fn release(pointer: *u8) -> unit foreign(release) = "free";
+
+domain Graph(Link, Head, Node_Plain, Owner_Plain, Node_Parcel, Owner_Parcel);
+record Link { prev: *Link; next: *Link; } opaque;
+resource Head { link: Link; } opaque stable drop head_drop;
+
+fn link_init(link: *Link) -> unit access(edit, Graph) {
+    (*link).prev = link;
+    (*link).next = link;
+}
+
+fn link_unlink(link: *Link) -> unit access(edit, Graph) {
+    var before: *Link = (*link).prev;
+    var after: *Link = (*link).next;
+    (*before).next = after;
+    (*after).prev = before;
+    link_init(link);
+}
+
+fn link_insert(at: *Link, link: *Link) -> unit access(edit, Graph) {
+    link_unlink(link);
+    var after: *Link = (*at).next;
+    (*link).prev = at;
+    (*link).next = after;
+    (*after).prev = link;
+    (*at).next = link;
+}
+
+fn head_init(head: *Head) -> unit access(reclaim, Graph) initializes(head) {
+    link_init(&(*head).link);
+}
+
+fn head_drop(head: mut Head) -> unit access(reclaim, Graph) {
+    while head.link.next != &head.link { link_unlink(head.link.next); }
+}
+
+fn head_count(head: read Head) -> usize access(read, Graph) {
+    var count: usize = 0usize;
+    var link: *Link = head.link.next;
+    while link != &head.link {
+        count = count + 1usize;
+        link = (*link).next;
+    }
+    return count;
+}
+
+record Node_Plain { ready: Link; active: Link; value: Plain; } opaque;
+resource Owner_Plain { node: *Node_Plain; } opaque drop owner_drop_Plain;
+
+fn owner_new_Plain(value: Plain) -> Owner_Plain access(reclaim, Graph) {
+    var node: *Node_Plain = allocate(sizeof(Node_Plain)) as *Node_Plain;
+    if node == null(*Node_Plain) { trap; }
+    link_init(&(*node).ready);
+    link_init(&(*node).active);
+    (*node).value = move value;
+    return make Owner_Plain { node: node };
+}
+
+fn owner_drop_Plain(owner: mut Owner_Plain) -> unit access(reclaim, Graph) {
+    link_unlink(&(*owner.node).ready);
+    link_unlink(&(*owner.node).active);
+    drop *owner.node;
+    release(owner.node as *u8);
+}
+
+fn ready_insert_Plain(head: mut Head, owner: read Owner_Plain) -> unit access(edit, Graph) {
+    link_insert(&head.link, &(*owner.node).ready);
+}
+
+fn active_insert_Plain(head: mut Head, owner: read Owner_Plain) -> unit access(edit, Graph) {
+    link_insert(&head.link, &(*owner.node).active);
+}
+
+fn owner_value_Plain(owner: read Owner_Plain) -> read Plain access(read, Graph) from owner {
+    return read (*owner.node).value;
+}
+
+fn owner_mut_Plain(owner: mut Owner_Plain) -> mut Plain access(edit, Graph) from owner {
+    return mut (*owner.node).value;
+}
+
+record Node_Parcel { ready: Link; active: Link; value: Parcel; } opaque;
+resource Owner_Parcel { node: *Node_Parcel; } opaque drop owner_drop_Parcel;
+
+fn owner_new_Parcel(value: Parcel) -> Owner_Parcel access(reclaim, Graph) {
+    var node: *Node_Parcel = allocate(sizeof(Node_Parcel)) as *Node_Parcel;
+    if node == null(*Node_Parcel) { trap; }
+    link_init(&(*node).ready);
+    link_init(&(*node).active);
+    (*node).value = move value;
+    return make Owner_Parcel { node: node };
+}
+
+fn owner_drop_Parcel(owner: mut Owner_Parcel) -> unit access(reclaim, Graph) {
+    link_unlink(&(*owner.node).ready);
+    link_unlink(&(*owner.node).active);
+    drop *owner.node;
+    release(owner.node as *u8);
+}
+
+fn ready_insert_Parcel(head: mut Head, owner: read Owner_Parcel) -> unit access(edit, Graph) {
+    link_insert(&head.link, &(*owner.node).ready);
+}
+
+fn active_insert_Parcel(head: mut Head, owner: read Owner_Parcel) -> unit access(edit, Graph) {
+    link_insert(&head.link, &(*owner.node).active);
+}
+
+fn owner_value_Parcel(owner: read Owner_Parcel) -> read Parcel access(read, Graph) from owner {
+    return read (*owner.node).value;
+}
+
+fn owner_mut_Parcel(owner: mut Owner_Parcel) -> mut Parcel access(edit, Graph) from owner {
+    return mut (*owner.node).value;
+}

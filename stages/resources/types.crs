@@ -68,6 +68,7 @@ fn rs_owns(stage: *RsStage, syntax: *CrustTypeSyntax) -> bool {
     if (*stage).failed { return false; }
     if (*syntax).kind == CRUST_T_ARRAY { return rs_owns(stage, (*syntax).base); }
     if (*syntax).kind != CRUST_T_NAME { return false; }
+    if crust_map_get(&(*stage).affine_types, (*syntax).name as usize) != null(*u8) { return true; }
     var global: *RsGlobal = rs_global(stage, (*syntax).name);
     if global == null(*RsGlobal) || (*(*global).source).kind != CRUST_D_RECORD {
         rs_error(stage, &(*syntax).loc, "expected a declared record type");

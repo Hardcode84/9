@@ -1,0 +1,60 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn og_domain_families(program: *OgProgram, domain: *OsDomain, families: *CrustMap, definitions: *CrustMap) -> bool {
+    var context: *CrustContext = &(*program).generics.context;
+    var position: **OsField = &(*domain).records;
+    while *position != null(*OsField) {
+        var member: *OsField = *position;
+        var name: *CrustName = gs_name(context, (*member).name);
+        if name == null(*CrustName) { return false; }
+        var definition: *GpDefinition = crust_map_get(definitions, name as usize) as *GpDefinition;
+        if definition == null(*GpDefinition) || (*definition).parameters == null(*GpParameters) {
+            position = &(*member).next;
+        } else {
+            if (*(*definition).source).kind != CRUST_D_RECORD {
+                gs_error(context, &(*(*domain).declaration).loc, "domain member must name a record family"); return false;
+            }
+            var previous: *OsDomain = crust_map_get(families, definition as usize) as *OsDomain;
+            if previous != null(*OsDomain) && previous != domain {
+                gs_error(context, &(*(*domain).declaration).loc, "record family cannot belong to multiple domains"); return false;
+            }
+            if !crust_try_map_set(context, families, definition as usize, domain as *u8) { return false; }
+            *position = (*member).next;
+        }
+    }
+    return true;
+}
+
+// A domain names a generic record family once. Each instance has that domain.
+fn og_domains(program: *OgProgram) -> bool {
+    var families: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    var definitions: CrustMap = families;
+    var definition: *GpDefinition = (*program).generics.first;
+    while definition != null(*GpDefinition) {
+        var name: *CrustName = gs_name(&(*program).generics.context, (*(*definition).source).name);
+        if name == null(*CrustName) || !crust_try_map_set(&(*program).generics.context,
+            &definitions, name as usize, definition as *u8) { return false; }
+        definition = (*definition).next;
+    }
+    definition = (*program).generics.first;
+    while definition != null(*GpDefinition) {
+        var name: *CrustName = gs_name(&(*program).generics.context, (*(*definition).source).name);
+        if name == null(*CrustName) { return false; }
+        var domain: *OsDomain = crust_map_get(&(*program).ownership.domains, name as usize) as *OsDomain;
+        if domain != null(*OsDomain) && !og_domain_families(program, domain, &families, &definitions) { return false; }
+        definition = (*definition).next;
+    }
+    var instance: *GpInstance = (*program).generics.instances;
+    while instance != null(*GpInstance) {
+        var domain: *OsDomain = crust_map_get(&families, (*instance).definition as usize) as *OsDomain;
+        if domain != null(*OsDomain) {
+            var member: *OsField = rs_alloc(&(*program).resources, sizeof(OsField), alignof(OsField)) as *OsField;
+            if member == null(*OsField) { return false; }
+            (*member).name = (*(*instance).declaration).name;
+            (*member).next = (*domain).records;
+            (*domain).records = member;
+        }
+        instance = (*instance).next;
+    }
+    return true;
+}

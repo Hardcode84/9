@@ -74,6 +74,7 @@ fn os_native_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, cont
         if index >= (*expression).arg_count { os_error(check, &(*expression).loc, "missing native argument"); return null(*OsValue); }
         var value: *OsValue = os_expr(check, state, (*expression).args[index]);
         if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+        if !os_abstract_same(check, (*parameter).syntax_type, (*value).syntax, &(*expression).loc) { return null(*OsValue); }
         os_native_argument(check, state, value, os_native_effect(contract, (*parameter).name), &(*expression).loc);
         parameter = (*parameter).next;
         index = index + 1usize;

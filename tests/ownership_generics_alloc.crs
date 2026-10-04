@@ -1,0 +1,156 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record OgAllocation { calls: usize; fail_at: usize; live: usize; }
+
+fn og_allocate(user: *u8, size: usize) -> *u8 {
+    var counts: *OgAllocation = user as *OgAllocation;
+    (*counts).calls = (*counts).calls + 1usize;
+    if (*counts).calls == (*counts).fail_at { return null(*u8); }
+    var bytes: *u8 = crust0_host_alloc(size, 16usize);
+    if bytes == null(*u8) { trap; }
+    (*counts).live = (*counts).live + 1usize;
+    return bytes;
+}
+
+fn og_release(user: *u8, bytes: *u8) -> unit {
+    var counts: *OgAllocation = user as *OgAllocation;
+    if bytes == null(*u8) || (*counts).live == 0usize { trap; }
+    (*counts).live = (*counts).live - 1usize;
+    crust0_host_free(bytes);
+}
+
+fn og_allocation_copy(text: *u8) -> *u8 {
+    var size: usize = gs_length(text);
+    var bytes: *u8 = crust0_host_alloc(size + 1usize, 1usize);
+    if bytes == null(*u8) { trap; }
+    var index: usize = 0usize;
+    while index <= size { bytes[index] = text[index]; index = index + 1usize; }
+    return bytes;
+}
+
+fn og_allocation_read(program: *OgProgram, text: *u8, identity: u64, trusted: bool) -> bool {
+    var source: CrustSource = make CrustSource {
+        path: og_allocation_copy("ownership-generic-allocation"), bytes: og_allocation_copy(text),
+        size: gs_length(text), identity: identity
+    };
+    var success: bool = og_read(program, &source, trusted);
+    crust0_host_free(source.path);
+    crust0_host_free(source.bytes);
+    return success;
+}
+
+fn og_allocation_prepare(program: *OgProgram) -> bool {
+    if !og_allocation_read(program,
+        "fn transfer!(Payload)(value:Payload)->Payload{return move value;} fn discard!(Payload)(value:Payload)->unit{drop value;}",
+        1u64, false) { return false; }
+    if !og_allocation_read(program,
+        "fn trusted_discard!(Payload)(value:Payload)->unit{drop value;}",
+        2u64, true) { return false; }
+    if !og_allocation_read(program,
+        "record Plain{code:i32;} resource Packet{code:i32;} drop packet_drop; fn packet_drop(value:mut Packet)->unit{} fn main(argc:i32,argv:**u8)->i32{var packet:Packet=make Packet{code:7i32}; var forwarded:Packet=transfer!(Packet)(move packet); discard!(Packet)(move forwarded); var plain:Plain=make Plain{code:9i32}; trusted_discard!(Plain)(plain); return 0i32;}",
+        3u64, false) { return false; }
+    if !og_check(program) { return false; }
+    if (*program).proof_checks != 2usize || (*program).proof_bytes == 0usize { trap; }
+    return gp_find(&(*program).generics, "main") != null(*CrustDecl);
+}
+
+fn og_allocation_diagnostic(program: *OgProgram) -> *CrustContext {
+    var context: *CrustContext = &(*program).generics.context;
+    if (*program).generics.syntax.error_count != 0usize { context = &(*program).generics.syntax; }
+    if (*context).error_count == 0usize || (*context).error[0usize] == 0u8 { trap; }
+    return context;
+}
+
+fn og_allocation_sticky(program: *OgProgram, counts: *OgAllocation) -> unit {
+    var context: *CrustContext = og_allocation_diagnostic(program);
+    var location: CrustLoc = (*context).error_loc;
+    var errors: usize = (*context).error_count;
+    var calls: usize = (*counts).calls;
+    var message: [u8; 512] = uninit;
+    var index: usize = 0usize;
+    while index < 512usize { message[index] = (*context).error[index]; index = index + 1usize; }
+    if og_check(program) || og_prove(program) || og_lower_syntax(program) ||
+       og_allocation_read(program, "fn extra()->unit{}", 4u64, false) ||
+       gp_find(&(*program).generics, "main") != null(*CrustDecl) { trap; }
+    if (*counts).calls != calls || (*context).error_count != errors ||
+       (*context).error_loc.source != location.source || (*context).error_loc.offset != location.offset { trap; }
+    index = 0usize;
+    while index < 512usize {
+        if message[index] != (*context).error[index] { trap; }
+        index = index + 1usize;
+    }
+}
+
+fn og_allocation_attempt(fail_at: usize) -> usize {
+    var counts: OgAllocation = make OgAllocation { calls: 0usize, fail_at: fail_at, live: 0usize };
+    var allocator: CrustAllocator = make CrustAllocator {
+        user: &counts as *u8, allocate: og_allocate, release: og_release
+    };
+    var program: OgProgram = uninit;
+    og_init(&program, &allocator, 10000u64);
+    var success: bool = og_allocation_prepare(&program);
+    if fail_at == 0usize {
+        if !success { c_driver_diagnostic(&program.generics.context, "allocation baseline"); trap; }
+        var calls: usize = counts.calls;
+        if !og_check(&program) || counts.calls != calls { trap; }
+    } else {
+        if success || counts.calls != fail_at { trap; }
+        og_allocation_sticky(&program, &counts);
+    }
+    og_destroy(&program);
+    if counts.live != 0usize { trap; }
+    return counts.calls;
+}
+
+fn og_allocation_invalid() -> unit {
+    var counts: OgAllocation = make OgAllocation { calls: 0usize, fail_at: 0usize, live: 0usize };
+    var allocator: CrustAllocator = make CrustAllocator {
+        user: &counts as *u8, allocate: og_allocate, release: og_release
+    };
+    var program: OgProgram = uninit;
+    og_init(&program, &allocator, 10000u64);
+    if !og_allocation_read(&program,
+        "fn duplicate!(Payload)(value:Payload)->Payload{var copied:Payload=value; return move copied;} fn main(argc:i32,argv:**u8)->i32{return 0i32;}",
+        1u64, false) || og_check(&program) { trap; }
+    var source: *CrustSource = program.generics.context.error_loc.source;
+    if source == null(*CrustSource) || (*source).identity != 1u64 ||
+       gs_length((*source).path) != gs_length("ownership-generic-allocation") ||
+       (*source).bytes[program.generics.context.error_loc.offset] == 0u8 { trap; }
+    og_allocation_sticky(&program, &counts);
+    og_destroy(&program);
+    if counts.live != 0usize { trap; }
+}
+
+fn og_allocation_seal(source: *u8, extension: *u8) -> unit {
+    var counts: OgAllocation = make OgAllocation { calls: 0usize, fail_at: 0usize, live: 0usize };
+    var allocator: CrustAllocator = make CrustAllocator {
+        user: &counts as *u8, allocate: og_allocate, release: og_release
+    };
+    var program: OgProgram = uninit;
+    og_init(&program, &allocator, 10000u64);
+    if !og_allocation_read(&program, source, 1u64, false) || !og_prove(&program) ||
+       !og_allocation_read(&program, extension, 2u64, false) || og_check(&program) { trap; }
+    var diagnostic: *CrustContext = og_allocation_diagnostic(&program);
+    if (*diagnostic).error_loc.source == null(*CrustSource) ||
+       (*(*diagnostic).error_loc.source).identity != 2u64 { trap; }
+    og_allocation_sticky(&program, &counts);
+    og_destroy(&program);
+    if counts.live != 0usize { trap; }
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 1i32 { return 1i32; }
+    var total: usize = og_allocation_attempt(0usize);
+    var fail_at: usize = 1usize;
+    while fail_at <= total {
+        og_allocation_attempt(fail_at);
+        fail_at = fail_at + 1usize;
+    }
+    if og_allocation_attempt(0usize) != total { trap; }
+    og_allocation_invalid();
+    og_allocation_seal(
+        "record Cell{value:i32;} fn inspect!(Payload)(payload:read Payload,value:read Cell)->i32{return value.value;}",
+        "domain Added(Cell);");
+    og_allocation_seal("record Cell!(Payload){value:Payload;}", "domain Added(Cell);");
+    return 0i32;
+}

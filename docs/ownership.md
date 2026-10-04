@@ -623,3 +623,24 @@ Independent libraries retain the same types, effects, origins, and selected
 trust in their receipts. See the [stage contract](ownership-model.md#independent-libraries).
 The guarantee depends on the root selecting the checker and correct trusted
 implementations. Selecting the raw seed provides raw-pointer semantics.
+
+## 10. Reuse a definition for several payload types
+
+The [generic ownership tutorial](../examples/generics/ownership/README.md)
+uses declaration-local parameters:
+
+```crust
+fn transfer!(Value)(value: Value) -> Value {
+    return move value;
+}
+```
+
+The ownership-generic stage checks this body once. `Value` represents a movable
+record with closed ownership and cleanup that requires no domain access.
+The body uses `move` because the value can own resources. A call such as
+`transfer!(Ticket)(move ticket)` supplies the concrete resource type. A plain
+record can also be passed, with its ordinary copy behavior at the call boundary.
+
+The same tutorial uses a generic intrusive node and owner. The root selects the
+pointer provider once. Each new payload gets its own layout and complete cleanup.
+The definitions and their parameter declarations stay beside the source code.

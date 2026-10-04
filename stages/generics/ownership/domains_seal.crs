@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn og_seal_members(program: *OgProgram, domain: *OsDomain,
+                    definitions: *CrustMap, memberships: *CrustMap) -> bool {
+    var context: *CrustContext = &(*program).generics.syntax;
+    var member: *OsField = (*domain).records;
+    while member != null(*OsField) {
+        var declaration: *CrustDecl = crust_map_get(definitions, (*member).name as usize) as *CrustDecl;
+        if declaration != null(*CrustDecl) && (*declaration).kind == CRUST_D_RECORD {
+            var previous: *CrustDecl = crust_map_get(memberships, declaration as usize) as *CrustDecl;
+            if previous != null(*CrustDecl) && previous != (*domain).declaration {
+                gs_error(context, &(*(*domain).declaration).loc, "record cannot belong to multiple domains"); return false;
+            }
+            if !crust_try_map_set(context, memberships, declaration as usize, (*domain).declaration as *u8) { return false; }
+        }
+        member = (*member).next;
+    }
+    return true;
+}
+
+fn og_seal_memberships(program: *OgProgram, definitions: *CrustMap, memberships: *CrustMap) -> bool {
+    var input: *CrustUnit = (*program).generics.syntax.units;
+    while input != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*input).declarations;
+        while declaration != null(*CrustDecl) {
+            var domain: *OsDomain = crust_map_get(&(*program).parsed.domains, (*declaration).name as usize) as *OsDomain;
+            if domain != null(*OsDomain) && !og_seal_members(program, domain, definitions, memberships) { return false; }
+            declaration = (*declaration).next;
+        }
+        input = (*input).next;
+    }
+    return true;
+}
+
+fn og_seal_record(program: *OgProgram, declaration: *CrustDecl, memberships: *CrustMap) -> bool {
+    var current: *CrustDecl = crust_map_get(memberships, declaration as usize) as *CrustDecl;
+    if current == null(*CrustDecl) { current = declaration; }
+    var previous: *CrustDecl = crust_map_get(&(*program).sealed_domains, declaration as usize) as *CrustDecl;
+    if previous == current { return true; }
+    if previous != null(*CrustDecl) {
+        var location: *CrustLoc = &(*current).loc;
+        gs_error(&(*program).generics.syntax, location, "domain membership is frozen by a checked definition receipt");
+        return false;
+    }
+    return crust_try_map_set(&(*program).generics.syntax, &(*program).sealed_domains,
+        declaration as usize, current as *u8);
+}
+
+// Freeze domain membership for every record dependency of checked definitions.
+// Later source inputs can add declarations while preserving those memberships.
+fn og_seal_domains(program: *OgProgram) -> bool {
+    var context: *CrustContext = &(*program).generics.syntax;
+    if (*context).error_count != 0usize || (*program).generics.context.error_count != 0usize { return false; }
+    var definitions: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    var memberships: CrustMap = definitions;
+    var input: *CrustUnit = (*context).units;
+    while input != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*input).declarations;
+        while declaration != null(*CrustDecl) {
+            if !crust_try_map_set(context, &definitions, (*declaration).name as usize, declaration as *u8) { return false; }
+            declaration = (*declaration).next;
+        }
+        input = (*input).next;
+    }
+    if !og_seal_memberships(program, &definitions, &memberships) { return false; }
+    input = (*context).units;
+    while input != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*input).declarations;
+        while declaration != null(*CrustDecl) {
+            if (*declaration).kind == CRUST_D_RECORD && !og_seal_record(program, declaration, &memberships) { return false; }
+            declaration = (*declaration).next;
+        }
+        input = (*input).next;
+    }
+    return true;
+}

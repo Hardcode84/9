@@ -2,6 +2,9 @@
 
 # Tutorial: generics
 
+For resources and loans, continue with
+[generics and ownership](ownership/README.md) after this tutorial.
+
 A pair stores two values of the same type. Write its record and operations once,
 then use them with the types that your program needs.
 
@@ -35,6 +38,7 @@ ordinary compilation code supplied by the example. `setup.crs` loads the C
 backend and the generics stage. Its generics calls are:
 
 ```crust
+host_source(root, "../../stages/generics/model.crs");
 host_source(root, "../../stages/generics/source_model.crs");
 host_source(root, "../../stages/generics/source_api.crs");
 host_link(root, "../../build/crust-generics-library.so");

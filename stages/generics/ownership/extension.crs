@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Supply a namespace distinct from source and imported declaration identities.
+extern fn og_init(program: *OgProgram, allocator: *CrustAllocator, namespace: u64) -> unit = "og_init";
+// Capture source and annotations. Keep parsed definitions unchanged after reading.
+extern fn og_read(program: *OgProgram, source: *CrustSource, trusted: bool) -> bool = "og_read";
+extern fn og_read_range(program: *OgProgram, source: *CrustSource, begin: usize, end: usize, trusted: bool) -> bool = "og_read_range";
+// Check generic definitions and freeze their domain contracts. Further reads may
+// add declarations while preserving those contracts.
+extern fn og_prove(program: *OgProgram) -> bool = "og_prove";
+// Complete concrete cleanup, argument validation, and ordinary body checking.
+extern fn og_check(program: *OgProgram) -> bool = "og_check";
+// Finish all consumers before releasing program storage.
+extern fn og_destroy(program: *OgProgram) -> unit = "og_destroy";

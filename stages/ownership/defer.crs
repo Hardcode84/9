@@ -2,6 +2,7 @@
 
 fn os_defer(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> unit {
     while (*expression).kind == CRUST_E_GROUP { expression = (*expression).left; }
+    if (*expression).kind != CRUST_E_CALL { os_error(check, &(*expression).loc, "defer requires a function call"); return; }
     var callee: *CrustExpr = (*expression).left;
     while (*callee).kind == CRUST_E_GROUP { callee = (*callee).left; }
     if (*callee).kind != CRUST_E_NAME { os_error(check, &(*expression).loc, "deferred call requires a declared interface"); return; }
@@ -9,7 +10,7 @@ fn os_defer(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> unit {
     if contract == null(*OsFunction) || (*contract).foreign != 0u32 {
         os_error(check, &(*expression).loc, "deferred foreign call requires a checked unit wrapper"); return;
     }
-    if !os_explicit_call(check, contract, &(*expression).loc) { return; }
+    if !os_abstract_defer(check, expression, contract) || !os_explicit_call(check, contract, &(*expression).loc) { return; }
     if (*contract).initializes != null(*OsField) { os_error(check, &(*expression).loc, "in-place construction cannot be deferred"); return; }
     var arguments: **OsValue = os_arguments(check, state, expression, contract);
     if os_failed(check) { return; }

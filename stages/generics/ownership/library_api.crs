@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Require inputs from og_read with immutable parsed definitions and annotations.
+// Publish a closed provider and keep its receipt in trusted compilation state.
+// Directory is an existing absolute cache directory without untrusted writers.
+extern fn og_library_publish(program: *OgProgram, directory: *u8,
+                             result: *OwnershipLibrary) -> bool = "og_library_publish";
+
+// Require a fresh program and a retained publication receipt. Read client inputs
+// after import. Provider source paths are diagnostic labels and are never opened.
+extern fn og_library_import(program: *OgProgram, directory: *u8,
+                            receipt: *OwnershipLibrary) -> bool = "og_library_import";

@@ -1,0 +1,121 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn og_proof_body(clone: *GsClone, source: *CrustDecl, depth: u32) -> *CrustStmt {
+    var environment: *GpEnvironment = (*clone).user as *GpEnvironment;
+    var program: *OgProgram = (*(*environment).program).clone_user as *OgProgram;
+    var root: *GpInstance = crust_map_get(&(*program).proof_roots, source as usize) as *GpInstance;
+    if root == null(*GpInstance) || (*root).arguments != (*environment).arguments ||
+       os_trusted(&(*program).parsed, source) ||
+       crust_map_get(&(*program).verified, source as usize) != null(*u8) { return null(*CrustStmt); }
+    return gs_clone_statement(clone, (*source).body, depth);
+}
+
+fn og_proof_atom(program: *OgProgram, definition: *GpDefinition, index: usize) -> *CrustTypeSyntax {
+    var context: *CrustContext = &(*program).generics.context;
+    var text: *u8 = gs_number_name(context, "$parameter_", (*(*definition).source).unit_identity,
+        (*(*definition).source).identity);
+    if text == null(*u8) { return null(*CrustTypeSyntax); }
+    text = gs_number_name(context, text, 0u64, index as u64);
+    if text == null(*u8) { return null(*CrustTypeSyntax); }
+    var name: *CrustName = crust_try_intern(context, text, gs_length(text));
+    if name == null(*CrustName) || !os_abstract_parameter(&(*program).ownership, name) { return null(*CrustTypeSyntax); }
+    var syntax: CrustTypeSyntax = uninit;
+    syntax.loc = (*(*definition).source).loc;
+    return gp_named_type(context, &syntax, name);
+}
+
+fn og_proof_root(program: *OgProgram, definition: *GpDefinition) -> bool {
+    var context: *CrustContext = &(*program).generics.context;
+    var count: usize = (*(*definition).parameters).count;
+    var application: CrustTypeSyntax = uninit;
+    application.loc = (*(*definition).source).loc;
+    application.param_count = count;
+    var arguments: **CrustTypeSyntax = gs_array_storage(context, count,
+        sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax), &application.loc) as **CrustTypeSyntax;
+    if arguments == null(**CrustTypeSyntax) { return false; }
+    var index: usize = 0usize;
+    while index < count {
+        arguments[index] = og_proof_atom(program, definition, index);
+        if arguments[index] == null(*CrustTypeSyntax) { return false; }
+        index = index + 1usize;
+    }
+    var environment: GpEnvironment = make GpEnvironment {
+        program: &(*program).generics, definition: definition, arguments: arguments, generation: 0u32
+    };
+    var instance: *GpInstance = gp_cached_instance(&environment, definition, arguments, &application);
+    return instance != null(*GpInstance) && crust_try_map_set(context, &(*program).proof_roots,
+        (*definition).source as usize, instance as *u8);
+}
+
+fn og_proof_prepare(proof: *OgProgram, original: *OgProgram) -> bool {
+    og_init(proof, &(*original).generics.context.arena.allocator, (*original).generics.namespace);
+    (*proof).generics.syntax.units = (*original).generics.syntax.units;
+    (*proof).generics.syntax.last_unit = (*original).generics.syntax.last_unit;
+    (*proof).generics.parameters = (*original).generics.parameters;
+    (*proof).generics.clone_body = og_proof_body;
+    (*proof).parsed_resources = (*original).parsed_resources;
+    (*proof).parsed_resources.context = &(*proof).generics.syntax;
+    (*proof).parsed = (*original).parsed;
+    (*proof).parsed.resources = &(*proof).parsed_resources;
+    (*proof).references = (*original).references;
+    (*proof).resource_index = (*original).resource_index;
+    (*proof).verified = (*original).verified;
+    var context: *CrustContext = &(*proof).generics.context;
+    if !gp_declarations(&(*proof).generics) { return false; }
+    var output: *CrustUnit = crust_try_alloc(context, sizeof(CrustUnit), alignof(CrustUnit)) as *CrustUnit;
+    if output == null(*CrustUnit) { return false; }
+    (*context).units = output;
+    (*context).last_unit = output;
+    var definition: *GpDefinition = (*proof).generics.first;
+    while definition != null(*GpDefinition) {
+        if (*definition).parameters != null(*GpParameters) && !og_proof_root(proof, definition) { return false; }
+        definition = (*definition).next;
+    }
+    return gp_lower_ordinary(&(*proof).generics) && gp_lower_instances(&(*proof).generics) &&
+        !(*proof).resources.failed && og_domains(proof);
+}
+
+fn og_proof_check(proof: *OgProgram) -> bool {
+    if !os_abstract_collect(&(*proof).ownership) || !og_arguments(proof) { return false; }
+    var definition: *GpDefinition = (*proof).generics.first;
+    while definition != null(*GpDefinition) {
+        var source: *CrustDecl = (*definition).source;
+        var root: *GpInstance = crust_map_get(&(*proof).proof_roots, source as usize) as *GpInstance;
+        if root != null(*GpInstance) && (*source).kind == CRUST_D_FUNCTION &&
+           !os_trusted(&(*proof).parsed, source) &&
+           crust_map_get(&(*proof).verified, source as usize) == null(*u8) {
+            if !os_abstract_check(&(*proof).ownership, (*root).declaration) { return false; }
+            (*proof).proof_checks = (*proof).proof_checks + 1usize;
+        }
+        definition = (*definition).next;
+    }
+    return true;
+}
+
+fn og_proof_receipts(program: *OgProgram, proof: *OgProgram) -> bool {
+    var definition: *GpDefinition = (*proof).generics.first;
+    while definition != null(*GpDefinition) {
+        var source: *CrustDecl = (*definition).source;
+        if (*definition).parameters != null(*GpParameters) && !os_trusted(&(*program).parsed, source) &&
+           !crust_try_map_set(&(*program).generics.syntax, &(*program).verified, source as usize, source as *u8) { return false; }
+        definition = (*definition).next;
+    }
+    return true;
+}
+
+// Check each generic definition once under independent affine parameter contracts.
+fn og_prove(program: *OgProgram) -> bool {
+    if (*program).generics.syntax.error_count != 0usize || (*program).generics.context.error_count != 0usize { return false; }
+    if !og_resource_index(program) || !og_seal_domains(program) { return false; }
+    var proof: OgProgram = uninit;
+    var success: bool = og_proof_prepare(&proof, program) && og_proof_check(&proof);
+    (*program).proof_checks = (*program).proof_checks + proof.proof_checks;
+    var bytes: usize = proof.generics.context.arena.bytes_reserved + proof.generics.syntax.arena.bytes_reserved;
+    if bytes > (*program).proof_bytes { (*program).proof_bytes = bytes; }
+    if success { success = og_proof_receipts(program, &proof); }
+    if !success && proof.generics.context.error_count != 0usize {
+        gs_error(&(*program).generics.context, &proof.generics.context.error_loc, &proof.generics.context.error[0usize]);
+    }
+    gp_destroy(&proof.generics);
+    return success;
+}

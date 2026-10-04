@@ -2,11 +2,14 @@
 
 # Generics through compilation programs
 
-Date: 2026-10-05. Status: source generics implemented; ownership composition proposed.
+Date: 2026-10-05. Status: source generics and the closed-record ownership composition implemented.
 The [generics stage](../../stages/generics/README.md) implements source capture,
 declaration-local type parameters, concrete checking, and instance reuse. The
 [tutorial](../../examples/generics/README.md) shows setup, definitions, and use.
-The ownership composition and abstract-checking APIs below remain proposals.
+The [ownership composition](../../stages/generics/ownership/README.md) implements
+the abstract checks and closed-record payload contract. Its tutorial and API
+reference give the callable interfaces; pseudocode below describes the design
+boundaries.
 The [seed specification](../crust0-spec.md) and
 [ownership contract](../ownership-model.md) define their current behavior.
 
@@ -425,7 +428,7 @@ syntax.
 
 ## Ownership parameter contract
 
-The first ownership composition accepts one payload parameter with these
+The ownership composition gives each payload parameter these
 requirements:
 
 - A sized, movable record.

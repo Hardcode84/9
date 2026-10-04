@@ -1,0 +1,158 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Register a nominal, movable, affine record parameter with domain-free cleanup.
+// This atom has no fields, concrete layout, or seed declaration.
+fn os_abstract_parameter(stage: *OsStage, name: *CrustName) -> bool {
+    var resources: *RsStage = (*stage).resources;
+    rs_put(resources, &(*stage).parameters, name as usize, name as *u8);
+    rs_put(resources, &(*resources).affine_types, name as usize, name as *u8);
+    return !(*resources).failed;
+}
+
+fn os_parameter_type(stage: *OsStage, syntax: *CrustTypeSyntax) -> bool {
+    return syntax != null(*CrustTypeSyntax) && (*syntax).kind == CRUST_T_NAME &&
+        crust_map_get(&(*stage).parameters, (*syntax).name as usize) != null(*u8);
+}
+
+fn os_abstract_active(check: *OsCheck) -> bool { return (*(*check).stage).parameters.count != 0usize; }
+
+// Register and validate source interfaces without publishing a seed layout.
+fn os_abstract_collect(stage: *OsStage) -> bool {
+    var resources: *RsStage = (*stage).resources;
+    (*resources).delegate_memory = true;
+    (*resources).delegate_return_loans = true;
+    if !rs_collect(resources) || !os_prepare_outputs(stage) { return false; }
+    var check: OsCheck = uninit;
+    os_check_init(&check, stage, null(*OsFunction));
+    os_resolve_domains(&check);
+    var global: *RsGlobal = (*resources).first_global;
+    while global != null(*RsGlobal) && !os_failed(&check) {
+        os_abstract_declaration(&check, (*global).source);
+        if (*(*global).source).kind == CRUST_D_RECORD && !os_failed(&check) {
+            os_validate_record(&check, global);
+        }
+        global = (*global).next;
+    }
+    if !os_failed(&check) { os_resolve_functions(&check); }
+    return !os_failed(&check);
+}
+
+// Check one definition under its registered parameter and callee contracts.
+fn os_abstract_check(stage: *OsStage, declaration: *CrustDecl) -> bool {
+    var resources: *RsStage = (*stage).resources;
+    var global: *RsGlobal = rs_global(resources, (*declaration).name);
+    var contract: *OsFunction = crust_map_get(&(*stage).functions, declaration as usize) as *OsFunction;
+    if global == null(*RsGlobal) || contract == null(*OsFunction) || (*global).source != declaration {
+        rs_error(resources, &(*declaration).loc, "abstract body requires a collected function interface");
+        return false;
+    }
+    if (*declaration).kind != CRUST_D_FUNCTION || (*declaration).body == null(*CrustStmt) ||
+       os_imported(stage, declaration) || os_trusted(stage, declaration) || (*contract).foreign != 0u32 {
+        rs_error(resources, &(*declaration).loc, "abstract verification requires an untrusted source definition"); return false;
+    }
+    os_check_function(stage, global, contract);
+    if !(*resources).failed {
+        rs_put(resources, &(*stage).verified_bodies, declaration as usize, declaration as *u8);
+    }
+    return !(*resources).failed;
+}
+
+fn os_abstract_declaration(check: *OsCheck, declaration: *CrustDecl) -> unit {
+    var name: *CrustName = (*declaration).name;
+    if crust_map_get(&(*(*check).stage).parameters, name as usize) != null(*u8) {
+        os_error(check, &(*declaration).loc, "declaration conflicts with an abstract parameter"); return;
+    }
+    if (*declaration).kind == CRUST_D_RECORD {
+        var field: *CrustField = (*declaration).fields;
+        while field != null(*CrustField) && !os_failed(check) {
+            os_abstract_type(check, (*field).syntax_type, false);
+            field = (*field).next;
+        }
+    } else {
+        os_abstract_type(check, (*declaration).syntax_type, (*declaration).kind != CRUST_D_CONST);
+        var parameter: *CrustParam = (*declaration).params;
+        while parameter != null(*CrustParam) && !os_failed(check) {
+            os_abstract_type(check, (*parameter).syntax_type, false);
+            parameter = (*parameter).next;
+        }
+    }
+}
+
+fn os_abstract_type(check: *OsCheck, syntax: *CrustTypeSyntax, result: bool) -> bool {
+    if !os_enter(check, &(*syntax).loc) { return false; }
+    os_abstract_type_inner(check, syntax, result);
+    (*check).depth = (*check).depth - 1usize;
+    return !os_failed(check);
+}
+
+fn os_abstract_type_inner(check: *OsCheck, syntax: *CrustTypeSyntax, result: bool) -> unit {
+    var kind: u32 = (*syntax).kind;
+    if kind < CRUST_T_UNIT { return; }
+    if kind == CRUST_T_UNIT {
+        if !result { os_error(check, &(*syntax).loc, "unit is only permitted as a function result"); }
+        return;
+    }
+    if kind == CRUST_T_NAME {
+        if os_parameter_type((*check).stage, syntax) { return; }
+        var global: *RsGlobal = rs_global((*(*check).stage).resources, (*syntax).name);
+        if global == null(*RsGlobal) || (*(*global).source).kind != CRUST_D_RECORD {
+            os_error(check, &(*syntax).loc, "abstract type requires a declared record or parameter");
+        }
+        return;
+    }
+    if kind == CRUST_T_FUNCTION { os_abstract_signature(check, syntax); return; }
+    if kind != CRUST_T_POINTER && kind != CRUST_T_ARRAY && kind != RS_READ && kind != RS_MUT {
+        os_error(check, &(*syntax).loc, "unsupported abstract type"); return;
+    }
+    os_abstract_container(check, syntax);
+}
+
+fn os_abstract_container(check: *OsCheck, syntax: *CrustTypeSyntax) -> unit {
+    if os_borrowed((*syntax).base) {
+        os_error(check, &(*syntax).loc, "borrow types cannot be nested or stored in pointers or arrays"); return;
+    }
+    if (*syntax).kind == CRUST_T_ARRAY && (*syntax).count == 0u64 {
+        os_error(check, &(*syntax).loc, "array count must be positive"); return;
+    }
+    os_abstract_type(check, (*syntax).base, false);
+    if (*syntax).kind == CRUST_T_ARRAY && !os_failed(check) && rs_owns((*(*check).stage).resources, (*syntax).base) {
+        os_error(check, &(*syntax).loc, "abstract ownership requires individual record values, not arrays of owners");
+    }
+}
+
+fn os_abstract_signature(check: *OsCheck, syntax: *CrustTypeSyntax) -> unit {
+    os_abstract_type(check, (*syntax).base, true);
+    var index: usize = 0usize;
+    while index < (*syntax).param_count && !os_failed(check) {
+        os_abstract_type(check, (*syntax).params[index], false);
+        index = index + 1usize;
+    }
+}
+
+fn os_abstract_same(check: *OsCheck, expected: *CrustTypeSyntax,
+                     actual: *CrustTypeSyntax, location: *CrustLoc) -> bool {
+    if !os_abstract_active(check) { return true; }
+    if !os_borrowed(expected) && os_borrowed(actual) { actual = (*actual).base; }
+    if rs_same((*(*check).stage).resources, expected, actual) { return true; }
+    os_error(check, location, "type mismatch under abstract parameter contracts");
+    return false;
+}
+
+fn os_abstract_arity(check: *OsCheck, declaration: *CrustDecl, count: usize, location: *CrustLoc) -> bool {
+    if !os_abstract_active(check) { return true; }
+    var parameter: *CrustParam = (*declaration).params;
+    var expected: usize = 0usize;
+    while parameter != null(*CrustParam) { expected = expected + 1usize; parameter = (*parameter).next; }
+    if expected == count { return true; }
+    os_error(check, location, "argument count does not match abstract function interface");
+    return false;
+}
+
+fn os_abstract_local(check: *OsCheck, state: *OsState, name: *CrustName, location: *CrustLoc) -> bool {
+    if !os_abstract_active(check) { return true; }
+    if os_local(state, name) != null(*OsSlot) || rs_global((*(*check).stage).resources, name) != null(*RsGlobal) ||
+       crust_map_get(&(*(*check).stage).parameters, name as usize) != null(*u8) {
+        os_error(check, location, "local name is already visible"); return false;
+    }
+    return true;
+}

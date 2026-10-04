@@ -1,0 +1,28 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
+extern fn acquire_fd(fd: i32) -> i32 foreign(acquire Ticket.handle) = "dup";
+extern fn close_fd(fd: i32) -> i32 foreign(move fd: Ticket.handle) = "close";
+
+record Plain { x: i32; y: i32; }
+resource Ticket { handle: i32; } owns(handle = -1i32) drop ticket_drop;
+resource Parcel { ticket: Ticket; code: i32; } drop parcel_drop;
+
+fn ticket_drop(ticket: mut Ticket) -> unit {
+    if ticket.handle != -1i32 {
+        var status: i32 = close_fd(move ticket.handle);
+        if status != 0i32 { trap; }
+        emit(70i32);
+    }
+}
+
+fn parcel_drop(parcel: mut Parcel) -> unit {
+    emit(parcel.code);
+}
+
+fn parcel_new(code: i32) -> Parcel {
+    var handle: i32 = acquire_fd(1i32);
+    if handle == -1i32 { trap; }
+    var ticket: Ticket = make Ticket { handle: move handle };
+    return make Parcel { ticket: move ticket, code: code };
+}

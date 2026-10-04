@@ -69,7 +69,7 @@ fn os_unfold(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
 
 fn os_object_fields(check: *OsCheck, state: *OsState, object: *OsObject, initialized: bool) -> unit {
     var syntax: *CrustTypeSyntax = (*object).syntax;
-    if (*syntax).kind != CRUST_T_NAME || os_opaque((*object).contract) { return; }
+    if (*syntax).kind != CRUST_T_NAME || os_opaque((*object).contract) || os_parameter_type((*check).stage, syntax) { return; }
     var global: *RsGlobal = rs_global((*(*check).stage).resources, (*syntax).name);
     var field: *CrustField = (*(*global).source).fields;
     var fields: *OsSlot = null(*OsSlot);
@@ -155,7 +155,9 @@ fn os_local(state: *OsState, name: *CrustName) -> *OsSlot {
 fn os_initialized(check: *OsCheck, state: *OsState, object: *OsObject) -> bool {
     if object == null(*OsObject) { return true; }
     if (os_flags(state, object) & OS_DESTROYED) != 0u32 { return false; }
-    if os_opaque((*object).contract) { return (os_flags(state, object) & OS_READY) != 0u32; }
+    if os_opaque((*object).contract) || os_parameter_type((*check).stage, (*object).syntax) {
+        return (os_flags(state, object) & OS_READY) != 0u32;
+    }
     if (os_flags(state, object) & OS_SUMMARY) != 0u32 { return true; }
     if !os_enter(check, &(*(*object).syntax).loc) { return false; }
     var valid: bool = true;

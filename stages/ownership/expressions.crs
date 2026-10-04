@@ -23,6 +23,7 @@ fn os_expr_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *O
 
 fn os_literal(check: *OsCheck, expression: *CrustExpr) -> *OsValue {
     var kind: u32 = (*expression).kind;
+    if !os_abstract_literal(check, expression) { return null(*OsValue); }
     if kind == CRUST_E_NULL { return os_value(check, (*expression).syntax_type, null(*OsObject), true); }
     var syntax: *CrustTypeSyntax = null(*CrustTypeSyntax);
     if kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL {
@@ -46,6 +47,7 @@ fn os_unary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValu
     if (*value).pointer || (*value).object != null(*OsObject) {
         os_error(check, &(*expression).loc, "unary operation cannot erase ownership provenance");
     }
+    if !os_abstract_unary(check, expression, value) { return null(*OsValue); }
     var result: *OsValue = os_copy(check, value);
     return result;
 }
@@ -113,6 +115,7 @@ fn os_cast(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
     if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
     if !os_plain(check, value, &(*expression).loc) { return null(*OsValue); }
     var target: *CrustTypeSyntax = (*expression).syntax_type;
+    if !os_abstract_cast(check, target, (*value).syntax, &(*expression).loc) { return null(*OsValue); }
     if (*target).kind == CRUST_T_POINTER {
         if !(*value).pointer { os_error(check, &(*expression).loc, "pointer casts cannot create checked storage"); return null(*OsValue); }
         if (*value).allocation_type != null(*CrustTypeSyntax) {
@@ -153,6 +156,7 @@ fn os_binary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVal
 }
 
 fn os_make(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
+    if !os_abstract_make(check, expression) { return null(*OsValue); }
     if os_opaque(os_record((*check).stage, (*expression).syntax_type)) { os_error(check, &(*expression).loc, "opaque values require their declared constructor"); return null(*OsValue); }
     var object: *OsObject = os_object(check, state, (*expression).syntax_type, null(*OsObject), (*state).scope, false);
     if object == null(*OsObject) { return null(*OsValue); }
@@ -185,6 +189,7 @@ fn os_refine_values(check: *OsCheck, state: *OsState, left: *OsValue, right: *Os
 }
 
 fn os_binary_access(check: *OsCheck, expression: *CrustExpr, left: *OsValue, right: *OsValue) -> unit {
+    if !os_abstract_binary(check, expression, left, right) { return; }
     if ((*left).native != null(*OsField) || (*right).native != null(*OsField)) &&
        (*expression).op != CRUST_OP_EQ && (*expression).op != CRUST_OP_NE {
         os_error(check, &(*expression).loc, "owned values permit equality tests, not arithmetic");

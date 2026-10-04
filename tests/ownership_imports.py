@@ -187,6 +187,36 @@ def source_checks(directory, driver, cache, links, library, client, environment,
     return 4
 
 
+def domain_membership_checks(directory, driver, cache, environment):
+    provider = directory / "domain-free-provider.crs"
+    provider.write_text(
+        "record Cell{value:i32;} fn cell_value(value:read Cell)->i32{return value.value;}"
+    )
+    receipt = publish(driver, cache, [provider])
+    client = directory / "domain-free-client.crs"
+    client.write_text(
+        "fn main(argc:i32,argv:**u8)->i32 {var value:Cell=make Cell{value:5i32};"
+        "return cell_value(read value)-5i32;}"
+    )
+    output = directory / "domain-free-client"
+    command(import_arguments(driver, cache, receipt, client, output), env=environment)
+    assert command([str(output)]).stdout == ""
+    client.write_text(
+        "domain Added(Cell); fn main(argc:i32,argv:**u8)->i32 {"
+        "domain Added {var value:Cell=make Cell{value:5i32};"
+        "return cell_value(read value)-5i32;}}"
+    )
+    result = command([driver, "publish", str(cache), str(provider), str(client)], success=False)
+    assert "borrowed value requires its declared domain authority" in result.stderr
+    provider.unlink()
+    reject_import(
+        import_arguments(driver, cache, receipt, client, output),
+        environment,
+        "imported record domain membership is frozen",
+    )
+    return 2
+
+
 def run(build):
     driver = str(build / "crust-ownership-import-test")
     scratch = build / "ownership-contracts"
@@ -201,6 +231,7 @@ def run(build):
         rejected = source_checks(
             directory, driver, cache, links, library, client, environment, receipt
         )
+        rejected += domain_membership_checks(directory, driver, cache, environment)
         links.unlink()
         library.unlink()
         output = directory / "client"

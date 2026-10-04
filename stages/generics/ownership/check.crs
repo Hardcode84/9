@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn og_instance_receipts(program: *OgProgram) -> bool {
+    var instance: *GpInstance = (*program).generics.instances;
+    while instance != null(*GpInstance) {
+        var source: *CrustDecl = (*(*instance).definition).source;
+        if crust_map_get(&(*program).verified, source as usize) != null(*u8) {
+            rs_put(&(*program).resources, &(*program).ownership.verified_bodies,
+                (*instance).declaration as usize, source as *u8);
+        }
+        instance = (*instance).next;
+    }
+    return !(*program).resources.failed;
+}
+
+fn og_checked_receipts(program: *OgProgram) -> bool {
+    var definition: *GpDefinition = (*program).generics.first;
+    while definition != null(*GpDefinition) {
+        var source: *CrustDecl = (*definition).source;
+        if !os_trusted(&(*program).parsed, source) &&
+           !crust_try_map_set(&(*program).generics.syntax, &(*program).verified, source as usize, source as *u8) { return false; }
+        definition = (*definition).next;
+    }
+    return true;
+}
+
+// Check generic contracts, lower concrete cleanup, then verify ordinary bodies.
+fn og_check(program: *OgProgram) -> bool {
+    if (*program).generics.syntax.error_count != 0usize || (*program).generics.context.error_count != 0usize { return false; }
+    if (*program).generics.state == 2u32 { return true; }
+    if (*program).generics.state != 0u32 {
+        crust_set_error(&(*program).generics.context, null(*CrustSource), 0usize,
+            "ownership generic program has already been lowered"); return false;
+    }
+    if !og_prove(program) || !og_lower_syntax(program) || !og_domains(program) ||
+       !os_lower(&(*program).ownership) || !og_arguments(program) || !og_instance_receipts(program) ||
+       !os_verify(&(*program).ownership) || !og_checked_receipts(program) { return false; }
+    (*program).generics.state = 2u32;
+    return true;
+}
+
+fn og_destroy(program: *OgProgram) -> unit { gp_destroy(&(*program).generics); }

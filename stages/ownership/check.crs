@@ -54,6 +54,10 @@ fn os_validate_owner(check: *OsCheck, contract: *OsRecord, field: *CrustField) -
     if (*syntax).kind != CRUST_T_POINTER {
         os_error(check, &(*field).loc, "storage ownership requires a pointer field"); return;
     }
+    if os_parameter_type((*check).stage, (*syntax).base) {
+        if (*contract).domain != null(*CrustName) { os_error(check, &(*field).loc, "abstract payload requires domain-free storage ownership"); }
+        return;
+    }
     var target: *OsRecord = os_record((*check).stage, (*syntax).base);
     if target == null(*OsRecord) || (*target).domain != (*contract).domain {
         os_error(check, &(*field).loc, "owned allocation and handle must share a domain or both omit it"); return;
@@ -73,7 +77,7 @@ fn os_exclusive_storage(check: *OsCheck, contract: *OsRecord) -> bool {
         var syntax: *CrustTypeSyntax = (*field).syntax_type;
         if os_borrowed(syntax) {
             os_error(check, &(*field).loc, "exclusive heap storage cannot retain borrowed fields");
-        } else { if (*syntax).kind == CRUST_T_NAME {
+        } else { if (*syntax).kind == CRUST_T_NAME && !os_parameter_type((*check).stage, syntax) {
             os_exclusive_storage(check, os_record((*check).stage, syntax));
         } }
         field = (*field).next;
@@ -163,7 +167,8 @@ fn os_function_exit(check: *OsCheck, state: *OsState, location: *CrustLoc) -> un
 }
 
 fn os_check_function(stage: *OsStage, global: *RsGlobal, contract: *OsFunction) -> unit {
-    if os_imported(stage, (*global).source) || os_trusted(stage, (*global).source) { return; }
+    if os_imported(stage, (*global).source) || os_trusted(stage, (*global).source) ||
+       crust_map_get(&(*stage).verified_bodies, (*global).source as usize) != null(*u8) { return; }
     var declaration: *CrustDecl = (*global).source;
     var check: OsCheck = uninit;
     os_check_init(&check, stage, contract);
@@ -187,9 +192,7 @@ fn os_check_function(stage: *OsStage, global: *RsGlobal, contract: *OsFunction) 
     }
     os_statement(&check, &state, (*declaration).body);
     if os_failed(&check) { return; }
-    if state.flow == OS_NORMAL { os_function_exit(&check, &state, &(*declaration).loc); }
-    if state.flow == OS_NORMAL { os_scope_end(&check, &state, &(*declaration).loc); }
-    if state.flow == OS_NORMAL { os_contract_end(&check, &state, &(*declaration).loc); }
+    if state.flow == OS_NORMAL { os_function_fallthrough(&check, &state, declaration); }
 }
 
 fn os_validate_borrows(check: *OsCheck, declaration: *CrustDecl) -> unit {
@@ -236,4 +239,13 @@ fn os_check(stage: *OsStage) -> bool {
         global = (*global).next;
     }
     return !os_failed(&check);
+}
+
+fn os_function_fallthrough(check: *OsCheck, state: *OsState, declaration: *CrustDecl) -> unit {
+    if os_abstract_active(check) && (*(*declaration).syntax_type).kind != CRUST_T_UNIT {
+        os_error(check, &(*declaration).loc, "non-unit function must return a value on every continuing path"); return;
+    }
+    os_function_exit(check, state, &(*declaration).loc);
+    os_scope_end(check, state, &(*declaration).loc);
+    os_contract_end(check, state, &(*declaration).loc);
 }

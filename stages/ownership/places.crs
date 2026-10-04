@@ -137,6 +137,9 @@ fn os_deref_place(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *
 fn os_move(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
     var slot: *OsSlot = os_place(check, state, (*expression).left);
     if slot == null(*OsSlot) || os_failed(check) { return null(*OsValue); }
+    if (*slot).loan != null(*OsLoan) && (*slot).object == null(*OsObject) {
+        os_error(check, &(*expression).loc, "cannot move out of a borrowed value"); return null(*OsValue);
+    }
     var value: *OsValue = os_read_slot(check, state, slot, &(*expression).loc);
     if value == null(*OsValue) { return value; }
     if !os_move_allowed(check, state, slot, value, &(*expression).loc) ||
@@ -150,10 +153,11 @@ fn os_move(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
 }
 
 fn os_move_allowed(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue, location: *CrustLoc) -> bool {
-    if !(*slot).owns {
+    if !(*slot).owns && ((*(*slot).syntax).kind != CRUST_T_NAME || os_borrowed((*value).syntax)) {
         os_error(check, location, "move requires an owner place");
         return false;
     }
+    if !os_abstract_move_field(check, slot, location) { return false; }
     if (*slot).object != null(*OsObject) {
         if (*os_root((*slot).object)).aliased {
             os_error(check, location, "owner transfer requires an ownership origin, not a retained reference"); return false;
@@ -180,7 +184,7 @@ fn os_store_record(check: *OsCheck, state: *OsState, target: *OsObject,
         (*check).depth = (*check).depth - 1usize;
         return;
     }
-    if os_opaque((*target).contract) {
+    if os_opaque((*target).contract) || os_parameter_type((*check).stage, (*target).syntax) {
         os_mark(check, state, target, os_flags(state, source));
         (*check).depth = (*check).depth - 1usize; return;
     }
@@ -199,7 +203,7 @@ fn os_store(check: *OsCheck, state: *OsState, slot: *OsSlot,
             value: *OsValue, location: *CrustLoc) -> unit {
     if value == null(*OsValue) || os_failed(check) { return; }
     if !os_store_allowed(check, state, slot, value, location) { return; }
-    value = os_stored_value(check, slot, value);
+    value = os_stored_value(check, state, slot, value);
     if value == null(*OsValue) { return; }
     var previous: *OsValue = os_bound(state, slot);
     if previous != null(*OsValue) && (*slot).owns && !os_first_store(check, state, previous, location) {
@@ -212,7 +216,10 @@ fn os_store(check: *OsCheck, state: *OsState, slot: *OsSlot,
     os_loan_keep(check, state, value);
 }
 
-fn os_stored_value(check: *OsCheck, slot: *OsSlot, value: *OsValue) -> *OsValue {
+fn os_stored_value(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue) -> *OsValue {
+    if !os_affine(check, (*value).syntax) && !(*value).pointer && (*value).object != null(*OsObject) && !os_borrowed((*slot).syntax) {
+        return os_copy_record(check, state, slot, value);
+    }
     if (*value).pointer || (*value).object != null(*OsObject) || os_borrowed((*slot).syntax) { return value; }
     var result: *OsValue = os_copy(check, value);
     if result != null(*OsValue) {
@@ -225,6 +232,7 @@ fn os_stored_value(check: *OsCheck, slot: *OsSlot, value: *OsValue) -> *OsValue 
 
 fn os_store_allowed(check: *OsCheck, state: *OsState, slot: *OsSlot,
                       value: *OsValue, location: *CrustLoc) -> bool {
+    if !os_abstract_same(check, (*slot).syntax, (*value).syntax, location) { return false; }
     if !os_native_store(check, slot, value, location) || !os_brand_store(check, state, slot, value, location) { return false; }
     if !os_transferable(check, state, value, location) || !os_store_lifetime(check, slot, value, location) { return false; }
     if !os_loan_place_access(check, state, slot, (*slot).loan, true, location) { return false; }
@@ -270,7 +278,7 @@ fn os_pristine(check: *OsCheck, state: *OsState, object: *OsObject, location: *C
 fn os_transferable(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> bool {
     if os_borrowed((*value).syntax) { return true; }
     if !(*value).pointer && (*value).object != null(*OsObject) {
-        if (os_flags(state, (*value).object) & OS_PINNED) != 0u32 || (!(*value).fresh && !(*value).owner) {
+        if (os_flags(state, (*value).object) & OS_PINNED) != 0u32 || (os_affine(check, (*value).syntax) && !(*value).fresh && !(*value).owner) {
             os_error(check, location, "schema transfer requires movable owned or fresh storage"); return false;
         }
     }
@@ -351,4 +359,16 @@ fn os_store_record_field(check: *OsCheck, state: *OsState, slot: *OsSlot,
             }
         }
     }
+}
+
+fn os_copy_record(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue) -> *OsValue {
+    var copy: *OsValue = os_copy(check, value);
+    var object: *OsObject = os_object(check, state, (*value).syntax, (*slot).object, (*slot).scope, false);
+    if copy == null(*OsValue) || object == null(*OsObject) { return null(*OsValue); }
+    os_store_record(check, state, object, (*value).object, &(*(*slot).syntax).loc);
+    (*copy).object = object;
+    (*copy).loan = null(*OsLoan);
+    (*copy).place = null(*OsSlot);
+    (*copy).borrow_scope = null(*OsScope);
+    return copy;
 }

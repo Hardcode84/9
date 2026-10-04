@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Load the generic and reader models before these composition interfaces.
+extern fn gp_read_range_with_hooks(program: *GsProgram, source: *CrustSource, begin: usize, end: usize, hooks: *CrustReaderHooks) -> bool = "gp_read_range_with_hooks";
+extern fn gp_read_with_hooks(program: *GsProgram, source: *CrustSource, hooks: *CrustReaderHooks) -> bool = "gp_read_with_hooks";
+extern fn gp_reader_header(reader: *CrustReader, program: *GsProgram) -> *CrustDecl = "gp_reader_header";
+extern fn gp_reader_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax = "gp_reader_type";
+extern fn gp_reader_prefix(reader: *CrustReader, user: *u8) -> *CrustExpr = "gp_reader_prefix";
+extern fn gp_application(clone: *GsClone, source: *CrustTypeSyntax, depth: u32, kind: u32) -> *CrustDecl = "gp_application";
+extern fn gs_clone_type(clone: *GsClone, source: *CrustTypeSyntax, depth: u32) -> *CrustTypeSyntax = "gs_clone_type";
+extern fn gs_clone_expression(clone: *GsClone, source: *CrustExpr, depth: u32) -> *CrustExpr = "gs_clone_expression";

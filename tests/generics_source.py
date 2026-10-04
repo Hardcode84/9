@@ -125,6 +125,7 @@ def build_driver(suite, filename="generics_source_driver"):
             "api/crust0_stage.crs",
             "api/crust0_x64.crs",
             "stages/c/api.crs",
+            "stages/generics/model.crs",
             "stages/generics/source_model.crs",
             "stages/generics/source_api.crs",
         )

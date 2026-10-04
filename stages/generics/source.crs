@@ -11,6 +11,10 @@ fn gp_init(program: *GsProgram, allocator: *CrustAllocator, namespace: u64) -> u
     (*program).instances = null(*GpInstance);
     (*program).last_instance = null(*GpInstance);
     (*program).output_tail = null(*CrustDecl);
+    (*program).clone_user = null(*u8);
+    (*program).clone_statement = null(fn(*GsClone,*CrustStmt,*CrustStmt)->unit);
+    (*program).clone_body = null(fn(*GsClone,*CrustDecl,u32)->*CrustStmt);
+    (*program).clone_declaration = null(fn(*GsClone,*CrustDecl,*CrustDecl)->unit);
     (*program).namespace = namespace;
     (*program).next_identity = 0u64;
     (*program).requests = 0usize;
@@ -117,15 +121,37 @@ fn gp_append(program: *GsProgram, declaration: *CrustDecl) -> unit {
 }
 
 fn gp_clone_definition(program: *GsProgram, definition: *GpDefinition,
-                       arguments: **CrustTypeSyntax, generation: u32) -> *CrustDecl {
+                       arguments: **CrustTypeSyntax, generation: u32,
+                       target: *CrustDecl) -> *CrustDecl {
     var environment: GpEnvironment = make GpEnvironment {
         program: program, definition: definition, arguments: arguments, generation: generation
     };
     var clone: GsClone = make GsClone {
         context: &(*program).context, user: &environment as *u8,
-        type_syntax: gp_clone_type, expression: gp_clone_expression
+        type_syntax: gp_clone_type, expression: gp_clone_expression,
+        statement: (*program).clone_statement, body: (*program).clone_body
     };
-    return gs_clone_declaration(&clone, (*definition).source);
+    var declaration: *CrustDecl = gs_clone_declaration(&clone, (*definition).source);
+    if declaration == null(*CrustDecl) { return declaration; }
+    if target == null(*CrustDecl) {
+        (*declaration).identity = (*(*definition).source).identity;
+        (*declaration).unit_identity = (*(*definition).source).unit_identity;
+        if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_CONST {
+            (*declaration).link_name = "";
+        }
+    } else {
+        (*declaration).name = (*target).name;
+        (*declaration).unit_identity = (*target).unit_identity;
+        (*declaration).identity = (*target).identity;
+        (*declaration).link_name = (*target).link_name;
+        *target = *declaration;
+        declaration = target;
+    }
+    if (*program).clone_declaration != null(fn(*GsClone,*CrustDecl,*CrustDecl)->unit) {
+        (*program).clone_declaration(&clone, (*definition).source, declaration);
+    }
+    if (*program).context.error_count != 0usize { return null(*CrustDecl); }
+    return declaration;
 }
 
 fn gp_lower_ordinary(program: *GsProgram) -> bool {
@@ -133,13 +159,9 @@ fn gp_lower_ordinary(program: *GsProgram) -> bool {
     while definition != null(*GpDefinition) {
         if !gp_locals(program, definition) { return false; }
         if (*definition).parameters == null(*GpParameters) {
-            var declaration: *CrustDecl = gp_clone_definition(program, definition, null(**CrustTypeSyntax), 0u32);
+            var declaration: *CrustDecl = gp_clone_definition(program, definition,
+                null(**CrustTypeSyntax), 0u32, null(*CrustDecl));
             if declaration == null(*CrustDecl) { return false; }
-            (*declaration).identity = (*(*definition).source).identity;
-            (*declaration).unit_identity = (*(*definition).source).unit_identity;
-            if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_CONST {
-                (*declaration).link_name = "";
-            }
             gp_append(program, declaration);
         }
         definition = (*definition).next;
@@ -151,15 +173,9 @@ fn gp_lower_instances(program: *GsProgram) -> bool {
     var instance: *GpInstance = (*program).instances;
     while instance != null(*GpInstance) {
         var declaration: *CrustDecl = gp_clone_definition(program, (*instance).definition,
-            (*instance).arguments, (*instance).generation);
+            (*instance).arguments, (*instance).generation, (*instance).declaration);
         if declaration == null(*CrustDecl) { return false; }
-        var target: *CrustDecl = (*instance).declaration;
-        (*declaration).name = (*target).name;
-        (*declaration).unit_identity = (*target).unit_identity;
-        (*declaration).identity = (*target).identity;
-        (*declaration).link_name = (*target).link_name;
-        *target = *declaration;
-        gp_append(program, target);
+        gp_append(program, declaration);
         instance = (*instance).next;
     }
     return true;

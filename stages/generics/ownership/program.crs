@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn og_driver_sources(cli: *CCli, program: *OgProgram, trusted: *CrustSource, count: usize) -> bool {
+    var index: usize = 0usize;
+    while index < count {
+        if !og_read(program, &trusted[index], true) { return false; }
+        index = index + 1usize;
+    }
+    if (*cli).root != null(*CrustSource) &&
+       !og_read_range(program, (*cli).root, (*cli).target_begin, (*(*cli).root).size, false) { return false; }
+    index = 0usize;
+    while index < (*cli).source_count {
+        var source: *CrustSource = &(*cli).sources[index];
+        var bytes: *u8 = null(*u8);
+        var size: usize = 0usize;
+        if crust0_host_read_file((*source).path, &bytes, &size) != 0i32 {
+            c_driver_io_error(&(*cli).driver, "cannot read input", (*source).path, *c_driver_errno()); return false;
+        }
+        (*source).bytes = bytes;
+        (*source).size = size;
+        var success: bool = og_read(program, source, false);
+        crust0_host_free(bytes);
+        if !success { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn og_driver_namespace(program: *OgProgram) -> bool {
+    var namespace: u64 = 0u64;
+    var input: *CrustUnit = (*program).generics.syntax.units;
+    while input != null(*CrustUnit) {
+        if (*(*input).source).identity > namespace { namespace = (*(*input).source).identity; }
+        input = (*input).next;
+    }
+    if namespace == ~0u64 {
+        crust_set_error(&(*program).generics.context, null(*CrustSource), 0usize, "source identities leave no generic namespace"); return false;
+    }
+    (*program).generics.namespace = namespace + 1u64;
+    return true;
+}
+
+fn og_driver_diagnostic(context: *CrustContext, source: *CrustContext) -> unit {
+    if (*source).error_count == 0usize { return; }
+    var input: *CrustSource = (*source).error_loc.source;
+    var copy: *CrustSource = null(*CrustSource);
+    if input != null(*CrustSource) {
+        copy = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+        if copy == null(*CrustSource) { return; }
+        *copy = *input;
+        (*copy).path = crust_try_copy_string(context, (*input).path, gs_length((*input).path));
+        (*copy).bytes = crust_try_copy_string(context, (*input).bytes, (*input).size);
+        if (*copy).path == null(*u8) || (*copy).bytes == null(*u8) { return; }
+    }
+    crust_set_error(context, copy, (*source).error_loc.offset, &(*source).error[0usize]);
+}
+
+// The root selects trusted input once. Concrete instances inherit that selection.
+fn ownership_generics_program(request: *CrustBuild, trusted: *CrustSource, count: usize) -> i32 {
+    var program: OgProgram = uninit;
+    og_init(&program, &(*(*request).context).arena.allocator, 0u64);
+    var cli: CCli = uninit;
+    var ready: bool = c_driver_init(&cli, &program.generics.context, (*request).argc);
+    cli.root = (*request).source;
+    cli.target_begin = (*request).target_begin;
+    var result: i32 = 1i32;
+    if ready && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) &&
+       og_driver_sources(&cli, &program, trusted, count) && og_driver_namespace(&program) && og_check(&program) {
+        result = os_driver_emit(&cli, &program.resources);
+    }
+    og_driver_diagnostic((*request).context, &program.generics.syntax);
+    og_driver_diagnostic((*request).context, &program.generics.context);
+    c_stage_destroy(&cli.stage);
+    og_destroy(&program);
+    return result;
+}

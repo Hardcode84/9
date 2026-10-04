@@ -17,8 +17,7 @@ build/ownership-basics
 The output is `BC` and a newline. [program.crs](program.crs) moves a resource,
 borrows its field, changes it, and checks explicit and scope-exit destruction.
 The local owner controls cleanup. `drop code` ends the field loan before
-the owner changes. Heap storage introduces domain permissions in the next
-example.
+the owner changes. The next example applies the same loan rules to heap storage.
 
 ```sh
 build/crust examples/ownership-basics/main.crs -o build/ownership-heap \
@@ -29,6 +28,8 @@ build/ownership-heap
 The output is `AB` and a newline. [heap.crs](heap.crs) owns individual heap
 allocations. Each allocation can be released before the next one is made.
 The allocator can reuse the address; the program does not require reuse.
+It also drops one allocation while a view of another allocation remains live.
+The declared owning field and local loans supply its lifetime contracts.
 
 The Rust version of the first example needs no external crate:
 

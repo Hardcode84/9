@@ -1,13 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn os_storage_fields(fields: *OsField) -> bool {
-    while fields != null(*OsField) {
-        if (*fields).storage { return true; }
-        fields = (*fields).next;
-    }
-    return false;
-}
-
 fn os_owned_field(slot: *OsSlot) -> *OsField {
     if (*slot).object == null(*OsObject) { return null(*OsField); }
     var schema: *OsRecord = (*(*slot).object).contract;

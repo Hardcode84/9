@@ -257,6 +257,13 @@ states `initializes`. The wrapper must initialize the output before each return.
 Opaque constructors and destructors require root-selected trust. Transparent
 owned allocations use `owns(field: storage)`, explicit allocation and null
 checks, field initialization, and release. See the [heap example](../examples/ownership-basics/heap.crs).
+An exclusive allocation tree needs no domain. Its record fields must be
+transparent and domain-free, including embedded value records. They can hold
+native resources and further owned allocations. They cannot hold borrowed
+fields: an owning result has no contract for those stored loan origins.
+Each owned pointer edge uses its declared target type. The checker validates
+these declarations locally, including at independent library boundaries.
+Loans protect the specific owner tree; another independent owner can be released.
 The allocation argument must be `sizeof(Record)`, optionally in parentheses.
 This identifies the record whose initialization and field ownership are checked.
 A byte count or scalar type supplies no record contract. Direct allocation

@@ -389,43 +389,51 @@ field. The [heap example](../examples/ownership-basics/heap.crs) declares the
 handle and its allocation separately:
 
 ```crust
-domain Cells(Cell, CellOwner);
 record Cell { value: i64; }
 resource CellOwner { cell: *Cell; } owns(cell: storage) drop cell_drop;
 ```
 
 `owns(cell: storage)` gives the handle responsibility for that allocation.
-`domain Cells(Cell, CellOwner)` assigns both types to `Cells`, an access domain:
-a compile-time name that groups storage and its access rules. Each type can
-belong to one domain. Cleanup of an owner in this domain requires
-reclamation permission. The constructor and destructor declare
-`access(reclaim, Cells)`:
+Unique ownership and local loans control its lifetime. The constructor creates
+an allocation, and the destructor releases it:
 
 ```crust
-fn cell_new(value: i64) -> CellOwner access(reclaim, Cells) {
+fn cell_new(value: i64) -> CellOwner {
     var cell: *Cell = allocate(sizeof(Cell)) as *Cell;
     if cell != null(*Cell) { (*cell).value = value; }
     return make CellOwner { cell: move cell };
 }
 
-fn cell_drop(owner: mut CellOwner) -> unit access(reclaim, Cells) {
+fn cell_drop(owner: mut CellOwner) -> unit {
     var cell: *Cell = move owner.cell;
     if cell != null(*Cell) { release(cell as *u8); }
 }
+
+fn cell_view(owner: read CellOwner) -> read Cell from owner.cell {
+    if owner.cell == null(*Cell) { trap; }
+    return read *owner.cell;
+}
 ```
 
-| Function contract | Permitted use of its domain |
-| --- | --- |
-| `access(read, Cells)` | Read through valid views. |
-| `access(edit, Cells)` | Change valid storage and checked links. Preserve owners. |
-| `access(reclaim, Cells)` | Create and destroy owners when conflicting uses have ended. |
+The allocation can contain scalar fields, embedded resources, and further
+uniquely owned allocations. These types must have transparent fields and must
+be outside storage domains. Stored borrowed fields are rejected, including in
+embedded records: the owning result interface carries no origin for them.
 
-Reclamation permission also permits read and edit calls. A function can narrow
-its permission inside `read Cells { ... }` or `edit Cells { ... }`. The block
-ends before the function recovers its outer permission. Owners must survive
-until their views end. Domain permissions are compile-time facts; they add no
-runtime object, pool, common allocation lifetime, or lock. Concurrent access
-still requires synchronization.
+Independent owners have independent lifetimes:
+
+```crust
+var first: CellOwner = cell_new(65i64);
+var second: CellOwner = cell_new(66i64);
+var view: read Cell = cell_view(read first);
+drop second;
+if view.value != 65i64 { trap; }
+drop view;
+drop first;
+```
+
+`cell_view` checks for null and returns `read Cell` with `from owner.cell`.
+Dropping `first` while `view` remains live is rejected.
 
 The file declares `allocate` and `release` as foreign allocation and release
 operations. Those declarations are trusted adapters to `malloc` and `free`.
@@ -474,6 +482,22 @@ does not make a cursor from the old allocation valid again.
 The [intrusive tutorial](../examples/intrusive/README.md) contains a direct
 pointer implementation and a checked client. The compilation root selects the
 implementation as trusted. Checked code cannot access its private fields.
+
+The provider's declaration `domain Graph(Node, Owner, ReadyHead, ActiveHead,
+Cursor)` assigns those types to one storage domain. Each type can belong to
+one domain. The domain controls access to objects with internal retained aliases.
+
+| Function contract | Permitted use of its domain |
+| --- | --- |
+| `access(read, Graph)` | Read through valid views. |
+| `access(edit, Graph)` | Change valid storage and checked links. Preserve owners. |
+| `access(reclaim, Graph)` | Create and destroy owners when conflicting uses have ended. |
+
+Reclamation permission also permits read and edit calls. A function can narrow
+its permission inside `read Graph { ... }` or `edit Graph { ... }`. The block
+ends before the function recovers its outer permission. Owners must survive
+until their views end. Domain permissions exist only during compilation.
+Concurrent access still requires synchronization.
 
 ```crust
 domain Graph {

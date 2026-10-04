@@ -9,6 +9,7 @@ from pathlib import Path
 from ownership_boundaries import check_boundaries
 from ownership_ending import check_ending
 from ownership_expressions import check_expressions
+from ownership_heap import check_heap
 from ownership_places import check_places
 from ownership_runtime import check_runtime
 from ownership_support import ROOT, SCALAR_FLOW, command, execute
@@ -266,7 +267,7 @@ def run(build, directory, sanitize):
     command([compiler, "--check", path])
     path = directory / "allocation-helper-loop.crs"
     path.write_text(
-        heap[: heap.index("fn main(")] + "fn main(argc:i32,argv:**u8)->i32 access(reclaim,Cells) {"
+        heap[: heap.index("fn main(")] + "fn main(argc:i32,argv:**u8)->i32 {"
         "var count:i32=argc;while count>0i32 {var owner:CellOwner=cell_new(65i64);"
         "count=count-1i32;}return 0i32;}"
     )
@@ -299,6 +300,7 @@ def run(build, directory, sanitize):
     check_expressions(build, directory, sanitize)
     check_ending(build, directory, sanitize)
     check_boundaries(build, directory, sanitize)
+    check_heap(build, directory, sanitize)
     check_runtime(build, directory, ROOT, sanitize)
     for artifact in [compiler, build / "crust-ownership-library.so"]:
         assert b"z3" not in command(["ldd", artifact]).stdout.lower()

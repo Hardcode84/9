@@ -4,9 +4,6 @@ fn os_validate_record(check: *OsCheck, global: *RsGlobal) -> unit {
     var declaration: *CrustDecl = (*global).source;
     var contract: *OsRecord = crust_map_get(&(*(*check).stage).records, declaration as usize) as *OsRecord;
     if contract == null(*OsRecord) { os_error(check, &(*declaration).loc, "schema requires an ownership schema"); return; }
-    if os_storage_fields((*contract).owns) && (*contract).domain == null(*CrustName) {
-        os_error(check, &(*declaration).loc, "stored pointer contracts require a declared domain"); return;
-    }
     if (*contract).owns != null(*OsField) && (*global).resource == null(*RsResource) {
         os_error(check, &(*declaration).loc, "owned fields require a resource destructor"); return;
     }
@@ -59,8 +56,30 @@ fn os_validate_owner(check: *OsCheck, contract: *OsRecord, field: *CrustField) -
     }
     var target: *OsRecord = os_record((*check).stage, (*syntax).base);
     if target == null(*OsRecord) || (*target).domain != (*contract).domain {
-        os_error(check, &(*field).loc, "owned allocation and handle must share a declared domain");
+        os_error(check, &(*field).loc, "owned allocation and handle must share a domain or both omit it"); return;
     }
+    if (*contract).domain == null(*CrustName) { os_exclusive_storage(check, target); }
+}
+
+// Exclusive heap values cannot retain loans or domain-managed storage.
+fn os_exclusive_storage(check: *OsCheck, contract: *OsRecord) -> bool {
+    var declaration: *CrustDecl = (*contract).declaration;
+    if !os_enter(check, &(*declaration).loc) { return false; }
+    if (*contract).domain != null(*CrustName) || (*contract).opaque {
+        os_error(check, &(*declaration).loc, "exclusive heap storage requires transparent domain-free records");
+    }
+    var field: *CrustField = (*declaration).fields;
+    while field != null(*CrustField) && !os_failed(check) {
+        var syntax: *CrustTypeSyntax = (*field).syntax_type;
+        if os_borrowed(syntax) {
+            os_error(check, &(*field).loc, "exclusive heap storage cannot retain borrowed fields");
+        } else { if (*syntax).kind == CRUST_T_NAME {
+            os_exclusive_storage(check, os_record((*check).stage, syntax));
+        } }
+        field = (*field).next;
+    }
+    (*check).depth = (*check).depth - 1usize;
+    return !os_failed(check);
 }
 
 fn os_validate_foreign(check: *OsCheck, contract: *OsFunction) -> unit {

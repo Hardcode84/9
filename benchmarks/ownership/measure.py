@@ -130,7 +130,7 @@ def application(build, work, name, source, provider, pairs, rng):
         memory[mode] = int(usage.read_text())
         if result.returncode or result.stdout or result.stderr:
             raise RuntimeError((command, result))
-    expected_output = b"OK\nSFF" if name == "handles" else b"OK\n"
+    expected_output = {"handles": b"OK\nSFF", "heap": b"AB\n"}.get(name, b"OK\n")
     execute(target, symbols, work, name, False, expected_output)
     erasure = [build / "crust-ownership-erasure"]
     if provider:
@@ -195,6 +195,7 @@ def main():
         "index": ("examples/ownership-index/program.crs", "examples/ownership-index/provider.crs"),
         "handles": ("examples/ownership-basics/handles.crs", None),
         "views": ("examples/ownership-basics/views.crs", None),
+        "heap": ("examples/ownership-basics/heap.crs", None),
     }
     report = {
         "driver_sha256": digest(driver),

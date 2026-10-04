@@ -104,6 +104,7 @@ def main():
             ("examples/ownership-index/program.crs", "examples/ownership-index/provider.crs"),
             ("examples/ownership-basics/handles.crs", ""),
             ("examples/ownership-basics/views.crs", ""),
+            ("examples/ownership-basics/heap.crs", ""),
         ]:
             print(source, run([work / "sweep", source, trusted]).strip())
 

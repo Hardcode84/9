@@ -9,7 +9,15 @@ from ownership_support import command
 
 
 def check_runtime(
-    build, directory, root, sanitize, source_path=None, outputs=None, arguments=(), client_path=None
+    build,
+    directory,
+    root,
+    sanitize,
+    source_path=None,
+    outputs=None,
+    arguments=(),
+    client_path=None,
+    trusted=True,
 ):
     if source_path is None:
         source_path = root / "examples/intrusive/links.crs"
@@ -28,8 +36,7 @@ def check_runtime(
     command(
         [
             build / "crust-ownership-test",
-            "trusted",
-            source,
+            *(["trusted", source] if trusted else [source]),
             "--emit-c",
             "--symbols",
             symbols,

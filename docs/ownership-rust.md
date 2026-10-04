@@ -37,6 +37,7 @@ does not need them to understand a move or repair a loan conflict.
 | Return several distinct origins | Rejected by the one-origin result contract; return separately or construct in the caller | Distinct declared lifetimes can express the relationship |
 | Replace a stored origin through a borrower | Rejected; replace a local view after consuming it | Must satisfy the declared reference lifetimes |
 | Own an integer handle | Native acquisition and consumption contracts on `owns(field)` | A wrapper owns the handle; native implementation establishes its contract |
+| Own an allocation | `owns(field: storage)` with local loans; transparent owned trees need no domain | `Box<T>` with ordinary reference lifetimes |
 | Direct graph access | Opaque scoped view and domain permission | A safe library interface over implementation-specific invariants |
 
 Rust's [borrowing chapter](https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html)

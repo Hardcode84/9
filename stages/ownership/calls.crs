@@ -72,7 +72,8 @@ fn os_allocate(check: *OsCheck, state: *OsState, expression: *CrustExpr, contrac
         return null(*OsValue);
     }
     var syntax: *CrustTypeSyntax = (*size).syntax_type;
-    if os_record((*check).stage, syntax) == null(*OsRecord) {
+    var storage: *OsRecord = os_record((*check).stage, syntax);
+    if storage == null(*OsRecord) {
         os_error(check, &(*size).loc, "allocation type must be a record with field contracts");
         return null(*OsValue);
     }
@@ -80,6 +81,7 @@ fn os_allocate(check: *OsCheck, state: *OsState, expression: *CrustExpr, contrac
         os_error(check, &(*expression).loc, "direct allocation in a loop requires a helper that returns an owning resource");
         return null(*OsValue);
     }
+    if (*storage).domain == null(*CrustName) && !os_exclusive_storage(check, storage) { return null(*OsValue); }
     var object: *OsObject = os_object(check, state, syntax, null(*OsObject), null(*OsScope), false);
     if object == null(*OsObject) { return null(*OsValue); }
     (*object).heap = true;
@@ -111,12 +113,13 @@ fn os_release(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract
 
 fn os_reclaim(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
     if !os_loan_access(check, state, object, null(*OsLoan), true, location) { return false; }
-    if (*state).effect != OS_RECLAIM || (*state).brand != (*object).brand {
-        os_error(check, location, "release requires exclusive reclamation authority");
-        return false;
-    }
     if (os_flags(state, object) & OS_LIVE) == 0u32 {
         os_error(check, location, "allocation has already been released");
+        return false;
+    }
+    if (*object).domain == null(*CrustName) { return true; }
+    if (*state).effect != OS_RECLAIM || (*state).brand != (*object).brand {
+        os_error(check, location, "release requires exclusive reclamation authority");
         return false;
     }
     return os_no_cursors(check, state, (*object).domain, location);

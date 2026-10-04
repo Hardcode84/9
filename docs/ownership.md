@@ -7,13 +7,12 @@ before that cleanup? Crust checks these rules during compilation. An owner can
 transfer a value. A borrower can use it for a shorter time. Destruction must
 wait until conflicting uses have ended.
 
-This tutorial teaches the ownership stage. It combines owners and loans with
-explicit storage schemas and ordinary field and function conditions. The
+This tutorial teaches the ownership stage. It combines local owners and loans
+with explicit domain access for opaque containers. The
 [stage contract](ownership-model.md) defines the rules used by the examples.
 
-These examples use the current checker, whose graph checks need Z3. The
-[replacement design](ownership-design.md) specifies a solver-free stage with
-explicitly trusted container implementations. It is not implemented yet.
+The stage has no solver dependency. Container implementations require explicit
+root-selected trust; their clients use checked interfaces.
 
 Start here if you can already write a function and a record. You do not need
 to know the compiler implementation or a proof language.
@@ -26,9 +25,9 @@ Read the sections in order:
 4. [Borrow for reads or changes](#4-borrow-for-reads-or-changes).
 5. [Return a borrowed field](#5-return-a-borrowed-field).
 6. [Own a heap allocation](#6-own-a-heap-allocation).
-7. [Keep intrusive nodes at a stable address](#7-keep-intrusive-nodes-at-a-stable-address).
-8. [Destroy embedded resources](#8-destroy-embedded-resources).
-9. [Use library contracts](#9-use-library-contracts).
+7. [Use an opaque container](#7-use-an-opaque-container)
+8. [Defer a call](#8-defer-a-call)
+9. [Choose the boundary](#9-choose-the-boundary)
 
 The [Rust comparison](ownership-rust.md) explains corresponding concepts,
 differences in accepted code, and obligations for container authors.
@@ -40,16 +39,15 @@ The [stage contract](ownership-model.md) gives the declaration and checking rule
 Run these commands from the repository root:
 
 ```sh
-make all ownership-stage Z3_FLAGS=-l:libz3.so.4
+make all ownership-stage
 build/crust examples/ownership-basics/main.crs
 build/ownership-basics
 ```
 
-Use `Z3_FLAGS=-lz3` if the development library is installed. The output is `BC`
+The output is `BC`
 and a newline. The [root file](../examples/ownership-basics/main.crs) loads the
 ownership stage and compiles [program.crs](../examples/ownership-basics/program.crs).
-The target program does not link Z3. The stage uses it to check intrusive link
-implementations; this first example has no links.
+Neither the compiler stage nor the target requires Z3.
 
 To check a target file without producing an executable:
 
@@ -122,7 +120,8 @@ Unless stated otherwise, the following statement examples replace the body of
 ```
 
 The block prints `BA`. Local resources drop in reverse declaration order.
-Normal `return`, `break`, and `continue` exits also run applicable cleanup.
+Normal returns also run applicable cleanup. This stage rejects `break` and
+`continue` because their ownership-state joins are not implemented.
 A process exit or `trap` does not unwind scopes. RAII is the name for this
 association between a value's lifetime and its cleanup.
 
@@ -323,7 +322,7 @@ drop ticket;
 The read block ends before `drop ticket`. A helper that returns `mut T` needs
 an exclusive input and a matching result origin. A node view uses the same
 syntax. The [intrusive tutorial](../examples/intrusive/README.md#traverse-and-borrow-payload)
-shows views returned through typed pointer fields.
+shows scoped cursors and payload views behind an opaque interface.
 
 ### Store views in a record
 
@@ -365,7 +364,7 @@ view in a smaller scope, or drop it before direct access to the source.
 The result contract names one exact origin for every borrowed result field.
 A helper cannot return a view of a local variable or replace stored origins
 through a borrowed record. Use a fresh result with `from` instead. View records
-are scoped values; persistent graph links use `references` in a domain.
+are scoped values; persistent graph links belong inside an explicitly trusted opaque implementation.
 
 Run [views.crs](../examples/ownership-basics/views.crs) with the
 [example instructions](../examples/ownership-basics/README.md#stored-views).
@@ -430,93 +429,79 @@ The output is `AB` and a newline. The first owner is destroyed before the
 replacement is created. The allocator can reuse the address. A new allocation
 does not make a cursor from the old allocation valid again.
 
-## 7. Keep intrusive nodes at a stable address
+## 7. Use an opaque container
 
-A retained pointer field uses `references(field)`. Its record belongs to a
-closed domain schema. Each pointer must be null or refer to live storage of
-its declared type. Record conditions state additional facts:
-
-```crust
-record Entry { peer: *Entry; } domain(Links) references(peer)
-    invariant((*self).peer == null(*Entry) || (*(*self).peer).peer == self);
-```
-
-Declare `domain Links(Entry);` with this record. An edit function must preserve
-its condition for every live entry. The function can declare `requires`,
-`ensures`, and `modifies` conditions on ordinary fields. Destruction must prove
-that no surviving retained reference points into the released storage.
-
-The [intrusive example](../examples/intrusive/README.md) uses this rule for two
-sets of pointer fields in a `Node`. Its insertion and removal functions are
-ordinary source functions. Each allocated node has an independent owner.
-The same owner can unlink, release, and replace a node while other owners
-remain live.
-
-The example uses full typed nodes as sentinels. Traversal accesses payload
-through `*Node` directly. Publication fixes the node's address; moves of that
-storage or its containing record are rejected. Read and edit cursors cannot
-outlive their access scope or cross reclamation.
-
-## 8. Destroy embedded resources
-
-A node can contain resource fields as well as links. Its destructor detaches
-the hooks, destroys the stored value, and then releases the outer allocation:
+The [intrusive tutorial](../examples/intrusive/README.md) contains a direct
+pointer implementation and a checked client. The compilation root selects the
+implementation as trusted. Checked code cannot access its private fields.
 
 ```crust
-drop *node;
-release(node as *u8);
+domain Graph {
+    var owner: Owner = owner_new(65i64);
+    var head: ReadyHead = uninit;
+    ready_init(&head);
+    edit Graph { ready_insert(mut head, read owner); }
+    read Graph {
+        var cursor: Cursor = ready_first(read head);
+        var value: read i64 = cursor_value(read cursor);
+        if value != 65i64 { trap; }
+    }
+    drop owner;
+}
 ```
 
-This fragment is inside the checked destructor in
-[fields.crs](../examples/intrusive/fields.crs). `node` is its non-null owned
-allocation, and both hooks are already detached.
+The domain block creates a fresh compile-time identity. It adds no runtime
+object. The head is constructed in its final stack location. Insertion borrows
+the owner handle; the trusted container can retain the node pointer in that
+domain. Node cleanup unlinks the node before release. Head cleanup detaches any
+survivors. Each implementation must uphold these obligations.
 
-`drop *node` runs value cleanup; it does not free the outer allocation. A
-resource callback runs before the automatic cleanup of embedded resource
-fields. Those fields drop in reverse declaration order. The callback must
-leave them initialized for that cleanup and consume its raw owned pointers.
+Move `drop owner` inside `read Graph` and compilation fails: the destructor
+requires reclamation access. Move `cursor` outside that block and compilation
+fails: a scoped view cannot outlive its access. Holding a mutable payload view
+also blocks other operations that could alias the payload. End that loan before
+editing or navigating through a conflicting handle.
 
-Dropping one field separately is rejected because its containing value still
-has a field-cleanup obligation. Releasing resource storage before value cleanup
-is also rejected. These rules avoid hidden runtime flags for partial cleanup.
-See the [nested-resource example](../examples/intrusive/README.md#embedded-and-recursive-ownership)
-for allocation failure paths and the `BABAOK` cleanup trace.
+A fresh nested `domain Graph` is a different instance. An outer owner cannot
+be inserted into its head. The compiler compares static identities, not pointer
+bits. No node registry or generation check is required.
 
-## 9. Use library contracts
+## 8. Defer a call
 
-Each function is checked from its own body, declared fields, and called
-interfaces. `read` and `mut` parameters describe access; by-value resources
-describe transfer; `from` describes a returned view; `access` describes domain
-authority. A declaration is an obligation for the implementation, not permission
-to skip checking it.
+A deferred call captures its arguments now and executes at scope exit:
 
-A separately published library can supply verified interfaces and object code.
-Its client needs no provider source and does not repeat proofs for imported
-bodies. The compilation program retains the trusted publication receipt.
-Changing contracts, object bytes, or checker images invalidates that receipt.
-The [library-import instructions](../examples/intrusive/README.md#verify-the-emitted-program-and-the-boundary)
-give the compilation API and trust boundary.
+```crust
+fn consume(ticket: Ticket) -> unit access(reclaim, Demo) {}
 
-## Choose code that this stage can check
+fn later() -> unit access(reclaim, Demo) {
+    var ticket: Ticket = make Ticket { code: 65i32 };
+    defer consume(move ticket);
+}
+```
 
-The following distinctions matter when you design an interface:
+The capture owns the ticket until `consume` runs. A borrowed capture keeps its
+loan until the call runs. Later conflicting writes, moves, or destruction are
+rejected. The required access permission must be available during cleanup.
+Deferred calls return `unit`; wrap foreign calls in a checked source function.
+In-place constructors cannot be deferred.
 
-| Requirement | Current source rule |
-| --- | --- |
-| Borrow a value within a block | Use `read` or `mut`; named views end with the block. |
-| Return a view | Declare its input origin with `from`. |
-| Store a borrowed field in a record | Use `read T` or `mut T` fields in a scoped view record; move the record and declare `from` on a returned view record. |
-| Store a persistent raw pointer | Declare `owns` or `references` in a closed storage schema. |
-| Return an unchecked raw pointer | Rejected: use a borrowed result with an origin. |
-| Replace a local owner across loop iterations | Accepted for initialized, movable resource records without stored loans. The declared type is the loop invariant. Owned targets and validity facts can change; other outer storage retains its state. |
-| Traverse or detach an intrusive ring | Use ordinary field conditions and function contracts; traversal has no fixed node-count bound. |
-| Register `defer` in this modular stage | Rejected. The separate resource stage supports it, but this stage has no deferred-effect contract. |
+## 9. Choose the boundary
 
-These rejections are not a request to add `unsafe`. Change the interface or
-select a stage whose stated rules cover the required operation. Selecting the
-raw seed removes these ownership guarantees.
+Local ownership checks do not prove a raw graph algorithm. Use an opaque
+library when internal aliases need that algorithm. Test its implementation with
+native tests and sanitizers, and test its client interface with rejected programs.
+The [owning tree](../examples/ownership-graphs/README.md) uses the same rules.
+It transfers ownership through ordinary child links and returns an owner on
+removal. The stage has no tree-specific rule.
 
-Checking and proof can increase compile time. The generated ownership code has
-ordinary values, pointers, and required cleanup calls. It has no added ownership
-tags, validity checks, reference counts, or cleanup flags. Explicit allocation,
-I/O, null guards, and destructor work still cost what their code does.
+Returned views state one exact input path with `from`. Stored views can combine
+several local origins, but a returned view record currently requires all its
+borrowed fields to use that one declared path. Split such results into separate
+calls, or construct the combined view in the caller. Replacing origins through
+a borrowed view record is rejected: its interface has no replacement map.
+These are explicit interface restrictions, not permission to skip checking.
+
+Independent libraries retain the same types, effects, origins, and selected
+trust in their receipts. See the [stage contract](ownership-model.md#independent-libraries).
+The guarantee depends on the root selecting the checker and correct trusted
+implementations. Selecting the raw seed provides raw-pointer semantics.

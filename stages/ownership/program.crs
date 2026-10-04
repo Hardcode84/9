@@ -27,7 +27,7 @@ fn os_lower(stage: *OsStage) -> bool {
     var resources: *RsStage = (*stage).resources;
     (*resources).delegate_memory = true;
     (*resources).delegate_return_loans = true;
-    if !rs_collect(resources) || !rs_publish(resources) { return false; }
+    if !rs_collect(resources) || !os_prepare_outputs(stage) || !rs_publish(resources) { return false; }
     var global: *RsGlobal = (*resources).first_global;
     while global != null(*RsGlobal) && !(*resources).failed {
         if (*(*global).source).kind == CRUST_D_FUNCTION && !rs_function(resources, global) { return false; }
@@ -57,29 +57,28 @@ fn os_driver_emit(cli: *CCli, resources: *RsStage) -> i32 {
     return c_backend_build_with_body((*resources).context, entry, &(*cli).options, rs_c_body, resources as *u8);
 }
 
-fn os_driver_build(cli: *CCli) -> i32 {
+fn os_driver_build(cli: *CCli, trusted: *CrustSource, count: usize) -> i32 {
     var resources: RsStage = uninit;
     rs_init(&resources, (*cli).stage.status.context);
     var stage: OsStage = uninit;
     os_init(&stage, &resources);
     var result: i32 = 1i32;
-    if os_driver_read(cli, &stage) && os_lower(&stage) && os_verify(&stage) {
+    if os_trust_sources(&stage, trusted, count) && os_driver_read(cli, &stage) && os_lower(&stage) && os_verify(&stage) {
         result = os_driver_emit(cli, &resources);
     }
-    pf_destroy(&stage.proof);
     return result;
 }
 
-// Check every function from its declared interface before producing output.
+// Check untrusted bodies against declared interfaces before producing output.
 // Keep source and arguments alive until return. Retain diagnostics in context.
-fn ownership_program(request: *CrustBuild) -> i32 {
+fn ownership_program(request: *CrustBuild, trusted: *CrustSource, count: usize) -> i32 {
     var cli: CCli = uninit;
     var success: bool = c_driver_init(&cli, (*request).context, (*request).argc);
     cli.root = (*request).source;
     cli.target_begin = (*request).target_begin;
     var result: i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
-        result = os_driver_build(&cli);
+        result = os_driver_build(&cli, trusted, count);
     }
     c_stage_destroy(&cli.stage);
     return result;

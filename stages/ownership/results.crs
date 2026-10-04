@@ -27,9 +27,7 @@ fn os_result_step(check: *OsCheck, state: *OsState, value: *OsValue,
     if os_borrowed((*slot).syntax) {
         return os_view_origin(check, state, slot, location);
     }
-    var result: *OsValue = null(*OsValue);
-    if os_symbolic_slot(slot) { result = os_heap_load(check, state, slot, location); }
-    else { result = os_copy(check, os_bound(state, slot)); }
+    var result: *OsValue = os_copy(check, os_bound(state, slot));
     if result == null(*OsValue) { os_error(check, location, "returned view path is uninitialized"); return result; }
     (*result).place = slot;
     (*result).loan = (*value).loan;
@@ -53,20 +51,9 @@ fn os_result_path(check: *OsCheck, state: *OsState, contract: *OsFunction,
 fn os_result_matches(check: *OsCheck, state: *OsState, actual: *OsValue,
                       expected: *OsValue, location: *CrustLoc) -> bool {
     if (*actual).object == (*expected).object && os_original((*actual).place) == os_original((*expected).place) { return true; }
-    var a: *OsObject = (*actual).object;
-    var b: *OsObject = (*expected).object;
-    if a == null(*OsObject) && b == null(*OsObject) {
-        var x: *OsSlot = os_original((*actual).place);
-        var y: *OsSlot = os_original((*expected).place);
-        if x != null(*OsSlot) && y != null(*OsSlot) && (*x).field == (*y).field {
-            a = (*x).object; b = (*y).object;
-        }
-    }
-    if a == null(*OsObject) || b == null(*OsObject) {
-        os_error(check, location, "returned loan does not match its declared storage path"); return false;
-    }
-    return os_prove(check, state, pf_eq(&(*check).proof, (*a).term, (*b).term),
-                    location, "returned loan does not match its declared storage path");
+    if (*actual).object != null(*OsObject) && (*actual).object == (*expected).object && (*expected).pointer { return true; }
+    os_error(check, location, "returned loan does not match its declared storage path");
+    return false;
 }
 
 fn os_return_view(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> bool {
@@ -82,12 +69,16 @@ fn os_return_view(check: *OsCheck, state: *OsState, value: *OsValue, location: *
     if !os_loan_ancestor((*expected).loan, (*value).loan) {
         os_error(check, location, "returned loan does not derive from its declared source parameter"); return false;
     }
+    if (*source).object != null(*OsObject) && os_opaque((*(*source).object).contract) && (*contract).result_path == null(*OsField) { return true; }
     return os_result_matches(check, state, value, expected, location);
 }
 
 fn os_call_view(check: *OsCheck, state: *OsState, contract: *OsFunction,
                   source: *OsValue, location: *CrustLoc) -> *OsValue {
     if source == null(*OsValue) { os_error(check, location, "returned view requires its source loan"); return null(*OsValue); }
+    if (*source).object != null(*OsObject) && os_opaque((*(*source).object).contract) && (*contract).result_path == null(*OsField) {
+        return os_opaque_view(check, state, (*(*contract).declaration).syntax_type, source, location);
+    }
     var result: *OsValue = os_result_path(check, state, contract, source, location);
     if result == null(*OsValue) { return result; }
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;

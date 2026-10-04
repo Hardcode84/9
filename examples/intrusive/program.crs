@@ -1,187 +1,61 @@
 // SPDX-License-Identifier: Apache-2.0
 
-extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
-extern fn release(pointer: *u8) -> unit foreign(release) = "free";
-extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
-
-domain Graph(Node, Owner, ReadyHead, ActiveHead);
-record Node { prev: *Node; next: *Node; active_prev: *Node; active_next: *Node; value: i64; }
-    domain(Graph)
-    references(prev, next, active_prev, active_next)
-    invariant((*self).prev != null(*Node) && (*self).next != null(*Node) &&
-              (*(*self).prev).next == self && (*(*self).next).prev == self)
-    invariant((*self).active_prev != null(*Node) && (*self).active_next != null(*Node) &&
-              (*(*self).active_prev).active_next == self && (*(*self).active_next).active_prev == self);
-resource Owner { node: *Node; } owns(node: storage) domain(Graph) drop owner_drop;
-resource ReadyHead { node: Node; } domain(Graph) drop ready_drop;
-resource ActiveHead { node: Node; } domain(Graph) drop active_drop;
-
-fn node_init(node: *Node, value: i64) -> unit access(edit, Graph) initializes(node)
-    requires(node != null(*Node))
-    ensures((*node).prev == node && (*node).next == node &&
-            (*node).active_prev == node && (*node).active_next == node && (*node).value == value) {
-    (*node).prev = node;
-    (*node).next = node;
-    (*node).active_prev = node;
-    (*node).active_next = node;
-    (*node).value = value;
-}
-
-fn owner_new(value: i64) -> Owner access(reclaim, Graph) {
-    var node: *Node = allocate(sizeof(Node)) as *Node;
-    if node != null(*Node) {
-        node_init(node, value);
-    }
-    return make Owner { node: move node };
-}
-
-fn owner_drop(owner: mut Owner) -> unit access(reclaim, Graph) {
-    var node: *Node = move owner.node;
-    if node != null(*Node) {
-        edit Graph {
-            ready_unlink(node);
-            active_unlink(node);
-        }
-        release(node as *u8);
-    }
-}
-
-fn ready_drop(head: mut ReadyHead) -> unit access(reclaim, Graph) {
-    edit Graph {
-        while head.node.next != &head.node { ready_unlink(head.node.next); }
-        active_unlink(&head.node);
-    }
-}
-
-fn active_drop(head: mut ActiveHead) -> unit access(reclaim, Graph) {
-    edit Graph {
-        while head.node.active_next != &head.node { active_unlink(head.node.active_next); }
-        ready_unlink(&head.node);
-    }
-}
-
-fn ready_count(head: read ReadyHead) -> usize access(read, Graph) {
-    read Graph {
-        var count: usize = 0usize;
-        var cursor: *Node = head.node.next;
-        while cursor != &head.node {
-            var node: *Node = cursor;
-            if (*node).value < 0i64 { trap; }
-            count = count + 1usize;
-            cursor = (*cursor).next;
-        }
-        return count;
-    }
-}
-
-fn active_count(head: read ActiveHead) -> usize access(read, Graph) {
-    read Graph {
-        var count: usize = 0usize;
-        var cursor: *Node = head.node.active_prev;
-        while cursor != &head.node {
-            var node: *Node = cursor;
-            if (*node).value < 0i64 { trap; }
-            count = count + 1usize;
-            cursor = (*cursor).active_prev;
-        }
-        return count;
-    }
-}
-
-fn node_view(owner: read Owner) -> read Node access(read, Graph) from owner.node {
-    if owner.node == null(*Node) { trap; }
-    return read *owner.node;
-}
-
-fn value_view(node: read Node) -> read i64 access(read, Graph) from node.value {
-    return read node.value;
-}
-
-fn value_mut(node: mut Node) -> mut i64 access(edit, Graph) from node.value {
-    return mut node.value;
-}
-
-fn increment(node: mut Node) -> unit access(edit, Graph) {
-    node.value = node.value + 1i64;
-}
-
-fn first_node_view(head: read ReadyHead) -> read Node access(read, Graph) from head.node.next {
-    return read *head.node.next;
-}
-
-fn first_node(head: read ReadyHead) -> read Node access(read, Graph) from head.node.next {
-    var cursor: *Node = head.node.next;
-    if cursor == &head.node { trap; }
-    return read *cursor;
-}
-
-fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Graph) {
-    var first: Owner = owner_new(65i64);
-    var second: Owner = owner_new(66i64);
-    if first.node == null(*Node) || second.node == null(*Node) { return 1i32; }
-    {
-        var ready: ReadyHead = make ReadyHead { node: make Node { prev: null(*Node), next: null(*Node), active_prev: null(*Node), active_next: null(*Node), value: 0i64 } };
-        var active: ActiveHead = make ActiveHead { node: make Node { prev: null(*Node), next: null(*Node), active_prev: null(*Node), active_next: null(*Node), value: 0i64 } };
-        // Set self-links after each head reaches its final address.
-        node_init(&ready.node, 0i64);
-        node_init(&active.node, 0i64);
-        var empty: usize = ready_count(read ready);
-        if empty != 0usize { trap; }
-        edit Graph {
-            ready_insert(&ready.node, first.node);
-            ready_insert(first.node, second.node);
-            active_insert(&active.node, first.node);
-            active_insert(first.node, second.node);
-        }
-        var ready_total: usize = ready_count(read ready);
-        var active_total: usize = active_count(read active);
-        if ready_total != 2usize || active_total != 2usize { trap; }
-        read Graph {
-            var begin: read Node = first_node_view(read ready);
-            var cursor: *Node = &begin;
-            if cursor == &ready.node { trap; }
-            var node: read Node = first_node(read ready);
-            if node.value != 65i64 { trap; }
-        }
-        { var early: Owner = move first; }
-        read Graph {
-            if ready.node.next != second.node || active.node.active_next != second.node { trap; }
-            var ready_cursor: *Node = ready.node.next;
-            var active_cursor: *Node = active.node.active_next;
-            if ready_cursor == &ready.node || active_cursor == &active.node { trap; }
-            var from_ready: *Node = ready_cursor;
-            var from_active: *Node = active_cursor;
-            if (*from_ready).value != 66i64 || (*from_active).value != 66i64 { trap; }
-        }
-        ready_total = ready_count(read ready);
-        active_total = active_count(read active);
-        if ready_total != 1usize || active_total != 1usize { trap; }
-        // Reuse allocation independently while the heads and second owner remain live.
+fn main(argc: i32, argv: **u8) -> i32 {
+    domain Graph {
+        var first: Owner = owner_new(65i64);
+        var second: Owner = owner_new(66i64);
         {
-            var replacement: Owner = owner_new(67i64);
-            if replacement.node == null(*Node) { return 1i32; }
+            var ready: ReadyHead = uninit;
+            var active: ActiveHead = uninit;
+            ready_init(&ready);
+            active_init(&active);
             edit Graph {
-                ready_insert(&ready.node, replacement.node);
-                active_insert(&active.node, replacement.node);
+                ready_insert(mut ready, read first);
+                ready_insert(mut ready, read second);
+                active_insert(mut active, read first);
+                active_insert(mut active, read second);
+            }
+            var ready_total: usize = ready_count(read ready);
+            var active_total: usize = active_count(read active);
+            if ready_total != 2usize || active_total != 2usize { trap; }
+            read Graph {
+                var cursor: Cursor = ready_first(read ready);
+                var end: Cursor = ready_end(read ready);
+                var count: usize = 0usize;
+                var done: bool = cursor_equal(read cursor, read end);
+                while !done {
+                    { var value: read i64 = cursor_value(read cursor);
+                      if value < 65i64 || value > 66i64 { trap; } }
+                    count = count + 1usize;
+                    cursor_advance(mut cursor);
+                    done = cursor_equal(read cursor, read end);
+                }
+                if count != 2usize { trap; }
+            }
+            drop first;
+            ready_total = ready_count(read ready);
+            active_total = active_count(read active);
+            if ready_total != 1usize || active_total != 1usize { trap; }
+            {
+                var replacement: Owner = owner_new(67i64);
+                edit Graph {
+                    ready_insert(mut ready, read replacement);
+                    active_insert(mut active, read replacement);
+                }
+            }
+            ready_total = ready_count(read ready);
+            if ready_total != 1usize { trap; }
+            edit Graph {
+                var cursor: Cursor = ready_first(read ready);
+                var value: mut i64 = cursor_mut(mut cursor);
+                value = 68i64;
             }
         }
+        read Graph {
+            var value: read i64 = owner_value(read second);
+            if value != 68i64 { trap; }
+        }
     }
-    read Graph {
-        if (*second.node).next != second.node || (*second.node).active_prev != second.node { trap; }
-        if (*second.node).value != 66i64 { trap; }
-    }
-    edit Graph {
-        increment(mut *second.node);
-        var value: mut i64 = value_mut(mut *second.node);
-        value = 66i64;
-    }
-    read Graph {
-        var node: read Node = node_view(read second);
-        var value: read i64 = value_view(read node);
-        if value != 66i64 { trap; }
-    }
-    emit(79i32);
-    emit(75i32);
-    emit(10i32);
+    emit(79i32); emit(75i32); emit(10i32);
     return 0i32;
 }

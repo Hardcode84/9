@@ -1,5 +1,8 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
+This archive records earlier designs. The [current ownership contract](../ownership-model.md)
+uses local checks and explicit trusted providers without a solver.
+
 # Crust: exploration of a small systems language
 
 Date: 2026-09-30. Updated: 2026-10-03. Status: research and executable experiments.
@@ -7,14 +10,13 @@ Date: 2026-09-30. Updated: 2026-10-03. Status: research and executable experimen
 The [Crust0 specification](../crust0-spec.md) now defines the bootstrap language.
 The richer syntax and checked rules below remain research candidates, not seed
 features. Module management is a library stage under that specification.
-The [checked ownership target](../design.md#checked-ownership-target) now requires
+The [checked ownership target](../design.md#checked-ownership) now requires
 function and field contracts without whole-program analysis. Its user-facing
 model must be no more complex than Rust's, including container implementations.
 This target supersedes the broader proof work proposed below. Retain the
 experiments as evidence; they do not establish acceptance of the modular model.
-The [modular stage](../ownership-model.md) uses ordinary field conditions and
-function contracts in a closed storage schema. Its proof terms stay out of
-user source and generated code.
+The [current modular stage](../ownership-model.md) uses local facts and explicit
+trusted-container interfaces. The field-condition proofs below are historical.
 
 Reading guide: [recommendation](#1-recommendation),
 [language research](#3-lessons-from-existing-languages),
@@ -1235,7 +1237,7 @@ No frontend speed claim follows from these checks.
 
 #### Implemented optional proof profile
 
-The [static memory tutorial](../../examples/ownership/README.md) now contains a
+The earlier static memory tutorial (removed with the solver dependency) contained a
 separate complete checked client. Its executor, memory policy, and ring policy
 are ordinary Crust code. They consume the existing typed tree and call the Z3
 C API directly. The seed has no new syntax, ownership state, or solver operation.
@@ -1263,7 +1265,7 @@ There is no claim of C-speed proof checking or completed modular ownership.
 
 The resource stage supports a result view tied to one input loan. Its moves,
 RAII, and `defer` use retained cleanup plans. The
-[closed-program stage](../../examples/intrusive/README.md#other-proof-profiles) brings those
+earlier closed-program stage (removed with the solver dependency) brings those
 plans, source storage scopes, deferred captures, and owner transfers into the
 memory proof. A check of the lowered tree alone would still omit cleanup calls.
 The same transfer facts support consuming pointer reads with `move place`.

@@ -3,15 +3,13 @@
 """Check owned native values independently of their ABI representation."""
 
 import argparse
+import os
 import tempfile
 from pathlib import Path
 
-from memory import command
-from ownership_contracts import rejected
 from ownership_imports import command as import_command
 from ownership_imports import import_arguments, unpack
-from ownership_views import no_solver
-from resource_memory import execute
+from ownership_support import command, execute, rejected
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "examples/ownership-basics/handles.crs"
@@ -237,7 +235,7 @@ def bodyless(build, directory, source, environment):
 
 
 def run(build, directory, sanitize):
-    environment = no_solver(directory)
+    environment = dict(os.environ)
     source = directory / "handles.crs"
     source.write_text(SOURCE.read_text())
     native(build, directory, source, b"OK\nSFF", sanitize, environment)

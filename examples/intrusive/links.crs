@@ -1,9 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn ready_unlink(node: *Node) -> unit access(edit, Graph)
-    modifies(Node.prev, Node.next)
-    requires(node != null(*Node))
-    ensures((*node).prev == node && (*node).next == node) {
+extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
+extern fn release(pointer: *u8) -> unit foreign(release) = "free";
+extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
+
+domain Graph(Node, Owner, ReadyHead, ActiveHead, Cursor);
+record Node { prev: *Node; next: *Node; active_prev: *Node; active_next: *Node; value: i64; }
+    opaque domain(Graph);
+resource Owner { node: *Node; } opaque domain(Graph) drop owner_drop;
+resource ReadyHead { node: Node; } opaque stable domain(Graph) drop ready_drop;
+resource ActiveHead { node: Node; } opaque stable domain(Graph) drop active_drop;
+record Cursor { node: *Node; } opaque scoped domain(Graph);
+
+fn ready_unlink(node: *Node) -> unit access(edit, Graph) {
     var before: *Node = (*node).prev;
     var after: *Node = (*node).next;
     (*before).next = after;
@@ -11,11 +20,7 @@ fn ready_unlink(node: *Node) -> unit access(edit, Graph)
     (*node).prev = node;
     (*node).next = node;
 }
-
-fn ready_insert(at: *Node, node: *Node) -> unit access(edit, Graph)
-    modifies(Node.prev, Node.next)
-    requires(at != null(*Node) && node != null(*Node))
-    ensures(at == node || (*at).next == node) {
+fn ready_link(at: *Node, node: *Node) -> unit access(edit, Graph) {
     if at == node { return; }
     ready_unlink(node);
     var after: *Node = (*at).next;
@@ -24,11 +29,7 @@ fn ready_insert(at: *Node, node: *Node) -> unit access(edit, Graph)
     (*after).prev = node;
     (*at).next = node;
 }
-
-fn active_unlink(node: *Node) -> unit access(edit, Graph)
-    modifies(Node.active_prev, Node.active_next)
-    requires(node != null(*Node))
-    ensures((*node).active_prev == node && (*node).active_next == node) {
+fn active_unlink(node: *Node) -> unit access(edit, Graph) {
     var before: *Node = (*node).active_prev;
     var after: *Node = (*node).active_next;
     (*before).active_next = after;
@@ -36,11 +37,7 @@ fn active_unlink(node: *Node) -> unit access(edit, Graph)
     (*node).active_prev = node;
     (*node).active_next = node;
 }
-
-fn active_insert(at: *Node, node: *Node) -> unit access(edit, Graph)
-    modifies(Node.active_prev, Node.active_next)
-    requires(at != null(*Node) && node != null(*Node))
-    ensures(at == node || (*at).active_next == node) {
+fn active_link(at: *Node, node: *Node) -> unit access(edit, Graph) {
     if at == node { return; }
     active_unlink(node);
     var after: *Node = (*at).active_next;
@@ -48,4 +45,77 @@ fn active_insert(at: *Node, node: *Node) -> unit access(edit, Graph)
     (*node).active_next = after;
     (*after).active_prev = node;
     (*at).active_next = node;
+}
+fn node_init(node: *Node, value: i64) -> unit {
+    (*node).prev = node;
+    (*node).next = node;
+    (*node).active_prev = node;
+    (*node).active_next = node;
+    (*node).value = value;
+}
+fn owner_new(value: i64) -> Owner access(reclaim, Graph) {
+    var node: *Node = allocate(sizeof(Node)) as *Node;
+    if node == null(*Node) { trap; }
+    node_init(node, value);
+    return make Owner { node: node };
+}
+fn owner_drop(owner: mut Owner) -> unit access(reclaim, Graph) {
+    ready_unlink(owner.node);
+    active_unlink(owner.node);
+    release(owner.node as *u8);
+}
+fn ready_init(head: *ReadyHead) -> unit access(reclaim, Graph) initializes(head) {
+    node_init(&(*head).node, 0i64);
+}
+fn active_init(head: *ActiveHead) -> unit access(reclaim, Graph) initializes(head) {
+    node_init(&(*head).node, 0i64);
+}
+fn ready_drop(head: mut ReadyHead) -> unit access(reclaim, Graph) {
+    while head.node.next != &head.node { ready_unlink(head.node.next); }
+}
+fn active_drop(head: mut ActiveHead) -> unit access(reclaim, Graph) {
+    while head.node.active_next != &head.node { active_unlink(head.node.active_next); }
+}
+fn ready_insert(head: mut ReadyHead, owner: read Owner) -> unit access(edit, Graph) {
+    ready_link(&head.node, owner.node);
+}
+fn active_insert(head: mut ActiveHead, owner: read Owner) -> unit access(edit, Graph) {
+    active_link(&head.node, owner.node);
+}
+fn ready_count(head: read ReadyHead) -> usize access(read, Graph) {
+    var count: usize = 0usize;
+    var cursor: *Node = head.node.next;
+    while cursor != &head.node { count = count + 1usize; cursor = (*cursor).next; }
+    return count;
+}
+fn active_count(head: read ActiveHead) -> usize access(read, Graph) {
+    var count: usize = 0usize;
+    var cursor: *Node = head.node.active_next;
+    while cursor != &head.node { count = count + 1usize; cursor = (*cursor).active_next; }
+    return count;
+}
+fn ready_first(head: read ReadyHead) -> Cursor access(read, Graph) {
+    return make Cursor { node: head.node.next };
+}
+fn ready_end(head: read ReadyHead) -> Cursor access(read, Graph) {
+    return make Cursor { node: &head.node };
+}
+fn cursor_next(cursor: read Cursor) -> Cursor access(read, Graph) {
+    return make Cursor { node: (*cursor.node).next };
+}
+fn cursor_equal(a: read Cursor, b: read Cursor) -> bool access(read, Graph) {
+    return a.node == b.node;
+}
+fn cursor_value(cursor: read Cursor) -> read i64 access(read, Graph) from cursor {
+    return read (*cursor.node).value;
+}
+fn cursor_mut(cursor: mut Cursor) -> mut i64 access(edit, Graph) from cursor {
+    return mut (*cursor.node).value;
+}
+fn owner_value(owner: read Owner) -> read i64 access(read, Graph) from owner {
+    return read (*owner.node).value;
+}
+
+fn cursor_advance(cursor: mut Cursor) -> unit access(read, Graph) {
+    cursor.node = (*cursor.node).next;
 }

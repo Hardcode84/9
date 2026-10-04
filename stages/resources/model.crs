@@ -41,6 +41,7 @@ record RsStage {
     functions: CrustMap;
     return_sources: CrustMap;
     return_loans: CrustMap;
+    initialized_parameters: CrustMap;
     context: *CrustContext;
     sources: *CrustUnit;
     resources: *RsResource;
@@ -86,6 +87,7 @@ record RsValue {
     mode: u32;
     owned: bool;
     unsafe_call: bool;
+    initializes: bool;
 }
 
 record RsAction {

@@ -1,52 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn os_join_heap(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState) -> unit {
-    var guard: *u8 = (*left).proof.assumptions;
-    var field: *PfField = (*target).proof.fields;
-    var seen: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
-    while field != null(*PfField) && !os_failed(check) {
-        if crust_map_get(&seen, (*field).field as usize) == null(*u8) {
-            rs_put((*(*check).stage).resources, &seen, (*field).field as usize, field as *u8);
-            var a: *PfField = os_field_state(left, (*field).field);
-            var b: *PfField = os_field_state(right, (*field).field);
-            pf_field_set(&(*check).proof, &(*target).proof, (*field).field,
-                os_merge_term(check, os_array_sort(check, (*(*field).field).syntax_type), guard, (*a).value, (*b).value),
-                os_merge_term(check, "(Array Int Bool)", guard, (*a).initialized, (*b).initialized));
-        }
-        field = (*field).next;
-    }
-    var heap: *OsHeap = (*target).heaps;
-    while heap != null(*OsHeap) && !os_failed(check) {
-        if os_heap(target, (*heap).schema) == heap {
-            os_set_heap(check, target, (*heap).schema, os_merge_term(check, "(Array Int Bool)", guard,
-                (*os_heap(left, (*heap).schema)).live, (*os_heap(right, (*heap).schema)).live));
-        }
-        heap = (*heap).next;
-    }
-    (*target).grounded = null(*OsGround);
-    (*target).proof.assumptions = pf_or(&(*check).proof, (*left).proof.assumptions, (*right).proof.assumptions);
-    os_join_snapshots(check, target, left, right);
-}
-
-fn os_join_snapshots(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState) -> unit {
-    (*target).snapshots = (*left).snapshots;
-    var snapshot: *OsSnapshot = (*right).snapshots;
-    while snapshot != null(*OsSnapshot) && !os_failed(check) {
-        var copy: *OsSnapshot = os_alloc(check, sizeof(OsSnapshot), alignof(OsSnapshot)) as *OsSnapshot;
-        if copy == null(*OsSnapshot) { return; }
-        *copy = *snapshot;
-        (*copy).next = (*target).snapshots;
-        (*target).snapshots = copy;
-        snapshot = (*snapshot).next;
-    }
-    (*target).proof.terms = (*left).proof.terms;
-    var term: *PfTerm = (*right).proof.terms;
-    while term != null(*PfTerm) && !os_failed(check) {
-        os_observe(check, target, (*term).value);
-        term = (*term).next;
-    }
-}
-
 fn os_join_value(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
                    slot: *OsSlot, a: *OsValue, b: *OsValue, location: *CrustLoc) -> unit {
     if (*a).borrow_scope != (*b).borrow_scope || (*a).loan != (*b).loan {
@@ -56,25 +9,11 @@ fn os_join_value(check: *OsCheck, target: *OsState, left: *OsState, right: *OsSt
     if value == null(*OsValue) { return; }
     if (*a).native != (*b).native { os_error(check, location, "continuing paths must agree on resource kind"); return; }
     (*value).presence = (*a).presence & (*b).presence;
-    (*value).term = os_merge_term(check, os_sort((*a).syntax), (*left).proof.assumptions, os_term(check, a), os_term(check, b));
     if (*a).object != (*b).object {
         if (*slot).owns || !(*a).pointer || !(*b).pointer {
             os_error(check, location, "continuing paths must agree on storage ownership"); return;
         }
-        var object: *OsObject = os_object_header(check, target, (*(*slot).syntax).base, null(*OsObject), (*slot).scope, true);
-        if object == null(*OsObject) { return; }
-        (*object).term = (*value).term;
-        (*object).cursor = true;
-        os_observe(check, target, (*object).term);
-        (*object).abstract = true;
-        os_mark(check, target, object, OS_LIVE | OS_READY | OS_SUMMARY | OS_PUBLISHED | OS_PINNED);
-        (*value).object = object;
+        os_error(check, location, "pointer branch merge requires a declared scoped view"); return;
     }
     os_set(check, target, slot as *u8, value, OS_READY);
-}
-
-fn os_merge_term(check: *OsCheck, sort: *u8, guard: *u8, left: *u8, right: *u8) -> *u8 {
-    if os_failed(check) { return null(*u8); }
-    if c_equal(left, right) { return left; }
-    return pf_define(&(*check).proof, sort, pf_ite(&(*check).proof, guard, left, right));
 }

@@ -20,7 +20,11 @@ fn oi_release(user: *u8, bytes: *u8) -> unit {
 
 fn oi_publish(request: *CrustBuild, directory: *u8) -> i32 {
     var library: OwnershipLibrary = uninit;
-    var result: i32 = ownership_publish(request, directory, &library);
+    var trusted: *CrustSource = ownership_test_trust(request);
+    var count: usize = 0usize;
+    if trusted != null(*CrustSource) { count = 1usize; }
+    if (*(*request).context).error_count != 0usize { return 1i32; }
+    var result: i32 = ownership_publish(request, directory, &library, trusted, count);
     if result == 0i32 {
         if crust0_host_write_stream(1u32, library.artifact, c_length(library.artifact)) != 0i32 ||
            crust0_host_write_stream(1u32, "\n", 1usize) != 0i32 ||
@@ -37,10 +41,10 @@ fn oi_command(context: *CrustContext, argc: i32, argv: **u8) -> i32 {
         argc: argc - 3i32, argv: argv + 3isize
     };
     if c_equal(argv[1usize], "publish") { return oi_publish(&request, argv[2usize]); }
-    if !c_equal(argv[1usize], "import") || argc < 6i32 {
+    if (!c_equal(argv[1usize], "import") && !c_equal(argv[1usize], "import-trusted")) || argc < 6i32 {
         native_error(context, "invalid ownership library command"); return 1i32;
     }
-    var library: OwnershipLibrary = make OwnershipLibrary { artifact: argv[3usize], digest: argv[4usize] };
+    var library: OwnershipLibrary = make OwnershipLibrary { artifact: argv[3usize], digest: argv[4usize], trusted: c_equal(argv[1usize], "import-trusted") };
     var imports: OwnershipImports = make OwnershipImports { directory: argv[2usize], libraries: &library, count: 1usize };
     request.argc = argc - 5i32;
     request.argv = argv + 5isize;

@@ -9,7 +9,7 @@ uses the same resource operations and separate intrusive-list examples.
 From the repository root:
 
 ```sh
-make all ownership-stage Z3_FLAGS=-l:libz3.so.4
+make all ownership-stage
 build/crust examples/ownership-basics/main.crs
 build/ownership-basics
 ```
@@ -123,13 +123,13 @@ or stores. Ownership facts remain in the checker. The example checks pointer
 layout and verifies that borrowed records remain usable after their view ends.
 
 ```sh
-make check-ownership check-ownership-imports Z3_FLAGS=-l:libz3.so.4
+make check-ownership check-ownership-imports
 python3 tests/ownership_views.py --sanitize
 ```
 
 The tests compare emitted C before and after verification, execute optimized
 and unoptimized programs, and reject scope escape, alias conflicts, incorrect
 result origins, source destruction, and use after a move. They also check a
-client after removing its provider source. The basic view checks run with an
-interceptor that fails if the stage starts Z3. Domain field conditions still
-use the separate proof path.
+client after removing its provider source. The basic view checks run with a
+dependency check that rejects solver symbols or libraries. All selected
+ownership checks use finite local rules.

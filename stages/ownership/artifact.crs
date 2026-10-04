@@ -5,6 +5,7 @@ record OsLibraryWork {
     inputs: CacheInputs;
     checker: *u8;
     provider: *u8;
+    trusted: bool;
 }
 
 record OsLibraryBundle {
@@ -12,6 +13,7 @@ record OsLibraryBundle {
     object: CrustSource;
     checker: *u8;
     provider: *u8;
+    trusted: bool;
 }
 
 fn os_library_error(context: *CrustContext, message: *u8) -> bool {
@@ -34,6 +36,7 @@ fn os_library_begin(context: *CrustContext, directory: *u8, work: *OsLibraryWork
     (*work).inputs = make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize };
     (*work).checker = null(*u8);
     (*work).provider = null(*u8);
+    (*work).trusted = false;
     if directory == null(*u8) || directory[0usize] != 47u8 {
         return os_library_error(context, "ownership library requires an absolute trusted cache directory");
     }
@@ -46,6 +49,7 @@ fn os_library_begin(context: *CrustContext, directory: *u8, work: *OsLibraryWork
 
 fn os_library_sources(stage: *OsStage, work: *OsLibraryWork) -> bool {
     var context: *CrustContext = (*(*stage).resources).context;
+    (*work).trusted = (*stage).trusted.count != 0usize;
     var parsed: *CrustUnit = (*(*stage).resources).sources;
     while parsed != null(*CrustUnit) {
         if !cache_add(context, &(*work).inputs, (*parsed).source) { return false; }
@@ -57,22 +61,25 @@ fn os_library_sources(stage: *OsStage, work: *OsLibraryWork) -> bool {
 
 fn os_library_pack(buffer: *CBuffer, work: *OsLibraryWork,
                     interface_source: *CrustSource, object: *CrustSource) -> bool {
-    c_buffer_text(buffer, "crust-ownership-library-v1-linux-x64\n");
+    c_buffer_text(buffer, "crust-ownership-library-v2-linux-x64\n");
     c_buffer_bytes(buffer, (*work).checker, 64usize);
     c_buffer_bytes(buffer, (*work).provider, 64usize);
     var interface_size: u64 = (*interface_source).size as u64;
     var object_size: u64 = (*object).size as u64;
     c_buffer_bytes(buffer, &interface_size as *u8, 8usize);
     c_buffer_bytes(buffer, &object_size as *u8, 8usize);
+    var trusted: u64 = 0u64;
+    if (*work).trusted { trusted = 1u64; }
+    c_buffer_bytes(buffer, &trusted as *u8, 8usize);
     c_buffer_bytes(buffer, (*interface_source).bytes, (*interface_source).size);
     c_buffer_bytes(buffer, (*object).bytes, (*object).size);
     return !(*(*buffer).status).failed;
 }
 
 fn os_library_unpack(context: *CrustContext, source: *CrustSource, bundle: *OsLibraryBundle) -> bool {
-    var tag: *u8 = "crust-ownership-library-v1-linux-x64\n";
+    var tag: *u8 = "crust-ownership-library-v2-linux-x64\n";
     var size: usize = native_strlen(tag);
-    if (*source).size < size + 144usize || cache_memcmp((*source).bytes, tag, size) != 0i32 {
+    if (*source).size < size + 152usize || cache_memcmp((*source).bytes, tag, size) != 0i32 {
         return os_library_error(context, "invalid ownership library format or target");
     }
     (*bundle).checker = (*source).bytes + size as isize;
@@ -81,7 +88,11 @@ fn os_library_unpack(context: *CrustContext, source: *CrustSource, bundle: *OsLi
     var object_size: u64 = 0u64;
     native_memcpy(&interface_size as *u8, (*bundle).provider + 64isize, 8usize);
     native_memcpy(&object_size as *u8, (*bundle).provider + 72isize, 8usize);
-    size = size + 144usize;
+    var trusted: u64 = 0u64;
+    native_memcpy(&trusted as *u8, (*bundle).provider + 80isize, 8usize);
+    if trusted > 1u64 { return os_library_error(context, "invalid ownership trust contract"); }
+    (*bundle).trusted = trusted != 0u64;
+    size = size + 152usize;
     if interface_size > ((*source).size - size) as u64 ||
        object_size != ((*source).size - size - interface_size as usize) as u64 {
         return os_library_error(context, "invalid ownership library lengths");
@@ -113,6 +124,6 @@ fn os_library_publish_bytes(context: *CrustContext, directory: *u8, work: *OsLib
     };
     var artifact: CacheArtifact = uninit;
     if !cache_artifact(context, directory, &request, &artifact) { return false; }
-    *result = make OwnershipLibrary { artifact: artifact.path, digest: digest };
+    *result = make OwnershipLibrary { artifact: artifact.path, digest: digest, trusted: (*work).trusted };
     return true;
 }

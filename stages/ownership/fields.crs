@@ -13,15 +13,9 @@ fn os_drop_callback(check: *OsCheck, state: *OsState, object: *OsObject, locatio
     if destructor == null(*OsFunction) || ((*(*object).contract).domain != null(*CrustName) && (*destructor).effect != OS_RECLAIM) {
         os_error(check, location, "resource destructor requires a reclamation contract"); return;
     }
-    if !os_call_effect(check, state, destructor, location) { return; }
+    if !os_brand_access(check, state, object, location) || !os_call_effect(check, state, destructor, location) { return; }
     os_publish_value(check, state, object, location);
-    if os_failed(check) { return; }
-    var parameter: *CrustParam = (*(*destructor).declaration).params;
-    var bindings: *OsBinding = os_binding(check, (*parameter).name, (*object).syntax,
-        (*object).term, null(*OsBinding));
-    if !os_check_precondition(check, state, destructor, bindings, location) ||
-       !os_call_frame(check, destructor, location) { return; }
-    if (*destructor).effect >= OS_EDIT { os_heap_havoc(check, state, (*object).domain, destructor, bindings); }
+    os_call_frame(check, destructor, location);
 }
 
 fn os_drop_fields(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {

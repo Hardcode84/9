@@ -5,14 +5,14 @@
 import os
 import subprocess
 
-from memory import command
+from ownership_support import command
 
 
 def check_runtime(build, directory, root, sanitize, source_path=None, outputs=None, arguments=()):
     if source_path is None:
-        source_path = root / "examples/intrusive/program.crs"
+        source_path = root / "examples/intrusive/links.crs"
     if outputs is None:
-        outputs = (b"OK\n", b"", b"", b"")
+        outputs = (b"OK\n",)
     source = directory / "allocator-program.crs"
     source.write_text(
         source_path.read_text()
@@ -24,13 +24,14 @@ def check_runtime(build, directory, root, sanitize, source_path=None, outputs=No
     command(
         [
             build / "crust-ownership-test",
+            "trusted",
+            source,
             "--emit-c",
             "--symbols",
             symbols,
             "-o",
             generated,
-            root / "examples/intrusive/links.crs",
-            source,
+            root / "examples/intrusive/program.crs",
         ]
     )
     for optimization in ("-O0", "-O2"):

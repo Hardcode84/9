@@ -6,10 +6,10 @@ host_source(run, "../../stages/ownership/build.crs");
 host_link(run, "../../build/crust-ownership-library.so");
 
 if (*run).argc != 0i32 {
-    return ownership_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv);
+    return ownership_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv, null(*CrustSource), 0usize);
 };
 var arguments: [*u8; 3] = make [*u8; 3] {
     "-o", host_path(run, "../../build/ownership-basics"),
     host_path(run, "program.crs")
 };
-return ownership_build((*run).source, (*run).cursor, 3i32, &arguments[0usize]);
+return ownership_build((*run).source, (*run).cursor, 3i32, &arguments[0usize], null(*CrustSource), 0usize);

@@ -46,14 +46,14 @@ fn os_owner_root(check: *OsCheck, state: *OsState, object: *OsObject, location: 
 
 fn os_loan_overlap(check: *OsCheck, state: *OsState, a: *OsObject, b: *OsObject, location: *CrustLoc) -> bool {
     if a == null(*OsObject) || b == null(*OsObject) { return false; }
-    var possible: bool = (*os_root(a)).uncertain || (*os_root(b)).uncertain;
+    // Distinct local handles keep distinct storage when their owned targets change.
+    var possible: bool = ((*a).heap || (*b).heap) && ((*os_root(a)).uncertain || (*os_root(b)).uncertain);
     var left: *OsObject = os_owner_root(check, state, a, location);
     var right: *OsObject = os_owner_root(check, state, b, location);
     if left == right { return true; }
     if left == null(*OsObject) || right == null(*OsObject) { return false; }
-    if (*left).domain == null(*CrustName) || (*left).domain != (*right).domain { return false; }
-    return possible || (*left).readonly || (*right).readonly ||
-        (*left).cursor || (*right).cursor;
+    if (*left).domain == null(*CrustName) || (*left).brand != (*right).brand { return false; }
+    return possible || (*left).aliased || (*right).aliased;
 }
 
 fn os_loan_permission(check: *OsCheck, state: *OsState, through: *OsLoan,
@@ -95,6 +95,10 @@ fn os_loan_new(check: *OsCheck, state: *OsState, value: *OsValue,
         return null(*OsLoan);
     }
     if !os_loan_place_access(check, state, (*value).place, (*value).loan, mode == RS_MUT, location) { return null(*OsLoan); }
+    return os_loan_create(check, state, value, object, mode);
+}
+
+fn os_loan_create(check: *OsCheck, state: *OsState, value: *OsValue, object: *OsObject, mode: u32) -> *OsLoan {
     var loan: *OsLoan = os_alloc(check, sizeof(OsLoan), alignof(OsLoan)) as *OsLoan;
     if loan == null(*OsLoan) { return loan; }
     (*loan).object = object;
@@ -193,13 +197,13 @@ fn os_edit_loan_source(check: *OsCheck, state: *OsState, loan: *OsLoan,
     return false;
 }
 
-fn os_edit_loans(check: *OsCheck, state: *OsState, arguments: **OsValue,
-                       count: usize, location: *CrustLoc) -> bool {
+fn os_call_loans(check: *OsCheck, state: *OsState, arguments: **OsValue,
+                       count: usize, effect: u32, location: *CrustLoc) -> bool {
     var loan: *OsLoan = (*check).loans;
     while loan != null(*OsLoan) && !os_failed(check) {
         if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && (*loan).object != null(*OsObject) &&
-           (*(*loan).object).domain == (*state).domain && !os_edit_loan_source(check, state, loan, arguments, count, location) {
-            os_error(check, location, "edit authority conflicts with an active domain loan"); return false;
+           (*(*loan).object).brand == (*state).brand && (effect >= OS_EDIT || (*loan).mode == RS_MUT) && !os_edit_loan_source(check, state, loan, arguments, count, location) {
+            os_error(check, location, "call authority conflicts with an active domain loan"); return false;
         }
         loan = (*loan).next;
     }
@@ -210,7 +214,7 @@ fn os_no_domain_loans(check: *OsCheck, state: *OsState, domain: *CrustName, loca
     var loan: *OsLoan = (*check).loans;
     while loan != null(*OsLoan) && !os_failed(check) {
         if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && (*loan).object != null(*OsObject) &&
-           (*(*loan).object).domain == domain {
+           (*(*loan).object).brand == (*state).brand {
             os_error(check, location, "reclamation conflicts with an active domain loan"); return false;
         }
         loan = (*loan).next;

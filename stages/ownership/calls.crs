@@ -37,8 +37,8 @@ fn os_no_cursors(check: *OsCheck, state: *OsState, domain: *CrustName, location:
         while slot != null(*OsSlot) {
             var value: *OsValue = os_bound(state, slot);
             if value != null(*OsValue) && !(*slot).owns && !(*slot).authority && (*value).object != null(*OsObject) &&
-               ((*value).pointer || (*(*slot).syntax).kind == RS_READ || (*(*slot).syntax).kind == RS_MUT) {
-                if (*(*value).object).domain == domain {
+               (((*value).pointer && (*(*value).object).aliased) || os_borrowed((*slot).syntax)) {
+                if (*(*value).object).brand == (*state).brand {
                     os_error(check, location, "reclamation conflicts with an active domain cursor");
                     return false;
                 }
@@ -83,7 +83,6 @@ fn os_release(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract
             return null(*OsValue);
         }
         if !os_reclaim(check, state, object, &(*expression).loc) { return null(*OsValue); }
-        if !os_heap_retire(check, state, object, &(*expression).loc) { return null(*OsValue); }
         os_release_fields(check, state, object, &(*expression).loc);
         os_mark(check, state, object, os_flags(state, object) & ~OS_LIVE);
     }
@@ -93,11 +92,7 @@ fn os_release(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract
 
 fn os_reclaim(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
     if !os_loan_access(check, state, object, null(*OsLoan), true, location) { return false; }
-    if (*os_root(object)).readonly {
-        os_error(check, location, "shared storage has no reclamation authority");
-        return false;
-    }
-    if (*state).effect != OS_RECLAIM || (*state).domain != (*object).domain {
+    if (*state).effect != OS_RECLAIM || (*state).brand != (*object).brand {
         os_error(check, location, "release requires exclusive reclamation authority");
         return false;
     }
@@ -131,23 +126,10 @@ fn os_call_argument(check: *OsCheck, state: *OsState, expression: *CrustExpr) ->
 fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract: *OsFunction) -> *OsValue {
     if !os_call_effect(check, state, contract, &(*expression).loc) { return null(*OsValue); }
     if !os_argument_effects(check, expression, contract) { return null(*OsValue); }
-    var parameter: *CrustParam = (*(*contract).declaration).params;
-    var source_name: *CrustName = os_result_parameter(check, contract);
-    var source: *OsValue = null(*OsValue);
-    var arguments: **OsValue = os_alloc(check, (*expression).arg_count * sizeof(*OsValue), alignof(*OsValue)) as **OsValue;
-    if (*expression).arg_count != 0usize && arguments == null(**OsValue) { return null(*OsValue); }
-    var index: usize = 0usize;
-    while parameter != null(*CrustParam) && !os_failed(check) {
-        if index >= (*expression).arg_count { os_error(check, &(*expression).loc, "missing ownership argument"); return null(*OsValue); }
-        var value: *OsValue = os_call_argument(check, state, (*expression).args[index]);
-        os_argument(check, state, contract, parameter, value, &(*expression).loc);
-        arguments[index] = value;
-        if (*parameter).name == source_name { source = value; }
-        parameter = (*parameter).next;
-        index = index + 1usize;
-    }
+    var arguments: **OsValue = os_arguments(check, state, expression, contract);
     if os_failed(check) { return null(*OsValue); }
-    if (*contract).effect >= OS_EDIT && !os_edit_loans(check, state, arguments, (*expression).arg_count, &(*expression).loc) {
+    var source: *OsValue = os_source_argument(check, contract, arguments);
+    if (*contract).effect != 0u32 && !os_call_loans(check, state, arguments, (*expression).arg_count, (*contract).effect, &(*expression).loc) {
         return null(*OsValue);
     }
     os_apply_contract(check, state, contract, arguments, &(*expression).loc);
@@ -161,6 +143,7 @@ fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contr
 
 fn os_call_owned(check: *OsCheck, state: *OsState, contract: *OsFunction, location: *CrustLoc) -> *OsValue {
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
+    if os_scoped(check, syntax) { return os_scoped_result(check, state, contract, location); }
     if (*syntax).kind == CRUST_T_POINTER {
         os_error(check, location, "pointer results require a declared cursor lifetime");
         return null(*OsValue);
@@ -206,7 +189,6 @@ fn os_mutable_value(check: *OsCheck, state: *OsState, value: *OsValue,
     var slot: *OsSlot = os_original((*(*value).loan).place);
     var changed: *OsValue = os_copy(check, os_bound(state, slot));
     if changed != null(*OsValue) {
-        (*changed).term = pf_fresh(&(*check).proof, os_sort((*slot).syntax));
         os_set(check, state, slot as *u8, changed, OS_READY);
     }
 }
@@ -283,17 +265,24 @@ fn os_no_nested_calls(check: *OsCheck, expression: *CrustExpr) -> bool {
 fn os_argument(check: *OsCheck, state: *OsState, contract: *OsFunction, parameter: *CrustParam,
                 value: *OsValue, location: *CrustLoc) -> unit {
     if value == null(*OsValue) || os_failed(check) { return; }
-    if !os_plain(check, value, location) { return; }
+    if !os_plain(check, value, location) || !os_brand_access(check, state, (*value).object, location) { return; }
     var syntax: *CrustTypeSyntax = (*parameter).syntax_type;
     if (*syntax).kind == RS_READ || (*syntax).kind == RS_MUT {
         os_borrow_argument(check, state, contract, syntax, value, location);
         return;
     }
-    if (*value).pointer { os_cursor_argument(check, state, contract, parameter, value, location); return; }
+    if (*value).pointer { os_output_argument(check, state, contract, parameter, value, location); return; }
     if (*value).object != null(*OsObject) { os_publish_value(check, state, (*value).object, location); }
     if !os_transferable(check, state, value, location) { return; }
     if os_affine(check, syntax) && !(*value).owner {
         os_error(check, location, "owner argument requires an explicit move");
+    }
+    os_argument_ready(check, state, value, location);
+}
+
+fn os_argument_ready(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> unit {
+    if os_scoped(check, (*value).syntax) && (*value).borrow_scope == null(*OsScope) {
+        os_error(check, location, "scoped argument requires a retained access origin");
     }
     if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
         os_error(check, location, "argument contains uninitialized storage");
@@ -310,7 +299,33 @@ fn os_borrow_argument(check: *OsCheck, state: *OsState, contract: *OsFunction,
         os_error(check, location, "borrowed argument must be fully initialized"); return;
     }
     if (*value).object != null(*OsObject) { os_publish_value(check, state, (*value).object, location); }
-    if (*syntax).kind == RS_MUT && (*contract).effect == OS_RECLAIM {
-        os_error(check, location, "explicit mutable calls cannot carry destruction authority");
+}
+
+fn os_arguments(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract: *OsFunction) -> **OsValue {
+    var parameter: *CrustParam = (*(*contract).declaration).params;
+    var arguments: **OsValue = os_alloc(check, (*expression).arg_count * sizeof(*OsValue), alignof(*OsValue)) as **OsValue;
+    if (*expression).arg_count != 0usize && arguments == null(**OsValue) { return null(**OsValue); }
+    var index: usize = 0usize;
+    while parameter != null(*CrustParam) && !os_failed(check) {
+        if index >= (*expression).arg_count { os_error(check, &(*expression).loc, "missing ownership argument"); return null(**OsValue); }
+        var value: *OsValue = os_call_argument(check, state, (*expression).args[index]);
+        os_argument(check, state, contract, parameter, value, &(*expression).loc);
+        arguments[index] = value;
+        parameter = (*parameter).next;
+        index = index + 1usize;
     }
+    if os_failed(check) { return null(**OsValue); }
+    return arguments;
+}
+
+fn os_source_argument(check: *OsCheck, contract: *OsFunction, arguments: **OsValue) -> *OsValue {
+    var name: *CrustName = os_result_parameter(check, contract);
+    var parameter: *CrustParam = (*(*contract).declaration).params;
+    var index: usize = 0usize;
+    while parameter != null(*CrustParam) {
+        if (*parameter).name == name { return arguments[index]; }
+        index = index + 1usize;
+        parameter = (*parameter).next;
+    }
+    return null(*OsValue);
 }

@@ -7,11 +7,9 @@ import os
 import tempfile
 from pathlib import Path
 
-from memory import command
-from ownership_contracts import rejected
 from ownership_imports import command as import_command
 from ownership_imports import import_arguments, unpack
-from resource_memory import execute
+from ownership_support import command, execute, rejected
 
 ROOT = Path(__file__).resolve().parents[1]
 READING = "record View {value:read i64;} "
@@ -118,18 +116,18 @@ def reject_cases():
             "continuing paths must agree on owner consumption",
         ),
         "stored-view-loop-effect": (
-            "domain D(Cell);record Cell {value:i64;} domain(D) invariant(true);"
+            "domain D(Cell);record Cell {value:i64;} domain(D);"
             "record View {flag:mut bool;} "
-            "fn bad(p:*Cell)->i64 access(read,D) requires(p==null(*Cell)) {"
+            "fn bad(p:*Cell)->i64 access(read,D) {"
             "var flag:bool=true;{var view:View=make View{flag:mut flag};"
             "while view.flag {view.flag=false;}}"
             "if flag {return 0i64;}return (*p).value;}",
             "pointer access requires live non-null storage",
         ),
         "stored-view-branch-effect": (
-            "domain D(Cell);record Cell {value:i64;} domain(D) invariant(true);"
+            "domain D(Cell);record Cell {value:i64;} domain(D);"
             "record View {flag:mut bool;} "
-            "fn bad(view:mut View,test:bool,p:*Cell)->i64 access(read,D) requires(p==null(*Cell)) {"
+            "fn bad(view:mut View,test:bool,p:*Cell)->i64 access(read,D) {"
             "view.flag=true;if test {view.flag=false;}"
             "if view.flag {return 0i64;}return (*p).value;}",
             "pointer access requires live non-null storage",
@@ -139,10 +137,7 @@ def reject_cases():
 
 
 def effect_cases():
-    schema = (
-        "domain D(Cell); record Cell {value:i64;} domain(D) invariant(true); "
-        "record View {flag:mut bool;} "
-    )
+    schema = "domain D(Cell); record Cell {value:i64;} domain(D); " "record View {flag:mut bool;} "
     cases = {}
     for name, parameter, argument in (
         ("borrowed", "mut View", "mut view"),
@@ -150,7 +145,7 @@ def effect_cases():
     ):
         cases[f"{name}-view-scalar-effect"] = (
             schema + f"fn clear(view:{parameter})->unit {{view.flag=false;}} "
-            "fn bad(p:*Cell)->i64 access(read,D) requires(p==null(*Cell)) {"
+            "fn bad(p:*Cell)->i64 access(read,D) {"
             "var flag:bool=true;{var view:View=make View{flag:mut flag};"
             + f"clear({argument});"
             + "}if flag {return 0i64;} return (*p).value;}",
@@ -226,7 +221,7 @@ def native_cases():
             b"",
         ),
         "domain-view": (
-            "domain D(Cell);record Cell {value:i64;} domain(D) invariant(true); "
+            "domain D(Cell);record Cell {value:i64;} domain(D); "
             "record View {cell:mut Cell;} "
             "fn change(view:mut View)->unit access(edit,D) {view.cell.value=7i64;} "
             "fn consume(view:View)->unit access(edit,D) {view.cell.value=9i64;} "
@@ -280,32 +275,6 @@ def check_native_cases(build, directory, sanitize):
         execute(generated, symbols, directory, name, sanitize, output)
 
 
-def no_solver(directory):
-    source = directory / "no-solver.c"
-    library = directory / "no-solver.so"
-    source.write_text(
-        "#include <stdio.h>\n#include <stdlib.h>\n"
-        "void *Z3_mk_config(void);\nvoid *Z3_mk_config(void) {\n"
-        'fputs("basic views must not start a solver\\n", stderr); exit(97);\n}\n'
-    )
-    command(
-        [
-            "gcc",
-            "-std=c99",
-            "-pedantic-errors",
-            "-Wall",
-            "-Wextra",
-            "-Werror",
-            "-fPIC",
-            "-shared",
-            source,
-            "-o",
-            library,
-        ]
-    )
-    return dict(os.environ, LD_PRELOAD=str(library))
-
-
 def bodyless(build, directory, source, environment):
     provider, main = source.read_text().split("fn main(", 1)
     library, client = directory / "provider.crs", directory / "client.crs"
@@ -336,7 +305,7 @@ def bodyless(build, directory, source, environment):
 def run(build, directory, sanitize):
     source = ROOT / "examples/ownership-basics/views.crs"
     generated, symbols = directory / "views.c", directory / "views.rsp"
-    environment = no_solver(directory)
+    environment = dict(os.environ)
     import_command(
         [
             str(build / "crust"),

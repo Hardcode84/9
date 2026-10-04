@@ -21,7 +21,6 @@ fn os_native_value(check: *OsCheck, owner: *OsField) -> *OsValue {
     if value != null(*OsValue) {
         (*value).native = owner;
         (*value).owner = true;
-        (*value).term = pf_fresh(&(*check).proof, os_sort(syntax));
         if (*owner).invalid == null(*CrustExpr) { (*value).presence = OS_PRESENT; }
     }
     return value;

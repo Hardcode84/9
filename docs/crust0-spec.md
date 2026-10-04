@@ -19,17 +19,16 @@ bounded measurements. Those results do not establish checked-Crust performance.
 Crust0 is a low-level language with raw memory preconditions. It does not claim
 memory safety. Ownership, borrowing, cleanup, and unsafe policy belong to
 separate compiled language stages. Their removal from the seed is deliberate.
-The complete checked Crust language requires the direct-list lifetime contract
-identified in the [research](exploration/language-exploration.md#69-intrusive-lists-with-individual-destruction-and-reuse).
-This specification does not replace that requirement with unchecked list code.
+The checked ownership stage uses the [explicit trusted-container boundary](ownership-model.md#opaque-storage-and-explicit-trust). Its direct-list client
+is checked; its pointer implementation must uphold the declared contracts.
 The ownership model must not require whole-program analysis. Function interfaces
 and type and field declarations must encode all safety conditions needed across
 function boundaries. Check each body against those contracts, with local flow
 analysis. The user-facing model must be no more complex than Rust's for both
-application and container authors. The [checked ownership target](design.md#checked-ownership-target)
+application and container authors. The [checked ownership target](design.md#checked-ownership)
 defines the acceptance gate. The [ownership stage contract](ownership-model.md)
-describes an external implementation based on closed storage schemas and
-ordinary field and function conditions. The [intrusive tutorial](../examples/intrusive/README.md)
+describes an external implementation based on local ownership facts and
+explicit trusted-container interfaces. The [intrusive tutorial](../examples/intrusive/README.md)
 uses those rules without container-specific stage logic.
 These requirements add no ownership feature to the seed.
 
@@ -948,40 +947,16 @@ must fail explicitly; it must not omit a check or accept partial output.
 The current repository implements seed syntax, execution, and root control.
 Its stage libraries provide bounded construction witnesses. The C backend passes
 the stage self-compilation case. It does not establish the C frontend experiment.
-The optional [memory stage](../examples/ownership/README.md) checks a complete
-direct two-hook client through its typed operation tree. Its library proof also
-checks init, unlink, insert, and splice over rings of arbitrary length. The
-client checker expands calls or uses selected concrete effect templates. It
-requires a proved end to each unfolded loop.
-The [closed-program resource composition](../examples/intrusive/README.md#other-proof-profiles) also
-checks source lifetimes, owner transfers, and complete cleanup plans. Neither
-closed-program profile consumes modular ownership summaries. Passing
-these checks does not complete compiler-construction or checked-language
-acceptance.
-An optional finite-effect contract proves a selected body independently and
-checks its callers against declared input conditions, exact output maps, and
-a writable-cell set. It does not establish an abstract ownership predicate for
-an arbitrary graph or replace bounded loop execution.
-An optional read-only loop stage checks an inductive invariant and a decreasing
-integer variant. It checks runtime-sized intrusive traversal and subsequent
-resource cleanup. Loops with memory writes or allocation require a different
-frame rule and reject this form.
-
-The separate [modular ownership stage](../examples/intrusive/README.md) checks
-each source body against declared storage and function contracts. It supports
-individual owners, scoped cursors, stored `read` and `mut` fields in affine view
-records, typed payload access, field conditions, and cleanup over arbitrary
-list sizes. A returned view record declares one exact source with `from`.
-The [ownership contract](ownership-model.md#stored-views) defines its lifetime
-and origin rules. [Native resource contracts](ownership-model.md#native-resources)
-apply acquisition, move, borrow, and consumption rules to integers and opaque
-pointers without granting memory access. Native resources need no storage
-domain. Loops can replace initialized, movable owner records. Their declared
-types supply the local invariant; stored loan origins must remain fixed. See
-the [loop rules](ownership-model.md#local-proof-and-loops). Calls use verified
-interfaces; they do not expand callee bodies. Proof state erases before
-emission. The complete
-checked-language gate also requires the other ownership acceptance cases.
+The optional [ownership stage](ownership-model.md) checks each function from
+finite local state and declared interfaces. It checks resource moves, integer
+and pointer handles, stored loans, returned origins, cleanup, and domain access.
+It uses no graph solver. The [intrusive tutorial](../examples/intrusive/README.md)
+has an explicitly trusted opaque provider and checked client. The provider must
+obey its internal retention and retirement contract; the stage does not prove
+its pointer stores. The [owning tree](../examples/ownership-graphs/README.md)
+uses the same interface rules. Independent imports preserve selected trust.
+Ownership state erases before emission. These witnesses do not establish every
+compiler-construction or checked-language acceptance case.
 
 The first implementation must establish these cases before adding language
 facilities:
@@ -1029,7 +1004,7 @@ change it, and repeat that witness before adding another dependent layer. A
 slower optional checking stage can proceed when its capability and cost are
 explicit. If measurement cannot establish the speed gate, do not call that
 configuration C-level. The seed and each checked configuration have separate
-cost claims. Unsupported proofs and exhausted solver budgets are diagnostics,
+cost claims. Unsupported checks and exhausted checker limits are diagnostics,
 not permission to emit unchecked code under the same safety claim.
 
 Runtime costs also require evidence. Compare selected abstractions with C that
@@ -1063,70 +1038,20 @@ target. Linux, GCC, and LLVM cases require explicit storage, layout, callbacks,
 relocation, and synchronization. The seed provides basic mechanisms to implement
 compiler libraries; it does not yet claim to compile those source trees.
 
-The optional memory stage assigns each allocation a fresh proof identity.
-Pointer offsets retain that identity; numeric address equality cannot make a
-retired identity live. Release requires a live heap base with no incoming
-persistent links. These checks apply to user-written direct pointer operations,
-without a pool or trusted unlink operation. They establish a closed sequential
-program profile, not the full modular ownership contract.
+Resource checking retains cleanup plans outside the lowered tree. Composed
+stages consume source ownership and these plans before emission. The ownership
+stage delegates raw representation operations only inside root-selected trusted
+definitions. Other functions use local storage and interface checks. There is
+no inferred trust, solver fallback, or whole-program expansion. See the
+[implemented contract](ownership-model.md) for exact accepted operations.
 
-Resource checking retains cleanup chains outside its lowered tree and moves
-local declarations to function entry. The combined stage consumes those chains,
-preserves source storage scopes and deferred captures, and removes initialized
-permissions from moved values. Its proof view adds no emitted operations.
-The resource stage can explicitly delegate raw memory and plain-value
-initialization checks to this proof. Plain values have no resource cleanup
-obligation and are not loan bindings. Output calls, field stores, and cleanup
-can initialize them; each read must have initialized storage on its reachable path. Taking an address
-does not initialize storage. Owner construction, moves, loan bindings, and
-cleanup eligibility keep the resource stage's source checks. Plain resource
-checking retains its whole-binding initialization rule.
-The resource syntax also permits `move` on a writable raw pointer place.
-The combined stage consumes that place's initialized permission without a
-clear store. Reads through all aliases then fail until assignment initializes
-the place again. Plain resource checking requires `unsafe` for pointer moves;
-it does not perform this memory proof. Whole-resource moves retain their
-cleanup obligations and source loan checks.
-The root can select straight-line, unit-returning functions for inferred memory
-summaries. Each template is derived from the checked body and resource proof
-view in the current context. It retains access obligations, changed memory
-maps, and written cells. Each call binds fresh proof names to its input state,
-checks the obligations and typed-write separation, and retains cells for later
-destruction checks. Calls, branches, loops, and local storage inside a selected
-body are rejected. Other bodies still expand. There is no saved-summary import.
-These concrete effects do not establish abstract ownership predicates or loop
-invariants. The optional declared-contract stage adds explicit input conditions,
-exact output maps, and a finite writable-cell set. It proves the actual body
-once, including every access and intermediate write, then installs the verified
-effect for callers. Complete final-map equality supplies the unchanged-memory
-frame. Inconsistent input conditions reject registration. This form supports
-loop-free unit functions with scalar parameters and bindings without local
-storage. It checks branches but rejects calls, loops, traps, and aggregate
-copies in the selected body. Abstract graph predicates still require a rule
-for separating an unbounded set of cells from caller memory. The [contract tutorial](../examples/intrusive/README.md#other-proof-profiles)
-provides the complete source and selectable compilation root.
-The optional [loop stage](../examples/intrusive/README.md#other-proof-profiles)
-checks read-only memory with scalar updates through the existing statement
-callback. It derives modified bindings from the complete body and checks an
-immutable invariant at entry and after an arbitrary iteration. Every
-continuation must decrease a nonnegative integer variant. Condition-false and
-break paths retain the checked exit state. Every access is checked, and all
-memory maps, including initialized permissions, must remain unchanged.
-The selected body permits branches, scalar locals, break, continue, and traps.
-It checks accesses before each terminating trap, including array bounds guards.
-It rejects calls, nested loops, memory stores, addressed bindings, aggregate
-storage, and returns. Other loops use bounded execution. Mutable graphs
-and runtime allocation loops require invariants with a sound frame for changed
-storage, fresh allocation identities, and retained links; this read-only rule
-does not supply that frame. The loop checker and its selection policy are
-ordinary Crust code. They add no seed operation or target instruction.
 Ownership proofs must erase before backend optimization. Runtime pointer-validity
 checks, identity metadata, pointer tags, reference counts, and hidden cleanup
 flags are excluded. Null checks before release and debug-only bounds checks are
 permitted; debug-only checks do not prove release-build spatial safety. The
 [static ownership experiment](exploration/language-exploration.md#static-ownership-candidate-and-unresolved-proof)
-states the selected model, executable evidence, and remaining source-checking
-work. It adds no seed feature.
+retains historical research. The [ownership contract](ownership-model.md)
+defines current checking and trust. It adds no seed feature.
 
 The experiment tests whether ordinary compiled libraries can define language
 rules and backend interfaces with selectable capability and compilation costs.

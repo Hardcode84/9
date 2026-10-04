@@ -6,7 +6,7 @@
 // The checker host and its loaded images must remain unchanged during the call.
 // Receipt strings belong to request.context. Copy them before destroying it.
 extern fn ownership_publish(request: *CrustBuild, directory: *u8,
-                            result: *OwnershipLibrary) -> i32 = "ownership_publish";
+                            result: *OwnershipLibrary, trusted: *CrustSource, count: usize) -> i32 = "ownership_publish";
 
 // Require an empty context and receipts from trusted publication. Capture and
 // validate each bundle, check client bodies, and link private object snapshots.

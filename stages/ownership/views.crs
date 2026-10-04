@@ -4,6 +4,7 @@ fn os_view_mode(check: *OsCheck, syntax: *CrustTypeSyntax) -> u32 {
     if os_borrowed(syntax) { return (*syntax).kind; }
     var schema: *OsRecord = os_record((*check).stage, syntax);
     if schema == null(*OsRecord) { return 1u32; }
+    if (*schema).opaque { return 1u32; }
     if (*schema).view_mode != 0u32 { return (*schema).view_mode; }
     if !os_enter(check, &(*syntax).loc) { return 1u32; }
     var mode: u32 = 1u32;
@@ -19,7 +20,7 @@ fn os_view_mode(check: *OsCheck, syntax: *CrustTypeSyntax) -> u32 {
 }
 
 fn os_affine(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {
-    return rs_owns((*(*check).stage).resources, syntax) ||
+    return os_scoped(check, syntax) || rs_owns((*(*check).stage).resources, syntax) ||
         ((*syntax).kind == CRUST_T_NAME && os_view_mode(check, syntax) >= RS_READ);
 }
 
@@ -30,7 +31,6 @@ fn os_view_parameter(check: *OsCheck, state: *OsState, slot: *OsSlot) -> *OsValu
         target = os_object_header(check, state, (*syntax).base, null(*OsObject), (*state).scope, true);
         if target == null(*OsObject) { return null(*OsValue); }
         os_mark(check, state, target, os_flags(state, target) | OS_SUMMARY);
-        os_heap_assume_object(check, state, target, false);
     }
     var place: *OsSlot = os_loan_storage(check, state, (*syntax).base, target);
     if place == null(*OsSlot) { return null(*OsValue); }

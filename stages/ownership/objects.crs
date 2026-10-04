@@ -18,8 +18,6 @@ fn os_object(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax,
     var object: *OsObject = os_object_header(check, state, syntax, parent, scope, initialized);
     if object != null(*OsObject) {
         os_object_fields(check, state, object, initialized);
-        if initialized { os_heap_assume_object(check, state, object, false); }
-        else { os_heap_uninitialized(check, state, object); }
     }
     (*check).depth = (*check).depth - 1usize;
     return object;
@@ -30,14 +28,19 @@ fn os_object_header(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax,
     var object: *OsObject = os_alloc(check, sizeof(OsObject), alignof(OsObject)) as *OsObject;
     if object == null(*OsObject) { return object; }
     (*object).syntax = syntax;
-    (*object).term = pf_fresh(&(*check).proof, "Int");
     (*object).contract = os_record((*check).stage, syntax);
     (*object).parent = parent;
     (*object).scope = scope;
     (*object).next = (*check).objects;
     (*check).objects = object;
     if (*object).contract != null(*OsRecord) { (*object).domain = (*(*object).contract).domain; }
-    if parent != null(*OsObject) { (*object).domain = (*parent).domain; }
+    if (*object).domain != null(*CrustName) {
+        if (*object).domain != (*state).domain || (*state).brand == null(*OsScope) {
+            os_error(check, &(*syntax).loc, "managed value requires its declared domain authority"); return null(*OsObject);
+        }
+        (*object).brand = (*state).brand;
+    }
+    if parent != null(*OsObject) { (*object).domain = (*parent).domain; (*object).brand = (*parent).brand; }
     var flags: u32 = OS_LIVE | OS_NONNULL;
     if initialized { flags = flags | OS_READY; }
     os_mark(check, state, object, flags);
@@ -52,7 +55,7 @@ fn os_fields(state: *OsState, object: *OsObject) -> *OsSlot {
 
 fn os_set_fields(check: *OsCheck, state: *OsState, object: *OsObject, fields: *OsSlot) -> unit {
     os_mark(check, state, object, os_flags(state, object));
-    if !os_failed(check) { (*(*state).facts).fields = fields; }
+    if !os_failed(check) { (*(*state).facts[os_fact_bucket(object as *u8)]).fields = fields; }
 }
 
 // An owned pointer promises an initialized value of its declared type.
@@ -62,12 +65,11 @@ fn os_unfold(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
     os_mark(check, state, object, os_flags(state, object) & ~OS_SUMMARY);
     os_object_fields(check, state, object, true);
     os_abstract_value(check, state, object, (*object).uncertain);
-    if (*object).readonly { os_readonly(check, state, object); }
 }
 
 fn os_object_fields(check: *OsCheck, state: *OsState, object: *OsObject, initialized: bool) -> unit {
     var syntax: *CrustTypeSyntax = (*object).syntax;
-    if (*syntax).kind != CRUST_T_NAME { return; }
+    if (*syntax).kind != CRUST_T_NAME || os_opaque((*object).contract) { return; }
     var global: *RsGlobal = rs_global((*(*check).stage).resources, (*syntax).name);
     var field: *CrustField = (*(*global).source).fields;
     var fields: *OsSlot = null(*OsSlot);
@@ -120,11 +122,6 @@ fn os_field_value(check: *OsCheck, state: *OsState, slot: *OsSlot) -> *OsValue {
         if target == null(*OsObject) { return null(*OsValue); }
         (*target).heap = true;
         (*target).owner = (*slot).object;
-        var entry: *PfField = os_field_state(state, (*slot).field);
-        if entry != null(*PfField) {
-            (*target).term = pf_select(&(*check).proof, (*entry).value, (*(*slot).object).term);
-        }
-        os_heap_assume_object(check, state, target, true);
         os_mark(check, state, target, (os_flags(state, target) & ~OS_NONNULL) | OS_SUMMARY);
     }
     var result: *OsValue = os_value(check, syntax, target, (*syntax).kind == CRUST_T_POINTER);
@@ -158,6 +155,7 @@ fn os_local(state: *OsState, name: *CrustName) -> *OsSlot {
 fn os_initialized(check: *OsCheck, state: *OsState, object: *OsObject) -> bool {
     if object == null(*OsObject) { return true; }
     if (os_flags(state, object) & OS_DESTROYED) != 0u32 { return false; }
+    if os_opaque((*object).contract) { return (os_flags(state, object) & OS_READY) != 0u32; }
     if (os_flags(state, object) & OS_SUMMARY) != 0u32 { return true; }
     if !os_enter(check, &(*(*object).syntax).loc) { return false; }
     var valid: bool = true;
@@ -181,19 +179,4 @@ fn os_initialized_field(check: *OsCheck, state: *OsState, slot: *OsSlot) -> bool
         if !(*slot).owns || (os_flags(state, (*value).object) & OS_ABSENT) != 0u32 { return true; }
     }
     return os_initialized(check, state, (*value).object);
-}
-
-fn os_readonly(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
-    if !os_enter(check, &(*(*object).syntax).loc) { return; }
-    (*object).readonly = true;
-    (*object).abstract = true;
-    var slot: *OsSlot = os_fields(state, object);
-    while slot != null(*OsSlot) && !os_failed(check) {
-        var value: *OsValue = os_bound(state, slot);
-        if value != null(*OsValue) && (*value).object != null(*OsObject) {
-            os_readonly(check, state, (*value).object);
-        }
-        slot = (*slot).next;
-    }
-    (*check).depth = (*check).depth - 1usize;
 }

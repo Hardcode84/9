@@ -1,48 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn os_call_bindings(check: *OsCheck, contract: *OsFunction, arguments: **OsValue) -> *OsBinding {
-    var result: *OsBinding = null(*OsBinding);
-    var parameter: *CrustParam = (*(*contract).declaration).params;
-    var index: usize = 0usize;
-    while parameter != null(*CrustParam) && !os_failed(check) {
-        var syntax: *CrustTypeSyntax = (*parameter).syntax_type;
-        if os_borrowed(syntax) { syntax = (*syntax).base; }
-        result = os_binding(check, (*parameter).name, syntax, os_term(check, arguments[index]), result);
-        parameter = (*parameter).next;
-        index = index + 1usize;
-    }
-    return result;
-}
-
-fn os_check_precondition(check: *OsCheck, state: *OsState, contract: *OsFunction,
-                          bindings: *OsBinding, location: *CrustLoc) -> bool {
-    var term: *u8 = os_conditions(check, state, (*contract).requires, bindings);
-    if os_failed(check) { return false; }
-    if !c_equal(term, "true") && !os_prove(check, state, term, location, "call does not establish the function precondition") {
-        return false;
-    }
-    return os_close(check, state, location);
-}
-
-fn os_heap_havoc(check: *OsCheck, state: *OsState, domain: *CrustName, contract: *OsFunction, bindings: *OsBinding) -> unit {
-    var global: *RsGlobal = (*(*(*check).stage).resources).first_global;
-    while global != null(*RsGlobal) && !os_failed(check) {
-        var schema: *OsRecord = crust_map_get(&(*(*check).stage).records, (*global).source as usize) as *OsRecord;
-        if os_tracked(schema) && (*schema).domain == domain {
-            var field: *CrustField = (*(*schema).declaration).fields;
-            while field != null(*CrustField) && !os_failed(check) {
-                if contract == null(*OsFunction) || !(*contract).has_modifies || os_writes(contract, field) {
-                    var entry: *PfField = os_field_state(state, field);
-                    pf_field_set(&(*check).proof, &(*state).proof, field,
-                        os_havoc_field(check, state, schema, field, contract, bindings), (*entry).initialized);
-                }
-                field = (*field).next;
-            }
-        }
-        global = (*global).next;
-    }
-}
-
 fn os_call_frame(check: *OsCheck, contract: *OsFunction, location: *CrustLoc) -> bool {
     if (*contract).effect < OS_EDIT || !(*(*check).function).has_modifies { return true; }
     if !(*contract).has_modifies {
@@ -66,20 +23,8 @@ fn os_call_construction(check: *OsCheck, state: *OsState, contract: *OsFunction,
         if os_field((*contract).initializes, (*parameter).name) != null(*OsField) {
             var object: *OsObject = (*arguments[index]).object;
             os_constructed_fields(check, state, object, location);
-            os_mark(check, state, object, os_flags(state, object) | OS_READY | OS_PUBLISHED);
-            os_pin(check, state, object);
-            var heap: *OsHeap = os_heap(state, (*object).contract);
-            if heap != null(*OsHeap) {
-                os_set_heap(check, state, (*object).contract,
-                    pf_store(&(*check).proof, (*heap).live, (*object).term, "true"));
-                var field: *CrustField = (*(*(*object).contract).declaration).fields;
-                while field != null(*CrustField) && !os_failed(check) {
-                    var entry: *PfField = os_field_state(state, field);
-                    pf_field_set(&(*check).proof, &(*state).proof, field, (*entry).value,
-                        pf_store(&(*check).proof, (*entry).initialized, (*object).term, "true"));
-                    field = (*field).next;
-                }
-            }
+            os_mark(check, state, object, os_flags(state, object) | OS_READY);
+            if (*(*object).contract).stable { os_pin(check, state, object); }
         }
         parameter = (*parameter).next;
         index = index + 1usize;
@@ -88,13 +33,8 @@ fn os_call_construction(check: *OsCheck, state: *OsState, contract: *OsFunction,
 
 fn os_apply_contract(check: *OsCheck, state: *OsState, contract: *OsFunction,
                       arguments: **OsValue, location: *CrustLoc) -> unit {
-    var bindings: *OsBinding = os_call_bindings(check, contract, arguments);
-    if !os_check_precondition(check, state, contract, bindings, location) || !os_call_frame(check, contract, location) { return; }
-    if (*contract).effect >= OS_EDIT { os_heap_havoc(check, state, (*contract).domain, contract, bindings); }
+    if !os_call_frame(check, contract, location) { return; }
     os_call_construction(check, state, contract, arguments, location);
-    // The independently checked callee restores the complete type contract.
-    if !os_closed(state) { os_snapshot(check, state); }
-    os_assume(check, state, os_conditions(check, state, (*contract).ensures, bindings));
 }
 
 fn os_contract_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> unit {
@@ -104,12 +44,9 @@ fn os_contract_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> uni
         if value == null(*OsValue) || (*value).object == null(*OsObject) {
             os_error(check, location, "initializes must name live output storage"); return;
         }
-        os_heap_publish(check, state, (*value).object, location);
+        os_publish_value(check, state, (*value).object, location);
         item = (*item).next;
     }
-    if !os_close(check, state, location) { return; }
-    var term: *u8 = os_conditions(check, state, (*(*check).function).ensures, (*check).parameters);
-    if !os_failed(check) && !c_equal(term, "true") { os_prove(check, state, term, location, "function does not establish its postcondition"); }
 }
 
 fn os_constructed_fields(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
@@ -124,34 +61,4 @@ fn os_constructed_fields(check: *OsCheck, state: *OsState, object: *OsObject, lo
     }
     os_mark(check, state, object, os_flags(state, object) | OS_READY);
     (*check).depth = (*check).depth - 1usize;
-}
-
-fn os_havoc_field(check: *OsCheck, state: *OsState, schema: *OsRecord, field: *CrustField,
-                   contract: *OsFunction, bindings: *OsBinding) -> *u8 {
-    var entry: *PfField = os_field_state(state, field);
-    var fresh: *u8 = pf_fresh(&(*check).proof, os_array_sort(check, (*field).syntax_type));
-    var writable: *u8 = os_live_term(check, state, schema, "os!row");
-    if contract != null(*OsFunction) {
-        var item: *OsField = (*contract).initializes;
-        while item != null(*OsField) && !os_failed(check) {
-            var binding: *OsBinding = os_find_binding(bindings, (*item).name);
-            if binding != null(*OsBinding) && (*(*binding).term.syntax).kind == CRUST_T_POINTER &&
-               os_record((*check).stage, (*(*binding).term.syntax).base) == schema {
-                writable = pf_or(&(*check).proof, writable, pf_eq(&(*check).proof, "os!row", (*binding).term.value));
-            }
-            item = (*item).next;
-        }
-    }
-    var value: *u8 = pf_ite(&(*check).proof, writable,
-        pf_select(&(*check).proof, fresh, "os!row"), pf_select(&(*check).proof, (*entry).value, "os!row"));
-    return pf_define(&(*check).proof, os_array_sort(check, (*field).syntax_type),
-        pf_unary(&(*check).proof, "lambda ((os!row Int))", value));
-}
-
-fn os_find_binding(bindings: *OsBinding, name: *CrustName) -> *OsBinding {
-    while bindings != null(*OsBinding) {
-        if (*bindings).name == name { return bindings; }
-        bindings = (*bindings).next;
-    }
-    return null(*OsBinding);
 }

@@ -1,0 +1,58 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Declare an in-place output after collection and before lowering bodies.
+// A normal return initializes the complete pointee. The caller must check this
+// contract before emission. Deferred construction is rejected.
+fn rs_initializes(stage: *RsStage, signature: *CrustTypeSyntax, index: usize) -> bool {
+    if index >= (*signature).param_count || (*(*signature).params[index]).kind != CRUST_T_POINTER {
+        rs_error(stage, &(*signature).loc, "initialization output requires a pointer parameter"); return false;
+    }
+    rs_put(stage, &(*stage).initialized_parameters, &(*signature).params[index] as usize, signature as *u8);
+    return !(*stage).failed;
+}
+
+fn rs_output_argument(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*source).loc;
+    while (*source).kind == CRUST_E_GROUP { source = (*source).left; }
+    if (*source).kind == CRUST_E_NAME { return rs_forward_output(function, source, output); }
+    if (*source).kind != CRUST_E_UNARY || (*source).op != CRUST_OP_ADDRESS || (*(*source).left).kind != CRUST_E_NAME {
+        rs_error(stage, location, "in-place output requires the address of an uninitialized local"); return null(*RsValue);
+    }
+    var place: *RsValue = rs_place(function, (*source).left, output, true, true);
+    if place == null(*RsValue) || (*stage).failed { return null(*RsValue); }
+    if (*place).local == null(*RsLocal) || (*(*place).local).initialized || (*(*place).local).mode != 0u32 {
+        rs_error(stage, location, "in-place output cannot replace initialized storage"); return null(*RsValue);
+    }
+    var value: *RsValue = rs_value(function, rs_pointer(stage, (*place).syntax),
+        rs_unary(stage, CRUST_OP_ADDRESS, (*place).expression, location));
+    if value != null(*RsValue) { (*value).local = (*place).local; (*value).initializes = true; }
+    return value;
+}
+
+fn rs_call_argument(function: *RsFunction, expression: *CrustExpr, signature: *CrustTypeSyntax,
+                    index: usize, output: *RsStatements) -> *RsValue {
+    if crust_map_get(&(*(*function).stage).initialized_parameters, &(*signature).params[index] as usize) != null(*u8) {
+        return rs_output_argument(function, expression, output);
+    }
+    return rs_expr(function, expression, output);
+}
+
+fn rs_complete_outputs(function: *RsFunction, values: **RsValue, count: usize) -> unit {
+    var index: usize = 0usize;
+    while index < count {
+        if (*values[index]).initializes && (*values[index]).local != null(*RsLocal) { rs_live(function, (*values[index]).local, true); }
+        index = index + 1usize;
+    }
+}
+
+fn rs_forward_output(function: *RsFunction, source: *CrustExpr, output: *RsStatements) -> *RsValue {
+    var value: *RsValue = rs_expr(function, source, output);
+    if value == null(*RsValue) { return value; }
+    if (*(*value).syntax).kind != CRUST_T_POINTER {
+        rs_error((*function).stage, &(*source).loc, "forwarded output requires a pointer"); return null(*RsValue);
+    }
+    (*value).local = null(*RsLocal);
+    (*value).initializes = true;
+    return value;
+}

@@ -92,10 +92,9 @@ does not create a cleanup obligation for the returned raw pointer.
 
 Plain resource checking requires `unsafe` for this operation. In that mode,
 the programmer must meet the consumed-read contract. The
-[closed-program memory stage](../../examples/intrusive/README.md#closed-program-proof-examples) enforces
-it without `unsafe`, including in subsequent cleanup and called bodies. It
-consumes the transfer facts retained with the checked operations. A source
-loan that forbids writing the place also forbids moving its pointer.
+[ownership stage](../../docs/ownership-model.md) checks moves through declared
+owned storage and rejects unchecked aliases. A source loan that forbids writing
+the place also forbids moving its pointer.
 
 ### Returned views
 
@@ -266,14 +265,7 @@ from final target GCC compilation and linking. They also report emitted size
 and cleanup growth. Passing resource tests alone is not a speed result.
 
 The stage proves local ownership and loan rules, including returned views.
-The separate [memory proof tutorial](../../examples/ownership/README.md) checks
-complete seed programs and direct pointer accesses. It does not consume this
-stage's cleanup plans and cannot verify a resource program from its lowered
-tree alone. Persistent intrusive-list links in the resource profile
-need an additional observer-validity contract across unlink, destruction, and
-storage reuse. The current source types do not express that contract. The
-[static ownership experiment](../../docs/exploration/language-exploration.md#executable-experiments-and-model-selection)
-selects erased permissions and verified library contracts. Source owners,
-cleanup plans, projected loans, and destructive call effects must obey those
-contracts before a Crust application can use the checked list. Neither a
-resource drop nor a raw pointer establishes them.
+The [ownership stage](../../docs/ownership-model.md) adds local memory and
+interface checks. Opaque container implementations require explicit root-selected
+trust. Raw pointer operations in the resource-only profile still need the
+source's explicit unsafe boundary; cleanup alone cannot establish memory safety.

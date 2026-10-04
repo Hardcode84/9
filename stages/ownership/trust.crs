@@ -1,0 +1,156 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Select this declaration explicitly in the compilation program before checking.
+// Imported receipts retain the same choice. Source annotations cannot grant it.
+fn os_trust(stage: *OsStage, declaration: *CrustDecl) -> bool {
+    rs_put((*stage).resources, &(*stage).trusted, declaration as usize, declaration as *u8);
+    return !(*(*stage).resources).failed;
+}
+
+fn os_trusted(stage: *OsStage, declaration: *CrustDecl) -> bool {
+    return crust_map_get(&(*stage).trusted, declaration as usize) != null(*u8);
+}
+
+fn os_trust_sources(stage: *OsStage, sources: *CrustSource, count: usize) -> bool {
+    var index: usize = 0usize;
+    while index < count {
+        if !os_read(stage, &sources[index], 0usize, sources[index].size) { return false; }
+        var declaration: *CrustDecl = (*(*(*(*stage).resources).context).last_unit).declarations;
+        while declaration != null(*CrustDecl) {
+            if !os_trust(stage, declaration) { return false; }
+            declaration = (*declaration).next;
+        }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn os_opaque(schema: *OsRecord) -> bool {
+    return schema != null(*OsRecord) && (*schema).opaque;
+}
+
+fn os_scoped(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {
+    var schema: *OsRecord = os_record((*check).stage, syntax);
+    return schema != null(*OsRecord) && (*schema).scoped;
+}
+
+fn os_validate_opaque(check: *OsCheck, global: *RsGlobal, schema: *OsRecord) -> unit {
+    var location: *CrustLoc = &(*(*global).source).loc;
+    if !os_trusted((*check).stage, (*global).source) && !os_imported((*check).stage, (*global).source) {
+        os_error(check, location, "opaque implementation requires explicit trust from the compilation program"); return;
+    }
+    if (*schema).scoped && ((*schema).domain == null(*CrustName) || (*global).resource != null(*RsResource) || (*schema).stable) {
+        os_error(check, location, "scoped representation requires a domain and cannot have destruction or stable storage"); return;
+    }
+    if (*schema).stable && (*global).resource == null(*RsResource) {
+        os_error(check, location, "stable opaque storage requires a retirement destructor"); return;
+    }
+    if (*global).resource != null(*RsResource) { os_validate_retirement(check, global, schema); }
+}
+
+fn os_validate_retirement(check: *OsCheck, global: *RsGlobal, schema: *OsRecord) -> unit {
+    var location: *CrustLoc = &(*(*global).source).loc;
+    {
+        var destructor: *OsFunction = os_function((*check).stage, (*(*global).resource).drop_name);
+        if destructor == null(*OsFunction) || (*destructor).domain != (*schema).domain ||
+           ((*schema).domain != null(*CrustName) && (*destructor).effect != OS_RECLAIM) {
+            os_error(check, location, "managed retirement requires reclamation access to the same domain"); return;
+        }
+        if !os_trusted((*check).stage, (*destructor).declaration) && !os_imported((*check).stage, (*destructor).declaration) {
+            os_error(check, location, "opaque retirement must belong to the selected trusted implementation");
+        }
+    }
+}
+
+fn os_scope_origin(check: *OsCheck, state: *OsState, domain: *CrustName, location: *CrustLoc) -> *OsScope {
+    var scope: *OsScope = (*state).scope;
+    while scope != null(*OsScope) && !(*scope).access { scope = (*scope).parent; }
+    if scope == null(*OsScope) && (*(*check).function).effect != OS_RECLAIM { scope = (*state).scope; }
+    if scope == null(*OsScope) || (*state).domain != domain {
+        os_error(check, location, "scoped result requires a read or edit access scope"); return null(*OsScope);
+    }
+    return scope;
+}
+
+fn os_scoped_result(check: *OsCheck, state: *OsState, contract: *OsFunction, location: *CrustLoc) -> *OsValue {
+    var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
+    var schema: *OsRecord = os_record((*check).stage, syntax);
+    var scope: *OsScope = os_scope_origin(check, state, (*schema).domain, location);
+    if scope == null(*OsScope) { return null(*OsValue); }
+    var object: *OsObject = os_object(check, state, syntax, null(*OsObject), scope, true);
+    var value: *OsValue = os_value(check, syntax, object, false);
+    if value != null(*OsValue) { (*value).owner = true; (*value).fresh = true; (*value).borrow_scope = scope; }
+    return value;
+}
+
+fn os_opaque_view(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax,
+                  source: *OsValue, location: *CrustLoc) -> *OsValue {
+    var base: *CrustTypeSyntax = (*syntax).base;
+    var object: *OsObject = null(*OsObject);
+    if (*base).kind == CRUST_T_NAME {
+        object = os_object(check, state, base, null(*OsObject), (*source).borrow_scope, true);
+        if object == null(*OsObject) { return null(*OsValue); }
+        (*object).owner = (*source).object;
+        (*object).domain = (*(*source).object).domain;
+        (*object).brand = (*(*source).object).brand;
+        (*object).aliased = true;
+    }
+    var place: *OsSlot = os_slot(check, base, null(*CrustName), (*source).object, (*source).borrow_scope);
+    var value: *OsValue = os_value(check, base, object, false);
+    if place == null(*OsSlot) || value == null(*OsValue) { return null(*OsValue); }
+    os_set(check, state, place as *u8, value, OS_READY);
+    (*value).place = place;
+    (*value).loan = (*source).loan;
+    (*value).loan = os_loan_new(check, state, value, (*syntax).kind, location);
+    (*value).syntax = syntax;
+    (*value).borrow_scope = (*source).borrow_scope;
+    return value;
+}
+
+fn os_prepare_outputs(stage: *OsStage) -> bool {
+    var resources: *RsStage = (*stage).resources;
+    var global: *RsGlobal = (*resources).first_global;
+    while global != null(*RsGlobal) && !(*resources).failed {
+        var contract: *OsFunction = crust_map_get(&(*stage).functions, (*global).source as usize) as *OsFunction;
+        if contract != null(*OsFunction) {
+            var parameter: *CrustParam = (*(*global).source).params;
+            var index: usize = 0usize;
+            while parameter != null(*CrustParam) && !(*resources).failed {
+                if os_field((*contract).initializes, (*parameter).name) != null(*OsField) {
+                    rs_initializes(resources, (*global).syntax, index);
+                }
+                index = index + 1usize;
+                parameter = (*parameter).next;
+            }
+        }
+        global = (*global).next;
+    }
+    return !(*resources).failed;
+}
+
+fn os_brand_access(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
+    if object == null(*OsObject) || (*object).brand == null(*OsScope) { return true; }
+    if (*object).brand != (*state).brand {
+        os_error(check, location, "managed values must use the same domain instance"); return false;
+    }
+    return true;
+}
+
+fn os_brand_store(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue, location: *CrustLoc) -> bool {
+    var object: *OsObject = (*value).object;
+    if !os_brand_access(check, state, object, location) { return false; }
+    if object == null(*OsObject) || (*object).brand == null(*OsScope) { return true; }
+    if !os_scope_contains((*object).brand, (*slot).scope) {
+        os_error(check, location, "managed value cannot escape its domain instance"); return false;
+    }
+    return true;
+}
+
+fn os_brand_return(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> bool {
+    var object: *OsObject = (*value).object;
+    if object == null(*OsObject) || (*object).brand == null(*OsScope) { return true; }
+    if (*object).brand != (*check).origin {
+        os_error(check, location, "returned value cannot escape a fresh domain instance"); return false;
+    }
+    return true;
+}

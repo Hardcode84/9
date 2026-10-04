@@ -2,40 +2,32 @@
 
 # Ownership stage contract
 
-The ownership stage checks owners, loans, storage fields, and function
-interfaces. It uses the public reader and AST APIs. It does not change the
-C99 core. The [tutorial](ownership.md) introduces the source notation.
-
-This document describes the implemented checker. Its graph checks still use
-Z3. The [replacement design](ownership-design.md) uses bounded local rules and
-an explicitly trusted container implementation behind a checked API. It is not
-implemented. Keep the existing checks until the replacement passes its stated
-gate. Removing the solver call does not establish safe destruction.
+The stage uses finite body-local ownership, initialization, loan, and access
+facts. It has no graph solver or whole-program analysis. All rules are in
+Crust. The C99 core has no ownership policy. Read the [tutorial](ownership.md)
+for examples and the [design](ownership-design.md) for the implementation boundary.
 
 ## Owners and loans
 
-A `resource` declaration supplies a cleanup function. A record can own resource
-fields. `owns(field)` makes a scalar field own a native resource. The field
-can be an integer or an opaque pointer. `owns(field: storage)` also grants
-ownership of the allocation addressed by that pointer. `move` transfers an
-owner. A move does not copy the destruction duty.
+`resource` adds a destructor. `move` transfers its cleanup duty. `read T` lends
+shared access; `mut T` lends exclusive access. Ordinary values remain copyable.
+The checker rejects use after move, duplicate owners, uninitialized reads,
+conflicting loans, and destruction through a borrower. Named loans last to the
+end of their lexical scope. Reborrows prevent conflicting use of their parent.
 
-`read T` lends shared access. `mut T` lends exclusive access. The stage rejects
-conflicting loans, reads of moved values, and destruction through a borrower.
-A returned view uses `from parameter.field` to identify the storage that keeps
-it valid. The caller retains that loan for the result's scope.
+Automatic cleanup and explicit `drop` require the same destructor permission.
+Resources drop in reverse declaration order. Destructors run before embedded
+resource fields drop, in reverse field order. A destructor must consume its
+owned native fields and leave embedded resources initialized for cleanup.
+A trap ends the process; it does not unwind resources.
 
-Moving an owned field out of published storage requires reclaim access and
-proof that no surviving reference can observe the incomplete containing record.
-The record must be detached before that transfer. The allocation remains owned;
-only access through retained references ends. Owned paths use the owner and
-initialization rules separately from the set of published objects.
-
-A retained reference gives access to an object. It does not grant ownership of
-that object's resource fields. To transfer those fields, use an ownership
-origin. A mutable loan of a resource also requires an ownership origin.
-A cursor can lend a scalar payload field without acquiring its containing
-object's destruction duty.
+`defer call(...)` captures arguments at registration and invokes a unit-returning
+source function at scope exit. Moves transfer owners into the capture; borrows
+remain live until the call runs. Deferred calls and local cleanup run in reverse
+registration order. The checker applies mutable effects when the call runs.
+In-place construction cannot be deferred. Wrap a foreign function in a checked
+unit-returning source function before deferring it. This keeps native acquisition
+and consumption in the ordinary checked call path.
 
 ## Native resources
 
@@ -148,201 +140,135 @@ loan lowers to one ordinary pointer. View-only records need no generated
 cleanup calls or runtime lifetime state. The [stored-view example](../examples/ownership-basics/views.crs)
 checks native behavior, moves, reborrows, and pointer layout.
 
-## Storage interfaces
 
-A domain declares the complete set of record types whose storage it governs:
+## Opaque storage and explicit trust
+
+The root selects trusted declarations with `os_trust(stage, declaration)`, or
+supplies captured trusted sources to `ownership_program`. Source annotations
+cannot grant trust. Every selected body still passes syntax, type, and resource
+lowering checks. Its pointer algorithm is not checked by the ownership pass.
+All other bodies are checked from their own source and published interfaces.
 
 ```crust
-domain Graph(Node, Owner);
-record Node { next: *Node; value: i64; }
-    domain(Graph) references(next);
-resource Owner { node: *Node; }
-    domain(Graph) owns(node: storage) drop owner_drop;
+domain Graph(Node, Owner, Head, Cursor);
+record Node { prev: *Node; next: *Node; value: i64; } opaque domain(Graph);
+resource Owner { node: *Node; } opaque domain(Graph) drop owner_drop;
+resource Head { node: Node; } opaque stable domain(Graph) drop head_drop;
+record Cursor { node: *Node; } opaque scoped domain(Graph);
 ```
 
-`references` declares non-owning pointer fields. Each target must have a record
-type in the same domain. The pointer representation is unchanged. A domain is
-an access boundary; it does not select an allocator.
+Opaque fields are private to the selected implementation. Checked clients
+cannot project, construct, cast, or duplicate the representation. `stable`
+requires a resource destructor. After in-place construction, its storage cannot
+move. `scoped` requires a domain and forbids a destructor or stable storage.
+It produces an affine value whose origin is the current read or edit scope.
+The stage has no built-in cursor, list, tree, membership, or navigation rule.
 
-The type list is closed. Every record with that domain must appear in the list.
-An imported interface includes this declaration. A client cannot add a new
-storage type to that interface without changing and checking the interface.
-This makes every possible retained reference field visible at the function
-boundary. The checker does not inspect callers or search function bodies for
-possible references.
+A domain lists the types in one retention boundary. Only the root can admit
+opaque types and their implementations. Merely naming a domain cannot add a
+persistent observer. Outside observers must retain ordinary loans.
 
-Allocated objects have separate owners. Stable stack objects can also belong
-to a domain. Publication makes their address fixed. The checker rejects a move
-or copy of published storage, including a move of its containing record.
+A trusted implementation must keep internal references valid, transfer each
+owner once, obey access effects, and remove every admitted internal reference
+before storage retirement. Node retirement must handle all memberships. Head
+retirement must detach survivors. A missing pointer store in a trusted body is
+a library defect, not a compiler rejection. Native tests and sanitizers test
+these bodies separately from checked-client rejection tests.
 
-## Access
+## Domain instances and access
 
-| Contract | Permission |
+`domain Graph { ... }` introduces a fresh static identity and reclamation
+permission. Values from distinct instances cannot mix or escape their instance
+scope. There is no runtime domain value, allocator, lock, or counter.
+
+`access(MODE, Graph)` on a helper is an abstract domain interface. A call binds
+it to the caller's current instance. The body is checked once, with no caller
+inspection or specialization. A function with that interface can return an
+owner in the same domain; it cannot return an owner from a fresh nested instance.
+Only one domain instance is accessible at a time in this profile. End a nested
+instance scope to restore the outer permission.
+
+| Mode | Permission |
 | --- | --- |
-| `access(read, D)` | Read initialized storage in `D` |
-| `access(edit, D)` | Read and change storage in `D` |
-| `access(reclaim, D)` | Construct and destroy storage in `D` |
+| `read` | Read published storage; update an opaque local handle only through declared operations. |
+| `edit` | Change links or payload; preserve storage lifetime and address. |
+| `reclaim` | Construct and retire storage; no outstanding domain views. |
 
-A function can call an interface that requires the same or weaker permission.
-`read D { ... }` and `edit D { ... }` reduce the current permission for a scope.
-They cannot acquire permission that the function does not have.
+`read Graph { ... }` and `edit Graph { ... }` narrow existing permission.
+They cannot regain stronger permission. Cleanup inside either scope cannot
+invoke a reclamation destructor. Put its owner outside that access scope, or
+consume it before entering the scope. Cleanup after scope exit uses the restored
+outer permission only after scoped views have ended.
 
-A local pointer into a domain is a cursor. It cannot escape its access scope.
-Reclamation excludes active domain cursors and payload loans. Thus a cursor
-cannot remain usable across the destruction and reuse of its target's storage.
-The rule needs no runtime generation number or allocation registry.
+An opaque scoped result retains its access scope. It does not itself borrow
+payload access. A library operation can navigate or edit links while cursors
+exist. A returned payload `read` or `mut` view separately borrows the domain's
+access permission and its declared origin. Potential aliases in one domain are
+conservative: a mutable payload view blocks other read or edit calls unless
+they receive that view's authority. Shared payload loans block conflicting edits.
+Neither cursor bits nor address reuse can create a new checked lifetime.
 
-## Field conditions
+## In-place construction and transparent storage
 
-A record can state conditions with ordinary typed expressions:
+`initializes(parameter)` promises complete initialization on normal return.
+The parameter must point to a record in the function's declared domain.
+A client supplies `&local` for uninitialized final storage. Each output is
+reserved exclusively while arguments are checked. It cannot replace a live
+resource. The resource lowerer schedules cleanup only after construction.
+There is no implicit zero fill or runtime initialization flag.
 
-```crust
-domain Links(Entry);
-record Entry { peer: *Entry; }
-    domain(Links) references(peer)
-    invariant((*self).peer == null(*Entry) || (*(*self).peer).peer == self);
-```
+A checked wrapper can forward an output parameter when its own interface also
+states `initializes`. The wrapper must initialize the output before each return.
+Opaque constructors and destructors require root-selected trust. Transparent
+owned allocations use `owns(field: storage)`, explicit allocation and null
+checks, field initialization, and release. See the [heap example](../examples/ownership-basics/heap.crs).
+Transparent records cannot store non-owning raw pointers. Use view fields for
+ordinary borrows or an opaque interface for persistent internal aliases.
 
-`self` denotes the current object. Conditions can use field paths, pointer
-and scalar comparisons, Boolean operators, null, and scalar literals.
-Short-circuit operators guard the validity of the right operand. Conditions
-cannot call functions, mutate storage, allocate, or contain user solver code.
-Field maps cover types with `references` or `invariant`, and reference target
-types. Scalar-field reads outside those maps have unknown values in the proof;
-the checker does not retain a value that another alias could change.
+The stage rejects Boolean heap contracts (`invariant`, `requires`, `ensures`)
+and raw pointer arguments without an initialization interface. `modifies`
+can restrict field classes written by a checked function; it does not assert
+heap relationships. A failed or unsupported check never selects trust.
 
-For every published object, the checker requires these facts:
+## Local flow and loops
 
-1. Its fields are initialized.
-2. Each retained pointer is null or refers to live storage of the declared type.
-3. Each declared `invariant` is true.
+Continuing branches must agree on owner consumption and loan origins. Scalar
+initialization uses intersection. No drop flags reconcile different owner
+states. Initialize or consume owners explicitly in both branches.
 
-The condition applies to every object of the declared type, including objects
-not named by local variables. Functions can temporarily break a condition while
-they update fields. They must restore the complete conditions before an ordinary
-call, a loop boundary, or return. An observer cannot run during a partial update.
+The checker checks one loop body from its declared local type state. Continuing
+backedges must preserve initialization, ownership, and loan origins. Movable
+owner records can be replaced with new initialized owners. The checker forgets
+old allocation and native-handle validity facts; check them again before use.
+It does not unroll iterations, solve arithmetic conditions, or search heap graphs.
+An opaque cursor can advance through a declared operation. Raw pointer merges
+are rejected. `break` and `continue` have no local-state join implementation in
+this profile and are rejected; use a loop condition or return.
 
-The stage has no rule for a particular field name, pointer pair, or container.
-The same field-expression checks apply to an index, a parent reference, or a
-list node. The conditions that each data structure needs belong in its types
-and function interfaces.
+## Independent libraries
 
-## Function conditions and changed fields
+`ownership_publish(request, directory, receipt, trusted, count)` checks the
+provider's untrusted bodies and publishes its interface and native object.
+`ownership_import_program(request, imports)` checks clients against those
+interfaces and links captured objects. No provider body is read at import.
 
-```crust
-fn clear(entry: *Entry) -> unit access(edit, Links)
-    modifies(Entry.peer)
-    requires(entry != null(*Entry))
-    ensures((*entry).peer == null(*Entry)) {
-    var peer: *Entry = (*entry).peer;
-    if peer != null(*Entry) { (*peer).peer = null(*Entry); }
-    (*entry).peer = null(*Entry);
-}
-```
-
-`requires` states a caller obligation. `ensures` states a condition established
-by the body. Parameter names in conditions denote the supplied argument values.
-Field reads use the state at the checked boundary. Assigning a local parameter
-does not change that condition binding. `modifies(Type.field, ...)` names the
-field classes the function can change. This example permits changes to `peer`
-on any `Entry` in the domain.
-An empty `modifies()` clause permits no domain field changes. Without a clause,
-an edit or reclaim interface permits all domain fields to change.
-
-The checker verifies direct writes and callee write contracts against that
-list. At a call, it checks the precondition, forgets the old values of permitted
-fields, and uses the verified postcondition and restored type conditions.
-It does not execute or expand the callee body. Unchanged field classes retain
-their values.
-
-A function's implementation is checked even when no other function calls it.
-An external interface needs a verified library receipt, or an explicit foreign
-allocation, release, scalar, or native resource contract. Copying interface text
-does not make an external implementation trusted.
-
-## Construction and destruction
-
-`initializes(parameter)` identifies unpublished output storage. A constructor
-must initialize every field and establish the record conditions before return.
-The caller must supply suitable checked storage. It cannot use this contract
-to replace a published object. A nullable allocation still needs a null test
-before a constructor that requires a non-null pointer.
-
-An owner can publish an allocation when it transfers it into an owned field.
-An ordinary pointer or borrow argument must also satisfy its storage type before
-the callee can use it. This checks initialization at the boundary, including
-construction done directly in the allocation's final storage.
-
-Destruction has one retained-reference rule: no surviving declared reference
-field may point into the storage being destroyed. The query covers each field
-in the closed domain schema and an arbitrary live source object. References
-inside the same retiring allocation do not prevent its destruction. Local
-cursors and loans have separate lifetime checks.
-
-A resource destructor must consume each present owned field. Embedded resources
-retain their declared cleanup order. Allocation failure paths must discharge
-all owners that were successfully constructed. The checker adds no runtime
-cleanup flags.
-
-## Local proof and loops
-
-The owner and loan analysis follows local control flow. Pointer field conditions
-use symbolic field maps and a solver. A successful obligation requires an
-UNSAT result for its negation. A timeout, unknown result, or malformed condition
-is an error. Each function has a separate solver context. Queries reuse its
-declarations; each query scopes its assumptions so that one path cannot supply
-premises to another. The context is released after the function check.
-
-Each function starts from its published type and function contracts. Heap
-conditions are instantiated at symbolic addresses; omitted instances weaken
-the premises. They cannot turn a failed proof into a successful proof.
-A destruction query uses an arbitrary surviving source address, not a list of
-allocations observed in a test run.
-
-Loops use an inductive check. The checker forgets local scalar values, including
-scalar loan targets, and widens assigned domain cursors. A helper or a mutable
-loan can change scalar storage without a direct assignment to its name.
-The entry state does not retain those scalar values as loop invariants. The
-checker checks the body and the backedge under that state. It does not choose
-a maximum list length or expand recursive calls.
-
-A loop can replace a local resource record. The record must be initialized and
-movable on entry and at each backedge. The checker uses its declared type as
-the invariant. It forgets the old owned targets and their null or native-handle
-validity facts. Test those values again before use. For example:
-
-```crust
-while chain.node != null(*Node) {
-    chain = chain_pop(move chain);
-}
-```
-
-The callee consumes the old chain and returns an initialized replacement. It
-is checked from its own interface. The loop needs no extra annotation. A
-replacement cannot overwrite a live owner, leave a moved field uninitialized,
-escape a loan, or move address-stable storage. Records with stored loans keep
-their existing origin contracts and cannot use this replacement rule.
-
-Other outer storage keeps its identity, initialization, and loan origins at
-the backedge. This includes fields reached through an owner or a borrowed
-record, not only the outer variable. A field condition must also hold at the
-boundary. An early return checks function exit and cleanup; it has no backedge.
-These checks add no runtime state.
+`OwnershipLibrary` retains the artifact path, digest, and explicit `trusted`
+status. The receipt binds interface bytes, object bytes, selected trust, and
+checker images. The root must preserve all three fields. A copied interface or
+an artifact with a different trust flag cannot authorize unchecked bodies.
+Publication requires a target source or root source in the request, in addition
+to any separately supplied trusted implementation sources.
 
 ## Output and verification
 
-Ownership data exists only during compilation. Field maps, access permissions,
-proof identities, and conditions do not appear in emitted code. The erasure
-check emits C before and after ownership verification and compares the output.
-RAII cleanup remains ordinary generated calls and follows the resource contract.
+Verification does not change the emitted C or native symbol table. Loans and
+permissions add no runtime checks, tags, counters, ownership chains, or drop
+flags. Cleanup and the library's explicit pointer operations remain ordinary
+code. The pointer representation is unchanged before optimization.
 
-The intrusive tutorial uses a full typed node as each sentinel. That is a
-visible representation choice in the source, not hidden ownership metadata.
-Its two sets of links support separate memberships. The example tests removal,
-individual release, allocation reuse, payload access, and head cleanup while
-other owners remain live.
-
-`make check-ownership` exercises the native programs and rejected programs.
-`make check-ownership-imports` checks bodyless provider interfaces and their
-artifact receipts. `make check-ownership-alloc` checks allocation failure paths
-in the compiler stage. Z3 is needed for the selected field-condition checks.
+Run `make check-ownership check-ownership-imports check-ownership-alloc`.
+The checks cover client rejection, native containers, address reuse, erasure,
+source-free imports, receipt tampering, and compiler allocation failures.
+Use `--sanitize` with the ownership Python tests for native ASan and UBSan.
+The [benchmark](../benchmarks/ownership/README.md) measures a compiled stage in
+fresh application builds and excludes target GCC compilation and linking.

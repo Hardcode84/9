@@ -340,69 +340,38 @@ in memory. These endpoints are different. Exclude target GCC compilation
 and linking from the current frontend measurements. Passing a functional
 test does not establish C-level compilation speed for that configuration.
 
-## Checked ownership target
+## Checked ownership
 
-Ownership belongs in an external Crust stage. Its rules must apply to storage,
-fields, owners, and loans. The implementation must not recognize container
-names, fixed pointer roles, or example source paths.
+The [ownership stage](ownership-model.md) uses finite local initialization,
+owner, loan, and domain-access facts. Each body is checked against declared
+interfaces. Calls do not expand bodies or inspect callers. Z3 and the earlier
+graph-proof stages are removed. The C99 core is unchanged.
 
-The [replacement design](ownership-design.md) uses finite local rules for
-owners, initialization, loans, and declared access effects. Check each function
-from its body and interfaces. Do not inspect callers, expand callees, or search
-the whole program. Do not depend on Z3, replace it with another general-purpose
-prover, or build an equivalent solver in the stage.
+The [intrusive implementation](../examples/intrusive/README.md) is explicitly
+trusted by the root. Its opaque types hide direct pointer fields. The provider
+must preserve internal references and unlink before retirement. The client
+checker enforces moves, scoped cursors, payload loans, stable storage, and
+reclamation requirements, including automatic cleanup. A missing pointer store
+inside a trusted body is a library defect, not a checked proof obligation.
+The [owning tree](../examples/ownership-graphs/README.md) uses the same rules.
 
-Permit an explicitly trusted container implementation behind an opaque checked
-API. The root selects this trust boundary. The library is responsible for its
-internal pointer algorithms. Its types declare retirement and retention
-contracts. The client checker enforces their ownership and access requirements,
-including those of implicit cleanup. A trusted body is not a verified proof.
+Fresh domain scopes have distinct compile-time identities. No domain value,
+pool, counter, generation tag, hidden ownership chain, or runtime pointer check
+is added. Verification leaves emitted C and native symbols unchanged.
+Native resource contracts cover both integer and opaque-pointer handles.
+Returned views state one exact input path. Local records can combine views
+from several sources; a returned multi-origin record or stored-origin replacement
+requires a richer interface and is rejected by this profile.
 
-Optional static domains separate access from reclamation. Cursors cannot
-outlive an access scope. Destruction requires reclamation authority, which is
-unavailable during access. The trusted retirement operation removes internal
-references before storage release or reuse. No pointer checks, generation
-numbers, pools, or membership counters are added.
+Independent library receipts bind bodyless interfaces, objects, checker images,
+and selected trust. Clients need no provider source. Native sanitizer tests
+cover trusted algorithms; rejection tests cover client obligations. The
+[benchmark](../benchmarks/ownership/README.md) records checking and emission
+separately from target GCC. Its optional-stage budget is not a C-speed claim.
 
-The [replacement gate](ownership-design.md#9-replacement-gate) requires a real
-two-membership intrusive program, individual release and reuse, an owning tree
-with parent references, and independent provider and client checks. Reject
-client lifetime errors; test trusted pointer algorithms with native execution
-and sanitizers. Compare emitted code and measure frontend cost separately from
-target compilation and linking. Do not add graph proof features before this
-gate passes. The implemented stage below still uses Z3.
-
-## Current safety stages
-
-The [ownership contract](ownership-model.md) specifies the modular stage.
-A closed domain schema enumerates storage types. Records declare `owns`,
-`references`, and ordinary Boolean field conditions. Functions declare access,
-construction outputs, preconditions, postconditions, and changed field classes.
-The checker verifies source bodies, then uses these interfaces at calls.
-
-The [intrusive tutorial](../examples/intrusive/README.md) is an ordinary client
-of these rules. Its removal and insertion functions contain direct pointer
-stores. The release rule checks every retained field in the schema at an
-arbitrary surviving source address. Node counts are not bounded by a test
-fixture or a whole-program execution trace.
-
-Owner and loan facts use local flow analysis. Field conditions use symbolic
-maps and Z3. Proof state erases before emission. Output comparison checks this
-boundary, and native tests exercise cleanup, individual allocation reuse,
-multiple memberships, and recursive owners. Provider artifacts carry a verified
-bodyless interface bound to their object bytes and checker identity.
-
-Scoped view records hold `read` or `mut` fields and transfer their loans with
-`move`. A returned view record uses an exact `from parameter.path` contract.
-Local lifetime checks, bodyless factory imports, and native pointer layout
-have executable tests. These basic view checks do not start Z3. A result with
-several independent origins or an update that replaces stored origins needs
-an interface that states those relationships; the current one-origin contract
-rejects it. See the [stored-view rules](ownership-model.md#stored-views).
-
-The separate [resource tutorial](../stages/resources/README.md) covers
-cleanup and `defer`. Closed-program memory proof examples use their own
-explicit proof stages. They do not change the modular ownership contract.
+The [resource tutorial](../stages/resources/README.md) covers the lower-level
+cleanup stage. Composers retain its plans and supply their own memory policy.
+The ownership stage adds local checks and explicit trusted container policy.
 
 ## Read next
 

@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
+const OS_NORMAL: u32 = 0u32;
+const OS_RETURN: u32 = 1u32;
+const OS_TRAP: u32 = 2u32;
+
 const OS_READ: u32 = 1u32;
 const OS_EDIT: u32 = 2u32;
 const OS_RECLAIM: u32 = 3u32;
@@ -11,15 +15,13 @@ const OS_ACQUIRE: u32 = 5u32;
 const OS_PRESENT: u32 = 1u32;
 
 record OsStage {
-    proof: PfStage;
     records: CrustMap;
     functions: CrustMap;
     blocks: CrustMap;
     imports: CrustMap;
     domains: CrustMap;
+    trusted: CrustMap;
     resources: *RsStage;
-    solver: *u8;
-    sent: usize;
 }
 
 record OsField {
@@ -32,16 +34,15 @@ record OsField {
 }
 
 record OsDomain { declaration: *CrustDecl; records: *OsField; }
-record OsCondition { expression: *CrustExpr; next: *OsCondition; }
 
 record OsRecord {
     declaration: *CrustDecl;
     domain: *CrustName;
     owns: *OsField;
-    references: *OsField;
-    conditions: *OsCondition;
     view_mode: u32;
-    tracked: bool;
+    opaque: bool;
+    stable: bool;
+    scoped: bool;
 }
 
 record OsNative {
@@ -59,23 +60,19 @@ record OsFunction {
     result_path: *OsField;
     initializes: *OsField;
     modifies: *OsField;
-    requires: *OsCondition;
-    ensures: *OsCondition;
     native: *OsNative;
     effect: u32;
     foreign: u32;
     has_modifies: bool;
 }
 
-record OsAccess { domain: *CrustName; effect: u32; }
+record OsAccess { domain: *CrustName; effect: u32; fresh: bool; }
 
 const OS_LIVE: u32 = 1u32;
 const OS_NONNULL: u32 = 2u32;
 const OS_PINNED: u32 = 4u32;
 const OS_READY: u32 = 8u32;
-const OS_PUBLISHED: u32 = 16u32;
 const OS_ABSENT: u32 = 32u32;
-const OS_RETIRING: u32 = 64u32;
 const OS_DESTROYED: u32 = 128u32;
 const OS_SUMMARY: u32 = 256u32;
 
@@ -86,13 +83,12 @@ record OsObject {
     owner: *OsObject;
     domain: *CrustName;
     scope: *OsScope;
-    term: *u8;
+    brand: *OsScope;
     next: *OsObject;
     heap: bool;
     abstract: bool;
-    readonly: bool;
     uncertain: bool;
-    cursor: bool;
+    aliased: bool;
 }
 
 record OsSlot {
@@ -103,6 +99,7 @@ record OsSlot {
     scope: *OsScope;
     next: *OsSlot;
     original: *OsSlot;
+    deferred: *OsDeferred;
     loan: *OsLoan;
     owns: bool;
     authority: bool;
@@ -117,7 +114,6 @@ record OsValue {
     native: *OsField;
     borrow_scope: *OsScope;
     loan: *OsLoan;
-    term: *u8;
     presence: u32;
     owner: bool;
     pointer: bool;
@@ -142,33 +138,28 @@ record OsLoan {
     mode: u32;
 }
 
-record OsScope { parent: *OsScope; locals: *OsSlot; domain: *CrustName; effect: u32; access: bool; }
-record OsHeap { schema: *OsRecord; live: *u8; next: *OsHeap; }
-record OsSnapshot { fields: *PfField; heaps: *OsHeap; guard: *u8; next: *OsSnapshot; }
-record OsGround { snapshot: *OsSnapshot; terms: *PfTerm; next: *OsGround; }
-record OsTerm { syntax: *CrustTypeSyntax; value: *u8; valid: *u8; }
-record OsBinding { term: OsTerm; name: *CrustName; value: *OsValue; next: *OsBinding; }
+record OsScope { parent: *OsScope; locals: *OsSlot; domain: *CrustName; brand: *OsScope; effect: u32; access: bool; }
+record OsBinding { name: *CrustName; value: *OsValue; next: *OsBinding; }
 
 record OsState {
-    proof: PfState;
-    facts: *OsFact;
-    heaps: *OsHeap;
-    snapshots: *OsSnapshot;
-    grounded: *OsGround;
+    facts: [*OsFact;64];
     scope: *OsScope;
+    brand: *OsScope;
     domain: *CrustName;
     effect: u32;
     flow: u32;
 }
 
 record OsCheck {
-    proof: PfRun;
     stage: *OsStage;
     function: *OsFunction;
     objects: *OsObject;
     loans: *OsLoan;
     parameters: *OsBinding;
+    origin: *OsScope;
     depth: usize;
     loop_depth: usize;
     drop: bool;
 }
+
+record OsDeferred { contract: *OsFunction; arguments: **OsValue; location: *CrustLoc; count: usize; }

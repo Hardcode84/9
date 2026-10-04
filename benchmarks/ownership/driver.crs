@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn ownership_clock_ns() -> u64 = "ownership_clock_ns";
+
+fn cost_report(read_ns: u64, lower_ns: u64, check_ns: u64, emit_ns: u64) -> unit {
+    c_driver_print_number(read_ns); c_driver_stderr(" ");
+    c_driver_print_number(lower_ns); c_driver_stderr(" ");
+    c_driver_print_number(check_ns); c_driver_stderr(" ");
+    c_driver_print_number(emit_ns); c_driver_stderr("\n");
+}
+
+fn cost_run(cli: *CCli, trusted: *CrustSource, count: usize, verify: bool) -> bool {
+    var resources: RsStage = uninit;
+    rs_init(&resources, (*cli).stage.status.context);
+    var stage: OsStage = uninit;
+    os_init(&stage, &resources);
+    var start: u64 = ownership_clock_ns();
+    if !os_trust_sources(&stage, trusted, count) || !os_driver_read(cli, &stage) { return false; }
+    return cost_body(cli, &stage, &resources, verify, start);
+}
+
+fn cost_body(cli: *CCli, stage: *OsStage, resources: *RsStage, verify: bool, start: u64) -> bool {
+    var read_end: u64 = ownership_clock_ns();
+    if !os_lower(stage) { return false; }
+    var lower_end: u64 = ownership_clock_ns();
+    if verify && !os_verify(stage) { return false; }
+    var check_end: u64 = ownership_clock_ns();
+    if !c_driver_names(&(*cli).driver) || !c_emit_with_body(&(*cli).stage, null(*CrustDecl), rs_c_body, resources as *u8) { return false; }
+    var end: u64 = ownership_clock_ns();
+    cost_report(read_end-start, lower_end-read_end, check_end-lower_end, end-check_end);
+    return true;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc >= 5i32 && c_equal(argv[1usize], "publish") { return cost_publish(argc, argv); }
+    if argc >= 7i32 && c_equal(argv[1usize], "import") { return cost_import(argc, argv); }
+    if argc < 3i32 || (!c_equal(argv[1usize], "verify") && !c_equal(argv[1usize], "lower")) { return 2i32; }
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var request: CrustBuild = make CrustBuild { context: &context, source: null(*CrustSource),
+        target_begin: 0usize, argc: argc-2i32, argv: argv+2isize };
+    var trusted: *CrustSource = ownership_test_trust(&request);
+    var count: usize = 0usize;
+    if trusted != null(*CrustSource) { count = 1usize; }
+    var cli: CCli = uninit;
+    var valid: bool = c_driver_init(&cli, &context, request.argc) && context.error_count == 0usize;
+    if valid { valid = c_driver_parse(&cli, request.argc, request.argv, 0i32); }
+    if valid { valid = cost_run(&cli, trusted, count, c_equal(argv[1usize], "verify")); }
+    if context.error_count != 0usize { c_driver_diagnostic(&context, argv[0usize]); }
+    c_stage_destroy(&cli.stage);
+    crust_context_destroy(&context);
+    if valid { return 0i32; }
+    return 1i32;
+}
+
+fn cost_publish(argc: i32, argv: **u8) -> i32 {
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var trusted: *CrustSource = ownership_test_input(&context, argv[3usize]);
+    var request: CrustBuild = make CrustBuild { context: &context, source: null(*CrustSource), target_begin: 0usize, argc: argc-4i32, argv: argv+4isize };
+    var receipt: OwnershipLibrary = uninit;
+    var result: i32 = 1i32;
+    if trusted != null(*CrustSource) { result = ownership_publish(&request, argv[2usize], &receipt, trusted, 1usize); }
+    if result == 0i32 {
+        c_driver_stderr(receipt.artifact); c_driver_stderr("\n");
+        c_driver_stderr(receipt.digest); c_driver_stderr("\n");
+    } else { c_driver_diagnostic(&context, argv[0usize]); }
+    crust_context_destroy(&context);
+    return result;
+}
+
+fn cost_import_run(cli: *CCli, imports: *OwnershipImports, verify: bool) -> bool {
+    var context: *CrustContext = (*cli).stage.status.context;
+    var resources: RsStage = uninit;
+    rs_init(&resources, context);
+    var stage: OsStage = uninit;
+    os_init(&stage, &resources);
+    var work: OsLibraryWork = uninit;
+    var loaded: *OsLoadedLibrary = null(*OsLoadedLibrary);
+    var start: u64 = ownership_clock_ns();
+    var valid: bool = os_import_read(cli, &stage, imports, &work, &loaded);
+    var captured: u64 = ownership_clock_ns();
+    if valid { valid = os_driver_read(cli, &stage); }
+    if valid {
+        c_driver_print_number(captured-start); c_driver_stderr(" ");
+        valid = cost_body(cli, &stage, &resources, verify, captured);
+    }
+    if !os_import_cleanup(context, &work, loaded) { valid = false; }
+    return valid;
+}
+
+fn cost_import(argc: i32, argv: **u8) -> i32 {
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var receipt: OwnershipLibrary = make OwnershipLibrary { artifact: argv[3usize], digest: argv[4usize], trusted: true };
+    var imports: OwnershipImports = make OwnershipImports { directory: argv[2usize], libraries: &receipt, count: 1usize };
+    var cli: CCli = uninit;
+    var valid: bool = c_driver_init(&cli, &context, argc-6i32);
+    if valid { valid = c_driver_parse(&cli, argc-6i32, argv+6isize, 0i32); }
+    if valid { valid = cost_import_run(&cli, &imports, c_equal(argv[5usize], "verify")); }
+    if !valid { c_driver_diagnostic(&context, argv[0usize]); }
+    c_stage_destroy(&cli.stage);
+    crust_context_destroy(&context);
+    if valid { return 0i32; }
+    return 1i32;
+}

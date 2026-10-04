@@ -2,9 +2,9 @@
 
 # Ownership without a graph solver
 
-This is the replacement design. It is not the implemented stage. The
-[current stage contract](ownership-model.md) describes the existing checker,
-which still needs Z3 for graph conditions.
+This design is implemented by the optional ownership stage. The
+[stage contract](ownership-model.md) defines its accepted syntax and rejection
+rules. Z3 and the earlier graph-proof stages are removed.
 
 Use local ownership checks for application code. Permit an explicitly trusted
 implementation for containers whose internal pointers require stronger reasoning.
@@ -25,7 +25,7 @@ Keep these rules:
 | Resource field | `owns(field)` applies to a native resource, including an integer handle. Storage ownership also grants access to an allocation. |
 | Shared loan | `read` permits reads and prevents conflicting changes and destruction. |
 | Exclusive loan | `mut` permits changes and prevents conflicting access. |
-| Stored or returned loan | Its type or function interface states its input origins. |
+| Stored or returned loan | Local facts retain origins; returned views declare one exact input path. |
 | Cleanup | Scope exit, explicit `drop`, and `defer` use the same ownership and access checks as an ordinary call. |
 | Stable storage | After construction, the value cannot move or be overwritten before its destructor completes. Its owning pointer can move. |
 | Opaque resource | Clients can use its exported operations. They cannot inspect, construct, copy, cast, or overwrite its representation. |
@@ -55,17 +55,13 @@ An interface contains types, ownership modes, loan origins, initialization
 outputs, access effects, and cleanup requirements. These are finite type and
 effect facts. They are not Boolean formulas about arbitrary objects.
 
-A returned or stored view retains each input loan on which it depends. For
-records with several borrowed fields, the summary maps result field paths to
-input field paths. Each path starts at a declared parameter. A result selected
-from several inputs retains all of those possible origins. No caller analysis
-is needed to check the function. No callee expansion is needed to check a call.
-
-The same maps describe replacement of a stored view through an exclusive
-parameter: which old loans end and which input loans the replacement retains.
-The body must establish that map on every continuing exit. A missing or
-ambiguous relationship is a diagnostic. The checker does not infer a contract
-by inspecting other functions.
+A returned view declares one exact input path with `from parameter.path`.
+Every borrowed field of a returned view record must derive from that path.
+Local view records can combine loans from several inputs. A function cannot
+return that combination through one `from` path or replace stored origins
+through a borrowed parameter. The checker rejects these interfaces. A finite
+per-field result and replacement map would be needed to accept them. This
+implementation does not add that interface before a production API needs it.
 
 Borrowed storage must be initialized again before return. A mutable call
 invalidates scalar facts for its declared writable places. Native-handle
@@ -96,12 +92,11 @@ an existing identity cannot be constructed. Independent instances cannot be
 mixed. Creating a fresh instance does not permit existing objects to change
 their identity.
 
-A root or constructor introduces the identity in a lexical scope. Objects and
+A `domain D { ... }` block introduces the identity in a lexical scope. Objects and
 views dependent on it cannot escape that scope. Helpers are checked once with
 an abstract domain parameter. Instantiation substitutes an identity; it does
-not specialize or recompile the helper. The initial implementation need not
-support returning a new domain and all of its dependent objects as one package.
-Reject such an escape until the interface can bind that identity explicitly.
+not specialize or recompile the helper. Returning a fresh domain and its dependent objects is rejected: the interface
+cannot bind a new identity in a result.
 
 Retain the existing access distinction:
 
@@ -189,7 +184,7 @@ owned allocation and bypass retirement with a raw release call.
 ### Internal retention
 
 A trusted operation can retain a managed object's address inside its own
-domain. Its interface declares this retention class. The client checker checks
+domain. Its opaque type and domain declare this retention boundary. The client checker checks
 the managed type, matching domain identity, and required access permission.
 It does not create a per-edge loan or a membership counter. Correct retirement
 is part of the managed type's trusted contract.
@@ -289,7 +284,7 @@ The checker uses the same rules for all these interfaces:
 | Hash table or one-way observer index | Remove every retained entry before target retirement, or keep an ordinary loan on the target. | Do not turn an index cursor into an owner or let it outlive access. |
 | Intrusive work queue with two memberships | Maintain both hooks and detach both before node release. | No destruction during traversal or payload borrowing. |
 | File or integer-like native handle | Obey acquisition, borrowing, invalid-value, and release contracts. | Move ownership once and do not close through a borrower. No domain is needed for ordinary use. |
-| Record containing views from two inputs | Obey the declared field-origin map. This can be checked code. | Keep both source loans until their dependent views end. |
+| Local record containing views from two inputs | Create checked loans for both fields. | Keep both source loans until their dependent views end; return them through separate declared interfaces. |
 
 A one-way index cannot claim cheap individual deletion if its representation
 has no way to find or remove incoming entries. It must supply that algorithm,
@@ -299,8 +294,8 @@ does not invent a reverse index or pay for one invisibly.
 ## 7. Body-local checker
 
 Build a finite interface table once. It contains resource kinds, field paths,
-opaque layout identities, destructor effects, borrow-origin maps, domain
-parameters, and trust dependencies. Intern paths and identities. Do not create
+opaque layout identities, destructor effects, borrow-origin paths, domain
+parameters, and trust dependencies. Names are interned; places retain declaration and scope identities. Do not create
 symbolic field arrays or expand heap objects.
 
 Check each body independently:
@@ -337,13 +332,15 @@ diagnostic, not permission to accept the body.
 
 Let `N` be body operations, `P` the distinct place paths, and `L` the loan facts
 in a body. Their sizes depend on source, not runtime heap population. Use
-compact initialization sets and indexed origin paths. Structured branch joins
+local fact chains indexed by fixed hash buckets and explicit origin paths.
+Branch state copies the bucket heads; earlier facts remain immutable. Structured branch joins
 need work proportional to the local state they join. A simple implementation
 can take quadratic time in unusually large bodies; do not call it linear
 without measurement. It must not have exponential pointer-case search.
 
-A declaration pass precedes body checking. Bodies read immutable interface
-summaries and use separate arenas. Bodies can run in parallel. Recursive calls
+A declaration pass precedes body checking. Bodies read interface summaries and keep separate local state in the
+request arena. The current driver runs bodies serially. Separate check contexts permit
+parallel body work after interface publication; no scheduler is supplied here. Recursive calls
 use the same published summaries and do not require an interprocedural fixed
 point. A changed body needs a new check; an unchanged interface need not force
 unrelated bodies to be checked again.

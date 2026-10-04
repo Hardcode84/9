@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_defer(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> unit {
+    while (*expression).kind == CRUST_E_GROUP { expression = (*expression).left; }
+    var callee: *CrustExpr = (*expression).left;
+    while (*callee).kind == CRUST_E_GROUP { callee = (*callee).left; }
+    if (*callee).kind != CRUST_E_NAME { os_error(check, &(*expression).loc, "deferred call requires a declared interface"); return; }
+    var contract: *OsFunction = os_function((*check).stage, (*callee).name);
+    if contract == null(*OsFunction) || (*contract).foreign != 0u32 {
+        os_error(check, &(*expression).loc, "deferred foreign call requires a checked unit wrapper"); return;
+    }
+    if (*contract).initializes != null(*OsField) { os_error(check, &(*expression).loc, "in-place construction cannot be deferred"); return; }
+    if !os_argument_effects(check, expression, contract) { return; }
+    var arguments: **OsValue = os_arguments(check, state, expression, contract);
+    if os_failed(check) { return; }
+    var index: usize = 0usize;
+    while index < (*expression).arg_count {
+        os_loan_keep(check, state, arguments[index]);
+        index = index + 1usize;
+    }
+    var deferred: *OsDeferred = os_alloc(check, sizeof(OsDeferred), alignof(OsDeferred)) as *OsDeferred;
+    var slot: *OsSlot = os_slot(check, (*(*contract).declaration).syntax_type, null(*CrustName), null(*OsObject), (*state).scope);
+    if os_failed(check) { return; }
+    *deferred = make OsDeferred { contract: contract, arguments: arguments, location: &(*expression).loc, count: (*expression).arg_count };
+    (*slot).deferred = deferred;
+    (*slot).next = (*(*state).scope).locals;
+    (*(*state).scope).locals = slot;
+}
+
+fn os_defer_finish(check: *OsCheck, state: *OsState, deferred: *OsDeferred) -> unit {
+    var contract: *OsFunction = (*deferred).contract;
+    var location: *CrustLoc = (*deferred).location;
+    if !os_call_effect(check, state, contract, location) { return; }
+    if (*contract).effect != 0u32 && !os_call_loans(check, state, (*deferred).arguments, (*deferred).count, (*contract).effect, location) { return; }
+    os_mutable_call(check, state, contract, (*deferred).arguments, location);
+    os_consume_view_arguments(check, state, (*deferred).arguments, (*deferred).count, location);
+    var index: usize = 0usize;
+    while index < (*deferred).count && !os_failed(check) {
+        os_loan_end(check, state, (*deferred).arguments[index]);
+        index = index + 1usize;
+    }
+}

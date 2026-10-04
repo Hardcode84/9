@@ -45,8 +45,8 @@ requires it.
   Apply the [replacement gate](docs/ownership-design.md#9-replacement-gate):
   demonstrate a trusted direct-pointer provider and checked client, individual
   destruction and reuse, rejected client lifetime errors, independent imports,
-  unchanged emitted code, and the compilation-cost budget. Do not extend the
-  current solver-based model while this gate is unmet.
+  unchanged emitted code, and the compilation-cost budget. Keep this gate as a
+  regression requirement. Do not add graph solvers.
 - A small explicitly trusted container implementation is permitted behind an
   opaque checked API. The root must select the trust boundary. Trusted pointer
   bodies must obey their declared retention and retirement contracts, but are
@@ -71,9 +71,9 @@ requires it.
 - Keep the user-facing ownership model no more complex than Rust's, for both
   application and container authors. Do not hide required solver predicates,
   ghost lemmas, or custom proof scripts in libraries and call the model simple.
-  The existing closed-program proofs are experiments, not acceptance of this
-  modular model. Use the [solver-free design](docs/ownership-design.md) for the
-  replacement; it does not change the current stage's accepted syntax.
+  Use the [solver-free design](docs/ownership-design.md) and the implemented
+  [stage contract](docs/ownership-model.md). Do not treat proposed extensions
+  as accepted syntax.
 
 ## Communication and documentation
 
@@ -215,12 +215,8 @@ Build with `make all`. Use the checks that cover the change:
 | Root execution and reader extensions | `make check-stage check-reader` |
 | Native bootstrap and execution handoff | `make check-native` |
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |
-| Ownership and field contracts | `make check-ownership check-ownership-alloc` with Z3 |
-| Verified ownership provider imports | `make check-ownership-imports` with Z3 |
-| Memory proofs, initialization, and call effects | `make check-memory check-resource-memory check-memory-summaries` with Z3 |
-| Declared memory call contracts | `make check-memory-contracts` with Z3 |
-| Inductive read-only loops and intrusive traversal | `make check-memory-loops` with Z3 |
-| Memory proof allocation and cleanup | `make check-memory-alloc check-resource-memory-alloc` with Z3 |
+| Ownership and field contracts | `make check-ownership check-ownership-alloc` |
+| Verified ownership provider imports | `make check-ownership-imports` |
 | Overloads and resource composition | `make check-overload check-overload-alloc` |
 | Compilation program examples | `make check-examples` |
 | Module selection, bindings, and exports | `make check-modules` |

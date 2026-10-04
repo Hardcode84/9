@@ -1,5 +1,8 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
+This archive records earlier designs. The [current ownership contract](../ownership-model.md)
+uses local checks and explicit trusted providers without a solver.
+
 # Systems source requirements for Crust
 
 Date: 2026-09-30. Status: source study and design requirements.
@@ -268,7 +271,7 @@ A safe persistent-pointer contract can require more work. Measure that work
 inside the full frontend boundary. Do not move it to a linker or runtime service
 and omit its cost.
 
-The [ownership tutorial](../../examples/ownership/README.md) now checks a
+The earlier ownership tutorial (removed with the solver dependency) checked a
 sequential direct-pointer program with individual reclamation. Its profile
 expands actual calls or reuses selected straight-line effect templates. It
 proves that each loop stops within a selected bound.

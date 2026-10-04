@@ -1,16 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn os_read_condition(reader: *CrustReader, list: **OsCondition) -> unit {
-    rr_next(reader);
-    rr_expect(reader, 40u32, "expected '(' before contract expression");
-    var item: *OsCondition = rr_alloc(reader, sizeof(OsCondition), alignof(OsCondition)) as *OsCondition;
-    if item == null(*OsCondition) { return; }
-    (*item).expression = rr_expression(reader);
-    (*item).next = *list;
-    *list = item;
-    rr_expect(reader, 41u32, "expected ')' after contract expression");
-}
-
 fn os_read_modifies(reader: *CrustReader, list: **OsField) -> unit {
     rr_next(reader);
     rr_expect(reader, 40u32, "expected '(' before modified fields");
@@ -50,10 +39,6 @@ fn os_read_schema(reader: *CrustReader, stage: *OsStage) -> *CrustDecl {
     (*(*declaration).init).integer = 1u64;
     rs_put((*stage).resources, &(*stage).domains, (*declaration).name as usize, schema as *u8);
     return declaration;
-}
-
-fn os_tracked(schema: *OsRecord) -> bool {
-    return schema != null(*OsRecord) && (*schema).tracked;
 }
 
 fn os_resolve_field(check: *OsCheck, name: *CrustName, field: *CrustName, location: *CrustLoc) -> *CrustField {
@@ -128,15 +113,4 @@ fn os_field_write(check: *OsCheck, slot: *OsSlot, location: *CrustLoc) -> bool {
         os_error(check, location, "field write is absent from the function modifies contract"); return false;
     }
     return true;
-}
-
-fn os_validate_conditions(check: *OsCheck) -> unit {
-    var state: OsState = uninit;
-    os_state_init(&state, null(*OsFunction));
-    os_heap_start(check, &state);
-    var heap: *OsHeap = state.heaps;
-    while heap != null(*OsHeap) && !os_failed(check) {
-        os_record_term(check, &state, (*heap).schema, pf_fresh(&(*check).proof, "Int"));
-        heap = (*heap).next;
-    }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn os_statement(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if statement == null(*CrustStmt) || (*state).flow != PF_NORMAL { return; }
+    if statement == null(*CrustStmt) || (*state).flow != OS_NORMAL { return; }
     if !os_enter(check, &(*statement).loc) { return; }
     var before: *OsLoan = (*check).loans;
     os_statement_inner(check, state, statement);
@@ -27,35 +27,39 @@ fn os_statement_inner(check: *OsCheck, state: *OsState, statement: *CrustStmt) -
         return;
     }
     if kind == CRUST_S_RETURN { os_return(check, state, statement); return; }
+    if kind == RS_DEFER { os_defer(check, state, (*statement).expr); return; }
     if kind == RS_DROP { os_drop_statement(check, state, statement); return; }
-    if kind == CRUST_S_TRAP { (*state).flow = PF_TRAP; return; }
+    if kind == CRUST_S_TRAP { (*state).flow = OS_TRAP; return; }
     os_error(check, &(*statement).loc, "statement has no modular ownership contract");
 }
 
 fn os_block(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    var domain: *CrustName = (*state).domain;
-    var effect: u32 = (*state).effect;
-    var access: *OsAccess = crust_map_get(&(*(*check).stage).blocks, statement as usize) as *OsAccess;
-    if access != null(*OsAccess) {
-        if (*access).domain != domain || (*access).effect > effect {
-            os_error(check, &(*statement).loc, "access scope cannot acquire undeclared authority"); return;
-        }
-        (*state).effect = (*access).effect;
-    }
     os_scope(check, state);
     if os_failed(check) { return; }
-    (*(*state).scope).domain = domain;
-    (*(*state).scope).effect = effect;
-    (*(*state).scope).access = access != null(*OsAccess);
+    var access: *OsAccess = crust_map_get(&(*(*check).stage).blocks, statement as usize) as *OsAccess;
+    if access != null(*OsAccess) { os_access_scope(check, state, access, &(*statement).loc); }
     var child: *CrustStmt = (*statement).body;
-    while child != null(*CrustStmt) && (*state).flow == PF_NORMAL && !os_failed(check) {
+    while child != null(*CrustStmt) && (*state).flow == OS_NORMAL && !os_failed(check) {
         os_statement(check, state, child);
         child = (*child).next;
     }
-    if (*state).flow == PF_NORMAL { os_scope_end(check, state, &(*statement).loc); }
-    else { if (*state).flow == PF_TRAP { (*state).scope = (*(*state).scope).parent; } }
-    (*state).domain = domain;
-    (*state).effect = effect;
+    if (*state).flow == OS_NORMAL { os_scope_end(check, state, &(*statement).loc); }
+}
+
+fn os_access_scope(check: *OsCheck, state: *OsState, access: *OsAccess, location: *CrustLoc) -> unit {
+    if (*access).fresh {
+        if crust_map_get(&(*(*check).stage).domains, (*access).domain as usize) == null(*u8) {
+            os_error(check, location, "fresh domain requires a declared schema"); return;
+        }
+        (*state).domain = (*access).domain;
+        (*state).brand = (*state).scope;
+    } else {
+        if (*access).domain != (*state).domain || (*access).effect > (*state).effect {
+            os_error(check, location, "access scope cannot acquire undeclared authority"); return;
+        }
+        (*(*state).scope).access = true;
+    }
+    (*state).effect = (*access).effect;
 }
 
 fn os_variable(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
@@ -79,13 +83,12 @@ fn os_if(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     os_refine(check, &no, (*statement).expr, false);
     os_statement(check, &yes, (*statement).body);
     os_statement(check, &no, (*statement).otherwise);
-    if yes.flow != PF_NORMAL { *state = no; if no.flow != PF_NORMAL { (*state).flow = yes.flow; } return; }
-    if no.flow != PF_NORMAL { *state = yes; return; }
+    if yes.flow != OS_NORMAL { *state = no; if no.flow != OS_NORMAL { (*state).flow = yes.flow; } return; }
+    if no.flow != OS_NORMAL { *state = yes; return; }
     os_join(check, state, &yes, &no, &(*statement).loc);
 }
 
 fn os_join(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState, location: *CrustLoc) -> unit {
-    os_join_heap(check, target, left, right);
     os_join_loans(check, target, left, right);
     var scope: *OsScope = (*target).scope;
     while scope != null(*OsScope) && !os_failed(check) {
@@ -226,7 +229,7 @@ fn os_return(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
         os_scope_end(check, state, &(*statement).loc);
     }
     os_contract_end(check, state, &(*statement).loc);
-    (*state).flow = PF_RETURN;
+    (*state).flow = OS_RETURN;
 }
 
 fn os_join_summary(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
@@ -265,7 +268,7 @@ fn os_return_value(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> u
     if (*value).object != null(*OsObject) && !(*value).pointer && !os_borrowed((*value).syntax) {
         os_publish_value(check, state, (*value).object, &(*statement).loc);
     }
-    if !os_transferable(check, state, value, &(*statement).loc) { return; }
+    if !os_transferable(check, state, value, &(*statement).loc) || !os_brand_return(check, state, value, &(*statement).loc) { return; }
     if !os_borrowed((*value).syntax) && os_view_mode(check, (*value).syntax) >= RS_READ {
         os_return_view_record(check, state, (*value).object, &(*statement).loc);
     }
@@ -274,7 +277,14 @@ fn os_return_value(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> u
     } else { if (*value).pointer {
         os_error(check, &(*statement).loc, "returning a cursor requires a declared lifetime interface"); return;
     } }
+    os_result_ready(check, state, value, &(*statement).loc);
+}
+
+fn os_result_ready(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> unit {
+    if os_scoped(check, (*value).syntax) && (*(*check).function).effect == OS_RECLAIM {
+        os_error(check, location, "scoped result cannot escape reclamation authority"); return;
+    }
     if !os_initialized(check, state, (*value).object) {
-        os_error(check, &(*statement).loc, "return value is not fully initialized"); return;
+        os_error(check, location, "return value is not fully initialized"); return;
     }
 }

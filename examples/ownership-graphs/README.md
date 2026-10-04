@@ -1,38 +1,41 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Tutorial: declare a different pointer graph
+# Tutorial: an owning tree with parent links
 
-This program uses the same ownership stage as the intrusive-list tutorial.
-It declares a branch with a parent and two children. The stage has no tree rule.
+Use the same opaque boundary as the [intrusive tutorial](../intrusive/README.md).
+A parent owns its child through an ordinary child pointer. Each child also has
+a non-owning parent pointer. There is no second ownership chain or tree rule
+in the checker.
 
 ```sh
-make ownership-stage
+make all ownership-stage
 build/crust examples/ownership-graphs/main.crs
 build/ownership-graphs
 ```
 
-The program prints `OK`. It attaches a child, reads the child's payload through
-the parent, destroys the parent, and checks that the child remains live with
-no parent reference.
+The program prints `OK`. [main.crs](main.crs) explicitly trusts
+[provider.crs](provider.crs) and checks [program.crs](program.crs).
 
-[program.crs](program.crs) declares three retained fields. The parent must name
-this branch through either child field. Each child must name this branch as
-its parent. `detach` states a postcondition in which all three fields are null.
-It preserves the conditions of every other branch through ordinary stores.
-Release then uses the general absence-of-surviving-references rule.
+`Tree` is an opaque owner. `TreeCursor` is an opaque scoped view. Both belong
+to `Forest`. `tree_attach_left(mut parent, move child)` consumes one child owner
+and transfers its cleanup duty into the parent's ordinary child link. The
+trusted body uses `forget move child` after that transfer. This operation
+requires implementation trust; checked clients cannot use it to escape cleanup.
 
-`attach_left` requires an empty left slot and a child with no parent. Its
-caller checks those conditions. The write contract names field classes, so a
-call that can change a class discards facts about that class on other objects.
-A narrow `modifies` clause retains facts about unchanged fields. This tutorial
-does not require a per-object write-set language.
+`tree_take_left(mut parent)` clears that ownership link, repairs the parent
+reference, and returns an independent owner. The client can destroy the old
+parent while the removed child remains live. `tree_drop` destroys an entire
+owned subtree through iterative pointer operations. It uses the parent links
+for traversal and allocates no cleanup stack.
 
-Each allocation has a separate `Owner`. The parent and child fields do not own
-storage. These conditions describe safe pointer connections; they do not prove
-that a graph is acyclic or balanced. A program that requires those properties
-needs an interface that establishes them.
+All ownership transfers require reclamation access. Read access creates scoped
+cursors and payload loans. A cursor from either the child or its parent prevents
+reclamation until its access scope ends. The checker does not infer acyclicity
+or inspect heap edges. The provider must preserve its tree representation and
+its declared retention and retirement contract. Invalid attach or remove calls
+trap explicitly.
 
-Compare the declarations and function bodies with the
-[intrusive tutorial](../intrusive/README.md). Both use the same `references`,
-`invariant`, `requires`, `ensures`, and `modifies` forms. Neither registers
-container operations or proof callbacks.
+The client tests ownership transfer, navigation to a parent, removal, individual
+release, replacement, and subtree cleanup. `make check-ownership` also compares
+emitted C and symbols before and after checking. Run
+`python3 tests/ownership.py --build build --sanitize` for native ASan and UBSan.

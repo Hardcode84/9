@@ -12,6 +12,7 @@ fn os_interface_read(stage: *OsStage, source: *CrustSource) -> bool {
             rs_error((*stage).resources, &(*declaration).loc, "library interface contains a function body");
             return false;
         }
+        rs_put((*stage).resources, &(*stage).imports, declaration as usize, declaration as *u8);
         if (*declaration).kind == CRUST_D_EXTERN {
             var function: *OsFunction = crust_map_get(&(*stage).functions, declaration as usize) as *OsFunction;
             if (*function).foreign == 0u32 {

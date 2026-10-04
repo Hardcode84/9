@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
+extern fn release(pointer: *u8) -> unit foreign(release) = "free";
+extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
+
+domain Forest(Branch, Tree, TreeCursor);
+record Branch { parent: *Branch; left: *Branch; right: *Branch; value: i64; } opaque domain(Forest);
+resource Tree { node: *Branch; } opaque domain(Forest) drop tree_drop;
+record TreeCursor { node: *Branch; } opaque scoped domain(Forest);
+
+fn tree_new(value: i64) -> Tree access(reclaim, Forest) {
+    var node: *Branch = allocate(sizeof(Branch)) as *Branch;
+    if node == null(*Branch) { trap; }
+    (*node).parent = node;
+    (*node).left = null(*Branch);
+    (*node).right = null(*Branch);
+    (*node).value = value;
+    return make Tree { node: node };
+}
+fn tree_drop(tree: mut Tree) -> unit access(reclaim, Forest) {
+    var root: *Branch = tree.node;
+    var cursor: *Branch = root;
+    while cursor != null(*Branch) {
+        if (*cursor).left != null(*Branch) {
+            var child: *Branch = (*cursor).left;
+            (*cursor).left = null(*Branch);
+            cursor = child;
+        } else { if (*cursor).right != null(*Branch) {
+            var child: *Branch = (*cursor).right;
+            (*cursor).right = null(*Branch);
+            cursor = child;
+        } else {
+            var parent: *Branch = (*cursor).parent;
+            if cursor == root { parent = null(*Branch); }
+            release(cursor as *u8);
+            cursor = parent;
+        } }
+    }
+}
+fn tree_attach_left(parent: mut Tree, child: Tree) -> unit access(reclaim, Forest) {
+    if (*parent.node).left != null(*Branch) { trap; }
+    (*parent.node).left = child.node;
+    (*child.node).parent = parent.node;
+    // The parent now owns this allocation through its ordinary child field.
+    forget move child;
+}
+fn tree_take_left(parent: mut Tree) -> Tree access(reclaim, Forest) {
+    var node: *Branch = (*parent.node).left;
+    if node == null(*Branch) { trap; }
+    (*parent.node).left = null(*Branch);
+    (*node).parent = node;
+    return make Tree { node: node };
+}
+fn tree_left(parent: read Tree) -> TreeCursor access(read, Forest) {
+    var node: *Branch = (*parent.node).left;
+    if node == null(*Branch) { node = parent.node; }
+    return make TreeCursor { node: node };
+}
+fn tree_parent(cursor: read TreeCursor) -> TreeCursor access(read, Forest) {
+    return make TreeCursor { node: (*cursor.node).parent };
+}
+fn tree_value(cursor: read TreeCursor) -> read i64 access(read, Forest) from cursor {
+    return read (*cursor.node).value;
+}

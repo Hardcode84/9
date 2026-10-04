@@ -33,10 +33,6 @@ fn os_literal(check: *OsCheck, expression: *CrustExpr) -> *OsValue {
         syntax = os_syntax(check, CRUST_T_USIZE, &(*expression).loc);
     } else { os_error(check, &(*expression).loc, "expression has no ownership contract"); } }
     var result: *OsValue = os_value(check, syntax, null(*OsObject), false);
-    if result != null(*OsValue) {
-        if kind == CRUST_E_INTEGER { (*result).term = os_number(check, (*expression).integer); }
-        if kind == CRUST_E_BOOL { (*result).term = "false"; if (*expression).integer != 0u64 { (*result).term = "true"; } }
-    }
     return result;
 }
 
@@ -51,10 +47,6 @@ fn os_unary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValu
         os_error(check, &(*expression).loc, "unary operation cannot erase ownership provenance");
     }
     var result: *OsValue = os_copy(check, value);
-    if result != null(*OsValue) {
-        if operation == CRUST_OP_NOT { (*result).term = pf_not(&(*check).proof, os_term(check, value)); }
-        else { (*result).term = pf_fresh(&(*check).proof, os_sort((*value).syntax)); }
-    }
     return result;
 }
 
@@ -93,7 +85,7 @@ fn os_borrow(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVal
         return null(*OsValue);
     }
     if (*expression).kind == RS_MUT && (*value).object != null(*OsObject) &&
-       (*os_root((*value).object)).cursor && rs_owns((*(*check).stage).resources, (*value).syntax) {
+       (*os_root((*value).object)).aliased && rs_owns((*(*check).stage).resources, (*value).syntax) {
         os_error(check, &(*expression).loc, "mutable resource loan requires an ownership origin"); return null(*OsValue);
     }
     var loan: *OsLoan = os_loan_new(check, state, value, (*expression).kind, &(*expression).loc);
@@ -126,7 +118,6 @@ fn os_cast(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
             os_error(check, &(*expression).loc, "pointer cast cannot change the checked storage type");
         } }
     } else { if (*value).pointer { os_error(check, &(*expression).loc, "pointer casts cannot erase provenance"); } }
-    if !(*value).pointer { (*value).term = os_cast_term(check, value, target); }
     (*value).syntax = target;
     return value;
 }
@@ -146,7 +137,6 @@ fn os_binary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVal
         syntax = os_syntax(check, CRUST_T_BOOL, &(*expression).loc);
     }
     var result: *OsValue = os_value(check, syntax, null(*OsObject), false);
-    if result != null(*OsValue) { (*result).term = os_binary_term(check, (*expression).op, os_term(check, left), os_term(check, right), (*left).syntax); }
     return result;
 }
 
@@ -163,6 +153,7 @@ fn os_pure(check: *OsCheck, expression: *CrustExpr) -> bool {
 }
 
 fn os_make(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
+    if os_opaque(os_record((*check).stage, (*expression).syntax_type)) { os_error(check, &(*expression).loc, "opaque values require their declared constructor"); return null(*OsValue); }
     var object: *OsObject = os_object(check, state, (*expression).syntax_type, null(*OsObject), (*state).scope, false);
     if object == null(*OsObject) { return null(*OsValue); }
     var item: *CrustInit = (*expression).inits;
@@ -183,12 +174,6 @@ fn os_make(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
 
 fn os_refine(check: *OsCheck, state: *OsState, expression: *CrustExpr, truth: bool) -> unit {
     if !os_enter(check, &(*expression).loc) { return; }
-    var value: *OsValue = os_expr(check, state, expression);
-    if value != null(*OsValue) {
-        var term: *u8 = os_term(check, value);
-        if !truth { term = pf_not(&(*check).proof, term); }
-        os_assume(check, state, term);
-    }
     os_refine_inner(check, state, expression, truth);
     (*check).depth = (*check).depth - 1usize;
 }

@@ -34,6 +34,7 @@ STAGE = [
             "cleanup",
             "drop",
             "places",
+            "outputs",
             "expr",
             "control",
         )

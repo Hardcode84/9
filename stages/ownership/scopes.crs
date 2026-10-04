@@ -20,6 +20,7 @@ fn os_scope(check: *OsCheck, state: *OsState) -> unit {
     if scope != null(*OsScope) {
         (*scope).parent = (*state).scope;
         (*scope).domain = (*state).domain;
+        (*scope).brand = (*state).brand;
         (*scope).effect = (*state).effect;
         (*state).scope = scope;
     }
@@ -41,12 +42,14 @@ fn os_scope_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> unit {
     var slot: *OsSlot = (*(*state).scope).locals;
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
+        if (*slot).deferred != null(*OsDeferred) { os_defer_finish(check, state, (*slot).deferred); }
         if value != null(*OsValue) { os_end_local(check, state, slot, value, location); }
         os_set(check, state, slot as *u8, null(*OsValue), 0u32);
         slot = (*slot).next;
     }
     (*state).scope = (*scope).parent;
     (*state).domain = (*scope).domain;
+    (*state).brand = (*scope).brand;
     (*state).effect = (*scope).effect;
 }
 
@@ -66,7 +69,6 @@ fn os_end_local(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue
     var object: *OsObject = (*value).object;
     if object == null(*OsObject) { return; }
     if (*slot).owns { os_drop_object(check, state, object, location); }
-    else { os_heap_retire(check, state, object, location); }
     os_mark(check, state, object, os_flags(state, object) & ~OS_LIVE);
 }
 
@@ -80,12 +82,10 @@ fn os_drop_object(check: *OsCheck, state: *OsState, object: *OsObject, location:
         var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*object).syntax).name);
         if (*global).resource != null(*RsResource) { os_drop_callback(check, state, object, location); }
         else {
-            os_heap_retire(check, state, object, location);
             os_drop_fields(check, state, object, location);
         }
         if !os_failed(check) {
             os_expire_owned(check, state, object, location);
-            os_snapshot(check, state);
         }
     }
     (*check).depth = (*check).depth - 1usize;
@@ -105,7 +105,6 @@ fn os_expire_owned(check: *OsCheck, state: *OsState, object: *OsObject, location
         os_set(check, state, slot as *u8, null(*OsValue), 0u32);
         slot = (*slot).next;
     }
-    os_heap_forget(check, state, object);
     os_mark(check, state, object, (os_flags(state, object) & ~(OS_LIVE | OS_SUMMARY)) | OS_DESTROYED);
     (*check).depth = (*check).depth - 1usize;
 }
@@ -128,7 +127,5 @@ fn os_destructor_end(check: *OsCheck, state: *OsState, object: *OsObject, locati
         }
         slot = (*slot).next;
     }
-    if !os_close(check, state, location) { return; }
-    os_heap_retire(check, state, object, location);
     os_drop_fields(check, state, object, location);
 }

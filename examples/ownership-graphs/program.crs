@@ -1,85 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
-domain Tree(Branch, Owner);
-record Branch { parent: *Branch; left: *Branch; right: *Branch; value: i64; }
-    domain(Tree) references(parent, left, right)
-    invariant((*self).parent == null(*Branch) ||
-              (*(*self).parent).left == self || (*(*self).parent).right == self)
-    invariant((*self).left == null(*Branch) || (*(*self).left).parent == self)
-    invariant((*self).right == null(*Branch) || (*(*self).right).parent == self);
-resource Owner { node: *Branch; } domain(Tree) owns(node: storage) drop owner_drop;
-extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
-extern fn release(pointer: *u8) -> unit foreign(release) = "free";
-extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
-
-fn initialize(node: *Branch, value: i64) -> unit access(edit, Tree) initializes(node)
-    requires(node != null(*Branch))
-    ensures((*node).parent == null(*Branch) && (*node).left == null(*Branch) &&
-            (*node).right == null(*Branch)) {
-    (*node).parent = null(*Branch);
-    (*node).left = null(*Branch);
-    (*node).right = null(*Branch);
-    (*node).value = value;
-}
-
-fn detach(node: *Branch) -> unit access(edit, Tree)
-    modifies(Branch.parent, Branch.left, Branch.right)
-    requires(node != null(*Branch))
-    ensures((*node).parent == null(*Branch) && (*node).left == null(*Branch) &&
-            (*node).right == null(*Branch)) {
-    var parent: *Branch = (*node).parent;
-    var left: *Branch = (*node).left;
-    var right: *Branch = (*node).right;
-    if parent != null(*Branch) {
-        if (*parent).left == node { (*parent).left = null(*Branch); }
-        if (*parent).right == node { (*parent).right = null(*Branch); }
+fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Forest) {
+    var root: Tree = tree_new(65i64);
+    var child: Tree = tree_new(66i64);
+    tree_attach_left(mut root, move child);
+    read Forest {
+        var leaf: TreeCursor = tree_left(read root);
+        var parent: TreeCursor = tree_parent(read leaf);
+        var parent_value: read i64 = tree_value(read parent);
+        var child_value: read i64 = tree_value(read leaf);
+        if parent_value != 65i64 || child_value != 66i64 { trap; }
     }
-    if left != null(*Branch) { (*left).parent = null(*Branch); }
-    if right != null(*Branch) { (*right).parent = null(*Branch); }
-    (*node).parent = null(*Branch);
-    (*node).left = null(*Branch);
-    (*node).right = null(*Branch);
-}
-
-fn attach_left(parent: *Branch, child: *Branch) -> unit access(edit, Tree)
-    modifies(Branch.parent, Branch.left)
-    requires(parent != null(*Branch) && child != null(*Branch) && parent != child &&
-             (*parent).left == null(*Branch) && (*child).parent == null(*Branch))
-    ensures((*parent).left == child && (*child).parent == parent) {
-    (*parent).left = child;
-    (*child).parent = parent;
-}
-
-fn owner_new(value: i64) -> Owner access(reclaim, Tree) {
-    var node: *Branch = allocate(sizeof(Branch)) as *Branch;
-    if node != null(*Branch) { initialize(node, value); }
-    return make Owner { node: move node };
-}
-
-fn owner_drop(owner: mut Owner) -> unit access(reclaim, Tree) {
-    var node: *Branch = move owner.node;
-    if node != null(*Branch) {
-        edit Tree { detach(node); }
-        release(node as *u8);
-    }
-}
-
-fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Tree) {
-    var root: Owner = owner_new(1i64);
-    var child: Owner = owner_new(2i64);
-    if root.node == null(*Branch) || child.node == null(*Branch) { return 1i32; }
-    if root.node == child.node { trap; }
-    edit Tree {
-        if (*root.node).left != null(*Branch) || (*child.node).parent != null(*Branch) { trap; }
-        attach_left(root.node, child.node);
-    }
-    read Tree {
-        if (*root.node).left != child.node || (*child.node).parent != root.node { trap; }
-        if (*(*root.node).left).value != 2i64 { trap; }
-    }
+    var detached: Tree = tree_take_left(mut root);
     drop root;
-    read Tree { if (*child.node).parent != null(*Branch) { trap; } }
-    drop child;
+    read Forest {
+        var leaf: TreeCursor = tree_left(read detached);
+        var value: read i64 = tree_value(read leaf);
+        if value != 66i64 { trap; }
+    }
+    var replacement: Tree = tree_new(67i64);
+    tree_attach_left(mut detached, move replacement);
+    // Cleanup destroys the parent-owned subtree without a second ownership chain.
     emit(79i32); emit(75i32); emit(10i32);
     return 0i32;
 }

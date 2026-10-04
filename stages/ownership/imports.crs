@@ -46,6 +46,9 @@ fn os_library_capture(context: *CrustContext, directory: *u8, receipt: *Ownershi
         return os_library_error(context, "ownership artifact does not match its trusted digest receipt");
     }
     if !os_library_unpack(context, &(*loaded).source, &(*loaded).bundle) { return false; }
+    if (*loaded).bundle.trusted != (*receipt).trusted {
+        return os_library_error(context, "ownership trust contract differs from the root receipt");
+    }
     if cache_memcmp(checker, (*loaded).bundle.checker, 64usize) != 0i32 {
         return os_library_error(context, "ownership library checker host or loaded images changed");
     }
@@ -121,7 +124,6 @@ fn os_import_build(cli: *CCli, imports: *OwnershipImports) -> i32 {
         result = os_driver_emit(cli, &resources);
     }
     if !os_import_cleanup(context, &work, loaded) { result = 1i32; }
-    pf_destroy(&stage.proof);
     return result;
 }
 

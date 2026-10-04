@@ -12,7 +12,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TAG = b"crust-ownership-library-v1-linux-x64\n"
+TAG = b"crust-ownership-library-v2-linux-x64\n"
 
 
 def command(args, *, env=None, success=True):
@@ -35,7 +35,7 @@ def unpack(data):
     assert data.startswith(TAG)
     offset = len(TAG) + 128
     interface_size, object_size = struct.unpack_from("<QQ", data, offset)
-    start = offset + 16
+    start = offset + 24
     end = start + interface_size
     assert end + object_size == len(data)
     return start, end, data[start:end].decode()
@@ -44,19 +44,29 @@ def unpack(data):
 def fixture(directory, name="program.crs"):
     tutorial = ROOT / "examples/intrusive"
     source = (tutorial / name).read_text()
-    provider, client = source.split("fn main(", 1)
     links = directory / "links.crs"
     library = directory / "provider.crs"
     consumer = directory / "client.crs"
     links.write_bytes((tutorial / "links.crs").read_bytes())
-    library.write_text(provider)
-    consumer.write_text("// SPDX-License-Identifier: Apache-2.0\nfn main(" + client)
+    library.write_text(
+        "fn client_read(owner:read Owner)->read i64 access(read,Graph) from owner {return owner_value(read owner);}"
+    )
+    consumer.write_text(source)
     return links, library, consumer
 
 
-def import_arguments(driver, cache, receipt, client, output):
+def import_arguments(driver, cache, receipt, client, output, trusted=False):
     artifact, digest = receipt
-    return [driver, "import", str(cache), str(artifact), digest, "-o", str(output), str(client)]
+    return [
+        driver,
+        "import-trusted" if trusted else "import",
+        str(cache),
+        str(artifact),
+        digest,
+        "-o",
+        str(output),
+        str(client),
+    ]
 
 
 def reject_import(args, environment, message):
@@ -71,15 +81,15 @@ def tamper_checks(args, environment, receipt):
     original_checksum = sidecar.read_bytes()
     start, end, interface = unpack(original)
     assert "fn owner_drop" in interface and "fn ready_unlink" in interface
-    assert "from owner.node" in interface and "from node.value" in interface
-    assert "from head.node.next" in interface
+    assert "opaque" in interface and "scoped" in interface
+    assert "from owner" in interface
     assert "var " not in interface and "while " not in interface
     mutations = {
         "function contract": original.replace(b"access(read, Graph)", b"access(edit, Graph)", 1),
         "type layout": original.replace(b"value: i64", b"value: i32", 1),
-        "write contract": original.replace(
-            b"modifies(Node.prev, Node.next)", b"modifies(Node.next, Node.next)", 1
-        ),
+        "trust contract": original[: len(TAG) + 144]
+        + struct.pack("<Q", 0)
+        + original[len(TAG) + 152 :],
         "object": original[:end] + bytes([original[end] ^ 1]) + original[end + 1 :],
         "truncated object": original[:-1],
         "trailing bytes": original + b"unbound bytes",
@@ -143,16 +153,19 @@ def capture_race(directory, args, environment, receipt, output):
 def source_checks(directory, driver, cache, links, library, client, environment, receipt):
     original = library.read_text()
     bad = directory / "bad-provider.crs"
-    bad.write_text(original.replace("active_unlink(node);", "", 1))
-    command([driver, "publish", str(cache), str(links), str(bad)], success=False)
+    bad.write_text(
+        original
+        + "fn invalid()->Owner access(reclaim,Graph) {var a:Owner=owner_new(1i64);return a;}"
+    )
+    command([driver, "publish", str(cache), "trusted", str(links), str(bad)], success=False)
     changed = directory / "changed-provider.crs"
     changed.write_text(original + "\nfn additional(value:i32)->i32 { return value; }\n")
-    new_receipt = publish(driver, cache, [links, changed])
+    new_receipt = publish(driver, cache, [changed], "trusted", str(links))
     first = receipt[0].read_bytes()
     second = new_receipt[0].read_bytes()
     assert first[len(TAG) + 64 : len(TAG) + 128] != second[len(TAG) + 64 : len(TAG) + 128]
     args = import_arguments(
-        driver, cache, (new_receipt[0], receipt[1]), client, directory / "mismatched"
+        driver, cache, (new_receipt[0], receipt[1]), client, directory / "mismatched", trusted=True
     )
     reject_import(args, environment, "trusted digest receipt")
     # Interface text has no authority when copied into ordinary application input.
@@ -166,20 +179,11 @@ def source_checks(directory, driver, cache, links, library, client, environment,
             "var second: Owner = owner_new(66i64);", "var second: Owner = first;", 1
         )
     )
-    args = import_arguments(driver, cache, receipt, bad_client, directory / "bad-client")
+    args = import_arguments(
+        driver, cache, receipt, bad_client, directory / "bad-client", trusted=True
+    )
     command(args, env=environment, success=False)
     return 4
-
-
-def field_import(directory, driver, cache, environment):
-    directory.mkdir()
-    links, library, client = fixture(directory, "fields.crs")
-    receipt = publish(driver, cache, [links, library])
-    links.unlink()
-    library.unlink()
-    output = directory / "client"
-    command(import_arguments(driver, cache, receipt, client, output), env=environment)
-    assert command([str(output)]).stdout == "BABAOK\n"
 
 
 def run(build):
@@ -192,16 +196,19 @@ def run(build):
         cache = directory / "cache"
         cache.mkdir(mode=0o700)
         links, library, client = fixture(directory)
-        receipt = publish(driver, cache, [links, library])
+        receipt = publish(driver, cache, [library], "trusted", str(links))
         rejected = source_checks(
             directory, driver, cache, links, library, client, environment, receipt
         )
         links.unlink()
         library.unlink()
         output = directory / "client"
-        args = import_arguments(driver, cache, receipt, client, output)
+        args = import_arguments(driver, cache, receipt, client, output, trusted=True)
         command(args, env=environment)
         assert command([str(output)]).stdout == "OK\n"
+        wrong_trust = [args[0], "import", *args[2:]]
+        reject_import(wrong_trust, environment, "trust contract differs")
+        rejected += 1
         for mode in ("--object", "--emit-c", "--prepare"):
             options = [*args[:5], str(client), mode]
             reject_import(options, environment, "loses imported dependencies")
@@ -210,7 +217,6 @@ def run(build):
         changed_checker(directory, driver, args, environment)
         rejected += 1
         capture_race(directory, args, environment, receipt, output)
-        field_import(directory / "fields", driver, cache, environment)
         allocation_provider = directory / "allocation-provider.crs"
         allocation_provider.write_text(
             "// SPDX-License-Identifier: Apache-2.0\nfn value()->i32 { return 0i32; }\n"

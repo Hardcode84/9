@@ -2,7 +2,7 @@
 
 record OsLoopSlot { slot: *OsSlot; next: *OsLoopSlot; }
 
-fn os_cursor_scope(state: *OsState, object: *OsObject) -> *OsScope {
+fn os_access_origin(state: *OsState, object: *OsObject) -> *OsScope {
     var scope: *OsScope = (*state).scope;
     while scope != null(*OsScope) && !(*scope).access { scope = (*scope).parent; }
     if scope == null(*OsScope) { scope = (*state).scope; }
@@ -24,34 +24,10 @@ fn os_loop_find(bindings: *OsLoopSlot, slot: *OsSlot) -> *OsLoopSlot {
 fn os_loop_widen(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> *OsValue {
     var value: *OsValue = os_bound(state, slot);
     if (*slot).owns { return os_loop_owner(check, state, slot, location); }
-    if value == null(*OsValue) || os_borrowed((*slot).syntax) ||
-       ((*value).object != null(*OsObject) && !(*value).pointer) {
-        os_error(check, location, "loop assignment requires an initialized scalar or domain cursor"); return null(*OsValue);
+    if value == null(*OsValue) || os_borrowed((*slot).syntax) || (*value).object != null(*OsObject) || (*value).pointer {
+        os_error(check, location, "loop assignment requires an initialized scalar or owner"); return null(*OsValue);
     }
-    if !(*value).pointer { return os_value(check, (*slot).syntax, null(*OsObject), false); }
-    if (*value).object == null(*OsObject) || !os_tracked((*(*value).object).contract) {
-        os_error(check, location, "loop cursor requires a declared storage schema"); return null(*OsValue);
-    }
-    var object: *OsObject = (*value).object;
-    if !os_prove(check, state, os_nullable_live(check, state, object), location, "loop cursor may refer to unpublished storage") {
-        return null(*OsValue);
-    }
-    var nonnull: bool = os_entails(check, state,
-        pf_not(&(*check).proof, pf_eq(&(*check).proof, (*object).term, "0")), location);
-    var target: *OsObject = os_object_header(check, state, (*object).syntax, null(*OsObject), (*value).borrow_scope, true);
-    if target == null(*OsObject) { return null(*OsValue); }
-    (*target).abstract = true;
-    (*target).cursor = true;
-    os_observe(check, state, (*target).term);
-    os_mark(check, state, target, OS_LIVE | OS_READY | OS_SUMMARY | OS_PUBLISHED | OS_PINNED);
-    os_assume(check, state, os_nullable_live(check, state, target));
-    if nonnull {
-        os_mark(check, state, target, os_flags(state, target) | OS_NONNULL);
-        os_assume(check, state, pf_not(&(*check).proof, pf_eq(&(*check).proof, (*target).term, "0")));
-    }
-    var result: *OsValue = os_value(check, (*value).syntax, target, true);
-    if result != null(*OsValue) { (*result).borrow_scope = (*value).borrow_scope; (*result).loan = (*value).loan; }
-    return result;
+    return os_value(check, (*slot).syntax, null(*OsObject), false);
 }
 
 fn os_loop_owner_ready(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> bool {
@@ -133,22 +109,9 @@ fn os_loop_bindings(check: *OsCheck, state: *OsState, statement: *CrustStmt,
 fn os_loop_cursor_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
                            before: *OsValue, after: *OsValue, location: *CrustLoc) -> unit {
     if after == null(*OsValue) || (*after).owner || (*after).borrow_scope != (*before).borrow_scope ||
-       (*after).loan != (*before).loan {
-        os_error(check, location, "loop backedge must preserve initialized values and borrow lifetimes"); return;
+       (*after).loan != (*before).loan || (*after).pointer != (*before).pointer {
+        os_error(check, location, "loop backedge must preserve initialized values and borrow lifetimes");
     }
-    if !(*before).pointer { return; }
-    if (*after).object == null(*OsObject) {
-        if (os_flags(entry, (*before).object) & OS_NONNULL) != 0u32 {
-            os_error(check, location, "loop backedge must preserve a nonnull domain cursor");
-        }
-        return;
-    }
-    var valid: *u8 = os_nullable_live(check, body, (*after).object);
-    if (os_flags(entry, (*before).object) & OS_NONNULL) != 0u32 {
-        valid = os_live_term(check, body, (*(*after).object).contract, (*(*after).object).term);
-    }
-    os_prove(check, body, valid, location,
-        "loop backedge must preserve a live or null domain cursor");
 }
 
 fn os_loop_check_slot(check: *OsCheck, entry: *OsState, body: *OsState, slot: *OsSlot,
@@ -194,9 +157,7 @@ fn os_loop_fixed_object(check: *OsCheck, entry: *OsState, body: *OsState,
     } else {
         var field: *OsSlot = os_fields(entry, object);
         while field != null(*OsSlot) && !os_failed(check) {
-            if !os_symbolic_slot(field) {
-                os_loop_fixed_value(check, entry, body, os_bound(entry, field), os_bound(body, field), location);
-            }
+            os_loop_fixed_value(check, entry, body, os_bound(entry, field), os_bound(body, field), location);
             field = (*field).next;
         }
     } }
@@ -217,14 +178,10 @@ fn os_loop_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
 }
 
 fn os_checked_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if !os_pure(check, (*statement).expr) || !os_close(check, state, &(*statement).loc) { return; }
+    if !os_pure(check, (*statement).expr) { return; }
     var bindings: *OsLoopSlot = null(*OsLoopSlot);
     os_loop_scalars(check, state, &bindings, &(*statement).loc);
     os_loop_bindings(check, state, (*statement).body, &bindings);
-    if (*state).effect >= OS_EDIT {
-        os_heap_havoc(check, state, (*state).domain, (*check).function, (*check).parameters);
-        os_snapshot(check, state);
-    }
     if os_failed(check) { return; }
     os_expr(check, state, (*statement).expr);
     var body: OsState = *state;
@@ -233,9 +190,8 @@ fn os_checked_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> u
     os_statement(check, &body, (*statement).body);
     (*check).loop_depth = (*check).loop_depth - 1usize;
     if os_failed(check) { return; }
-    if body.flow == PF_NORMAL {
+    if body.flow == OS_NORMAL {
         os_loop_backedge(check, state, &body, bindings, &(*statement).loc);
-        os_close(check, &body, &(*statement).loc);
     }
     os_refine(check, state, (*statement).expr, false);
 }

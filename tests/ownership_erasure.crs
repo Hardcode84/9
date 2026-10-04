@@ -10,7 +10,7 @@ fn erasure_equal(left: *CBuffer, right: *CBuffer) -> bool {
     return true;
 }
 
-fn erasure_check(cli: *CCli) -> bool {
+fn erasure_check(cli: *CCli, trusted: *CrustSource, count: usize) -> bool {
     var context: *CrustContext = (*cli).stage.status.context;
     var resources: RsStage = uninit;
     rs_init(&resources, context);
@@ -20,7 +20,7 @@ fn erasure_check(cli: *CCli) -> bool {
     var after: CStage = uninit;
     c_stage_init(&before, context);
     c_stage_init(&after, context);
-    var valid: bool = os_driver_read(cli, &ownership) && os_lower(&ownership);
+    var valid: bool = os_trust_sources(&ownership, trusted, count) && os_driver_read(cli, &ownership) && os_lower(&ownership);
     var entry: *CrustDecl = null(*CrustDecl);
     if valid {
         entry = resource_driver_entry(cli, &resources);
@@ -35,17 +35,22 @@ fn erasure_check(cli: *CCli) -> bool {
     }
     c_stage_destroy(&after);
     c_stage_destroy(&before);
-    pf_destroy(&ownership.proof);
+
     return valid;
 }
 
 fn main(argc: i32, argv: **u8) -> i32 {
     var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
+    var request: CrustBuild = make CrustBuild { context: &context, source: null(*CrustSource),
+        target_begin: 0usize, argc: argc - 1i32, argv: argv + 1isize };
+    var trusted: *CrustSource = ownership_test_trust(&request);
+    var count: usize = 0usize;
+    if trusted != null(*CrustSource) { count = 1usize; }
     var cli: CCli = uninit;
-    var valid: bool = c_driver_init(&cli, &context, argc - 1i32);
-    if valid { valid = c_driver_parse(&cli, argc, argv, 1i32); }
-    if valid { valid = erasure_check(&cli); }
+    var valid: bool = c_driver_init(&cli, &context, request.argc) && context.error_count == 0usize;
+    if valid { valid = c_driver_parse(&cli, request.argc, request.argv, 0i32); }
+    if valid { valid = erasure_check(&cli, trusted, count); }
     if context.error_count != 0usize { c_driver_diagnostic(&context, argv[0usize]); }
     c_stage_destroy(&cli.stage);
     crust_context_destroy(&context);

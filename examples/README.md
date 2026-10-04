@@ -25,9 +25,8 @@ separates application rules from container-author obligations.
 | 6 | [Modules](../stages/modules/README.md) | Separate contexts, selected imports, native exports, and provider lifetimes |
 | 7 | [Native bootstrap](../stages/native/README.md) | Build stages from source and hand following compilation code to native execution |
 | 8 | [Cyclomatic complexity](../stages/ccn/README.md) | Count decisions with the public AST and reject functions before backend emission |
-| 9 | [Static memory checks](ownership/README.md) | Check direct pointer programs and intrusive link invariants before emission |
-| 10 | [Intrusive-list verification](intrusive/README.md) | Use ordinary field contracts for scoped traversal, destruction, and reuse |
-| 11 | [Pointer graphs](ownership-graphs/README.md) | Check parent and child fields with the same contracts |
+| 9 | [Intrusive lists](intrusive/README.md) | Use a trusted opaque provider with checked traversal, destruction, and reuse |
+| 10 | [Owning tree](ownership-graphs/README.md) | Transfer child ownership behind the same checked interface |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -46,8 +45,7 @@ Each example has its own directory and README.
 | [modules](modules/README.md) | Compile separate namespaces and import selected names | `modules: 42` |
 | [native](native/README.md) | Bootstrap stages and execute compilation functions natively | `Hello from a bootstrapped native stage!` |
 | [intrusive](intrusive/README.md) | Check two intrusive memberships with node and head destructors | `OK` |
-| [intrusive/recursive](intrusive/recursive/README.md) | Retain a runtime-sized chain of node owners | `OK` |
-| [ownership-graphs](ownership-graphs/README.md) | Destroy a parent while its child owner stays live | `OK` |
+| [ownership-graphs](ownership-graphs/README.md) | Detach a child owner and destroy an owned subtree | `OK` |
 | [cached-backend](cached-backend/README.md) | Bootstrap native stages from source and reuse the library | Native ASM/C handoff and hello output |
 | [reader-switch](reader-switch/README.md) | Replace the reader and executor from the root | Two lines read with a new grammar |
 | [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
@@ -55,7 +53,6 @@ Each example has its own directory and README.
 | [ccn](ccn/README.md) | Measure function complexity and select a compilation limit | CCN report or checked executable |
 | [resources/hello](resources/hello/README.md) | Select ownership, RAII, and defer in the same source file | `Hello, resources!` |
 | [resources/returned](resources/returned/README.md) | Return a field view tied to a source loan | `42` |
-| [ownership](ownership/README.md) | Select static memory checking for two intrusive hooks | `OK` |
 | [resources/sqlite](resources/sqlite/README.md) | Own SQLite connections and statements; borrow column bytes | Typed rows and separate error codes |
 | [overload/hello](overload/hello/README.md) | Select overloads and a typed function value in the same file | Two greeting lines |
 | [overload/separate](overload/separate/README.md) | Link overloaded functions from a separate native object | `types: 42` |
@@ -66,14 +63,8 @@ require `make resource-stage`. The SQLite example also needs its pinned native
 SQLite input; its README gives the command.
 Overload examples require `make overload-stage`.
 The intrusive, ownership-basics, and ownership-graphs examples require
-`make ownership-stage` and Z3.
-The intrusive `closed-main.crs` proof example requires
-`make resource-memory-stage` and Z3.
-Its `raw-main.crs` root retains the seed-language bootstrap witness.
-Its `contract-main.crs` root checks a declared unlink contract against the body
-and callers. Build that optional stage with `make memory-contract-stage` and Z3.
-Its `walk-main.crs` root proves a runtime-sized traversal before RAII cleanup.
-Build that optional stage with `make memory-loop-stage` and Z3.
+`make ownership-stage`. They have no solver dependency. The intrusive
+`raw-main.crs` root retains the unchecked seed-language bootstrap witness.
 Paths passed to `host_source`, `host_input`, and `host_path` are relative to the
 root file. A raw `-o` argument passed to the C backend is relative to the working
 directory. Each example states its output path. A root builds an executable;
@@ -87,16 +78,12 @@ unchanged source files and selected libraries into a path with spaces. It runs
 them from a separate working directory, executes their outputs, and checks
 reader and inline-target errors. `make check` and `make check-c` also check the
 custom assembly stage. These checks use the raw intrusive witness. The modular
-intrusive root runs in `make check-ownership` with Z3; the closed-program root
-runs in `make check-resource-memory`.
+intrusive root runs in `make check-ownership`.
 
 Run `make check-resources` for the resource hello and resource language tests.
-Run `make check-memory` with a Z3 library for the optional static memory tutorial.
-Run `make check-ownership check-ownership-imports` with Z3 for the ownership
-basics, modular intrusive ownership, and verified library imports.
-Run `make check-resource-memory` with Z3 for the closed-program intrusive proof.
-Run `make check-memory-contracts` with Z3 for declared body and caller contracts.
-Run `make check-memory-loops` with Z3 for inductive loop checks and traversal.
+Run `make check-ownership check-ownership-imports` for local ownership, trusted
+containers, and independent library contracts. Run `make check-ownership-alloc`
+for compiler allocation failures.
 The SQLite verifier checks the native application against its frozen C baseline.
 Run `make check-overload` for the overload examples, native symbols, separate
 objects, and resource composition tests.

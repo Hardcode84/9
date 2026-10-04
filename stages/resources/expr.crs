@@ -121,6 +121,7 @@ fn rs_finish_call(function: *RsFunction, signature: *CrustTypeSyntax, call: *Cru
     } else {
         result = rs_call_result(function, call, (*signature).base, result_local, output, location);
     }
+    rs_complete_outputs(function, values, (*signature).param_count);
     rs_end_call_loans(function, values, (*signature).param_count);
     return result;
 }
@@ -515,7 +516,7 @@ fn rs_call_arguments(function: *RsFunction, source: *CrustExpr, signature: *Crus
     var count: usize = (*source).arg_count;
     var index: usize = 0usize;
     while index < count && !(*stage).failed {
-        var value: *RsValue = rs_expr(function, (*source).args[index], output);
+        var value: *RsValue = rs_call_argument(function, (*source).args[index], signature, index, output);
         if !rs_require_value(function, value, (*signature).params[index], &(*(*source).args[index]).loc) { return false; }
         if (*value).local == null(*RsLocal) && (*value).mode != RS_READ && (*value).mode != RS_MUT && rs_indirect((*value).syntax) {
             value = rs_capture(function, output, value, &(*source).loc);
@@ -536,6 +537,9 @@ fn rs_call_transfer(function: *RsFunction, values: **RsValue, count: usize, defe
     var stage: *RsStage = (*function).stage;
     var index: usize = 0usize;
     while index < count && !(*stage).failed {
+        if deferred != null(*RsScope) && (*values[index]).initializes {
+            rs_error(stage, location, "in-place construction cannot be deferred"); return;
+        }
         rs_transfer(function, values[index]);
         if deferred != null(*RsScope) && (*values[index]).local != null(*RsLocal) {
             rs_put(stage, &(*function).captures, (*(*values[index]).local).storage as usize, deferred as *u8);

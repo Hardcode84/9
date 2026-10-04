@@ -128,7 +128,7 @@ owner. No runtime flag selects which cleanup to run.
 
 `drop *pointer;` destroys a resource value, including its embedded resources,
 without freeing the allocation. The ordinary resource stage requires `unsafe`
-for this operation. A composed memory stage must prove unique destruction
+for this operation. A composed ownership stage must establish unique destruction
 authority and prevent later reads of the destroyed value. The modular ownership
 stage checks that contract before it accepts a following `release(pointer)`.
 Explicit drop accepts a resource record or a record with resource fields.
@@ -307,7 +307,7 @@ check the resulting pointer's access permission before use. Owner construction,
 moves, loan bindings, and cleanup eligibility keep
 their source checks. Their states must still agree at continuing control-flow
 edges. The [intrusive tutorial](../../examples/intrusive/README.md) describes
-the modular checker and the earlier complete proof views. Plain `rs_prepare` retains
+the modular checker. Plain `rs_prepare` retains
 whole-binding initialization checks and its explicit `unsafe` requirement.
 
 Memory delegation also permits borrowed record fields and explicit record
@@ -321,7 +321,7 @@ and moves. Plain `rs_prepare` rejects borrowed record fields.
 origins, including `from` contracts on record results. A stage that sets it must check each returned loan against the declared
 input and any field path. Memory delegation alone keeps the original source
 loan check. The modular ownership stage sets this option and checks field-origin
-contracts; the closed-program memory stage does not set it.
+contracts.
 
 ## 6. Check the proof and cost boundaries
 
@@ -353,3 +353,17 @@ Continue with the [SQLite example](../../examples/resources/sqlite/README.md)
 for connections, statements, borrowed column bytes, and error paths. The
 [overload composition example](../../examples/overload/resources/README.md)
 shows why source overload selection runs before borrow types are lowered.
+
+## In-place outputs for composed checkers
+
+A source-linked composer can call `rs_initializes(stage, signature, index)`
+after `rs_collect` and before `rs_publish`. A normal return must initialize
+that complete pointee. The composer must verify this promise and exclusive
+access to each uninitialized output. The signature is the collected source
+function type, not the lowered C type.
+
+The lowerer accepts an uninitialized local's address or a forwarded pointer.
+It schedules local resource cleanup after construction succeeds. It adds no
+zero fill or runtime flag. It rejects replacement of an initialized local and
+deferred construction. The ownership stage uses this generic contract for
+opaque stable stack resources.

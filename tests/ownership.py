@@ -1,201 +1,255 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Check generic field contracts, owner lifetimes, and the intrusive tutorial."""
+"""Check the opaque boundary, local lifetimes, and native container behavior."""
 
 import argparse
 import tempfile
 from pathlib import Path
 
-from memory import command
 from ownership_runtime import check_runtime
-from resource_memory import execute
-
-ROOT = Path(__file__).resolve().parents[1]
-TUTORIAL = ROOT / "examples/intrusive"
+from ownership_support import ROOT, SCALAR_FLOW, command, execute
 
 
-def replace(source, before, after):
-    if before not in source:
-        raise RuntimeError(f"mutation did not match: {before!r}")
-    return source.replace(before, after, 1)
+def body(text):
+    return "fn main(argc:i32,argv:**u8)->i32 {domain Graph {" + text + "}return 0i32;}"
 
 
-def contract_cases():
-    source = (TUTORIAL / "links.crs").read_text()
-    program = (TUTORIAL / "program.crs").read_text()
-    types = (
-        "domain Graph(Node);\nrecord Node"
-        + program.split("record Node", 1)[1].split("resource Owner", 1)[0]
-    )
-    source = types + source
+def rejects():
+    owner = "var owner:Owner=owner_new(1i64);"
+    head = "var head:ReadyHead=uninit;ready_init(&head);"
+    cursor = "var cursor:Cursor=ready_first(read head);"
     return {
-        "missing-update": replace(source, "(*after).prev = before;", ""),
-        "missing-postcondition": replace(source, "(*node).next = node;", ""),
-        "undeclared-write": replace(source, "modifies(Node.prev, Node.next)", "modifies()"),
-        "read-editor": replace(source, "access(edit, Graph)", "access(read, Graph)"),
-        "null-input": replace(source, "requires(node != null(*Node))", ""),
-        "observer-during-update": replace(
-            source, "(*before).next = after;", "(*before).next = after; observe(after);"
-        )
-        + "\nfn observe(node:*Node)->unit access(read,Graph) {}\n",
+        "copy-owner": (body(owner + "var copy:Owner=owner;"), "explicit move"),
+        "double-drop": (body(owner + "drop owner;drop owner;"), "has been moved"),
+        "after-drop": (
+            body(owner + "drop owner;var value:read i64=owner_value(read owner);"),
+            "has been moved",
+        ),
+        "private-read": (body(owner + "var node:*Node=owner.node;"), "private"),
+        "private-make": (body("var owner:Owner=make Owner{node:null(*Node)};"), "opaque"),
+        "raw-retirement": (body(owner + "release(owner.node as *u8);"), "private"),
+        "stable-move": (body(head + "var copy:ReadyHead=move head;"), "address-stable"),
+        "stable-replace": (body(head + "ready_init(&head);"), "initialized storage"),
+        "drop-during-read": (body(owner + "read Graph {drop owner;}"), "stronger domain authority"),
+        "implicit-drop-during-edit": (
+            body(owner + "edit Graph {var capture:Owner=move owner;}"),
+            "stronger domain authority",
+        ),
+        "return-cleanup": (
+            "fn bad()->i32 {domain Graph {"
+            + owner
+            + "edit Graph {var capture:Owner=move owner;return 0i32;}}}",
+            "stronger domain authority",
+        ),
+        "head-cleanup": (body(head + "read Graph {drop head;}"), "stronger domain authority"),
+        "cursor-escape": (
+            body(head + "var saved:Cursor=uninit;read Graph {" + cursor + "saved=move cursor;}"),
+            "outlive its access",
+        ),
+        "cursor-return": (
+            "fn bad()->Cursor access(reclaim,Graph) {"
+            + head
+            + "read Graph {"
+            + cursor
+            + "return move cursor;}}",
+            "escape reclamation",
+        ),
+        "mutable-alias": (
+            body(
+                head
+                + "edit Graph {"
+                + cursor
+                + "var a:mut i64=cursor_mut(mut cursor);var b:mut i64=cursor_mut(mut cursor);}"
+            ),
+            "active",
+        ),
+        "payload-versus-read-call": (
+            body(
+                head
+                + "edit Graph {"
+                + cursor
+                + "var a:mut i64=cursor_mut(mut cursor);ready_count(read head);}"
+            ),
+            "active domain loan",
+        ),
+        "payload-versus-edit-call": (
+            body(
+                owner
+                + head
+                + "edit Graph {"
+                + cursor
+                + "var a:read i64=cursor_value(read cursor);ready_insert(mut head,read owner);}"
+            ),
+            "active domain loan",
+        ),
+        "wrong-instance": (
+            body(owner + "domain Graph {" + head + "ready_insert(mut head,read owner);}"),
+            "domain",
+        ),
+        "domain-escape": (
+            "fn bad()->Owner access(reclaim,Graph) {domain Graph {return owner_new(1i64);}}",
+            "fresh domain",
+        ),
+        "outer-storage": (
+            body("var owner:Owner=uninit;domain Graph {owner=owner_new(1i64);}"),
+            "domain instance",
+        ),
+        "missing-authority": (
+            "fn bad()->unit {var owner:Owner=owner_new(1i64);}",
+            "stronger domain authority",
+        ),
+        "borrowed-retirement": (
+            body(owner + "read Graph {var view:read Owner=read owner;drop owner;}"),
+            "active",
+        ),
+        "unapproved-type": ("record Private {p:*u8;} opaque;", "explicit trust"),
+        "hidden-retainer": ("record Observer {p:*Node;}", "persistent pointers"),
+        "heap-formula": ("fn bad()->unit requires(true) {}", "expected '{'"),
+        "deferred-reclaim": (
+            "fn consume(value:Owner)->unit access(reclaim,Graph) {}"
+            + body(owner + "edit Graph {defer consume(move owner);}"),
+            "stronger domain authority",
+        ),
     }
 
 
-def owner_cases():
-    source = (TUTORIAL / "program.crs").read_text()
-    release = "release(node as *u8);"
-    early = "{ var early: Owner = move first; }"
+def local_cases():
+    resource = "resource Value {n:i64;} drop dispose;fn dispose(v:mut Value)->unit {}"
     return {
-        "second-membership-live": replace(source, "active_unlink(node);", ""),
-        "head-live": replace(
-            source, "while head.node.next != &head.node { ready_unlink(head.node.next); }", ""
-        ),
-        "missing-payload": replace(source, "(*node).value = value;", ""),
-        "missing-pointer-init": replace(source, "(*node).active_next = node;", ""),
-        "double-release": replace(source, release, release + release),
-        "use-after-release": replace(source, release, release + " (*node).value = 9i64;"),
-        "copied-owner": replace(source, "node: move node", "node: node"),
-        "saved-cursor": replace(source, early, "var saved:*Node=first.node; " + early),
-        "move-stable-head": replace(
-            source,
-            "node_init(&ready.node, 0i64);",
-            "node_init(&ready.node, 0i64); var moved:ReadyHead=move ready;",
-        ),
-        "forged-owner": replace(
-            source,
-            "var first: Owner = owner_new(65i64);",
-            "var first:Owner=make Owner {node:4096usize as *Node};",
-        ),
-        "edit-reclaims": replace(source, early, "edit Graph " + early),
-        "hidden-reference": source + "\nrecord Hidden { saved:*Node; }\n",
-        "outside-schema": source
-        + "\nrecord Hidden { saved:*Node; } domain(Graph) references(saved);\n",
-        "third-reference": extra_reference(source),
-        "consume-comparison": replace(source, release, "if node == move node {} " + release),
-        "consume-shortcircuit": replace(
-            source, release, "if false && node == move node {} " + release
-        ),
-        "interior-release": replace(source, release, "release((&(*node).value) as *u8);"),
-        "partial-owner-return": replace(
-            source,
-            early,
-            "var raw:*Node=move first.node; if argc==2i32 {return 0i32;} first.node=move raw;"
-            + early,
-        ),
-        "byte-reinterpret": replace(
-            source, early, "var bytes:*u8=first.node as *u8; var bad:u8=*bytes; " + early
-        ),
-        "false-destructor-precondition": replace(
-            source,
-            "fn owner_drop(owner: mut Owner) -> unit access(reclaim, Graph) {",
-            "fn owner_drop(owner: mut Owner) -> unit access(reclaim, Graph) requires(false) {",
-        ),
-        "null-backedge": replace(source, "cursor = (*cursor).next;", "cursor = null(*Node);"),
-        "read-loop-write": replace(
-            source, "cursor = (*cursor).next;", "ready_unlink(cursor); cursor = (*cursor).next;"
-        ),
-        "scope-escape": replace(
-            source,
-            "fn ready_count(head: read ReadyHead) -> usize access(read, Graph) {",
-            "fn ready_count(head: read ReadyHead) -> usize access(read, Graph) { var escaped:*Node=null(*Node);",
-        ).replace("cursor = (*cursor).next;", "escaped=cursor; cursor=(*cursor).next;", 1),
-        "read-loop-reclaim": replace(
-            source,
-            "cursor = (*cursor).next;",
-            "var doomed:Owner=owner_new(3i64); cursor=(*cursor).next;",
-        ),
-        "unused-invalid-body": source
-        + "\nfn bad(owner:mut Owner)->unit access(read,Graph) {release(owner.node as *u8);}\n",
+        "defer-borrow": resource
+        + "fn observe(v:read Value)->unit {if v.n!=7i64 {trap;}} fn main(argc:i32,argv:**u8)->i32 {var v:Value=make Value{n:7i64};defer observe(read v);return 0i32;}",
+        "defer-move": resource
+        + "fn consume(v:Value)->unit {} fn main(argc:i32,argv:**u8)->i32 {var v:Value=make Value{n:7i64};defer consume(move v);return 0i32;}",
+        "defer-order": 'extern fn emit(c:i32)->i32 foreign(scalar)="putchar";fn put(c:i32)->unit {emit(c);} fn main(argc:i32,argv:**u8)->i32 {defer put(75i32);defer put(79i32);return 0i32;}',
+        "scalar-flow": SCALAR_FLOW,
     }
 
 
-def extra_reference(source):
-    source = replace(
-        source,
-        "domain Graph(Node, Owner, ReadyHead, ActiveHead);",
-        "domain Graph(Node, Owner, ReadyHead, ActiveHead, Index);",
+def local_rejects():
+    return {
+        "uninitialized": ("fn bad()->i64 {var value:i64=uninit;return value;}", "uninitialized"),
+        "branch-initialization": (
+            "fn bad(test:bool)->i64 {var value:i64=uninit;if test {value=1i64;}return value;}",
+            "uninitialized",
+        ),
+        "return-stack-loan": (
+            "fn bad(x:read i64)->read i64 from x {var y:i64=1i64;return read y;}",
+            "declared source",
+        ),
+        "return-wrong-origin": (
+            "fn bad(x:read i64,y:read i64)->read i64 from x {return read y;}",
+            "declared source",
+        ),
+        "shared-write": ("fn bad(x:read i64)->unit {x=2i64;}", "shared"),
+        "defer-borrow-escape": (
+            "fn use(x:read i64)->unit {} fn bad()->unit {var x:i64=1i64;defer use(read x);x=2i64;}",
+            "active",
+        ),
+        "defer-mutable-read": (
+            "fn set(x:mut i64)->unit {x=2i64;} fn bad()->i64 {var x:i64=1i64;defer set(mut x);return x;}",
+            "active",
+        ),
+    }
+
+
+RUNTIME_TREE = "fn main(argc:i32,argv:**u8)->i32 access(reclaim,Forest) {\n var root:Tree=tree_new(1i64);\n var count:i32=argc+64i32;\n while count>0i32 {\n  var next:Tree=tree_new(2i64);\n  tree_attach_left(mut next,move root);\n  root=move next;\n  count=count-1i32;\n }\n return 0i32;\n}\n"
+
+
+def run(build, directory, sanitize):
+    compiler = build / "crust-ownership-test"
+    provider = ROOT / "examples/intrusive/links.crs"
+    cases = rejects()
+    for name, (text, diagnostic) in cases.items():
+        path = directory / f"{name}.crs"
+        path.write_text(text)
+        result = command([compiler, "trusted", provider, "--library", "--check", path], expected=1)
+        assert diagnostic in result.stderr.decode(), (name, result.stderr)
+    for name, (text, diagnostic) in local_rejects().items():
+        path = directory / f"{name}.crs"
+        path.write_text(text)
+        result = command([compiler, "--library", "--check", path], expected=1)
+        assert diagnostic in result.stderr.decode(), (name, result.stderr)
+    # Ordinary input cannot grant itself trust, even when its bytes match a library.
+    result = command(
+        [compiler, "--check", provider, ROOT / "examples/intrusive/program.crs"], expected=1
     )
-    return source + "\nrecord Index { saved:*Node; } domain(Graph) references(saved);\n"
-
-
-def accepted(compiler, directory, cases, inputs, sanitize):
-    for name, source in cases.items():
-        path = directory / f"accept-{name}.crs"
-        path.write_text(source)
-        generated, symbols = directory / f"{name}.c", directory / f"{name}.rsp"
-        command(
-            [compiler, "--emit-c", "--symbols", symbols, "-o", generated, *inputs, path], timeout=90
-        )
-        execute(generated, symbols, directory, name, sanitize, b"OK\n")
-    return len(cases)
-
-
-def rejected(compiler, directory, cases, prefix, inputs):
-    for name, source in cases.items():
-        path = directory / f"{prefix}-{name}.crs"
-        path.write_text(source)
-        output = directory / f"{prefix}-{name}.c"
-        output.write_text("output must survive rejection\n")
-        result = command(
-            [compiler, "--library", "--emit-c", "-o", output, *inputs, path], 1, timeout=90
-        )
-        if not result.stderr or output.read_text() != "output must survive rejection\n":
-            raise RuntimeError(f"{name}: missing diagnostic or output changed on rejection")
-    return len(cases)
-
-
-def basics(build, directory, sanitize):
-    tutorial = ROOT / "examples/ownership-basics"
-    for name, expected in (("program", b"BC\n"), ("heap", b"AB\n")):
-        source = tutorial / f"{name}.crs"
-        generated, symbols = directory / f"basic-{name}.c", directory / f"basic-{name}.rsp"
+    assert b"explicit trust" in result.stderr
+    for folder, library in [("intrusive", "links.crs"), ("ownership-graphs", "provider.crs")]:
+        sources = [
+            "trusted",
+            ROOT / "examples" / folder / library,
+            ROOT / "examples" / folder / "program.crs",
+        ]
+        generated, symbols = directory / f"{folder}.c", directory / f"{folder}.rsp"
         command(
             [
-                build / "crust",
-                tutorial / "main.crs",
+                compiler,
+                *sources[:2],
                 "--emit-c",
                 "--symbols",
                 symbols,
                 "-o",
                 generated,
-                source,
+                *sources[2:],
             ]
         )
-        command([build / "crust-ownership-erasure", "--check", source])
-        execute(generated, symbols, directory, f"basic-{name}", sanitize, expected)
-    print("ownership basics: 2 source-root examples, erasure, and native output passed")
-
-
-def run(build, directory, sanitize):
-    basics(build, directory, sanitize)
-    compiler = build / "crust-ownership-test"
-    links = TUTORIAL / "links.crs"
-    program = TUTORIAL / "program.crs"
-    command([compiler, "--library", "--check", links, program])
-    generated, symbols = directory / "intrusive.c", directory / "intrusive.rsp"
+        command([build / "crust-ownership-erasure", *sources])
+        execute(generated, symbols, directory, folder, sanitize, b"OK\n")
+    runtime_tree = directory / "runtime-tree.crs"
+    runtime_tree.write_text(RUNTIME_TREE)
+    generated, symbols = runtime_tree.with_suffix(".c"), runtime_tree.with_suffix(".rsp")
     command(
-        [compiler, "--emit-c", "--symbols", symbols, "-o", generated, links, program], timeout=90
+        [
+            compiler,
+            "trusted",
+            ROOT / "examples/ownership-graphs/provider.crs",
+            "--emit-c",
+            "--symbols",
+            symbols,
+            "-o",
+            generated,
+            runtime_tree,
+        ]
     )
-    execute(generated, symbols, directory, "intrusive", sanitize, b"OK\n")
+    command(
+        [
+            build / "crust-ownership-erasure",
+            "trusted",
+            ROOT / "examples/ownership-graphs/provider.crs",
+            runtime_tree,
+        ]
+    )
+    execute(generated, symbols, directory, "runtime-tree", sanitize, b"")
+    for name, text in local_cases().items():
+        path = directory / f"{name}.crs"
+        path.write_text(text)
+        generated, symbols = path.with_suffix(".c"), path.with_suffix(".rsp")
+        command([compiler, "--emit-c", "--symbols", symbols, "-o", generated, path])
+        command([build / "crust-ownership-erasure", path])
+        execute(
+            generated, symbols, directory, name, sanitize, b"OK" if name == "defer-order" else b""
+        )
+    forwarded = directory / "forwarded.crs"
+    forwarded.write_text(
+        "fn initialize(head:*ReadyHead)->unit access(reclaim,Graph) initializes(head) {ready_init(head);}"
+        + body("var head:ReadyHead=uninit;initialize(&head);")
+    )
+    command([compiler, "trusted", provider, "--check", forwarded])
+    duplicate_provider = directory / "duplicate-provider.crs"
+    duplicate_provider.write_text(
+        provider.read_text()
+        + "fn twice(a:*ReadyHead,b:*ReadyHead)->unit access(reclaim,Graph) initializes(a,b) {ready_init(a);ready_init(b);}"
+    )
+    duplicate = directory / "duplicate-output.crs"
+    duplicate.write_text(body("var head:ReadyHead=uninit;twice(&head,&head);"))
+    result = command([compiler, "trusted", duplicate_provider, "--check", duplicate], expected=1)
+    assert b"active" in result.stderr, result.stderr
     check_runtime(build, directory, ROOT, sanitize)
-    command([build / "crust-ownership-erasure", "--check", links, program], timeout=90)
-    command([build / "crust", TUTORIAL / "main.crs", "--check", links, program], timeout=90)
-    count = rejected(compiler, directory, contract_cases(), "contract", [])
-    count += rejected(compiler, directory, owner_cases(), "owner", [links])
-    renamed = directory / "renamed.crs"
-    text = links.read_text() + program.read_text()
-    for old, new in (
-        ("Node", "Entry"),
-        ("Graph", "Work"),
-        ("prev", "older"),
-        ("next", "newer"),
-        ("unlink", "detach"),
-    ):
-        text = text.replace(old, new)
-    renamed.write_text(text)
-    command([compiler, "--library", "--check", renamed], timeout=90)
+    for artifact in [compiler, build / "crust-ownership-library.so"]:
+        assert b"z3" not in command(["ldd", artifact]).stdout.lower()
+        assert b"Z3_" not in command(["nm", "-u", artifact]).stdout
     print(
-        f"ownership: tutorial, root, erasure, exact-address reuse, renaming, and {count} rejections passed"
+        f"ownership: two containers, address reuse, O0/O2, erasure, {len(cases)+len(local_rejects())+2} rejections"
     )
 
 
@@ -204,8 +258,8 @@ def main():
     parser.add_argument("--build", type=Path, default=ROOT / "build")
     parser.add_argument("--sanitize", action="store_true")
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix="ownership-", dir=args.build) as temporary:
-        run(args.build.resolve(), Path(temporary).resolve(), args.sanitize)
+    with tempfile.TemporaryDirectory(prefix="ownership-local-", dir=args.build) as temporary:
+        run(args.build.resolve(), Path(temporary), args.sanitize)
 
 
 if __name__ == "__main__":

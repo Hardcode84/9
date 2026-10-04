@@ -26,12 +26,12 @@ fn os_publish_bundle(cli: *CCli, stage: *OsStage, directory: *u8,
     c_driver_buffer(&(*cli).stage.status, &buffer);
     if !os_library_pack(&buffer, work, &interface_source, &object) { return false; }
     var source: CrustSource = make CrustSource {
-        path: "ownership-library-v1", bytes: buffer.data, size: buffer.size, identity: 0u64
+        path: "ownership-library-v2", bytes: buffer.data, size: buffer.size, identity: 0u64
     };
     return os_library_publish_bytes((*(*stage).resources).context, directory, work, &source, result);
 }
 
-fn os_publish_build(cli: *CCli, directory: *u8, result: *OwnershipLibrary) -> bool {
+fn os_publish_build(cli: *CCli, directory: *u8, result: *OwnershipLibrary, trusted: *CrustSource, count: usize) -> bool {
     var context: *CrustContext = (*cli).stage.status.context;
     if !os_publish_options(cli) { return false; }
     var resources: RsStage = uninit;
@@ -40,10 +40,9 @@ fn os_publish_build(cli: *CCli, directory: *u8, result: *OwnershipLibrary) -> bo
     os_init(&stage, &resources);
     var work: OsLibraryWork = uninit;
     var success: bool = os_library_begin(context, directory, &work) &&
-        os_driver_read(cli, &stage) && os_lower(&stage) && os_verify(&stage);
+        os_trust_sources(&stage, trusted, count) && os_driver_read(cli, &stage) && os_lower(&stage) && os_verify(&stage);
     if success { success = os_publish_bundle(cli, &stage, directory, &work, result); }
     if !cache_cleanup(context, &work.files) { success = false; }
-    pf_destroy(&stage.proof);
     return success;
 }
 
@@ -57,16 +56,16 @@ fn os_publish_options(cli: *CCli) -> bool {
     return true;
 }
 
-// Publish only after checking every provider body. Retain the receipt in trusted
+// Check untrusted provider bodies and record selected trust. Retain the receipt in trusted
 // build state and keep the cache directory free of untrusted writers.
-fn ownership_publish(request: *CrustBuild, directory: *u8, result: *OwnershipLibrary) -> i32 {
-    *result = make OwnershipLibrary { artifact: null(*u8), digest: null(*u8) };
+fn ownership_publish(request: *CrustBuild, directory: *u8, result: *OwnershipLibrary, trusted: *CrustSource, count: usize) -> i32 {
+    *result = make OwnershipLibrary { artifact: null(*u8), digest: null(*u8), trusted: false };
     var cli: CCli = uninit;
     var success: bool = c_driver_init(&cli, (*request).context, (*request).argc);
     cli.root = (*request).source;
     cli.target_begin = (*request).target_begin;
     if success { success = c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32); }
-    if success { success = os_publish_build(&cli, directory, result); }
+    if success { success = os_publish_build(&cli, directory, result, trusted, count); }
     c_stage_destroy(&cli.stage);
     if success { return 0i32; }
     return 1i32;

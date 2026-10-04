@@ -7,13 +7,11 @@ fn os_init(stage: *OsStage, resources: *RsStage) -> unit {
     (*stage).imports = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
     (*stage).resources = resources;
     (*stage).domains = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
-    pf_init(&(*stage).proof, (*resources).context);
-    (*stage).solver = null(*u8);
-    (*stage).sent = 0usize;
+    (*stage).trusted = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
 }
 
 fn os_failed(check: *OsCheck) -> bool {
-    return (*(*(*check).stage).resources).failed || (*(*check).stage).proof.status.failed;
+    return (*(*(*check).stage).resources).failed;
 }
 
 fn os_error(check: *OsCheck, location: *CrustLoc, message: *u8) -> unit {
@@ -24,8 +22,14 @@ fn os_alloc(check: *OsCheck, size: usize, alignment: usize) -> *u8 {
     return rs_alloc((*(*check).stage).resources, size, alignment);
 }
 
+// Bucket heads are copied with branch state; older facts remain immutable.
+fn os_fact_bucket(key: *u8) -> usize {
+    var bits: usize = key as usize;
+    return ((bits >> 3usize) ^ (bits >> 9usize)) & 63usize;
+}
+
 fn os_fact(state: *OsState, key: *u8) -> *OsFact {
-    var fact: *OsFact = (*state).facts;
+    var fact: *OsFact = (*state).facts[os_fact_bucket(key)];
     while fact != null(*OsFact) {
         if (*fact).key == key { return fact; }
         fact = (*fact).next;
@@ -36,8 +40,8 @@ fn os_fact(state: *OsState, key: *u8) -> *OsFact {
 fn os_set(check: *OsCheck, state: *OsState, key: *u8, value: *OsValue, flags: u32) -> unit {
     var fact: *OsFact = os_alloc(check, sizeof(OsFact), alignof(OsFact)) as *OsFact;
     if fact == null(*OsFact) { return; }
-    *fact = make OsFact { fields: null(*OsSlot), key: key, value: value, next: (*state).facts, flags: flags };
-    (*state).facts = fact;
+    *fact = make OsFact { fields: null(*OsSlot), key: key, value: value, next: (*state).facts[os_fact_bucket(key)], flags: flags };
+    (*state).facts[os_fact_bucket(key)] = fact;
 }
 
 fn os_flags(state: *OsState, object: *OsObject) -> u32 {
@@ -49,7 +53,7 @@ fn os_flags(state: *OsState, object: *OsObject) -> u32 {
 fn os_mark(check: *OsCheck, state: *OsState, object: *OsObject, flags: u32) -> unit {
     var fields: *OsSlot = os_fields(state, object);
     os_set(check, state, object as *u8, null(*OsValue), flags);
-    if !os_failed(check) { (*(*state).facts).fields = fields; }
+    if !os_failed(check) { (*(*state).facts[os_fact_bucket(object as *u8)]).fields = fields; }
 }
 
 fn os_bound(state: *OsState, slot: *OsSlot) -> *OsValue {
@@ -70,9 +74,6 @@ fn os_value(check: *OsCheck, syntax: *CrustTypeSyntax, object: *OsObject, pointe
         (*result).syntax = syntax;
         (*result).object = object;
         (*result).pointer = pointer;
-        if object == null(*OsObject) && !pointer && syntax != null(*CrustTypeSyntax) {
-            (*result).term = pf_fresh(&(*check).proof, os_sort(syntax));
-        }
     }
     return result;
 }
@@ -122,4 +123,14 @@ fn os_enter(check: *OsCheck, location: *CrustLoc) -> bool {
     }
     (*check).depth = (*check).depth + 1usize;
     return true;
+}
+
+fn os_binding(check: *OsCheck, name: *CrustName, value: *OsValue, next: *OsBinding) -> *OsBinding {
+    var binding: *OsBinding = os_alloc(check, sizeof(OsBinding), alignof(OsBinding)) as *OsBinding;
+    if binding != null(*OsBinding) { *binding = make OsBinding { name: name, value: value, next: next }; }
+    return binding;
+}
+
+fn os_publish_value(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+    if !os_initialized(check, state, object) { os_error(check, location, "interface requires initialized storage"); }
 }

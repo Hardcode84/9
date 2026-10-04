@@ -388,4 +388,4 @@ The [intrusive tutorial](../../examples/intrusive/README.md) uses ordinary typed
 pointer updates. Its example tests individual release, allocation reuse,
 multiple memberships, head cleanup, and payload loans. The owning-chain example
 checks recursive storage from finite type interfaces. These results remain
-subject to the [full ownership gate](../design.md#checked-ownership-target).
+subject to the [full ownership gate](../design.md#checked-ownership).

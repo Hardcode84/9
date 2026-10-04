@@ -1,0 +1,110 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
+extern fn release(pointer: *u8) -> unit foreign(release) = "free";
+extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
+
+domain Symbols(Symbol, Alias, Index, Selection);
+record Symbol { next: *Symbol; key: i64; value: i64; } opaque domain(Symbols);
+record Alias { next: *Alias; target: *Symbol; key: i64; } opaque domain(Symbols);
+resource Index { symbols: *Symbol; aliases: *Alias; } opaque domain(Symbols) drop index_drop;
+record Selection { target: *Symbol; } opaque scoped domain(Symbols);
+
+fn index_new() -> Index access(reclaim, Symbols) {
+    return make Index { symbols: null(*Symbol), aliases: null(*Alias) };
+}
+
+fn symbol_find(index: read Index, key: i64) -> *Symbol access(read, Symbols) {
+    var node: *Symbol = index.symbols;
+    while node != null(*Symbol) {
+        if (*node).key == key { return node; }
+        node = (*node).next;
+    }
+    return null(*Symbol);
+}
+
+fn alias_find(index: read Index, key: i64) -> *Alias access(read, Symbols) {
+    var alias: *Alias = index.aliases;
+    while alias != null(*Alias) {
+        if (*alias).key == key { return alias; }
+        alias = (*alias).next;
+    }
+    return null(*Alias);
+}
+
+// Duplicate keys are errors. Allocation failure terminates the process.
+fn index_insert(index: mut Index, key: i64, value: i64) -> unit access(reclaim, Symbols) {
+    if symbol_find(read index, key) != null(*Symbol) { trap; }
+    var node: *Symbol = allocate(sizeof(Symbol)) as *Symbol;
+    if node == null(*Symbol) { trap; }
+    *node = make Symbol { next: index.symbols, key: key, value: value };
+    index.symbols = node;
+}
+
+// A missing target gives an unbound alias. Alias keys must be distinct.
+fn index_alias(index: mut Index, key: i64, target: i64) -> unit access(reclaim, Symbols) {
+    if alias_find(read index, key) != null(*Alias) { trap; }
+    var node: *Symbol = symbol_find(read index, target);
+    var alias: *Alias = allocate(sizeof(Alias)) as *Alias;
+    if alias == null(*Alias) { trap; }
+    *alias = make Alias { next: index.aliases, target: node, key: key };
+    index.aliases = alias;
+}
+
+// Return false if the alias does not exist. A missing target unbinds it.
+fn index_bind(index: mut Index, key: i64, target: i64) -> bool access(edit, Symbols) {
+    var alias: *Alias = alias_find(read index, key);
+    if alias == null(*Alias) { return false; }
+    (*alias).target = symbol_find(read index, target);
+    return true;
+}
+
+// Remove the symbol and unbind all its aliases. Return false for a missing key.
+fn index_remove(index: mut Index, key: i64) -> bool access(reclaim, Symbols) {
+    var link: **Symbol = &index.symbols;
+    while *link != null(*Symbol) {
+        var node: *Symbol = *link;
+        if (*node).key == key {
+            var alias: *Alias = index.aliases;
+            while alias != null(*Alias) {
+                if (*alias).target == node { (*alias).target = null(*Symbol); }
+                alias = (*alias).next;
+            }
+            *link = (*node).next;
+            release(node as *u8);
+            return true;
+        }
+        link = &(*node).next;
+    }
+    return false;
+}
+
+fn index_select(index: read Index, key: i64) -> Selection access(read, Symbols) {
+    var alias: *Alias = alias_find(read index, key);
+    var target: *Symbol = null(*Symbol);
+    if alias != null(*Alias) { target = (*alias).target; }
+    return make Selection { target: target };
+}
+
+fn selection_present(selection: read Selection) -> bool access(read, Symbols) {
+    return selection.target != null(*Symbol);
+}
+
+// Return the selected payload. An absent selection terminates the process.
+fn selection_value(selection: read Selection) -> read i64 access(read, Symbols) from selection {
+    if selection.target == null(*Symbol) { trap; }
+    return read (*selection.target).value;
+}
+
+fn index_drop(index: mut Index) -> unit access(reclaim, Symbols) {
+    while index.aliases != null(*Alias) {
+        var alias: *Alias = index.aliases;
+        index.aliases = (*alias).next;
+        release(alias as *u8);
+    }
+    while index.symbols != null(*Symbol) {
+        var node: *Symbol = index.symbols;
+        index.symbols = (*node).next;
+        release(node as *u8);
+    }
+}

@@ -61,6 +61,28 @@ def reject_cases():
             READING + "fn bad(a:mut View,b:View)->unit {a=move b;}",
             "borrowed view records must retain their stored loan origins",
         ),
+        "return-independent-origins": (
+            "record Pair {first:read i64;second:read i64;}"
+            "fn pair(a:read i64,b:read i64)->Pair from a {"
+            "return make Pair{first:read a,second:read b};}",
+            "stored result does not derive from its declared source parameter",
+        ),
+        "local-first-origin": (
+            "record Pair {first:read i64;second:read i64;}"
+            + main_body(
+                "var a:i64=1i64;var b:i64=2i64;"
+                "var pair:Pair=make Pair{first:read a,second:read b};a=3i64;"
+            ),
+            "active",
+        ),
+        "local-second-origin": (
+            "record Pair {first:read i64;second:read i64;}"
+            + main_body(
+                "var a:i64=1i64;var b:i64=2i64;"
+                "var pair:Pair=make Pair{first:read a,second:read b};b=3i64;"
+            ),
+            "active",
+        ),
         "duplicate-mut": (
             "record View {a:mut i64;b:mut i64;}"
             + main_body("var x:i64=1i64;var v:View=make View{a:mut x,b:mut x};"),

@@ -8,11 +8,15 @@ import subprocess
 from ownership_support import command
 
 
-def check_runtime(build, directory, root, sanitize, source_path=None, outputs=None, arguments=()):
+def check_runtime(
+    build, directory, root, sanitize, source_path=None, outputs=None, arguments=(), client_path=None
+):
     if source_path is None:
         source_path = root / "examples/intrusive/links.crs"
     if outputs is None:
         outputs = (b"OK\n",)
+    if client_path is None:
+        client_path = root / "examples/intrusive/program.crs"
     source = directory / "allocator-program.crs"
     source.write_text(
         source_path.read_text()
@@ -31,7 +35,7 @@ def check_runtime(build, directory, root, sanitize, source_path=None, outputs=No
             symbols,
             "-o",
             generated,
-            root / "examples/intrusive/program.crs",
+            client_path,
         ]
     )
     for optimization in ("-O0", "-O2"):

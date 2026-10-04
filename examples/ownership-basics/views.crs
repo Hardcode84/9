@@ -5,6 +5,7 @@ record Editing { value: mut i64; }
 record Wrapped { reading: Reading; }
 record Meter { value: i64; }
 record MeterView { meter: read Meter; }
+record Comparison { actual: read i64; expected: read i64; }
 
 extern fn emit(value: i32) -> i32 foreign(scalar) = "putchar";
 
@@ -43,6 +44,8 @@ fn meter_view(meter: read Meter) -> MeterView from meter {
 }
 
 fn meter_get(view: read MeterView) -> i64 { return view.meter.value; }
+
+fn comparison_equal(pair: read Comparison) -> bool { return pair.actual == pair.expected; }
 
 fn main(argc: i32, argv: **u8) -> i32 {
     var count: i64 = 42i64;
@@ -91,6 +94,24 @@ fn main(argc: i32, argv: **u8) -> i32 {
         meter.value = 7i64;
     }
     if sizeof(Editing) != sizeof(*i64) || sizeof(MeterView) != sizeof(*Meter) { trap; }
+    var expected: i64 = 11i64;
+    {
+        // Independent results can be combined locally without a result-origin map.
+        var actual: Reading = reading_new(read count);
+        var reference: Reading = reading_new(read expected);
+        var pair: Comparison = make Comparison { actual: read actual.value, expected: read reference.value };
+        var equal: bool = comparison_equal(read pair);
+        if !equal { trap; }
+    }
+    {
+        var view: Reading = reading_new(read count);
+        drop view;
+        view = reading_new(read expected);
+        count = 12i64;
+        if view.value != 11i64 { trap; }
+        drop view;
+        expected = 13i64;
+    }
     emit(79i32); emit(75i32); emit(10i32);
     return 0i32;
 }

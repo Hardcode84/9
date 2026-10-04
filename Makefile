@@ -183,6 +183,7 @@ ownership-stage: $(BUILD)/crust-ownership-test $(BUILD)/crust-ownership-library.
 
 check-ownership: all ownership-stage $(BUILD)/crust-ownership-erasure $(BUILD)/crust-ownership-import-test
 	python3 tests/ownership.py --build $(BUILD)
+	python3 tests/ownership_index.py --build $(BUILD)
 	python3 tests/ownership_views.py --build $(BUILD)
 	python3 tests/ownership_native.py --build $(BUILD)
 

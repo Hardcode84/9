@@ -101,6 +101,7 @@ def main():
             (runtime_tree, "examples/ownership-graphs/provider.crs"),
             ("examples/intrusive/program.crs", "examples/intrusive/links.crs"),
             ("examples/ownership-graphs/program.crs", "examples/ownership-graphs/provider.crs"),
+            ("examples/ownership-index/program.crs", "examples/ownership-index/provider.crs"),
             ("examples/ownership-basics/handles.crs", ""),
             ("examples/ownership-basics/views.crs", ""),
         ]:

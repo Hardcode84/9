@@ -12,11 +12,20 @@ fn os_call(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
         os_error(check, &(*expression).loc, "call has no ownership interface");
         return null(*OsValue);
     }
+    if !os_explicit_call(check, contract, &(*expression).loc) { return null(*OsValue); }
     if (*contract).foreign == OS_NATIVE { return os_native_call(check, state, expression, contract); }
     if (*contract).foreign == OS_ALLOCATE { return os_allocate(check, state, expression, contract); }
     if (*contract).foreign == OS_RELEASE { return os_release(check, state, expression, contract); }
     if (*contract).foreign == OS_SCALAR { return os_scalar_call(check, state, expression, contract); }
     return os_local_call(check, state, expression, contract);
+}
+
+fn os_explicit_call(check: *OsCheck, contract: *OsFunction, location: *CrustLoc) -> bool {
+    var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*contract).declaration).name);
+    if (*global).drop_only {
+        os_error(check, location, "destructor calls require drop of an owned value"); return false;
+    }
+    return true;
 }
 
 fn os_call_effect(check: *OsCheck, state: *OsState, contract: *OsFunction, location: *CrustLoc) -> bool {
@@ -37,7 +46,8 @@ fn os_no_cursors(check: *OsCheck, state: *OsState, domain: *CrustName, location:
         while slot != null(*OsSlot) {
             var value: *OsValue = os_bound(state, slot);
             if value != null(*OsValue) && !(*slot).owns && !(*slot).authority && (*value).object != null(*OsObject) &&
-               (((*value).pointer && (*(*value).object).aliased) || os_borrowed((*slot).syntax)) {
+               (((*value).pointer && (*(*value).object).aliased) ||
+                (os_borrowed((*slot).syntax) && !os_handle_loan(check, state, (*value).loan))) {
                 if (*(*value).object).brand == (*state).brand {
                     os_error(check, location, "reclamation conflicts with an active domain cursor");
                     return false;

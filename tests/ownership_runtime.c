@@ -3,11 +3,13 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-static void *slots[4];
-static size_t extents[4];
+enum { SLOT_COUNT = 64 };
+
+static void *slots[SLOT_COUNT];
+static size_t extents[SLOT_COUNT];
 static unsigned int calls;
 static unsigned int failure;
-static unsigned int busy[4];
+static unsigned int busy[SLOT_COUNT];
 static unsigned int reused;
 
 void *ownership_test_allocate(size_t size);
@@ -16,7 +18,7 @@ void ownership_test_release(void *pointer);
 static void finish(void)
 {
     unsigned int index;
-    for (index = 0; index < 4; ++index) {
+    for (index = 0; index < SLOT_COUNT; ++index) {
         if (busy[index]) {
             abort();
         }
@@ -41,7 +43,7 @@ void *ownership_test_allocate(size_t size)
     if (calls == failure) {
         return NULL;
     }
-    for (index = 0; index < 4; ++index) {
+    for (index = 0; index < SLOT_COUNT; ++index) {
         if (busy[index] || (slots[index] != NULL && extents[index] != size)) {
             continue;
         }
@@ -66,7 +68,7 @@ void ownership_test_release(void *pointer)
     if (pointer == NULL) {
         return;
     }
-    for (index = 0; index < 4; ++index) {
+    for (index = 0; index < SLOT_COUNT; ++index) {
         if (pointer == slots[index] && busy[index]) {
             busy[index] = 0;
             return;

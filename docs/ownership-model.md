@@ -16,6 +16,8 @@ conflicting loans, and destruction through a borrower. Named loans last to the
 end of their lexical scope. Reborrows prevent conflicting use of their parent.
 
 Automatic cleanup and explicit `drop` require the same destructor permission.
+Checked code cannot call a destructor function directly or defer it. Use `drop`
+to consume an owner, or defer a helper that takes the owner by value.
 Resources drop in reverse declaration order. Destructors run before embedded
 resource fields drop, in reverse field order. A destructor must consume its
 owned native fields and leave embedded resources initialized for cleanup.
@@ -135,6 +137,13 @@ with a declared origin, then consume or drop the old local view. Results that
 contain loans from different input paths require separate results or calls;
 one `from` path cannot describe those independent origins.
 
+This is the selected interface boundary for this profile. The
+[index tutorial](../examples/ownership-index/README.md) combines independent
+loans in a checked local record. The stored-view example combines separate
+single-origin results and replaces a local view after `drop`. Neither needs
+a per-field result or replacement map. Keep the unsupported interfaces rejected;
+adding such a map requires an API that cannot use these forms.
+
 Basic view checks use local owner and loan facts without a solver. Each stored
 loan lowers to one ordinary pointer. View-only records need no generated
 cleanup calls or runtime lifetime state. The [stored-view example](../examples/ownership-basics/views.crs)
@@ -207,6 +216,13 @@ access permission and its declared origin. Potential aliases in one domain are
 conservative: a mutable payload view blocks other read or edit calls unless
 they receive that view's authority. Shared payload loans block conflicting edits.
 Neither cursor bits nor address reuse can create a new checked lifetime.
+
+A direct borrow of an opaque resource handle protects that handle's storage.
+It can be forwarded to a reclamation call. This permits checked helpers such
+as `remove(index: mut Index) access(reclaim, Symbols)`. The checker still
+rejects conflicting handle access and destruction through the borrower.
+Interior views and payload loans remain subject to the domain restrictions
+above; they cannot be treated as independent owner handles.
 
 ## In-place construction and transparent storage
 

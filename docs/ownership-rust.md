@@ -81,7 +81,14 @@ verification, at no optimization level. Its [benchmark](../benchmarks/ownership/
 measures compiled-stage checking separately from target GCC.
 
 The [intrusive tutorial](../examples/intrusive/README.md) and
-[owning tree](../examples/ownership-graphs/README.md) show all annotations and
+[owning tree](../examples/ownership-graphs/README.md), and
+[one-way index](../examples/ownership-index/README.md) show all annotations and
 trusted pointer bodies. The compiler has no rules for those field names or
 operations. Safety depends on correct trusted providers and foreign contracts.
 The stage is not a concurrency model or a formal proof of the compiler.
+
+The index client combines two input loans in a local comparison record. The
+stored-view client combines separate factory results and replaces a local view
+after `drop`. These examples retain the single-origin result interface. They do
+not require a per-field result or replacement map. The corresponding rejected
+interfaces remain explicit in the table above.

@@ -369,6 +369,22 @@ are scoped values; persistent graph links belong inside an explicitly trusted op
 Run [views.crs](../examples/ownership-basics/views.crs) with the
 [example instructions](../examples/ownership-basics/README.md#stored-views).
 It also shows nested records and returned loans through stored fields.
+`Comparison` combines independent factory results in a local record. To change
+a local view's source, drop the old view and assign a new factory result:
+
+```crust
+var first: i64 = 1i64;
+var second: i64 = 2i64;
+var view: Editing = editing_new(mut first);
+drop view;
+view = editing_new(mut second);
+first = 3i64;
+drop view;
+second = 4i64;
+```
+
+Each assignment uses the existing single-origin factory interface. No
+replacement-origin contract is needed for a local whose old loan has ended.
 
 ## 6. Own a heap allocation
 
@@ -483,7 +499,9 @@ The capture owns the ticket until `consume` runs. A borrowed capture keeps its
 loan until the call runs. Later conflicting writes, moves, or destruction are
 rejected. The required access permission must be available during cleanup.
 Deferred calls return `unit`; wrap foreign calls in a checked source function.
-In-place constructors cannot be deferred.
+In-place constructors cannot be deferred. Checked code cannot call or defer a
+destructor function directly. Use `drop`, or defer a helper that consumes an
+owner by value, as above. This prevents a second cleanup of the same resource.
 
 ## 9. Choose the boundary
 
@@ -494,12 +512,18 @@ The [owning tree](../examples/ownership-graphs/README.md) uses the same rules.
 It transfers ownership through ordinary child links and returns an owner on
 removal. The stage has no tree-specific rule.
 
+The [one-way index](../examples/ownership-index/README.md) owns symbols and
+separate aliases to them. A symbol has no reverse alias link. Its retirement
+operation scans and clears incoming aliases before it frees the symbol.
+The client uses the same read, edit, and reclamation scopes as the list.
+
 Returned views state one exact input path with `from`. Stored views can combine
 several local origins, but a returned view record currently requires all its
 borrowed fields to use that one declared path. Split such results into separate
 calls, or construct the combined view in the caller. Replacing origins through
 a borrowed view record is rejected: its interface has no replacement map.
-These are explicit interface restrictions, not permission to skip checking.
+The index and stored-view examples exercise these forms. This profile keeps
+the single-origin boundary and rejects interfaces that need an origin map.
 
 Independent libraries retain the same types, effects, origins, and selected
 trust in their receipts. See the [stage contract](ownership-model.md#independent-libraries).

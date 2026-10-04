@@ -118,6 +118,14 @@ origins. Callers use those declarations without inspecting bodies. Borrowed
 record parameters must retain their stored origins. A returned record's borrowed
 fields must all derive from its one declared `from` path.
 
+`Comparison` combines two independently returned views locally. A helper can
+borrow that record without a new result-origin contract. The example also
+drops a local `Reading`, assigns a new factory result, and changes the old
+source. The new source remains borrowed until the replacement view ends.
+Replacing a view through `mut Reading`, or returning both independent origins
+through one `from` path, is rejected. This profile keeps those restrictions
+instead of adding a per-field lifetime map.
+
 Resource lowering turns stored views into pointer fields and ordinary loads
 or stores. Ownership facts remain in the checker. The example checks pointer
 layout and verifies that borrowed records remain usable after their view ends.

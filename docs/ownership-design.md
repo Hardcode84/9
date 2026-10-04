@@ -63,6 +63,14 @@ through a borrowed parameter. The checker rejects these interfaces. A finite
 per-field result and replacement map would be needed to accept them. This
 implementation does not add that interface before a production API needs it.
 
+The [one-way index](../examples/ownership-index/README.md) checks this boundary:
+a helper compares a selected payload with a separate caller input through a
+local view record. The [stored-view example](../examples/ownership-basics/views.crs)
+combines two single-origin factory results and replaces a local view after
+ending its old loan. Retain these forms as the accepted profile. A returned
+multi-origin record and replacement through a borrowed view remain rejected.
+This is the selected interface restriction for this profile.
+
 Borrowed storage must be initialized again before return. A mutable call
 invalidates scalar facts for its declared writable places. Native-handle
 validity facts must also be rechecked after a call that can replace the handle.
@@ -73,6 +81,14 @@ A destructor's required permission is part of the resource type. Implicit
 cleanup cannot call a destructor that an explicit call could not call at the
 same point. Check generated cleanup paths as well as written calls. Deferred
 calls keep their captured owners or loans until they run.
+
+A checked helper can forward a borrow of an opaque owner handle to a
+reclamation call. The handle borrow protects its own storage. An interior
+view, heap loan, or payload loan still prevents reclamation. Ordinary alias
+checks prevent destruction or conflicting use of the borrowed handle itself.
+Direct and deferred calls to destructor functions are rejected in checked
+code: those calls would leave the original cleanup duty live. Use `drop` or
+pass an owner by value to a consuming helper.
 
 There are no checked `invariant`, `requires`, or `ensures` formulas in this
 profile. Ordinary application conditions still execute. Assertions do not
@@ -291,6 +307,14 @@ has no way to find or remove incoming entries. It must supply that algorithm,
 retain a loan that prevents deletion, or reject that operation. The compiler
 does not invent a reverse index or pay for one invisibly.
 
+The index tutorial owns symbol entries and separate alias entries. Symbols have
+no reverse alias link. Removing a symbol scans and clears every alias to it,
+then releases that symbol. The checked client tests two incoming aliases,
+unaffected targets, rebinding, individual release, replacement, and automatic
+cleanup of a runtime-sized index. The native test forces address reuse. The
+same client also compiles from a bodyless imported interface. This supplies
+the one-way retention example without another ownership feature.
+
 ## 7. Body-local checker
 
 Build a finite interface table once. It contains resource kinds, field paths,
@@ -394,10 +418,10 @@ Compare the complete provider and client annotations with a corresponding
 Rust API and its unsafe implementation. Do not hide required proof scripts in
 the library or require a second proof language to satisfy this gate.
 
-Only after that provider/client boundary and the cost gate pass should the
-modular ownership stage remove its Z3 dependency. The old closed-program proof
-experiments are separate code. Remove or migrate them explicitly; do not claim
-a repository-wide removal while they still link the solver.
+The provider/client boundary and compilation-cost gate passed before removal
+of Z3 and the graph-proof stages. Keep their replacement checks as regression
+requirements. The ownership test checks that its compiler and stage library
+have no solver library dependency or solver symbols.
 
 ## 10. Basis and tradeoffs
 

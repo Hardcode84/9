@@ -210,11 +210,22 @@ fn os_call_loans(check: *OsCheck, state: *OsState, arguments: **OsValue,
     return !os_failed(check);
 }
 
+fn os_handle_loan(check: *OsCheck, state: *OsState, loan: *OsLoan) -> bool {
+    if loan == null(*OsLoan) || (*loan).object == null(*OsObject) || (*loan).place == null(*OsSlot) { return false; }
+    var object: *OsObject = (*loan).object;
+    var resources: *RsStage = (*(*check).stage).resources;
+    if !os_opaque((*object).contract) || !rs_owns(resources, (*object).syntax) ||
+       !rs_same(resources, (*(*loan).place).syntax, (*object).syntax) { return false; }
+    var root: *OsObject = os_root(object);
+    // A handle loan protects its own storage. Interior views still block reclamation.
+    return !(*root).heap && !(*root).aliased && os_owner(state, root) == null(*OsObject);
+}
+
 fn os_no_domain_loans(check: *OsCheck, state: *OsState, domain: *CrustName, location: *CrustLoc) -> bool {
     var loan: *OsLoan = (*check).loans;
     while loan != null(*OsLoan) && !os_failed(check) {
         if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && (*loan).object != null(*OsObject) &&
-           (*(*loan).object).brand == (*state).brand {
+           (*(*loan).object).brand == (*state).brand && !os_handle_loan(check, state, loan) {
             os_error(check, location, "reclamation conflicts with an active domain loan"); return false;
         }
         loan = (*loan).next;

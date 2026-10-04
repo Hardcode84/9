@@ -87,6 +87,7 @@ def main():
     workloads = {
         "intrusive": ("examples/intrusive/program.crs", "examples/intrusive/links.crs"),
         "tree": ("examples/ownership-graphs/program.crs", "examples/ownership-graphs/provider.crs"),
+        "index": ("examples/ownership-index/program.crs", "examples/ownership-index/provider.crs"),
         "handles": ("examples/ownership-basics/handles.crs", None),
         "views": ("examples/ownership-basics/views.crs", None),
     }

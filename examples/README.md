@@ -27,6 +27,7 @@ separates application rules from container-author obligations.
 | 8 | [Cyclomatic complexity](../stages/ccn/README.md) | Count decisions with the public AST and reject functions before backend emission |
 | 9 | [Intrusive lists](intrusive/README.md) | Use a trusted opaque provider with checked traversal, destruction, and reuse |
 | 10 | [Owning tree](ownership-graphs/README.md) | Transfer child ownership behind the same checked interface |
+| 11 | [One-way index](ownership-index/README.md) | Retire a symbol with incoming aliases and check local views from separate inputs |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -46,6 +47,7 @@ Each example has its own directory and README.
 | [native](native/README.md) | Bootstrap stages and execute compilation functions natively | `Hello from a bootstrapped native stage!` |
 | [intrusive](intrusive/README.md) | Check two intrusive memberships with node and head destructors | `OK` |
 | [ownership-graphs](ownership-graphs/README.md) | Detach a child owner and destroy an owned subtree | `OK` |
+| [ownership-index](ownership-index/README.md) | Clear one-way aliases before individual symbol release and reuse | `OK` |
 | [cached-backend](cached-backend/README.md) | Bootstrap native stages from source and reuse the library | Native ASM/C handoff and hello output |
 | [reader-switch](reader-switch/README.md) | Replace the reader and executor from the root | Two lines read with a new grammar |
 | [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
@@ -62,7 +64,7 @@ The root files select their compiler libraries explicitly. Resource examples
 require `make resource-stage`. The SQLite example also needs its pinned native
 SQLite input; its README gives the command.
 Overload examples require `make overload-stage`.
-The intrusive, ownership-basics, and ownership-graphs examples require
+The intrusive, ownership-basics, ownership-graphs, and ownership-index examples require
 `make ownership-stage`. They have no solver dependency. The intrusive
 `raw-main.crs` root retains the unchecked seed-language bootstrap witness.
 Paths passed to `host_source`, `host_input`, and `host_path` are relative to the

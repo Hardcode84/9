@@ -19,8 +19,8 @@ driver hash, commands, raw samples, and bootstrap intervals. It compares paired
 runs of the same input with and without ownership verification. The unchecked
 path exists only in this measurement driver and does not provide a safety claim.
 
-The four workloads use the intrusive client, owning tree, native handles, and
-stored views. The script repeats independent function bodies at three sizes.
+The five workloads use the intrusive client, owning tree, one-way index, native
+handles, and stored views. The script repeats independent function bodies at three sizes.
 It randomizes each pair and reports the verification pass separately. The
 selected gate is a median total frontend ratio at most `2.0` for each workload
 and size. This budget is not a C-level speed claim.

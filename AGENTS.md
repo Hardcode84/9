@@ -42,15 +42,25 @@ requires it.
 - The target ownership stage must not depend on Z3. Do not add another
   general-purpose theorem prover or build an equivalent solver to preserve
   every accepted predicate. Use a bounded set of local checking rules.
-  Before replacing the current graph checker, demonstrate checked intrusive
-  removal, individual destruction and reuse, rejection of surviving incoming
-  references, independent library interfaces, and unchanged runtime output.
-  Do not extend the current solver-based model while this gate is unmet.
+  Apply the [replacement gate](docs/ownership-design.md#9-replacement-gate):
+  demonstrate a trusted direct-pointer provider and checked client, individual
+  destruction and reuse, rejected client lifetime errors, independent imports,
+  unchanged emitted code, and the compilation-cost budget. Do not extend the
+  current solver-based model while this gate is unmet.
+- A small explicitly trusted container implementation is permitted behind an
+  opaque checked API. The root must select the trust boundary. Trusted pointer
+  bodies must obey their declared retention and retirement contracts, but are
+  not compiler-verified ownership proofs. Test their native behavior separately
+  from client rejection tests. Never turn a failed check into implicit trust.
+  All client invalidation paths, including automatic cleanup, must enforce the
+  destructor's access requirements. Do not permit an undeclared retainer or a
+  raw release call to bypass retirement.
 - The checked ownership model must not require whole-program analysis. Check
   each function from its body, declared function and field contracts, and
   callee interfaces. Local flow analysis is permitted. Do not expand callees
   or inspect callers to obtain missing safety conditions. Check definitions
-  against their contracts before using them as verified library code.
+  against their contracts before using them as verified library code. Imported
+  interfaces must distinguish checked bodies from explicitly trusted bodies.
 - Develop generic ownership rules. A container example is a test, not the
   definition of the model. Do not add topology-specific ownership keywords,
   roles, state, or proof callbacks to make that example pass. Specialized
@@ -62,8 +72,8 @@ requires it.
   application and container authors. Do not hide required solver predicates,
   ghost lemmas, or custom proof scripts in libraries and call the model simple.
   The existing closed-program proofs are experiments, not acceptance of this
-  modular model. Apply the [ownership acceptance gate](docs/design.md#checked-ownership-target)
-  before extending the model.
+  modular model. Use the [solver-free design](docs/ownership-design.md) for the
+  replacement; it does not change the current stage's accepted syntax.
 
 ## Communication and documentation
 

@@ -11,6 +11,10 @@ This tutorial teaches the ownership stage. It combines owners and loans with
 explicit storage schemas and ordinary field and function conditions. The
 [stage contract](ownership-model.md) defines the rules used by the examples.
 
+These examples use the current checker, whose graph checks need Z3. The
+[replacement design](ownership-design.md) specifies a solver-free stage with
+explicitly trusted container implementations. It is not implemented yet.
+
 Start here if you can already write a function and a record. You do not need
 to know the compiler implementation or a proof language.
 

@@ -7,10 +7,10 @@ interfaces. It uses the public reader and AST APIs. It does not change the
 C99 core. The [tutorial](ownership.md) introduces the source notation.
 
 This document describes the implemented checker. Its graph checks still use
-Z3. They do not meet the [ownership target](design.md#checked-ownership-target),
-which requires bounded local rules without a general-purpose theorem prover.
-The existing checks must remain enforced until a replacement passes that
-target. Removing the solver call does not establish safe destruction.
+Z3. The [replacement design](ownership-design.md) uses bounded local rules and
+an explicitly trusted container implementation behind a checked API. It is not
+implemented. Keep the existing checks until the replacement passes its stated
+gate. Removing the solver call does not establish safe destruction.
 
 ## Owners and loans
 

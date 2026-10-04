@@ -12,6 +12,11 @@ These conditions are checked by the selected stage and add no runtime state.
 The [stage contract](ownership-model.md) describes their source notation.
 This comparison does not establish that Crust is easier to use than Rust.
 
+The [replacement design](ownership-design.md) changes the container boundary:
+opaque implementations can be explicitly trusted, while their clients use
+local ownership checks. That design is not implemented. The comparisons below
+describe the current stage, including its solver-checked container bodies.
+
 ## How Rust organizes the learning material
 
 Rust separates introductory teaching, worked examples, language rules, and

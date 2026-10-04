@@ -346,30 +346,31 @@ Ownership belongs in an external Crust stage. Its rules must apply to storage,
 fields, owners, and loans. The implementation must not recognize container
 names, fixed pointer roles, or example source paths.
 
-Check each function from its body and declared interfaces. All conditions
-needed across a call must appear in the function or storage contract. Do not
-expand callees, inspect callers, or replace an interface obligation with a
-whole-program search.
+The [replacement design](ownership-design.md) uses finite local rules for
+owners, initialization, loans, and declared access effects. Check each function
+from its body and interfaces. Do not inspect callers, expand callees, or search
+the whole program. Do not depend on Z3, replace it with another general-purpose
+prover, or build an equivalent solver in the stage.
 
-The target ownership stage must not depend on Z3 or a general-purpose theorem
-prover. Use a bounded set of local rules for ownership, initialization, loans,
-and field effects. A work limit must produce a diagnostic. It must not permit
-unchecked code. Keeping every Boolean condition accepted by the current
-checker is not a requirement. Do not replace the dependency with an equivalent
-solver inside the stage.
+Permit an explicitly trusted container implementation behind an opaque checked
+API. The root selects this trust boundary. The library is responsible for its
+internal pointer algorithms. Its types declare retirement and retention
+contracts. The client checker enforces their ownership and access requirements,
+including those of implicit cleanup. A trusted body is not a verified proof.
 
-The current graph checker does not meet this requirement. Before replacing
-it, check the direct intrusive example from source through native execution.
-The replacement must check removal and individual destruction, reject a
-surviving incoming reference, and work through independently checked library
-interfaces. Compare the emitted program before and after checking. Measure
-checking separately from target compilation and linking. Do not add more
-graph proof features before this replacement passes those checks.
+Optional static domains separate access from reclamation. Cursors cannot
+outlive an access scope. Destruction requires reclamation authority, which is
+unavailable during access. The trusted retirement operation removes internal
+references before storage release or reuse. No pointer checks, generation
+numbers, pools, or membership counters are added.
 
-The acceptance cases include stored views, owned trees with parent references,
-one-way retained references, and direct intrusive lists with individual
-release and reuse. Compare the complete source contracts with Rust's user
-model. Passing one container example does not establish that full gate.
+The [replacement gate](ownership-design.md#9-replacement-gate) requires a real
+two-membership intrusive program, individual release and reuse, an owning tree
+with parent references, and independent provider and client checks. Reject
+client lifetime errors; test trusted pointer algorithms with native execution
+and sanitizers. Compare emitted code and measure frontend cost separately from
+target compilation and linking. Do not add graph proof features before this
+gate passes. The implemented stage below still uses Z3.
 
 ## Current safety stages
 

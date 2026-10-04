@@ -9,12 +9,10 @@ fn main(argc: i32, argv: **u8) -> i32 {
             var active: ActiveHead = uninit;
             ready_init(&ready);
             active_init(&active);
-            edit Graph {
-                ready_insert(mut ready, read first);
-                ready_insert(mut ready, read second);
-                active_insert(mut active, read first);
-                active_insert(mut active, read second);
-            }
+            ready_insert(mut ready, read first);
+            ready_insert(mut ready, read second);
+            active_insert(mut active, read first);
+            active_insert(mut active, read second);
             var ready_total: usize = ready_count(read ready);
             var active_total: usize = active_count(read active);
             if ready_total != 2usize || active_total != 2usize { trap; }
@@ -38,10 +36,8 @@ fn main(argc: i32, argv: **u8) -> i32 {
             if ready_total != 1usize || active_total != 1usize { trap; }
             {
                 var replacement: Owner = owner_new(67i64);
-                edit Graph {
-                    ready_insert(mut ready, read replacement);
-                    active_insert(mut active, read replacement);
-                }
+                ready_insert(mut ready, read replacement);
+                active_insert(mut active, read replacement);
             }
             ready_total = ready_count(read ready);
             if ready_total != 1usize { trap; }

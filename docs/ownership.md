@@ -71,10 +71,9 @@ A `resource` is a record with automatic cleanup. The example uses a small
 resource whose destructor prints one character:
 
 ```crust
-domain Demo(Ticket);
-resource Ticket { code: i32; } domain(Demo) drop ticket_drop;
+resource Ticket { code: i32; } drop ticket_drop;
 
-fn ticket_drop(ticket: mut Ticket) -> unit access(reclaim, Demo) {
+fn ticket_drop(ticket: mut Ticket) -> unit {
     var result: i32 = emit(ticket.code);
     if result < 0i32 { trap; }
 }
@@ -92,24 +91,9 @@ the owning local determines when cleanup runs. `mut Ticket` gives the destructor
 access to the value without creating a second owner. Section 4 explains this
 borrowed type.
 
-`Demo` is an access domain: a compile-time name that groups storage and its
-access rules. Cleanup of a resource in a domain requires reclamation authority.
-Thus the destructor and the example's `main` declare `access(reclaim, Demo)`.
-There is no runtime `Demo` object, pool, common allocation lifetime, or lock.
-
-| Function contract | Permitted use of its domain |
-| --- | --- |
-| `access(read, Demo)` | Read through valid views. |
-| `access(edit, Demo)` | Change valid storage and checked links. Do not destroy owners. |
-| `access(reclaim, Demo)` | Create and destroy owners when conflicting uses have ended. |
-
-A function can use weaker access inside `read Demo { ... }` or
-`edit Demo { ... }`. The block ends before the function recovers its outer
-authority. These declarations do not provide thread synchronization.
-
 Unless stated otherwise, the following statement examples replace the body of
-`main` in `program.crs`. Keep its `access(reclaim, Demo)` contract and add
-`return 0i32;` at the end. Other declarations in that file supply the helpers.
+`main` in `program.crs`. Add `return 0i32;` at the end. Other declarations in
+that file supply the helpers.
 
 ```crust
 {
@@ -248,7 +232,7 @@ A `mut T` view permits exclusive changes. Borrowing does not transfer cleanup.
 The source spells both the requested borrow and the parameter type:
 
 ```crust
-fn set_code(ticket: mut Ticket, code: i32) -> unit access(edit, Demo) {
+fn set_code(ticket: mut Ticket, code: i32) -> unit {
     ticket.code = code;
 }
 ```
@@ -258,7 +242,7 @@ A borrowed resource remains owned by the caller. `move ticket` reports
 `cannot drop a borrowed value`. To transfer cleanup to the function, take a
 `Ticket` by value and pass it with `move`.
 
-Call it with `set_code(mut ticket, 66i32)` inside an `edit Demo` block.
+Call it with `set_code(mut ticket, 66i32)`.
 The view uses ordinary field access. A borrowed scalar also uses its name
 directly: write `view = 7i64`, rather than `*view = 7i64`.
 
@@ -310,7 +294,7 @@ In this example, the inner block ends before `view = 7i64`.
 A function can return a view if its signature states where the view comes from:
 
 ```crust
-fn ticket_code(ticket: read Ticket) -> read i32 access(read, Demo) from ticket.code {
+fn ticket_code(ticket: read Ticket) -> read i32 from ticket.code {
     return read ticket.code;
 }
 ```
@@ -321,14 +305,14 @@ relationship. A view of a local temporary or a different input is rejected.
 
 ```crust
 var ticket: Ticket = make Ticket { code: 65i32 };
-read Demo {
+{
     var code: read i32 = ticket_code(read ticket);
     if code != 65i32 { trap; }
 }
 drop ticket;
 ```
 
-The read block ends before `drop ticket`. A helper that returns `mut T` needs
+The block ends before `drop ticket`. A helper that returns `mut T` needs
 an exclusive input and a matching result origin. A node view uses the same
 syntax. The [intrusive tutorial](../examples/intrusive/README.md#traverse-and-borrow-payload)
 shows scoped cursors and payload views behind an opaque interface.
@@ -408,8 +392,10 @@ resource CellOwner { cell: *Cell; } owns(cell: storage) domain(Cells) drop cell_
 ```
 
 `owns(cell: storage)` gives the handle responsibility for that allocation.
-Both types use the same access domain. Allocation, initialization, transfer, and release
-remain explicit:
+Both types use `Cells`, an access domain: a compile-time name that groups
+storage and its access rules. Cleanup of an owner in this domain requires
+reclamation permission. The constructor and destructor declare
+`access(reclaim, Cells)`:
 
 ```crust
 fn cell_new(value: i64) -> CellOwner access(reclaim, Cells) {
@@ -423,6 +409,19 @@ fn cell_drop(owner: mut CellOwner) -> unit access(reclaim, Cells) {
     if cell != null(*Cell) { release(cell as *u8); }
 }
 ```
+
+| Function contract | Permitted use of its domain |
+| --- | --- |
+| `access(read, Cells)` | Read through valid views. |
+| `access(edit, Cells)` | Change valid storage and checked links. Preserve owners. |
+| `access(reclaim, Cells)` | Create and destroy owners when conflicting uses have ended. |
+
+Reclamation permission also permits read and edit calls. A function can narrow
+its permission inside `read Cells { ... }` or `edit Cells { ... }`. The block
+ends before the function recovers its outer permission. Owners must survive
+until their views end. Domain permissions are compile-time facts; they add no
+runtime object, pool, common allocation lifetime, or lock. Concurrent access
+still requires synchronization.
 
 The file declares `allocate` and `release` as foreign allocation and release
 operations. Those declarations are trusted adapters to `malloc` and `free`.
@@ -477,7 +476,7 @@ domain Graph {
     var owner: Owner = owner_new(65i64);
     var head: ReadyHead = uninit;
     ready_init(&head);
-    edit Graph { ready_insert(mut head, read owner); }
+    ready_insert(mut head, read owner);
     read Graph {
         var cursor: Cursor = ready_first(read head);
         var value: read i64 = cursor_value(read cursor);
@@ -508,9 +507,9 @@ bits. No node registry or generation check is required.
 A deferred call captures its arguments now and executes at scope exit:
 
 ```crust
-fn consume(ticket: Ticket) -> unit access(reclaim, Demo) {}
+fn consume(ticket: Ticket) -> unit {}
 
-fn later() -> unit access(reclaim, Demo) {
+fn later() -> unit {
     var ticket: Ticket = make Ticket { code: 65i32 };
     defer consume(move ticket);
 }

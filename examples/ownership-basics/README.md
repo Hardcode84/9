@@ -16,6 +16,9 @@ build/ownership-basics
 
 The output is `BC` and a newline. [program.crs](program.crs) moves a resource,
 borrows its field, changes it, and checks explicit and scope-exit destruction.
+The local owner controls cleanup. A lexical block ends the field loan before
+the owner changes. Heap storage introduces domain permissions in the next
+example.
 
 ```sh
 build/crust examples/ownership-basics/main.crs -o build/ownership-heap \

@@ -55,7 +55,7 @@ domain Graph {
     var owner: Owner = owner_new(65i64);
     var ready: ReadyHead = uninit;
     ready_init(&ready);
-    edit Graph { ready_insert(mut ready, read owner); }
+    ready_insert(mut ready, read owner);
 }
 ```
 
@@ -72,6 +72,8 @@ Taking the address alone does not initialize storage.
 Insertion borrows the handle without consuming it. Its edit contract permits
 internal retention in the same domain and forbids destruction. Actual insertion
 uses ordinary pointer loads and stores. It performs no ownership bookkeeping.
+The domain block's reclamation permission permits this edit call. A read or
+edit block is needed when the client creates scoped cursors and payload views.
 
 ## Traverse and borrow payload
 

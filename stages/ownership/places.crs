@@ -313,6 +313,9 @@ fn os_address(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVa
         os_error(check, &(*expression).loc, "address requires stable schema storage");
         return null(*OsValue);
     }
+    if (*slot).loan == null(*OsLoan) && os_affine(check, (*os_root((*value).object)).syntax) {
+        os_pin(check, state, (*value).object);
+    }
     var syntax: *CrustTypeSyntax = rs_pointer((*(*check).stage).resources, (*slot).syntax);
     var result: *OsValue = os_value(check, syntax, (*value).object, true);
     if result != null(*OsValue) { (*result).borrow_scope = os_access_origin(state, (*result).object); (*result).loan = (*slot).loan; }

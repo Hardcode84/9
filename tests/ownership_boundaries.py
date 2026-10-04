@@ -53,6 +53,8 @@ def good_cases():
         "refreshed-owner": START + "unchanged(mut owner);"
         "if owner.cell!=null(*Cell) {if owner.cell.value!=7i64 {trap;}}",
         "preserved-owner": START + "preserves(mut owner);if raw.value!=7i64 {trap;}",
+        "expired-address-loan": START + "{var view:read CellOwner=read owner;"
+        "var address:*CellOwner=&view;drop view;}var next:CellOwner=move owner;",
         "returned-view": START
         + "var view:read Cell=cell_view(mut owner);if view.value!=7i64 {trap;}",
         "deferred-owner": START + "{defer consume(move owner);if raw.value!=7i64 {trap;}}",
@@ -75,10 +77,24 @@ def bad_cases():
         "loop-old-alias": "var i:i32=0i32;"
         "while i<argc {drop owner;owner=cell_new(7i64);i=i+1i32;}",
     }
-    return {
+    cases = {
         name: (main(START + change + "var stale:i64=raw.value;"), "live non-null storage")
         for name, change in changes.items()
     }
+    cases["addressed-owner-move"] = (
+        main(START + "var address:*CellOwner=&owner;var next:CellOwner=move owner;"),
+        "address-stable",
+    )
+    cases["addressed-inline-owner-move"] = (
+        "record Part {value:i64;}resource Wrapper {part:Part;} drop wrapper_drop;"
+        "fn wrapper_drop(wrapper:mut Wrapper)->unit {}"
+        + main(
+            "var wrapper:Wrapper=make Wrapper{part:make Part{value:7i64}};"
+            "var address:*Part=&wrapper.part;var next:Wrapper=move wrapper;"
+        ),
+        "address-stable",
+    )
+    return cases
 
 
 def check_argument_alias(build, directory):
@@ -91,7 +107,7 @@ def check_argument_alias(build, directory):
     rejected(
         build / "crust-ownership-test",
         directory,
-        {"boundary-argument-alias": (source, "active payload loan")},
+        {"boundary-argument-alias": (source, "address-stable")},
     )
 
 
@@ -135,4 +151,4 @@ def check_boundaries(build, directory, sanitize):
     )
     check_imports(build, directory)
     check_argument_alias(build, directory)
-    print("ownership boundaries: 7 positives, 8 rejections, O0/O2, erasure, source-free imports")
+    print("ownership boundaries: 8 positives, 10 rejections, O0/O2, erasure, source-free imports")

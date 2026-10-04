@@ -21,6 +21,11 @@ Direct fields of an ordinary record can be borrowed separately. A loan of the
 whole record covers all its fields. Moving, replacing, or destroying a record
 requires every conflicting field loan to have ended.
 
+Taking a raw address of an owner or an inline record inside it fixes that
+storage for the rest of its lifetime. An address taken through a loan follows
+that loan's lifetime instead. Taking an address inside a heap allocation keeps
+the allocation in place while permitting movement of its separate owning handle.
+
 Passing an owner by value ends access through its old raw aliases when the call
 runs. A mutable call can replace owned allocations. Raw aliases to allocations
 that its contract permits it to replace also expire. Obtain new pointers from

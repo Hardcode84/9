@@ -39,11 +39,12 @@ ownership verification. These root costs have no independent C-speed claim.
 
 A separate stress case puts 32, 64, and 128 live loans and branches in one
 function. It measures branch-join growth rather than independent-body scaling.
-The checker currently visits all visible slots and objects at each join and
-publishes facts even for unchanged slots. This case can exceed the independent
-body budget. Reducing that cost requires merging only changed facts while
-preserving initialization, ownership, and loan facts on both continuing paths.
-The report records this cost separately and does not classify it as C-level.
+The checker visits all visible slots and objects at each join. When both paths
+retain the incoming slot value, the join reuses that binding. When both paths
+consume the value, the join must replace the incoming binding. This prevents
+unchanged slot facts from extending the lookup chains at each branch. Object,
+loan, and initialization checks still run. The report records this cost
+separately and does not classify it as C-level.
 
 All samples include child CPU time. A separate observation records peak RSS
 for each route. At least 20 paired samples are required. The source-free client

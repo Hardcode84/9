@@ -53,6 +53,18 @@ def reject_cases():
             READING + main_body(local + "drop view;var stale:i64=view.value;"),
             "uninitialized or has been moved",
         ),
+        "use-dropped-on-both-branches": (
+            READING
+            + main_body(
+                local + "if argc>1i32 {drop view;} else {drop view;}var stale:i64=view.value;"
+            ),
+            "uninitialized or has been moved",
+        ),
+        "write-under-view-after-join": (
+            READING
+            + main_body(local + "var n:i64=0i64;if argc>1i32 {n=view.value;} else {n=2i64;}x=n;"),
+            "active payload loan",
+        ),
         "double-drop": (
             READING + main_body(local + "drop view;drop view;"),
             "uninitialized or has been moved",

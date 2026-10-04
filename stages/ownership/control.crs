@@ -196,7 +196,11 @@ fn os_join_slot(check: *OsCheck, target: *OsState, left: *OsState, right: *OsSta
         if os_absent_storage(check, left, (*slot).object, location) { a = b; }
         if os_absent_storage(check, right, (*slot).object, location) { b = a; }
     }
-    if a == b { os_set(check, target, slot as *u8, a, 0u32); return; }
+    if a == b {
+        // Equal branches can still differ from the incoming binding.
+        if os_bound(target, slot) != a { os_set(check, target, slot as *u8, a, 0u32); }
+        return;
+    }
     if a == null(*OsValue) || b == null(*OsValue) { os_join_absent(check, target, left, right, slot, a, b, location); return; }
     os_join_value(check, target, left, right, slot, a, b, location);
 }

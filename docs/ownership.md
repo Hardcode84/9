@@ -81,7 +81,10 @@ fn ticket_drop(ticket: mut Ticket) -> unit access(reclaim, Demo) {
 
 The complete file declares `emit` as the C `putchar` function with a scalar-only
 foreign contract. This printing action makes cleanup visible. A real resource
-can instead release an allocation or another native resource.
+can instead release an allocation or another native resource. Its fields can
+hold integer handles, such as file descriptors or API object identifiers.
+`resource` assigns cleanup to the wrapper value. `owns(field)` is a separate
+contract for a pointer to an owned allocation.
 
 A local such as `ticket` owns one `Ticket` value. The type defines its cleanup;
 the owning local determines when cleanup runs. `mut Ticket` gives the destructor
@@ -130,6 +133,40 @@ ticket = make Ticket { code: 66i32 };
 This prints `AB`: the first value drops explicitly, and the replacement drops
 at scope exit. There is no second cleanup of the consumed value. A `record`
 with only scalar fields has no cleanup action; reading an integer copies it.
+
+### Wrap an integer handle
+
+This example wraps an already acquired POSIX file descriptor:
+
+```crust
+domain Files(File);
+resource File { fd: i32; } domain(Files) drop file_drop;
+
+extern fn close_fd(fd: i32) -> i32 foreign(scalar) = "close";
+
+fn file_drop(file: mut File) -> unit access(reclaim, Files) {
+    var result: i32 = close_fd(file.fd);
+    if result != 0i32 { trap; }
+}
+```
+
+Construct `File` only after acquisition succeeds. Move or borrow the wrapper
+with the same rules as `Ticket`. Normal scope exit calls `file_drop`. This
+example traps if closing fails; that is the wrapper's explicit error policy.
+Other integer handles use the scalar type and release function of their API.
+No pointer conversion, heap allocation, or runtime ownership tag is needed.
+
+The checker tracks the wrapper, not the native handle's identity. Its `i32`
+field remains copyable. It does not detect two wrappers built from the same
+number, or prove that the foreign call closes a valid handle exactly once.
+The acquisition and release adapters must satisfy that native contract.
+Checking the handle itself would require contracts for acquisition, borrowed
+use, and consumption at the foreign boundary. `foreign(scalar)` does not
+supply those contracts.
+
+The [resource-stage descriptor example](../stages/resources/README.md#1-run-a-real-descriptor-owner)
+also shows acquisition and I/O. It uses the separate resource profile described
+in section 1.
 
 ## 3. Transfer ownership
 
@@ -302,8 +339,9 @@ It also shows nested records and returned loans through stored fields.
 
 ## 6. Own a heap allocation
 
-A resource can own a pointer field. The [heap example](../examples/ownership-basics/heap.crs)
-declares the handle and its allocation separately:
+For heap storage, a resource can own the allocation addressed by a pointer
+field. The [heap example](../examples/ownership-basics/heap.crs) declares the
+handle and its allocation separately:
 
 ```crust
 domain Cells(Cell, CellOwner);

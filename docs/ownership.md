@@ -387,13 +387,14 @@ handle and its allocation separately:
 
 ```crust
 domain Cells(Cell, CellOwner);
-record Cell { value: i64; } domain(Cells);
-resource CellOwner { cell: *Cell; } owns(cell: storage) domain(Cells) drop cell_drop;
+record Cell { value: i64; }
+resource CellOwner { cell: *Cell; } owns(cell: storage) drop cell_drop;
 ```
 
 `owns(cell: storage)` gives the handle responsibility for that allocation.
-Both types use `Cells`, an access domain: a compile-time name that groups
-storage and its access rules. Cleanup of an owner in this domain requires
+`domain Cells(Cell, CellOwner)` assigns both types to `Cells`, an access domain:
+a compile-time name that groups storage and its access rules. Each type can
+belong to one domain. Cleanup of an owner in this domain requires
 reclamation permission. The constructor and destructor declare
 `access(reclaim, Cells)`:
 

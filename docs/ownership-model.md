@@ -161,10 +161,10 @@ All other bodies are checked from their own source and published interfaces.
 
 ```crust
 domain Graph(Node, Owner, Head, Cursor);
-record Node { prev: *Node; next: *Node; value: i64; } opaque domain(Graph);
-resource Owner { node: *Node; } opaque domain(Graph) drop owner_drop;
-resource Head { node: Node; } opaque stable domain(Graph) drop head_drop;
-record Cursor { node: *Node; } opaque scoped domain(Graph);
+record Node { prev: *Node; next: *Node; value: i64; } opaque;
+resource Owner { node: *Node; } opaque drop owner_drop;
+resource Head { node: Node; } opaque stable drop head_drop;
+record Cursor { node: *Node; } opaque scoped;
 ```
 
 Opaque fields are private to the selected implementation. Checked clients
@@ -174,9 +174,12 @@ move. `scoped` requires a domain and forbids a destructor or stable storage.
 It produces an affine value whose origin is the current read or edit scope.
 The stage has no built-in cursor, list, tree, membership, or navigation rule.
 
-A domain lists the types in one retention boundary. Only the root can admit
-opaque types and their implementations. Merely naming a domain cannot add a
-persistent observer. Outside observers must retain ordinary loans.
+A domain declaration lists all types in one retention boundary. Each type can
+belong to one domain. The list determines membership, including in imported
+interfaces. Types can appear before or after the domain declaration. A missing
+type, repeated member, or membership in two domains is an error. Only the root
+can admit opaque types and their implementations. Outside observers must
+retain ordinary loans.
 
 A trusted implementation must keep internal references valid, transfer each
 owner once, obey access effects, and remove every admitted internal reference

@@ -23,10 +23,10 @@ The complete storage interface is:
 
 ```crust
 domain Symbols(Symbol, Alias, Index, Selection);
-record Symbol { next: *Symbol; key: i64; value: i64; } opaque domain(Symbols);
-record Alias { next: *Alias; target: *Symbol; key: i64; } opaque domain(Symbols);
-resource Index { symbols: *Symbol; aliases: *Alias; } opaque domain(Symbols) drop index_drop;
-record Selection { target: *Symbol; } opaque scoped domain(Symbols);
+record Symbol { next: *Symbol; key: i64; value: i64; } opaque;
+record Alias { next: *Alias; target: *Symbol; key: i64; } opaque;
+resource Index { symbols: *Symbol; aliases: *Alias; } opaque drop index_drop;
+record Selection { target: *Symbol; } opaque scoped;
 ```
 
 `Index` owns two ordinary singly linked lists: symbols and aliases. Each entry

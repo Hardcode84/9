@@ -124,12 +124,31 @@ def local_cases():
         + "fn consume(v:Value)->unit {} fn main(argc:i32,argv:**u8)->i32 {var v:Value=make Value{n:7i64};defer consume(move v);return 0i32;}",
         "defer-order": 'extern fn emit(c:i32)->i32 foreign(scalar)="putchar";fn put(c:i32)->unit {emit(c);} fn main(argc:i32,argv:**u8)->i32 {defer put(75i32);defer put(79i32);return 0i32;}',
         "scalar-flow": SCALAR_FLOW,
+        "domain-after-record": "record Cell {value:i64;} domain D(Cell);"
+        "fn main(argc:i32,argv:**u8)->i32 {domain D {"
+        "var cell:Cell=make Cell{value:7i64};if cell.value!=7i64 {trap;}}return 0i32;}",
     }
 
 
 def local_rejects():
     allocation = 'extern fn allocate(size:usize)->*u8 foreign(allocate)="malloc";\n'
     cases = {
+        "missing-domain-member": (
+            "domain D(Missing);",
+            "domain member must name a declared record",
+        ),
+        "non-record-domain-member": (
+            "domain D(value);const value:i64=1i64;",
+            "domain member must name a declared record",
+        ),
+        "duplicate-domain-member": (
+            "domain D(Cell,Cell);record Cell {value:i64;}",
+            "duplicate ownership field annotation",
+        ),
+        "multiple-domain-membership": (
+            "domain A(Cell);domain B(Cell);record Cell {value:i64;}",
+            "record cannot belong to multiple domains",
+        ),
         "allocation-byte-count": (
             allocation + "fn bad()->unit {var p:*u8=allocate(8usize);}",
             "allocation size must be sizeof(Record) so the checker can track its fields",

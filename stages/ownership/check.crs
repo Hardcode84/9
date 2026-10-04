@@ -10,7 +10,6 @@ fn os_validate_record(check: *OsCheck, global: *RsGlobal) -> unit {
     if (*contract).owns != null(*OsField) && (*global).resource == null(*RsResource) {
         os_error(check, &(*declaration).loc, "owned fields require a resource destructor"); return;
     }
-    os_validate_schema(check, contract);
     if (*contract).opaque { os_validate_opaque(check, global, contract); return; }
     if (*contract).scoped || (*contract).stable { os_error(check, &(*declaration).loc, "scoped and stable require an opaque representation"); return; }
     os_validate_view_record(check, global, contract);
@@ -198,12 +197,12 @@ fn os_validate_borrow_parameter(check: *OsCheck, parameter: *CrustParam) -> unit
 fn os_check(stage: *OsStage) -> bool {
     var check: OsCheck = uninit;
     os_check_init(&check, stage, null(*OsFunction));
+    os_resolve_domains(&check);
     var global: *RsGlobal = (*(*stage).resources).first_global;
     while global != null(*RsGlobal) && !os_failed(&check) {
         if (*(*global).source).kind == CRUST_D_RECORD { os_validate_record(&check, global); }
         global = (*global).next;
     }
-    os_validate_domains(&check);
     os_resolve_functions(&check);
     global = (*(*stage).resources).first_global;
     while global != null(*RsGlobal) && !os_failed(&check) {

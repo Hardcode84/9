@@ -32,7 +32,7 @@ has one node pointer. These fields are the complete runtime representation.
 | Annotation | Meaning |
 | --- | --- |
 | `opaque` | Client code cannot access or construct the representation. The root must approve the implementation. |
-| `domain(Graph)` | The type belongs to this closed retention boundary. |
+| `domain Graph(Node, Owner, ReadyHead, ActiveHead, Cursor);` | The list defines the types in this closed retention boundary. |
 | `stable` | Construct in final storage; then prohibit relocation. |
 | `scoped` | The value depends on the current read or edit scope; it cannot escape. |
 | `drop owner_drop` | Cleanup calls this function. Its reclamation permission also applies to implicit cleanup. |

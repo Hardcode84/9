@@ -183,9 +183,7 @@ def rejects(provider):
         "has been moved",
     )
     cursor = provider.split("fn open_file(", 1)[0]
-    cursor = "domain D(File);" + cursor.replace(
-        "owns(handle = -1i32) drop", "owns(handle = -1i32) domain(D) drop"
-    )
+    cursor = "domain D(File);" + cursor
     cursor = cursor.replace(
         "fn file_drop(file: mut File) -> unit {",
         "fn file_drop(file: mut File) -> unit access(reclaim,D) {",
@@ -269,7 +267,7 @@ def run(build, directory, sanitize):
     native(build, directory, composite, b"FS", sanitize, environment)
     embedded = directory / "embedded.crs"
     embedded.write_text(
-        provider + "domain D(Holder);resource Holder {file:File;} domain(D) drop holder_drop;"
+        provider + "domain D(Holder);resource Holder {file:File;} drop holder_drop;"
         "fn holder_drop(h:mut Holder)->unit access(reclaim,D) {}"
         "fn main(argc:i32,argv:**u8)->i32 access(reclaim,D) {var f:File=open_file();if f.handle==-1i32 {trap;}"
         "var h:Holder=make Holder{file:move f};return 0i32;}"

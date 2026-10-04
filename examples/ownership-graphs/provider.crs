@@ -5,9 +5,9 @@ extern fn release(pointer: *u8) -> unit foreign(release) = "free";
 extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
 
 domain Forest(Branch, Tree, TreeCursor);
-record Branch { parent: *Branch; left: *Branch; right: *Branch; value: i64; } opaque domain(Forest);
-resource Tree { node: *Branch; } opaque domain(Forest) drop tree_drop;
-record TreeCursor { node: *Branch; } opaque scoped domain(Forest);
+record Branch { parent: *Branch; left: *Branch; right: *Branch; value: i64; } opaque;
+resource Tree { node: *Branch; } opaque drop tree_drop;
+record TreeCursor { node: *Branch; } opaque scoped;
 
 fn tree_new(value: i64) -> Tree access(reclaim, Forest) {
     var node: *Branch = allocate(sizeof(Branch)) as *Branch;

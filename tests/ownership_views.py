@@ -114,11 +114,11 @@ def reject_cases():
             "loan requires initialized storage",
         ),
         "persistent-field": (
-            "domain D(View);record View {value:read i64;} domain(D);",
+            "domain D(View);record View {value:read i64;}",
             "stored loans require a scoped view record",
         ),
         "persistent-nested-field": (
-            "domain D(Outer);" + READING + "record Outer {view:View;} domain(D);",
+            "domain D(Outer);" + READING + "record Outer {view:View;}",
             "stored loans require a scoped view record",
         ),
         "wrong-field-origin": (
@@ -150,7 +150,7 @@ def reject_cases():
             "continuing paths must agree on owner consumption",
         ),
         "stored-view-loop-effect": (
-            "domain D(Cell);record Cell {value:i64;} domain(D);"
+            "domain D(Cell);record Cell {value:i64;}"
             "record View {flag:mut bool;} "
             "fn bad(p:*Cell)->i64 access(read,D) {"
             "var flag:bool=true;{var view:View=make View{flag:mut flag};"
@@ -159,7 +159,7 @@ def reject_cases():
             "pointer access requires live non-null storage",
         ),
         "stored-view-branch-effect": (
-            "domain D(Cell);record Cell {value:i64;} domain(D);"
+            "domain D(Cell);record Cell {value:i64;}"
             "record View {flag:mut bool;} "
             "fn bad(view:mut View,test:bool,p:*Cell)->i64 access(read,D) {"
             "view.flag=true;if test {view.flag=false;}"
@@ -171,7 +171,7 @@ def reject_cases():
 
 
 def effect_cases():
-    schema = "domain D(Cell); record Cell {value:i64;} domain(D); " "record View {flag:mut bool;} "
+    schema = "domain D(Cell); record Cell {value:i64;} " "record View {flag:mut bool;} "
     cases = {}
     for name, parameter, argument in (
         ("borrowed", "mut View", "mut view"),
@@ -190,7 +190,7 @@ def effect_cases():
 
 def lifetime_cases():
     owner = (
-        "domain D(Owned); resource Owned {value:i64;} domain(D) drop destroy; "
+        "domain D(Owned); resource Owned {value:i64;} drop destroy; "
         "fn destroy(value:mut Owned)->unit access(reclaim,D) {} "
         "record View {target:read Owned;} "
     )
@@ -255,7 +255,7 @@ def native_cases():
             b"",
         ),
         "domain-view": (
-            "domain D(Cell);record Cell {value:i64;} domain(D); "
+            "domain D(Cell);record Cell {value:i64;} "
             "record View {cell:mut Cell;} "
             "fn change(view:mut View)->unit access(edit,D) {view.cell.value=7i64;} "
             "fn consume(view:View)->unit access(edit,D) {view.cell.value=9i64;} "
@@ -266,7 +266,7 @@ def native_cases():
             b"",
         ),
         "resource-source": (
-            "domain D(Owned);resource Owned {value:i64;} domain(D) drop destroy; "
+            "domain D(Owned);resource Owned {value:i64;} drop destroy; "
             'extern fn emit(code:i32)->i32 foreign(scalar)="putchar"; '
             "fn destroy(value:mut Owned)->unit access(reclaim,D) {emit(68i32);} "
             "record View {target:read Owned;} "

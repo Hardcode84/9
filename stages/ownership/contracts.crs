@@ -75,24 +75,16 @@ fn os_writes(contract: *OsFunction, field: *CrustField) -> bool {
     return false;
 }
 
-fn os_validate_schema(check: *OsCheck, schema: *OsRecord) -> unit {
-    if (*schema).domain == null(*CrustName) { return; }
-    var domain: *OsDomain = crust_map_get(&(*(*check).stage).domains, (*schema).domain as usize) as *OsDomain;
-    if domain == null(*OsDomain) || os_field((*domain).records, (*(*schema).declaration).name) == null(*OsField) {
-        os_error(check, &(*(*schema).declaration).loc, "record is absent from its declared domain schema");
-    }
-}
-
-fn os_validate_domains(check: *OsCheck) -> unit {
+fn os_resolve_domains(check: *OsCheck) -> unit {
     var global: *RsGlobal = (*(*(*check).stage).resources).first_global;
     while global != null(*RsGlobal) && !os_failed(check) {
         var schema: *OsDomain = crust_map_get(&(*(*check).stage).domains, (*(*global).source).name as usize) as *OsDomain;
-        if schema != null(*OsDomain) { os_validate_domain(check, schema); }
+        if schema != null(*OsDomain) { os_resolve_domain(check, schema); }
         global = (*global).next;
     }
 }
 
-fn os_validate_domain(check: *OsCheck, domain: *OsDomain) -> unit {
+fn os_resolve_domain(check: *OsCheck, domain: *OsDomain) -> unit {
     var item: *OsField = (*domain).records;
     while item != null(*OsField) && !os_failed(check) {
         var global: *RsGlobal = rs_global((*(*check).stage).resources, (*item).name);
@@ -100,9 +92,14 @@ fn os_validate_domain(check: *OsCheck, domain: *OsDomain) -> unit {
         if global != null(*RsGlobal) {
             schema = crust_map_get(&(*(*check).stage).records, (*global).source as usize) as *OsRecord;
         }
-        if schema == null(*OsRecord) || (*schema).domain != (*(*domain).declaration).name {
-            os_error(check, &(*(*domain).declaration).loc, "domain schema types must declare that same domain");
+        if schema == null(*OsRecord) {
+            os_error(check, &(*(*domain).declaration).loc, "domain member must name a declared record"); return;
         }
+        var name: *CrustName = (*(*domain).declaration).name;
+        if (*schema).domain != null(*CrustName) && (*schema).domain != name {
+            os_error(check, &(*(*domain).declaration).loc, "record cannot belong to multiple domains"); return;
+        }
+        (*schema).domain = name;
         item = (*item).next;
     }
 }

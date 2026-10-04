@@ -82,6 +82,7 @@ def tamper_checks(args, environment, receipt):
     start, end, interface = unpack(original)
     assert "fn owner_drop" in interface and "fn ready_unlink" in interface
     assert "opaque" in interface and "scoped" in interface
+    assert "domain Graph(Node, Owner, ReadyHead, ActiveHead, Cursor);" in interface
     assert "from owner" in interface
     assert "var " not in interface and "while " not in interface
     mutations = {
@@ -206,6 +207,13 @@ def run(build):
         args = import_arguments(driver, cache, receipt, client, output, trusted=True)
         command(args, env=environment)
         assert command([str(output)]).stdout == "OK\n"
+        retagged = directory / "retagged.crs"
+        retagged.write_text("domain Other(Owner);\n" + client.read_text())
+        retagged_args = import_arguments(
+            driver, cache, receipt, retagged, directory / "retagged", trusted=True
+        )
+        reject_import(retagged_args, environment, "record cannot belong to multiple domains")
+        rejected += 1
         wrong_trust = [args[0], "import", *args[2:]]
         reject_import(wrong_trust, environment, "trust contract differs")
         rejected += 1

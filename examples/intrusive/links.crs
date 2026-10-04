@@ -6,11 +6,11 @@ extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
 
 domain Graph(Node, Owner, ReadyHead, ActiveHead, Cursor);
 record Node { prev: *Node; next: *Node; active_prev: *Node; active_next: *Node; value: i64; }
-    opaque domain(Graph);
-resource Owner { node: *Node; } opaque domain(Graph) drop owner_drop;
-resource ReadyHead { node: Node; } opaque stable domain(Graph) drop ready_drop;
-resource ActiveHead { node: Node; } opaque stable domain(Graph) drop active_drop;
-record Cursor { node: *Node; } opaque scoped domain(Graph);
+    opaque;
+resource Owner { node: *Node; } opaque drop owner_drop;
+resource ReadyHead { node: Node; } opaque stable drop ready_drop;
+resource ActiveHead { node: Node; } opaque stable drop active_drop;
+record Cursor { node: *Node; } opaque scoped;
 
 fn ready_unlink(node: *Node) -> unit access(edit, Graph) {
     var before: *Node = (*node).prev;

@@ -28,23 +28,11 @@ fn os_read_fields(reader: *CrustReader, fields: **OsField) -> unit {
     rr_expect(reader, 41u32, "expected ')' after ownership fields");
 }
 
-fn os_read_domain(reader: *CrustReader, domain: **CrustName) -> unit {
-    if *domain != null(*CrustName) {
-        rr_error(reader, (*reader).token.offset, "duplicate domain annotation");
-        return;
-    }
-    rr_next(reader);
-    rr_expect(reader, 40u32, "expected '(' after domain");
-    *domain = rr_name(reader);
-    rr_expect(reader, 41u32, "expected ')' after domain name");
-}
-
 fn os_read_record_clause(reader: *CrustReader, contract: *OsRecord) -> bool {
     if rr_is_name(reader, "opaque") { (*contract).opaque = true; rr_next(reader); return true; }
     if rr_is_name(reader, "stable") { (*contract).stable = true; rr_next(reader); return true; }
     if rr_is_name(reader, "scoped") { (*contract).scoped = true; rr_next(reader); return true; }
     if rr_is_name(reader, "owns") { os_read_owners(reader, &(*contract).owns); return true; }
-    if rr_is_name(reader, "domain") { os_read_domain(reader, &(*contract).domain); return true; }
     return false;
 }
 

@@ -93,11 +93,11 @@ static bool hosted_entry(const CrustDecl *decl)
 }
 
 typedef struct {
-    enum { EMIT, CHECK, PREPARE } mode;
     CrustSource *sources;
     size_t source_count;
     const char *entry_name;
     const char *output;
+    enum { EMIT, CHECK, PREPARE } mode;
     bool library;
     bool exports;
 } DriverOptions;
@@ -239,7 +239,7 @@ compile_error:
 
 int main(int argc, char **argv)
 {
-    DriverOptions options = {EMIT, NULL, 0, "main", NULL, false, false};
+    DriverOptions options = {.entry_name = "main", .mode = EMIT};
     CrustContext ctx;
     ArgumentResult parsed;
     size_t index;

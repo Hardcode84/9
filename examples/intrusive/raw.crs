@@ -10,7 +10,7 @@ record Hook {
 }
 
 record Node {
-    value: u64;
+    value: [u64; 2];
     hook: Hook;
 }
 
@@ -40,6 +40,7 @@ fn node_of(h: *Hook) -> *Node {
 }
 
 fn main(argc: i32, argv: **u8) -> i32 {
+    if offsetof(Node, hook) == 0usize { return 9i32; }
     var head: Hook = uninit;
     init(&head);
     var first: *Node = alloc(sizeof(Node), alignof(Node)) as *Node;
@@ -51,8 +52,10 @@ fn main(argc: i32, argv: **u8) -> i32 {
         free(first as *u8);
         return 2i32;
     }
-    (*first).value = 11u64;
-    (*second).value = 22u64;
+    (*first).value[0usize] = 11u64;
+    (*first).value[1usize] = 111u64;
+    (*second).value[0usize] = 22u64;
+    (*second).value[1usize] = 222u64;
     init(&(*first).hook);
     init(&(*second).hook);
     insert_after(&head, &(*first).hook);
@@ -60,7 +63,7 @@ fn main(argc: i32, argv: **u8) -> i32 {
     unlink(&(*first).hook);
     free(first as *u8);
     var found: *Node = node_of(head.next);
-    if found != second || (*found).value != 22u64 {
+    if found != second || (*found).value[0usize] != 22u64 || (*found).value[1usize] != 222u64 {
         return 3i32;
     }
     if head.prev != &(*second).hook || (*second).hook.prev != &head {
@@ -72,13 +75,14 @@ fn main(argc: i32, argv: **u8) -> i32 {
         free(second as *u8);
         return 5i32;
     }
-    (*first).value = 33u64;
+    (*first).value[0usize] = 33u64;
+    (*first).value[1usize] = 333u64;
     init(&(*first).hook);
     insert_after(&head, &(*first).hook);
     unlink(&(*second).hook);
     free(second as *u8);
     found = node_of(head.next);
-    if found != first || (*found).value != 33u64 || head.prev != &(*first).hook {
+    if found != first || (*found).value[0usize] != 33u64 || (*found).value[1usize] != 333u64 || head.prev != &(*first).hook {
         return 6i32;
     }
     unlink(&(*first).hook);

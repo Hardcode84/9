@@ -126,29 +126,29 @@ record CrustMap {
 }
 
 record CrustTypeSyntax {
-    kind: u32;
     loc: CrustLoc;
     name: *CrustName;
     base: *CrustTypeSyntax;
     params: **CrustTypeSyntax;
     param_count: usize;
     count: u64;
+    kind: u32;
 }
 
 record CrustType {
-    kind: u32;
     size: u64;
-    align: u32;
     base: *CrustType;
     count: u64;
     params: **CrustType;
     param_count: usize;
     record_decl: *CrustDecl;
+    kind: u32;
+    align: u32;
 }
 
 record CrustInit {
-    name: *CrustName;
     loc: CrustLoc;
+    name: *CrustName;
     value: *CrustExpr;
     field: *CrustField;
     next: *CrustInit;
@@ -178,7 +178,6 @@ record CrustExpr {
 }
 
 record CrustStmt {
-    kind: u32;
     loc: CrustLoc;
     next: *CrustStmt;
     body: *CrustStmt;
@@ -188,12 +187,13 @@ record CrustStmt {
     name: *CrustName;
     syntax_type: *CrustTypeSyntax;
     symbol: *CrustSymbol;
+    kind: u32;
     uninitialized: bool;
 }
 
 record CrustField {
-    name: *CrustName;
     loc: CrustLoc;
+    name: *CrustName;
     syntax_type: *CrustTypeSyntax;
     type: *CrustType;
     offset: u64;
@@ -202,8 +202,8 @@ record CrustField {
 }
 
 record CrustParam {
-    name: *CrustName;
     loc: CrustLoc;
+    name: *CrustName;
     syntax_type: *CrustTypeSyntax;
     type: *CrustType;
     symbol: *CrustSymbol;
@@ -211,16 +211,15 @@ record CrustParam {
 }
 
 record CrustSymbol {
-    kind: u32;
-    name: *CrustName;
     loc: CrustLoc;
+    name: *CrustName;
     type: *CrustType;
     decl: *CrustDecl;
     scope_next: *CrustSymbol;
+    kind: u32;
 }
 
 record CrustDecl {
-    kind: u32;
     loc: CrustLoc;
     name: *CrustName;
     unit_identity: u64;
@@ -236,6 +235,7 @@ record CrustDecl {
     body: *CrustStmt;
     init: *CrustExpr;
     next: *CrustDecl;
+    kind: u32;
     resolve_state: u32;
     checked: bool;
 }
@@ -258,19 +258,19 @@ record CrustRootScope {
 }
 
 record CrustContext {
+    builtins: [CrustType; 12];
+    error: [u8; 512];
     arena: CrustArena;
+    globals: CrustMap;
+    identities: CrustMap;
+    error_loc: CrustLoc;
     names: **CrustName;
     name_count: usize;
     name_capacity: usize;
-    globals: CrustMap;
-    identities: CrustMap;
     type_comparison: *u8;
-    builtins: [CrustType; 12];
     units: *CrustUnit;
     last_unit: *CrustUnit;
     failure: *u8;
-    error_loc: CrustLoc;
-    error: [u8; 512];
     error_count: usize;
 }
 

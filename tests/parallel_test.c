@@ -18,6 +18,7 @@ typedef struct {
 
 typedef struct {
     CrustContext context;
+    Snapshot snapshots[SNAPSHOT_COUNT];
     CrustSource source;
     CrustUnit *unit;
     CrustDecl *record;
@@ -25,36 +26,35 @@ typedef struct {
     CrustDecl *function;
     CrustDecl *private_value;
     CrustDecl *callback;
-    Snapshot snapshots[SNAPSHOT_COUNT];
     size_t snapshot_count;
 } Provider;
 
 typedef struct {
     const char *source;
     const char *link_name;
+    const char *expected_error;
     unsigned provider;
     unsigned function_provider;
     bool include_function;
     bool include_private;
-    const char *expected_error;
 } Policy;
 
 typedef struct {
-    bool accepted;
-    bool aliases_equal;
+    char error[512];
     uint64_t unit_identity;
     uint64_t declaration_identity;
     uint64_t error_source_identity;
     size_t error_offset;
-    char error[512];
     char *output;
     size_t output_size;
     unsigned publication_order;
+    bool accepted;
+    bool aliases_equal;
 } Result;
 
 typedef struct {
-    pthread_mutex_t mutex;
     pthread_cond_t changed;
+    pthread_mutex_t mutex;
     unsigned ready;
     unsigned next;
     bool started;
@@ -65,8 +65,8 @@ typedef struct {
     Provider *providers;
     const Policy *policy;
     Result *result;
-    unsigned index;
     Gate *gate;
+    unsigned index;
 } Work;
 
 typedef struct {
@@ -81,15 +81,15 @@ static const char ordinary_consumer[] =
     "}";
 
 static const Policy policies[JOB_COUNT] = {
-    {ordinary_consumer, "consumer_a", 0, 0, true, false, NULL},
-    {ordinary_consumer, "consumer_b", 1, 1, true, false, NULL},
-    {"fn consume() -> u64 { return private_value; }", "consumer_private_hidden", 0, 0, true, false,
-     "unknown name 'private_value'"},
-    {"fn consume(p: *Node) -> u64 { return read_node(p); }", "consumer_function_missing", 0, 0,
-     false, false, "unknown name 'read_node'"},
-    {"fn consume() -> u64 { return private_value; }", "consumer_private_selected", 0, 0, true, true,
-     NULL},
-    {ordinary_consumer, "consumer_wrong_provider", 0, 1, true, false, "type mismatch"}};
+    {ordinary_consumer, "consumer_a", NULL, 0, 0, true, false},
+    {ordinary_consumer, "consumer_b", NULL, 1, 1, true, false},
+    {"fn consume() -> u64 { return private_value; }", "consumer_private_hidden",
+     "unknown name 'private_value'", 0, 0, true, false},
+    {"fn consume(p: *Node) -> u64 { return read_node(p); }", "consumer_function_missing",
+     "unknown name 'read_node'", 0, 0, false, false},
+    {"fn consume() -> u64 { return private_value; }", "consumer_private_selected", NULL, 0, 0, true,
+     true},
+    {ordinary_consumer, "consumer_wrong_provider", "type mismatch", 0, 1, true, false}};
 
 static unsigned checks;
 static unsigned failures;

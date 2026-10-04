@@ -11,8 +11,8 @@
 #define CRUST_VERSION "0.1"
 #define CRUST_ALIGNOF(T)                                                                           \
     (sizeof(struct {                                                                               \
-         char byte;                                                                                \
          T value;                                                                                  \
+         char byte;                                                                                \
      }) -                                                                                          \
      sizeof(T))
 
@@ -96,24 +96,24 @@ typedef enum {
 } CrustTypeKind;
 
 struct CrustTypeSyntax {
-    CrustTypeKind kind;
     CrustLoc loc;
     CrustName *name;
     CrustTypeSyntax *base;
     CrustTypeSyntax **params;
     size_t param_count;
     uint64_t count;
+    CrustTypeKind kind;
 };
 
 struct CrustType {
-    CrustTypeKind kind;
     uint64_t size;
-    uint32_t align;
     CrustType *base;
     uint64_t count;
     CrustType **params;
     size_t param_count;
     CrustDecl *record_decl;
+    CrustTypeKind kind;
+    uint32_t align;
 };
 
 typedef enum {
@@ -163,8 +163,8 @@ typedef enum {
 } CrustExprKind;
 
 struct CrustInit {
-    CrustName *name;
     CrustLoc loc;
+    CrustName *name;
     CrustExpr *value;
     CrustField *field;
     CrustInit *next;
@@ -209,7 +209,6 @@ typedef enum {
 /* Branch and loop bodies introduce lexical scopes even when their root is not
    CRUST_S_BLOCK. A function body can also be any statement kind. */
 struct CrustStmt {
-    CrustStmtKind kind;
     CrustLoc loc;
     CrustStmt *next;
     CrustStmt *body;
@@ -219,12 +218,13 @@ struct CrustStmt {
     CrustName *name;
     CrustTypeSyntax *syntax_type;
     CrustSymbol *symbol;
+    CrustStmtKind kind;
     bool uninitialized;
 };
 
 struct CrustField {
-    CrustName *name;
     CrustLoc loc;
+    CrustName *name;
     CrustTypeSyntax *syntax_type;
     CrustType *type;
     uint64_t offset;
@@ -233,8 +233,8 @@ struct CrustField {
 };
 
 struct CrustParam {
-    CrustName *name;
     CrustLoc loc;
+    CrustName *name;
     CrustTypeSyntax *syntax_type;
     CrustType *type;
     CrustSymbol *symbol;
@@ -252,16 +252,15 @@ typedef enum {
 } CrustSymbolKind;
 
 struct CrustSymbol {
-    CrustSymbolKind kind;
-    CrustName *name;
     CrustLoc loc;
+    CrustName *name;
     CrustType *type;
     CrustDecl *decl;
     CrustSymbol *scope_next;
+    CrustSymbolKind kind;
 };
 
 struct CrustDecl {
-    CrustDeclKind kind;
     CrustLoc loc;
     CrustName *name;
     uint64_t unit_identity;
@@ -277,6 +276,7 @@ struct CrustDecl {
     CrustStmt *body;
     CrustExpr *init;
     CrustDecl *next;
+    CrustDeclKind kind;
     unsigned resolve_state;
     bool checked;
 };
@@ -304,19 +304,19 @@ typedef struct CrustFailureFrame {
 } CrustFailureFrame;
 
 struct CrustContext {
+    CrustType builtins[CRUST_T_UNIT + 1];
+    char error[512];
     CrustArena arena;
+    CrustMap globals;
+    CrustMap identities;
+    CrustLoc error_loc;
     CrustName **names;
     size_t name_count;
     size_t name_capacity;
-    CrustMap globals;
-    CrustMap identities;
     void *type_comparison;
-    CrustType builtins[CRUST_T_UNIT + 1];
     CrustUnit *units;
     CrustUnit *last_unit;
     CrustFailureFrame *failure;
-    CrustLoc error_loc;
-    char error[512];
     size_t error_count;
 };
 

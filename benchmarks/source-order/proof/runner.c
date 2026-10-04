@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 #define _XOPEN_SOURCE 700
 #include "crust0_host.h"
 #include "proof.h"
@@ -348,12 +350,12 @@ static bool interface_layout(CrustContext *provider)
         offsetof(ProofSession, owner),         offsetof(ProofSession, source),
         offsetof(ProofSession, cursor),        offsetof(ProofSession, reader),
         offsetof(ProofSession, backend),       offsetof(ProofSession, target),
-        offsetof(ProofSession, argc),          offsetof(ProofSession, argv),
-        offsetof(ProofSession, pending),       offsetof(ProofSession, target_source),
-        offsetof(ProofSession, switch_offset), offsetof(ProofSession, selections),
-        offsetof(ProofSession, reads),         offsetof(ProofSession, includes),
-        offsetof(ProofSession, emits),         offsetof(ProofSession, allocations),
-        offsetof(ProofSession, releases),      offsetof(ProofSession, root_done),
+        offsetof(ProofSession, argv),          offsetof(ProofSession, pending),
+        offsetof(ProofSession, target_source), offsetof(ProofSession, switch_offset),
+        offsetof(ProofSession, selections),    offsetof(ProofSession, reads),
+        offsetof(ProofSession, includes),      offsetof(ProofSession, emits),
+        offsetof(ProofSession, allocations),   offsetof(ProofSession, releases),
+        offsetof(ProofSession, argc),          offsetof(ProofSession, root_done),
         offsetof(ProofSession, reader_active), offsetof(ProofSession, custom_started)};
     CrustDecl *declaration = lookup(provider, "ProofSession", 12);
     CrustDecl *action = lookup(provider, "ProofAction", 11);

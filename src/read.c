@@ -45,22 +45,22 @@ enum {
 };
 
 typedef struct {
-    int kind;
     CrustLoc loc;
     CrustName *name;
     uint64_t integer;
-    CrustTypeKind integer_type;
     const unsigned char *bytes;
     size_t byte_count;
+    int kind;
+    CrustTypeKind integer_type;
 } Token;
 
 typedef struct {
+    Token token;
     CrustContext *ctx;
     CrustSource *source;
     size_t offset;
     size_t end;
     unsigned depth;
-    Token token;
 } Reader;
 
 typedef struct {

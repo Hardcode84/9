@@ -23,11 +23,10 @@ typedef union {
 } CrustArenaAlign;
 
 struct CrustArenaBlock {
+    CrustArenaAlign alignment;
     CrustArenaBlock *next;
     size_t used;
     size_t capacity;
-    CrustArenaAlign alignment;
-    unsigned char data[];
 };
 
 static void *default_allocate(void *user, size_t size)
@@ -80,7 +79,8 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
     CrustArenaBlock *block = arena->blocks;
     size_t offset;
     size_t capacity;
-    size_t prefix = offsetof(CrustArenaBlock, data);
+    /* Header tail padding keeps the following payload maximally aligned. */
+    size_t prefix = sizeof(CrustArenaBlock);
     if (size == 0 || alignment == 0 || (alignment & (alignment - 1)) != 0 ||
         alignment > CRUST_ALIGNOF(CrustArenaAlign)) {
         return NULL;
@@ -89,7 +89,7 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
         offset = (block->used + alignment - 1) & ~(alignment - 1);
         if (offset <= block->capacity && size <= block->capacity - offset) {
             block->used = offset + size;
-            return block->data + offset;
+            return (unsigned char *)block + prefix + offset;
         }
     }
     capacity = arena_capacity(arena, size);
@@ -105,7 +105,7 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
     block->capacity = capacity;
     arena->blocks = block;
     arena->bytes_reserved += prefix + capacity;
-    return block->data;
+    return (unsigned char *)block + prefix;
 }
 
 void crust_context_init(CrustContext *ctx, const CrustAllocator *allocator)
@@ -561,22 +561,22 @@ enum {
 };
 
 typedef struct {
-    int kind;
     CrustLoc loc;
     CrustName *name;
     uint64_t integer;
-    CrustTypeKind integer_type;
     const unsigned char *bytes;
     size_t byte_count;
+    int kind;
+    CrustTypeKind integer_type;
 } Token;
 
 typedef struct {
+    Token token;
     CrustContext *ctx;
     CrustSource *source;
     size_t offset;
     size_t end;
     unsigned depth;
-    Token token;
 } Reader;
 
 typedef struct {
@@ -1605,19 +1605,19 @@ bool crust_read(CrustContext *ctx, CrustSource *source, CrustUnit **result)
 
 typedef struct Identity Identity;
 struct Identity {
-    CrustDecl *decl;
     CrustMap fields;
-    unsigned layout_depth;
+    CrustDecl *decl;
     Identity *next;
     Identity *pending_next;
+    unsigned layout_depth;
 };
 
 typedef struct BindWork BindWork;
 struct BindWork {
     CrustDecl *decl;
+    BindWork *next;
     unsigned layout_state;
     unsigned layout_depth;
-    BindWork *next;
 };
 
 typedef struct {
@@ -1626,19 +1626,19 @@ typedef struct {
 } BoundType;
 
 typedef struct {
-    CrustContext *ctx;
     CrustMap pending;
     CrustMap visited;
     CrustMap types;
+    CrustContext *ctx;
     Identity *identities;
     BindWork *work;
     BindWork **tail;
 } Binding;
 
 typedef struct {
+    CrustMap locals;
     CrustContext *ctx;
     CrustType *return_type;
-    CrustMap locals;
     CrustSymbol *scope;
     unsigned loop_depth;
     unsigned depth;

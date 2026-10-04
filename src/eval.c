@@ -65,8 +65,6 @@ struct EvalDecl {
 };
 
 struct CrustEval {
-    CrustContext *context;
-    unsigned active_depth;
     CrustEvalOptions options;
     CrustMap declarations;
     CrustMap identities;
@@ -76,7 +74,9 @@ struct CrustEval {
     CrustMap roots;
     CrustMap statements;
     CrustMap expressions;
+    CrustContext *context;
     EvalDecl *first;
+    unsigned active_depth;
 };
 
 typedef enum { EVAL_NEXT, EVAL_RETURN, EVAL_BREAK, EVAL_CONTINUE } EvalFlow;

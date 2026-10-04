@@ -23,15 +23,15 @@ static unsigned failures;
 
 typedef struct {
     CrustContext *context;
-    bool enabled;
     unsigned lookups;
+    bool enabled;
 } Resolver;
 
 typedef struct {
-    bool fail;
     size_t live;
     size_t calls;
     size_t fail_at;
+    bool fail;
 } AllocatorState;
 
 int32_t eval_native_reenter(int32_t (*callback)(int32_t), int32_t value)
@@ -267,7 +267,7 @@ static void test_evaluation_depth(void)
     CrustUnit *unit;
     CrustEval *eval;
     CrustDecl *declaration;
-    AllocatorState state = {false, 0, 0, 0};
+    AllocatorState state = {0};
     CrustAllocator allocator = {&state, test_allocate, test_release};
     uint32_t depth;
     uint32_t result;
@@ -337,7 +337,7 @@ static void test_native_type_graph(void)
     CrustDecl bad;
     CrustEval *eval;
     Resolver resolver;
-    AllocatorState state = {false, 0, 0, 0};
+    AllocatorState state = {0};
     CrustAllocator allocator = {&state, test_allocate, test_release};
     crust_context_init(&context, &allocator);
     a = native_graph_declaration(&context, &left, CRUST_T_USIZE, 1);
@@ -551,7 +551,7 @@ static void test_root_storage(void)
     CrustContext context;
     CrustRootScope scope = {{NULL, 0, 0}, NULL};
     CrustAction action;
-    AllocatorState state = {false, 0, 0, 0};
+    AllocatorState state = {0};
     CrustAllocator allocator = {&state, poison_allocate, test_release};
     CrustEval *eval;
     unsigned char *storage = NULL;
@@ -585,7 +585,7 @@ static void test_root_storage_failure(void)
     CrustContext context;
     CrustRootScope scope = {{NULL, 0, 0}, NULL};
     CrustAction action;
-    AllocatorState state = {false, 0, 0, 0};
+    AllocatorState state = {0};
     CrustAllocator allocator = {&state, test_allocate, test_release};
     CrustEval *eval;
     bool returned = false;
@@ -807,7 +807,7 @@ static void test_registration_failures(void)
         CrustUnit *unit;
         CrustDecl *declaration;
         CrustEval *eval;
-        AllocatorState state = {false, 0, 0, 0};
+        AllocatorState state = {0};
         CrustAllocator allocator = {&state, test_allocate, test_release};
         size_t initial_calls;
         int32_t (*callbacks[200])(int32_t);
@@ -909,7 +909,7 @@ static void test_failures(void)
     CrustSource source = source_text(text);
     CrustContext context;
     CrustUnit *unit;
-    AllocatorState state = {false, 0, 0, 0};
+    AllocatorState state = {0};
     CrustAllocator allocator = {&state, test_allocate, test_release};
     CrustEval *eval;
     int32_t value = 0;

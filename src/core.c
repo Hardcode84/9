@@ -16,11 +16,10 @@ typedef union {
 } CrustArenaAlign;
 
 struct CrustArenaBlock {
+    CrustArenaAlign alignment;
     CrustArenaBlock *next;
     size_t used;
     size_t capacity;
-    CrustArenaAlign alignment;
-    unsigned char data[];
 };
 
 static void *default_allocate(void *user, size_t size)
@@ -73,7 +72,8 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
     CrustArenaBlock *block = arena->blocks;
     size_t offset;
     size_t capacity;
-    size_t prefix = offsetof(CrustArenaBlock, data);
+    /* Header tail padding keeps the following payload maximally aligned. */
+    size_t prefix = sizeof(CrustArenaBlock);
     if (size == 0 || alignment == 0 || (alignment & (alignment - 1)) != 0 ||
         alignment > CRUST_ALIGNOF(CrustArenaAlign)) {
         return NULL;
@@ -82,7 +82,7 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
         offset = (block->used + alignment - 1) & ~(alignment - 1);
         if (offset <= block->capacity && size <= block->capacity - offset) {
             block->used = offset + size;
-            return block->data + offset;
+            return (unsigned char *)block + prefix + offset;
         }
     }
     capacity = arena_capacity(arena, size);
@@ -98,7 +98,7 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
     block->capacity = capacity;
     arena->blocks = block;
     arena->bytes_reserved += prefix + capacity;
-    return block->data;
+    return (unsigned char *)block + prefix;
 }
 
 void crust_context_init(CrustContext *ctx, const CrustAllocator *allocator)

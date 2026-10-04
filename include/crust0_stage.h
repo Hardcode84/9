@@ -12,8 +12,8 @@ typedef struct {
     CrustContext *context;
     CrustSource *source;
     size_t target_begin;
-    int32_t argc;
     char **argv;
+    int32_t argc;
 } CrustBuild;
 
 #endif

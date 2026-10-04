@@ -9,19 +9,19 @@
 
 typedef struct Identity Identity;
 struct Identity {
-    CrustDecl *decl;
     CrustMap fields;
-    unsigned layout_depth;
+    CrustDecl *decl;
     Identity *next;
     Identity *pending_next;
+    unsigned layout_depth;
 };
 
 typedef struct BindWork BindWork;
 struct BindWork {
     CrustDecl *decl;
+    BindWork *next;
     unsigned layout_state;
     unsigned layout_depth;
-    BindWork *next;
 };
 
 typedef struct {
@@ -30,19 +30,19 @@ typedef struct {
 } BoundType;
 
 typedef struct {
-    CrustContext *ctx;
     CrustMap pending;
     CrustMap visited;
     CrustMap types;
+    CrustContext *ctx;
     Identity *identities;
     BindWork *work;
     BindWork **tail;
 } Binding;
 
 typedef struct {
+    CrustMap locals;
     CrustContext *ctx;
     CrustType *return_type;
-    CrustMap locals;
     CrustSymbol *scope;
     unsigned loop_depth;
     unsigned depth;

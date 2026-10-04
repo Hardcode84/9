@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: Apache-2.0 */
+
 #ifndef SOURCE_ORDER_PROOF_H
 #define SOURCE_ORDER_PROOF_H
 #include "crust0.h"
@@ -15,7 +17,6 @@ struct ProofSession {
     int32_t (*reader)(void *, void *, void *);
     int32_t (*backend)(void *, void *, void *);
     CrustContext *target;
-    int32_t argc;
     char **argv;
     int32_t (*pending)(void *);
     CrustSource *target_source;
@@ -26,6 +27,7 @@ struct ProofSession {
     size_t emits;
     size_t allocations;
     size_t releases;
+    int32_t argc;
     bool root_done;
     bool reader_active;
     bool custom_started;

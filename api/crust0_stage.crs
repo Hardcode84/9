@@ -6,6 +6,6 @@ record CrustBuild {
     context: *CrustContext;
     source: *CrustSource;
     target_begin: usize;
-    argc: i32;
     argv: **u8;
+    argc: i32;
 }

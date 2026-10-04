@@ -15,6 +15,7 @@ typedef struct CrustRunState CrustRunState;
    selected before its reader was called. Input-consuming execution can advance
    cursor further. Source storage remains immutable. */
 struct CrustRun {
+    CrustRootScope scope;
     CrustContext *context;
     CrustSource *source;
     size_t cursor;
@@ -22,13 +23,12 @@ struct CrustRun {
     bool (*execute)(CrustRun *run, void *user, void *action);
     void *user;
     CrustEval *eval;
-    CrustRootScope scope;
     uint64_t next_identity;
-    int32_t argc;
     char **argv;
-    bool returned;
-    int32_t status;
     CrustRunState *state;
+    int32_t argc;
+    int32_t status;
+    bool returned;
 };
 
 /* Initialize an empty runner using a context with checked installed interfaces.

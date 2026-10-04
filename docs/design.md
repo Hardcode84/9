@@ -17,8 +17,6 @@ receive their runtime machinery.
 
 This guide describes the current implementation and its extension contracts.
 The [Crust0 specification](crust0-spec.md) defines the seed language rules.
-The [exploration archive](exploration/README.md) retains research, proposals,
-and earlier experiments; their candidate syntax does not extend the seed.
 
 ## The language core
 
@@ -148,11 +146,11 @@ must already be available before a call uses it; preparing that code is an
 explicit build dependency. A root can also define and execute stage functions
 directly, as the [reader switch](../examples/reader-switch/README.md) does.
 
-The intended startup policy keeps the seed evaluator small. An early root
-action selects a backend, prepares its native code with an available compiler
-configuration, and installs the execution stage for subsequent compilation
-code. A backend can then compile its next generation explicitly. ASM and C
-are the available emission paths; LLVM requires a separate adapter stage.
+The native execution stage starts with a small setup prefix in the seed.
+An early root action selects a backend, prepares its native code with an
+available compiler configuration, and installs the executor for subsequent
+compilation code. A backend can then compile its next generation explicitly.
+ASM and C are the available emission paths.
 
 This handoff uses `CrustRun.read`, `execute`, and `user`. Loading a library
 with `host_link` alone leaves the default root executor in place. The selected
@@ -299,12 +297,6 @@ same file directly. The root installs its compiler and executor explicitly.
 The reader, checker, evaluator, and runner remain C99. A separate Crust reader
 library is available to stages that select it.
 
-An LLVM adapter belongs at the same library boundary. There is no LLVM
-adapter in the current tree. Such an adapter must implement target layout
-and ABI mapping, operation lowering, IR construction, pass options, and
-emission. It must preserve source trap and alias rules. Exposing that adapter
-does not by itself expose LLVM's internal algorithms.
-
 ## Lifetimes, parallel work, and cost
 
 Contexts own arenas for compiler nodes, names, tables, and plans. Source
@@ -317,8 +309,9 @@ context.
 One mutable context and each syntax body have one writer. Independent
 contexts can read sources, check bodies, and emit output in parallel while
 sharing complete, immutable provider facts. Stable identities and diagnostic
-order must not depend on worker completion order. The current drivers are
-serial; the public interfaces permit a library to schedule independent work.
+order must not depend on worker completion order. The default drivers are
+serial. The optional [native job library](../stages/parallel/README.md) runs
+independent jobs; its caller selects dependencies and worker count.
 
 The root cursor has a serial dependency because an action can select the
 next reader. A host evaluator also requires exclusive access from one
@@ -331,7 +324,8 @@ explicit producer. Include stage and helper code, compiler and ABI identity,
 target settings, options, and all external inputs. Optional file lookups must
 encode absence as well as presence. The producer owns only its output and
 scratch files. Root effects run on every invocation. No context, address, or
-execution state is stored. Cold measurements include stage preparation.
+execution state is stored. Measure source bootstrap and cache validation
+separately from application compilation with an identified compiled backend.
 
 Keep frontend checks, stage execution, emission, and target toolchain time
 separate. Assembly `--prepare` builds storage plans but leaves instruction
@@ -344,8 +338,8 @@ test does not establish C-level compilation speed for that configuration.
 
 The [ownership stage](ownership-model.md) uses finite local initialization,
 owner, loan, and domain-access facts. Each body is checked against declared
-interfaces. Calls do not expand bodies or inspect callers. Z3 and the earlier
-graph-proof stages are removed. The C99 core is unchanged.
+interfaces. Calls use callee contracts. Each function keeps its own local
+state, and the stage implements the checking policy in Crust.
 
 The [intrusive implementation](../examples/intrusive/README.md) is explicitly
 trusted by the root. Its opaque types hide direct pointer fields. The provider
@@ -360,8 +354,9 @@ pool, counter, generation tag, hidden ownership chain, or runtime pointer check
 is added. Verification leaves emitted C and native symbols unchanged.
 Native resource contracts cover both integer and opaque-pointer handles.
 Returned views state one exact input path. Local records can combine views
-from several sources; a returned multi-origin record or stored-origin replacement
-requires a richer interface and is rejected by this profile.
+from several sources. Return those views separately and combine them in the
+caller. To change a local view's origin, drop it and assign a new result.
+Replacement through a borrowed view is rejected.
 
 Independent library receipts bind bodyless interfaces, objects, checker images,
 and selected trust. Clients need no provider source. Native sanitizer tests
@@ -380,4 +375,3 @@ The ownership stage adds local checks and explicit trusted container policy.
 - [Runner contract](source-runner.md): action boundaries, native calls, errors, and teardown.
 - [Bootstrap guide](bootstrap.md): build commands, assembly interfaces, and validation.
 - [C backend reference](c-backend.md): emission, symbol mapping, and custom bodies.
-- [Exploration archive](exploration/README.md): research and recorded design decisions.

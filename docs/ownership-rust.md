@@ -3,9 +3,9 @@
 # Ownership: Crust and Rust
 
 Both models use owners, moves, shared loans, exclusive loans, and scope cleanup.
-Crust's optional stage checks finite local facts and declared interfaces. It
-uses no solver or whole-program analysis. An opaque raw container implementation
-requires explicit root-selected trust. This is a library correctness obligation,
+Crust's optional stage checks each body from local facts and declared function
+and field contracts. An opaque raw container implementation requires explicit
+root-selected trust. This is a library correctness obligation,
 not a compiler proof of its internal pointer algorithm.
 
 ## How Rust organizes the learning material
@@ -35,7 +35,7 @@ does not need them to understand a move or repair a loan conflict.
 | Return a view | One exact `from parameter.path` origin | Declared lifetime relationships, with elision where applicable |
 | Store several local origins | View record fields retain their loans | References with lifetime parameters |
 | Return several distinct origins | Rejected by the one-origin result contract; return separately or construct in the caller | Distinct declared lifetimes can express the relationship |
-| Replace a stored origin through a borrower | Rejected without a replacement-origin interface | Must satisfy the declared reference lifetimes |
+| Replace a stored origin through a borrower | Rejected; replace a local view after consuming it | Must satisfy the declared reference lifetimes |
 | Own an integer handle | Native acquisition and consumption contracts on `owns(field)` | A wrapper owns the handle; native implementation establishes its contract |
 | Direct graph access | Opaque scoped view and domain permission | A safe library interface over implementation-specific invariants |
 
@@ -89,6 +89,6 @@ The stage is not a concurrency model or a formal proof of the compiler.
 
 The index client combines two input loans in a local comparison record. The
 stored-view client combines separate factory results and replaces a local view
-after `drop`. These examples retain the single-origin result interface. They do
-not require a per-field result or replacement map. The corresponding rejected
-interfaces remain explicit in the table above.
+after `drop`. These examples retain the single-origin result interface.
+Returning independent origins through one `from` path, or replacing origins
+through a borrowed view, produces a diagnostic.

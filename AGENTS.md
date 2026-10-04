@@ -53,7 +53,7 @@ does not veto the selected capability.
 - Erase proof state. No runtime identity metadata, validity checks, reference
   counts, hidden cleanup flags. Allowed: null checks before release; debug
   bounds checks. Cheap profiles reject unsupported proofs; preserve guarantees.
-- Keep [replacement gate](docs/ownership-design.md#9-replacement-gate) as a
+- Keep [validation gate](docs/ownership-design.md#9-validation) as a
   regression: trusted direct-pointer provider + checked client; individual
   destruction/reuse; rejected lifetime errors; independent imports; identical
   emitted code; compilation-cost budget.

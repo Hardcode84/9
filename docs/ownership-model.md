@@ -3,9 +3,9 @@
 # Ownership stage contract
 
 The stage uses finite body-local ownership, initialization, loan, and access
-facts. It has no graph solver or whole-program analysis. All rules are in
-Crust. The C99 core has no ownership policy. Read the [tutorial](ownership.md)
-for examples and the [design](ownership-design.md) for the implementation boundary.
+facts. Each body uses function and field contracts. All ownership rules are
+implemented in Crust. Read the [tutorial](ownership.md) for examples and the
+[design](ownership-design.md) for the implementation boundary.
 
 ## Owners and loans
 
@@ -96,9 +96,8 @@ the caller must check its invalid value again. Loop backedges must preserve
 initialized owners and any validity required at loop entry.
 
 The [native resource example](../examples/ownership-basics/handles.crs) uses
-POSIX descriptors and opaque C streams. Local checks need no solver. Native
-arguments retain their integer or pointer ABI. Moves and resource validity facts
-have no runtime representation. The emitted cleanup consists of ordinary calls
+POSIX descriptors and opaque C streams. Native arguments retain their integer
+or pointer ABI. Moves and resource validity facts have no runtime representation. The emitted cleanup consists of ordinary calls
 and the explicit failure tests in the source.
 
 ## Stored views
@@ -140,12 +139,11 @@ one `from` path cannot describe those independent origins.
 This is the selected interface boundary for this profile. The
 [index tutorial](../examples/ownership-index/README.md) combines independent
 loans in a checked local record. The stored-view example combines separate
-single-origin results and replaces a local view after `drop`. Neither needs
-a per-field result or replacement map. Keep the unsupported interfaces rejected;
-adding such a map requires an API that cannot use these forms.
+single-origin results and replaces a local view after `drop`. These local
+operations retain each source loan until the corresponding view ends.
 
-Basic view checks use local owner and loan facts without a solver. Each stored
-loan lowers to one ordinary pointer. View-only records need no generated
+View checks use local owner and loan facts. Each stored loan lowers to one
+ordinary pointer. View-only records need no generated
 cleanup calls or runtime lifetime state. The [stored-view example](../examples/ownership-basics/views.crs)
 checks native behavior, moves, reborrows, and pointer layout.
 

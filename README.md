@@ -48,14 +48,13 @@ the third runs it.
 - [Getting started: language, execution, and stages](docs/tutorial.md)
 - [Core design and compilation flow](docs/design.md)
 - [Language specification](docs/crust0-spec.md)
-- [Solver-free ownership design](docs/ownership-design.md)
+- [Ownership checker design](docs/ownership-design.md)
 - [Current ownership stage contract](docs/ownership-model.md)
 - [Ownership tutorial](docs/ownership.md)
 - [Ownership compared with Rust](docs/ownership-rust.md)
 - [Tutorials and examples](examples/README.md)
 - [Compilation programs and stage APIs](docs/source-runner.md)
 - [Build, tests, and contributor setup](docs/bootstrap.md)
-- [Research and design exploration](docs/exploration/README.md)
 
 ## Credits
 

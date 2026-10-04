@@ -4,8 +4,8 @@
 
 Keep direct `prev` and `next` pointers, independent node allocation, and stack
 heads. Put the pointer algorithm behind an explicitly trusted opaque interface.
-Check the client with local ownership and domain access rules. There is no pool,
-generation check, hidden ownership chain, or graph solver.
+Check the client with local ownership and domain access rules. The node and
+head fields are the complete runtime representation.
 
 ## Build and run
 

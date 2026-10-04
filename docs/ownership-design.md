@@ -1,10 +1,11 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Ownership without a graph solver
+# Ownership checker design
 
 This design is implemented by the optional ownership stage. The
 [stage contract](ownership-model.md) defines its accepted syntax and rejection
-rules. Z3 and the earlier graph-proof stages are removed.
+rules. The [ownership tutorial](ownership.md) explains them through programs
+that you can build and run.
 
 Use local ownership checks for application code. Permit an explicitly trusted
 implementation for containers whose internal pointers require stronger reasoning.
@@ -12,12 +13,12 @@ The trusted implementation must preserve the guarantees of its checked API.
 A defect in that implementation can cause memory errors. The compiler does not
 prove its pointer algorithms correct.
 
-The stage stays in Crust. The C99 core needs no ownership rules, graph analysis,
-new runtime, or solver interface.
+The stage is written in Crust. It reads annotations, checks each body against
+declared interfaces, and passes cleanup plans to the C backend.
 
 ## 1. The checked language
 
-Keep these rules:
+The checked interface uses these concepts:
 
 | Concept | Rule |
 | --- | --- |
@@ -45,9 +46,10 @@ which resource places are initialized. Put cleanup or reinitialization in the
 branches when they would otherwise disagree. Ordinary scalar initialization
 uses intersection at a join.
 
-Use lexical loan scopes in the first replacement. Explicit `drop` of a view
-ends its loan. Last-use inference is not required to remove Z3. This restriction
-can need more explicit scopes than Rust; it is not a claim of equal ergonomics.
+Loans have lexical scopes. Explicit `drop` of a view ends its loan. The target
+remains borrowed until the view's scope ends or the view is consumed, even
+after its last read. Use an inner block when access must end before the
+surrounding scope.
 
 ## 2. Function boundaries
 
@@ -59,17 +61,16 @@ A returned view declares one exact input path with `from parameter.path`.
 Every borrowed field of a returned view record must derive from that path.
 Local view records can combine loans from several inputs. A function cannot
 return that combination through one `from` path or replace stored origins
-through a borrowed parameter. The checker rejects these interfaces. A finite
-per-field result and replacement map would be needed to accept them. This
-implementation does not add that interface before a production API needs it.
+through a borrowed parameter. Return single-origin views separately, then
+combine them in the caller. To change a local view's origin, drop that view
+and assign a new result.
 
 The [one-way index](../examples/ownership-index/README.md) checks this boundary:
 a helper compares a selected payload with a separate caller input through a
 local view record. The [stored-view example](../examples/ownership-basics/views.crs)
 combines two single-origin factory results and replaces a local view after
-ending its old loan. Retain these forms as the accepted profile. A returned
-multi-origin record and replacement through a borrowed view remain rejected.
-This is the selected interface restriction for this profile.
+ending its old loan. Both forms preserve the origins declared at function
+boundaries.
 
 Borrowed storage must be initialized again before return. A mutable call
 invalidates scalar facts for its declared writable places. Native-handle
@@ -90,11 +91,9 @@ Direct and deferred calls to destructor functions are rejected in checked
 code: those calls would leave the original cleanup duty live. Use `drop` or
 pass an owner by value to a consuming helper.
 
-There are no checked `invariant`, `requires`, or `ensures` formulas in this
-profile. Ordinary application conditions still execute. Assertions do not
-create ownership authority. A Boolean result cannot manufacture an owner or
-end a loan unless a finite, declared type transition supplies that behavior.
-Do not add such transitions before an API needs them.
+The checker derives ownership authority from declarations and checked transfers.
+Application conditions and assertions execute as ordinary code. A Boolean
+result alone cannot create an owner or end a loan.
 
 ## 3. Optional domains for opaque shared storage
 
@@ -114,7 +113,7 @@ an abstract domain parameter. Instantiation substitutes an identity; it does
 not specialize or recompile the helper. Returning a fresh domain and its dependent objects is rejected: the interface
 cannot bind a new identity in a result.
 
-Retain the existing access distinction:
+The domain has three access permissions:
 
 | Permission | Permitted work |
 | --- | --- |
@@ -143,7 +142,7 @@ its storage. Reading or changing payload requires a separate `read` or `mut`
 view. That view borrows the domain access permission as well as its declared
 storage origins. While a mutable payload view is live, another operation that
 could alias it is rejected. A shared payload view prevents conflicting edits.
-The first profile treats unknown aliases in one domain conservatively.
+The checker treats unknown aliases in one domain as potentially overlapping.
 
 This separates navigation from a reference to the payload. It does not make
 several potentially aliased mutable references safe.
@@ -251,37 +250,58 @@ example library, not to the checker:
 | Destroy node owner | Requires reclamation authority; consumes the owner; unlinks all hooks before release. |
 | Destroy head | Requires reclamation authority; leaves all externally owned nodes live and detached from that head. |
 
-This client sequence is pseudocode, not a proposed source grammar. The domain
-identity and required access modes are interface annotations. They add no
-runtime argument.
+The following is a complete target program for the example's provider. Save it
+as `build/intrusive-small.crs`. From the repository root, run:
 
-```text
-first = construct node
-second = construct node
-construct ready and active heads in their final stack locations
-
-edit domain:
-    insert first and second into ready
-    insert first and second into active
-
-read domain:
-    traverse both lists through cursors
-    end all payload views and cursors
-
-destroy first
-construct replacement, possibly at the same address
-
-edit domain:
-    insert replacement into both lists
-
-destroy the heads
-destroy the remaining node owners
+```sh
+make all ownership-stage
+build/crust examples/intrusive/main.crs -o build/intrusive-small \
+    build/intrusive-small.crs
+build/intrusive-small
 ```
 
-The destruction and construction lines occur outside the access scopes. The
-compiler rejects moving `destroy first` inside the read scope. It also rejects
-using an old cursor after that scope. Destroying the head first is valid because
-its trusted destructor detaches the surviving nodes.
+```crust
+fn main(argc: i32, argv: **u8) -> i32 {
+    domain Graph {
+        var first: Owner = owner_new(65i64);
+        var second: Owner = owner_new(66i64);
+        {
+            var ready: ReadyHead = uninit;
+            var active: ActiveHead = uninit;
+            ready_init(&ready);
+            active_init(&active);
+            edit Graph {
+                ready_insert(mut ready, read first);
+                ready_insert(mut ready, read second);
+                active_insert(mut active, read first);
+                active_insert(mut active, read second);
+            }
+            read Graph {
+                var cursor: Cursor = ready_first(read ready);
+                var value: read i64 = cursor_value(read cursor);
+                if value != 66i64 { trap; }
+            }
+            drop first;
+            var replacement: Owner = owner_new(67i64);
+            edit Graph {
+                ready_insert(mut ready, read replacement);
+                active_insert(mut active, read replacement);
+            }
+        }
+    }
+    return 0i32;
+}
+```
+
+The program returns zero. `drop first` retires an individual node while both
+heads remain live. The replacement has a new owner and can join both lists.
+Its scope cleanup unlinks it before the heads are destroyed. Head cleanup
+then detaches `second`, whose owner is cleaned up at the domain boundary.
+
+Destruction occurs outside the access scopes. Moving `drop first` inside the
+read scope produces a diagnostic. A cursor can be used only within its access
+scope. The [full example](../examples/intrusive/README.md) also checks traversal,
+payload mutation, both head counts, and surviving nodes after head destruction.
 
 An owning container can keep ownership in its existing links. Removal returns
 an owner and removes the container's ownership of that node. This transfer is
@@ -354,13 +374,13 @@ diagnostic, not permission to accept the body.
 
 ## 8. Compilation cost and parallel work
 
-Let `N` be body operations, `P` the distinct place paths, and `L` the loan facts
-in a body. Their sizes depend on source, not runtime heap population. Use
-local fact chains indexed by fixed hash buckets and explicit origin paths.
-Branch state copies the bucket heads; earlier facts remain immutable. Structured branch joins
-need work proportional to the local state they join. A simple implementation
-can take quadratic time in unusually large bodies; do not call it linear
-without measurement. It must not have exponential pointer-case search.
+Checker state consists of places, objects, and loans encountered in one body.
+Its size depends on the source, not the runtime heap population. Local fact
+chains use fixed hash buckets. A branch copies bucket heads and retains the
+immutable facts. A join scans local slots, objects, and loans. It reuses an
+unchanged slot binding and records a new binding when the merged value changes.
+Large bodies and long fact chains can increase lookup and join cost; measure
+those cases separately from many small independent functions.
 
 A declaration pass precedes body checking. Bodies read interface summaries and keep separate local state in the
 request arena. The current driver runs bodies serially. Separate check contexts permit
@@ -375,7 +395,7 @@ built provider without its bodies. Cache keys must distinguish a body checked
 by the ownership stage from a body explicitly trusted by the root. An artifact
 cannot change that status through its own metadata.
 
-The first performance gate uses the compiled stage and a fresh client check.
+The ownership performance gate uses the compiled stage and a fresh client check.
 Exclude target GCC compilation and linking. Compare the same source through
 resource lowering and C emission with and without the ownership pass in the
 erasure harness. Require identical emitted C and symbols. Do not expose the
@@ -383,12 +403,12 @@ unchecked harness path as an alternative with the same safety claim.
 
 Use the intrusive client, native-handle code, a returned-view client, and an
 owning-tree client. Also measure independent provider and client builds. The
-initial budget is a median total frontend ratio at most `2.0` against the
+budget is a median total frontend ratio at most `2.0` against the
 resource-only path on a large client workload, using randomized paired runs
 and reporting uncertainty. Measure `1x`, `2x`, and `4x` copies of independent
 function bodies to detect scaling faults. Report the ownership pass separately.
-This is a design acceptance budget, not a measured result or a change to the
-raw frontend's C-speed requirement.
+The [ownership measurement guide](../benchmarks/ownership/README.md) gives the
+commands and report fields. The raw frontend has a separate C-speed gate.
 
 No runtime representation is added for ownership state, domain identities,
 permissions, trust, or borrow origins. An owner handle and a cursor keep their
@@ -396,55 +416,31 @@ ordinary representations. Link rewrites and cleanup calls remain executable
 work, as in the corresponding C implementation. Compare those operations;
 do not assume an optimizer will erase extra bookkeeping.
 
-## 9. Replacement gate
+## 9. Validation
 
-Implement one trusted provider and its checked client before adding another
-ownership feature. Use the direct two-hook intrusive example, independent node
-release and reuse, and native output. Add an owning tree with parent references
-to ensure that the boundary has no list-specific rule.
+Run from the repository root:
 
-The client checker must reject duplicate owners, borrowed destruction, cursor
-escape, reclamation during access, wrong-domain arguments, replacement of
-stable storage, private-field access, retirement bypass, undeclared result
-origins, and unapproved trust. It must check cleanup on failure and early exit.
+```sh
+make all ownership-stage
+make check-ownership check-ownership-imports check-ownership-alloc
+```
 
-Test the trusted pointer implementation with native behavior tests and
-sanitizers. A missing backlink store in that implementation is a library defect;
-it is not a promised compiler rejection. A malicious trusted declaration can
-also break safety. Keep those facts explicit in the test names, documentation,
-and compilation policy.
+The checks cover trusted direct-pointer providers and checked clients: two-hook
+intrusive lists, an owning tree with parent references, and a one-way index.
+They exercise individual release, address reuse, native output, independent
+imports, and identical code before and after ownership verification.
 
-Compare the complete provider and client annotations with a corresponding
-Rust API and its unsafe implementation. Do not hide required proof scripts in
-the library or require a second proof language to satisfy this gate.
+Client rejection tests cover duplicate owners, borrowed destruction, cursor
+escape, reclamation during access, wrong-domain arguments, replacement of stable
+storage, private-field access, retirement bypass, undeclared result origins,
+and unapproved trust. Cleanup checks cover failure and early exit.
 
-The provider/client boundary and compilation-cost gate passed before removal
-of Z3 and the graph-proof stages. Keep their replacement checks as regression
-requirements. The ownership test checks that its compiler and stage library
-have no solver library dependency or solver symbols.
+Test trusted pointer implementations with native behavior checks and sanitizers.
+A missing backlink store is a provider defect. A malicious trusted declaration
+can also break safety. The root selects the implementation whose correctness
+it relies on. Native tests and checked-client rejections cover different parts
+of this boundary.
 
-## 10. Basis and tradeoffs
-
-The basic loan contracts follow the same reason for explicit lifetime
-relationships as [Rust's function and record lifetimes](https://doc.rust-lang.org/book/ch10-03-lifetime-syntax.html):
-check a body and its callers from an interface. This design retains simpler
-lexical scopes at first and does not claim all Rust borrow-checker behavior.
-
-The stable-address and retirement contract follows the principle used for
-[intrusive lists in Rust's pinning documentation](https://doc.rust-lang.org/std/pin/#an-intrusive-doubly-linked-list).
-The library must unlink before storage becomes invalid. Crust additionally
-makes the required reclamation permission part of the destructor interface.
-
-[GhostCell](https://plv.mpi-sws.org/rustbelt/ghostcell/paper.pdf) supports separating
-access permission from pointers. It does not by itself supply the individual
-retirement guarantee used here. That guarantee belongs to the trusted container.
-
-The alternatives do not remove this obligation for free.
-[Ghost collections](https://github.com/matthieu-m/ghost-collections) documents
-allocation-identity checks when StaticRc shares join.
-[Mezzo's adoption and abandon](https://cambium.inria.fr/~fpottier/publis/pottier-protzenko-mezzo.pdf)
-uses runtime ownership state and checks.
-[Alias types](https://www.cs.princeton.edu/~dpw/papers/alias-recursion-tr.pdf)
-can describe recursive ownership and aliasing through explicit store types.
-This design does not add those store descriptions to the user's interface.
-It accepts a visible trusted implementation instead.
+The [Rust comparison](ownership-rust.md) describes the annotations needed by
+application and container authors. The tutorials show complete provider and
+client sources alongside their build commands.

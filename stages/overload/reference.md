@@ -58,9 +58,9 @@ these callbacks and preserves source import, unsafe, and drop contracts.
 The implementation passes a separate caller and provider test that formats
 typed values, links by generated symbols, and produces the required output.
 Resource tests check cleanup and reject invalid ownership across that boundary.
-The [baseline](../../benchmarks/overload/README.md) fixes the experiment and
-the measurement rules. Frontend measurements stop before target C compilation
-and linking. The seed and the default compilation path have no overload pass.
+The [measurement guide](../../benchmarks/overload/README.md) defines equivalent
+inputs and comparison rules. Frontend measurements stop before target C
+compilation and linking. The seed and the default compilation path have no overload pass.
 
 ## Use from a compilation program
 
@@ -195,6 +195,5 @@ arena backing allocation failures with AddressSanitizer and UndefinedBehaviorSan
 
 The [measurement method](../../benchmarks/overload/README.md) separates the
 explicit-name baseline, the enabled stage with explicit names, and overload
-selection. The [field lookup experiment](../../benchmarks/overload/README.md)
-checks large record constructors. These methods state the tested boundaries;
-they do not establish the project's general C-speed requirement.
+selection. Its field-lookup workload checks large record constructors. Each
+result applies to its measured inputs, builds, and endpoint.

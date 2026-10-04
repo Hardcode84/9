@@ -86,4 +86,7 @@ The measurement uses fresh processes and randomizes endpoint order. It compares
 misses, hits, and prepared backends, checks emitted bytes, and runs the final
 list program. It excludes final target GCC compilation and linking. Native
 stage preparation remains in the miss result. Reports stay under `build/`.
-A warm result does not establish the cold C-speed requirement.
+Report bootstrap misses and cache validation separately from application
+compilation with a compiled backend. The
+[application gate](../../docs/source-runner.md#compiled-backend-application-gate)
+defines that comparison.

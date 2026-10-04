@@ -35,9 +35,10 @@ functions. A caller can edit the plan while it keeps these invariants valid.
 
 `crust_x64_emit_program_with_ops` accepts optional expression, place, and
 statement callbacks. A null callback selects the default operation. Public
-`crust_x64_try_*` functions return false with a diagnostic on failure. They do
-not unwind through native callers. The C-only variadic and throwing entry
-points have been removed. See the [custom operation example](../../examples/custom-stage/README.md).
+`crust_x64_try_*` functions return false with a diagnostic on failure. Native
+callers check that result and retain control of their own cleanup. The
+[custom operation example](../../examples/custom-stage/README.md) shows how to
+install an emitter callback.
 
 ## Implementation
 
@@ -56,8 +57,7 @@ before an operation returns, including after a nested failure.
 
 Internal emission trusts checked input. Source nesting is bounded by the
 reader and checker. Native function-type comparison uses an explicit worklist
-and a map of visited pairs. No C-private failure frame or type-comparison
-service is required.
+and a map of visited pairs.
 
 `make check` covers behavior, public layouts, callbacks, allocation failures,
 and output failures. `make check-asm` verifies that the seed and core archive

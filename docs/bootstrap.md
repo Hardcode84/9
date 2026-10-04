@@ -21,9 +21,9 @@ seed and sources and retains the resulting native library for later runs.
 
 ## Build and use
 
-A C99 compiler, the system C library, Make, Python 3, and libffi development
-headers and library build the default tools. GNU assembler and the system
-linker build the native examples. Python 3 also runs tests and measurements.
+Install a C99 compiler, GCC, GNU Make, GNU binutils, Python 3, and the libffi
+development headers and library. GCC and binutils compile, rename, and link
+the generated backend code. Python 3 also runs tests and measurements.
 The build downloads no dependencies. The standalone `build/crust0` executable
 does not link libffi. Its source bootstrap uses the seed and libffi to build
 the external assembly stage.
@@ -324,9 +324,6 @@ generations. `make check-cache` checks source-only bootstrap and artifact reuse.
 symbol response files across all three generations, and uses the final
 generation to build and run the direct-list program. No cache is used.
 These checks establish the stage self-compilation gate.
-The C frontend experiment requires a separate C reader, C semantic rules, and
-an ABI adapter for C operations absent from Crust0. The small replacement-stage
-witness does not establish that case.
 
 ## Parallel use
 
@@ -408,21 +405,22 @@ Use these commands for a second strict compiler and address/undefined-behavior
 instrumentation:
 
 ```sh
-make CC=clang-20 BUILD=build/clang check
-ASAN_OPTIONS=detect_leaks=0:detect_stack_use_after_return=1:abort_on_error=1 \
+make CC=clang BUILD=build/clang check
+ASAN_OPTIONS=detect_leaks=1:detect_stack_use_after_return=1:abort_on_error=1 \
 UBSAN_OPTIONS=halt_on_error=1 make CC=gcc BUILD=build/sanitize \
   CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
   LDFLAGS='-fsanitize=address,undefined' all c-stage check-stage
 ```
 
-The shown sanitizer configuration disables leak scanning. The allocation tests
-count live arena blocks; they do not replace a general leak check. Retain the
-commands and logs for each sanitizer run in ignored storage.
+This configuration enables leak scanning. Allocation tests also count live
+arena blocks. Retain commands and logs for each sanitizer run in ignored storage.
 
 The [source-runner measurement contract](source-runner.md#parallel-work-reuse-and-measurements)
 includes root capture and execution through complete C and symbol output.
-Required stage preparation contributes to cold cost. Final target GCC compilation
-and linking are excluded from the frontend interval.
+The application gate uses a compiled backend and includes loading it. Measure
+source bootstrap and automatic cache validation separately. A changed project
+stage needs a configuration that includes its preparation cost. Exclude final
+target GCC compilation and linking from frontend measurements.
 
 `benchmarks/bootstrap/measure.py` measures fresh-process checking, frame
 preparation, and complete assembly as separate endpoints. It uses the list
@@ -437,10 +435,10 @@ python3 benchmarks/bootstrap/measure.py --cpu 0 \
 ```
 
 Select an allowed CPU and a new output path. Compare equivalent source operations
-against the faster eligible C compiler at the same boundary. These inputs alone
-do not test compilation of Linux, GCC, LLVM, or SQLite, nor a self-hosted C reader.
-Keep reports and profiles under `build/`; the [benchmark guide](../benchmarks/README.md)
-defines retention and comparison rules.
+against the faster eligible C compiler at the same boundary. This harness covers
+the raw list program and generated function scaling. The
+[benchmark guide](../benchmarks/README.md) lists the resource, ownership, and
+parallel workloads and defines comparison rules. Keep reports under `build/`.
 
 ## Expression storage measurement
 

@@ -68,8 +68,7 @@ require `make resource-stage`. The SQLite example also needs its pinned native
 SQLite input; its README gives the command.
 Overload examples require `make overload-stage`.
 The intrusive, ownership-basics, ownership-graphs, and ownership-index examples require
-`make ownership-stage`. They have no solver dependency. The intrusive
-`raw-main.crs` root retains the unchecked seed-language bootstrap witness.
+`make ownership-stage`. The intrusive `raw-main.crs` root contains the unchecked seed-language bootstrap witness.
 Paths passed to `host_source`, `host_input`, and `host_path` are relative to the
 root file. A raw `-o` argument passed to the C backend is relative to the working
 directory. Each example states its output path. A root builds an executable;

@@ -2,10 +2,8 @@
 
 # Source-order compilation
 
-Date: 2026-10-01. This document defines the implemented root runner. The
-[language specification](crust0-spec.md) defines the Crust0 value and execution
-rules. The [design study](exploration/source-order-compilation.md) records the decision
-and the required experiments.
+This document defines the root runner. The [language specification](crust0-spec.md)
+defines the Crust0 value and execution rules.
 
 Run a compilation program with:
 
@@ -351,10 +349,8 @@ contexts, pointers, and prepared roots are not cached. See the
 [cache tutorial](../examples/cached-backend/README.md) for source bootstrap,
 publication, loading, and execution through the same source program.
 
-The [reader-transfer proof](../benchmarks/source-order/proof.md) established
-the first ownership and output boundary before this implementation. The
-production suite is `tests/source_order.py`. Its target GCC runs check actual
-executables outside the measurement interval. The full timing command is
+The production suite is `tests/source_order.py`. Its target GCC runs check
+actual executables outside the measurement interval. The timing command is
 `benchmarks/source-order/measure.py`.
 
 Measure from process start through root capture, installed interface checks,
@@ -366,11 +362,9 @@ stage is a separate measured configuration; it is not free project setup.
 The [measurement guide](../benchmarks/source-order/README.md) explains paired
 rounds, output controls, and separate preparation costs. Store raw samples,
 commands, tool versions, hashes, and confidence intervals in ignored reports.
-A historical prepared-stage result cannot establish current checkout speed or
-the full specification performance gate. The
-[benchmark matrix](../benchmarks/README.md) identifies the implemented consumers
-and the protocol cases that still require executable translations. Resource
-and ownership profiles have separate capability and cost claims.
+Use the [benchmark matrix](../benchmarks/README.md) to select an executable
+workload and its comparison boundary. Resource and ownership profiles have
+separate capability and cost claims.
 
 ### Compiled-backend application gate
 

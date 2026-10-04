@@ -2,7 +2,7 @@
 
 # C backend stage
 
-The second backend is an ordinary Crust0 library and driver in `stages/c/`.
+The C backend is an ordinary Crust0 library and driver in `stages/c/`.
 It reads checked trees, makes C text, and invokes GCC. All type mapping,
 expression lowering, names, number conversion, text buffers, and stage storage
 are written in Crust0. No C function emits or formats backend output.
@@ -329,18 +329,9 @@ output, and uses it to compile and run the intrusive-list program. It also
 checks native names, allocation-size failures, output failures, and the
 absence of C backend helper calls.
 
-The common suites check integer results, required traps, public API layouts,
-and native file-status layouts. Run `make check` and `make check-c` for current
-results and counts.
 The source-order suite checks interpreted root actions and the loaded backend.
-The [bootstrap guide](bootstrap.md#validation-and-measurements) describes its
-checks and recorded AddressSanitizer and UndefinedBehaviorSanitizer results.
-The exact generated backend C passes Clang 20 with strict C99 syntax checks;
-the layout probes use named structures in `offsetof`.
-
-The earlier prepared-driver run passed all 348 C-backend process checks at
-`-O3` with AddressSanitizer and UndefinedBehaviorSanitizer. That run preceded
-the source-stage split. Repeat that instrumented stage build with:
+The [bootstrap guide](bootstrap.md#validation-and-measurements) gives commands
+for core checks and sanitizer builds. To instrument the C stage and its targets:
 
 ```sh
 build/crust-c -o build/crust-c-sanitize \
@@ -351,16 +342,15 @@ build/crust-c -o build/crust-c-sanitize \
   api/crust0.crs api/crust0_host.crs api/crust0_stage.crs \
   stages/c/model.crs stages/c/base.crs stages/c/types.crs stages/c/emit.crs \
   stages/c/driver.crs stages/c/program.crs stages/c/main.crs
-ASAN_OPTIONS=detect_leaks=0 python3 tests/run.py --backend c \
+ASAN_OPTIONS=detect_leaks=1 python3 tests/run.py --backend c \
   --compiler build/crust-c-sanitize --work-dir build/tests-c-sanitize \
   --cflags='-O3 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer' \
   --ldflags='-fsanitize=address,undefined'
 ```
 
-Leak detection is disabled because LeakSanitizer needs process inspection
-that this sandbox does not permit. The allocation-failure test enables
-`allocator_may_return_null` for that child only. It sends a valid large request
-through the host allocator and checks the resulting stage error and cleanup.
+The allocation-failure test enables `allocator_may_return_null` for that child
+only. It sends a valid large request through the host allocator and checks the
+resulting stage error and cleanup.
 
 ## Compilation measurements
 
@@ -382,10 +372,11 @@ Correctness checks compile and run the output outside the timing samples. Keep
 raw samples, commands, source and tool hashes, and confidence intervals in the
 ignored report. A result applies to its recorded builds, inputs, and host.
 
-Stage construction is also separate. Include all required construction when
-measuring a cold source-defined compilation request. The
+The application speed gate uses an identified compiled backend. Measure source
+bootstrap and automatic cache validation separately. A configuration that
+changes a project stage includes its preparation cost. The
 [source runner](source-runner.md#parallel-work-reuse-and-measurements) defines
-that boundary. A prepared backend result does not establish the full cold gate.
+these boundaries.
 The [source-order measurement guide](../benchmarks/source-order/README.md)
 describes library inlining and text-append controls. Preserve capacity, overlap,
 raw-access, and aggregate-copy contracts when testing emitter changes.

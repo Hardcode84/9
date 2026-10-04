@@ -6,15 +6,26 @@ This application uses owned database and statement values, automatic cleanup,
 and synchronous borrowed callbacks. It matches the
 [C baseline](../../../benchmarks/resources/README.md) on success and error paths.
 
-Prepare the pinned SQLite sources and object with the commands in that baseline
-document. Then run these commands from the repository root:
+Use Linux x86-64 with GCC, GNU Make, GNU binutils, Python 3, and the libffi
+development headers and library. Source preparation also uses `curl`, `unzip`,
+and `sha256sum`. Run from the repository root:
 
 ```sh
+mkdir -p .profile-cache/sources
+curl -fL https://sqlite.org/2025/sqlite-amalgamation-3500400.zip -o .profile-cache/sqlite.download
+printf '%s  %s\n' 1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032 .profile-cache/sqlite.download | sha256sum -c -
+unzip -jo .profile-cache/sqlite.download 'sqlite-amalgamation-3500400/sqlite3.[ch]' -d .profile-cache/sources
+python3 benchmarks/resources/verify.py
 make all resource-stage
 build/crust examples/resources/sqlite/main.crs
 build/sqlite-resource .profile-cache/resources-baseline/normal.db
 python3 examples/resources/sqlite/verify.py --sanitizers
 ```
+
+The baseline verifier checks the extracted source hashes, builds SQLite 3.50.4
+and the C comparison programs, and creates the test databases. If the extracted
+sources already exist, start with `python3 benchmarks/resources/verify.py`.
+The Crust root uses the resulting `.profile-cache/resources-baseline/sqlite3.o`.
 
 `main.crs` loads the ordinary resource API and shared library. It selects the
 target files and SQLite object. The runner has no resource-stage selector.
@@ -23,9 +34,12 @@ The root accepts compiler arguments after its path. For example, append
 
 The application accepts one database path. It opens the database read-only and
 runs `SELECT value FROM input ORDER BY seq`. Result lines contain the original
-SQL type and hexadecimal bytes. A successful run ends with `rows N`.
-Errors use `error OPERATION FINALIZE CLOSE` and status 1. Invalid arguments use
-status 2. The baseline document defines the output format in full.
+SQL type and hexadecimal bytes. Type markers are `N`, `B`, `T`, `I`, and `R`
+for NULL, BLOB, text, integer, and real. Non-NULL bytes use lowercase hex.
+A successful run ends with `rows N`. The database needs an `input` table with
+`seq` and `value` columns.
+Errors on standard error use `error OPERATION FINALIZE CLOSE` and status 1.
+The three fields retain separate error codes. Invalid arguments use status 2.
 
 The library uses these contracts:
 
@@ -64,9 +78,9 @@ checks the compiler CLI, the source-order root, and an ASan/UBSan target. It
 also checks rejected ownership violations and decimal-format boundaries.
 The formatter tests zero, nine, ten, and the maximum `u64` against the actual C
 baseline helper. The SQLite object uses its baseline build; only the resource
-target is instrumented. Leak checks are disabled because LeakSanitizer fails
-under the execution environment's ptrace monitor. Stack-use-after-return and
-undefined-behavior checks remain enabled.
+target is instrumented. The verifier sets `detect_leaks=0`, so this profile
+checks address errors, stack-use-after-return, and undefined behavior. It
+provides no leak-check result.
 
 The rejected programs copy or move borrowed bytes, store a loan in a record,
 step a borrowed statement, close a borrowed database, or change callback access
@@ -76,5 +90,6 @@ step and finalization, failed output, and invalid arguments. Separate C contract
 checks establish busy-close and allocation-failure behavior in the pinned SQLite
 library.
 
-These checks do not measure compilation or runtime speed. They do not establish
-the separate direct-list observer contract.
+For compilation and runtime measurements, use the
+[resource benchmark commands](../../../benchmarks/resources/README.md#matched-check-and-handoff-gate).
+The commands above check behavior and cleanup.

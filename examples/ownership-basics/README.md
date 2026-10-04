@@ -80,8 +80,7 @@ python3 tests/ownership_native.py --sanitize
 This test runs the program at `-O0` and `-O2`, compares output before and after
 ownership verification, and checks a client after removal of its provider
 source. It rejects duplicate owners, unguarded use, invalid transfers,
-conflicting borrows, and ownership loss across branches and loops. An
-interceptor rejects any attempt to start a solver during these basic checks.
+conflicting borrows, and ownership loss across branches and loops.
 
 ## Stored views
 
@@ -123,8 +122,7 @@ borrow that record without a new result-origin contract. The example also
 drops a local `Reading`, assigns a new factory result, and changes the old
 source. The new source remains borrowed until the replacement view ends.
 Replacing a view through `mut Reading`, or returning both independent origins
-through one `from` path, is rejected. This profile keeps those restrictions
-instead of adding a per-field lifetime map.
+through one `from` path, is rejected.
 
 Resource lowering turns stored views into pointer fields and ordinary loads
 or stores. Ownership facts remain in the checker. The example checks pointer
@@ -138,6 +136,5 @@ python3 tests/ownership_views.py --sanitize
 The tests compare emitted C before and after verification, execute optimized
 and unoptimized programs, and reject scope escape, alias conflicts, incorrect
 result origins, source destruction, and use after a move. They also check a
-client after removing its provider source. The basic view checks run with a
-dependency check that rejects solver symbols or libraries. All selected
-ownership checks use finite local rules.
+client using only the published interface and native object. Ownership checks
+use finite local rules.

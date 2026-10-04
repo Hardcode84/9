@@ -152,7 +152,7 @@ build/crust stages/modules/exports.crs stages/c/api.crs stages/c/extension.crs
 
 The root reads every supplied path, then emits one `--export NAME` argument
 for each external function declaration. It checks all names before it writes
-output. This replaces the handwritten C backend export list in the Makefile.
+output. The Makefile uses this output to select the C backend library exports.
 Changing a consumer declaration changes the next library build's exports.
 
 This operation reads syntax; it does not resolve interface types or prove

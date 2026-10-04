@@ -2,7 +2,8 @@
 
 # Crust0 language specification
 
-Version 0.1. Date: 2026-10-01. Status: normative design draft.
+Version 0.1. This specification defines the implemented seed language and
+its compiler-library contracts.
 
 Crust0 is the bootstrap language for Crust compiler libraries. This document
 defines its syntax, static rules, execution rules, and compiler construction
@@ -13,27 +14,24 @@ The basic compilation path targets C-level speed through backend handoff.
 The root can select more capable checking stages with higher compilation cost.
 Such a stage must state its guarantees and cost; it need not meet the basic
 profile's speed gate. This choice adds no checking policy to the seed.
-The [C99 bootstrap implementation](bootstrap.md) implements the seed and has
-bounded measurements. Those results do not establish checked-Crust performance.
+The [bootstrap guide](bootstrap.md) gives build and test commands for the
+C99 implementation. Section 14 defines the validation and measurement boundaries.
 
 Crust0 is a low-level language with raw memory preconditions. It does not claim
 memory safety. Ownership, borrowing, cleanup, and unsafe policy belong to
-separate compiled language stages. Their removal from the seed is deliberate.
+separate compiled language stages.
 The checked ownership stage uses the [explicit trusted-container boundary](ownership-model.md#opaque-storage-and-explicit-trust). Its direct-list client
 is checked; its pointer implementation must uphold the declared contracts.
 The ownership model must not require whole-program analysis. Function interfaces
 and type and field declarations must encode all safety conditions needed across
 function boundaries. Check each body against those contracts, with local flow
 analysis. The user-facing model must be no more complex than Rust's for both
-application and container authors. The [checked ownership target](design.md#checked-ownership)
+application and container authors. The [checked ownership overview](design.md#checked-ownership)
 defines the acceptance gate. The [ownership stage contract](ownership-model.md)
 describes an external implementation based on local ownership facts and
 explicit trusted-container interfaces. The [intrusive tutorial](../examples/intrusive/README.md)
 uses those rules without container-specific stage logic.
 These requirements add no ownership feature to the seed.
-
-This document controls Crust0 version 0.1. The earlier documents remain research
-and capability requirements. Their proposed syntax is not additional Crust0 syntax.
 
 ## 1 Scope and minimum facilities
 
@@ -62,17 +60,14 @@ quotation, or general stage-definition keywords. The `crust` launcher executes
 root actions in source order. Those actions call ordinary functions through
 public interfaces and can replace the reader for unread root bytes.
 
-A compiler written in Crust0 can describe richer types as ordinary data and use
-another IR. For example, a C frontend can describe C floats and unions, then
-use its own checker and backend adapter. It need not translate them into
-Crust0 source types. Required numeric and ABI algorithms still need implementations.
-
-Crust0 is a bootstrap language, not a universal target IR. Public access to the
-compiler does not require every language to use one syntax tree or type system.
+Compiler libraries can define their own trees, types, and intermediate
+representations as ordinary Crust0 data. They select a reader, checker, and
+backend adapter whose contracts agree. The seed tree is one available
+representation; section 12 describes its construction and replacement APIs.
 
 ## 2 Target profile
 
-The initial execution profile is Linux x86-64, little endian, with 8-bit bytes
+The supported execution profile is Linux x86-64, little endian, with 8-bit bytes
 and 64-bit data pointers. It uses the System V AMD64 scalar calling convention.
 This is a bounded bootstrap target, not a claim of kernel or full C support.
 
@@ -89,8 +84,7 @@ or 1 for true. Null data pointers and null function values have all-zero
 representations. `usize` and `isize` are distinct types from `u64` and `i64`.
 
 The scalar ABI reference is the AMD64 ABI draft 0.99.6, sections 3.1 and 3.2.
-This selected historical reference defines the required scalar boundary;
-it is not a claim about the latest ABI revision.
+This reference defines the selected scalar boundary.
 [Selected AMD64 ABI](https://refspecs.linuxbase.org/elf/x86_64-abi-0.99.pdf)
 
 A different execution profile must define these representations and its ABI
@@ -211,6 +205,11 @@ chain within their own precedence level. Parentheses can group any expression.
 The grammar does not depend on whether an identifier names a type or a value.
 `make` separates construction from a following statement block. Assignment is
 a statement; its left expression is checked as a place after parsing.
+
+`else if` is another conditional in the `else` branch. Each arm counts toward
+the reader's recursion bound. Other branch bodies require braces. The seed
+reader and checker each enforce a 256-level traversal budget; nested
+expressions and statements share that budget.
 
 ## 5 Declarations and names
 
@@ -631,9 +630,8 @@ Each custom stage is an ordinary function defined in the user source or supplied
 by an external library. The compiler must not recognize a particular backend's
 name, path, or implementation. A standalone
 driver can prepare and execute those calls, but it does not replace the
-requirement that the override be in the user source. The
-[source metastage review](exploration/source-metastages.md) defines the phase requirements.
-It introduces no additional Crust0 grammar.
+requirement that the override be in the user source. The preparation order
+and runner operations below define when a selected stage takes effect.
 
 ### Source-order root execution
 
@@ -760,7 +758,7 @@ next generation of Crust stage libraries and drivers. The C99 seed remains
 available; it is not translated to Crust0. No generation requires its own
 unavailable output.
 
-The intended root startup is explicit: execute a small setup prefix with the
+Root startup is explicit: execute a small setup prefix with the
 seed, prepare the selected backend through an available compiler configuration,
 then install the stage that executes subsequent compilation code. A backend
 can compile its next generation after its first usable generation exists.
@@ -795,18 +793,19 @@ representations. Check those rules before lowering discards their information.
 Generated code has the same obligations as written code under the selected
 language policy. Making a pointer operation in a generator does not prove it safe.
 
-The seed is not a hidden ownership solver or proof kernel. A checked language's
-safety claim trusts its checker, transformations, backend, and foreign contracts.
+A checked language's safety claim trusts its checker, transformations, backend,
+and foreign contracts.
 A replacement that weakens them must not retain that safety claim without
 establishing the same properties. A small seed does not make the whole trusted
 implementation small.
 
-The LLVM adapter is a metastage too. Its public interface must expose target
-data, ABI decisions, type and operation lowering, IR construction, pass options,
-and emission. A user can change a lowering or replace the adapter through these
-interfaces. Replacing an LLVM-internal algorithm additionally requires its native
-extension interface or a different backend; naming the adapter a stage does
-not expose an unavailable LLVM implementation detail.
+The [ASM stage](../stages/asm/README.md) emits x86-64 assembly. The
+[C stage](c-backend.md) emits C and native-symbol arguments for GCC and
+`objcopy`. Both are Crust libraries selected by the compilation program.
+Their APIs expose storage preparation, target lowering, output buffers, and
+failure reporting. The C backend also accepts a function-body emitter callback.
+A custom adapter must construct the complete input required by its chosen
+backend and preserve the source language's ABI and execution rules.
 
 Backend semantic claims must follow actual language facts. For example, raw
 seed pointers do not justify exclusive-access metadata, and wrapping arithmetic
@@ -849,8 +848,9 @@ to the seed.
 No cache is needed for correctness or the first speed result. A persistent
 cache must account for stage and helper code, representations, source and binding
 facts, target settings, options, and every external input that can affect output.
-It must handle absent files and side effects as specified in the
-[cache contract](exploration/metacompilation.md#7-caching-without-changing-program-meaning).
+Optional file lookups must record absence as well as presence. Producers use
+the captured input bytes. Root effects run on every invocation. Artifact reuse
+must validate the stored bytes before loading them.
 Treat a compiled backend as a toolchain input to the application speed gate.
 Measure backend construction and automatic cache validation separately. A
 request that builds a changed project stage still includes that work in its
@@ -864,6 +864,8 @@ operations explicitly.
 
 This program creates and removes a directly linked stack node. The driver
 selects `main` as its hosted entry. Only the output function is external.
+Build the tools with `make all c-stage` from the repository root, then save the
+following source as `build/seed-list.crs`.
 
 ~~~text
 extern fn write_stream(stream: u32, data: *u8, size: usize) -> i32 = "crust0_host_write_stream";
@@ -906,14 +908,24 @@ fn main(argc: i32, argv: **u8) -> i32 {
 }
 ~~~
 
-The example has no heap allocation and keeps both nodes live through every
-access. It does not establish the required safe language rules for arbitrary
-stored pointers, individual destruction, and storage reuse. Auto-unlink alone
-cannot establish those rules. That separate requirement remains in the
-[direct-list witness](exploration/language-exploration.md#102-intrusive-list-witness).
+Compile and run it with:
+
+```sh
+build/crust0 -o build/seed-list.s build/seed-list.crs
+gcc -no-pie build/seed-list.s build/libcrust0_host.a -o build/seed-list
+build/seed-list
+```
+
+The output is `ok` and a newline. Both nodes remain live through every access.
+This raw program relies on the
+memory preconditions in section 8. For checked client lifetimes, individual
+node destruction, and storage reuse, use the
+[intrusive tutorial](../examples/intrusive/README.md). Its root selects the
+ownership stage and an explicitly trusted provider that unlinks before release.
 
 This second source uses constant tables, record values, and a function value.
-The result of `apply()` is `18u32`.
+Save it as `build/seed-values.crs`. The entry checks that `apply()` returns
+`18u32`.
 
 ~~~text
 record Pair {
@@ -932,9 +944,19 @@ fn apply() -> u32 {
     var pair: Pair = make Pair { second: widths[1usize], first: 1u32 };
     return f(pair.first + pair.second);
 }
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if apply() != 18u32 { return 1i32; }
+    return 0i32;
+}
 ~~~
 
-These programs are part of the bootstrap reader and execution tests.
+```sh
+build/crust-c -o build/seed-values build/seed-values.crs
+build/seed-values
+```
+
+The program returns zero and prints no text.
 
 ## 14 Conformance and performance gates
 
@@ -944,22 +966,19 @@ invalid constant forms, and missing returns. Diagnostics identify the input
 and source position when one exists. A stated implementation resource limit
 must fail explicitly; it must not omit a check or accept partial output.
 
-The current repository implements seed syntax, execution, and root control.
-Its stage libraries provide bounded construction witnesses. The C backend passes
-the stage self-compilation case. It does not establish the C frontend experiment.
-The optional [ownership stage](ownership-model.md) checks each function from
-finite local state and declared interfaces. It checks resource moves, integer
-and pointer handles, stored loans, returned origins, cleanup, and domain access.
-It uses no graph solver. The [intrusive tutorial](../examples/intrusive/README.md)
-has an explicitly trusted opaque provider and checked client. The provider must
-obey its internal retention and retirement contract; the stage does not prove
-its pointer stores. The [owning tree](../examples/ownership-graphs/README.md)
-uses the same interface rules. Independent imports preserve selected trust.
-Ownership state erases before emission. These witnesses do not establish every
-compiler-construction or checked-language acceptance case.
+The repository implements seed syntax, execution, and root control. Both
+backends compile their own next generations. The optional
+[ownership stage](ownership-model.md) checks each function from finite local
+state and declared interfaces. It checks resource moves, integer and pointer
+handles, stored loans, returned origins, cleanup, and domain access. The
+[intrusive tutorial](../examples/intrusive/README.md) uses a trusted opaque
+provider and checked client. Provider correctness includes internal retention
+and retirement. The [owning tree](../examples/ownership-graphs/README.md) and
+[one-way index](../examples/ownership-index/README.md) use the same rules.
+Independent imports preserve selected trust. Ownership state erases before
+emission.
 
-The first implementation must establish these cases before adding language
-facilities:
+Validation covers these contracts:
 
 | Case | Required observation |
 |---|---|
@@ -971,33 +990,40 @@ facilities:
 | Module replacement | A library supplies discovery, visibility, and dependency policy without a core module resolver |
 | Public construction | A user driver replaces a reader and one backend lowering through published APIs |
 | Stage self-compilation | Build the Crust backend and driver through the C99 seed, then through two successive generations of their own output, with caches disabled. Compare generated code and native names. Use the final generation to build and run the direct-list program |
-| C frontend extension | The frozen SQLite and chibicc cases satisfy the executable checks in the existing experiment |
 
-The C extension case tests compiler construction, including C rules absent
-from the seed. It does not add those rules to Crust0. Follow the bounded sequence
-in the [compiler extension experiment](exploration/compiler-extension-experiment.md#6-decision-gates).
-The checked Crust language must additionally pass the SQLite ownership and direct
-intrusive-list witnesses. A raw seed or C frontend result cannot replace them.
+Ownership configurations additionally check client lifetime errors, provider
+selection, independent imports, and erasure. Resource configurations check
+cleanup, native handles, and borrowed SQLite results. Each selected stage
+requires its own correctness checks and cost measurements.
 
-Use the established [check and handoff boundaries](exploration/language-exploration.md#103-define-the-timing-boundary).
-Count source input, lookup, interface construction, all selected language checks,
-stage preparation, generated-input processing, target ABI lowering, and complete
-backend IR construction when they are needed to reach the measured endpoint.
-The main gate starts with a compiled backend, a fresh process, and no saved
-application result. Include root execution, interface checks, native library
-loading, and all requested target work. Backend source interpretation and
-construction are separate bootstrap measurements. Report automatic backend
-cache validation separately too. If a request must compile a changed project
-stage, identify that configuration and include its preparation cost.
+There are two frontend measurement endpoints:
+
+- **Check:** source input through name binding, interface construction, type
+  checking, and all selected language checks. Compare with the fastest eligible
+  GCC or Clang syntax-check configuration on equivalent inputs.
+- **Handoff:** all check work plus lowering and construction of complete backend
+  input. For the C stage, include C and symbol text serialization. Compare with
+  Clang frontend IR emission with LLVM passes disabled, including serialization.
+
+The main application gate starts with a compiled backend, a fresh process, and
+no saved application result. Include root execution, installed interface checks,
+native library loading, target work, and cleanup. Exclude final target GCC
+compilation and linking. Measure backend bootstrap and automatic cache validation
+separately. A changed project stage requires a separate configuration that
+includes its preparation cost.
 
 For a configuration that claims C-level speed, use at least 20 randomized paired
 samples against the fastest eligible C baseline. Require a median candidate/C ratio
 at most 1.00 and a 95% bootstrap confidence upper bound at most 1.00. Apply this
 rule to one-worker builds as well as matched parallel builds. Application
 result reuse or more workers cannot excuse failure in the one-worker case
-with the same compiled backend. Retain
-the exact configurations and intervals required by the
-[measurement rule](exploration/language-exploration.md#104-test-matrix-and-pass-rule).
+with the same compiled backend. Record exact commands, build flags, source and
+tool hashes, CPU selection, worker count, cache conditions, raw paired samples,
+and confidence intervals. Check equivalent final program behavior outside the
+timed interval. Keep reports in ignored build storage. The
+[source-runner guide](source-runner.md#compiled-backend-application-gate) gives
+the command for this gate. The [benchmark guide](../benchmarks/README.md)
+identifies each executable workload and its comparison boundary.
 
 A failed correctness case blocks expansion. Identify the operation responsible,
 change it, and repeat that witness before adding another dependent layer. A
@@ -1012,51 +1038,28 @@ performs the same operations and required checks. No feature can require unused
 runtime metadata, registration, allocation, or indirect calls. Do not claim that
 the optimizer removes a cost without inspecting the emitted result.
 
-## 15 Decision record
+## 15 Implementation map
 
-This draft fixes only the raw bootstrap language and the public construction
-contract. It deliberately moves module management, ownership, cleanup, unsafe
-policy, richer syntax, and backend adaptation into ordinary compiled libraries.
-It does not add generics, a macro evaluator, a package manager, a query engine,
-or a permanent plugin ABI to make those libraries possible.
+The C99 seed supplies the reader, checker, evaluator, and root runner. Its
+public declarations are in `include/`; generated Crust bindings are in `api/`.
+Build the seed with `make build/crust`. Its evaluator can run backend source
+to construct a first native generation. `make all c-stage` builds the ASM and
+C backends. Their next generations compile through their own output.
 
-The seed reader, checker, evaluator, and runner remain C99. Backend emission
-and artifact caching are ordinary Crust libraries. A C99 compiler can build
-the seed without either backend. The evaluator can interpret a backend to
-build its first native generation. Crust stage libraries and drivers
-can compile themselves through their previous generation. This is the
-self-compilation gate; translating the seed is not a requirement.
-
-The seed accepts `else if`. Compiler stages contain long conditional chains;
-requiring a wrapper block for each next condition adds syntax nodes and closing
-braces. An `else if` uses the existing conditional node as the `otherwise`
-statement. No keyword or node kind is added. Each recursive arm counts toward
-the reader depth bound. Other branch bodies still require braces.
-
-The [systems source study](exploration/systems-capabilities.md) remains the capability
-target. Linux, GCC, and LLVM cases require explicit storage, layout, callbacks,
-relocation, and synchronization. The seed provides basic mechanisms to implement
-compiler libraries; it does not yet claim to compile those source trees.
+Module management, ownership, cleanup, overloads, highlighting, cache policy,
+and native execution are libraries under `stages/`. Their tutorials specify
+prerequisites, selection calls, and build commands. Roots under `examples/`
+select those libraries through ordinary calls.
 
 Resource checking retains cleanup plans outside the lowered tree. Composed
-stages consume source ownership and these plans before emission. The ownership
-stage delegates raw representation operations only inside root-selected trusted
-definitions. Other functions use local storage and interface checks. There is
-no inferred trust, solver fallback, or whole-program expansion. See the
-[implemented contract](ownership-model.md) for exact accepted operations.
+stages consume source contracts and those plans before emission. The ownership
+stage checks local storage and function interfaces. Root-selected trusted
+providers supply opaque representation operations under explicit contracts.
+See the [ownership contract](ownership-model.md) for accepted operations.
 
-Ownership proofs must erase before backend optimization. Runtime pointer-validity
-checks, identity metadata, pointer tags, reference counts, and hidden cleanup
-flags are excluded. Null checks before release and debug-only bounds checks are
-permitted; debug-only checks do not prove release-build spatial safety. The
-[static ownership experiment](exploration/language-exploration.md#static-ownership-candidate-and-unresolved-proof)
-retains historical research. The [ownership contract](ownership-model.md)
-defines current checking and trust. It adds no seed feature.
-
-The experiment tests whether ordinary compiled libraries can define language
-rules and backend interfaces with selectable capability and compilation costs.
-A small grammar alone does not establish those properties. Public replacement,
-executable output, and measurements for each configuration provide the evidence.
-The basic profile retains its C-level speed target. This document makes no claim
-of novelty or proven safety. Bootstrap timing results apply only to their
-stated workloads and endpoints.
+Ownership facts erase before backend optimization. Owners and views retain
+their ordinary value and pointer representations. Cleanup emits the declared
+calls. Ownership adds no runtime validity checks, identity metadata, pointer
+tags, reference counts, or hidden cleanup flags. Null checks before release
+and debug-only bounds checks are permitted;
+debug-only checks provide no release-build bounds guarantee.

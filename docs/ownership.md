@@ -11,8 +11,8 @@ This tutorial teaches the ownership stage. It combines local owners and loans
 with explicit domain access for opaque containers. The
 [stage contract](ownership-model.md) defines the rules used by the examples.
 
-The stage has no solver dependency. Container implementations require explicit
-root-selected trust; their clients use checked interfaces.
+Container implementations require explicit root-selected trust; their clients
+use checked interfaces.
 
 Start here if you can already write a function and a record. You do not need
 to know the compiler implementation or a proof language.
@@ -47,7 +47,6 @@ build/ownership-basics
 The output is `BC`
 and a newline. The [root file](../examples/ownership-basics/main.crs) loads the
 ownership stage and compiles [program.crs](../examples/ownership-basics/program.crs).
-Neither the compiler stage nor the target requires Z3.
 
 To check a target file without producing an executable:
 
@@ -197,9 +196,9 @@ a native library's implementation. A function with a scalar-only contract
 cannot receive an owned handle. This prevents accidental loss of ownership
 through an unannotated call.
 
-These resources need no domain, pointer conversion, hidden allocation, runtime
-tag, or solver. The foreign calls keep their original C ABI. Failure tests use
-the declared integer or null literal with `==` or `!=`.
+The wrappers contain their declared integer or pointer handles. The foreign
+calls keep their original C ABI. Failure tests use the declared integer or null
+literal with `==` or `!=`.
 
 ## 3. Transfer ownership
 

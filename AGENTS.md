@@ -174,6 +174,8 @@ Code changes: `make all`, then applicable checks:
 - Core/shared API changes: full table. Allocation/native-call/lifetime changes:
   relevant sanitizers. Repeat passed checks only after changes, failures, or
   new concerns. Docs-only: hooks + links; compiler rebuild unnecessary.
+- Executable doc changes: run consuming tests. Specification examples:
+  `make check check-c`.
 - C API authority: `include/`. API changes: `make api`, then
   `python3 tools/api.py --check`; update stage consumers. Never hand-edit
   generated API declarations or prelude.

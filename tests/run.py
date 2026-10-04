@@ -619,10 +619,7 @@ fn main(argc:i32,argv:**u8)->i32 {
     if len(examples) != 2:
         raise AssertionError(f"expected two complete specification examples, found {len(examples)}")
     assert command([executable("spec-list", examples[0])]).stdout == b"ok\n"
-    example_main = (
-        "\nfn main(argc:i32,argv:**u8)->i32{if apply()!=18u32{return 1i32;}return 0i32;}\n"
-    )
-    command([executable("spec-values", examples[1] + example_main)])
+    assert command([executable("spec-values", examples[1])]).stdout == b""
 
     stack_arguments = """
 fn sum(a:i8,b:u8,c:i16,d:u16,e:i32,f:u32,g:i8,h:u16)->i64 {

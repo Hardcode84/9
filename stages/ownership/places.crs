@@ -7,6 +7,12 @@ fn os_access(check: *OsCheck, state: *OsState, object: *OsObject,
 
 fn os_access_through(check: *OsCheck, state: *OsState, object: *OsObject,
                      loan: *OsLoan, write: bool, location: *CrustLoc) -> bool {
+    return os_storage_access(check, state, object, loan, write, location) &&
+        os_loan_access(check, state, object, loan, write, location);
+}
+
+fn os_storage_access(check: *OsCheck, state: *OsState, object: *OsObject,
+                     loan: *OsLoan, write: bool, location: *CrustLoc) -> bool {
     if object == null(*OsObject) {
         os_error(check, location, "pointer has no checked storage origin");
         return false;
@@ -26,10 +32,17 @@ fn os_access_through(check: *OsCheck, state: *OsState, object: *OsObject,
             return false;
         }
     }
-    return os_loan_access(check, state, object, loan, write, location);
+    return os_loan_permission(check, state, loan, write, location);
 }
 
 fn os_read_slot(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> *OsValue {
+    if !os_borrowed((*slot).syntax) && !os_loan_place_access(check, state, slot, (*slot).loan, false, location) {
+        return null(*OsValue);
+    }
+    return os_slot_value(check, state, slot, location);
+}
+
+fn os_slot_value(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> *OsValue {
     var value: *OsValue = os_bound(state, slot);
     if value == null(*OsValue) {
         os_error(check, location, "value is uninitialized or has been moved");
@@ -37,9 +50,6 @@ fn os_read_slot(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *Crus
     }
     if (*value).unknown {
         os_error(check, location, "raw parameter has no checked storage contract");
-        return null(*OsValue);
-    }
-    if !os_borrowed((*slot).syntax) && !os_loan_place_access(check, state, slot, (*slot).loan, false, location) {
         return null(*OsValue);
     }
     var result: *OsValue = os_copy(check, value);
@@ -77,14 +87,36 @@ fn os_named_place(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *
     return local;
 }
 
+fn os_projection(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
+    if !os_enter(check, &(*expression).loc) { return null(*OsValue); }
+    var result: *OsValue = os_projection_inner(check, state, expression);
+    (*check).depth = (*check).depth - 1usize;
+    return result;
+}
+
+fn os_projection_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
+    if (*expression).kind == CRUST_E_GROUP { return os_projection(check, state, (*expression).left); }
+    if (*expression).kind == CRUST_E_NAME || (*expression).kind == CRUST_E_FIELD {
+        var slot: *OsSlot = os_place(check, state, expression);
+        if slot == null(*OsSlot) || os_failed(check) { return null(*OsValue); }
+        return os_slot_value(check, state, slot, &(*expression).loc);
+    }
+    if (*expression).kind == CRUST_E_UNARY && (*expression).op == CRUST_OP_DEREF {
+        var value: *OsValue = os_expr(check, state, (*expression).left);
+        if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+        return os_dereference_value(check, state, expression, value);
+    }
+    return os_expr(check, state, expression);
+}
+
 fn os_field_place(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsSlot {
-    var base: *OsValue = os_expr(check, state, (*expression).left);
+    var base: *OsValue = os_projection(check, state, (*expression).left);
     if base == null(*OsValue) || os_failed(check) { return null(*OsSlot); }
     if (*base).owner && (*base).place == null(*OsSlot) {
         os_error(check, &(*expression).loc, "resource temporary cannot lend a field beyond its expression");
         return null(*OsSlot);
     }
-    if !os_access_through(check, state, (*base).object, (*base).loan, false, &(*expression).loc) { return null(*OsSlot); }
+    if !os_storage_access(check, state, (*base).object, (*base).loan, false, &(*expression).loc) { return null(*OsSlot); }
     if os_opaque((*(*base).object).contract) { os_error(check, &(*expression).loc, "opaque fields are private to the trusted implementation"); return null(*OsSlot); }
     var field: *OsSlot = os_object_slot(check, state, (*base).object, (*expression).field_name);
     if field == null(*OsSlot) { os_error(check, &(*expression).loc, "ownership field does not exist"); }
@@ -126,7 +158,7 @@ fn os_move_allowed(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsVa
         if (*os_root((*slot).object)).aliased {
             os_error(check, location, "owner transfer requires an ownership origin, not a retained reference"); return false;
         }
-        if !os_access_through(check, state, (*slot).object, (*slot).loan, true, location) { return false; }
+        if !os_storage_access(check, state, (*slot).object, (*slot).loan, true, location) { return false; }
     }
     if !os_loan_place_access(check, state, slot, (*slot).loan, true, location) { return false; }
     if (*value).object != null(*OsObject) &&
@@ -196,7 +228,7 @@ fn os_store_allowed(check: *OsCheck, state: *OsState, slot: *OsSlot,
     if !os_native_store(check, slot, value, location) || !os_brand_store(check, state, slot, value, location) { return false; }
     if !os_transferable(check, state, value, location) || !os_store_lifetime(check, slot, value, location) { return false; }
     if !os_loan_place_access(check, state, slot, (*slot).loan, true, location) { return false; }
-    if (*slot).object != null(*OsObject) && !os_access_through(check, state, (*slot).object, (*slot).loan, true, location) { return false; }
+    if (*slot).object != null(*OsObject) && !os_storage_access(check, state, (*slot).object, (*slot).loan, true, location) { return false; }
     if !os_store_owner(check, state, slot, value, location) { return false; }
     if !os_borrowed((*slot).syntax) && !(*value).pointer && (*value).object != null(*OsObject) &&
        os_view_mode(check, (*slot).syntax) >= RS_READ {

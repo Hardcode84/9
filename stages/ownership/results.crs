@@ -66,7 +66,7 @@ fn os_return_view(check: *OsCheck, state: *OsState, value: *OsValue, location: *
     }
     var expected: *OsValue = os_result_path(check, state, contract, source, location);
     if expected == null(*OsValue) { return false; }
-    if !os_loan_ancestor((*expected).loan, (*value).loan) {
+    if !os_loan_ancestor(check, (*expected).loan, (*value).loan) {
         os_error(check, location, "returned loan does not derive from its declared source parameter"); return false;
     }
     if (*source).object != null(*OsObject) && os_opaque((*(*source).object).contract) && (*contract).result_path == null(*OsField) { return true; }
@@ -81,6 +81,8 @@ fn os_call_view(check: *OsCheck, state: *OsState, contract: *OsFunction,
     }
     var result: *OsValue = os_result_path(check, state, contract, source, location);
     if result == null(*OsValue) { return result; }
+    (*result).loan = os_loan_via(check, state, (*result).loan, (*source).loan);
+    if (*result).loan == null(*OsLoan) { return null(*OsValue); }
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
     if !os_result_type(check, state, result, (*syntax).base, location) { return null(*OsValue); }
     if (*result).object != null(*OsObject) {

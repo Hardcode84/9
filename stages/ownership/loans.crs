@@ -10,9 +10,19 @@ fn os_loan_flags(state: *OsState, loan: *OsLoan) -> u32 {
     return (*fact).flags;
 }
 
-fn os_loan_ancestor(ancestor: *OsLoan, loan: *OsLoan) -> bool {
+fn os_loan_ancestor(check: *OsCheck, ancestor: *OsLoan, loan: *OsLoan) -> bool {
+    var budget: usize = 128usize;
+    return os_loan_search(check, ancestor, loan, &budget);
+}
+
+fn os_loan_search(check: *OsCheck, ancestor: *OsLoan, loan: *OsLoan, budget: *usize) -> bool {
     while loan != null(*OsLoan) {
         if loan == ancestor { return true; }
+        if *budget == 0usize {
+            os_error(check, &(*(*(*check).function).declaration).loc, "loan ancestry exceeds 128"); return false;
+        }
+        *budget = *budget - 1usize;
+        if (*loan).via != null(*OsLoan) && os_loan_search(check, ancestor, (*loan).via, budget) { return true; }
         loan = (*loan).parent;
     }
     return false;
@@ -58,6 +68,13 @@ fn os_loan_overlap(check: *OsCheck, state: *OsState, a: *OsObject, b: *OsObject,
 
 fn os_loan_permission(check: *OsCheck, state: *OsState, through: *OsLoan,
                        write: bool, location: *CrustLoc) -> bool {
+    if through != null(*OsLoan) && (*through).via != null(*OsLoan) {
+        if !os_enter(check, location) { return false; }
+        var valid: bool = os_loan_permission(check, state, (*through).parent, write, location) &&
+            os_loan_permission(check, state, (*through).via, write, location);
+        (*check).depth = (*check).depth - 1usize;
+        return valid;
+    }
     if through != null(*OsLoan) && (os_loan_flags(state, through) & OS_LIVE) == 0u32 {
         os_error(check, location, "access uses an expired payload loan"); return false;
     }
@@ -69,16 +86,64 @@ fn os_loan_permission(check: *OsCheck, state: *OsState, through: *OsLoan,
 
 fn os_loan_access(check: *OsCheck, state: *OsState, object: *OsObject,
                   through: *OsLoan, write: bool, location: *CrustLoc) -> bool {
-    if !os_loan_permission(check, state, through, write, location) { return false; }
+    return os_region_access(check, state, object, null(*OsSlot), through, write, location) &&
+        os_view_access(check, state, object, through, write, location);
+}
+
+fn os_object_contains(outer: *OsObject, inner: *OsObject) -> bool {
+    while inner != null(*OsObject) {
+        if outer == inner { return true; }
+        inner = (*inner).parent;
+    }
+    return false;
+}
+
+fn os_region_field(slot: *OsSlot, object: *OsObject) -> *CrustField {
+    if slot == null(*OsSlot) || (*slot).object != object || (*(*slot).syntax).kind == CRUST_T_NAME {
+        return null(*CrustField);
+    }
+    return (*slot).field;
+}
+
+// Only fields in the same concrete storage tree establish disjointness.
+// Owned pointees and opaque aliases still use the ownership overlap rule.
+fn os_regions_overlap(check: *OsCheck, state: *OsState, object: *OsObject,
+                      slot: *OsSlot, loan: *OsLoan, location: *CrustLoc) -> bool {
+    if slot != null(*OsSlot) && slot == (*loan).place { return true; }
+    var other: *OsObject = (*loan).object;
+    if object == null(*OsObject) || other == null(*OsObject) { return false; }
+    if os_root(object) != os_root(other) { return os_loan_overlap(check, state, object, other, location); }
+    var field: *CrustField = os_region_field(slot, object);
+    var other_field: *CrustField = os_region_field((*loan).place, other);
+    if object == other { return field == null(*CrustField) || other_field == null(*CrustField) || field == other_field; }
+    if os_object_contains(object, other) { return field == null(*CrustField); }
+    if os_object_contains(other, object) { return other_field == null(*CrustField); }
+    return false;
+}
+
+fn os_region_access(check: *OsCheck, state: *OsState, object: *OsObject, slot: *OsSlot,
+                    through: *OsLoan, write: bool, location: *CrustLoc) -> bool {
+    return os_loan_permission(check, state, through, write, location) &&
+        os_region_conflicts(check, state, object, slot, through, write, location);
+}
+
+fn os_region_conflicts(check: *OsCheck, state: *OsState, object: *OsObject, slot: *OsSlot,
+                       through: *OsLoan, write: bool, location: *CrustLoc) -> bool {
     var loan: *OsLoan = (*check).loans;
     while loan != null(*OsLoan) && !os_failed(check) {
-        if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && !os_loan_ancestor(loan, through) &&
-           (write || (*loan).mode == RS_MUT) && os_loan_overlap(check, state, object, (*loan).object, location) {
+        if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && !os_loan_ancestor(check, loan, through) &&
+           os_loan_conflict(check, state, object, slot, loan, write, location) {
             os_error(check, location, "access conflicts with an active payload loan"); return false;
         }
         loan = (*loan).next;
     }
     return !os_failed(check);
+}
+
+fn os_loan_conflict(check: *OsCheck, state: *OsState, object: *OsObject, slot: *OsSlot,
+                    loan: *OsLoan, write: bool, location: *CrustLoc) -> bool {
+    if (write || (*loan).mode == RS_MUT) && os_regions_overlap(check, state, object, slot, loan, location) { return true; }
+    return os_view_conflict(check, state, object, slot, (*loan).object, write, (*loan).mode, location);
 }
 
 fn os_loan_new(check: *OsCheck, state: *OsState, value: *OsValue,
@@ -91,11 +156,30 @@ fn os_loan_new(check: *OsCheck, state: *OsState, value: *OsValue,
     if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
         os_error(check, location, "loan requires initialized storage"); return null(*OsLoan);
     }
-    if object != null(*OsObject) && !os_access_through(check, state, object, (*value).loan, mode == RS_MUT, location) {
+    if object != null(*OsObject) && !os_storage_access(check, state, object, (*value).loan, mode == RS_MUT, location) {
         return null(*OsLoan);
     }
     if !os_loan_place_access(check, state, (*value).place, (*value).loan, mode == RS_MUT, location) { return null(*OsLoan); }
+    if !os_region_access(check, state, object, os_original((*value).place), (*value).loan, mode == RS_MUT, location) { return null(*OsLoan); }
+    if !os_view_access(check, state, (*value).object, (*value).loan, mode == RS_MUT, location) { return null(*OsLoan); }
     return os_loan_create(check, state, value, object, mode);
+}
+
+// A projected view uses both its stored loan and the containing borrow.
+// This authority expires with either source; it creates no separate reservation.
+fn os_loan_via(check: *OsCheck, state: *OsState, loan: *OsLoan, through: *OsLoan) -> *OsLoan {
+    if through == null(*OsLoan) || through == loan { return loan; }
+    var inherited: *OsLoan = os_alloc(check, sizeof(OsLoan), alignof(OsLoan)) as *OsLoan;
+    if inherited == null(*OsLoan) { return null(*OsLoan); }
+    *inherited = *loan;
+    (*inherited).parent = loan;
+    (*inherited).via = through;
+    (*inherited).scope = (*state).scope;
+    (*inherited).next = null(*OsLoan);
+    if (*through).mode == RS_READ { (*inherited).mode = RS_READ; }
+    var ready: u32 = os_loan_flags(state, loan) & os_loan_flags(state, through) & OS_READY;
+    os_set(check, state, inherited as *u8, null(*OsValue), OS_LIVE | ready);
+    return inherited;
 }
 
 fn os_loan_create(check: *OsCheck, state: *OsState, value: *OsValue, object: *OsObject, mode: u32) -> *OsLoan {
@@ -119,18 +203,20 @@ fn os_loan_create(check: *OsCheck, state: *OsState, value: *OsValue, object: *Os
 
 fn os_loan_place_access(check: *OsCheck, state: *OsState, slot: *OsSlot,
                         through: *OsLoan, write: bool, location: *CrustLoc) -> bool {
+    return os_loan_permission(check, state, through, write, location) &&
+        os_place_conflicts(check, state, slot, through, write, location);
+}
+
+fn os_place_conflicts(check: *OsCheck, state: *OsState, slot: *OsSlot,
+                      through: *OsLoan, write: bool, location: *CrustLoc) -> bool {
     if slot == null(*OsSlot) { return true; }
     slot = os_original(slot);
-    if (*slot).object == null(*OsObject) && !os_loan_permission(check, state, through, write, location) { return false; }
-    var loan: *OsLoan = (*check).loans;
-    while loan != null(*OsLoan) && !os_failed(check) {
-        if (*loan).place == slot && (os_loan_flags(state, loan) & OS_LIVE) != 0u32 &&
-           !os_loan_ancestor(loan, through) && (write || (*loan).mode == RS_MUT) {
-            os_error(check, location, "place conflicts with an active payload loan"); return false;
-        }
-        loan = (*loan).next;
-    }
-    return !os_failed(check);
+    var object: *OsObject = (*slot).object;
+    var value: *OsValue = os_bound(state, slot);
+    if (*(*slot).syntax).kind == CRUST_T_NAME && value != null(*OsValue) { object = (*value).object; }
+    if !os_region_conflicts(check, state, object, slot, through, write, location) { return false; }
+    if (*(*slot).syntax).kind == CRUST_T_NAME { return os_view_access(check, state, object, through, write, location); }
+    return true;
 }
 
 fn os_loan_keep(check: *OsCheck, state: *OsState, value: *OsValue) -> unit {

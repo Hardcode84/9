@@ -72,7 +72,7 @@ fn os_view_result_fields(check: *OsCheck, state: *OsState, object: *OsObject,
         var value: *OsValue = os_bound(state, field);
         if value != null(*OsValue) {
             if os_borrowed((*field).syntax) {
-                if (*expected).loan == null(*OsLoan) || !os_loan_ancestor((*expected).loan, (*value).loan) {
+                if (*expected).loan == null(*OsLoan) || !os_loan_ancestor(check, (*expected).loan, (*value).loan) {
                     os_error(check, location, "stored result does not derive from its declared source parameter");
                 } else { os_result_matches(check, state, value, expected, location); }
             } else { if !(*value).pointer && (*value).object != null(*OsObject) {
@@ -124,6 +124,8 @@ fn os_call_view_record(check: *OsCheck, state: *OsState, contract: *OsFunction,
     if source == null(*OsValue) { os_error(check, location, "view record call requires its source loan"); return null(*OsValue); }
     var expected: *OsValue = os_result_path(check, state, contract, source, location);
     if expected == null(*OsValue) { return null(*OsValue); }
+    (*expected).loan = os_loan_via(check, state, (*expected).loan, (*source).loan);
+    if (*expected).loan == null(*OsLoan) { return null(*OsValue); }
     (*expected).borrow_scope = (*source).borrow_scope;
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
     var object: *OsObject = os_object(check, state, syntax, null(*OsObject), (*state).scope, false);

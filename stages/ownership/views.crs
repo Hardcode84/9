@@ -50,12 +50,7 @@ fn os_view_place(check: *OsCheck, state: *OsState, field: *OsSlot,
     if value == null(*OsValue) || (*value).loan == null(*OsLoan) {
         os_error(check, location, "stored view requires an initialized loan"); return null(*OsSlot);
     }
-    var loan: *OsLoan = (*value).loan;
-    if through != null(*OsLoan) && (*through).mode == RS_READ && (*loan).mode == RS_MUT {
-        value = os_copy(check, value);
-        if value == null(*OsValue) { return null(*OsSlot); }
-        loan = os_loan_new(check, state, value, RS_READ, location);
-    }
+    var loan: *OsLoan = os_loan_via(check, state, (*value).loan, through);
     if loan == null(*OsLoan) { return null(*OsSlot); }
     return os_loan_slot(check, (*loan).place, loan);
 }
@@ -96,7 +91,7 @@ fn os_consume_view_arguments(check: *OsCheck, state: *OsState, arguments: **OsVa
 
 fn os_view_has_loan(check: *OsCheck, state: *OsState, value: *OsValue,
                      loan: *OsLoan, location: *CrustLoc) -> bool {
-    if os_loan_ancestor(loan, (*value).loan) { return true; }
+    if os_loan_ancestor(check, loan, (*value).loan) { return true; }
     var object: *OsObject = (*value).object;
     if object == null(*OsObject) || os_view_mode(check, (*object).syntax) < RS_READ { return false; }
     if !os_enter(check, location) { return false; }
@@ -126,4 +121,61 @@ fn os_validate_view_field(check: *OsCheck, field: *CrustField) -> unit {
     if (*target).kind >= CRUST_T_POINTER && (*target).kind != CRUST_T_NAME {
         os_error(check, &(*field).loc, "stored loan target must be a scalar or record type");
     }
+}
+
+// A view loan protects its stored references and the access they grant.
+fn os_view_access(check: *OsCheck, state: *OsState, object: *OsObject,
+                  through: *OsLoan, write: bool, location: *CrustLoc) -> bool {
+    if object == null(*OsObject) || os_view_mode(check, (*object).syntax) < RS_READ { return true; }
+    if !os_enter(check, location) { return false; }
+    var field: *OsSlot = os_fields(state, object);
+    while field != null(*OsSlot) && !os_failed(check) {
+        var value: *OsValue = os_bound(state, field);
+        if value != null(*OsValue) { os_view_field_access(check, state, field, value, through, write, location); }
+        field = (*field).next;
+    }
+    (*check).depth = (*check).depth - 1usize;
+    return !os_failed(check);
+}
+
+fn os_view_field_access(check: *OsCheck, state: *OsState, field: *OsSlot,
+                        value: *OsValue, through: *OsLoan, write: bool, location: *CrustLoc) -> unit {
+    if os_borrowed((*field).syntax) {
+        var loan: *OsLoan = (*value).loan;
+        if loan != null(*OsLoan) {
+            var authority: OsLoan = *loan;
+            authority.parent = loan;
+            authority.via = through;
+            var exclusive: bool = write && (*(*field).syntax).kind == RS_MUT;
+            if os_loan_permission(check, state, loan, exclusive, location) {
+                os_place_conflicts(check, state, (*loan).place, &authority, exclusive, location);
+            }
+        }
+    } else { if !(*value).pointer { os_view_access(check, state, (*value).object, through, write, location); } }
+}
+
+fn os_view_conflict(check: *OsCheck, state: *OsState, object: *OsObject, slot: *OsSlot,
+                    view: *OsObject, write: bool, mode: u32, location: *CrustLoc) -> bool {
+    if view == null(*OsObject) || os_view_mode(check, (*view).syntax) < RS_READ { return false; }
+    if !os_enter(check, location) { return false; }
+    var field: *OsSlot = os_fields(state, view);
+    var conflict: bool = false;
+    while field != null(*OsSlot) && !conflict && !os_failed(check) {
+        var value: *OsValue = os_bound(state, field);
+        if value != null(*OsValue) { conflict = os_view_field_conflict(check, state, object, slot, value, write, mode, location); }
+        field = (*field).next;
+    }
+    (*check).depth = (*check).depth - 1usize;
+    return conflict;
+}
+
+fn os_view_field_conflict(check: *OsCheck, state: *OsState, object: *OsObject, slot: *OsSlot,
+                          value: *OsValue, write: bool, mode: u32, location: *CrustLoc) -> bool {
+    if os_borrowed((*value).syntax) && (*value).loan != null(*OsLoan) {
+        var loan: OsLoan = *(*value).loan;
+        if mode == RS_READ { loan.mode = RS_READ; }
+        return os_loan_conflict(check, state, object, slot, &loan, write, location);
+    }
+    if (*value).pointer { return false; }
+    return os_view_conflict(check, state, object, slot, (*value).object, write, mode, location);
 }

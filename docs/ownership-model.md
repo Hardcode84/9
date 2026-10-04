@@ -14,6 +14,9 @@ shared access; `mut T` lends exclusive access. Ordinary values remain copyable.
 The checker rejects use after move, duplicate owners, uninitialized reads,
 conflicting loans, and destruction through a borrower. Named loans last to the
 end of their lexical scope. Reborrows prevent conflicting use of their parent.
+Direct fields of an ordinary record can be borrowed separately. A loan of the
+whole record covers all its fields. Moving, replacing, or destroying a record
+requires every conflicting field loan to have ended.
 
 Automatic cleanup and explicit `drop` require the same destructor permission.
 Checked code cannot call a destructor function directly or defer it. Use `drop`

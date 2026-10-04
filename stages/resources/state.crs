@@ -103,14 +103,15 @@ fn rs_access(function: *RsFunction, local: *RsLocal, write: bool, location: *Cru
         rs_error((*function).stage, location, "value is uninitialized or has been moved");
         return;
     }
-    if (*local).exclusive || (write && ((*local).readers != 0usize || (*local).mode == RS_READ)) {
+    if !(*(*function).stage).delegate_memory &&
+       ((*local).exclusive || (write && ((*local).readers != 0usize || (*local).mode == RS_READ))) {
         rs_error((*function).stage, location, "access conflicts with an active borrow");
     }
 }
 
 fn rs_lend(function: *RsFunction, local: *RsLocal, mode: u32, location: *CrustLoc) -> unit {
     rs_access(function, local, mode == RS_MUT, location);
-    if (*(*function).stage).failed { return; }
+    if (*(*function).stage).failed || (*(*function).stage).delegate_memory { return; }
     rs_note(function, local);
     if mode == RS_MUT { (*local).exclusive = true; }
     else { (*local).readers = (*local).readers + 1usize; }
@@ -118,6 +119,7 @@ fn rs_lend(function: *RsFunction, local: *RsLocal, mode: u32, location: *CrustLo
 
 fn rs_end_loan(function: *RsFunction, local: *RsLocal) -> unit {
     if !(*local).initialized || (*local).parent_loan == null(*RsLocal) { return; }
+    if (*(*function).stage).delegate_memory { rs_live(function, local, false); return; }
     var parent: *RsLocal = (*local).parent_loan;
     rs_note(function, parent);
     if (*local).mode == RS_MUT { (*parent).exclusive = false; }

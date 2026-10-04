@@ -98,11 +98,11 @@ def reject_cases():
         "duplicate-mut": (
             "record View {a:mut i64;b:mut i64;}"
             + main_body("var x:i64=1i64;var v:View=make View{a:mut x,b:mut x};"),
-            "active borrow",
+            "active payload loan",
         ),
         "mut-via-shared": (
             EDITING + "fn bad(view:read View)->unit {view.value=2i64;}",
-            "active borrow",
+            "shared field view permits only reads",
         ),
         "shared-field-write": (
             READING + "fn bad(view:mut View)->unit {view.value=2i64;}",
@@ -219,7 +219,7 @@ def lifetime_cases():
                 "var x:i64=1i64;var v:View=make View{value:mut x};"
                 "var y:read i64=read v.value;drop v;x=2i64;"
             ),
-            "active borrow",
+            "active payload loan",
         ),
         "same-value-wrong-parameter": (
             READING

@@ -51,26 +51,33 @@ fn os_unary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValu
 }
 
 fn os_dereference(check: *OsCheck, state: *OsState, expression: *CrustExpr, value: *OsValue) -> *OsValue {
-        if !(*value).pointer && !os_borrowed((*value).syntax) {
-            os_error(check, &(*expression).loc, "dereference requires a pointer or loan"); return null(*OsValue);
-        }
-        if (*value).object != null(*OsObject) && !os_access_through(check, state, (*value).object, (*value).loan, false, &(*expression).loc) {
-            return null(*OsValue);
-        }
-        if (*value).object == null(*OsObject) { return os_loan_scalar(check, state, value, &(*expression).loc); }
-        if !rs_same((*(*check).stage).resources, (*(*value).syntax).base, (*(*value).object).syntax) {
-            os_error(check, &(*expression).loc, "dereference cannot reinterpret checked storage"); return null(*OsValue);
-        }
-        var result: *OsValue = os_copy(check, value);
-        if result != null(*OsValue) {
-            (*result).syntax = (*(*value).syntax).base;
-            (*result).pointer = false;
-            (*result).fresh = false;
-            (*result).place = null(*OsSlot);
-            if os_borrowed((*value).syntax) && (*value).loan != null(*OsLoan) { (*result).place = (*(*value).loan).place; }
-            if (*(*result).syntax).kind != CRUST_T_NAME { (*result).object = null(*OsObject); }
-        }
-        return result;
+    if (*value).object != null(*OsObject) && !os_loan_access(check, state, (*value).object, (*value).loan, false, &(*expression).loc) {
+        return null(*OsValue);
+    }
+    return os_dereference_value(check, state, expression, value);
+}
+
+fn os_dereference_value(check: *OsCheck, state: *OsState, expression: *CrustExpr, value: *OsValue) -> *OsValue {
+    if !(*value).pointer && !os_borrowed((*value).syntax) {
+        os_error(check, &(*expression).loc, "dereference requires a pointer or loan"); return null(*OsValue);
+    }
+    if (*value).object != null(*OsObject) && !os_storage_access(check, state, (*value).object, (*value).loan, false, &(*expression).loc) {
+        return null(*OsValue);
+    }
+    if (*value).object == null(*OsObject) { return os_loan_scalar(check, state, value, &(*expression).loc); }
+    if !rs_same((*(*check).stage).resources, (*(*value).syntax).base, (*(*value).object).syntax) {
+        os_error(check, &(*expression).loc, "dereference cannot reinterpret checked storage"); return null(*OsValue);
+    }
+    var result: *OsValue = os_copy(check, value);
+    if result != null(*OsValue) {
+        (*result).syntax = (*(*value).syntax).base;
+        (*result).pointer = false;
+        (*result).fresh = false;
+        (*result).place = null(*OsSlot);
+        if os_borrowed((*value).syntax) && (*value).loan != null(*OsLoan) { (*result).place = (*(*value).loan).place; }
+        if (*(*result).syntax).kind != CRUST_T_NAME { (*result).object = null(*OsObject); }
+    }
+    return result;
 }
 
 fn os_borrow(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {

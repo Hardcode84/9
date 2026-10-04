@@ -133,6 +133,7 @@ record OsLoan {
     object: *OsObject;
     place: *OsSlot;
     parent: *OsLoan;
+    via: *OsLoan;
     scope: *OsScope;
     next: *OsLoan;
     mode: u32;

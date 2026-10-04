@@ -70,6 +70,13 @@ def run(build, directory, sanitize):
             "if flag.value {return (*node).value;} return 0i64;}",
             "pointer access requires live non-null storage",
         ),
+        "mutable-scalar-call": (
+            "domain D(Cell); record Cell {value:i64;} domain(D) invariant(true); "
+            "fn clear(flag:mut bool)->unit {flag=false;} "
+            "fn bad(p:*Cell)->i64 access(read,D) requires(p==null(*Cell)) {"
+            "var flag:bool=true; clear(mut flag); if flag {return 0i64;} return (*p).value;}",
+            "pointer access requires live non-null storage",
+        ),
         "self-reference-return": (
             "domain D(Node); record Node {ptr:*Node;} domain(D) references(ptr); "
             "fn bad()->Node access(reclaim,D) {"
@@ -114,6 +121,13 @@ fn wrap(p:*Cell)->unit access(edit,D) requires(p!=null(*Cell)) {
     accepted = directory / "numeric-wrap.crs"
     accepted.write_text(scalar)
     command([compiler, "--library", "--check", accepted])
+    snapshot = directory / "mutable-scalar-snapshot.crs"
+    snapshot.write_text(
+        cases["mutable-scalar-call"][0].replace(
+            "clear(mut flag); if flag", "var saved:bool=flag; clear(mut flag); if saved"
+        )
+    )
+    command([compiler, "--library", "--check", snapshot])
     cases["numeric-wrap-fails"] = (scalar.replace("257u16", "256u16"), "declared field invariants")
     expected = {
         "missing-update": "declared field invariants",

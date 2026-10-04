@@ -173,6 +173,9 @@ def main():
         node = program.split("record Node", 1)[1].split("resource Owner", 1)[0]
         types = "domain Graph(Node);\nrecord Node" + node
         cases = {
+            "scalar-loan": "fn clear(flag:mut bool)->unit {flag=false;} "
+            "fn main()->i32 {var flag:bool=true; clear(mut flag); "
+            "if flag {return 1i32;} return 0i32;}",
             "scalar-call": "domain D(Flag); record Flag {value:bool;} domain(D); "
             "fn set(flag:mut Flag)->unit access(edit,D) {flag.value=true;} "
             "fn main()->i32 access(reclaim,D) {var flag:Flag=make Flag{value:false}; "

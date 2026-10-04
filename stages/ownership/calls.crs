@@ -185,11 +185,24 @@ fn os_mutable_call(check: *OsCheck, state: *OsState, contract: *OsFunction,
     var index: usize = 0usize;
     while parameter != null(*CrustParam) && !os_failed(check) {
         var value: *OsValue = arguments[index];
-        if (*(*parameter).syntax_type).kind == RS_MUT && (*value).object != null(*OsObject) {
-            os_mutable_fields(check, state, (*value).object, contract, location);
+        if (*(*parameter).syntax_type).kind == RS_MUT {
+            os_mutable_value(check, state, value, contract, location);
         }
         parameter = (*parameter).next;
         index = index + 1usize;
+    }
+}
+
+fn os_mutable_value(check: *OsCheck, state: *OsState, value: *OsValue,
+                     contract: *OsFunction, location: *CrustLoc) -> unit {
+    if (*value).object != null(*OsObject) {
+        os_mutable_fields(check, state, (*value).object, contract, location); return;
+    }
+    var slot: *OsSlot = os_original((*(*value).loan).place);
+    var changed: *OsValue = os_copy(check, os_bound(state, slot));
+    if changed != null(*OsValue) {
+        (*changed).term = pf_fresh(&(*check).proof, os_sort((*slot).syntax));
+        os_set(check, state, slot as *u8, changed, OS_READY);
     }
 }
 

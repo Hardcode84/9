@@ -33,7 +33,7 @@ fn os_defer_finish(check: *OsCheck, state: *OsState, deferred: *OsDeferred) -> u
     if !os_call_effect(check, state, contract, location) { return; }
     if (*contract).effect != 0u32 && !os_call_loans(check, state, (*deferred).arguments, (*deferred).count, (*contract).effect, location) { return; }
     os_mutable_call(check, state, contract, (*deferred).arguments, location);
-    os_consume_view_arguments(check, state, (*deferred).arguments, (*deferred).count, location);
+    os_consume_owned_arguments(check, state, (*deferred).arguments, (*deferred).count, location);
     var index: usize = 0usize;
     while index < (*deferred).count && !os_failed(check) {
         os_loan_end(check, state, (*deferred).arguments[index]);

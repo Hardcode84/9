@@ -21,6 +21,13 @@ Direct fields of an ordinary record can be borrowed separately. A loan of the
 whole record covers all its fields. Moving, replacing, or destroying a record
 requires every conflicting field loan to have ended.
 
+Passing an owner by value ends access through its old raw aliases when the call
+runs. A mutable call can replace owned allocations. Raw aliases to allocations
+that its contract permits it to replace also expire. Obtain new pointers from
+the current owner after the call. Returned owners and views supply access
+through their declared contracts.
+A deferred call keeps its captured owner until invocation.
+
 Automatic cleanup and explicit `drop` require the same destructor permission.
 Checked code cannot call a destructor function directly or defer it. Use `drop`
 to consume an owner, or defer a helper that takes the owner by value.
@@ -281,6 +288,8 @@ Continuing backedges must restore the state required before the condition,
 including initialization, ownership, and loan origins. Movable
 owner records can be replaced with new initialized owners. The checker forgets
 old allocation and native-handle validity facts; check them again before use.
+Raw aliases to replaced owners expire at the loop boundary. Read replacement
+storage through the current owner.
 It does not unroll iterations, solve arithmetic conditions, or search heap graphs.
 An opaque cursor can advance through a declared operation. Raw pointer merges
 are rejected. `break` and `continue` have no local-state join implementation in

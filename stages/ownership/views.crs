@@ -76,14 +76,15 @@ fn os_view_lifetime(check: *OsCheck, state: *OsState, object: *OsObject,
     return !os_failed(check);
 }
 
-fn os_consume_view_arguments(check: *OsCheck, state: *OsState, arguments: **OsValue,
-                              count: usize, location: *CrustLoc) -> unit {
+fn os_consume_owned_arguments(check: *OsCheck, state: *OsState, arguments: **OsValue,
+                               count: usize, location: *CrustLoc) -> unit {
     var index: usize = 0usize;
     while index < count && !os_failed(check) {
         var value: *OsValue = arguments[index];
-        if (*value).owner && !(*value).pointer && (*value).object != null(*OsObject) &&
-           os_view_mode(check, (*value).syntax) >= RS_READ {
-            os_expire_owned(check, state, (*value).object, location);
+        if (*value).owner && !(*value).pointer && (*value).object != null(*OsObject) {
+            if os_loan_access(check, state, (*value).object, null(*OsLoan), true, location) {
+                os_expire_owned(check, state, (*value).object, location);
+            }
         }
         index = index + 1usize;
     }

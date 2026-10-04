@@ -153,7 +153,7 @@ fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contr
     }
     os_apply_contract(check, state, contract, arguments, &(*expression).loc);
     os_mutable_call(check, state, contract, arguments, &(*expression).loc);
-    os_consume_view_arguments(check, state, arguments, (*expression).arg_count, &(*expression).loc);
+    os_consume_owned_arguments(check, state, arguments, (*expression).arg_count, &(*expression).loc);
     var result: *OsValue = os_local_result(check, state, contract, source, &(*expression).loc);
     os_end_call_arguments(check, state, arguments, (*expression).arg_count);
     return result;
@@ -265,7 +265,9 @@ fn os_mutable_field(check: *OsCheck, state: *OsState, slot: *OsSlot,
 }
 
 fn os_mutable_owner(check: *OsCheck, state: *OsState, slot: *OsSlot, old: *OsValue) -> unit {
-    if (*old).object != null(*OsObject) { (*(*old).object).uncertain = true; }
+    if (*old).object != null(*OsObject) {
+        os_expire_owned(check, state, (*old).object, &(*(*slot).syntax).loc);
+    }
     var value: *OsValue = os_field_value(check, state, slot);
     if value == null(*OsValue) { return; }
     if (*value).object != null(*OsObject) { os_abstract_value(check, state, (*value).object, true); }

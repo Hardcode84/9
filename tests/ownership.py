@@ -6,6 +6,7 @@ import argparse
 import tempfile
 from pathlib import Path
 
+from ownership_boundaries import check_boundaries
 from ownership_ending import check_ending
 from ownership_expressions import check_expressions
 from ownership_places import check_places
@@ -297,6 +298,7 @@ def run(build, directory, sanitize):
     check_places(build, directory, sanitize)
     check_expressions(build, directory, sanitize)
     check_ending(build, directory, sanitize)
+    check_boundaries(build, directory, sanitize)
     check_runtime(build, directory, ROOT, sanitize)
     for artifact in [compiler, build / "crust-ownership-library.so"]:
         assert b"z3" not in command(["ldd", artifact]).stdout.lower()

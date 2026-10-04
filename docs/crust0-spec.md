@@ -969,8 +969,11 @@ frame rule and reject this form.
 
 The separate [modular ownership stage](../examples/intrusive/README.md) checks
 each source body against declared storage and function contracts. It supports
-individual owners, scoped cursors, typed payload access, field conditions,
-and cleanup over arbitrary list sizes. Calls use verified interfaces; they do
+individual owners, scoped cursors, stored `read` and `mut` fields in affine view
+records, typed payload access, field conditions, and cleanup over arbitrary
+list sizes. A returned view record declares one exact source with `from`.
+The [ownership contract](ownership-model.md#stored-views) defines its lifetime
+and origin rules. Calls use verified interfaces; they do
 not expand callee bodies. Proof state erases before emission. The complete
 checked-language gate also requires the other ownership acceptance cases.
 

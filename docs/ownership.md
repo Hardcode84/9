@@ -254,6 +254,52 @@ an exclusive input and a matching result origin. A node view uses the same
 syntax. The [intrusive tutorial](../examples/intrusive/README.md#traverse-and-borrow-payload)
 shows views returned through typed pointer fields.
 
+### Store views in a record
+
+Use a view record when a helper needs to retain borrowed access:
+
+```crust
+record Editing { value: mut i64; }
+
+fn editing_new(value: mut i64) -> Editing from value {
+    return make Editing { value: mut value };
+}
+
+fn editing_set(view: mut Editing, value: i64) -> unit { view.value = value; }
+```
+
+`view.value = value` writes the borrowed integer. It does not replace the
+reference. The caller keeps the source alive and excludes conflicting access:
+
+```crust
+var count: i64 = 1i64;
+{
+    var view: Editing = editing_new(mut count);
+    editing_set(mut view, 7i64);
+    var moved: Editing = move view;
+    drop moved;
+    count = 9i64;
+}
+```
+
+The move transfers the held loan. `drop moved` ends that loan; it does not
+destroy `count`. Ending the block has the same effect. A record with `read`
+fields uses the same move rule, but permits shared access to its targets.
+A shared loan of an `Editing` record also permits only reads of `value`.
+
+**Rejected:** moving the view outside its source scope, copying it without
+`move`, or changing `count` while the mutable view remains active. Keep the
+view in a smaller scope, or drop it before direct access to the source.
+
+The result contract names one exact origin for every borrowed result field.
+A helper cannot return a view of a local variable or replace stored origins
+through a borrowed record. Use a fresh result with `from` instead. View records
+are scoped values; persistent graph links use `references` in a domain.
+
+Run [views.crs](../examples/ownership-basics/views.crs) with the
+[example instructions](../examples/ownership-basics/README.md#stored-views).
+It also shows nested records and returned loans through stored fields.
+
 ## 6. Own a heap allocation
 
 A resource can own a pointer field. The [heap example](../examples/ownership-basics/heap.crs)
@@ -387,7 +433,7 @@ The following distinctions matter when you design an interface:
 | --- | --- |
 | Borrow a value within a block | Use `read` or `mut`; named views end with the block. |
 | Return a view | Declare its input origin with `from`. |
-| Store a borrowed field in a record | Rejected: there is no stored-lifetime field contract. |
+| Store a borrowed field in a record | Use `read T` or `mut T` fields in a scoped view record; move the record and declare `from` on a returned view record. |
 | Store a persistent raw pointer | Declare `owns` or `references` in a closed storage schema. |
 | Return an unchecked raw pointer | Rejected: use a borrowed result with an origin. |
 | Create or change an owner set across loop iterations | Rejected when no local owner-state invariant can be established. Changing the outer owner identity needs a loop invariant; recursive construction uses ordinary function contracts. |

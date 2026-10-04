@@ -91,11 +91,12 @@ fn os_expire_owned(check: *OsCheck, state: *OsState, object: *OsObject, location
     var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
-        if value != null(*OsValue) && (*value).object != null(*OsObject) {
+        if value != null(*OsValue) && os_borrowed((*slot).syntax) { os_loan_end(check, state, value); }
+        else { if value != null(*OsValue) && (*value).object != null(*OsObject) {
             if (*slot).owns && (*value).pointer {
                 os_expire_owned(check, state, (*value).object, location);
             } else { if !(*value).pointer { os_expire_owned(check, state, (*value).object, location); } }
-        }
+        } }
         os_set(check, state, slot as *u8, null(*OsValue), 0u32);
         slot = (*slot).next;
     }

@@ -174,7 +174,7 @@ fn os_make(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
     }
     var result: *OsValue = os_value(check, (*expression).syntax_type, object, false);
     if result != null(*OsValue) {
-        (*result).owner = rs_owns((*(*check).stage).resources, (*expression).syntax_type);
+        (*result).owner = os_affine(check, (*expression).syntax_type);
         (*result).fresh = true;
     }
     return result;

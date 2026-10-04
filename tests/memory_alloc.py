@@ -175,6 +175,7 @@ def main():
         node = program.split("record Node", 1)[1].split("resource Owner", 1)[0]
         types = "domain Graph(Node);\nrecord Node" + node
         cases = {
+            "views": (ROOT / "examples/ownership-basics/views.crs").read_text(),
             "scalar-flow": SCALAR_FLOW,
             "scalar-loan": "fn clear(flag:mut bool)->unit {flag=false;} "
             "fn main()->i32 {var flag:bool=true; clear(mut flag); "

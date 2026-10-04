@@ -109,6 +109,7 @@ fn os_resolve_interface(check: *OsCheck, contract: *OsFunction) -> unit {
         os_error(check, &(*declaration).loc, "foreign effects do not accept checked body contracts"); return;
     }
     os_resolve_modifies(check, contract);
+    os_resolve_view_result(check, contract);
     var item: *OsField = (*contract).initializes;
     while item != null(*OsField) && !os_failed(check) {
         os_resolve_output(check, contract, (*item).name);

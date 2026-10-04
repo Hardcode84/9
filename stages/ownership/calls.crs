@@ -149,8 +149,10 @@ fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contr
     }
     os_apply_contract(check, state, contract, arguments, &(*expression).loc);
     os_mutable_call(check, state, contract, arguments, &(*expression).loc);
+    os_consume_view_arguments(check, state, arguments, (*expression).arg_count, &(*expression).loc);
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
     if os_borrowed(syntax) { return os_call_view(check, state, contract, source, &(*expression).loc); }
+    if os_view_mode(check, syntax) >= RS_READ { return os_call_view_record(check, state, contract, source, &(*expression).loc); }
     return os_call_owned(check, state, contract, &(*expression).loc);
 }
 
@@ -166,7 +168,7 @@ fn os_call_owned(check: *OsCheck, state: *OsState, contract: *OsFunction, locati
         if object != null(*OsObject) { os_abstract_value(check, state, object, os_result_reuses(check, contract)); }
     }
     var result: *OsValue = os_value(check, syntax, object, false);
-    if result != null(*OsValue) { (*result).owner = rs_owns((*(*check).stage).resources, syntax); (*result).fresh = true; }
+    if result != null(*OsValue) { (*result).owner = os_affine(check, syntax); (*result).fresh = true; }
     return result;
 }
 
@@ -185,7 +187,7 @@ fn os_mutable_call(check: *OsCheck, state: *OsState, contract: *OsFunction,
     var index: usize = 0usize;
     while parameter != null(*CrustParam) && !os_failed(check) {
         var value: *OsValue = arguments[index];
-        if (*(*parameter).syntax_type).kind == RS_MUT {
+        if os_view_mode(check, (*parameter).syntax_type) == RS_MUT {
             os_mutable_value(check, state, value, contract, location);
         }
         parameter = (*parameter).next;
@@ -211,17 +213,23 @@ fn os_mutable_fields(check: *OsCheck, state: *OsState, object: *OsObject, contra
     var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
-        if value != null(*OsValue) {
-            if (*slot).owns && (*value).pointer {
-                if !(*contract).has_modifies || os_writes(contract, (*slot).field) { os_mutable_owner(check, state, slot, value); }
-            }
-            else { if !(*value).pointer && (*value).object != null(*OsObject) {
-                os_mutable_fields(check, state, (*value).object, contract, location);
-            } }
-        }
+        if value != null(*OsValue) { os_mutable_field(check, state, slot, value, contract, location); }
         slot = (*slot).next;
     }
     (*check).depth = (*check).depth - 1usize;
+}
+
+fn os_mutable_field(check: *OsCheck, state: *OsState, slot: *OsSlot,
+                     value: *OsValue, contract: *OsFunction, location: *CrustLoc) -> unit {
+    if os_borrowed((*slot).syntax) {
+        if (*(*slot).syntax).kind == RS_MUT { os_mutable_value(check, state, value, contract, location); }
+        return;
+    }
+    if (*slot).owns && (*value).pointer {
+        if !(*contract).has_modifies || os_writes(contract, (*slot).field) { os_mutable_owner(check, state, slot, value); }
+    } else { if !(*value).pointer && (*value).object != null(*OsObject) {
+        os_mutable_fields(check, state, (*value).object, contract, location);
+    } }
 }
 
 fn os_mutable_owner(check: *OsCheck, state: *OsState, slot: *OsSlot, old: *OsValue) -> unit {
@@ -280,7 +288,7 @@ fn os_argument(check: *OsCheck, state: *OsState, contract: *OsFunction, paramete
     if (*value).pointer { os_cursor_argument(check, state, contract, parameter, value, location); return; }
     if (*value).object != null(*OsObject) { os_publish_value(check, state, (*value).object, location); }
     if !os_transferable(check, state, value, location) { return; }
-    if rs_owns((*(*check).stage).resources, syntax) && !(*value).owner {
+    if os_affine(check, syntax) && !(*value).owner {
         os_error(check, location, "owner argument requires an explicit move");
     }
     if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {

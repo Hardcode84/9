@@ -98,6 +98,9 @@ fn os_field_place(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *
     if !os_access_through(check, state, (*base).object, (*base).loan, false, &(*expression).loc) { return null(*OsSlot); }
     var field: *OsSlot = os_object_slot(check, state, (*base).object, (*expression).field_name);
     if field == null(*OsSlot) { os_error(check, &(*expression).loc, "ownership field does not exist"); }
+    if field != null(*OsSlot) && os_borrowed((*field).syntax) {
+        return os_view_place(check, state, field, (*base).loan, &(*expression).loc);
+    }
     return os_loan_slot(check, field, (*base).loan);
 }
 
@@ -165,20 +168,7 @@ fn os_store_record(check: *OsCheck, state: *OsState, target: *OsObject,
     }
     var slot: *OsSlot = os_fields(state, target);
     while slot != null(*OsSlot) && !os_failed(check) {
-        var from: *OsSlot = os_object_slot(check, state, source, (*slot).name);
-        var value: *OsValue = os_bound(state, from);
-        if value != null(*OsValue) {
-            var previous: *OsValue = os_bound(state, slot);
-            if !(*value).pointer && (*value).object != null(*OsObject) && previous != null(*OsValue) {
-                os_store_record(check, state, (*previous).object, (*value).object, location);
-            } else {
-                os_set(check, state, slot as *u8, value, OS_READY);
-                if (*slot).owns && (*value).pointer && (*value).object != null(*OsObject) {
-                    os_set_owner(check, state, (*value).object, target);
-                }
-            }
-            os_heap_store(check, state, slot, os_bound(state, slot), location);
-        }
+        os_store_record_field(check, state, slot, source, location);
         slot = (*slot).next;
     }
     if !os_failed(check) && os_initialized(check, state, target) {
@@ -222,6 +212,13 @@ fn os_store_allowed(check: *OsCheck, state: *OsState, slot: *OsSlot,
     if !os_loan_place_access(check, state, slot, (*slot).loan, true, location) { return false; }
     if (*slot).object != null(*OsObject) && !os_access_through(check, state, (*slot).object, (*slot).loan, true, location) { return false; }
     if !os_store_owner(check, state, slot, value, location) { return false; }
+    if !os_borrowed((*slot).syntax) && !(*value).pointer && (*value).object != null(*OsObject) &&
+       os_view_mode(check, (*slot).syntax) >= RS_READ {
+        if (*slot).loan != null(*OsLoan) {
+            os_error(check, location, "borrowed view records must retain their stored loan origins"); return false;
+        }
+        return os_view_lifetime(check, state, (*value).object, (*slot).scope, location);
+    }
     return true;
 }
 
@@ -316,4 +313,22 @@ fn os_publish_owned(check: *OsCheck, state: *OsState, object: *OsObject, locatio
         os_error(check, location, "owner field requires a fully initialized allocation"); return false;
     }
     return os_heap_publish(check, state, object, location);
+}
+
+fn os_store_record_field(check: *OsCheck, state: *OsState, slot: *OsSlot,
+                         source: *OsObject, location: *CrustLoc) -> unit {
+    var from: *OsSlot = os_object_slot(check, state, source, (*slot).name);
+    var value: *OsValue = os_bound(state, from);
+    if value != null(*OsValue) {
+        var previous: *OsValue = os_bound(state, slot);
+        if !os_borrowed((*slot).syntax) && !(*value).pointer && (*value).object != null(*OsObject) && previous != null(*OsValue) {
+            os_store_record(check, state, (*previous).object, (*value).object, location);
+        } else {
+            os_set(check, state, slot as *u8, value, OS_READY);
+            if (*slot).owns && (*value).pointer && (*value).object != null(*OsObject) {
+                os_set_owner(check, state, (*value).object, (*slot).object);
+            }
+        }
+        os_heap_store(check, state, slot, os_bound(state, slot), location);
+    }
 }

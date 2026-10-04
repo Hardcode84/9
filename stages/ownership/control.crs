@@ -64,6 +64,7 @@ fn os_variable(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit 
     else { if (*(*statement).syntax_type).kind == CRUST_T_NAME {
         var object: *OsObject = os_object(check, state, (*statement).syntax_type, null(*OsObject), (*state).scope, false);
         value = os_value(check, (*statement).syntax_type, object, false);
+        if value != null(*OsValue) { (*value).owner = os_affine(check, (*statement).syntax_type); (*value).fresh = true; }
     } }
     if !os_failed(check) { os_bind(check, state, (*statement).name, (*statement).syntax_type, value, &(*statement).loc); }
 }
@@ -85,6 +86,7 @@ fn os_if(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
 
 fn os_join(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState, location: *CrustLoc) -> unit {
     os_join_heap(check, target, left, right);
+    os_join_loans(check, target, left, right);
     var scope: *OsScope = (*target).scope;
     while scope != null(*OsScope) && !os_failed(check) {
         var slot: *OsSlot = (*scope).locals;
@@ -214,22 +216,8 @@ fn os_while(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
 }
 
 fn os_return(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if (*statement).expr != null(*CrustExpr) {
-        var value: *OsValue = os_expr(check, state, (*statement).expr);
-        if value == null(*OsValue) || os_failed(check) { return; }
-        if (*value).object != null(*OsObject) && !(*value).pointer && !os_borrowed((*value).syntax) {
-            os_publish_value(check, state, (*value).object, &(*statement).loc);
-        }
-        if !os_transferable(check, state, value, &(*statement).loc) { return; }
-        if os_borrowed((*value).syntax) {
-            if !os_return_view(check, state, value, &(*statement).loc) { return; }
-        } else { if (*value).pointer {
-            os_error(check, &(*statement).loc, "returning a cursor requires a declared lifetime interface"); return;
-        } }
-        if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
-            os_error(check, &(*statement).loc, "return value is not fully initialized"); return;
-        }
-    }
+    os_return_value(check, state, statement);
+    if os_failed(check) { return; }
     os_function_exit(check, state, &(*statement).loc);
     while (*state).scope != null(*OsScope) && !os_failed(check) {
         os_scope_end(check, state, &(*statement).loc);
@@ -264,5 +252,27 @@ fn os_join_summary(check: *OsCheck, target: *OsState, left: *OsState, right: *Os
 fn os_summary_initialized(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
     if !os_absent_storage(check, state, object, location) && !os_initialized(check, state, object) {
         os_error(check, location, "continuing paths must preserve initialized owned storage");
+    }
+}
+
+fn os_return_value(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    if (*statement).expr != null(*CrustExpr) {
+        var value: *OsValue = os_expr(check, state, (*statement).expr);
+        if value == null(*OsValue) || os_failed(check) { return; }
+        if (*value).object != null(*OsObject) && !(*value).pointer && !os_borrowed((*value).syntax) {
+            os_publish_value(check, state, (*value).object, &(*statement).loc);
+        }
+        if !os_transferable(check, state, value, &(*statement).loc) { return; }
+        if !os_borrowed((*value).syntax) && os_view_mode(check, (*value).syntax) >= RS_READ {
+            os_return_view_record(check, state, (*value).object, &(*statement).loc);
+        }
+        if os_borrowed((*value).syntax) {
+            if !os_return_view(check, state, value, &(*statement).loc) { return; }
+        } else { if (*value).pointer {
+            os_error(check, &(*statement).loc, "returning a cursor requires a declared lifetime interface"); return;
+        } }
+        if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
+            os_error(check, &(*statement).loc, "return value is not fully initialized"); return;
+        }
     }
 }

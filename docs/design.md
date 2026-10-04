@@ -376,9 +376,13 @@ boundary, and native tests exercise cleanup, individual allocation reuse,
 multiple memberships, and recursive owners. Provider artifacts carry a verified
 bodyless interface bound to their object bytes and checker identity.
 
-The stage rejects grammar it cannot check, including borrowed record fields
-without a stored-lifetime interface. This is a concrete interface gap in the
-full acceptance gate, not permission to accept those fields as raw pointers.
+Scoped view records hold `read` or `mut` fields and transfer their loans with
+`move`. A returned view record uses an exact `from parameter.path` contract.
+Local lifetime checks, bodyless factory imports, and native pointer layout
+have executable tests. These basic view checks do not start Z3. A result with
+several independent origins or an update that replaces stored origins needs
+an interface that states those relationships; the current one-origin contract
+rejects it. See the [stored-view rules](ownership-model.md#stored-views).
 
 The separate [resource tutorial](../stages/resources/README.md) covers
 cleanup and `defer`. Closed-program memory proof examples use their own

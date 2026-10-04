@@ -160,10 +160,29 @@ extends the owner's life. Rust explains explicit relationships, lifetime
 elision, and borrowed struct fields in its
 [lifetime chapter](https://doc.rust-lang.org/book/ch10-03-lifetime-syntax.html).
 
-Rust can also express `struct View<'a> { code: &'a i32 }`. The current Crust
-stage has no corresponding stored-lifetime field contract. It rejects a record
-with a borrowed field. Returned local views do not establish support for stored
-views or general lifetime-polymorphic containers.
+Rust can express `struct View<'a> { code: &'a i32 }`. Crust uses an ordinary
+record field and a function origin contract:
+
+```crust
+record View { code: read i32; }
+fn view_new(code: read i32) -> View from code {
+    return make View { code: read code };
+}
+```
+
+The [stored-view example](../examples/ownership-basics/views.crs) exercises
+shared and mutable fields, moves, nested records, and returned reborrows.
+A stored field is one pointer. Scope exit or explicit `drop` ends the held
+loans without destroying their targets. These checks do not start a solver.
+A separate provider test removes the factory source before checking its client.
+
+Crust makes all view records affine, including shared-only records. Its result
+contract names one exact source path for every borrowed result field. Rust's
+lifetime parameters can express relationships between several field and input
+lifetimes. Crust does not have that syntax. It also rejects replacement of a
+view record through a borrowed parameter: that operation needs a contract for
+replacement origins. Use a fresh result and replace a consumed local instead.
+These rules are narrower than general lifetime-polymorphic containers.
 
 ## Cleanup order and conditional ownership
 
@@ -271,10 +290,11 @@ release, reuse, and payload loans. Its implementation and annotations are
 available for inspection.
 
 The ordinary owner and loan rules remain narrower than Rust's borrowing model.
-For example, named Crust loans use lexical scopes, and borrowed record fields
-need a stored-lifetime interface that this stage does not accept. A field
-condition cannot substitute for such a lifetime contract. The stage rejects
-that input instead of treating the borrowed field as an unchecked pointer.
+Named Crust loans use lexical scopes. View records support stored loans, but
+returned records use one exact origin and borrowed record parameters retain
+their stored origins. A field condition cannot replace a missing lifetime
+relationship. The stage rejects interfaces that do not express the required
+relationship.
 
 The generic field checker supports conditions expressed by its source grammar.
 It does not verify arbitrary user logic or infer a missing contract from caller

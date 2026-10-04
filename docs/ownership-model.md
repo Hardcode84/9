@@ -29,6 +29,47 @@ origin. A mutable loan of a resource also requires an ownership origin.
 A cursor can lend a scalar payload field without acquiring its containing
 object's destruction duty.
 
+## Stored views
+
+An ordinary record can contain `read T` or `mut T` fields. `T` must be a scalar
+or record type. Such a record holds scoped loans; it does not own their targets.
+Value fields can contain other view records. A view record cannot be a resource
+or belong to a storage domain, including through a containing value record.
+Persistent domain references use the storage interfaces below.
+
+```crust
+record Editing { value: mut i64; }
+fn editing_new(value: mut i64) -> Editing from value {
+    return make Editing { value: mut value };
+}
+fn editing_set(view: mut Editing, value: i64) -> unit { view.value = value; }
+```
+
+Field access reads or writes the borrowed target. It does not replace the
+stored reference. A shared loan of the containing record permits only reads,
+even when the field declares `mut`. A view record is affine: use `move` to
+transfer it. This rule also applies to records that contain only shared loans.
+Scope exit, `drop`, or a consuming call ends its held loans without destroying
+the borrowed storage. Outstanding reborrows still prevent conflicting access.
+The record cannot move into a scope that outlives any held loan.
+
+A returned view record requires `from parameter.path`, with a borrowed source
+parameter. Every borrowed field in the result must refer to that exact storage
+path and derive from its loan. A mutable result field requires a mutable source.
+The path can pass through stored view fields. The caller reconstructs the result
+loans from this interface, including for a bodyless imported function.
+
+A function cannot replace a view record through a borrowed parameter. Its
+signature has no contract to replace stored origins. Construct a new result
+with a declared origin, then consume or drop the old local view. Results that
+contain loans from different input paths require separate results or calls;
+one `from` path cannot describe those independent origins.
+
+Basic view checks use local owner and loan facts without a solver. Each stored
+loan lowers to one ordinary pointer. View-only records need no generated
+cleanup calls or runtime lifetime state. The [stored-view example](../examples/ownership-basics/views.crs)
+checks native behavior, moves, reborrows, and pointer layout.
+
 ## Storage interfaces
 
 A domain declares the complete set of record types whose storage it governs:

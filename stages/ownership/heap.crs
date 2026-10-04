@@ -276,7 +276,7 @@ fn os_heap_retire(check: *OsCheck, state: *OsState, object: *OsObject, location:
     var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
-        if value != null(*OsValue) && !(*value).pointer && (*value).object != null(*OsObject) {
+        if value != null(*OsValue) && !os_borrowed((*slot).syntax) && !(*value).pointer && (*value).object != null(*OsObject) {
             os_heap_retire(check, state, (*value).object, location);
         }
         slot = (*slot).next;

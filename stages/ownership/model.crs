@@ -35,6 +35,7 @@ record OsRecord {
     owns: *OsField;
     references: *OsField;
     conditions: *OsCondition;
+    view_mode: u32;
     tracked: bool;
 }
 

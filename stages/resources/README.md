@@ -310,8 +310,15 @@ edges. The [intrusive tutorial](../../examples/intrusive/README.md) describes
 the modular checker and the earlier complete proof views. Plain `rs_prepare` retains
 whole-binding initialization checks and its explicit `unsafe` requirement.
 
+Memory delegation also permits borrowed record fields and explicit record
+moves or drops whose validity the caller must prove. Borrowed fields lower to
+pointers; field access addresses the target. A record with no resource fields
+needs no cleanup call for `drop`. The consuming-place fact still identifies
+the ended value. The caller must check stored-loan lifetimes, alias permissions,
+and moves. Plain `rs_prepare` rejects borrowed record fields.
+
 `RsStage.delegate_return_loans` separately delegates proof of returned-view
-origins. A stage that sets it must check each returned loan against the declared
+origins, including `from` contracts on record results. A stage that sets it must check each returned loan against the declared
 input and any field path. Memory delegation alone keeps the original source
 loan check. The modular ownership stage sets this option and checks field-origin
 contracts; the closed-program memory stage does not set it.

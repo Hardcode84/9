@@ -182,8 +182,22 @@ fn rs_place_field(function: *RsFunction, source: *CrustExpr, output: *RsStatemen
     if value != null(*RsValue) {
         (*value).local = (*base).local;
         (*value).mode = (*base).mode;
+        rs_field_view(function, value, write, location);
     }
     return value;
+}
+
+fn rs_field_view(function: *RsFunction, value: *RsValue, write: bool, location: *CrustLoc) -> unit {
+    var syntax: *CrustTypeSyntax = (*value).syntax;
+    if (*syntax).kind != RS_READ && (*syntax).kind != RS_MUT { return; }
+    var mode: u32 = (*syntax).kind;
+    if (*value).mode == RS_READ { mode = RS_READ; }
+    if write && mode == RS_READ {
+        rs_error((*function).stage, location, "shared field view permits only reads"); return;
+    }
+    (*value).syntax = (*syntax).base;
+    (*value).mode = mode;
+    (*value).expression = rs_unary((*function).stage, CRUST_OP_DEREF, (*value).expression, location);
 }
 
 fn rs_place_index(function: *RsFunction, source: *CrustExpr, output: *RsStatements, write: bool) -> *RsValue {

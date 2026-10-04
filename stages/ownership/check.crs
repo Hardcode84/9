@@ -12,6 +12,7 @@ fn os_validate_record(check: *OsCheck, global: *RsGlobal) -> unit {
         os_error(check, &(*declaration).loc, "owned pointer fields require a resource destructor"); return;
     }
     os_validate_schema(check, contract);
+    os_validate_view_record(check, global, contract);
     (*contract).tracked = (*contract).tracked || (*contract).references != null(*OsField) || (*contract).conditions != null(*OsCondition);
     os_validate_names(check, global, (*contract).owns);
     os_validate_names(check, global, (*contract).references);
@@ -39,7 +40,7 @@ fn os_validate_field(check: *OsCheck, contract: *OsRecord, field: *CrustField) -
     }
     if owner != null(*OsField) { os_validate_owner(check, contract, field); return; }
     if reference != null(*OsField) { os_validate_reference(check, contract, field); return; }
-    if os_borrowed((*field).syntax_type) { return; }
+    if os_borrowed((*field).syntax_type) { os_validate_view_field(check, field); return; }
     if rs_owns((*(*check).stage).resources, (*field).syntax_type) {
         os_validate_embedded(check, contract, field); return;
     }
@@ -112,7 +113,7 @@ fn os_parameter(check: *OsCheck, state: *OsState, parameter: *CrustParam) -> uni
     } else { if output { os_error(check, &(*parameter).loc, "initializes requires a schema pointer parameter"); return; } }
     var value: *OsValue = os_value(check, syntax, object, pointer);
     if value == null(*OsValue) { return; }
-    (*value).owner = !borrowed && rs_owns((*(*check).stage).resources, syntax);
+    (*value).owner = !borrowed && os_affine(check, syntax);
     (*value).unknown = pointer && object == null(*OsObject);
     (*value).fresh = true;
     os_parameter_bind(check, state, parameter, value, borrowed);

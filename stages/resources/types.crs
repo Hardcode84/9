@@ -125,7 +125,7 @@ fn rs_collect_return(stage: *RsStage, global: *RsGlobal) -> bool {
     var result: *CrustTypeSyntax = (*declaration).syntax_type;
     var name: *CrustName = crust_map_get(&(*stage).return_sources, declaration as usize) as *CrustName;
     var borrowed: bool = (*result).kind == RS_READ || (*result).kind == RS_MUT;
-    if !borrowed {
+    if !borrowed && !(name != null(*CrustName) && (*stage).delegate_return_loans && (*result).kind == CRUST_T_NAME) {
         if name != null(*CrustName) {
             rs_error(stage, &(*result).loc, "from requires a borrowed function result");
         }
@@ -332,7 +332,8 @@ fn rs_publish_record(stage: *RsStage, source: *CrustDecl, target: *CrustDecl) ->
     var field: *CrustField = (*source).fields;
     var previous: *CrustField = null(*CrustField);
     while field != null(*CrustField) && !(*stage).failed {
-        if (*(*field).syntax_type).kind == RS_READ || (*(*field).syntax_type).kind == RS_MUT {
+        if !(*stage).delegate_memory &&
+           ((*(*field).syntax_type).kind == RS_READ || (*(*field).syntax_type).kind == RS_MUT) {
             rs_error(stage, &(*field).loc, "borrowed views cannot be record fields");
             return false;
         }

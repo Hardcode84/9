@@ -269,6 +269,12 @@ fn rs_move_expression(function: *RsFunction, source: *CrustExpr, output: *RsStat
     if (*operand).kind == CRUST_E_NAME {
         local = crust_map_get(&(*function).locals, (*operand).name as usize) as *RsLocal;
     }
+    // An exclusive pointer loan permits a consuming read followed by reinitialization.
+    if local != null(*RsLocal) && (*local).mode != 0u32 &&
+       ((*local).mode == RS_READ || (*(*local).syntax).kind != CRUST_T_POINTER) {
+        rs_error(stage, location, "cannot move out of a borrowed value");
+        return null(*RsValue);
+    }
     if local == null(*RsLocal) || !(*local).owning || (*local).mode != 0u32 {
         return rs_move_pointer(function, operand, output, location);
     }
@@ -290,6 +296,10 @@ fn rs_move_pointer(function: *RsFunction, operand: *CrustExpr, output: *RsStatem
     }
     var place: *RsValue = rs_place(function, operand, output, true, false);
     if (*stage).failed { return null(*RsValue); }
+    if rs_owns(stage, (*place).syntax) {
+        rs_error(stage, location, "cannot move a resource from this place; cleanup requires the whole owner");
+        return null(*RsValue);
+    }
     if (*(*place).syntax).kind != CRUST_T_POINTER &&
        !(*stage).delegate_memory {
         rs_error(stage, location, "move requires a whole local owner or a pointer place");

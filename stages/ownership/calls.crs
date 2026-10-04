@@ -61,14 +61,23 @@ fn os_no_cursors(check: *OsCheck, state: *OsState, domain: *CrustName, location:
 }
 
 fn os_allocate(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract: *OsFunction) -> *OsValue {
-    if (*check).loop_depth != 0usize || (*expression).arg_count != 1usize ||
-       (*(*expression).args[0usize]).kind != CRUST_E_SIZEOF {
-        os_error(check, &(*expression).loc, "checked allocation requires sizeof(TYPE) outside a loop");
+    if (*expression).arg_count != 1usize {
+        os_error(check, &(*expression).loc, "allocation requires one size argument");
         return null(*OsValue);
     }
-    var syntax: *CrustTypeSyntax = (*(*expression).args[0usize]).syntax_type;
+    var size: *CrustExpr = (*expression).args[0usize];
+    while (*size).kind == CRUST_E_GROUP { size = (*size).left; }
+    if (*size).kind != CRUST_E_SIZEOF {
+        os_error(check, &(*size).loc, "allocation size must be sizeof(Record) so the checker can track its fields");
+        return null(*OsValue);
+    }
+    var syntax: *CrustTypeSyntax = (*size).syntax_type;
     if os_record((*check).stage, syntax) == null(*OsRecord) {
-        os_error(check, &(*expression).loc, "checked allocation requires a schema with field contracts");
+        os_error(check, &(*size).loc, "allocation type must be a record with field contracts");
+        return null(*OsValue);
+    }
+    if (*check).loop_depth != 0usize {
+        os_error(check, &(*expression).loc, "direct allocation in a loop requires a helper that returns an owning resource");
         return null(*OsValue);
     }
     var object: *OsObject = os_object(check, state, syntax, null(*OsObject), null(*OsScope), false);

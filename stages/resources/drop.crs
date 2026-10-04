@@ -8,6 +8,14 @@ fn rs_drop_local(function: *RsFunction, source: *CrustExpr, place: *RsValue) -> 
 
 fn rs_lower_drop(function: *RsFunction, source: *CrustStmt, output: *RsStatements) -> bool {
     var stage: *RsStage = (*function).stage;
+    var operand: *CrustExpr = (*source).expr;
+    while (*operand).kind == CRUST_E_GROUP { operand = (*operand).left; }
+    if (*operand).kind == CRUST_E_NAME {
+        var binding: *RsLocal = crust_map_get(&(*function).locals, (*operand).name as usize) as *RsLocal;
+        if binding != null(*RsLocal) && (*binding).mode != 0u32 {
+            rs_error(stage, &(*source).loc, "cannot drop a borrowed value"); return false;
+        }
+    }
     var effects: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
     rs_scope(function);
     var place: *RsValue = rs_place(function, (*source).expr, &effects, true, false);

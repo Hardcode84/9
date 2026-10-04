@@ -8,6 +8,7 @@ from pathlib import Path
 
 from ownership_runtime import check_runtime
 from ownership_support import ROOT, SCALAR_FLOW, command, execute
+from resources import consumption_rejects
 
 
 def body(text):
@@ -126,7 +127,21 @@ def local_cases():
 
 
 def local_rejects():
-    return {
+    allocation = 'extern fn allocate(size:usize)->*u8 foreign(allocate)="malloc";\n'
+    cases = {
+        "allocation-byte-count": (
+            allocation + "fn bad()->unit {var p:*u8=allocate(8usize);}",
+            "allocation size must be sizeof(Record) so the checker can track its fields",
+        ),
+        "allocation-scalar-type": (
+            allocation + "fn bad()->unit {var p:*u8=allocate(sizeof(i64));}",
+            "allocation type must be a record with field contracts",
+        ),
+        "allocation-in-loop": (
+            allocation + "record Cell {value:i64;}\n"
+            "fn bad(run:bool)->unit {while run {var p:*u8=allocate(sizeof(Cell));}}",
+            "direct allocation in a loop requires a helper that returns an owning resource",
+        ),
         "uninitialized": ("fn bad()->i64 {var value:i64=uninit;return value;}", "uninitialized"),
         "branch-initialization": (
             "fn bad(test:bool)->i64 {var value:i64=uninit;if test {value=1i64;}return value;}",
@@ -150,6 +165,8 @@ def local_rejects():
             "active",
         ),
     }
+    cases.update({name: (source, diagnostic) for name, source, diagnostic in consumption_rejects()})
+    return cases
 
 
 RUNTIME_TREE = "fn main(argc:i32,argv:**u8)->i32 access(reclaim,Forest) {\n var root:Tree=tree_new(1i64);\n var count:i32=argc+64i32;\n while count>0i32 {\n  var next:Tree=tree_new(2i64);\n  tree_attach_left(mut next,move root);\n  root=move next;\n  count=count-1i32;\n }\n return 0i32;\n}\n"
@@ -220,6 +237,17 @@ def run(build, directory, sanitize):
         ]
     )
     execute(generated, symbols, directory, "runtime-tree", sanitize, b"")
+    heap = (ROOT / "examples/ownership-basics/heap.crs").read_text()
+    path = directory / "grouped-allocation.crs"
+    path.write_text(heap.replace("allocate(sizeof(Cell))", "allocate((sizeof(Cell)))"))
+    command([compiler, "--check", path])
+    path = directory / "allocation-helper-loop.crs"
+    path.write_text(
+        heap[: heap.index("fn main(")] + "fn main(argc:i32,argv:**u8)->i32 access(reclaim,Cells) {"
+        "var count:i32=argc;while count>0i32 {var owner:CellOwner=cell_new(65i64);"
+        "count=count-1i32;}return 0i32;}"
+    )
+    command([compiler, "--check", path])
     for name, text in local_cases().items():
         path = directory / f"{name}.crs"
         path.write_text(text)

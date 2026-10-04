@@ -223,6 +223,11 @@ var second: Ticket = first;
 Two cleanup obligations would refer to one resource. Add `move` if the second
 local must own it. Use a borrow if both pieces of code need temporary access.
 
+Resource moves consume a whole local owner. Moving an embedded resource, such
+as `move h.inner`, would leave its owner's cleanup without an initialized
+field. The diagnostic says that cleanup requires the whole owner. Borrow the
+field for temporary access, or move its containing owner.
+
 **Rejected: using a moved value.**
 
 ```crust
@@ -247,6 +252,11 @@ fn set_code(ticket: mut Ticket, code: i32) -> unit access(edit, Demo) {
     ticket.code = code;
 }
 ```
+
+A borrowed resource remains owned by the caller. `move ticket` reports
+`cannot move out of a borrowed value`; `drop ticket` reports
+`cannot drop a borrowed value`. To transfer cleanup to the function, take a
+`Ticket` by value and pass it with `move`.
 
 Call it with `set_code(mut ticket, 66i32)` inside an `edit Demo` block.
 The view uses ordinary field access. A borrowed scalar also uses its name
@@ -417,6 +427,18 @@ fn cell_drop(owner: mut CellOwner) -> unit access(reclaim, Cells) {
 The file declares `allocate` and `release` as foreign allocation and release
 operations. Those declarations are trusted adapters to `malloc` and `free`.
 They are not proof that arbitrary foreign code obeys the contract.
+
+`sizeof(Cell)` supplies both the byte count and the record type whose fields
+the checker tracks. `allocate(8usize)` supplies only a byte count, so it is
+rejected even when `Cell` occupies eight bytes. Use `allocate(sizeof(Cell))`;
+parentheses around the size expression are accepted. Checked allocation
+requires a record type, including for a single scalar payload.
+
+Direct allocation calls are restricted to bodies outside loops. To allocate
+per iteration, call an owning constructor such as `cell_new` in the loop.
+The checker uses its returned resource contract to track each owner and its
+cleanup. An arbitrary byte buffer requires a trusted provider that supplies
+its storage and access contracts.
 
 The constructor returns a nullable owned field. Its caller checks allocation
 failure before use. The destructor consumes the field and releases it once.

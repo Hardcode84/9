@@ -236,6 +236,10 @@ states `initializes`. The wrapper must initialize the output before each return.
 Opaque constructors and destructors require root-selected trust. Transparent
 owned allocations use `owns(field: storage)`, explicit allocation and null
 checks, field initialization, and release. See the [heap example](../examples/ownership-basics/heap.crs).
+The allocation argument must be `sizeof(Record)`, optionally in parentheses.
+This identifies the record whose initialization and field ownership are checked.
+A byte count or scalar type supplies no record contract. Direct allocation
+inside a loop is rejected; call a function that returns an owning resource.
 Transparent records cannot store non-owning raw pointers. Use view fields for
 ordinary borrows or an opaque interface for persistent internal aliases.
 

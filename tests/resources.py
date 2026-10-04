@@ -63,6 +63,18 @@ def cleanup_tree_source(depth):
 def runtime_cases():
     return [
         (
+            "consume-pointer-through-mutable-borrow",
+            program(
+                "unsafe {var value:i32=7i32; var pointer:*i32=&value;"
+                "var saved:*i32=take(mut pointer);"
+                "if pointer!=null(*i32) || *saved!=7i32 {trap;}}",
+                "unsafe fn take(pointer:mut *i32)->*i32 {var saved:*i32=move pointer;"
+                "pointer=null(*i32);return saved;}",
+                common=False,
+            ),
+            b"",
+        ),
+        (
             "explicit-drop-once-and-reinitialize",
             program("var value:Token=token(65i32); drop value; emit(66i32); value=token(67i32);"),
             b"ABC",
@@ -582,6 +594,43 @@ def runtime_cases():
             None,
         ),
     ]
+
+
+def consumption_rejects():
+    ticket = (
+        "resource Ticket {value:i64;} drop ticket_drop;\nfn ticket_drop(t:mut Ticket)->unit {}\n"
+    )
+    holder = ticket + (
+        "resource Holder {inner:Ticket;} drop holder_drop;\n"
+        "fn holder_drop(h:mut Holder)->unit {}\n"
+        "fn consume(t:Ticket)->unit {}\n"
+    )
+    cases = [
+        (
+            "resource-field-move-" + name,
+            holder + "fn bad(h:Holder)->" + result + " {unsafe {\n// expect-error\n" + body + "}}",
+            "cannot move a resource from this place; cleanup requires the whole owner",
+        )
+        for name, result, body in (
+            ("initializer", "unit", "var item:Ticket=move h.inner;"),
+            ("argument", "unit", "consume(move (h.inner));"),
+            ("return", "Ticket", "return move h.inner;"),
+        )
+    ]
+    for mode in ("read", "mut"):
+        cases += [
+            (
+                "move-from-" + mode + "-parameter",
+                ticket + f"fn bad(t:{mode} Ticket)->Ticket {{\n// expect-error\nreturn move (t);}}",
+                "cannot move out of a borrowed value",
+            ),
+            (
+                "drop-" + mode + "-parameter",
+                ticket + f"fn bad(t:{mode} Ticket)->unit {{\n// expect-error\ndrop (t);}}",
+                "cannot drop a borrowed value",
+            ),
+        ]
+    return cases
 
 
 def reject_cases():
@@ -1185,7 +1234,7 @@ def reject_cases():
         ),
         ("malformed-string", 'const bad:*u8="unfinished', "unterminated string"),
         ("invalid-source-byte", b"\0", "invalid source byte 0x00"),
-    ]
+    ] + consumption_rejects()
 
 
 def depth_reject_cases():

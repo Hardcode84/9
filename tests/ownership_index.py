@@ -93,7 +93,7 @@ def rejects():
         "unreported-observer": ("record Observer {target:*Symbol;}", "persistent pointers"),
         "drop-borrowed-handle": (
             "fn bad(index:mut Index)->unit access(reclaim,Symbols) {drop index;}",
-            "active",
+            "cannot drop a borrowed value",
         ),
         "retire-borrowed-handle": (
             "fn bad(index:mut Index)->unit access(reclaim,Symbols) {index_drop(mut index);}",

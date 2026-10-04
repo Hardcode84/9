@@ -29,7 +29,10 @@ analysis. The user-facing model must be no more complex than Rust's for both
 application and container authors. The [checked ownership target](design.md#checked-ownership-target)
 defines the acceptance gate. The current closed-program memory stage does not
 meet that gate. The separate [modular stage](../examples/intrusive/README.md)
-implements a bounded source subset through public compiler interfaces.
+implements a bounded source subset through public compiler interfaces. Its
+reciprocal-list rules do not meet the generality requirement. The
+[generic ownership proposal](ownership-model.md) defines a replacement design,
+not an implemented extension to this specification.
 These requirements add no ownership feature to the seed.
 
 This document controls Crust0 version 0.1. The earlier documents remain research

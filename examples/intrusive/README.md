@@ -6,6 +6,12 @@ Start with the [ownership guide](../../docs/ownership.md) for moves, loans,
 cleanup, and returned views. The [Rust comparison](../../docs/ownership-rust.md)
 separates client syntax from container implementation obligations.
 
+This tutorial documents a specialized reciprocal-list verifier. Its member,
+anchor, and isolation rules depend on list topology. The implementation fails
+the [generic ownership requirement](../../docs/design.md#checked-ownership-target).
+Its passing tests establish the declared list contract only. Keep them as
+executable evidence; do not extend these special rules as the language model.
+
 This program uses ordinary `prev` and `next` pointers. Each node has one owner
 and two independent hooks. A destructor detaches both hooks, then releases that
 node. A head destructor detaches its members without destroying them. Nodes can

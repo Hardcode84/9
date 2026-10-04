@@ -378,12 +378,20 @@ within the bounded experiment before extending the language.
 
 ## 7. Modular ownership candidate
 
-Keep ordinary owners, loans, RAII, and defer. Add declared relationships between
-stored links. Check each function from its interface and those relationships.
-Do not symbolically execute a client to discover a library's safety conditions.
-The [current acceptance gate](../design.md#checked-ownership-target) still applies.
-All rules belong to an ordinary Crust stage. The seed needs no list primitive,
-ownership type, or new compiler API.
+Status: this candidate fails the
+[generic ownership gate](../design.md#checked-ownership-target). Its reciprocal
+fields, member families, anchors, and isolation rules encode circular-list
+topology in the checker. Keep the implementation as a specialized verification
+experiment. Do not extend it as the accepted ownership model or hide the same
+rules behind a plugin interface.
+
+The candidate combines owners, loans, and cleanup with declared relationships
+between stored links. It checks each function from its interface and those
+relationships. It does not symbolically execute a client to discover a
+library's safety conditions. These rules belong to an ordinary Crust stage;
+the seed has no list primitive, ownership type, or new compiler API. That
+placement establishes extensibility of the seed, not generality of the
+ownership rules.
 
 ### Storage and access
 

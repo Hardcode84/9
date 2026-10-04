@@ -342,10 +342,17 @@ test does not establish C-level compilation speed for that configuration.
 
 ## Checked ownership target
 
-Checked Crust has two requirements: no whole-program ownership analysis, and a
-user-facing ownership model no more complex than Rust's. These are design
-requirements. The closed-program memory proof stages do not implement this
-model. The separate modular stage below implements a bounded source subset.
+Checked Crust requires a generic ownership model, no whole-program analysis,
+and a user-facing model no more complex than Rust's. These requirements apply
+to both applications and container implementations. The direct intrusive list
+is a required test of the model. Its topology must not define the model.
+
+The current candidate fails the generality requirement. It combines ordinary
+owners and loans with built-in reciprocal fields, member families, anchors,
+and isolation rules. These rules establish a specialized circular-list proof.
+A successful list test does not establish generic ownership. Keep this
+implementation as an executable experiment; do not extend it as the accepted
+language model. The closed-program proof stages also remain experiments.
 
 Check each function against its declared contract. Use its body, declared type
 and field contracts, and the interfaces of called functions. Local flow analysis
@@ -363,9 +370,33 @@ All conditions that cross a function boundary belong in the published interface:
 
 These are required facts, not proposed keywords. Infer local details where the
 interface permits it. A body must establish its declared result and preserve the
-type's field rules. Destructors and intrusive-link operations receive the same
-checks as other functions. Foreign contracts remain an explicit trust boundary;
-a trusted unlink operation cannot replace a checked implementation.
+type's field rules. Destructors and container operations receive the same checks
+as other functions. Foreign contracts remain an explicit trust boundary; a
+trusted unlink operation cannot replace a checked implementation.
+
+Ownership rules must establish that storage remains live and that access has
+the required permission. List order, tree balance, and reciprocal links are
+properties of particular data structures. A separate checker can verify those
+properties. If memory safety depends on a property, the checked implementation
+must establish it through the generic contract system before using it. Moving
+a special rule into a plugin or accepting a library assertion does not prove it.
+
+The [generic ownership proposal](ownership-model.md) defines a replacement
+contract for stored non-owning references. Ordinary stored views use lifetimes.
+Independently reclaimable links use a sealed storage schema, exclusive access,
+and finite field conditions. Every destruction must exclude incoming references
+from all surviving schema fields. No condition may disable that obligation.
+The same rules cover views, tree back references, one-way observers, and a
+two-hook intrusive list. Library authors supply ordinary field relationships,
+not ghost state, user quantifiers, solver terms, or proof callbacks.
+
+This is a design, not an implemented replacement. Local symbolic-heap probes
+support its reference-removal rules; they do not establish complete source
+checking, code erasure, or the Rust complexity ceiling. Removing the current
+list checks would permit invalid releases. Preserve them until the generic
+stage passes the implementation gate. The proposal explicitly identifies its
+different head representation and does not claim to verify the old sentinel
+projection.
 
 A caller's safety result depends on the published contract, not the callee's
 implementation. A changed implementation must still pass its own check. Once
@@ -374,71 +405,78 @@ each body result against its source, imported contracts, types, and checker
 configuration. Do not use a saved closed-program proof as a library contract.
 
 Rust's [lifetime signatures](https://doc.rust-lang.org/book/ch10-03-lifetime-syntax.html#in-function-signatures)
-give a comparison for caller-visible lifetime relationships. The complexity
-limit applies to both applications and container implementations. Compare
-the concepts, annotations, and error recovery for the same operations; a keyword
+give a comparison for caller-visible lifetime relationships. Compare the
+concepts, annotations, and error recovery for the same operations; a keyword
 count alone is insufficient. Ordinary ownership code must not require manual
 SMT terms, ghost lemmas, loop proofs, or a custom proof policy for each container.
 Checker internals can use stronger analysis, but must obey the function boundary.
 Memory safety must not require proof that every loop terminates.
 
-The next acceptance gate is one direct intrusive-list library and a separate
-client with a runtime number of nodes:
+The next candidate must pass these tests with the same ownership rules:
 
-1. Check each library function without the client. Check the client using only
-   the verified interfaces, without reading or expanding library bodies.
-2. Exercise two hooks, traversal, individual unlink and destruction, storage
-   reuse, and head cleanup while another owner remains live. Keep ordinary
-   pointer fields, with no pool requirement, runtime ownership metadata, or
-   `unsafe` region in the list implementation or client.
-3. Reject stale cursors, destruction with a live conflicting loan, invalid moves
-   of linked storage, and invalid contract implementations. An unfolding budget
-   must not substitute for a contract that works at arbitrary list lengths.
-4. Compare source obligations with Rust for both library and client. Check
-   emitted code and measure library and client checking separately. Do not
-   extend the model if this witness needs more complex user proofs.
+| Program | Required evidence |
+| --- | --- |
+| A record that stores a borrowed view | The interface ties the view to its source; an escaped view is rejected |
+| An owned tree with parent references | Ownership and non-owning back references use general field contracts; destruction cannot leave a usable dangling reference |
+| A one-way non-owning link | Link creation and removal use the same lifetime rules, without a reciprocal-pair requirement |
+| A direct intrusive list | Two hooks, runtime node count, traversal, individual destruction and reuse, and head cleanup while another owner remains live |
 
-The ordinary resource stage does not provide this reusable list contract. Keep
-the closed-program proof experiments as evidence. Do not expand their heap-graph
-machinery as a substitute for passing this gate.
-The [modular candidate](exploration/resource-metastage.md#7-modular-ownership-candidate)
-combines stable individual owners, scoped access, and reciprocal field contracts.
-Its restricted internal group rule addresses sentinel and payload types. The
-[annotated intrusive tutorial](../examples/intrusive/README.md) now implements
-that rule, declared owners, domain access, construction, and destruction in
-external Crust stages. It checks link definitions without a client, and all
-callers use declared interfaces. Named read and mutable loans, dotted returned-view
-origins, and embedded-resource destruction now have local contracts. A verified
-provider bundle binds these contracts and layouts to its compiled object and
-checker images. A client can use that bundle without provider source or solver
-queries for provider bodies. The compiler host still links Z3. The tutorial
-states the receipt trust boundary and tests changed artifacts and compiler
-allocation failures. Iterative owner replacement still needs a local invariant
-for a changing owner set. This result does not complete the general container
-and Rust source-complexity gate.
+For each program:
 
-The [recursive owner example](../examples/intrusive/recursive/README.md) uses
-finite type contracts for recursive owned fields. It retains a runtime number
-of nodes with two hooks, removes one allocation, and checks a client after the
-provider source is removed. It adds no source annotation or target metadata.
-The explicit owner chain costs one pointer per node. Construction and cleanup
-use a call stack proportional to the node count. The loop rule still rejects
-replacement of an outer owner, and domain-wide loans require separate attach
-passes for the two families. This result does not pass the full complexity gate.
+1. Check the library without the client. Check the client using only verified
+   interfaces, without reading or expanding library bodies.
+2. Use the same ownership, borrowing, access, and address-stability rules.
+   Reject a candidate that needs new container-specific syntax, checker cases,
+   trusted operations, or proof callbacks to pass another test.
+3. Reject stale references, destruction with conflicting loans, invalid moves
+   of stable storage, and invalid contract implementations. An unfolding budget
+   must not substitute for an arbitrary runtime size.
+4. Preserve direct pointers and individual reclamation. Add no required pool,
+   runtime identity metadata, validity checks, reference counts, hidden cleanup
+   flags, or `unsafe` region in the required container implementation or client.
+   Null checks before release and debug bounds checks remain permitted.
+5. Compare source obligations with Rust for both library and client. Record
+   additional owner links, indexes, allocations, or stack use required by the
+   chosen representation. A different storage scheme must not be reported as
+   proof that the original C-like representation passed.
+6. Check emitted-code erasure and final behavior. Measure library and client
+   checking separately, excluding target GCC compilation and linking. Keep
+   basic compilation fast; stronger optional checking can have a measured cost.
 
-The [user guide](ownership.md) teaches the implemented rules. The
-[Rust comparison](ownership-rust.md) checks ordinary resource and borrowing
-examples and compares intrusive-library obligations. It records additional
-Crust annotations and rejected borrowing patterns; it does not establish that
-the full user model meets the Rust complexity ceiling.
+Before replacing the implementation, demonstrate stored-reference removal and
+individual reclamation through these interfaces. Do not add more ownership
+mechanisms while this boundary remains unproved. Existing list successes,
+renamed annotations, or a more configurable solver do not pass the gate.
+
+The [current experiment](exploration/resource-metastage.md#7-modular-ownership-candidate)
+does have independently checked functions, verified provider bundles, scoped
+loans, returned views, and recursive owned fields. Its
+[intrusive tutorial](../examples/intrusive/README.md) documents the specialized
+rules. The [recursive example](../examples/intrusive/recursive/README.md) adds
+one explicit owner pointer per node and a call stack proportional to the node
+count. Domain-wide loans require separate attach passes. These results remain
+useful evidence about the implementation and its costs. They do not satisfy the
+generic ownership target.
+
+A verified provider bundle binds contracts and layouts to its compiled object
+and checker images. Clients can use it without provider source or solver
+queries for provider bodies. The compiler host still links Z3. The tutorials
+state the receipt trust boundary and test changed artifacts and compiler
+allocation failures. These modularity results do not remove the topology rules.
+
+The [user guide](ownership.md) teaches the implemented subset. The
+[Rust comparison](ownership-rust.md) records its extra annotations, rejected
+borrowing patterns, and specialized list proof. Neither document specifies an
+accepted generic ownership model.
 
 ## Current safety stages
 
 Safety claims follow the selected stages. Raw seed pointers do not
 justify ownership guarantees or exclusive-access metadata. The resource
 stage checks local owners, loans, and returned views tied to a named input.
-The [modular ownership stage](../stages/ownership/program.crs) checks function
-bodies independently. Record suffixes declare owned pointers, member origins,
+The [ownership and list experiment](../stages/ownership/program.crs) checks
+function bodies independently. Its persistent non-owning links use a
+specialized reciprocal-list contract. Record suffixes declare owned pointers, member origins,
 anchors, and domains. Function suffixes declare access and link results. The
 [relation stage](../stages/relations/check.crs) verifies inverse pointer fields,
 anchor identity, and arbitrary-size head-drain loops. Calls consume interfaces;

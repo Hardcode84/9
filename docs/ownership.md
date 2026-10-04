@@ -7,9 +7,15 @@ before that cleanup? Crust checks these rules during compilation. An owner can
 transfer a value. A borrower can use it for a shorter time. Destruction must
 wait until conflicting uses have ended.
 
-This tutorial teaches the current modular ownership stage. Start here if you
-can already write a function and a record. You do not need to know the compiler
-implementation or a proof language.
+This tutorial teaches the implemented ownership stage. It includes general
+owner and loan operations, plus a specialized intrusive-list verifier. The
+stage fails the [generic ownership design requirement](design.md#checked-ownership-target):
+it cannot express ordinary stored borrows and depends on list-specific rules
+for persistent non-owning links. The examples describe this implementation;
+they do not specify an accepted generic ownership model.
+
+Start here if you can already write a function and a record. You do not need
+to know the compiler implementation or a proof language.
 
 Read the sections in order:
 
@@ -25,6 +31,9 @@ Read the sections in order:
 
 The [Rust comparison](ownership-rust.md) explains corresponding concepts,
 differences in accepted code, and obligations for container authors.
+
+The [generic ownership proposal](ownership-model.md) specifies the replacement
+design. Its syntax is not implemented by this tutorial.
 
 ## 1. Select the stage and run a program
 

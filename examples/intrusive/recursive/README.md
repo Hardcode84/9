@@ -7,7 +7,10 @@ intrusive lists. The program removes one node, allocates a replacement, and
 then destroys both list heads while the nodes remain alive.
 
 Read the [basic intrusive tutorial](../README.md) first. This example uses the
-same link library and ownership stage. It adds no syntax or compiler-core API.
+same specialized list verifier and ownership stage. Recursive owned fields
+add no syntax or compiler-core API. The combined example still depends on
+reciprocal fields and anchor roles, so it does not pass the
+[generic ownership gate](../../../docs/design.md#checked-ownership-target).
 
 ## Build and run
 

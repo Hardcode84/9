@@ -8,10 +8,15 @@ It separates application code from container implementation. Read the
 
 For ordinary resources, both models use owners, moves, shared views, exclusive
 views, and scope cleanup. Crust currently needs more explicit contracts and
-accepts fewer borrowing patterns. For direct intrusive lists, Crust checks
-declared pointer relationships that Rust's ordinary borrow checker does not
-prove. This is a useful difference, but it does not establish that the complete
-Crust user model is no more complex than Rust's.
+accepts fewer borrowing patterns. The intrusive-list results come from a
+dedicated verifier for reciprocal pointer fields. That verifier is part of the
+comparison's implementation cost. Its proofs do not establish a generic
+ownership capability or a model no more complex than Rust's.
+
+The [generic replacement design](ownership-model.md) removes topology-specific
+checker rules. It still requires a separate source-complexity comparison after
+its bounded implementation; this page does not attribute those proposals to
+the current compiler.
 
 ## How Rust organizes the learning material
 
@@ -349,15 +354,23 @@ loan restrictions, domain-wide exclusion, mandatory returned origins, and
 branch-state agreement all impose visible work on the user. Calling the
 current model simpler than Rust would omit that work.
 
-For the implemented intrusive operations, Crust replaces manual raw-pointer
-invariant reasoning with checked declarations. Authors do not supply solver
+For the implemented intrusive operations, the specialized Crust verifier checks
+reciprocal pointer invariants from declarations. Authors do not supply solver
 terms or ghost lemmas. They still learn member and anchor roles, domain effects,
 isolation results, and exact field origins. Rust authors instead discharge the
 corresponding address, aliasing, and destructor obligations inside an unsafe
 implementation and design a safe API around it. Counting keywords alone would
 not compare those tasks.
 
-The full [acceptance gate](design.md#checked-ownership-target) remains open.
+The current candidate fails the generality part of the
+[acceptance gate](design.md#checked-ownership-target). Its implementation builds
+in two inverse fields, member families, anchor roles, and isolation. A tree
+parent reference or one-way non-owning link cannot use that topology contract.
+Moving these rules behind another stage interface would retain the same
+specialization. The next candidate must check these shapes and stored borrowed
+views with the same ownership rules.
+
+The complete acceptance gate remains open.
 Crust has no accepted general contract for creating a runtime-sized owner set
 across iterations, and it cannot yet supply the same range of stored-view
 interfaces. The direct-list library/client comparison therefore does not cover

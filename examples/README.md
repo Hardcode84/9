@@ -26,7 +26,7 @@ separates application rules from container-author obligations.
 | 7 | [Native bootstrap](../stages/native/README.md) | Build stages from source and hand following compilation code to native execution |
 | 8 | [Cyclomatic complexity](../stages/ccn/README.md) | Count decisions with the public AST and reject functions before backend emission |
 | 9 | [Static memory checks](ownership/README.md) | Check direct pointer programs and intrusive link invariants before emission |
-| 10 | [Modular intrusive ownership](intrusive/README.md) | Check reciprocal fields, scoped traversal, individual destruction, and storage reuse |
+| 10 | [Intrusive-list verification](intrusive/README.md) | Run the specialized reciprocal-list proof, scoped traversal, destruction, and reuse |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage

@@ -44,6 +44,13 @@ requires it.
   callee interfaces. Local flow analysis is permitted. Do not expand callees
   or inspect callers to obtain missing safety conditions. Check definitions
   against their contracts before using them as verified library code.
+- Develop generic ownership rules. A container example is a test, not the
+  definition of the model. Do not add topology-specific ownership keywords,
+  roles, state, or proof callbacks to make that example pass. Specialized
+  verification stages can exist, but their results do not establish generic
+  ownership. The same rules must cover stored views, owned trees with parent
+  references, one-way non-owning links, and the direct intrusive-list witness.
+  Do not hide a container-specific checker behind a general stage interface.
 - Keep the user-facing ownership model no more complex than Rust's, for both
   application and container authors. Do not hide required solver predicates,
   ghost lemmas, or custom proof scripts in libraries and call the model simple.
@@ -190,7 +197,7 @@ Build with `make all`. Use the checks that cover the change:
 | Root execution and reader extensions | `make check-stage check-reader` |
 | Native bootstrap and execution handoff | `make check-native` |
 | Ownership, RAII, and defer | `make check-resources check-resource-alloc` |
-| Modular owners, reciprocal fields, and intrusive lists | `make check-ownership check-ownership-alloc` with Z3 |
+| Ownership and reciprocal-list experiment | `make check-ownership check-ownership-alloc` with Z3 |
 | Verified ownership provider imports | `make check-ownership-imports` with Z3 |
 | Memory proofs, initialization, and call effects | `make check-memory check-resource-memory check-memory-summaries` with Z3 |
 | Declared memory call contracts | `make check-memory-contracts` with Z3 |

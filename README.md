@@ -47,6 +47,7 @@ the third runs it.
 
 - [Core design and compilation flow](docs/design.md)
 - [Language specification](docs/crust0-spec.md)
+- [Generic ownership design](docs/ownership-model.md)
 - [Ownership tutorial](docs/ownership.md)
 - [Ownership compared with Rust](docs/ownership-rust.md)
 - [Tutorials and examples](examples/README.md)

@@ -130,33 +130,26 @@ fn os_cast(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
 }
 
 fn os_binary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
-    if !os_pure(check, expression) { return null(*OsValue); }
+    if (*expression).op == CRUST_OP_AND || (*expression).op == CRUST_OP_OR {
+        var yes: OsState = *state;
+        var no: OsState = *state;
+        os_condition(check, state, expression, &yes, &no);
+        if !os_failed(check) { os_join(check, state, &yes, &no, &(*expression).loc); }
+        return os_value(check, os_syntax(check, CRUST_T_BOOL, &(*expression).loc), null(*OsObject), false);
+    }
     var left: *OsValue = os_expr(check, state, (*expression).left);
     if left == null(*OsValue) || os_failed(check) { return null(*OsValue); }
-    var branch: OsState = *state;
-    if (*expression).op == CRUST_OP_AND { os_refine(check, &branch, (*expression).left, true); }
-    if (*expression).op == CRUST_OP_OR { os_refine(check, &branch, (*expression).left, false); }
-    var right: *OsValue = os_expr(check, &branch, (*expression).right);
+    var right: *OsValue = os_expr(check, state, (*expression).right);
     if right == null(*OsValue) || os_failed(check) { return null(*OsValue); }
     os_binary_access(check, expression, left, right);
+    os_unused(check, state, left, &(*expression).loc);
+    os_unused(check, state, right, &(*expression).loc);
     var syntax: *CrustTypeSyntax = (*left).syntax;
     if (*expression).op >= CRUST_OP_EQ && (*expression).op <= CRUST_OP_OR {
         syntax = os_syntax(check, CRUST_T_BOOL, &(*expression).loc);
     }
     var result: *OsValue = os_value(check, syntax, null(*OsObject), false);
     return result;
-}
-
-fn os_pure(check: *OsCheck, expression: *CrustExpr) -> bool {
-    if expression == null(*CrustExpr) { return true; }
-    if !os_enter(check, &(*expression).loc) { return false; }
-    var kind: u32 = (*expression).kind;
-    var valid: bool = kind != CRUST_E_CALL && kind != RS_MOVE && kind != RS_READ &&
-        kind != RS_MUT && kind != CRUST_E_RECORD && kind != CRUST_E_ARRAY;
-    if valid { valid = os_pure(check, (*expression).left) && os_pure(check, (*expression).right); }
-    else { os_error(check, &(*expression).loc, "conditional operands must not consume owners or call effectful code"); }
-    (*check).depth = (*check).depth - 1usize;
-    return valid;
 }
 
 fn os_make(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
@@ -177,35 +170,6 @@ fn os_make(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
         (*result).fresh = true;
     }
     return result;
-}
-
-fn os_refine(check: *OsCheck, state: *OsState, expression: *CrustExpr, truth: bool) -> unit {
-    if !os_enter(check, &(*expression).loc) { return; }
-    os_refine_inner(check, state, expression, truth);
-    (*check).depth = (*check).depth - 1usize;
-}
-
-fn os_refine_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr, truth: bool) -> unit {
-    if (*expression).kind == CRUST_E_GROUP { os_refine(check, state, (*expression).left, truth); return; }
-    if (*expression).kind == CRUST_E_UNARY && (*expression).op == CRUST_OP_NOT {
-        os_refine(check, state, (*expression).left, !truth); return;
-    }
-    if (*expression).kind != CRUST_E_BINARY { return; }
-    var operation: u32 = (*expression).op;
-    if (operation == CRUST_OP_AND && truth) || (operation == CRUST_OP_OR && !truth) {
-        os_refine(check, state, (*expression).left, truth);
-        os_refine(check, state, (*expression).right, truth);
-        return;
-    }
-    if operation != CRUST_OP_EQ && operation != CRUST_OP_NE { return; }
-    var left: *OsValue = os_expr(check, state, (*expression).left);
-    var right: *OsValue = os_expr(check, state, (*expression).right);
-    if left == null(*OsValue) || right == null(*OsValue) || os_failed(check) { return; }
-    var equal: bool = truth == (operation == CRUST_OP_EQ);
-    os_native_refine(check, state, left, (*expression).right, equal);
-    os_native_refine(check, state, right, (*expression).left, equal);
-    os_refine_values(check, state, left, right, equal);
-    os_refine_values(check, state, right, left, equal);
 }
 
 fn os_refine_values(check: *OsCheck, state: *OsState, left: *OsValue, right: *OsValue, equal: bool) -> unit {

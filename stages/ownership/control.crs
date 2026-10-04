@@ -74,13 +74,13 @@ fn os_variable(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit 
 }
 
 fn os_if(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if !os_pure(check, (*statement).expr) { return; }
-    os_expr(check, state, (*statement).expr);
-    if os_failed(check) { return; }
+    var before: *OsLoan = (*check).loans;
     var yes: OsState = *state;
     var no: OsState = *state;
-    os_refine(check, &yes, (*statement).expr, true);
-    os_refine(check, &no, (*statement).expr, false);
+    os_condition(check, state, (*statement).expr, &yes, &no);
+    os_end_expression(check, &yes, before);
+    os_end_expression(check, &no, before);
+    if os_failed(check) { return; }
     os_statement(check, &yes, (*statement).body);
     os_statement(check, &no, (*statement).otherwise);
     if yes.flow != OS_NORMAL { *state = no; if no.flow != OS_NORMAL { (*state).flow = yes.flow; } return; }

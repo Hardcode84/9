@@ -11,7 +11,6 @@ fn os_defer(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> unit {
     }
     if !os_explicit_call(check, contract, &(*expression).loc) { return; }
     if (*contract).initializes != null(*OsField) { os_error(check, &(*expression).loc, "in-place construction cannot be deferred"); return; }
-    if !os_argument_effects(check, expression, contract) { return; }
     var arguments: **OsValue = os_arguments(check, state, expression, contract);
     if os_failed(check) { return; }
     var index: usize = 0usize;

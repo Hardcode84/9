@@ -6,6 +6,7 @@ import argparse
 import tempfile
 from pathlib import Path
 
+from ownership_expressions import check_expressions
 from ownership_places import check_places
 from ownership_runtime import check_runtime
 from ownership_support import ROOT, SCALAR_FLOW, command, execute
@@ -293,6 +294,7 @@ def run(build, directory, sanitize):
     result = command([compiler, "trusted", duplicate_provider, "--check", duplicate], expected=1)
     assert b"active" in result.stderr, result.stderr
     check_places(build, directory, sanitize)
+    check_expressions(build, directory, sanitize)
     check_runtime(build, directory, ROOT, sanitize)
     for artifact in [compiler, build / "crust-ownership-library.so"]:
         assert b"z3" not in command(["ldd", artifact]).stdout.lower()

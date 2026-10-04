@@ -143,10 +143,10 @@ fn os_call_argument(check: *OsCheck, state: *OsState, expression: *CrustExpr) ->
 }
 
 fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract: *OsFunction) -> *OsValue {
-    if !os_call_effect(check, state, contract, &(*expression).loc) { return null(*OsValue); }
-    if !os_argument_effects(check, expression, contract) { return null(*OsValue); }
     var arguments: **OsValue = os_arguments(check, state, expression, contract);
     if os_failed(check) { return null(*OsValue); }
+    os_end_output_arguments(check, state, arguments, (*expression).arg_count);
+    if !os_call_effect(check, state, contract, &(*expression).loc) { return null(*OsValue); }
     var source: *OsValue = os_source_argument(check, contract, arguments);
     if (*contract).effect != 0u32 && !os_call_loans(check, state, arguments, (*expression).arg_count, (*contract).effect, &(*expression).loc) {
         return null(*OsValue);
@@ -154,10 +154,38 @@ fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contr
     os_apply_contract(check, state, contract, arguments, &(*expression).loc);
     os_mutable_call(check, state, contract, arguments, &(*expression).loc);
     os_consume_view_arguments(check, state, arguments, (*expression).arg_count, &(*expression).loc);
+    var result: *OsValue = os_local_result(check, state, contract, source, &(*expression).loc);
+    os_end_call_arguments(check, state, arguments, (*expression).arg_count);
+    return result;
+}
+
+fn os_local_result(check: *OsCheck, state: *OsState, contract: *OsFunction,
+                   source: *OsValue, location: *CrustLoc) -> *OsValue {
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
-    if os_borrowed(syntax) { return os_call_view(check, state, contract, source, &(*expression).loc); }
-    if os_view_mode(check, syntax) >= RS_READ { return os_call_view_record(check, state, contract, source, &(*expression).loc); }
-    return os_call_owned(check, state, contract, &(*expression).loc);
+    if os_borrowed(syntax) { return os_call_view(check, state, contract, source, location); }
+    if os_view_mode(check, syntax) >= RS_READ { return os_call_view_record(check, state, contract, source, location); }
+    return os_call_owned(check, state, contract, location);
+}
+
+fn os_end_call_arguments(check: *OsCheck, state: *OsState, arguments: **OsValue, count: usize) -> unit {
+    var index: usize = 0usize;
+    while index < count && !os_failed(check) {
+        var value: *OsValue = arguments[index];
+        os_loan_end(check, state, value);
+        index = index + 1usize;
+    }
+}
+
+fn os_end_output_arguments(check: *OsCheck, state: *OsState, arguments: **OsValue, count: usize) -> unit {
+    var index: usize = 0usize;
+    while index < count && !os_failed(check) {
+        var value: *OsValue = arguments[index];
+        // Output reservations protect argument evaluation; construction starts next.
+        if (*value).pointer && (*value).loan != null(*OsLoan) {
+            os_set(check, state, (*value).loan as *u8, null(*OsValue), 0u32);
+        }
+        index = index + 1usize;
+    }
 }
 
 fn os_call_owned(check: *OsCheck, state: *OsState, contract: *OsFunction, location: *CrustLoc) -> *OsValue {
@@ -242,43 +270,6 @@ fn os_mutable_owner(check: *OsCheck, state: *OsState, slot: *OsSlot, old: *OsVal
     if value == null(*OsValue) { return; }
     if (*value).object != null(*OsObject) { os_abstract_value(check, state, (*value).object, true); }
     os_set(check, state, slot as *u8, value, OS_READY);
-}
-
-fn os_argument_effects(check: *OsCheck, expression: *CrustExpr, contract: *OsFunction) -> bool {
-    var parameter: *CrustParam = (*(*contract).declaration).params;
-    var borrowed: bool = false;
-    while parameter != null(*CrustParam) {
-        var kind: u32 = (*(*parameter).syntax_type).kind;
-        if kind == RS_READ || kind == RS_MUT { borrowed = true; }
-        parameter = (*parameter).next;
-    }
-    if !borrowed { return true; }
-    var index: usize = 0usize;
-    while index < (*expression).arg_count {
-        if !os_no_nested_calls(check, (*expression).args[index]) { return false; }
-        index = index + 1usize;
-    }
-    return true;
-}
-
-fn os_no_nested_calls(check: *OsCheck, expression: *CrustExpr) -> bool {
-    if expression == null(*CrustExpr) { return true; }
-    if !os_enter(check, &(*expression).loc) { return false; }
-    var valid: bool = (*expression).kind != CRUST_E_CALL;
-    if !valid { os_error(check, &(*expression).loc, "borrowed call arguments require prior evaluation of nested calls"); }
-    if valid { valid = os_no_nested_calls(check, (*expression).left) && os_no_nested_calls(check, (*expression).right); }
-    var index: usize = 0usize;
-    while valid && index < (*expression).arg_count {
-        valid = os_no_nested_calls(check, (*expression).args[index]);
-        index = index + 1usize;
-    }
-    var item: *CrustInit = (*expression).inits;
-    while valid && item != null(*CrustInit) {
-        valid = os_no_nested_calls(check, (*item).value);
-        item = (*item).next;
-    }
-    (*check).depth = (*check).depth - 1usize;
-    return valid;
 }
 
 fn os_argument(check: *OsCheck, state: *OsState, contract: *OsFunction, parameter: *CrustParam,

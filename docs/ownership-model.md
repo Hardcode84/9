@@ -256,12 +256,26 @@ heap relationships. A failed or unsupported check never selects trust.
 
 ## Local flow and loops
 
+Expressions evaluate their operands and call arguments once, in source order.
+An argument loan stays active until its call returns. A returned view retains
+its declared source loan. A deferred call retains its captured loans until
+execution. Output construction reserves storage while its arguments evaluate.
+The call checks reclamation permission after argument evaluation.
+
+Conditions use the effects of that evaluation. `&&` evaluates its right operand
+only when the left is true; `||` evaluates it only when the left is false.
+The checker joins the evaluated and skipped paths. Condition temporaries end
+before the selected body starts. A validity test applies to the value tested;
+later replacement of an owner requires a new test.
+
 Continuing branches must agree on owner consumption and loan origins. Scalar
 initialization uses intersection. No drop flags reconcile different owner
 states. Initialize or consume owners explicitly in both branches.
 
-The checker checks one loop body from its declared local type state. Continuing
-backedges must preserve initialization, ownership, and loan origins. Movable
+The checker checks a loop condition and body from their local type state.
+The condition executes before each iteration and can call checked functions.
+Continuing backedges must restore the state required before the condition,
+including initialization, ownership, and loan origins. Movable
 owner records can be replaced with new initialized owners. The checker forgets
 old allocation and native-handle validity facts; check them again before use.
 It does not unroll iterations, solve arithmetic conditions, or search heap graphs.

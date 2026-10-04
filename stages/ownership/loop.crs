@@ -178,20 +178,23 @@ fn os_loop_backedge(check: *OsCheck, entry: *OsState, body: *OsState,
 }
 
 fn os_checked_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if !os_pure(check, (*statement).expr) { return; }
     var bindings: *OsLoopSlot = null(*OsLoopSlot);
     os_loop_scalars(check, state, &bindings, &(*statement).loc);
     os_loop_bindings(check, state, (*statement).body, &bindings);
     if os_failed(check) { return; }
-    os_expr(check, state, (*statement).expr);
+    var entry: OsState = *state;
     var body: OsState = *state;
-    os_refine(check, &body, (*statement).expr, true);
+    var exit: OsState = *state;
+    var before: *OsLoan = (*check).loans;
     (*check).loop_depth = (*check).loop_depth + 1usize;
-    os_statement(check, &body, (*statement).body);
+    os_condition(check, state, (*statement).expr, &body, &exit);
+    os_end_expression(check, &body, before);
+    os_end_expression(check, &exit, before);
+    if !os_failed(check) { os_statement(check, &body, (*statement).body); }
     (*check).loop_depth = (*check).loop_depth - 1usize;
     if os_failed(check) { return; }
     if body.flow == OS_NORMAL {
-        os_loop_backedge(check, state, &body, bindings, &(*statement).loc);
+        os_loop_backedge(check, &entry, &body, bindings, &(*statement).loc);
     }
-    os_refine(check, state, (*statement).expr, false);
+    *state = exit;
 }

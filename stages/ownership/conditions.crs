@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_condition(check: *OsCheck, state: *OsState, expression: *CrustExpr,
+                yes: *OsState, no: *OsState) -> unit {
+    if !os_enter(check, &(*expression).loc) { return; }
+    os_condition_inner(check, state, expression, yes, no);
+    (*check).depth = (*check).depth - 1usize;
+}
+
+fn os_condition_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr,
+                      yes: *OsState, no: *OsState) -> unit {
+    if (*expression).kind == CRUST_E_GROUP {
+        os_condition(check, state, (*expression).left, yes, no); return;
+    }
+    if (*expression).kind == CRUST_E_UNARY && (*expression).op == CRUST_OP_NOT {
+        os_condition(check, state, (*expression).left, no, yes); return;
+    }
+    if (*expression).kind == CRUST_E_BINARY {
+        var operation: u32 = (*expression).op;
+        if operation == CRUST_OP_AND || operation == CRUST_OP_OR {
+            os_condition_logical(check, state, expression, yes, no); return;
+        }
+        if operation == CRUST_OP_EQ || operation == CRUST_OP_NE {
+            os_condition_equality(check, state, expression, yes, no); return;
+        }
+    }
+    var value: *OsValue = os_expr(check, state, expression);
+    os_unused(check, state, value, &(*expression).loc);
+    *yes = *state;
+    *no = *state;
+}
+
+fn os_condition_logical(check: *OsCheck, state: *OsState, expression: *CrustExpr,
+                        yes: *OsState, no: *OsState) -> unit {
+    var left_yes: OsState = *state;
+    var left_no: OsState = *state;
+    os_condition(check, state, (*expression).left, &left_yes, &left_no);
+    if os_failed(check) { return; }
+    var branch: *OsState = &left_yes;
+    if (*expression).op == CRUST_OP_OR { branch = &left_no; }
+    var before: *OsLoan = (*check).loans;
+    os_condition(check, branch, (*expression).right, yes, no);
+    os_end_expression(check, yes, before);
+    os_end_expression(check, no, before);
+    if os_failed(check) { return; }
+    if (*expression).op == CRUST_OP_AND {
+        var evaluated: OsState = *no;
+        *no = left_no;
+        os_join(check, no, &left_no, &evaluated, &(*expression).loc);
+    } else {
+        var evaluated: OsState = *yes;
+        *yes = left_yes;
+        os_join(check, yes, &left_yes, &evaluated, &(*expression).loc);
+    }
+}
+
+fn os_condition_equality(check: *OsCheck, state: *OsState, expression: *CrustExpr,
+                         yes: *OsState, no: *OsState) -> unit {
+    var left: *OsValue = os_expr(check, state, (*expression).left);
+    if left == null(*OsValue) || os_failed(check) { return; }
+    var binding: *OsValue = os_bound(state, (*left).place);
+    var right: *OsValue = os_expr(check, state, (*expression).right);
+    if right == null(*OsValue) || os_failed(check) { return; }
+    os_binary_access(check, expression, left, right);
+    os_unused(check, state, left, &(*expression).loc);
+    os_unused(check, state, right, &(*expression).loc);
+    *yes = *state;
+    *no = *state;
+    if os_failed(check) { return; }
+    var equal: bool = (*expression).op == CRUST_OP_EQ;
+    if (*left).place == null(*OsSlot) || os_bound(state, (*left).place) == binding {
+        os_condition_refine(check, yes, left, right, (*expression).right, equal);
+        os_condition_refine(check, no, left, right, (*expression).right, !equal);
+    }
+    os_condition_refine(check, yes, right, left, (*expression).left, equal);
+    os_condition_refine(check, no, right, left, (*expression).left, !equal);
+}
+
+fn os_condition_refine(check: *OsCheck, state: *OsState, value: *OsValue,
+                       other: *OsValue, syntax: *CrustExpr, equal: bool) -> unit {
+    os_native_refine(check, state, value, syntax, equal);
+    os_refine_values(check, state, value, other, equal);
+}

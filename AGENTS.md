@@ -39,6 +39,13 @@ requires it.
   validity checks, reference counts, or hidden cleanup flags. Null checks before
   release and debug bounds checks are permitted. A cheaper checking profile
   must reject unsupported proofs, not silently weaken its declared guarantees.
+- The target ownership stage must not depend on Z3. Do not add another
+  general-purpose theorem prover or build an equivalent solver to preserve
+  every accepted predicate. Use a bounded set of local checking rules.
+  Before replacing the current graph checker, demonstrate checked intrusive
+  removal, individual destruction and reuse, rejection of surviving incoming
+  references, independent library interfaces, and unchanged runtime output.
+  Do not extend the current solver-based model while this gate is unmet.
 - The checked ownership model must not require whole-program analysis. Check
   each function from its body, declared function and field contracts, and
   callee interfaces. Local flow analysis is permitted. Do not expand callees

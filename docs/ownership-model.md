@@ -6,6 +6,12 @@ The ownership stage checks owners, loans, storage fields, and function
 interfaces. It uses the public reader and AST APIs. It does not change the
 C99 core. The [tutorial](ownership.md) introduces the source notation.
 
+This document describes the implemented checker. Its graph checks still use
+Z3. They do not meet the [ownership target](design.md#checked-ownership-target),
+which requires bounded local rules without a general-purpose theorem prover.
+The existing checks must remain enforced until a replacement passes that
+target. Removing the solver call does not establish safe destruction.
+
 ## Owners and loans
 
 A `resource` declaration supplies a cleanup function. A record can own resource

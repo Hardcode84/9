@@ -351,6 +351,21 @@ needed across a call must appear in the function or storage contract. Do not
 expand callees, inspect callers, or replace an interface obligation with a
 whole-program search.
 
+The target ownership stage must not depend on Z3 or a general-purpose theorem
+prover. Use a bounded set of local rules for ownership, initialization, loans,
+and field effects. A work limit must produce a diagnostic. It must not permit
+unchecked code. Keeping every Boolean condition accepted by the current
+checker is not a requirement. Do not replace the dependency with an equivalent
+solver inside the stage.
+
+The current graph checker does not meet this requirement. Before replacing
+it, check the direct intrusive example from source through native execution.
+The replacement must check removal and individual destruction, reject a
+surviving incoming reference, and work through independently checked library
+interfaces. Compare the emitted program before and after checking. Measure
+checking separately from target compilation and linking. Do not add more
+graph proof features before this replacement passes those checks.
+
 The acceptance cases include stored views, owned trees with parent references,
 one-way retained references, and direct intrusive lists with individual
 release and reuse. Compare the complete source contracts with Rust's user

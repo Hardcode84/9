@@ -77,7 +77,7 @@ fn os_allocate(check: *OsCheck, state: *OsState, expression: *CrustExpr, contrac
         os_error(check, &(*size).loc, "allocation type must be a record with field contracts");
         return null(*OsValue);
     }
-    if (*check).loop_depth != 0usize {
+    if (*check).loop != null(*OsLoop) {
         os_error(check, &(*expression).loc, "direct allocation in a loop requires a helper that returns an owning resource");
         return null(*OsValue);
     }

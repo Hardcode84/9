@@ -3,6 +3,7 @@
 const OS_NORMAL: u32 = 0u32;
 const OS_RETURN: u32 = 1u32;
 const OS_TRAP: u32 = 2u32;
+const OS_STOP: u32 = 3u32;
 
 const OS_READ: u32 = 1u32;
 const OS_EDIT: u32 = 2u32;
@@ -158,8 +159,8 @@ record OsCheck {
     loans: *OsLoan;
     parameters: *OsBinding;
     origin: *OsScope;
+    loop: *OsLoop;
     depth: usize;
-    loop_depth: usize;
     drop: bool;
 }
 

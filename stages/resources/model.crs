@@ -123,13 +123,15 @@ record RsChange {
     exclusive: bool;
 }
 
+record RsLoopExit { changes: *RsChange; next: *RsLoopExit; }
+
 record RsLoop {
     parent: *RsLoop;
     scope: *RsScope;
     break_target: *RsChain;
     continue_target: *RsChain;
     entry: *RsChange;
-    has_break: bool;
+    exits: *RsLoopExit;
 }
 
 record RsFunction {

@@ -8,7 +8,7 @@ fn os_check_init(check: *OsCheck, stage: *OsStage, contract: *OsFunction) -> uni
     (*check).parameters = null(*OsBinding);
     (*check).origin = null(*OsScope);
     (*check).depth = 0usize;
-    (*check).loop_depth = 0usize;
+    (*check).loop = null(*OsLoop);
     (*check).drop = false;
 }
 

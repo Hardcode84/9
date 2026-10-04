@@ -80,8 +80,10 @@ resource fields and elements. Other values retain Crust0 copy semantics.
 - A return value is captured before cleanup. `break` and `continue` clean the
   scopes that they leave. Each loop iteration has its own cleanup scope.
 - Continuing branches must agree on outer initialization and ownership states.
-  Loop conditions and loop edges must restore those entry states. The checker
-  rejects disagreement instead of adding runtime drop flags.
+  Loop conditions and backedges, including `continue`, must restore entry states.
+  `break` paths must agree with each other and with the condition-false exit.
+  A literal `while true` has only `break` exits. The checker rejects disagreement
+  instead of adding runtime drop flags.
 - A `while true` loop with no `break` that exits it cannot reach the next
   statement. Parentheses around `true` do not change this rule. Other loop
   conditions can reach the next statement; the checker does not evaluate

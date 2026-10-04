@@ -431,6 +431,19 @@ def runtime_cases():
             b"DBAXZ",
         ),
         (
+            "loop-break-consumes-owner",
+            program(
+                "var value:Token=token(65i32); while true {consume(move value); break;}",
+                "fn consume(value:Token)->unit {}",
+            ),
+            b"A",
+        ),
+        (
+            "loop-break-initializes-owner",
+            program("var value:Token=uninit; while true {value=token(65i32); break;}"),
+            b"A",
+        ),
+        (
             "loop-return-cleanup",
             program(
                 "if nested()!=7i32 { return 1i32; } emit(88i32);",
@@ -1103,11 +1116,12 @@ def reject_cases():
             "loop edges must restore",
         ),
         (
-            "break-missing-owner-restoration",
+            "break-owner-exit-disagreement",
             program(
-                "var value:Token=token(65i32); while true {consume(move value); break;}", consume
+                "var value:Token=token(65i32); while argc>0i32 {consume(move value); break;}",
+                consume,
             ),
-            "loop edges must restore",
+            "continuing paths must agree",
         ),
         (
             "continue-missing-owner-restoration",

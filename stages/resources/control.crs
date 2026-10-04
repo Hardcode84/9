@@ -62,6 +62,42 @@ fn rs_loop_state(function: *RsFunction, loop: *RsLoop, location: *CrustLoc) -> u
     rs_restore(function, marker);
 }
 
+fn rs_loop_forever(expression: *CrustExpr) -> bool {
+    while (*expression).kind == CRUST_E_GROUP { expression = (*expression).left; }
+    return (*expression).kind == CRUST_E_BOOL && (*expression).integer != 0u64;
+}
+
+fn rs_loop_break(function: *RsFunction, loop: *RsLoop) -> unit {
+    var stage: *RsStage = (*function).stage;
+    var exit: *RsLoopExit = rs_alloc(stage, sizeof(RsLoopExit), alignof(RsLoopExit)) as *RsLoopExit;
+    if exit == null(*RsLoopExit) { return; }
+    var marker: *RsChange = (*function).changes;
+    var scope: *RsScope = (*function).scope;
+    while scope != (*loop).scope && !(*stage).failed { rs_release_scope(function, scope); scope = (*scope).parent; }
+    (*exit).changes = rs_snapshot(function, (*loop).entry, (*loop).scope);
+    rs_restore(function, marker);
+    (*exit).next = (*loop).exits;
+    (*loop).exits = exit;
+}
+
+fn rs_loop_join(function: *RsFunction, loop: *RsLoop, source: *CrustStmt) -> bool {
+    // Exit snapshots share the restored entry state as their baseline.
+    rs_restore(function, (*loop).entry);
+    var exit: *RsLoopExit = (*loop).exits;
+    var joined: *RsChange = null(*RsChange);
+    if rs_loop_forever((*source).expr) {
+        if exit == null(*RsLoopExit) { return false; }
+        joined = (*exit).changes;
+        exit = (*exit).next;
+    }
+    while exit != null(*RsLoopExit) && !(*(*function).stage).failed {
+        rs_join(function, joined, (*exit).changes, &(*source).loc);
+        exit = (*exit).next;
+    }
+    rs_apply(function, joined);
+    return true;
+}
+
 fn rs_condition(function: *RsFunction, expression: *CrustExpr, output: *RsStatements) -> *RsValue {
     rs_scope(function);
     var effects: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
@@ -286,14 +322,11 @@ fn rs_lower_while(function: *RsFunction, source: *CrustStmt, output: *RsStatemen
     rs_append(&body, test);
     var falls: bool = rs_lower_statement(function, (*source).body, &body);
     if falls { rs_loop_state(function, loop, location); }
-    rs_restore(function, (*loop).entry);
+    var exits: bool = rs_loop_join(function, loop, source);
     (*target).body = rs_block(stage, &body, location);
     (*function).loop = (*loop).parent;
     rs_append(output, target);
-    var test_expr: *CrustExpr = (*source).expr;
-    while (*test_expr).kind == CRUST_E_GROUP { test_expr = (*test_expr).left; }
-    var forever: bool = (*test_expr).kind == CRUST_E_BOOL && (*test_expr).integer != 0u64;
-    return !forever || (*loop).has_break;
+    return exits;
 }
 
 fn rs_lower_loop_exit(function: *RsFunction, source: *CrustStmt, output: *RsStatements) -> bool {
@@ -302,11 +335,12 @@ fn rs_lower_loop_exit(function: *RsFunction, source: *CrustStmt, output: *RsStat
     var kind: u32 = (*source).kind;
     var loop: *RsLoop = (*function).loop;
     if loop == null(*RsLoop) { rs_error(stage, location, "loop exit outside a loop"); return false; }
-    rs_loop_state(function, loop, location);
+    if kind == CRUST_S_BREAK { rs_loop_break(function, loop); }
+    else { rs_loop_state(function, loop, location); }
     var target: *CrustStmt = rs_stmt_node(stage, kind, location);
     if target == null(*CrustStmt) { return false; }
     var destination: *RsChain = (*loop).continue_target;
-    if kind == CRUST_S_BREAK { destination = (*loop).break_target; (*loop).has_break = true; }
+    if kind == CRUST_S_BREAK { destination = (*loop).break_target; }
     rs_exit(function, target, (*loop).scope, destination, null(*RsChain));
     rs_append(output, target);
     return false;

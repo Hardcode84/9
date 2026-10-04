@@ -10,6 +10,7 @@ from ownership_boundaries import check_boundaries
 from ownership_ending import check_ending
 from ownership_expressions import check_expressions
 from ownership_heap import check_heap
+from ownership_loops import check_loops
 from ownership_places import check_places
 from ownership_runtime import check_runtime
 from ownership_support import ROOT, SCALAR_FLOW, command, execute
@@ -298,6 +299,7 @@ def run(build, directory, sanitize):
     assert b"active" in result.stderr, result.stderr
     check_places(build, directory, sanitize)
     check_expressions(build, directory, sanitize)
+    check_loops(build, directory, sanitize)
     check_ending(build, directory, sanitize)
     check_boundaries(build, directory, sanitize)
     check_heap(build, directory, sanitize)

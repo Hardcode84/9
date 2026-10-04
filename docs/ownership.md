@@ -104,10 +104,27 @@ that file supply the helpers.
 ```
 
 The block prints `BA`. Local resources drop in reverse declaration order.
-Normal returns also run applicable cleanup. This stage rejects `break` and
-`continue` because their ownership-state joins are not implemented.
+Normal returns also run applicable cleanup. `break` and `continue` run cleanup
+for the scopes they leave, including deferred calls.
 A process exit or `trap` does not unwind scopes. RAII is the name for this
 association between a value's lifetime and its cleanup.
+
+```crust
+var index: i32 = 0i32;
+while index < 3i32 {
+    var ticket: Ticket = make Ticket { code: 65i32 + index };
+    index = index + 1i32;
+    if index < 3i32 { continue; }
+    break;
+}
+```
+
+This loop prints `ABC`. Each `continue` drops `ticket` before the next condition
+test. The third iteration reaches `break`, which also drops `ticket`.
+Owners outside the loop must be ready for another iteration on each `continue`
+path. All exits must agree on whether each outer owner remains available.
+A `while true` loop can consume an outer owner before `break` when all its exits
+consume that owner. Other loops also include the condition-false exit in this check.
 
 Use `drop` to perform cleanup before scope exit:
 

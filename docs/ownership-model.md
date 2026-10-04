@@ -302,10 +302,19 @@ owner records can be replaced with new initialized owners. The checker forgets
 old allocation and native-handle validity facts; check them again before use.
 Raw aliases to replaced owners expire at the loop boundary. Read replacement
 storage through the current owner.
-It does not unroll iterations, solve arithmetic conditions, or search heap graphs.
-An opaque cursor can advance through a declared operation. Raw pointer merges
-are rejected. `break` and `continue` have no local-state join implementation in
-this profile and are rejected; use a loop condition or return.
+`continue` follows the backedge rule. `break` joins the states after the loop,
+including the state where the condition is false. These exits must agree on
+owner consumption and loan origins. A scalar is initialized after the loop only
+if each exit initializes it. For `while true`, only `break` paths reach the next
+statement. Parentheses around `true` preserve this rule.
+
+Both jumps leave inner scopes in order. Each scope runs deferred calls, drops
+owners, and ends local loans in reverse order. Cleanup must obey the access
+permission of its own scope. Nested loops send each jump to the nearest loop.
+
+The checker uses one abstract iteration. It does not solve arithmetic conditions
+or search heap graphs. An opaque cursor can advance through a declared operation.
+Raw pointer merges are rejected.
 
 ## Independent libraries
 

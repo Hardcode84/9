@@ -14,6 +14,7 @@ fn os_statement_inner(check: *OsCheck, state: *OsState, statement: *CrustStmt) -
     if kind == CRUST_S_BLOCK { os_block(check, state, statement); return; }
     if kind == CRUST_S_IF { os_if(check, state, statement); return; }
     if kind == CRUST_S_WHILE { os_while(check, state, statement); return; }
+    if kind == CRUST_S_BREAK || kind == CRUST_S_CONTINUE { os_loop_jump(check, state, statement); return; }
     if kind == CRUST_S_VAR { os_variable(check, state, statement); return; }
     if kind == CRUST_S_ASSIGN {
         var slot: *OsSlot = os_place(check, state, (*statement).expr);

@@ -368,7 +368,10 @@ Check each body independently:
 6. Check a loop with a declared type and ownership state at its boundary.
    Forget scalar values and old allocation identities that can change. Check
    one body under that abstract entry and require each continuing backedge
-   to restore the same ownership and loan interface. Do not unroll iterations.
+   to restore the same ownership and loan interface, including `continue`.
+   Join `break` paths with the condition-false exit. A literal `true` condition
+   has only `break` exits. End inner scopes and check their cleanup before each
+   jump. Do not unroll iterations.
 7. Check each return and cleanup path against the function and destructor
    interfaces. An access scope cannot silently regain stronger authority to
    run a destructor. Keep reclamation-requiring owners outside that scope or

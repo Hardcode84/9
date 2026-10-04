@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from ownership import RUNTIME_TREE
+from ownership_loops import LOOPS
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -97,7 +98,10 @@ def main():
         )
         runtime_tree = work / "runtime-tree.crs"
         runtime_tree.write_text(RUNTIME_TREE)
+        loops = work / "loops.crs"
+        loops.write_text(LOOPS)
         for source, trusted in [
+            (loops, ""),
             (runtime_tree, "examples/ownership-graphs/provider.crs"),
             ("examples/intrusive/program.crs", "examples/intrusive/links.crs"),
             ("examples/ownership-graphs/program.crs", "examples/ownership-graphs/provider.crs"),

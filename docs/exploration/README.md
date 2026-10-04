@@ -17,6 +17,7 @@ architecture. Use the [language specification](../crust0-spec.md) and
 | [Compiler profiles](compiler-profiles.md) | C, C++, and Rust profile methods, interpretation, and reproduction commands |
 | [Systems capabilities](systems-capabilities.md) | Linux, GCC, LLVM, and Coho source requirements, including direct intrusive lists |
 | [Metacompilation](metacompilation.md) | Jai, Lisp, Scheme, Racket, Forth, small cores, stage dependencies, and caching |
+| [Generics through compilation programs](generics.md) | D, Rust, Zig, and Jai; ordinary factories, abstract ownership contracts, specialization, and a bounded container witness |
 | [Compiler extension experiment](compiler-extension-experiment.md) | Replaceable syntax and stages, backend adapters, and a proposed C compiler benchmark |
 | [Source metastages](source-metastages.md) | Zig and Jai comparison and the choice to select stages in source |
 | [Native host-stage experiment](source-stages.md) | The removed native host-block launcher and its measured preparation cost |

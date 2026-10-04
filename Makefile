@@ -37,7 +37,7 @@ MEMORY = stages/memory/options.crs stages/memory/model.crs stages/memory/base.cr
 MEMORY_LIBRARY = $(C_LIBRARY) $(PROOF) $(MEMORY)
 RESOURCE_MEMORY = stages/resource_memory/model.crs stages/resource_memory/view.crs stages/resource_memory/effects.crs stages/resource_memory/program.crs
 RESOURCE_MEMORY_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(MEMORY) $(RESOURCE_MEMORY)
-OWNERSHIP = stages/ownership/model.crs stages/ownership/base.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/fields.crs stages/ownership/loans.crs stages/ownership/views.crs stages/ownership/view_results.crs stages/ownership/results.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/calls.crs stages/ownership/entry.crs stages/ownership/flow.crs stages/ownership/contracts.crs stages/ownership/symbols.crs stages/ownership/predicates.crs stages/ownership/heap.crs stages/ownership/effects.crs stages/ownership/scopes.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/program.crs
+OWNERSHIP = stages/ownership/model.crs stages/ownership/base.crs stages/ownership/native_read.crs stages/ownership/native.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/fields.crs stages/ownership/loans.crs stages/ownership/views.crs stages/ownership/view_results.crs stages/ownership/results.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/calls.crs stages/ownership/entry.crs stages/ownership/flow.crs stages/ownership/contracts.crs stages/ownership/symbols.crs stages/ownership/predicates.crs stages/ownership/heap.crs stages/ownership/effects.crs stages/ownership/scopes.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/program.crs
 OWNERSHIP_IMPORTS = api/crust0_eval.crs api/crust0_run.crs stages/native/model.crs stages/native/linux.crs stages/cache/model.crs stages/cache/linux.crs stages/cache/artifact.crs stages/cache/inputs.crs stages/ownership/library_model.crs stages/ownership/interface.crs stages/ownership/artifact.crs stages/ownership/publish.crs stages/ownership/imports.crs
 OWNERSHIP_LIBRARY = $(RESOURCE_LIBRARY) $(PROOF) $(OWNERSHIP) $(OWNERSHIP_IMPORTS)
 MEMORY_CONTRACT = stages/memory/contract.crs
@@ -221,6 +221,7 @@ check-ownership: all ownership-stage $(BUILD)/crust-ownership-erasure $(BUILD)/c
 	python3 tests/ownership_fields.py --build $(BUILD)
 	python3 tests/ownership_loans.py --build $(BUILD)
 	python3 tests/ownership_views.py --build $(BUILD)
+	python3 tests/ownership_native.py --build $(BUILD)
 	python3 tests/ownership_recursive.py --build $(BUILD)
 
 check-ownership-alloc: all c-stage

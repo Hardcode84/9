@@ -65,10 +65,11 @@ when an initialized owner is destroyed; `drop(value)` consumes the value to
 request early destruction. See [moves](https://doc.rust-lang.org/rust-by-example/scope/move.html)
 and [the Book's `Drop` chapter](https://doc.rust-lang.org/book/ch15-03-drop.html).
 
-The extra Crust domain contract is visible even in this scalar-only resource
-example. It cannot be omitted from a comparison of what beginners must learn.
-It is not Rust's lifetime syntax under another name: it groups access authority
-and can restrict operations on several allocations at once.
+This Crust example declares a domain to show access authority. A scalar-only
+resource can omit that domain. The [native-handle example](../examples/ownership-basics/handles.crs)
+does so for integer descriptors and opaque pointers. A storage domain groups
+access authority and can restrict operations on several allocations at once.
+It is separate from the resource's move, borrow, and cleanup rules.
 
 For heap storage, Rust supplies [`Box<T>`](https://doc.rust-lang.org/std/boxed/index.html)
 as a standard owning type. The Crust heap tutorial writes `CellOwner`, its
@@ -252,7 +253,7 @@ quality of diagnostics, and the accepted programs determine usability.
 ## Recursive owners
 
 The [recursive intrusive example](../examples/intrusive/recursive/README.md)
-adds a runtime-sized owner chain. Its `owned_next: *Node` field has an `owns`
+adds a runtime-sized owner chain. Its `owned_next: *Node` field has an `owns(owned_next: storage)`
 contract. A corresponding Rust ownership field is:
 
 ```rust

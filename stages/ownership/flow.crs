@@ -54,6 +54,8 @@ fn os_join_value(check: *OsCheck, target: *OsState, left: *OsState, right: *OsSt
     }
     var value: *OsValue = os_copy(check, a);
     if value == null(*OsValue) { return; }
+    if (*a).native != (*b).native { os_error(check, location, "continuing paths must agree on resource kind"); return; }
+    (*value).presence = (*a).presence & (*b).presence;
     (*value).term = os_merge_term(check, os_sort((*a).syntax), (*left).proof.assumptions, os_term(check, a), os_term(check, b));
     if (*a).object != (*b).object {
         if (*slot).owns || !(*a).pointer || !(*b).pointer {

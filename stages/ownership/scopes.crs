@@ -10,6 +10,7 @@ fn os_scope_contains(outer: *OsScope, inner: *OsScope) -> bool {
 
 fn os_unused(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> unit {
     if value == null(*OsValue) || !(*value).owner || os_failed(check) { return; }
+    if (*value).native != null(*OsField) { os_error(check, location, "unused resource must be consumed or assigned an owner"); return; }
     if (*value).pointer { os_error(check, location, "unused allocation must be released or assigned an owner"); return; }
     if (*value).object != null(*OsObject) { os_drop_object(check, state, (*value).object, location); }
 }
@@ -28,7 +29,7 @@ fn os_bind(check: *OsCheck, state: *OsState, name: *CrustName, syntax: *CrustTyp
            value: *OsValue, location: *CrustLoc) -> *OsSlot {
     var slot: *OsSlot = os_slot(check, syntax, name, null(*OsObject), (*state).scope);
     if slot == null(*OsSlot) { return slot; }
-    if value != null(*OsValue) && (*value).owner && (*value).pointer { (*slot).owns = true; }
+    if value != null(*OsValue) && (*value).owner && ((*value).pointer || (*value).native != null(*OsField)) { (*slot).owns = true; }
     (*slot).next = (*(*state).scope).locals;
     (*(*state).scope).locals = slot;
     if value != null(*OsValue) { os_store(check, state, slot, value, location); }
@@ -51,6 +52,10 @@ fn os_scope_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> unit {
 
 fn os_end_local(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue, location: *CrustLoc) -> unit {
     if os_borrowed((*slot).syntax) { os_loan_end(check, state, value); return; }
+    if (*value).native != null(*OsField) {
+        if (*value).presence != OS_ABSENT { os_error(check, location, "owned value must be consumed or moved before its scope ends"); }
+        return;
+    }
     if (*value).pointer {
         if (*slot).owns && (*value).object != null(*OsObject) &&
            (os_flags(state, (*value).object) & OS_ABSENT) == 0u32 {
@@ -109,7 +114,11 @@ fn os_destructor_end(check: *OsCheck, state: *OsState, object: *OsObject, locati
     var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
-        if (*slot).owns && (*(*slot).syntax).kind == CRUST_T_POINTER && value != null(*OsValue) {
+        if value != null(*OsValue) && (*value).native != null(*OsField) && (*value).presence == OS_ABSENT {
+            value = null(*OsValue);
+        }
+        if (*slot).owns && value != null(*OsValue) &&
+           ((*(*slot).syntax).kind == CRUST_T_POINTER || (*value).native != null(*OsField)) {
             os_error(check, location, "destructor must consume each owned field"); return;
         }
         if rs_owns((*(*check).stage).resources, (*slot).syntax) {

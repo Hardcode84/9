@@ -40,7 +40,7 @@ fn os_read_domain(reader: *CrustReader, domain: **CrustName) -> unit {
 }
 
 fn os_read_record_clause(reader: *CrustReader, contract: *OsRecord) -> bool {
-    if rr_is_name(reader, "owns") { os_read_fields(reader, &(*contract).owns); return true; }
+    if rr_is_name(reader, "owns") { os_read_owners(reader, &(*contract).owns); return true; }
     if rr_is_name(reader, "references") { os_read_fields(reader, &(*contract).references); return true; }
     if rr_is_name(reader, "invariant") { os_read_condition(reader, &(*contract).conditions); return true; }
     if rr_is_name(reader, "domain") { os_read_domain(reader, &(*contract).domain); return true; }
@@ -98,6 +98,9 @@ fn os_read_function_access(reader: *CrustReader, function: *OsFunction) -> unit 
 fn os_read_foreign(reader: *CrustReader, function: *OsFunction) -> unit {
     rr_next(reader);
     rr_expect(reader, 40u32, "expected '(' after foreign");
+    if !rr_is_name(reader, "allocate") && !rr_is_name(reader, "release") && !rr_is_name(reader, "scalar") {
+        os_read_native(reader, function); return;
+    }
     if rr_is_name(reader, "allocate") { (*function).foreign = OS_ALLOCATE; }
     else { if rr_is_name(reader, "release") { (*function).foreign = OS_RELEASE; }
     else { if rr_is_name(reader, "scalar") { (*function).foreign = OS_SCALAR; }

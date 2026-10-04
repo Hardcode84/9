@@ -1,0 +1,62 @@
+// SPDX-License-Identifier: Apache-2.0
+
+resource File { handle: i32; } owns(handle = -1i32) drop file_drop;
+resource Stream { handle: *u8; } owns(handle = null(*u8)) drop stream_drop;
+
+extern fn acquire_fd(fd: i32) -> i32 foreign(acquire File.handle) = "dup";
+extern fn clone_fd(fd: i32) -> i32
+    foreign(read fd: File.handle, acquire File.handle) = "dup";
+extern fn close_fd(fd: i32) -> i32 foreign(move fd: File.handle) = "close";
+extern fn query_fd(fd: i32) -> i32 foreign(read fd: File.handle) = "isatty";
+extern fn acquire_stream() -> *u8 foreign(acquire Stream.handle) = "tmpfile";
+extern fn close_stream(stream: *u8) -> i32 foreign(move stream: Stream.handle) = "fclose";
+extern fn put_stream(c: i32, stream: *u8) -> i32
+    foreign(mut stream: Stream.handle) = "fputc";
+extern fn put(c: i32) -> i32 foreign(scalar) = "putchar";
+
+fn file_drop(file: mut File) -> unit {
+    if file.handle != -1i32 {
+        var status: i32 = close_fd(move file.handle);
+        if status != 0i32 { trap; }
+        put(70i32);
+    }
+}
+
+fn stream_drop(stream: mut Stream) -> unit {
+    if stream.handle != null(*u8) {
+        var status: i32 = close_stream(move stream.handle);
+        if status != 0i32 { trap; }
+        put(83i32);
+    }
+}
+
+fn open_file() -> File {
+    var raw: i32 = acquire_fd(1i32);
+    return make File { handle: move raw };
+}
+
+fn clone_file(file: read File) -> File {
+    if file.handle == -1i32 { trap; }
+    var raw: i32 = clone_fd(file.handle);
+    return make File { handle: move raw };
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    var failed: i32 = acquire_fd(-1i32);
+    if failed != -1i32 { trap; }
+    var empty: File = make File { handle: move failed };
+    var file: File = open_file();
+    if file.handle == -1i32 { return 1i32; }
+    var query: i32 = query_fd(file.handle);
+    var duplicate: File = clone_file(read file);
+    if duplicate.handle == -1i32 { return 1i32; }
+    var moved: File = move duplicate;
+    var raw: *u8 = acquire_stream();
+    var stream: Stream = make Stream { handle: move raw };
+    if stream.handle == null(*u8) { return 2i32; }
+    var written: i32 = put_stream(65i32, stream.handle);
+    if written != 65i32 { return 3i32; }
+    if sizeof(File) != sizeof(i32) || sizeof(Stream) != sizeof(*u8) { return 4i32; }
+    put(79i32); put(75i32); put(10i32);
+    return 0i32;
+}

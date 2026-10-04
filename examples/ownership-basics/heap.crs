@@ -7,7 +7,7 @@ extern fn release(pointer: *u8) -> unit foreign(release) = "free";
 extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
 
 record Cell { value: i64; } domain(Cells);
-resource CellOwner { cell: *Cell; } owns(cell) domain(Cells) drop cell_drop;
+resource CellOwner { cell: *Cell; } owns(cell: storage) domain(Cells) drop cell_drop;
 
 fn cell_new(value: i64) -> CellOwner access(reclaim, Cells) {
     var cell: *Cell = allocate(sizeof(Cell)) as *Cell;

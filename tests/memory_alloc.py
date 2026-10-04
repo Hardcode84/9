@@ -176,6 +176,7 @@ def main():
         types = "domain Graph(Node);\nrecord Node" + node
         cases = {
             "views": (ROOT / "examples/ownership-basics/views.crs").read_text(),
+            "native": (ROOT / "examples/ownership-basics/handles.crs").read_text(),
             "scalar-flow": SCALAR_FLOW,
             "scalar-loan": "fn clear(flag:mut bool)->unit {flag=false;} "
             "fn main()->i32 {var flag:bool=true; clear(mut flag); "

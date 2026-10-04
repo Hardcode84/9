@@ -2,7 +2,7 @@
 
 fn os_validate_embedded(check: *OsCheck, contract: *OsRecord, field: *CrustField) -> unit {
     var child: *OsRecord = os_record((*check).stage, (*field).syntax_type);
-    if child == null(*OsRecord) || (*child).domain != (*contract).domain {
+    if child == null(*OsRecord) || ((*child).domain != null(*CrustName) && (*child).domain != (*contract).domain) {
         os_error(check, &(*field).loc, "embedded resource and containing schema must share a declared domain");
     }
 }
@@ -10,7 +10,7 @@ fn os_validate_embedded(check: *OsCheck, contract: *OsRecord, field: *CrustField
 fn os_drop_callback(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
     var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*object).syntax).name);
     var destructor: *OsFunction = os_function((*check).stage, (*(*global).resource).drop_name);
-    if destructor == null(*OsFunction) || (*destructor).effect != OS_RECLAIM {
+    if destructor == null(*OsFunction) || ((*(*object).contract).domain != null(*CrustName) && (*destructor).effect != OS_RECLAIM) {
         os_error(check, location, "resource destructor requires a reclamation contract"); return;
     }
     if !os_call_effect(check, state, destructor, location) { return; }
@@ -21,7 +21,7 @@ fn os_drop_callback(check: *OsCheck, state: *OsState, object: *OsObject, locatio
         (*object).term, null(*OsBinding));
     if !os_check_precondition(check, state, destructor, bindings, location) ||
        !os_call_frame(check, destructor, location) { return; }
-    os_heap_havoc(check, state, (*object).domain, destructor, bindings);
+    if (*destructor).effect >= OS_EDIT { os_heap_havoc(check, state, (*object).domain, destructor, bindings); }
 }
 
 fn os_drop_fields(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
@@ -72,6 +72,7 @@ fn os_drop_statement(check: *OsCheck, state: *OsState, statement: *CrustStmt) ->
     if slot == null(*OsSlot) || os_failed(check) { return; }
     var value: *OsValue = os_read_slot(check, state, slot, &(*statement).loc);
     if value == null(*OsValue) || os_failed(check) { return; }
+    if !os_plain(check, value, &(*statement).loc) { return; }
     if !(*slot).owns || (*value).pointer || os_borrowed((*slot).syntax) {
         os_error(check, &(*statement).loc, "drop requires a whole owner or an owned allocation"); return;
     }

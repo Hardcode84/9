@@ -4,7 +4,7 @@ extern fn release(pointer: *u8) -> unit foreign(release) = "free";
 extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";
 domain Graph(Data, Payload, Node, Owner, ReadyHead);
 record Data { value:i64; } domain(Graph);
-resource Payload { data:*Data; } owns(data) domain(Graph) drop payload_drop;
+resource Payload { data:*Data; } owns(data: storage) domain(Graph) drop payload_drop;
 record Node { prev:*Node; next:*Node; active_prev:*Node; active_next:*Node; first:Payload; second:Payload; value:i64; }
     domain(Graph)
     references(prev, next, active_prev, active_next)
@@ -12,7 +12,7 @@ record Node { prev:*Node; next:*Node; active_prev:*Node; active_next:*Node; firs
               (*(*self).prev).next == self && (*(*self).next).prev == self)
     invariant((*self).active_prev != null(*Node) && (*self).active_next != null(*Node) &&
               (*(*self).active_prev).active_next == self && (*(*self).active_next).active_prev == self);
-resource Owner { node:*Node; } owns(node) domain(Graph) drop owner_drop;
+resource Owner { node:*Node; } owns(node: storage) domain(Graph) drop owner_drop;
 resource ReadyHead { node:Node; } domain(Graph) drop ready_drop;
 fn payload_new(value:i64)->Payload access(reclaim,Graph) {
     var data:*Data=allocate(sizeof(Data)) as *Data;

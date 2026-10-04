@@ -112,6 +112,8 @@ fn os_pin(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
 fn os_field_value(check: *OsCheck, state: *OsState, slot: *OsSlot) -> *OsValue {
     var syntax: *CrustTypeSyntax = (*slot).syntax;
     if os_borrowed(syntax) { return os_view_parameter(check, state, slot); }
+    var owner: *OsField = os_owned_field(slot);
+    if owner != null(*OsField) && !(*owner).storage { return os_native_value(check, owner); }
     var target: *OsObject = null(*OsObject);
     if (*syntax).kind == CRUST_T_POINTER && (*slot).owns {
         target = os_object_header(check, state, (*syntax).base, null(*OsObject), null(*OsScope), true);

@@ -163,7 +163,7 @@ fn inspect(chain:read Chain,choice:bool)->unit access(read,Graph) {
         "mutual-types": """// SPDX-License-Identifier: Apache-2.0
 domain Graph(Chain, Node);
 extern fn release(pointer:*u8)->unit foreign(release)="free";
-resource Chain { node:*Node; } owns(node) domain(Graph) drop chain_drop;
+resource Chain { node:*Node; } owns(node: storage) domain(Graph) drop chain_drop;
 record Node { rest:Chain; value:i64; } domain(Graph);
 fn chain_drop(chain:mut Chain)->unit access(reclaim,Graph) {
     var node:*Node=move chain.node;

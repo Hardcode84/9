@@ -7,7 +7,7 @@ record Branch { parent: *Branch; left: *Branch; right: *Branch; value: i64; }
               (*(*self).parent).left == self || (*(*self).parent).right == self)
     invariant((*self).left == null(*Branch) || (*(*self).left).parent == self)
     invariant((*self).right == null(*Branch) || (*(*self).right).parent == self);
-resource Owner { node: *Branch; } domain(Tree) owns(node) drop owner_drop;
+resource Owner { node: *Branch; } domain(Tree) owns(node: storage) drop owner_drop;
 extern fn allocate(size: usize) -> *u8 foreign(allocate) = "malloc";
 extern fn release(pointer: *u8) -> unit foreign(release) = "free";
 extern fn emit(code: i32) -> i32 foreign(scalar) = "putchar";

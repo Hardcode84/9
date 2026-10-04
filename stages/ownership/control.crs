@@ -203,6 +203,9 @@ fn os_join_absent(check: *OsCheck, target: *OsState, left: *OsState, right: *OsS
     var live: *OsValue = a;
     var branch: *OsState = left;
     if live == null(*OsValue) { live = b; branch = right; }
+    if live != null(*OsValue) && (*live).native != null(*OsField) && (*live).presence == OS_ABSENT {
+        os_set(check, target, slot as *u8, null(*OsValue), 0u32); return;
+    }
     if (*slot).owns && live != null(*OsValue) && (*live).pointer && (*live).object != null(*OsObject) &&
        (os_flags(branch, (*live).object) & OS_ABSENT) != 0u32 {
         os_set(check, target, slot as *u8, null(*OsValue), 0u32); return;
@@ -256,23 +259,22 @@ fn os_summary_initialized(check: *OsCheck, state: *OsState, object: *OsObject, l
 }
 
 fn os_return_value(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if (*statement).expr != null(*CrustExpr) {
-        var value: *OsValue = os_expr(check, state, (*statement).expr);
-        if value == null(*OsValue) || os_failed(check) { return; }
-        if (*value).object != null(*OsObject) && !(*value).pointer && !os_borrowed((*value).syntax) {
-            os_publish_value(check, state, (*value).object, &(*statement).loc);
-        }
-        if !os_transferable(check, state, value, &(*statement).loc) { return; }
-        if !os_borrowed((*value).syntax) && os_view_mode(check, (*value).syntax) >= RS_READ {
-            os_return_view_record(check, state, (*value).object, &(*statement).loc);
-        }
-        if os_borrowed((*value).syntax) {
-            if !os_return_view(check, state, value, &(*statement).loc) { return; }
-        } else { if (*value).pointer {
-            os_error(check, &(*statement).loc, "returning a cursor requires a declared lifetime interface"); return;
-        } }
-        if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
-            os_error(check, &(*statement).loc, "return value is not fully initialized"); return;
-        }
+    if (*statement).expr == null(*CrustExpr) { return; }
+    var value: *OsValue = os_expr(check, state, (*statement).expr);
+    if value == null(*OsValue) || os_failed(check) || !os_plain(check, value, &(*statement).loc) { return; }
+    if (*value).object != null(*OsObject) && !(*value).pointer && !os_borrowed((*value).syntax) {
+        os_publish_value(check, state, (*value).object, &(*statement).loc);
+    }
+    if !os_transferable(check, state, value, &(*statement).loc) { return; }
+    if !os_borrowed((*value).syntax) && os_view_mode(check, (*value).syntax) >= RS_READ {
+        os_return_view_record(check, state, (*value).object, &(*statement).loc);
+    }
+    if os_borrowed((*value).syntax) {
+        if !os_return_view(check, state, value, &(*statement).loc) { return; }
+    } else { if (*value).pointer {
+        os_error(check, &(*statement).loc, "returning a cursor requires a declared lifetime interface"); return;
+    } }
+    if !os_initialized(check, state, (*value).object) {
+        os_error(check, &(*statement).loc, "return value is not fully initialized"); return;
     }
 }

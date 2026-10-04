@@ -1,0 +1,171 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_storage_fields(fields: *OsField) -> bool {
+    while fields != null(*OsField) {
+        if (*fields).storage { return true; }
+        fields = (*fields).next;
+    }
+    return false;
+}
+
+fn os_owned_field(slot: *OsSlot) -> *OsField {
+    if (*slot).object == null(*OsObject) { return null(*OsField); }
+    var schema: *OsRecord = (*(*slot).object).contract;
+    if schema == null(*OsRecord) { return null(*OsField); }
+    return os_field((*schema).owns, (*slot).name);
+}
+
+fn os_native_value(check: *OsCheck, owner: *OsField) -> *OsValue {
+    var syntax: *CrustTypeSyntax = (*(*owner).field).syntax_type;
+    var value: *OsValue = os_value(check, syntax, null(*OsObject), (*syntax).kind == CRUST_T_POINTER);
+    if value != null(*OsValue) {
+        (*value).native = owner;
+        (*value).owner = true;
+        (*value).term = pf_fresh(&(*check).proof, os_sort(syntax));
+        if (*owner).invalid == null(*CrustExpr) { (*value).presence = OS_PRESENT; }
+    }
+    return value;
+}
+
+fn os_plain(check: *OsCheck, value: *OsValue, location: *CrustLoc) -> bool {
+    if value != null(*OsValue) && (*value).native != null(*OsField) {
+        os_error(check, location, "owned value requires a declared resource effect"); return false;
+    }
+    return true;
+}
+
+fn os_native_store(check: *OsCheck, slot: *OsSlot, value: *OsValue, location: *CrustLoc) -> bool {
+    var owner: *OsField = os_owned_field(slot);
+    if owner != null(*OsField) && (*owner).storage { owner = null(*OsField); }
+    if owner != null(*OsField) && (*value).native != owner {
+        os_error(check, location, "owned field requires acquisition of its declared resource kind"); return false;
+    }
+    if (*value).native == null(*OsField) { return true; }
+    if !(*slot).owns || !(*value).owner {
+        os_error(check, location, "owned value transfer requires an explicit move"); return false;
+    }
+    if (*slot).object != null(*OsObject) && owner != (*value).native {
+        os_error(check, location, "owned value cannot change resource kind"); return false;
+    }
+    return true;
+}
+
+fn os_native_argument(check: *OsCheck, state: *OsState, value: *OsValue,
+                       effect: *OsNative, location: *CrustLoc) -> unit {
+    if effect == null(*OsNative) {
+        if !os_plain(check, value, location) { return; }
+        if (*value).pointer || (*value).object != null(*OsObject) {
+            os_error(check, location, "native storage argument requires a declared effect");
+        }
+        return;
+    }
+    if (*value).native != (*effect).owner {
+        os_error(check, location, "native argument has the wrong resource kind"); return;
+    }
+    if (*value).presence != OS_PRESENT {
+        os_error(check, location, "native use requires a successful acquisition check"); return;
+    }
+    if (*effect).mode == RS_MOVE {
+        if !(*value).owner { os_error(check, location, "native consumption requires an explicit move"); }
+        return;
+    }
+    if (*value).owner || (*value).place == null(*OsSlot) {
+        os_error(check, location, "native borrow requires an owner place"); return;
+    }
+    os_loan_new(check, state, value, (*effect).mode, location);
+}
+
+fn os_native_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contract: *OsFunction) -> *OsValue {
+    var before: *OsLoan = (*check).loans;
+    var parameter: *CrustParam = (*(*contract).declaration).params;
+    var index: usize = 0usize;
+    while parameter != null(*CrustParam) && !os_failed(check) {
+        if index >= (*expression).arg_count { os_error(check, &(*expression).loc, "missing native argument"); return null(*OsValue); }
+        if !os_no_nested_calls(check, (*expression).args[index]) { return null(*OsValue); }
+        var value: *OsValue = os_expr(check, state, (*expression).args[index]);
+        if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+        os_native_argument(check, state, value, os_native_effect(contract, (*parameter).name), &(*expression).loc);
+        parameter = (*parameter).next;
+        index = index + 1usize;
+    }
+    if os_failed(check) { return null(*OsValue); }
+    os_end_expression(check, state, before);
+    var result: *OsNative = os_native_effect(contract, null(*CrustName));
+    if result != null(*OsNative) { return os_native_value(check, (*result).owner); }
+    return os_value(check, (*(*contract).declaration).syntax_type, null(*OsObject), false);
+}
+
+fn os_ungroup(expression: *CrustExpr) -> *CrustExpr {
+    while (*expression).kind == CRUST_E_GROUP { expression = (*expression).left; }
+    return expression;
+}
+
+fn os_sentinel_same(a: *CrustExpr, b: *CrustExpr) -> bool {
+    a = os_ungroup(a); b = os_ungroup(b);
+    if (*a).kind != (*b).kind { return false; }
+    if (*a).kind == CRUST_E_UNARY {
+        if (*a).op != CRUST_OP_NEG || (*b).op != CRUST_OP_NEG { return false; }
+        a = os_ungroup((*a).left); b = os_ungroup((*b).left);
+    }
+    if (*a).kind != (*b).kind { return false; }
+    if (*a).kind == CRUST_E_NULL { return true; }
+    return (*a).literal_type == (*b).literal_type && (*a).integer == (*b).integer;
+}
+
+fn os_native_refine(check: *OsCheck, state: *OsState, value: *OsValue, other: *CrustExpr, equal: bool) -> unit {
+    if (*value).native == null(*OsField) || (*value).place == null(*OsSlot) { return; }
+    var invalid: *CrustExpr = (*(*value).native).invalid;
+    if invalid == null(*CrustExpr) || !os_sentinel_same(invalid, other) { return; }
+    var copy: *OsValue = os_copy(check, os_bound(state, (*value).place));
+    if copy == null(*OsValue) { return; }
+    (*copy).presence = OS_PRESENT;
+    if equal { (*copy).presence = OS_ABSENT; }
+    os_set(check, state, os_original((*value).place) as *u8, copy, OS_READY);
+}
+
+fn os_validate_sentinel(check: *OsCheck, owner: *OsField, syntax: *CrustTypeSyntax, location: *CrustLoc) -> unit {
+    var expression: *CrustExpr = (*owner).invalid;
+    if expression == null(*CrustExpr) { return; }
+    expression = os_ungroup(expression);
+    var negative: bool = (*expression).kind == CRUST_E_UNARY && (*expression).op == CRUST_OP_NEG;
+    if negative { expression = os_ungroup((*expression).left); }
+    if !negative && (*expression).kind == CRUST_E_NULL && (*syntax).kind == CRUST_T_POINTER {
+        if rs_same((*(*check).stage).resources, syntax, (*expression).syntax_type) { return; }
+    }
+    if (*expression).kind == CRUST_E_INTEGER && (*expression).literal_type == (*syntax).kind {
+        if os_sentinel_integer(check, syntax, (*expression).integer, negative) { return; }
+    }
+    os_error(check, location, "invalid resource value must be a representable integer or null literal of the field type");
+}
+
+fn os_sentinel_integer(check: *OsCheck, syntax: *CrustTypeSyntax, integer: u64, negative: bool) -> bool {
+    var type: *CrustType = rs_storage_type((*(*check).stage).resources, syntax);
+    if type == null(*CrustType) { return false; }
+    var bits: u64 = (*type).size * 8u64;
+    var signed: bool = ((*syntax).kind & 1u32) == 0u32;
+    var limit: u64 = 18446744073709551615u64;
+    if signed { limit = (1u64 << (bits - 1u64)) - 1u64; if negative { limit = limit + 1u64; } }
+    else { if bits < 64u64 { limit = (1u64 << bits) - 1u64; } }
+    return integer <= limit && (!negative || signed);
+}
+
+fn os_native_backedge(check: *OsCheck, entry: *OsState, body: *OsState, location: *CrustLoc) -> unit {
+    var object: *OsObject = (*check).objects;
+    while object != null(*OsObject) && !os_failed(check) {
+        var field: *OsSlot = os_fields(entry, object);
+        while field != null(*OsSlot) && !os_failed(check) {
+            var before: *OsValue = os_bound(entry, field);
+            if before != null(*OsValue) && (*before).native != null(*OsField) {
+                var after: *OsValue = os_bound(body, field);
+                if after == null(*OsValue) || (*after).native != (*before).native {
+                    os_error(check, location, "loop backedge must preserve initialized resource fields"); return;
+                }
+                if ((*after).presence & (*before).presence) != (*before).presence {
+                    os_error(check, location, "loop backedge must preserve resource validity"); return;
+                }
+            }
+            field = (*field).next;
+        }
+        object = (*object).next;
+    }
+}

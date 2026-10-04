@@ -44,7 +44,7 @@ record Node {
   invariant((*self).active_prev != null(*Node) && (*self).active_next != null(*Node) &&
             (*(*self).active_prev).active_next == self &&
             (*(*self).active_next).active_prev == self);
-resource Owner { node: *Node; } owns(node) domain(Graph) drop owner_drop;
+resource Owner { node: *Node; } owns(node: storage) domain(Graph) drop owner_drop;
 ```
 
 The four retained pointer fields are ordinary machine pointers. The conditions

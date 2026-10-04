@@ -4,12 +4,12 @@ fn os_validate_record(check: *OsCheck, global: *RsGlobal) -> unit {
     var declaration: *CrustDecl = (*global).source;
     var contract: *OsRecord = crust_map_get(&(*(*check).stage).records, declaration as usize) as *OsRecord;
     if contract == null(*OsRecord) { os_error(check, &(*declaration).loc, "schema requires an ownership schema"); return; }
-    if ((*contract).owns != null(*OsField) || (*contract).references != null(*OsField) ||
+    if (os_storage_fields((*contract).owns) || (*contract).references != null(*OsField) ||
         (*contract).conditions != null(*OsCondition)) && (*contract).domain == null(*CrustName) {
         os_error(check, &(*declaration).loc, "stored pointer contracts require a declared domain"); return;
     }
     if (*contract).owns != null(*OsField) && (*global).resource == null(*RsResource) {
-        os_error(check, &(*declaration).loc, "owned pointer fields require a resource destructor"); return;
+        os_error(check, &(*declaration).loc, "owned fields require a resource destructor"); return;
     }
     os_validate_schema(check, contract);
     os_validate_view_record(check, global, contract);
@@ -52,8 +52,17 @@ fn os_validate_field(check: *OsCheck, contract: *OsRecord, field: *CrustField) -
 
 fn os_validate_owner(check: *OsCheck, contract: *OsRecord, field: *CrustField) -> unit {
     var syntax: *CrustTypeSyntax = (*field).syntax_type;
+    var owner: *OsField = os_field((*contract).owns, (*field).name);
+    (*owner).field = field;
+    if !(*owner).storage {
+        if (*syntax).kind == CRUST_T_UNIT || (*syntax).kind > CRUST_T_POINTER {
+            os_error(check, &(*field).loc, "native owned fields require a scalar representation; embed resource records directly"); return;
+        }
+        os_validate_sentinel(check, owner, syntax, &(*field).loc);
+        return;
+    }
     if (*syntax).kind != CRUST_T_POINTER {
-        os_error(check, &(*field).loc, "owns requires a pointer field"); return;
+        os_error(check, &(*field).loc, "storage ownership requires a pointer field"); return;
     }
     var target: *OsRecord = os_record((*check).stage, (*syntax).base);
     if target == null(*OsRecord) || (*target).domain != (*contract).domain {
@@ -78,6 +87,7 @@ fn os_validate_foreign(check: *OsCheck, contract: *OsFunction) -> unit {
     if (*declaration).kind != CRUST_D_EXTERN {
         os_error(check, &(*declaration).loc, "foreign effects require an external declaration"); return;
     }
+    if (*contract).foreign == OS_NATIVE { os_validate_native(check, contract); return; }
     if (*contract).foreign == OS_SCALAR {
         if (*(*declaration).syntax_type).kind >= CRUST_T_POINTER {
             os_error(check, &(*declaration).loc, "scalar foreign result must be a scalar type");
@@ -157,7 +167,7 @@ fn os_check_function(stage: *OsStage, global: *RsGlobal, contract: *OsFunction) 
     var check: OsCheck = uninit;
     os_check_init(&check, stage, contract);
     check.drop = (*global).drop_only;
-    if (*contract).foreign != 0u32 { os_validate_foreign(&check, contract); return; }
+    if (*contract).foreign != 0u32 { return; }
     if (*declaration).kind != CRUST_D_FUNCTION {
         os_error(&check, &(*declaration).loc, "external call requires a declared foreign effect"); return;
     }

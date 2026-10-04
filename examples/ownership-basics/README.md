@@ -34,6 +34,55 @@ rustc --edition=2024 examples/ownership-basics/program.rs -o build/ownership-rus
 build/ownership-rust
 ```
 
+## Native handles
+
+[handles.crs](handles.crs) owns POSIX file descriptors and opaque C streams.
+The descriptor uses an `i32`. The stream uses a `*u8`. Both need one owner,
+borrowed access, and one cleanup action. Neither needs a storage domain.
+
+```sh
+build/crust examples/ownership-basics/main.crs -o build/ownership-handles \
+    examples/ownership-basics/handles.crs
+build/ownership-handles
+```
+
+The output is `OK`, a newline, then `SFF`. `S` marks stream cleanup. Each `F`
+marks descriptor cleanup. The failed acquisition has no cleanup duty. Moving
+the duplicate descriptor does not add a cleanup action.
+
+The declaration `owns(handle = -1i32)` identifies an owned native value and its
+invalid representation. An acquisition function returns that kind. An ordinary
+integer cannot initialize the field. The opaque stream uses the same contract
+with `null(*u8)` as its invalid value. This pointer cannot be dereferenced.
+Allocation owners use the additional `owns(field: storage)` contract.
+
+The `clone_fd` declaration has two independent effects. It borrows its input
+and returns a new owner. `close_fd` consumes an explicitly moved input. The
+source calls use the native scalar ABI, with no wrapper conversion at the C
+boundary. Check the declared invalid value with `==` or `!=` before native use.
+Move or borrow whole wrappers across ordinary Crust function boundaries.
+
+The native declarations are trusted. Their implementations must obey the
+acquisition, borrowing, and consumption contracts. Consumption applies even
+when the native function reports an error. Both example destructors trap on a
+cleanup error. A caller can instead consume an unwrapped acquisition result
+explicitly and process the returned status before it continues.
+
+The reader records these contracts on the existing AST. The checker follows
+owned values through local control flow. The native resource kind and validity
+facts do not appear in the output. Resource lowering inserts ordinary cleanup
+calls. The example checks that each wrapper has the size of its raw handle.
+
+```sh
+python3 tests/ownership_native.py --sanitize
+```
+
+This test runs the program at `-O0` and `-O2`, compares output before and after
+ownership verification, and checks a client after removal of its provider
+source. It rejects duplicate owners, unguarded use, invalid transfers,
+conflicting borrows, and ownership loss across branches and loops. An
+interceptor rejects any attempt to start a solver during these basic checks.
+
 ## Stored views
 
 [views.crs](views.crs) keeps shared or exclusive access inside ordinary records.

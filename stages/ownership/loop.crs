@@ -82,7 +82,7 @@ fn os_loop_scalars(check: *OsCheck, state: *OsState, cursors: **OsLoopCursor, lo
     while scope != null(*OsScope) && !os_failed(check) {
         var slot: *OsSlot = (*scope).locals;
         while slot != null(*OsSlot) && !os_failed(check) {
-            if (*(*slot).syntax).kind < CRUST_T_POINTER && os_bound(state, slot) != null(*OsValue) {
+            if !(*slot).owns && (*(*slot).syntax).kind < CRUST_T_POINTER && os_bound(state, slot) != null(*OsValue) {
                 os_loop_slot(check, state, slot, cursors, location);
             }
             slot = (*slot).next;
@@ -176,6 +176,7 @@ fn os_checked_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> u
     }
     if body.flow == PF_NORMAL {
         os_loop_read_backedge(check, state, &body, cursors, &(*statement).loc);
+        os_native_backedge(check, state, &body, &(*statement).loc);
         os_close(check, &body, &(*statement).loc);
     }
     os_refine(check, state, (*statement).expr, false);

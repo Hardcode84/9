@@ -6,6 +6,9 @@ const OS_RECLAIM: u32 = 3u32;
 const OS_ALLOCATE: u32 = 1u32;
 const OS_RELEASE: u32 = 2u32;
 const OS_SCALAR: u32 = 3u32;
+const OS_NATIVE: u32 = 4u32;
+const OS_ACQUIRE: u32 = 5u32;
+const OS_PRESENT: u32 = 1u32;
 
 record OsStage {
     proof: PfStage;
@@ -23,7 +26,9 @@ record OsField {
     name: *CrustName;
     record_name: *CrustName;
     field: *CrustField;
+    invalid: *CrustExpr;
     next: *OsField;
+    storage: bool;
 }
 
 record OsDomain { declaration: *CrustDecl; records: *OsField; }
@@ -39,6 +44,15 @@ record OsRecord {
     tracked: bool;
 }
 
+record OsNative {
+    parameter: *CrustName;
+    schema: *CrustName;
+    field: *CrustName;
+    owner: *OsField;
+    next: *OsNative;
+    mode: u32;
+}
+
 record OsFunction {
     declaration: *CrustDecl;
     domain: *CrustName;
@@ -47,6 +61,7 @@ record OsFunction {
     modifies: *OsField;
     requires: *OsCondition;
     ensures: *OsCondition;
+    native: *OsNative;
     effect: u32;
     foreign: u32;
     has_modifies: bool;
@@ -99,9 +114,11 @@ record OsValue {
     object: *OsObject;
     place: *OsSlot;
     allocation_type: *CrustTypeSyntax;
+    native: *OsField;
     borrow_scope: *OsScope;
     loan: *OsLoan;
     term: *u8;
+    presence: u32;
     owner: bool;
     pointer: bool;
     unknown: bool;

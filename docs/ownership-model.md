@@ -9,8 +9,10 @@ C99 core. The [tutorial](ownership.md) introduces the source notation.
 ## Owners and loans
 
 A `resource` declaration supplies a cleanup function. A record can own resource
-fields. `owns(field)` makes a pointer field the owner of its allocation.
-`move` transfers that owner. A move does not copy the destruction duty.
+fields. `owns(field)` makes a scalar field own a native resource. The field
+can be an integer or an opaque pointer. `owns(field: storage)` also grants
+ownership of the allocation addressed by that pointer. `move` transfers an
+owner. A move does not copy the destruction duty.
 
 `read T` lends shared access. `mut T` lends exclusive access. The stage rejects
 conflicting loans, reads of moved values, and destruction through a borrower.
@@ -28,6 +30,76 @@ that object's resource fields. To transfer those fields, use an ownership
 origin. A mutable loan of a resource also requires an ownership origin.
 A cursor can lend a scalar payload field without acquiring its containing
 object's destruction duty.
+
+## Native resources
+
+Ownership and representation are separate. An owned integer is not copyable
+because its representation is an integer. An owned opaque pointer does not
+permit memory access because its representation is a pointer. A record can
+contain resources by value. Those fields use their resource type's cleanup.
+
+```crust
+resource File { fd: i32; } owns(fd = -1i32) drop file_drop;
+extern fn duplicate(fd: i32) -> i32
+    foreign(read fd: File.fd, acquire File.fd) = "dup";
+extern fn close_fd(fd: i32) -> i32 foreign(move fd: File.fd) = "close";
+```
+
+The field declaration identifies a resource kind. Two fields with the same
+integer type do not describe the same resource kind. Nest an existing resource
+type to reuse its kind and cleanup. The optional `= VALUE` clause gives the
+invalid representation. It must be a representable integer literal or a typed
+null literal. Without this clause, acquisition promises a valid resource.
+
+A foreign resource contract has independent argument and result effects:
+
+| Effect | Contract |
+| --- | --- |
+| `acquire Type.field` | Return a new owner, or the declared invalid value |
+| `read arg: Type.field` | Use the resource during the call without changing it or retaining access |
+| `mut arg: Type.field` | Use the resource exclusively during the call without consuming it or retaining access |
+| `move arg: Type.field` | Consume an explicitly moved owner, on every return path |
+
+The raw ABI type must equal the field's type. An unannotated argument must be
+an ordinary scalar. An unannotated result must be a scalar, not a pointer.
+The existing allocation interfaces add storage extent and initialization
+contracts. They cannot acquire or release opaque native resources.
+
+These declarations are trusted foreign boundaries. The native implementation
+must establish new ownership on successful acquisition and obey its declared
+effects. The checker cannot verify an external implementation. Declaring a
+native function incorrectly can invalidate the guarantee. A `move` effect ends
+ownership even when the native call reports an error. An API that retains a
+resource on error needs a different contract; this unconditional effect cannot
+describe that API.
+
+An acquisition result is affine even before the failure test. Compare it with
+its declared invalid literal using `==` or `!=` before borrowed use or
+consumption. The success branch permits those actions. The failure branch has
+no cleanup duty. Moving the result into its declared owned field preserves
+these facts. A destructor can test the field and consume it on success.
+Neither branch needs a runtime ownership flag.
+
+The checker rejects raw-value fabrication, duplicate owners, arithmetic or
+casts that remove ownership, unannotated calls with owned arguments, use after
+consumption, and conflicting native argument borrows. Borrow the containing
+resource with `read` or `mut`; a raw owned field cannot become a scalar loan.
+Pass or return the resource wrapper across ordinary source function boundaries.
+The current scalar function types do not declare a native resource kind.
+
+Owned native fields need no storage domain. A domain is needed when the program
+also declares persistent storage references or allocation ownership. A resource
+without a domain can be embedded in a record that has a domain. Function
+bodies use the field and function declarations. Imported bodyless interfaces
+retain the same contracts. An ordinary mutable call can replace an owned field;
+the caller must check its invalid value again. Loop backedges must preserve
+initialized owners and any validity required at loop entry.
+
+The [native resource example](../examples/ownership-basics/handles.crs) uses
+POSIX descriptors and opaque C streams. Local checks need no solver. Native
+arguments retain their integer or pointer ABI. Moves and resource validity facts
+have no runtime representation. The emitted cleanup consists of ordinary calls
+and the explicit failure tests in the source.
 
 ## Stored views
 
@@ -79,7 +151,7 @@ domain Graph(Node, Owner);
 record Node { next: *Node; value: i64; }
     domain(Graph) references(next);
 resource Owner { node: *Node; }
-    domain(Graph) owns(node) drop owner_drop;
+    domain(Graph) owns(node: storage) drop owner_drop;
 ```
 
 `references` declares non-owning pointer fields. Each target must have a record
@@ -179,8 +251,8 @@ their values.
 
 A function's implementation is checked even when no other function calls it.
 An external interface needs a verified library receipt, or an explicit foreign
-allocation, release, or scalar contract. Copying interface text does not make
-an external implementation trusted.
+allocation, release, scalar, or native resource contract. Copying interface text
+does not make an external implementation trusted.
 
 ## Construction and destruction
 
@@ -201,7 +273,7 @@ in the closed domain schema and an arbitrary live source object. References
 inside the same retiring allocation do not prevent its destruction. Local
 cursors and loans have separate lifetime checks.
 
-A resource destructor must consume each owned pointer field. Embedded resources
+A resource destructor must consume each present owned field. Embedded resources
 retain their declared cleanup order. Allocation failure paths must discharge
 all owners that were successfully constructed. The checker adds no runtime
 cleanup flags.

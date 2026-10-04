@@ -83,8 +83,8 @@ The complete file declares `emit` as the C `putchar` function with a scalar-only
 foreign contract. This printing action makes cleanup visible. A real resource
 can instead release an allocation or another native resource. Its fields can
 hold integer handles, such as file descriptors or API object identifiers.
-`resource` assigns cleanup to the wrapper value. `owns(field)` is a separate
-contract for a pointer to an owned allocation.
+`resource` assigns cleanup to the wrapper value. `owns(field)` also checks
+ownership of a native handle. `owns(field: storage)` adds allocation ownership.
 
 A local such as `ticket` owns one `Ticket` value. The type defines its cleanup;
 the owning local determines when cleanup runs. `mut Ticket` gives the destructor
@@ -92,7 +92,7 @@ access to the value without creating a second owner. Section 4 explains this
 borrowed type.
 
 `Demo` is an access domain: a compile-time name that groups storage and its
-access rules. This stage requires reclamation authority for resource cleanup.
+access rules. Cleanup of a resource in a domain requires reclamation authority.
 Thus the destructor and the example's `main` declare `access(reclaim, Demo)`.
 There is no runtime `Demo` object, pool, common allocation lifetime, or lock.
 
@@ -134,39 +134,69 @@ This prints `AB`: the first value drops explicitly, and the replacement drops
 at scope exit. There is no second cleanup of the consumed value. A `record`
 with only scalar fields has no cleanup action; reading an integer copies it.
 
-### Wrap an integer handle
+### Own a native handle
 
-This example wraps an already acquired POSIX file descriptor:
+The ownership rules apply to integers and opaque pointers. A file descriptor
+uses an integer representation:
 
 ```crust
-domain Files(File);
-resource File { fd: i32; } domain(Files) drop file_drop;
+resource File { fd: i32; } owns(fd = -1i32) drop file_drop;
+extern fn acquire_fd(fd: i32) -> i32 foreign(acquire File.fd) = "dup";
+extern fn close_fd(fd: i32) -> i32 foreign(move fd: File.fd) = "close";
 
-extern fn close_fd(fd: i32) -> i32 foreign(scalar) = "close";
+fn file_drop(file: mut File) -> unit {
+    if file.fd != -1i32 {
+        var status: i32 = close_fd(move file.fd);
+        if status != 0i32 { trap; }
+    }
+}
 
-fn file_drop(file: mut File) -> unit access(reclaim, Files) {
-    var result: i32 = close_fd(file.fd);
-    if result != 0i32 { trap; }
+fn file_new() -> File {
+    var fd: i32 = acquire_fd(1i32);
+    return make File { fd: move fd };
 }
 ```
 
-Construct `File` only after acquisition succeeds. Move or borrow the wrapper
-with the same rules as `Ticket`. Normal scope exit calls `file_drop`. This
-example traps if closing fails; that is the wrapper's explicit error policy.
-Other integer handles use the scalar type and release function of their API.
-No pointer conversion, heap allocation, or runtime ownership tag is needed.
+`owns(fd = -1i32)` defines an owned field with an invalid value of `-1`.
+`acquire File.fd` returns a fresh owner or that invalid value. The acquired
+integer cannot be copied into another owner. `move` transfers it to the field.
+The destructor checks the invalid value before it consumes the handle. This
+example traps if closing fails. That is the wrapper's explicit error policy.
+The native close contract consumes the handle even if it reports an error.
 
-The checker tracks the wrapper, not the native handle's identity. Its `i32`
-field remains copyable. It does not detect two wrappers built from the same
-number, or prove that the foreign call closes a valid handle exactly once.
-The acquisition and release adapters must satisfy that native contract.
-Checking the handle itself would require contracts for acquisition, borrowed
-use, and consumption at the foreign boundary. `foreign(scalar)` does not
-supply those contracts.
+A native operation can borrow a handle and acquire another in the same call:
 
-The [resource-stage descriptor example](../stages/resources/README.md#1-run-a-real-descriptor-owner)
-also shows acquisition and I/O. It uses the separate resource profile described
-in section 1.
+```crust
+extern fn duplicate(fd: i32) -> i32
+    foreign(read fd: File.fd, acquire File.fd) = "dup";
+```
+
+Check `file.fd != -1i32` before `duplicate(file.fd)`. `read` permits shared use
+for the duration of the native call. `mut` requires exclusive use. Neither
+permits the native function to retain access after return. Ordinary source
+helpers borrow `read File` or `mut File` and return or consume `File` values.
+
+The [complete example](../examples/ownership-basics/handles.crs) also declares
+`Stream.handle: *u8` with `owns(handle = null(*u8))`. It uses the same acquisition,
+move, borrow, and cleanup rules. The pointer is opaque: it grants no permission
+to dereference, reinterpret, or free memory. Memory owners use the additional
+`storage` contract in section 6.
+
+Raw integers cannot initialize these owned fields, even when their bits equal
+a live descriptor. Different owned-field declarations identify different
+resource kinds. To contain an existing kind, embed its resource wrapper.
+A plain `fd: i32` field without `owns` remains copyable; cleanup alone does not
+check the underlying native ownership.
+
+Foreign effect declarations are trusted. The native implementation must obey
+them. The checker rejects source violations of those contracts but cannot prove
+a native library's implementation. A function with a scalar-only contract
+cannot receive an owned handle. This prevents accidental loss of ownership
+through an unannotated call.
+
+These resources need no domain, pointer conversion, hidden allocation, runtime
+tag, or solver. The foreign calls keep their original C ABI. Failure tests use
+the declared integer or null literal with `==` or `!=`.
 
 ## 3. Transfer ownership
 
@@ -346,11 +376,11 @@ handle and its allocation separately:
 ```crust
 domain Cells(Cell, CellOwner);
 record Cell { value: i64; } domain(Cells);
-resource CellOwner { cell: *Cell; } owns(cell) domain(Cells) drop cell_drop;
+resource CellOwner { cell: *Cell; } owns(cell: storage) domain(Cells) drop cell_drop;
 ```
 
-`owns(cell)` gives the handle responsibility for that allocation. Both types
-use the same access domain. Allocation, initialization, transfer, and release
+`owns(cell: storage)` gives the handle responsibility for that allocation.
+Both types use the same access domain. Allocation, initialization, transfer, and release
 remain explicit:
 
 ```crust

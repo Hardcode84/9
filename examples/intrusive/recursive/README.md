@@ -29,9 +29,9 @@ returns status 1 after cleanup. Install the Z3 development library before the bu
 The [target program](program.crs) declares:
 
 ```crust
-resource Chain { node: *Node; } owns(node) domain(Graph) drop chain_drop;
+resource Chain { node: *Node; } owns(node: storage) domain(Graph) drop chain_drop;
 resource Node { prev: *Node; next: *Node; active_prev: *Node; active_next: *Node; owned_next: *Node; value: i64; }
-    owns(owned_next) domain(Graph)
+    owns(owned_next: storage) domain(Graph)
     references(prev, next, active_prev, active_next)
     invariant((*self).prev != null(*Node) && (*self).next != null(*Node) &&
               (*(*self).prev).next == self && (*(*self).next).prev == self)

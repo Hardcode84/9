@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_read_owners(reader: *CrustReader, fields: **OsField) -> unit {
+    rr_next(reader);
+    rr_expect(reader, 40u32, "expected '(' before owned fields");
+    while !(*reader).failed {
+        var field: *OsField = os_read_field(reader, fields);
+        if field == null(*OsField) { return; }
+        if (*reader).token.kind == 58u32 {
+            rr_next(reader);
+            if !rr_is_name(reader, "storage") { rr_error(reader, (*reader).token.offset, "expected storage ownership"); return; }
+            (*field).storage = true;
+            rr_next(reader);
+        } else { if (*reader).token.kind == 61u32 {
+            rr_next(reader);
+            (*field).invalid = rr_expression(reader);
+        } }
+        if (*reader).token.kind != 44u32 { break; }
+        rr_next(reader);
+    }
+    rr_expect(reader, 41u32, "expected ')' after owned fields");
+}
+
+fn os_native_mode(reader: *CrustReader) -> u32 {
+    if rr_is_name(reader, "acquire") { return OS_ACQUIRE; }
+    if rr_is_name(reader, "read") { return RS_READ; }
+    if rr_is_name(reader, "mut") { return RS_MUT; }
+    if rr_is_name(reader, "move") { return RS_MOVE; }
+    rr_error(reader, (*reader).token.offset, "expected acquire, read, mut, or move foreign effect");
+    return 0u32;
+}
+
+fn os_read_native(reader: *CrustReader, function: *OsFunction) -> unit {
+    (*function).foreign = OS_NATIVE;
+    while !(*reader).failed {
+        var effect: *OsNative = rr_alloc(reader, sizeof(OsNative), alignof(OsNative)) as *OsNative;
+        if effect == null(*OsNative) { return; }
+        (*effect).mode = os_native_mode(reader);
+        rr_next(reader);
+        if (*effect).mode != OS_ACQUIRE {
+            (*effect).parameter = rr_name(reader);
+            rr_expect(reader, 58u32, "expected ':' before owned field type");
+        }
+        (*effect).schema = rr_name(reader);
+        rr_expect(reader, 46u32, "expected '.' before owned field name");
+        (*effect).field = rr_name(reader);
+        (*effect).next = (*function).native;
+        (*function).native = effect;
+        if (*reader).token.kind != 44u32 { break; }
+        rr_next(reader);
+    }
+    rr_expect(reader, 41u32, "expected ')' after foreign effects");
+}
+
+fn os_native_effect(contract: *OsFunction, name: *CrustName) -> *OsNative {
+    var effect: *OsNative = (*contract).native;
+    while effect != null(*OsNative) {
+        if (*effect).parameter == name { return effect; }
+        effect = (*effect).next;
+    }
+    return null(*OsNative);
+}
+
+fn os_native_resolve(check: *OsCheck, contract: *OsFunction, effect: *OsNative) -> unit {
+    var global: *RsGlobal = rs_global((*(*check).stage).resources, (*effect).schema);
+    var schema: *OsRecord = null(*OsRecord);
+    if global != null(*RsGlobal) { schema = crust_map_get(&(*(*check).stage).records, (*global).source as usize) as *OsRecord; }
+    if schema != null(*OsRecord) { (*effect).owner = os_field((*schema).owns, (*effect).field); }
+    if (*effect).owner == null(*OsField) || (*(*effect).owner).storage {
+        os_error(check, &(*(*contract).declaration).loc, "native effect requires an owned value field"); return;
+    }
+    var field: *CrustField = (*(*effect).owner).field;
+    var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
+    if (*effect).mode != OS_ACQUIRE {
+        var parameter: *CrustParam = (*(*contract).declaration).params;
+        while parameter != null(*CrustParam) && (*parameter).name != (*effect).parameter { parameter = (*parameter).next; }
+        if parameter == null(*CrustParam) { os_error(check, &(*(*contract).declaration).loc, "native effect names no parameter"); return; }
+        syntax = (*parameter).syntax_type;
+    }
+    if !rs_same((*(*check).stage).resources, syntax, (*field).syntax_type) {
+        os_error(check, &(*(*contract).declaration).loc, "native effect must preserve the owned field representation");
+    }
+}
+
+fn os_validate_native(check: *OsCheck, contract: *OsFunction) -> unit {
+    var effect: *OsNative = (*contract).native;
+    while effect != null(*OsNative) && !os_failed(check) {
+        if os_native_effect(contract, (*effect).parameter) != effect {
+            os_error(check, &(*(*contract).declaration).loc, "duplicate native effect for parameter or result"); return;
+        }
+        os_native_resolve(check, contract, effect);
+        effect = (*effect).next;
+    }
+    var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
+    if (*syntax).kind >= CRUST_T_POINTER && os_native_effect(contract, null(*CrustName)) == null(*OsNative) {
+        os_error(check, &(*(*contract).declaration).loc, "native pointer result requires an acquisition contract");
+    }
+}

@@ -208,6 +208,7 @@ fn os_stored_value(check: *OsCheck, slot: *OsSlot, value: *OsValue) -> *OsValue 
 
 fn os_store_allowed(check: *OsCheck, state: *OsState, slot: *OsSlot,
                       value: *OsValue, location: *CrustLoc) -> bool {
+    if !os_native_store(check, slot, value, location) { return false; }
     if !os_transferable(check, state, value, location) || !os_store_lifetime(check, slot, value, location) { return false; }
     if !os_loan_place_access(check, state, slot, (*slot).loan, true, location) { return false; }
     if (*slot).object != null(*OsObject) && !os_access_through(check, state, (*slot).object, (*slot).loan, true, location) { return false; }

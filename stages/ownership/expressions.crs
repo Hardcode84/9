@@ -45,6 +45,7 @@ fn os_unary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValu
     if operation == CRUST_OP_ADDRESS { return os_address(check, state, expression); }
     var value: *OsValue = os_expr(check, state, (*expression).left);
     if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+    if !os_plain(check, value, &(*expression).loc) { return null(*OsValue); }
     if operation == CRUST_OP_DEREF { return os_dereference(check, state, expression, value); }
     if (*value).pointer || (*value).object != null(*OsObject) {
         os_error(check, &(*expression).loc, "unary operation cannot erase ownership provenance");
@@ -83,6 +84,7 @@ fn os_dereference(check: *OsCheck, state: *OsState, expression: *CrustExpr, valu
 fn os_borrow(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
     var value: *OsValue = os_expr(check, state, (*expression).left);
     if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+    if !os_plain(check, value, &(*expression).loc) { return null(*OsValue); }
     if (*value).owner {
         os_error(check, &(*expression).loc, "borrow cannot consume a temporary owner"); return null(*OsValue);
     }
@@ -110,6 +112,7 @@ fn os_borrow(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVal
 fn os_cast(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
     var value: *OsValue = os_expr(check, state, (*expression).left);
     if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+    if !os_plain(check, value, &(*expression).loc) { return null(*OsValue); }
     var target: *CrustTypeSyntax = (*expression).syntax_type;
     if (*target).kind == CRUST_T_POINTER {
         if !(*value).pointer { os_error(check, &(*expression).loc, "pointer casts cannot create checked storage"); return null(*OsValue); }
@@ -137,9 +140,7 @@ fn os_binary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVal
     if (*expression).op == CRUST_OP_OR { os_refine(check, &branch, (*expression).left, false); }
     var right: *OsValue = os_expr(check, &branch, (*expression).right);
     if right == null(*OsValue) || os_failed(check) { return null(*OsValue); }
-    if ((*left).pointer || (*right).pointer) && (*expression).op != CRUST_OP_EQ && (*expression).op != CRUST_OP_NE {
-        os_error(check, &(*expression).loc, "pointer arithmetic has no checked ownership contract");
-    }
+    os_binary_access(check, expression, left, right);
     var syntax: *CrustTypeSyntax = (*left).syntax;
     if (*expression).op >= CRUST_OP_EQ && (*expression).op <= CRUST_OP_OR {
         syntax = os_syntax(check, CRUST_T_BOOL, &(*expression).loc);
@@ -209,11 +210,14 @@ fn os_refine_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr, tru
     var right: *OsValue = os_expr(check, state, (*expression).right);
     if left == null(*OsValue) || right == null(*OsValue) || os_failed(check) { return; }
     var equal: bool = truth == (operation == CRUST_OP_EQ);
+    os_native_refine(check, state, left, (*expression).right, equal);
+    os_native_refine(check, state, right, (*expression).left, equal);
     os_refine_values(check, state, left, right, equal);
     os_refine_values(check, state, right, left, equal);
 }
 
 fn os_refine_values(check: *OsCheck, state: *OsState, left: *OsValue, right: *OsValue, equal: bool) -> unit {
+    if (*left).native != null(*OsField) || (*right).native != null(*OsField) { return; }
     if !(*left).pointer || !(*right).pointer || (*left).object == null(*OsObject) { return; }
     var object: *OsObject = (*left).object;
     if (*right).object == null(*OsObject) {
@@ -221,5 +225,15 @@ fn os_refine_values(check: *OsCheck, state: *OsState, left: *OsValue, right: *Os
         if equal { flags = (flags & ~OS_NONNULL) | OS_ABSENT; }
         else { flags = (flags & ~OS_ABSENT) | OS_NONNULL; }
         os_mark(check, state, object, flags);
+    }
+}
+
+fn os_binary_access(check: *OsCheck, expression: *CrustExpr, left: *OsValue, right: *OsValue) -> unit {
+    if ((*left).native != null(*OsField) || (*right).native != null(*OsField)) &&
+       (*expression).op != CRUST_OP_EQ && (*expression).op != CRUST_OP_NE {
+        os_error(check, &(*expression).loc, "owned values permit equality tests, not arithmetic");
+    }
+    if ((*left).pointer || (*right).pointer) && (*expression).op != CRUST_OP_EQ && (*expression).op != CRUST_OP_NE {
+        os_error(check, &(*expression).loc, "pointer arithmetic has no checked ownership contract");
     }
 }

@@ -59,7 +59,10 @@ resource fields and elements. Other values retain Crust0 copy semantics.
   A borrow mode applies to a value type; modes cannot be stacked.
   Constants and their fields and elements permit `read` loans. Their storage
   lives for the whole program. They do not permit `mut` loans.
-- Named loans end at lexical scope exit. Temporary call loans end after the
+- Named local loans end at lexical scope exit or `drop name`. Explicit ending
+  requires all child loans and deferred uses to have ended. It invalidates the
+  local binding and emits no code. A borrowed parameter cannot be dropped.
+  Temporary call loans end after the
   complete call. Borrow modes are part of a source function type, including
   function pointers and constants. Lowering them to pointers does not erase
   their source contract.
@@ -112,7 +115,7 @@ result requires a `mut` source. The caller keeps the source loan until the
 returned view ends. Other temporary argument loans end with the call.
 
 The view uses the same pointer representation as a local loan. The dependency
-exists only in compiler state. Named views still last until scope exit and
+exists only in compiler state. Named views last until `drop` or scope exit and
 reserve the whole root. This rule does not add stored views or independent
 loans for disjoint fields.
 

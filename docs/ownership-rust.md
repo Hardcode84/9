@@ -31,7 +31,7 @@ does not need them to understand a move or repair a loan conflict.
 | --- | --- | --- |
 | Transfer an owner | Explicit `move` | Move for a non-`Copy` value |
 | Shared or exclusive access | `read T`, `mut T` | `&T`, `&mut T` |
-| End a named loan | Lexical scope or explicit view consumption | Borrow checking can end it after its last use |
+| End a named loan | Lexical scope or `drop` of the local view | Borrow checking can end it after its last use |
 | Return a view | One exact `from parameter.path` origin | Declared lifetime relationships, with elision where applicable |
 | Store several local origins | View record fields retain their loans | References with lifetime parameters |
 | Return several distinct origins | Rejected by the one-origin result contract; return separately or construct in the caller | Distinct declared lifetimes can express the relationship |

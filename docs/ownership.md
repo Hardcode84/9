@@ -237,7 +237,7 @@ fn set_code(ticket: mut Ticket, code: i32) -> unit {
 }
 ```
 
-A borrowed resource remains owned by the caller. `move ticket` reports
+A borrowed parameter remains owned by the caller. `move ticket` reports
 `cannot move out of a borrowed value`; `drop ticket` reports
 `cannot drop a borrowed value`. To transfer cleanup to the function, take a
 `Ticket` by value and pass it with `move`.
@@ -247,8 +247,8 @@ The view uses ordinary field access. A borrowed scalar also uses its name
 directly: write `view = 7i64`, rather than `*view = 7i64`.
 
 Several shared views can coexist. An exclusive view excludes conflicting
-reads and writes through other access paths. A named view lasts to the end
-of its lexical scope, even if its last read occurs earlier.
+reads and writes through other access paths. A named local view lasts until
+`drop view` or the end of its lexical scope, even if its last read occurs earlier.
 
 **Rejected: changing a value while a named shared view is in scope.**
 
@@ -259,16 +259,20 @@ if view != 1i64 { trap; }
 count = 2i64;
 ```
 
-**Correction: end the view's scope before the change.**
+**Correction: end the local view before the change.**
 
 ```crust
 var count: i64 = 1i64;
-{
-    var view: read i64 = read count;
-    if view != 1i64 { trap; }
-}
+var view: read i64 = read count;
+if view != 1i64 { trap; }
+drop view;
 count = 2i64;
 ```
+
+`drop view` ends the local binding. The borrowed value stays alive, and this
+operation emits no code. Later use of `view` is an error. A lexical block can
+also end a view. End all child loans and deferred uses first. The function's
+borrowed parameters remain available to its caller, so `drop` rejects them.
 
 Use the same repair before moving or destroying a borrowed owner. Copying a
 scalar out of a view does not keep that view alive. A pointer or another
@@ -305,14 +309,13 @@ relationship. A view of a local temporary or a different input is rejected.
 
 ```crust
 var ticket: Ticket = make Ticket { code: 65i32 };
-{
-    var code: read i32 = ticket_code(read ticket);
-    if code != 65i32 { trap; }
-}
+var code: read i32 = ticket_code(read ticket);
+if code != 65i32 { trap; }
+drop code;
 drop ticket;
 ```
 
-The block ends before `drop ticket`. A helper that returns `mut T` needs
+The field view ends before `drop ticket`. A helper that returns `mut T` needs
 an exclusive input and a matching result origin. A node view uses the same
 syntax. The [intrusive tutorial](../examples/intrusive/README.md#traverse-and-borrow-payload)
 shows scoped cursors and payload views behind an opaque interface.

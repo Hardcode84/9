@@ -63,6 +63,23 @@ def cleanup_tree_source(depth):
 def runtime_cases():
     return [
         (
+            "end-local-borrow",
+            program(
+                "var value:Token=token(65i32);var view:mut Token=mut value;"
+                "var child:read Token=read view;drop child;drop view;drop value;emit(66i32);"
+            ),
+            b"AB",
+        ),
+        (
+            "end-returned-borrow",
+            program(
+                "var value:Token=token(65i32);var view:read Token=identity(read value);"
+                "drop view;drop value;",
+                "fn identity(value:read Token)->read Token from value {return read value;}",
+            ),
+            b"A",
+        ),
+        (
             "consume-pointer-through-mutable-borrow",
             program(
                 "unsafe {var value:i32=7i32; var pointer:*i32=&value;"
@@ -638,6 +655,32 @@ def reject_cases():
     observe = "fn observe(value:read Token)->unit {}"
     condition = "fn condition(value:Token)->bool { return true; }"
     return [
+        (
+            "end-borrow-with-child",
+            program(
+                "var value:Token=token(65i32);var view:read Token=read value;"
+                "var child:read Token=read view;drop view;"
+            ),
+            "child loans",
+        ),
+        (
+            "end-deferred-borrow",
+            program(
+                "var value:Token=token(65i32);var view:read Token=read value;"
+                "defer observe(read view);drop view;",
+                observe,
+            ),
+            "child loans",
+        ),
+        (
+            "ended-borrow-use",
+            program(
+                "var value:Token=token(65i32);var view:read Token=read value;"
+                "drop view;observe(read view);",
+                observe,
+            ),
+            "has been moved",
+        ),
         (
             "explicit-drop-twice",
             program("var value:Token=token(65i32); drop value; drop value;"),

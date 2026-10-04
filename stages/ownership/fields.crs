@@ -62,6 +62,10 @@ fn os_drop_statement(check: *OsCheck, state: *OsState, statement: *CrustStmt) ->
     if (*expression).kind != CRUST_E_NAME {
         os_error(check, &(*statement).loc, "drop requires a whole owner or an owned allocation"); return;
     }
+    var binding: *OsSlot = os_local(state, (*expression).name);
+    if binding != null(*OsSlot) && os_borrowed((*binding).syntax) {
+        os_drop_borrow(check, state, binding, &(*statement).loc); return;
+    }
     var slot: *OsSlot = os_place(check, state, expression);
     if slot == null(*OsSlot) || os_failed(check) { return; }
     var value: *OsValue = os_read_slot(check, state, slot, &(*statement).loc);
@@ -71,5 +75,21 @@ fn os_drop_statement(check: *OsCheck, state: *OsState, statement: *CrustStmt) ->
         os_error(check, &(*statement).loc, "drop requires a whole owner or an owned allocation"); return;
     }
     os_drop_object(check, state, (*value).object, &(*statement).loc);
+    os_set(check, state, slot as *u8, null(*OsValue), 0u32);
+}
+
+fn os_drop_borrow(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> unit {
+    if (*slot).argument { os_error(check, location, "cannot drop a borrowed value"); return; }
+    var value: *OsValue = os_slot_value(check, state, slot, location);
+    if value == null(*OsValue) || os_failed(check) { return; }
+    var child: *OsLoan = (*check).loans;
+    while child != null(*OsLoan) && !os_failed(check) {
+        if child != (*value).loan && (os_loan_flags(state, child) & OS_LIVE) != 0u32 &&
+           os_loan_ancestor(check, (*value).loan, child) {
+            os_error(check, location, "cannot end a borrow with live child loans"); return;
+        }
+        child = (*child).next;
+    }
+    os_loan_end(check, state, value);
     os_set(check, state, slot as *u8, null(*OsValue), 0u32);
 }

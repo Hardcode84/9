@@ -20,10 +20,9 @@ fn set_code(ticket: mut Ticket, code: i32) -> unit {
 fn main(argc: i32, argv: **u8) -> i32 {
     var first: Ticket = make Ticket { code: 65i32 };
     var ticket: Ticket = move first;
-    {
-        var code: read i32 = ticket_code(read ticket);
-        if code != 65i32 { trap; }
-    }
+    var code: read i32 = ticket_code(read ticket);
+    if code != 65i32 { trap; }
+    drop code;
     set_code(mut ticket, 66i32);
     drop ticket;
     { var last: Ticket = make Ticket { code: 67i32 }; }

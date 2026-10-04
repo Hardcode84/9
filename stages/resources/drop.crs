@@ -6,6 +6,22 @@ fn rs_drop_local(function: *RsFunction, source: *CrustExpr, place: *RsValue) -> 
     return (*source).kind == CRUST_E_NAME && local != null(*RsLocal) && (*local).mode == 0u32;
 }
 
+fn rs_drop_borrow(function: *RsFunction, local: *RsLocal, location: *CrustLoc) -> bool {
+    var stage: *RsStage = (*function).stage;
+    // Parameters occupy the outer function scope; source locals occupy its body.
+    if (*(*local).scope).parent == null(*RsScope) {
+        rs_error(stage, location, "cannot drop a borrowed value"); return false;
+    }
+    rs_access(function, local, false, location);
+    if !(*stage).delegate_memory && ((*local).readers != 0usize || (*local).exclusive) {
+        rs_error(stage, location, "cannot end a borrow with live child loans"); return false;
+    }
+    if (*stage).failed { return false; }
+    rs_end_loan(function, local);
+    rs_live(function, local, false);
+    return true;
+}
+
 fn rs_lower_drop(function: *RsFunction, source: *CrustStmt, output: *RsStatements) -> bool {
     var stage: *RsStage = (*function).stage;
     var operand: *CrustExpr = (*source).expr;
@@ -13,7 +29,7 @@ fn rs_lower_drop(function: *RsFunction, source: *CrustStmt, output: *RsStatement
     if (*operand).kind == CRUST_E_NAME {
         var binding: *RsLocal = crust_map_get(&(*function).locals, (*operand).name as usize) as *RsLocal;
         if binding != null(*RsLocal) && (*binding).mode != 0u32 {
-            rs_error(stage, &(*source).loc, "cannot drop a borrowed value"); return false;
+            return rs_drop_borrow(function, binding, &(*source).loc);
         }
     }
     var effects: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };

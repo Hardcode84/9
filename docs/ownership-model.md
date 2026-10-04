@@ -12,8 +12,11 @@ implemented in Crust. Read the [tutorial](ownership.md) for examples and the
 `resource` adds a destructor. `move` transfers its cleanup duty. `read T` lends
 shared access; `mut T` lends exclusive access. Ordinary values remain copyable.
 The checker rejects use after move, duplicate owners, uninitialized reads,
-conflicting loans, and destruction through a borrower. Named loans last to the
-end of their lexical scope. Reborrows prevent conflicting use of their parent.
+conflicting loans, and destruction through a borrower. Named local loans end
+at `drop` or lexical scope exit. Explicit ending requires all child loans and
+deferred uses to have ended. It invalidates the binding without destroying the
+borrowed value or emitting code. Borrowed parameters cannot be dropped.
+Reborrows prevent conflicting use of their parent.
 Direct fields of an ordinary record can be borrowed separately. A loan of the
 whole record covers all its fields. Moving, replacing, or destroying a record
 requires every conflicting field loan to have ended.

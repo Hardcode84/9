@@ -48,8 +48,9 @@ uses intersection at a join.
 
 Loans have lexical scopes. Explicit `drop` of a view ends its loan. The target
 remains borrowed until the view's scope ends or the view is consumed, even
-after its last read. Use an inner block when access must end before the
-surrounding scope.
+after its last read. Use `drop` or an inner block to end a local view before
+the surrounding scope. Explicit ending requires all child loans to have ended.
+Borrowed parameters cannot be dropped.
 
 ## 2. Function boundaries
 

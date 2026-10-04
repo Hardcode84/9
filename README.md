@@ -59,7 +59,7 @@ the third runs it.
 ## Credits
 
 [Joseph Huber (@jhuber6)](https://github.com/jhuber6) is Our spiritual
-leader and the author of its name.
+leader and the author of the language name.
 
 ## License
 

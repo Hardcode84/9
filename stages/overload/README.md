@@ -36,14 +36,14 @@ program loads [api.crs](api.crs) and `build/crust-overload-library.so`.
 The final `overload_build` call passes the unread range of the same file.
 The runner treats this as an ordinary library call.
 
-The target has two definitions:
+The target defines two overloads with these signatures:
 
 ```crust
-fn hello(text: *u8) -> i32 { /* print text */ }
-fn hello(count: u32) -> i32 { /* print count greetings */ }
+fn hello(text: *u8) -> i32;
+fn hello(count: u32) -> i32;
 ```
 
-These headers summarize the definitions; see the linked source for their
+These declarations summarize the interfaces; see the linked source for their
 bodies. The string overload wraps the native `puts` call. The integer
 overload loops and calls the string overload.
 

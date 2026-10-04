@@ -23,18 +23,25 @@ lifetimes. Its root also contains all compiler and linker options.
 The stage extends Crust0 with these forms:
 
 ```crust
+extern fn release(handle: *u8) -> unit = "free";
 resource File { handle: *u8; } drop file_drop;
 
-fn file_drop(value: mut File) -> unit { /* audited release */ }
-fn use(value: read File) -> unit { /* shared access */ }
-fn update(value: mut File) -> unit { /* exclusive access */ }
-fn consume(value: File) -> unit { /* ownership transfers to this call */ }
+fn file_drop(value: mut File) -> unit {
+    unsafe { release(value.handle); }
+}
+fn use(value: read File) -> unit {}
+fn update(value: mut File) -> unit {}
+fn consume(value: File) -> unit {}
 
 // Within a function:
 var second: File = move first;
 use(read second);
 defer update(mut second);
 ```
+
+This wrapper requires a pointer that can be passed to C `free`. The three
+empty helpers show parameter modes. `consume` takes the cleanup obligation
+and drops its parameter on return.
 
 A resource is a nominal record with a declared drop function. Its raw fields
 and construction require `unsafe`. Ordinary records and fixed arrays own their

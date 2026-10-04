@@ -341,6 +341,11 @@ owner, loan, and domain-access facts. Each body is checked against declared
 interfaces. Calls use callee contracts. Each function keeps its own local
 state, and the stage implements the checking policy in Crust.
 
+Local owners and transparent exclusive heap trees need no domain. Field loans
+can protect separate fields of an ordinary record. `drop` ends a named local
+loan before scope exit. A domain supplies the access boundary for persistent
+internal aliases in an opaque container.
+
 The [intrusive implementation](../examples/intrusive/README.md) is explicitly
 trusted by the root. Its opaque types hide direct pointer fields. The provider
 must preserve internal references and unlink before retirement. The client

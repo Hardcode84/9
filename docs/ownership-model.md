@@ -105,8 +105,8 @@ resource with `read` or `mut`; a raw owned field cannot become a scalar loan.
 Pass or return the resource wrapper across ordinary source function boundaries.
 The current scalar function types do not declare a native resource kind.
 
-Owned native fields need no storage domain. A domain is needed when the program
-also declares persistent storage references or allocation ownership. A resource
+Owned native fields and exclusive allocation trees need no storage domain.
+Use a domain for a closed boundary with persistent internal aliases. A resource
 without a domain can be embedded in a record that has a domain. Function
 bodies use the field and function declarations. Imported bodyless interfaces
 retain the same contracts. An ordinary mutable call can replace an owned field;

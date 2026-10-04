@@ -173,10 +173,14 @@ Other useful checks in the descriptor example are:
 | Add `hello(mut output)` after its deferred call | The defer holds an exclusive loan |
 | Move an outer owner in only one continuing branch | The paths disagree on the live cleanup obligation |
 
-These rules keep cleanup statically determined. Named loans last until
-scope exit; temporary call loans last through the call. A field or element
+These rules keep cleanup statically determined. Named local loans last until
+explicit `drop` or scope exit; temporary call loans last through the call.
+Ending a local loan requires all child loans and deferred uses to have ended.
+A borrowed parameter cannot be dropped. A field or element
 loan reserves its complete root binding. The checker does not infer shorter
-last-use lifetimes or independent loans for disjoint fields.
+last-use lifetimes or independent loans for disjoint fields. The composed
+[ownership stage](../../docs/ownership.md#borrow-separate-fields) checks field
+overlap and permits separate loans for disjoint ordinary fields.
 
 The [returned-view example](../../examples/resources/returned/README.md) adds a
 field accessor whose result retains its input loan. Its `from` clause names the

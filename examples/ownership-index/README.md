@@ -102,6 +102,7 @@ function boundary. These examples do not require that additional interface.
 ## Check the boundary
 
 ```sh
+make check-ownership
 python3 tests/ownership_index.py --sanitize
 ```
 

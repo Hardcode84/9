@@ -19,7 +19,7 @@ a decimal exit status from 0 through 255 and an optional final line feed.
 The supplied [answer.txt](answer.txt) contains `42`.
 
 The reader constructs an ordinary Crust syntax tree. The program checks that
-tree, replaces the assembly operation for addition by zero, and emits an
+tree, replaces the assembly operation for addition by zero, and emits a
 `crust_stage_answer` function. [answer_main.c](answer_main.c) calls that function.
 The emitted assembly contains `# stage: add zero` from the selected operation.
 

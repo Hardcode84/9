@@ -18,7 +18,7 @@ make check-asm
 [the C bootstrap](../c/bootstrap.crs), then uses that compiler to build this
 library. The [cache tutorial](../../examples/cached-backend/README.md) instead
 interprets this assembly stage directly to prepare its first native library.
-Neither route needs a checked-in generated file or binary.
+Neither route needs a checked-in generated backend file or binary.
 
 ## Interface
 

@@ -20,7 +20,8 @@ required `build` function, or backend selector in the launcher.
 
 The installed host profile is Linux x86-64 System V. Build the C99 seed with
 a C99 compiler, Make, Python 3, and libffi development headers and library.
-The optional C backend also requires GCC, GNU assembler, and GNU `objcopy`.
+The full build below also needs GCC, GNU assembler, and GNU `objcopy` to prepare
+the external backends. `make build/crust` builds only the seed launcher.
 
 ```sh
 make all c-stage

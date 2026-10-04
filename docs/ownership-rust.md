@@ -42,8 +42,8 @@ does not need them to understand a move or repair a loan conflict.
 
 Rust's [borrowing chapter](https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html)
 explains shared and mutable references and last-use lifetimes. Crust's lexical
-loans can require additional scopes. This implementation does not claim equal
-expressiveness or equal ergonomics.
+loans can require explicit `drop` or an additional scope. This implementation
+does not claim equal expressiveness or equal ergonomics.
 
 ## Container authors
 

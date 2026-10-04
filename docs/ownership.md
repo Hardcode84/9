@@ -11,8 +11,9 @@ This tutorial teaches the ownership stage. It combines local owners and loans
 with explicit domain access for opaque containers. The
 [stage contract](ownership-model.md) defines the rules used by the examples.
 
-Container implementations require explicit root-selected trust; their clients
-use checked interfaces.
+Opaque container implementations require explicit root-selected trust; their
+clients use checked interfaces. Transparent owners of exclusive allocations
+can have checked constructors and destructors.
 
 Start here if you can already write a function and a record. You do not need
 to know the compiler implementation or a proof language.
@@ -212,6 +213,11 @@ as `move h.inner`, would leave its owner's cleanup without an initialized
 field. The diagnostic says that cleanup requires the whole owner. Borrow the
 field for temporary access, or move its containing owner.
 
+Taking a raw address of an owner or one of its inline records makes that
+storage immovable for the rest of its lifetime. Use a loan for temporary
+access. An address inside a heap allocation leaves its separate owning handle
+movable; the allocation stays in place.
+
 **Rejected: using a moved value.**
 
 ```crust
@@ -292,6 +298,29 @@ if count != 7i64 { trap; }
 
 The parent view cannot be used while a conflicting child view remains live.
 In this example, the inner block ends before `view = 7i64`.
+
+### Borrow separate fields
+
+Fields of an ordinary record can have independent loans. Add this declaration
+beside the other records, then use the statements in `main`:
+
+```crust
+record Pair { left: i64; right: i64; }
+```
+
+```crust
+var pair: Pair = make Pair { left: 1i64, right: 2i64 };
+var left: mut i64 = mut pair.left;
+var right: mut i64 = mut pair.right;
+left = 3i64;
+right = 4i64;
+drop left;
+drop right;
+if pair.left + pair.right != 7i64 { trap; }
+```
+
+A loan of the whole `pair` covers both fields. Moving, replacing, or destroying
+the record requires all conflicting field loans to have ended.
 
 ## 5. Return a borrowed field
 
@@ -475,7 +504,7 @@ build/ownership-heap
 
 The output is `AB` and a newline. The first owner is destroyed before the
 replacement is created. The allocator can reuse the address. A new allocation
-does not make a cursor from the old allocation valid again.
+has a new checked lifetime; expired pointers and views remain unusable.
 
 ## 7. Use an opaque container
 

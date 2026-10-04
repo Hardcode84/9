@@ -36,8 +36,8 @@ fn current(counter:read Counter)->read i32 from counter {
 each return. A return cannot borrow new local storage, a different parameter,
 or storage reached only through a raw pointer.
 
-The call transfers its temporary input loan to the result. The loan ends
-when the result's scope ends. It does not end when `current` returns.
+The call transfers its temporary input loan to the result. A named local view
+ends at `drop` or scope exit. The loan remains live after `current` returns.
 
 ## End one loan before the next
 

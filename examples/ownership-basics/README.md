@@ -78,6 +78,7 @@ facts do not appear in the output. Resource lowering inserts ordinary cleanup
 calls. The example checks that each wrapper has the size of its raw handle.
 
 ```sh
+make check-ownership
 python3 tests/ownership_native.py --sanitize
 ```
 

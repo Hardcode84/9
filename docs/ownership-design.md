@@ -80,9 +80,9 @@ The stage can recognize a direct invalid-sentinel test; it does not prove
 arithmetic conditions to recover ownership or validity.
 
 A destructor's required permission is part of the resource type. Implicit
-cleanup cannot call a destructor that an explicit call could not call at the
-same point. Check generated cleanup paths as well as written calls. Deferred
-calls keep their captured owners or loans until they run.
+cleanup requires the same permission as explicit `drop` at that point.
+Check generated cleanup paths as well as written calls. Deferred calls keep
+their captured owners or loans until they run.
 
 A checked helper can forward a borrow of an opaque owner handle to a
 reclamation call. The handle borrow protects its own storage. An interior
@@ -102,7 +102,14 @@ Ordinary owners and loans need no domain. Use a domain when a trusted library
 manages stable objects with internal aliases. A domain is a static access
 boundary. It is not an allocator, pool, arena, registry, or reference count.
 
-Each instance has a distinct compile-time identity and one reclamation
+Transparent exclusive allocation trees use `owns(field: storage)` and local
+loans. Their constructors and destructors are checked from their declarations.
+Their stored fields must be transparent and domain-free, including embedded
+value records. Stored loans are rejected because owning result interfaces
+cannot describe their origins. Independent owner trees can be destroyed
+independently, including while another tree has a live loan.
+
+Each domain instance has a distinct compile-time identity and one reclamation
 authority. Types and interfaces carry that identity. A second authority for
 an existing identity cannot be constructed. Independent instances cannot be
 mixed. Creating a fresh instance does not permit existing objects to change
@@ -402,9 +409,9 @@ resource lowering and C emission with and without the ownership pass in the
 erasure harness. Require identical emitted C and symbols. Do not expose the
 unchecked harness path as an alternative with the same safety claim.
 
-Use the intrusive client, native-handle code, a returned-view client, and an
-owning-tree client. Also measure independent provider and client builds. The
-budget is a median total frontend ratio at most `2.0` against the
+Use the intrusive client, tree with parent links, one-way index, native handles,
+stored views, and exclusive heap owners. Also measure independent provider and
+client builds. The budget is a median total frontend ratio at most `2.0` against the
 resource-only path on a large client workload, using randomized paired runs
 and reporting uncertainty. Measure `1x`, `2x`, and `4x` copies of independent
 function bodies to detect scaling faults. Report the ownership pass separately.

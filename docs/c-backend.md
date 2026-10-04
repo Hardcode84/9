@@ -260,7 +260,7 @@ or prove their implementations. A private Crust function named `memcpy` does
 not replace the native symbol unless the driver exports it under that name.
 
 GCC configuration and extra `--cflag` arguments can add further dependencies.
-The tested Ubuntu GCC 13.3.0 configuration enables
+Toolchain defaults can enable
 `-fstack-protector-strong`, `-fstack-clash-protection`, and
 `-fcf-protection=full`. Stack protection can call `__stack_chk_fail`, which must
 terminate on guard failure. Control-flow protection can emit `endbr64`.

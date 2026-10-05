@@ -1,48 +1,49 @@
 // SPDX-License-Identifier: Apache-2.0
 
+fn su_variant(stage:*SuStage,sum:*SuType,name:*CrustName,location:*CrustLoc)->*SuVariant {
+    var variant:*SuVariant=sum->variants;
+    while variant!=null(*SuVariant) {
+        if variant->name==name { return variant; }
+        variant=variant->next;
+    }
+    su_error(stage,location,"unknown union variant");return null(*SuVariant);
+}
+
 fn su_construct(stage:*SuStage,stmt:*CrustStmt,sum:*SuType,op:*SuOperation)->unit {
-    var location:*CrustLoc=&stmt->loc;
-    var variant:*SuVariant=su_variant(stage,sum,op->variant,location);
-    if variant==null(*SuVariant) { return; }
-    if (variant->syntax->kind==CRUST_T_UNIT)!=(stmt->value==null(*CrustExpr)) {
-        su_error(stage,location,"construction requires the variant payload, or no payload for unit");return;
-    }
-    var name:*CrustName=su_fresh(stage);
-    var syntax:*CrustTypeSyntax=su_pointer(stage,su_named(stage,op->type_name,location),location);
-    var target:*CrustStmt=su_variable(stage,name,syntax,su_unary(stage,CRUST_OP_ADDRESS,stmt->expr,location),location);
-    var base:*CrustExpr=su_unary(stage,CRUST_OP_DEREF,su_name(stage,name,location),location);
-    var tag:*CrustStmt=su_assign(stage,su_field(stage,base,stage->tag_name,location),su_number(stage,variant->tag,location),location);
-    if stage->context->error_count!=0usize { return; }
-    target->next=tag;
-    if stmt->value!=null(*CrustExpr) {
-        var write:*CrustStmt=su_assign(stage,su_payload(stage,base,variant->syntax,location),stmt->value,location);
-        if write==null(*CrustStmt) { return; }
-        target->next=write;write->next=tag;
-    }
-    stmt->kind=CRUST_S_BLOCK;stmt->body=target;stmt->expr=null(*CrustExpr);stmt->value=null(*CrustExpr);
+    var variant:*SuVariant=su_variant(stage,sum,op->variant,&stmt->loc);
+    if variant==null(*SuVariant){return;}
+    domain CompilerArena{edit CompilerArena{
+        var builder:SuBuilder=make SuBuilder{stage:stage,location:&stmt->loc};
+        var name:SuName=make SuName{pointer:op->type_name};
+        var syntax:SuSyntax=make SuSyntax{pointer:variant->syntax};
+        var target:SuExpression=make SuExpression{pointer:stmt->expr};
+        var payload:SuExpression=make SuExpression{pointer:stmt->value};
+        var result:SuStatement=su_checked_construct(read builder,read name,read syntax,read target,read payload,variant->tag,variant->syntax->kind==CRUST_T_UNIT);
+        if stage->context->error_count==0usize{
+            stmt->kind=CRUST_S_BLOCK;stmt->body=result.pointer;stmt->expr=null(*CrustExpr);stmt->value=null(*CrustExpr);
+        }
+    }}
 }
 
 fn su_match_arm(stage:*SuStage,arm:*SuArm,variant:*SuVariant,snapshot:*CrustName)->*CrustStmt {
-    var block:*CrustStmt=su_stmt(stage,CRUST_S_BLOCK,&arm->location);
-    if block==null(*CrustStmt) { return block; }
-    block->body=arm->body;
-    if arm->binding!=null(*CrustName) {
-        if variant->syntax->kind==CRUST_T_UNIT { su_error(stage,&arm->location,"unit variant has no binding");return null(*CrustStmt); }
-        var value:*CrustExpr=su_payload(stage,su_name(stage,snapshot,&arm->location),variant->syntax,&arm->location);
-        var binding:*CrustStmt=su_variable(stage,arm->binding,variant->syntax,value,&arm->location);
-        if binding==null(*CrustStmt) { return null(*CrustStmt); }
-        block->body=binding;binding->next=arm->body;
-    }
-    return block;
+    domain CompilerArena{edit CompilerArena{
+        var builder:SuBuilder=make SuBuilder{stage:stage,location:&arm->location};
+        var name:SuName=make SuName{pointer:snapshot};
+        var binding:SuName=make SuName{pointer:arm->binding};
+        var body:SuStatement=make SuStatement{pointer:arm->body};
+        var syntax:SuSyntax=make SuSyntax{pointer:variant->syntax};
+        var result:SuStatement=su_checked_arm(read builder,read name,read binding,read body,read syntax,variant->syntax->kind==CRUST_T_UNIT);
+        return result.pointer;
+    }}
 }
 
 fn su_match_test(stage:*SuStage,snapshot:*CrustName,variant:*SuVariant,location:*CrustLoc)->*CrustExpr {
-    var condition:*CrustExpr=su_expr(stage,CRUST_E_BINARY,location);
-    if condition==null(*CrustExpr) { return condition; }
-    condition->op=CRUST_OP_EQ;
-    condition->left=su_field(stage,su_name(stage,snapshot,location),stage->tag_name,location);
-    condition->right=su_number(stage,variant->tag,location);
-    return condition;
+    domain CompilerArena{edit CompilerArena{
+        var builder:SuBuilder=make SuBuilder{stage:stage,location:location};
+        var name:SuName=make SuName{pointer:snapshot};
+        var result:SuExpression=su_checked_test(read builder,read name,variant->tag);
+        return result.pointer;
+    }}
 }
 
 fn su_match_arms(stage:*SuStage,sum:*SuType,op:*SuOperation,snapshot:*CrustName,location:*CrustLoc)->*CrustStmt {
@@ -68,11 +69,19 @@ fn su_match_arms(stage:*SuStage,sum:*SuType,op:*SuOperation,snapshot:*CrustName,
 }
 
 fn su_match(stage:*SuStage,stmt:*CrustStmt,sum:*SuType,op:*SuOperation)->unit {
-    var name:*CrustName=su_fresh(stage);
-    var snapshot:*CrustStmt=su_variable(stage,name,su_named(stage,op->type_name,&stmt->loc),stmt->expr,&stmt->loc);
-    var arms:*CrustStmt=su_match_arms(stage,sum,op,name,&stmt->loc);
-    if stage->context->error_count!=0usize { return; }
-    snapshot->next=arms;stmt->kind=CRUST_S_BLOCK;stmt->body=snapshot;stmt->expr=null(*CrustExpr);
+    domain CompilerArena{edit CompilerArena{
+        var builder:SuBuilder=make SuBuilder{stage:stage,location:&stmt->loc};
+        var name:SuName=su_fresh(read builder);
+        var type_name:SuName=make SuName{pointer:op->type_name};
+        var syntax:SuSyntax=su_named(read builder,read type_name);
+        var value:SuExpression=make SuExpression{pointer:stmt->expr};
+        var snapshot:SuStatement=su_variable(read builder,read name,read syntax,read value);
+        var arms:SuStatement=make SuStatement{pointer:su_match_arms(stage,sum,op,name.pointer,&stmt->loc)};
+        var body:SuStatement=su_sequence(read snapshot,read arms);
+        if stage->context->error_count==0usize{
+            stmt->kind=CRUST_S_BLOCK;stmt->body=body.pointer;stmt->expr=null(*CrustExpr);
+        }
+    }}
 }
 
 fn su_lower(stage:*SuStage,stmt:*CrustStmt,depth:usize)->unit {

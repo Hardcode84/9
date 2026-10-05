@@ -14,6 +14,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
+RAW_FILES = ("layout.crs", "nodes.crs", "lower.crs")
+PROVIDER_FILES = ("layout.crs", "layout_handles.crs", "nodes.crs", "lower.crs")
+CHECKED_FILES = ("layout_checked.crs", "lower_checked.crs")
 
 
 class Experiment:
@@ -72,13 +75,20 @@ def opaque(declaration):
     return declaration["text"] + (" opaque;" if declaration["opaque"] else "")
 
 
-def prepare(experiment, sources, raw_layout):
+def prepare(experiment, sources, raw_stage):
     dependencies, target, exports = [], [], []
     dependency_paths = []
     for path in sources:
-        if path.name in ("layout_handles.crs", "layout_checked.crs"):
+        if path.parent == ROOT / "stages/union" and path.name in (
+            "layout_handles.crs",
+            *CHECKED_FILES,
+        ):
             continue
-        selected = raw_layout if path == ROOT / "stages/union/layout.crs" else path
+        selected = (
+            raw_stage / path.name
+            if path.parent == ROOT / "stages/union" and path.name in RAW_FILES
+            else path
+        )
         declarations = experiment.declarations(selected)
         if path.parent == ROOT / "stages/union":
             target.extend(declarations)
@@ -132,12 +142,15 @@ def prepare(experiment, sources, raw_layout):
         "field.crs",
         port + "\nfn probe_serial(stage:read SuStage)->usize { return stage.serial; }\n",
     )
-    provider = experiment.capture(ROOT / "stages/union/layout.crs").read_text()
-    provider += "\n" + experiment.capture(ROOT / "stages/union/layout_handles.crs").read_text()
-    checked = experiment.capture(ROOT / "stages/union/layout_checked.crs").read_text()
+    provider = "\n".join(
+        experiment.capture(ROOT / "stages/union" / name).read_text() for name in PROVIDER_FILES
+    )
+    checked = "\n".join(
+        experiment.capture(ROOT / "stages/union" / name).read_text() for name in CHECKED_FILES
+    )
     candidate = port
     for declaration in target:
-        if declaration["path"] == str(raw_layout.relative_to(ROOT)):
+        if declaration["path"] in {str((raw_stage / name).relative_to(ROOT)) for name in RAW_FILES}:
             candidate = candidate.replace(declaration["text"], "")
     experiment.write("arena.crs", candidate + "\n" + provider)
     experiment.write("arena-checked.crs", checked)
@@ -289,7 +302,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument(
-        "--raw-layout", type=Path, required=True, help="preserved raw layout control under build/"
+        "--raw-stage",
+        type=Path,
+        required=True,
+        help="directory with preserved raw layout.crs, nodes.crs, lower.crs under build/",
     )
     parser.add_argument("--rounds", type=int, default=7)
     parser.add_argument("--cpu", type=int, required=True)
@@ -297,9 +313,11 @@ def main():
     output = args.output.resolve()
     if output.exists() or not output.is_relative_to(ROOT / "build") or args.rounds < 3:
         parser.error("use a new directory under build/ and at least three rounds")
-    raw_layout = args.raw_layout.resolve()
-    if not raw_layout.is_relative_to(ROOT / "build"):
-        parser.error("raw control must be a preserved input under build/")
+    raw_stage = args.raw_stage.resolve()
+    if not raw_stage.is_relative_to(ROOT / "build") or not all(
+        (raw_stage / name).is_file() for name in RAW_FILES
+    ):
+        parser.error("raw control must contain layout.crs, nodes.crs and lower.crs under build/")
     os.sched_setaffinity(0, {args.cpu})
     output.mkdir(parents=True)
     sys.path.insert(0, str(ROOT / "tests"))
@@ -315,7 +333,7 @@ def main():
     ):
         experiment.capture(path)
     dependencies, target, paths, exports = prepare(
-        experiment, packages.sources(ROOT / "build", "union/package.crs"), raw_layout
+        experiment, packages.sources(ROOT / "build", "union/package.crs"), raw_stage
     )
     driver = compile_driver(
         experiment, packages.sources(ROOT / "build", "generics/ownership/package.crs")
@@ -338,6 +356,16 @@ def main():
     checked_source = (output / "arena-checked.crs").read_text()
     checked_rejections = {}
     for name, source, diagnostic in (
+        (
+            "builder-private-representation",
+            checked_source.replace("var name:SuName=", "destination.pointer;var name:SuName=", 1),
+            "opaque fields",
+        ),
+        (
+            "builder-borrowed-drop",
+            checked_source.replace("var name:SuName=", "drop destination;var name:SuName=", 1),
+            "borrowed value",
+        ),
         (
             "private-representation",
             checked_source.replace(
@@ -393,7 +421,7 @@ def main():
             )
         samples.append(sample)
     report = {
-        "status": "production layout arithmetic and field/variant folds checked; pointer access and AST writes retain explicit trust",
+        "status": "production layout, construction and match-arm rules checked; pointer access, traversal and AST writes retain explicit trust",
         "scope": "union stage; raw reader and C backend dependencies behind native interfaces",
         "cpu": args.cpu,
         "attempts": attempts,
@@ -416,22 +444,30 @@ def main():
         },
         "samples": samples,
         "checked_generic_frontend_ns": None,
-        "layout_slice": {
+        "production_slice": {
             "checked_functions": sum(
                 line.startswith("fn ") for line in checked_source.splitlines()
             ),
             "checked_source_lines": len((output / "arena-checked.crs").read_text().splitlines()),
             "provider_source_lines": sum(
                 len((ROOT / "stages/union" / name).read_text().splitlines())
-                for name in ("layout.crs", "layout_handles.crs")
+                for name in PROVIDER_FILES
             ),
-            "raw_functions_outside_layout": sum(
-                d["kind"] == 1 for d in target if d["path"] != str(raw_layout.relative_to(ROOT))
+            "raw_functions_outside_provider": sum(
+                d["kind"] == 1
+                for d in target
+                if d["path"]
+                not in {str((raw_stage / name).relative_to(ROOT)) for name in RAW_FILES}
             ),
-            "boundary": "raw entry, nonnull arena handles, type lookup, cursor steps, AST allocation and storage updates",
-            "restructuring": "cache state distinguishes a new zeroed layout from cached computing/complete layouts; raw entry preserves null and allocation handling",
+            "provider_functions": sum(
+                line.startswith("fn ")
+                for name in PROVIDER_FILES
+                for line in (ROOT / "stages/union" / name).read_text().splitlines()
+            ),
+            "boundary": "raw entry, arena handles, type lookup, cursor steps, operation traversal, match coverage, AST allocation and writes",
+            "restructuring": "live layout handles; nullable typed AST fragments; raw bridges publish checked construction only when the context has no errors",
         },
-        "checked_layout_frontend_ratio": statistics.median(
+        "checked_production_frontend_ratio": statistics.median(
             sum(s["arena"].values()) / sum(s["raw"].values()) for s in samples
         ),
         "cost_scope": "fresh native process; read/copy and root trust selection, checks, emission timed separately; initialization, naming, teardown, file IO, GCC and linking excluded; opaque is a trust-only control",

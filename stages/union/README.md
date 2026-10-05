@@ -70,12 +70,19 @@ storage carrier selection, and the final tag size. The package treats this file
 as an untrusted input.
 An invalid field access or borrow operation stops normal stage preparation.
 
+[lower_checked.crs](lower_checked.crs) checks construction and match-arm rules.
+Construction evaluates the destination once, writes the payload, then writes
+the tag. A match binding copies its payload before the arm body starts. The
+checked code rejects a payload for a unit variant, a missing required payload,
+and a binding for a unit arm. It also builds each arm's tag comparison.
+
 [layout_handles.crs](layout_handles.crs) and [layout.crs](layout.crs) are the
 explicitly trusted provider. They handle arena pointers, cache lookup and
 insertion, type lookup, cursor steps, diagnostics, and AST storage construction.
-The typed cache helper is a generic function. The other union files, reader,
-and backend also have explicit raw-source trust. The package does not claim
-that those bodies have passed ownership checking.
+The typed cache helper is a generic function. [nodes.crs](nodes.crs) is the
+trusted AST builder. [lower.crs](lower.crs) bridges raw syntax to checked
+lowering and retains operation traversal, variant lookup, and match coverage
+checks. The reader, driver, and backend also have explicit raw-source trust.
 
 The owning context keeps arena storage live through a layout request. Opaque
 scoped handles contain live declaration, layout, and location pointers.
@@ -88,6 +95,14 @@ Checked code selects diagnostics and computes the storage plan. The provider
 attaches diagnostics to source locations and writes the planned AST fields.
 The provider must preserve these contracts. These annotations add no runtime
 ownership metadata or validity checks.
+
+The AST builder uses scoped name, type, expression, and statement handles.
+Each node handle contains one arena pointer. An empty handle represents an
+absent fragment or a failed allocation. Constructors retain the context's
+allocation diagnostic. The entry bridge publishes a statement only when the
+context has no errors. The builder keeps pointer writes behind typed
+interfaces. These interfaces add provider code; that code remains part of the
+trusted implementation and is included in the measurement.
 
 The package uses the shared source-owned compiler selection and cache. Make
 builds the seed and test fixtures. The checker and backend bootstrap through

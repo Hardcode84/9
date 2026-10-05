@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn su_checked_construct(builder:read SuBuilder,type_name:read SuName,syntax:read SuSyntax,destination:read SuExpression,payload:read SuExpression,tag:u32,is_unit:bool)->SuStatement access(edit,CompilerArena){
+    if is_unit==su_has_expression(read payload){
+        su_build_error(read builder,true);
+        return su_no_statements();
+    }
+    var name:SuName=su_fresh(read builder);
+    var named:SuSyntax=su_named(read builder,read type_name);
+    var pointer:SuSyntax=su_pointer(read builder,read named);
+    var address:SuExpression=su_unary(read builder,CRUST_OP_ADDRESS,read destination);
+    var target:SuStatement=su_variable(read builder,read name,read pointer,read address);
+    var reference:SuExpression=su_name(read builder,read name);
+    var base:SuExpression=su_unary(read builder,CRUST_OP_DEREF,read reference);
+    var field:SuExpression=su_tag(read builder,read base);
+    var number:SuExpression=su_number(read builder,tag);
+    var finish:SuStatement=su_assign(read builder,read field,read number);
+    if !is_unit{
+        var storage:SuExpression=su_payload(read builder,read base,read syntax);
+        var write:SuStatement=su_assign(read builder,read storage,read payload);
+        var tail:SuStatement=su_sequence(read write,read finish);
+        return su_sequence(read target,read tail);
+    }
+    return su_sequence(read target,read finish);
+}
+
+fn su_checked_arm(builder:read SuBuilder,snapshot:read SuName,binding:read SuName,body:read SuStatement,syntax:read SuSyntax,is_unit:bool)->SuStatement access(edit,CompilerArena){
+    if su_has_name(read binding){
+        if is_unit{su_build_error(read builder,false);return su_no_statements();}
+        var reference:SuExpression=su_name(read builder,read snapshot);
+        var value:SuExpression=su_payload(read builder,read reference,read syntax);
+        var local:SuStatement=su_variable(read builder,read binding,read syntax,read value);
+        var sequence:SuStatement=su_sequence(read local,read body);
+        return su_block(read builder,read sequence);
+    }
+    return su_block(read builder,read body);
+}
+
+fn su_checked_test(builder:read SuBuilder,snapshot:read SuName,tag:u32)->SuExpression access(edit,CompilerArena){
+    var reference:SuExpression=su_name(read builder,read snapshot);
+    var field:SuExpression=su_tag(read builder,read reference);
+    var number:SuExpression=su_number(read builder,tag);
+    return su_equal(read builder,read field,read number);
+}

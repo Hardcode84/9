@@ -27,6 +27,7 @@ fn verify_grid()->i32 {
 fn callback(value:u64)->u64 { return value+1u64; }
 fn destination(value:*Item,count:*u32)->*Item { *count=*count*10u32+1u32;return value; }
 fn payload(count:*u32)->u32 { *count=*count*10u32+2u32;return 7u32; }
+fn overwrite_tiny(value:*Tiny)->u16 {construct Tiny.Byte(*value,1u8);return 511u16;}
 fn get_item(value:*Item,count:*u32)->*Item { *count=*count+1u32;return value; }
 fn verify()->i32 {
     if sizeof(Item)!=24usize || alignof(Item)!=8usize || sizeof(Outer)!=32usize { return 1i32; }
@@ -64,7 +65,7 @@ fn verify()->i32 {
     match Item(item) { Callback(call) { if call(41u64)!=42u64 { return 25i32; } } Point { return 26i32; } Array { return 27i32; } Link { return 28i32; } End { return 29i32; } }
     var flag:Flag=uninit;construct Flag.On(flag);
     match Flag(flag) { Off { return 30i32; } On {} }
-    var tiny:Tiny=uninit;construct Tiny.Word(tiny,511u16);
+    var tiny:Tiny=uninit;construct Tiny.Word(tiny,overwrite_tiny(&tiny));
     match Tiny(tiny) { Word(word) { if word!=511u16 { return 31i32; } } Byte { return 32i32; } }
     var count:u32=0u32;
     while count<3u32 {

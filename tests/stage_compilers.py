@@ -95,6 +95,19 @@ stage_source_option(stage,stage->sources.items[0usize],"b");
     checked.write_text(original.replace("access(edit,CompilerArena)", "access(read,CompilerArena)"))
     assert b"stronger domain authority" in run([seed, union_root], expected=1, cwd="/").stderr
     checked.write_text(original)
+    checked = work / "stages/union/lower_checked.crs"
+    original = checked.read_text()
+    for edit, diagnostic in (
+        ("destination.pointer;", b"opaque fields"),
+        ("drop destination;", b"borrowed value"),
+    ):
+        checked.write_text(original.replace("var name:SuName=", edit + "var name:SuName=", 1))
+        rejected = run([seed, union_root], expected=1, cwd="/")
+        assert diagnostic in rejected.stderr, rejected.stderr
+        assert b"lower_checked.crs:" in rejected.stderr, rejected.stderr
+    checked.write_text(original.replace("access(edit,CompilerArena)", "access(read,CompilerArena)"))
+    assert b"stronger domain authority" in run([seed, union_root], expected=1, cwd="/").stderr
+    checked.write_text(original)
     print(
         "stage compilers: source selection, compiler and option invalidation, failures, cycles, checked union passed"
     )

@@ -48,6 +48,11 @@ fn wrapper_drop!(Value)(value:mut Wrapper!(Value))->unit {}
 PROGRAM = """
 fn main(argc:i32,argv:**u8)->i32 {
     if sizeof(Plain)!=sizeof(Ticket) || alignof(Plain)!=alignof(Ticket) {trap;}
+    var scalar:i64=transfer!(i64)(42i64);
+    var boxed_scalar:Box!(i64)=wrap!(i64)(scalar);
+    if boxed_scalar.value!=42i64 {trap;}
+    var flag:bool=transfer!(bool)(true);if !flag {trap;}
+    discard!(i64)(scalar);
     var plain:Plain=make Plain{value:7i64};
     var copied:Plain=transfer!(Plain)(plain);
     discard!(Plain)(copied);
@@ -189,7 +194,32 @@ def rejection_cases():
             "field out of a resource",
         ),
         "array-owner": ("fn bad!(T)(value:[T;2])->unit{}", "arrays of owners"),
-        "integer-argument": ("fn use(value:Box!(i64))->unit{}", "sized movable record"),
+        "pointer-value-argument": (
+            "fn use()->unit{transfer!(*u8)(null(*u8));}",
+            "scalar or closed movable record",
+        ),
+        "scalar-use-after-drop": (
+            "fn use()->i64{var value:i64=7i64;drop value;return value;}",
+            "has been moved",
+        ),
+        "scalar-drop-with-loan": (
+            "fn use()->unit{var value:i64=7i64;var loan:read i64=read value;drop value;drop loan;}",
+            "active",
+        ),
+        "indirect-to-owner": (
+            "fn bad!(T)(value:read T)->unit{sizeof(Box!(T));}",
+            "indirect type parameter cannot satisfy a closed ownership contract",
+        ),
+        "indirect-to-owner-function": (
+            "fn closed!(T)()->usize{return sizeof(T);}"
+            "fn bad!(T)(value:read T)->usize{return closed!(T)();}",
+            "indirect type parameter cannot satisfy a closed ownership contract",
+        ),
+        "indirect-domain-authority": (
+            "domain Graph(Node);record Node{value:i64;}"
+            "fn use(value:read Node)->unit access(read,Graph){inspect_view!(Node)(read value);}",
+            "borrowed value requires its declared domain authority",
+        ),
         "same-layout-resource-copy": (
             "fn use(value:Ticket)->Ticket{return transfer!(Ticket)(value);}",
             "explicit move",
@@ -247,6 +277,44 @@ def check_payloads(compiler, directory, sanitize):
     execute(generated, symbols, directory, "payloads", sanitize, b"BCDE\n")
 
 
+def check_indirect(compiler, directory, sanitize):
+    provider = directory / "indirect-provider.crs"
+    provider.write_text(
+        "record Hidden{pointer:*u8;number:i64;} opaque;"
+        "fn hidden_new()->Hidden{return make Hidden{pointer:null(*u8),number:42i64};}"
+        "fn hidden_number(value:read Hidden)->i64{return value.number;}"
+    )
+    source = directory / "indirect-client.crs"
+    source.write_text(
+        DEFINITIONS + "domain Graph(Managed);record Managed{value:i64;}"
+        "fn observe_graph!(T)(value:read T)->read T access(read,Graph) from value{return read value;}"
+        "fn main(argc:i32,argv:**u8)->i32{var value:Hidden=hidden_new();"
+        "var loan:read Hidden=observe!(Hidden)(read value);"
+        "inspect_view!(Hidden)(read loan);"
+        "if hidden_number(read loan)!=42i64{trap;}"
+        "domain Graph{var node:Managed=make Managed{value:7i64};"
+        "var view:read Managed=observe_graph!(Managed)(read node);if view.value!=7i64{trap;}}"
+        "return 0i32;}"
+    )
+    generated, symbols = emit_c(compiler, directory, "indirect", [source], provider)
+    execute(generated, symbols, directory, "indirect", sanitize, b"")
+    for name, code in (
+        (
+            "unused",
+            "fn size!(T)()->usize{return sizeof(T);}fn use()->usize{return size!(Hidden)();}",
+        ),
+        (
+            "callback-value",
+            "fn call!(T)(value:fn()->T)->unit{}" "fn use()->unit{call!(Hidden)(hidden_new);}",
+        ),
+    ):
+        source.write_text(code)
+        result = command(
+            [compiler, "trusted", provider, "--library", "--check", source], expected=1
+        )
+        assert b"movable closed record" in result.stderr, (name, result.stderr)
+
+
 def check_intrusive(compiler, directory, sanitize):
     example = ROOT / "examples/generics/ownership"
     provider = directory / "provider.crs"
@@ -282,11 +350,12 @@ def main():
     with tempfile.TemporaryDirectory(prefix="ownership-generics-", dir=build) as temporary:
         directory = Path(temporary)
         check_payloads(compiler, directory, options.sanitize)
+        check_indirect(compiler, directory, options.sanitize)
         check_rejections(compiler, directory)
         check_intrusive(compiler, directory, options.sanitize)
     print(
         "ownership generics: abstract definitions, equal-layout payloads, helper interfaces, "
-        f"O0/O2, exact-address reuse, {len(rejection_cases()) + 1} rejections"
+        f"O0/O2, exact-address reuse, {len(rejection_cases()) + 3} rejections"
     )
 
 

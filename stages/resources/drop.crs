@@ -36,7 +36,7 @@ fn rs_lower_drop(function: *RsFunction, source: *CrustStmt, output: *RsStatement
     rs_scope(function);
     var place: *RsValue = rs_place(function, (*source).expr, &effects, true, false);
     if (*stage).failed { return false; }
-    if (*(*place).syntax).kind != CRUST_T_NAME || (!(*stage).delegate_memory && !rs_owns(stage, (*place).syntax)) {
+    if !rs_drop_type(stage, (*place).syntax) {
         rs_error(stage, &(*source).loc, "drop requires a resource or a record with resource fields"); return false;
     }
     var local: bool = rs_drop_local(function, (*source).expr, place);
@@ -62,4 +62,9 @@ fn rs_drop_action(function: *RsFunction, place: *RsValue, location: *CrustLoc) -
     } else { action = rs_stmt_node(stage, CRUST_S_BLOCK, location); }
     if action != null(*CrustStmt) { rs_transfer_place(function, action, consumed); }
     return action;
+}
+
+fn rs_drop_type(stage: *RsStage, syntax: *CrustTypeSyntax) -> bool {
+    if (*stage).delegate_memory { return (*syntax).kind < CRUST_T_UNIT || (*syntax).kind == CRUST_T_NAME; }
+    return (*syntax).kind == CRUST_T_NAME && rs_owns(stage, syntax);
 }

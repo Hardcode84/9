@@ -233,7 +233,7 @@ def native_checks(experiment, dependency_paths, exports, corpus):
     )
     runtime = experiment.write("runtime.crs", corpus.RUNTIME)
     artifacts = []
-    for name in ("raw", "opaque", "generic-raw"):
+    for name in ("raw", "opaque", "generic-raw", "generic"):
         obj = compile_object(experiment, name, flags)
         compiler = work / f"{name}-union"
         experiment.run(
@@ -267,7 +267,7 @@ def native_checks(experiment, dependency_paths, exports, corpus):
     return {
         "sanitizers": "address,undefined",
         "target_bytes_equal": True,
-        "runtime_cases": 3,
+        "runtime_cases": len(artifacts),
         "rejections_per_compiler": len(corpus.REJECT),
     }
 
@@ -305,7 +305,6 @@ def main():
     for name, selected, expected in (
         ("raw", "*", "persistent pointers require"),
         ("unannotated", "*", "persistent pointers require"),
-        ("generic", "*", "generic payload requires a movable closed record"),
         ("borrow", "probe_layout_record", "pointer argument requires a declared domain interface"),
         ("field", "probe_serial", "opaque fields are private to the trusted implementation"),
     ):
@@ -320,11 +319,16 @@ def main():
     rng = random.Random(0)
     samples = []
     for _ in range(args.rounds):
-        modes = ["raw", "opaque", "generic-raw"]
+        modes = ["raw", "opaque", "generic-raw", "generic"]
         rng.shuffle(modes)
         sample = {}
         for mode in modes:
-            frontend = {"raw": "raw", "opaque": "checked", "generic-raw": "generic"}[mode]
+            frontend = {
+                "raw": "raw",
+                "opaque": "checked",
+                "generic-raw": "generic",
+                "generic": "checked",
+            }[mode]
             result = probe(experiment, driver, mode, mode=frontend)
             sample[mode] = dict(
                 zip(
@@ -333,7 +337,7 @@ def main():
             )
         samples.append(sample)
     report = {
-        "decision": "no-go: generic cache rejected; trust-only control checks no union body",
+        "status": "generic cache argument accepted; arena client contracts still require repair",
         "scope": "union stage; raw reader and C backend dependencies behind native interfaces",
         "cpu": args.cpu,
         "attempts": attempts,
@@ -359,6 +363,9 @@ def main():
         "control_frontend_ratio": statistics.median(
             sum(s["opaque"].values()) / sum(s["raw"].values()) for s in samples
         ),
+        "generic_trust_only_frontend_ratio": statistics.median(
+            sum(s["generic"].values()) / sum(s["raw"].values()) for s in samples
+        ),
         "standalone_generic_frontend_ratio": statistics.median(
             sum(s["generic-raw"].values()) / sum(s["raw"].values()) for s in samples
         ),
@@ -381,7 +388,7 @@ def main():
         )
     }
     experiment.write("report.json", json.dumps(report, indent=2) + "\n")
-    print(report["decision"])
+    print(report["status"])
     print(json.dumps(report["burden"], indent=2))
     print(f"Report: {output / 'report.json'}")
 

@@ -18,7 +18,8 @@ fn og_proof_atom(program: *OgProgram, definition: *GpDefinition, index: usize) -
     text = gs_number_name(context, text, 0u64, index as u64);
     if text == null(*u8) { return null(*CrustTypeSyntax); }
     var name: *CrustName = crust_try_intern(context, text, gs_length(text));
-    if name == null(*CrustName) || !os_abstract_parameter(&(*program).ownership, name) { return null(*CrustTypeSyntax); }
+    if name == null(*CrustName) || !os_abstract_parameter(&(*program).ownership, name,
+            og_parameter_closed(program, definition, index)) { return null(*CrustTypeSyntax); }
     var syntax: CrustTypeSyntax = uninit;
     syntax.loc = (*(*definition).source).loc;
     return gp_named_type(context, &syntax, name);

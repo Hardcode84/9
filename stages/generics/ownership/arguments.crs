@@ -79,9 +79,16 @@ fn og_payload_record(arguments: *OgArguments, syntax: *CrustTypeSyntax) -> bool 
 
 fn og_payload(arguments: *OgArguments, syntax: *CrustTypeSyntax) -> bool {
     var check: *OsCheck = &(*arguments).check;
-    if os_parameter_type((*check).stage, syntax) { return true; }
+    if os_parameter_type((*check).stage, syntax) {
+        var parameter: *OsParameter = crust_map_get(&(*(*check).stage).parameters, (*syntax).name as usize) as *OsParameter;
+        if !(*parameter).closed {
+            os_error(check, &(*syntax).loc, "indirect type parameter cannot satisfy a closed ownership contract");
+        }
+        return (*parameter).closed;
+    }
+    if (*syntax).kind < CRUST_T_UNIT { return true; }
     if (*syntax).kind != CRUST_T_NAME {
-        os_error(check, &(*syntax).loc, "generic ownership argument must be a sized movable record"); return false;
+        os_error(check, &(*syntax).loc, "generic value argument requires a scalar or closed movable record"); return false;
     }
     if crust_map_get(&(*arguments).visited, (*syntax).name as usize) != null(*u8) { return true; }
     if !os_enter(check, &(*syntax).loc) { return false; }
@@ -99,7 +106,7 @@ fn og_arguments(program: *OgProgram) -> bool {
     while instance != null(*GpInstance) && !os_failed(&arguments.check) {
         var index: usize = 0usize;
         while index < (*instance).count {
-            if !og_payload(&arguments, (*instance).arguments[index]) {
+            if !og_parameter_argument(program, &arguments, instance, index) {
                 og_argument_diagnostic(program, instance, index); return false;
             }
             index = index + 1usize;

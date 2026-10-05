@@ -65,9 +65,9 @@ fn discard!(Payload)(value: Payload) -> unit {
 `!(Payload)` declares the type parameter. Its name is local to the declaration.
 Use any valid identifier, and separate multiple parameters with commas.
 
-In this stage, each parameter means a sized, movable record with closed
-ownership and cleanup that requires no domain access. A plain record satisfies
-that contract. A resource with nested resources or exclusive owned storage can
+A parameter used by value, as in `transfer`, accepts integers, `bool`, and
+sized movable records with closed ownership and domain-free cleanup. A plain
+record satisfies that contract. A resource with nested resources or exclusive owned storage can
 also satisfy it. Native integer and pointer-shaped handles can be owned fields.
 
 The checker follows nested fields and owned storage. It rejects a payload that
@@ -90,6 +90,21 @@ fn duplicate!(Payload)(value: Payload) -> Payload {
 
 The error applies even when the only requested specialization uses a plain
 record. The function promises to work for resource payloads too.
+
+A signature that uses its parameter only through `read`, `mut`, or pointers
+requires a sized type. For example:
+
+```crust
+fn observe!(Value)(value: read Value) -> read Value from value {
+    return read value;
+}
+```
+
+`observe!(OpaqueType)` can return a loan of an opaque value. Its fields stay
+private, and the loan keeps the source alive. A domain-bound type also requires
+the function to declare that domain's access permission. Generic record
+parameters, unused parameters, and uses inside `Box!(Value)` require the
+closed-value contract. The declaration signature supplies these rules.
 
 ## 3. Use a generic function
 

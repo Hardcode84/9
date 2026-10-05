@@ -71,10 +71,17 @@ accepts declaration-local parameters and explicit type arguments:
 fn transfer!(Value)(value: Value) -> Value { return move value; }
 ```
 
-Each parameter has one contract: a sized movable record, closed ownership,
-and complete cleanup without domain access. The checker follows nested fields
-and owned storage. Native owned handles end those paths. Stored loans, opaque
-storage, stable or scoped values, and domain-bound records fail that contract.
+A by-value parameter requires an integer, `bool`, or a sized movable record
+with closed ownership and domain-free cleanup. Generic records and unused
+parameters use this contract too. The checker follows nested fields and owned
+storage. Native owned handles end those paths. Stored loans, opaque storage,
+stable or scoped values, and domain-bound records fail that value contract.
+
+A function parameter used only through pointers, `read`, or `mut` can denote
+any sized type. Uses within a generic type application require the closed-value
+contract. The checker derives these requirements from the signature. It rejects
+calls that pass an indirect parameter to a generic with a stronger contract.
+Concrete borrow signatures must satisfy the specialized type's domain authority.
 
 The body is checked once with distinct symbolic identities for its parameters.
 Parameter values are affine. Transfers require `move`; shared and exclusive

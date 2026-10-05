@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Bit one marks a use; bit two marks a use that requires value ownership.
+fn og_parameter_uses(program: *OgProgram, syntax: *CrustTypeSyntax, name: *CrustName,
+                     indirect: bool, depth: usize) -> u32 {
+    if syntax == null(*CrustTypeSyntax) || (*program).resources.failed { return 0u32; }
+    if depth >= 256usize {
+        rs_error(&(*program).resources, &(*syntax).loc, "generic parameter contract depth exceeded");
+        return 3u32;
+    }
+    if (*syntax).kind == CRUST_T_NAME && (*syntax).name == name {
+        if indirect { return 1u32; }
+        return 3u32;
+    }
+    var borrowed: bool = (*syntax).kind == CRUST_T_POINTER ||
+        (*syntax).kind == rs_kind(&(*program).parsed_resources, RS_READ) ||
+        (*syntax).kind == rs_kind(&(*program).parsed_resources, RS_MUT);
+    var uses: u32 = og_parameter_uses(program, (*syntax).base, name, borrowed, depth + 1usize);
+    var index: usize = 0usize;
+    while index < (*syntax).param_count {
+        uses = uses | og_parameter_uses(program, (*syntax).params[index], name, false, depth + 1usize);
+        index = index + 1usize;
+    }
+    return uses;
+}
+
+// Infer the contract from the declaration boundary, independently of its body.
+// Records, unused parameters, and value uses require closed ownership.
+fn og_parameter_closed(program: *OgProgram, definition: *GpDefinition, index: usize) -> bool {
+    var declaration: *CrustDecl = (*definition).source;
+    if (*declaration).kind != CRUST_D_FUNCTION { return true; }
+    var name: *CrustName = (*(*definition).parameters).names[index];
+    var uses: u32 = og_parameter_uses(program, (*declaration).syntax_type, name, false, 0usize);
+    var parameter: *CrustParam = (*declaration).params;
+    while parameter != null(*CrustParam) {
+        uses = uses | og_parameter_uses(program, (*parameter).syntax_type, name, false, 0usize);
+        parameter = (*parameter).next;
+    }
+    return uses != 1u32;
+}
+
+fn og_parameter_argument(program: *OgProgram, arguments: *OgArguments,
+                         instance: *GpInstance, index: usize) -> bool {
+    var syntax: *CrustTypeSyntax = (*instance).arguments[index];
+    if og_parameter_closed(program, (*instance).definition, index) { return og_payload(arguments, syntax); }
+    return os_abstract_type(&(*arguments).check, syntax, false);
+}

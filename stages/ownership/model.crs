@@ -72,6 +72,7 @@ record OsFunction {
 }
 
 record OsOrigin { parameter: *CrustName; path: *OsField; next: *OsOrigin; index: usize; }
+record OsParameter { closed: bool; }
 record OsChoice { value: *OsValue; next: *OsChoice; }
 record OsSelection { target: *OsValue; sources: *OsChoice; }
 

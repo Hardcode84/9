@@ -300,8 +300,8 @@ The supplied semantic combinations are bounded to these entries:
 | Generics with ownership and resources | [Generic ownership adapter](../stages/generics/ownership/README.md): check abstract definitions, specialize syntax and contracts, lower concrete resources, validate arguments and ownership, resource emission | `make check-ownership-generics` |
 
 Standalone generics, overloads, and tagged unions have their own entry points.
-The generic ownership adapter applies its declared record-parameter contract;
-it does not inherit the standalone generic stage's full argument set.
+The generic ownership adapter derives closed-value and indirect parameter
+contracts from declaration signatures. See its argument rules in the linked guide.
 Generics with overloads, unions with generics, and unions with ownership have
 no supplied adapter. Combining all three also has no supplied adapter. In
 particular, union payload copies and replacement have no checked resource

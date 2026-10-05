@@ -15,19 +15,33 @@ standalone packages does not perform this composition.
 
 ## Parameter contract
 
-Every declaration-local type parameter in this profile denotes a sized movable
-record with closed ownership. Its complete cleanup requires no domain access.
-Distinct parameters have distinct symbolic identities, even when a caller later
-supplies the same concrete type for both.
+The declaration boundary determines each type parameter's contract:
 
-The argument check visits each record in the ownership closure. It follows
-inline fields and `owns(field: storage)` targets. A native owned scalar or
-pointer-shaped handle ends that path. It rejects stored loans, raw pointer
-fields, opaque storage, stable or scoped values, and domain-bound records.
-Scalar type arguments require a different parameter profile; this entry point
-reports that a record argument is required.
+- A parameter used by value requires an integer, `bool`, or a sized movable
+  record with closed ownership. Its complete cleanup requires no domain access.
+  Generic record parameters and unused parameters have this contract too.
+- A function parameter used only through pointers, `read`, or `mut` requires
+  a sized type. This permits opaque, stable, scoped, and domain-bound records.
+  Access to a domain-bound specialization requires the function's declared
+  domain permission.
 
-A generic body can transfer, borrow, return, and drop a parameter value. It can
+Uses inside a generic type application require the value contract. Callback
+parameter and result types contribute their uses too. The checker reads these
+contracts from signatures before it checks bodies. Distinct parameters have
+separate symbolic identities, even when a caller supplies the same type for both.
+
+For a closed record, argument validation follows inline fields and
+`owns(field: storage)` targets. A native owned scalar or pointer-shaped handle
+ends that path. Stored loans, raw pointer fields, opaque storage, stable or
+scoped values, and domain-bound records fail the closed-value contract.
+
+An indirect parameter keeps its weaker contract in calls to other generics.
+Passing it to a generic that requires closed ownership fails. Borrowing an
+opaque value preserves its private representation and source lifetime. Raw
+pointer use still requires the ordinary pointer contracts or root trust.
+
+With a closed-value parameter, a generic body can transfer, borrow, return,
+and drop its value. It can
 store it in another declared record. Construction of an unknown parameter type,
 field selection on it, arithmetic, casts, and `offsetof` on it fail. `sizeof`
 and `alignof` produce a symbolic layout query whose value is supplied during
@@ -57,7 +71,8 @@ Domain membership can name a generic record family. All instances of that
 family inherit the declared domain.
 
 After argument validation, a concrete function instance receives the checked
-definition's receipt. The concrete seed checker still checks its types, layout,
+definition's receipt. The checker validates each concrete borrow signature's
+domain permissions. The concrete seed checker still checks its types, layout,
 and lowered cleanup. Explicit trust and imported concrete interfaces use
 separate maps. A failed body check cannot grant trust.
 

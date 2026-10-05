@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Register a nominal, movable, affine record parameter with domain-free cleanup.
-// This atom has no fields, concrete layout, or seed declaration.
-fn os_abstract_parameter(stage: *OsStage, name: *CrustName) -> bool {
+// Register an affine type atom. A closed atom permits domain-free value ownership.
+// An indirect atom supplies size and identity without a value ownership contract.
+fn os_abstract_parameter(stage: *OsStage, name: *CrustName, closed: bool) -> bool {
     var resources: *RsStage = (*stage).resources;
-    rs_put(resources, &(*stage).parameters, name as usize, name as *u8);
+    var parameter: *OsParameter = rs_alloc(resources, sizeof(OsParameter), alignof(OsParameter)) as *OsParameter;
+    if parameter == null(*OsParameter) { return false; }
+    (*parameter).closed = closed;
+    rs_put(resources, &(*stage).parameters, name as usize, parameter as *u8);
     rs_put(resources, &(*resources).affine_types, name as usize, name as *u8);
     return !(*resources).failed;
 }

@@ -8,6 +8,7 @@ stage_source(stage, "clone.crs");
 stage_source(stage, "domains.crs");
 stage_source(stage, "domains_seal.crs");
 stage_source(stage, "arguments.crs");
+stage_source(stage, "parameters.crs");
 stage_source(stage, "proof.crs");
 stage_source(stage, "check.crs");
 stage_source(stage, "program.crs");

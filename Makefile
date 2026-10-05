@@ -110,12 +110,13 @@ $(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
 
 GENERIC_OWNERSHIP = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources generics/ownership/package.crs),$(error Stage package query failed))
 
-$(BUILD)/crust-ownership-generics-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_generics_driver.crs Makefile
+# Native test drivers embed stage sources. Rebuild after source package preparation.
+$(BUILD)/crust-ownership-generics-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_generics_driver.crs Makefile test-tools
 	$< -o $@ $(GENERIC_OWNERSHIP) tests/ownership_input.crs tests/ownership_generics_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 .PHONY: test-tools check-ownership-generics
 
-$(BUILD)/crust-ownership-generics-clone: $(BUILD)/crust-c tests/ownership_generics_clone.crs Makefile
+$(BUILD)/crust-ownership-generics-clone: $(BUILD)/crust-c tests/ownership_generics_clone.crs Makefile test-tools
 	$< -o $@ $(GENERIC_OWNERSHIP) tests/ownership_generics_clone.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 check-ownership-generics: all test-tools $(BUILD)/crust-ownership-generics-test $(BUILD)/crust-ownership-generics-clone
@@ -134,7 +135,7 @@ UNION_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources
 
 .PHONY: test-tools check-union check-union-alloc
 
-$(BUILD)/crust-union-test: $(BUILD)/crust-c api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a
+$(BUILD)/crust-union-test: $(BUILD)/crust-c api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a test-tools
 	$< -o $@ $(UNION_LIBRARY) api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0_run.a --ldflag=-ldl --ldflag=-lffi --ldflag $(BUILD)/libcrust_asm.a --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 check-union: all test-tools $(BUILD)/crust-union-test
@@ -152,13 +153,13 @@ check-ccn: all test-tools
 check-vscode: test-tools $(BUILD)/crust
 	CRUST_HIGHLIGHT=$(abspath $(BUILD))/crust-highlight CRUST_LAUNCHER=$(abspath $(BUILD))/crust bun test ./editors/vscode
 
-$(BUILD)/crust-ownership-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_driver.crs Makefile
+$(BUILD)/crust-ownership-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_driver.crs Makefile test-tools
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-$(BUILD)/crust-ownership-erasure: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_erasure.crs Makefile
+$(BUILD)/crust-ownership-erasure: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_erasure.crs Makefile test-tools
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_erasure.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-$(BUILD)/crust-ownership-import-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_import_driver.crs Makefile
+$(BUILD)/crust-ownership-import-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_import_driver.crs Makefile test-tools
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_import_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 .PHONY: check-ownership-imports
@@ -232,7 +233,7 @@ check-c: test-tools
 check-reader: all test-tools
 	python3 stages/reader/test.py --build $(BUILD) --cc '$(CC)' --ldflags='$(LDFLAGS)'
 
-$(BUILD)/kind_composition: $(BUILD)/crust-c tests/kind_wrapper.crs tests/kind_composition.crs Makefile
+$(BUILD)/kind_composition: $(BUILD)/crust-c tests/kind_wrapper.crs tests/kind_composition.crs Makefile test-tools
 	$< -o $@ $(RESOURCE_LIBRARY) tests/kind_wrapper.crs tests/kind_composition.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 check-resources: all test-tools $(BUILD)/kind_composition
@@ -240,7 +241,7 @@ check-resources: all test-tools $(BUILD)/kind_composition
 	python3 tests/resource_returns.py --build $(BUILD)
 	python3 tests/extension_kinds.py --build $(BUILD)
 
-$(BUILD)/composition-test: $(BUILD)/crust-c   examples/composition/build.crs tests/composition_driver.crs Makefile
+$(BUILD)/composition-test: $(BUILD)/crust-c   examples/composition/build.crs tests/composition_driver.crs Makefile test-tools
 	$< -o $@ $(OWNERSHIP_LIBRARY) $(OVERLOAD) examples/composition/build.crs tests/composition_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 check-overload: all test-tools $(BUILD)/composition-test
@@ -287,7 +288,7 @@ clean:
 $(BUILD)/ownership-clock.o: benchmarks/ownership/clock_linux_x64.c | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -c $< -o $@
 
-$(BUILD)/ownership-cost: $(BUILD)/crust-c tests/ownership_input.crs benchmarks/ownership/driver.crs $(BUILD)/ownership-clock.o
+$(BUILD)/ownership-cost: $(BUILD)/crust-c tests/ownership_input.crs benchmarks/ownership/driver.crs $(BUILD)/ownership-clock.o test-tools
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs benchmarks/ownership/driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/ownership-clock.o --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 .PHONY: ownership-benchmark-config

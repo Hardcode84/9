@@ -296,6 +296,9 @@ if view != 1i64 { trap; }
 Put the change after the last use of `view`. The same rule applies before
 moving or destroying a borrowed owner.
 
+`drop` also ends an ordinary integer or Boolean binding without target cleanup.
+Its loans must end first. Later access to that binding is rejected.
+
 `drop view` can end the local binding explicitly. The borrowed value stays
 alive, and this operation emits no code. Later use of `view` is an error.
 End all child loans and deferred uses first. Borrowed parameters keep their

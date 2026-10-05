@@ -53,9 +53,10 @@ the minimum trust possible after a different API design.
 
 ## Controls and costs
 
-Three controls must produce identical target C and symbol maps: the raw stage,
+Four controls must produce identical target C and symbol maps: the raw stage,
 the stage with opaque records and all its bodies trusted, and the generic
-lookup compiled by the standalone generic stage. Each control builds and runs
+lookup compiled by the standalone generic stage, and that lookup compiled by
+the ownership adapter with explicit body trust. Each control builds and runs
 the union runtime corpus and rejects the union error corpus. The stage,
 dependency implementations, and generated target use ASan and UBSan.
 
@@ -67,11 +68,14 @@ contains each sample, the median trust-only/raw ratio, and its bootstrap interva
 The trust-only control measures compiler work with union body checks bypassed.
 It supplies no checked-port speed result.
 
-## Decision
+## Contract repairs
 
-Accept a port only after its generic cache boundary and client bodies pass the
-ownership checker, native behavior agrees, and the trust and restructuring
-burden has been reviewed. Trusting most bodies triggers a no-go decision.
-Record rejected constructs and the required contract changes in the tracker.
-Stop feature expansion until that boundary passes. A rejected generic port has
-no frontend cost result; the report keeps that value null.
+The typed cache lookup passes the ownership adapter's indirect type-argument
+contract. The report compares its output and cost with the other controls.
+Its bodies retain explicit trust in this control.
+
+The borrowed layout client and field-access probes retain their diagnostics.
+Use these inputs to repair the arena interface and continue the checked port.
+Accept the production port when client bodies pass, native behavior agrees,
+and the trusted boundary and restructuring burden have been reviewed. Keep
+checked-port timing separate from controls that bypass body checks.

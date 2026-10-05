@@ -10,7 +10,7 @@ from pathlib import Path
 from ownership_support import execute
 from source_order import ROOT, Suite
 
-TAG = b"crust-generic-ownership-v1-closed-records-linux-x64\n"
+TAG = b"crust-generic-ownership-v2-signature-contracts-linux-x64\n"
 
 HELPERS = """
 fn transfer!(Payload)(value:Payload)->Payload {return move value;}
@@ -27,6 +27,7 @@ resource Value {code:i32;} drop value_drop;
 record Number {value:i64;}
 fn value_drop(value:mut Value)->unit {emit(value.code);}
 fn main(argc:i32,argv:**u8)->i32 {
+    var scalar:i64=transfer!(i64)(42i64);if scalar!=42i64{trap;}discard!(i64)(scalar);
     var first:Value=make Value {code:65i32};
     var second:Value=transfer!(Value)(move first);
     discard!(Value)(move second);
@@ -100,6 +101,12 @@ def check_checked_library(suite, driver, sanitize):
     )
     assert b"explicit move" in result.stderr, result.stderr
     for name, text, diagnostic in (
+        (
+            "domain-argument",
+            CLIENT + "domain Graph(Node);record Node{value:i64;}"
+            "fn use(a:read Node,b:read Node)->unit access(read,Graph){pick!(Node)(read a,read b,true);}",
+            b"borrowed value requires its declared domain authority",
+        ),
         ("borrow-second", CLIENT.replace("if selected", "b.value=3i64;if selected"), b"active"),
         (
             "narrow-origin",

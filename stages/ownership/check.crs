@@ -167,8 +167,7 @@ fn os_function_exit(check: *OsCheck, state: *OsState, location: *CrustLoc) -> un
 }
 
 fn os_check_function(stage: *OsStage, global: *RsGlobal, contract: *OsFunction) -> unit {
-    if os_imported(stage, (*global).source) || os_trusted(stage, (*global).source) ||
-       crust_map_get(&(*stage).verified_bodies, (*global).source as usize) != null(*u8) { return; }
+    if os_imported(stage, (*global).source) || os_trusted(stage, (*global).source) { return; }
     var declaration: *CrustDecl = (*global).source;
     var check: OsCheck = uninit;
     os_check_init(&check, stage, contract);
@@ -179,6 +178,7 @@ fn os_check_function(stage: *OsStage, global: *RsGlobal, contract: *OsFunction) 
     }
     os_validate_borrows(&check, declaration);
     if os_failed(&check) { return; }
+    if crust_map_get(&(*stage).verified_bodies, declaration as usize) != null(*u8) { return; }
     var state: OsState = uninit;
     os_state_init(&state, contract);
     os_scope(&check, &state);

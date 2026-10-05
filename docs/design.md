@@ -230,22 +230,28 @@ data your stage needs to change.
 | Extension | Interface | Working example |
 | --- | --- | --- |
 | Replace unread root syntax and action execution | `CrustRun.read`, `execute`, and `user`; the action is an opaque pointer | [Reader switch](../examples/reader-switch/README.md) |
-| Extend the Crust declaration grammar | `CrustReaderHooks` for declarations, statements, prefixes, and types | [Reader library](../stages/reader/README.md) |
+| Extend the Crust declaration grammar | Ordered `CrustReaderHooks` for declarations, statements, prefixes, types, and function endings | [Reader library](../stages/reader/README.md) |
 | Construct or transform seed input | Public nodes, bindings, identities, and checking operations | [Custom reader](../examples/custom-stage/README.md) |
-| Add source name and type rules | An ordinary pass before the next checker | [Overload stage](../stages/overload/README.md) |
+| Add source name and type rules | A source pass with root-selected `CsHooks` query providers | [Stage composition](../examples/composition/README.md) |
 | Add ownership and cleanup rules | Source checker, separate lowered types, and retained exit plans | [Resource stage](../stages/resources/README.md) |
 | Change one assembly operation | `CrustX64Ops.expression`, `place`, or `statement` | [Custom assembly operation](../examples/custom-stage/README.md) |
 | Supply complete C function bodies | `c_emit_with_body` or `c_backend_build_with_body` | [Resource body emitter](../stages/resources/emit.crs) |
 | Replace the backend | A library that consumes its chosen representation and produces output | [C backend](../stages/c/README.md) |
 | Classify source for display | User services append source spans; consumers render HTML or editor tokens | [Highlighting tutorial](../stages/highlight/README.md) |
 
-The Crust reader library is separate from the seed reader. Its four hooks
+The Crust reader library is separate from the seed reader. Its ordered hooks
 extend target syntax without adding keywords to the C99 parser. Replacing
 the root reader and executor can replace the entire grammar of unread root
 bytes. Install both operations in one action, and keep their code, action
 data, and user state live through execution. The callbacks receive the captured
 user pointer as an explicit argument. A change to `run.user` selects state for
 the next action. The captured operations and state finish the current action.
+
+Reader chains use the first handled result. Unhandled callbacks preserve input;
+a diagnostic stops the chain. Source query providers use the same rule for type,
+binding, expression, and statement queries. Every selected contract callback
+contributes to function identity. The root selects providers and explicitly calls
+passes in dependency order. See the [query contract](../stages/source/README.md).
 
 Syntax extensions reserve a kind range with
 `crust_allocate_kinds(context, count)`. Each stage instance stores its returned

@@ -1,27 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Consume a function definition, native extern, or source ABI import header.
-fn ov_function(reader:*CrustReader)->*CrustDecl {
-    var declaration:*CrustDecl = rr_function_header(reader);
-    if declaration == null(*CrustDecl) { return declaration; }
-    if (*declaration).kind == CRUST_D_FUNCTION && rr_take(reader, 59u32) { return declaration; }
-    return rr_function_end(reader, declaration);
+fn ov_read_function_end(reader:*CrustReader, declaration:*CrustDecl, user:*u8)->bool {
+    if (*declaration).kind!=CRUST_D_FUNCTION || (*reader).token.kind!=59u32 { return false; }
+    rr_next(reader);
+    return true;
 }
 
-fn ov_read_declaration(reader:*CrustReader, user:*u8)->*CrustDecl {
-    if (*reader).token.kind == RR_FN { return ov_function(reader); }
-    return null(*CrustDecl);
-}
-
-fn ov_read(stage:*OvStage, source:*CrustSource, begin:usize, end:usize)->bool {
-    var hooks:CrustReaderHooks = make CrustReaderHooks {
-        user:stage as *u8, declaration:ov_read_declaration,
+// Append this set to the root-selected reader chain. Retain its storage through reading.
+fn ov_reader_hooks(hooks:*CrustReaderHooks, next:*CrustReaderHooks)->unit {
+    *hooks=make CrustReaderHooks {
+        next:next, user:null(*u8), function_end:ov_read_function_end,
+        declaration:null(fn(*CrustReader,*u8)->*CrustDecl),
         statement:null(fn(*CrustReader,*u8)->*CrustStmt),
         prefix:null(fn(*CrustReader,*u8)->*CrustExpr),
         type_syntax:null(fn(*CrustReader,*u8)->*CrustTypeSyntax)
     };
-    if rr_read((*stage).context, source, begin, end, &hooks) == null(*CrustUnit) {
-        (*stage).failed = true;
-    }
+}
+
+fn ov_read(stage:*OvStage, source:*CrustSource, begin:usize, end:usize)->bool {
+    var hooks:CrustReaderHooks=uninit; ov_reader_hooks(&hooks,null(*CrustReaderHooks));
+    if rr_read((*stage).context,source,begin,end,&hooks)==null(*CrustUnit) { (*stage).failed=true; }
     return !(*stage).failed;
 }

@@ -35,16 +35,15 @@ fn ov_bind(walk:*OvWalk,name:*CrustName,syntax:*CrustTypeSyntax,location:*CrustL
 fn ov_binding_value(walk:*OvWalk,syntax:*CrustTypeSyntax)->*CrustTypeSyntax {
     var stage:*OvStage=(*walk).stage;
     if (*stage).failed { return null(*CrustTypeSyntax); }
-    var hooks:*OvHooks=(*stage).hooks;
-    if hooks!=null(*OvHooks) && (*hooks).binding_type!=null(fn(*OvStage,*CrustTypeSyntax,*u8)->*CrustTypeSyntax) {
-        var errors:usize=(*(*stage).context).error_count;
-        var result:*CrustTypeSyntax=(*hooks).binding_type(stage,syntax,(*hooks).user);
-        if (*(*stage).context).error_count!=errors { (*stage).failed=true; }
-        if (*stage).failed { return null(*CrustTypeSyntax); }
-        if result==null(*CrustTypeSyntax) {
-            ov_error(stage,&(*syntax).loc,"binding type callback failed");
+    var query:CsQuery=uninit; ov_query(stage,walk,&query);
+    var hooks:*CsHooks=(*stage).hooks;
+    while hooks!=null(*CsHooks) {
+        if (*hooks).binding_type!=null(fn(*CsQuery,*CrustTypeSyntax,*u8)->*CrustTypeSyntax) {
+            var result:*CrustTypeSyntax=(*hooks).binding_type(&query,syntax,(*hooks).user);
+            if ov_hook_failed(stage) { return null(*CrustTypeSyntax); }
+            if result!=null(*CrustTypeSyntax) { return result; }
         }
-        return result;
+        hooks=(*hooks).next;
     }
     return syntax;
 }
@@ -169,12 +168,7 @@ fn ov_expression(walk:*OvWalk,expression:*CrustExpr,expected:*CrustTypeSyntax)->
     }
     (*walk).depth=(*walk).depth+1usize;
     var result:*CrustTypeSyntax=null(*CrustTypeSyntax);
-    var hooks:*OvHooks=(*stage).hooks;
-    if hooks!=null(*OvHooks) && (*hooks).expression!=null(fn(*OvWalk,*CrustExpr,*CrustTypeSyntax,*u8)->*CrustTypeSyntax) {
-        var errors:usize=(*(*stage).context).error_count;
-        result=(*hooks).expression(walk,expression,expected,(*hooks).user);
-        if (*(*stage).context).error_count!=errors { (*stage).failed=true; }
-    }
+    if (*stage).hooks!=null(*CsHooks) { result=ov_extension_expression(walk,expression,expected); }
     if result==null(*CrustTypeSyntax) && !(*stage).failed { result=ov_standard_expression(walk,expression,expected); }
     (*walk).depth=(*walk).depth-1usize;
     if (*stage).failed { return null(*CrustTypeSyntax); }
@@ -236,12 +230,7 @@ fn ov_statement(walk:*OvWalk,statement:*CrustStmt)->unit {
     }
     (*walk).depth=(*walk).depth+1usize;
     var handled:bool=false;
-    var hooks:*OvHooks=(*stage).hooks;
-    if hooks!=null(*OvHooks) && (*hooks).statement!=null(fn(*OvWalk,*CrustStmt,*u8)->bool) {
-        var errors:usize=(*(*stage).context).error_count;
-        handled=(*hooks).statement(walk,statement,(*hooks).user);
-        if (*(*stage).context).error_count!=errors { (*stage).failed=true; }
-    }
+    if (*stage).hooks!=null(*CsHooks) { handled=ov_extension_statement(walk,statement); }
     if !handled && !(*stage).failed { ov_standard_statement(walk,statement); }
     (*walk).depth=(*walk).depth-1usize;
 }

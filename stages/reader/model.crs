@@ -52,11 +52,13 @@ record CrustReaderToken {
     byte_count:usize;
 }
 
-// A null callback selects the standard production. A callback returns null
-// without consuming or changing a token when unhandled, or sets reader.failed on failure.
-// A handled callback consumes its complete production and returns its syntax.
-// A new context diagnostic also stops the reader.
+// Try callbacks in chain order. The first handled result wins.
+// Null callbacks or null/false results forward without changing input.
+// A handled callback consumes its complete production and returns syntax/true.
+// A diagnostic or reader.failed stops dispatch. Keep the finite chain live.
 record CrustReaderHooks {
+    next:*CrustReaderHooks;
+    function_end:fn(*CrustReader,*CrustDecl,*u8)->bool;
     user:*u8;
     declaration:fn(*CrustReader,*u8)->*CrustDecl;
     statement:fn(*CrustReader,*u8)->*CrustStmt;

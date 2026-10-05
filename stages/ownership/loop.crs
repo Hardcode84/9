@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record OsLoopSlot { slot: *OsSlot; next: *OsLoopSlot; }
-record OsLoop { entry: *OsState; exit: *OsState; bindings: *OsLoopSlot; parent: *OsLoop; }
-
 fn os_access_origin(state: *OsState, object: *OsObject) -> *OsScope {
     var scope: *OsScope = (*state).scope;
     while scope != null(*OsScope) && !(*scope).access { scope = (*scope).parent; }

@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn ov_query(stage:*OvStage, walk:*OvWalk, query:*CsQuery)->unit {
+    *query = make CsQuery {
+        context:(*stage).context, user:stage as *u8, scope:walk as *u8,
+        type_key:ov_query_type, expression:ov_query_expression, statement:ov_query_statement,
+        field_type:ov_query_field, same:ov_query_same, select:ov_query_select
+    };
+}
+
+fn ov_query_type(query:*CsQuery, syntax:*CrustTypeSyntax, text:*CsText, depth:usize)->unit {
+    ov_encode_type((*query).user as *OvStage, syntax, text, depth);
+}
+
+fn ov_query_expression(query:*CsQuery, expression:*CrustExpr, expected:*CrustTypeSyntax)->*CrustTypeSyntax {
+    return ov_expression((*query).scope as *OvWalk, expression, expected);
+}
+
+fn ov_query_statement(query:*CsQuery, statement:*CrustStmt)->unit {
+    ov_statement((*query).scope as *OvWalk, statement);
+}
+
+fn ov_query_field(query:*CsQuery, syntax:*CrustTypeSyntax, name:*CrustName, location:*CrustLoc)->*CrustTypeSyntax {
+    return ov_field_type((*query).user as *OvStage, syntax, name, location);
+}
+
+fn ov_query_same(query:*CsQuery, left:*CrustTypeSyntax, right:*CrustTypeSyntax)->bool {
+    return ov_same((*query).user as *OvStage, left, right);
+}
+
+fn ov_query_select(query:*CsQuery, name:*CrustName, syntax:*CrustTypeSyntax, location:*CrustLoc)->*CrustName {
+    var stage:*OvStage = (*query).user as *OvStage;
+    var selected:*OvFunction = ov_select(stage, ov_global(stage, name), syntax, false, location);
+    if selected == null(*OvFunction) { return null(*CrustName); }
+    return (*selected).internal_name;
+}
+
+fn ov_hook_failed(stage:*OvStage)->bool {
+    if (*(*stage).context).error_count != 0usize { (*stage).failed = true; }
+    return (*stage).failed;
+}
+
+fn ov_extension_expression(walk:*OvWalk, expression:*CrustExpr, expected:*CrustTypeSyntax)->*CrustTypeSyntax {
+    var stage:*OvStage = (*walk).stage;
+    var query:CsQuery = uninit; ov_query(stage, walk, &query);
+    var hooks:*CsHooks = (*stage).hooks;
+    while hooks != null(*CsHooks) {
+        if (*hooks).expression != null(fn(*CsQuery,*CrustExpr,*CrustTypeSyntax,*u8)->*CrustTypeSyntax) {
+            var result:*CrustTypeSyntax = (*hooks).expression(&query, expression, expected, (*hooks).user);
+            if ov_hook_failed(stage) { return null(*CrustTypeSyntax); }
+            if result != null(*CrustTypeSyntax) { return result; }
+        }
+        hooks = (*hooks).next;
+    }
+    return null(*CrustTypeSyntax);
+}
+
+fn ov_extension_statement(walk:*OvWalk, statement:*CrustStmt)->bool {
+    var stage:*OvStage = (*walk).stage;
+    var query:CsQuery = uninit; ov_query(stage, walk, &query);
+    var hooks:*CsHooks = (*stage).hooks;
+    while hooks != null(*CsHooks) {
+        if (*hooks).statement != null(fn(*CsQuery,*CrustStmt,*u8)->bool) {
+            var handled:bool = (*hooks).statement(&query, statement, (*hooks).user);
+            if ov_hook_failed(stage) || handled { return true; }
+        }
+        hooks = (*hooks).next;
+    }
+    return false;
+}
+
+fn ov_source_contract(stage:*OvStage, declaration:*CrustDecl)->*CrustName {
+    var query:CsQuery = uninit; ov_query(stage, null(*OvWalk), &query);
+    var begin:usize = (*stage).scratch.size;
+    ov_text(stage, &(*stage).scratch, "s");
+    var hooks:*CsHooks = (*stage).hooks;
+    while hooks != null(*CsHooks) && !ov_hook_failed(stage) {
+        if (*hooks).contract != null(fn(*CsQuery,*CrustDecl,*CsText,*u8)->unit) {
+            (*hooks).contract(&query, declaration, &(*stage).scratch, (*hooks).user);
+        }
+        hooks = (*hooks).next;
+    }
+    if ov_hook_failed(stage) { (*stage).scratch.size = begin; return null(*CrustName); }
+    return ov_finish_key(stage, begin);
+}
+
+fn ov_source_references(stage:*OvStage)->bool {
+    var query:CsQuery = uninit; ov_query(stage, null(*OvWalk), &query);
+    var hooks:*CsHooks = (*stage).hooks;
+    while hooks != null(*CsHooks) && !ov_hook_failed(stage) {
+        if (*hooks).references != null(fn(*CsQuery,*u8)->unit) { (*hooks).references(&query, (*hooks).user); }
+        hooks = (*hooks).next;
+    }
+    return !ov_hook_failed(stage);
+}
+
+fn ov_source_published(stage:*OvStage, declaration:*CrustDecl, imported:bool)->unit {
+    var query:CsQuery = uninit; ov_query(stage, null(*OvWalk), &query);
+    var hooks:*CsHooks = (*stage).hooks;
+    while hooks != null(*CsHooks) && !ov_hook_failed(stage) {
+        if (*hooks).published != null(fn(*CsQuery,*CrustDecl,bool,*u8)->unit) {
+            (*hooks).published(&query, declaration, imported, (*hooks).user);
+        }
+        hooks = (*hooks).next;
+    }
+}

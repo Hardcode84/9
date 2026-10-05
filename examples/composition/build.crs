@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn composition_entry(overloads:*OvStage)->*CrustDecl {
+    var context:*CrustContext=(*overloads).context;
+    var name:*CrustName=crust_try_intern(context,"main",4usize);
+    if name==null(*CrustName) { return null(*CrustDecl); }
+    var group:*OvGlobal=ov_global(overloads,name);
+    if group==null(*OvGlobal) || (*group).count!=1usize {
+        crust_set_error(context,null(*CrustSource),0usize,"entry requires one main function");
+        return null(*CrustDecl);
+    }
+    var symbol:*CrustSymbol=crust_map_get(&(*context).globals,(*(*group).first).internal_name as usize) as *CrustSymbol;
+    return (*symbol).decl;
+}
+
+fn composition_names(context:*CrustContext)->unit {
+    var parsed:*CrustUnit=(*context).units;
+    while parsed!=null(*CrustUnit) {
+        var declaration:*CrustDecl=(*parsed).declarations;
+        while declaration!=null(*CrustDecl) {
+            if (*declaration).link_name==null(*u8) { (*declaration).link_name=""; }
+            declaration=(*declaration).next;
+        }
+        parsed=(*parsed).next;
+    }
+}
+
+// Compile a complete source through overload selection, ownership, and C emission.
+// Keep source bytes and output options live until return. Retain errors in context.
+fn composition_build(context:*CrustContext, source:*CrustSource, options:*CBackendOptions)->bool {
+    var resources:RsStage=uninit; rs_init(&resources,context);
+    var ownership:OsStage=uninit; os_init(&ownership,&resources);
+
+    var resource_rules:CsHooks=uninit; rs_source_hooks(&resources,&resource_rules,null(*CsHooks));
+    var ownership_rules:CsHooks=uninit; os_source_hooks(&ownership,&ownership_rules,&resource_rules);
+    var overloads:OvStage=uninit; ov_init(&overloads,context,"checked_x64_v1",&ownership_rules);
+
+    var interfaces:CrustReaderHooks=uninit; ov_reader_hooks(&interfaces,null(*CrustReaderHooks));
+    var reader:CrustReaderHooks=uninit; os_reader_hooks(&ownership,&reader,&interfaces);
+    if rr_read(context,source,0usize,(*source).size,&reader)==null(*CrustUnit) { return false; }
+    if !ov_prepare(&overloads) || !os_lower(&ownership) || !os_verify(&ownership) { return false; }
+
+    var entry:*CrustDecl=composition_entry(&overloads);
+    if entry==null(*CrustDecl) { return false; }
+    composition_names(context);
+    return c_backend_build_with_body(context,entry,options,rs_c_body,&resources as *u8)==0i32;
+}

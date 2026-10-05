@@ -708,6 +708,14 @@ extension nodes before seed checking. Unlowered type, expression, and statement
 kinds produce diagnostics. Copying syntax between contexts requires a mapping
 for extension kinds. See the [construction API](bootstrap.md) for the C contract.
 
+The Crust reader library accepts root-owned, ordered hook chains. First handled
+syntax wins; an unhandled hook preserves input; a diagnostic stops dispatch.
+Source passes can select `CsHooks` providers for source types, traversal, and
+contracts. Each provider owns its rules and uses consumer queries for child
+nodes. The root calls passes in dependency order. These are external library
+interfaces; their [contract](../stages/source/README.md) and
+[composition example](../examples/composition/README.md) define their use.
+
 The source runner checks a native library's generated public API digest at
 load time. Missing and different digests are errors. The library must carry
 its own marker. The [runner contract](source-runner.md#files-and-native-inputs)

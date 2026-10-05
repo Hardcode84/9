@@ -187,11 +187,16 @@ fn os_read_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax {
     return rs_read_type(reader, (*((user as *OsStage))).resources as *u8);
 }
 
-fn os_read(stage: *OsStage, source: *CrustSource, begin: usize, end: usize) -> bool {
-    var hooks: CrustReaderHooks = make CrustReaderHooks {
+// Select this stage in a root-owned reader chain. Retain stage and hooks.
+fn os_reader_hooks(stage:*OsStage, hooks:*CrustReaderHooks, next:*CrustReaderHooks)->unit {
+    *hooks = make CrustReaderHooks { next:next, function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
         user: stage as *u8, declaration: os_read_declaration, statement: os_read_statement,
         prefix: os_read_prefix, type_syntax: os_read_type
     };
+}
+
+fn os_read(stage: *OsStage, source: *CrustSource, begin: usize, end: usize) -> bool {
+    var hooks:CrustReaderHooks=uninit; os_reader_hooks(stage,&hooks,null(*CrustReaderHooks));
     var unit_value: *CrustUnit = rr_read((*(*stage).resources).context, source, begin, end, &hooks);
     if unit_value == null(*CrustUnit) { (*(*stage).resources).failed = true; return false; }
     return !(*(*stage).resources).failed;

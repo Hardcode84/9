@@ -21,6 +21,8 @@ STAGE = [
     "api/crust0_host.crs",
     "stages/c/model.crs",
     "stages/c/base.crs",
+    "stages/source/model.crs",
+    "stages/source/base.crs",
     *[f"stages/reader/{name}.crs" for name in ("model", "lex", "parse")],
     *[
         f"stages/resources/{name}.crs"
@@ -37,11 +39,12 @@ STAGE = [
             "outputs",
             "expr",
             "control",
+            "source",
         )
     ],
     *[
         f"stages/overload/{name}.crs"
-        for name in ("model", "base", "types", "collect", "read", "resolve", "resources")
+        for name in ("model", "base", "types", "collect", "read", "resolve", "source")
     ],
     "tests/overload_alloc.crs",
 ]

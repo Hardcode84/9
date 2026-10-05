@@ -294,6 +294,8 @@ def import_root(suite, output, provider, target, register):
         "stages/c/model.crs",
         "stages/c/api.crs",
         "stages/c/extension.crs",
+        "stages/reader/model.crs",
+        "stages/source/model.crs",
         "stages/resources/model.crs",
         "stages/resources/extension.crs",
     ]

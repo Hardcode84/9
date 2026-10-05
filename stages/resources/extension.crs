@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Include api/crust0.crs, stages/c/model.crs, and stages/resources/model.crs
+// Include api/crust0.crs and the c, reader, source, and resource models
 // before this consumer interface. Use stages/c/extension.crs for backend services.
 
 // Initialize at a stable address with an empty target context.
@@ -11,6 +11,11 @@ extern fn rs_init(stage: *RsStage, context: *CrustContext) -> unit = "rs_init";
 // Return this stage's node kind for an RS_ syntax offset below RS_END.
 // Require successful initialization. Keep the owning context live.
 extern fn rs_kind(stage: *RsStage, offset: u32) -> u32 = "rs_kind";
+
+// Include reader/model.crs and source/model.crs before these composition services.
+// Keep stage, hooks, and each finite chain live through the selected operations.
+extern fn rs_reader_hooks(stage:*RsStage, hooks:*CrustReaderHooks, next:*CrustReaderHooks)->unit = "rs_reader_hooks";
+extern fn rs_source_hooks(stage:*RsStage, hooks:*CsHooks, next:*CsHooks)->unit = "rs_source_hooks";
 
 // Read a complete declaration range before preparation. Locations retain full-source offsets.
 // Retain each source descriptor and its bytes until context destruction.

@@ -81,16 +81,19 @@ fn rr_hook_checked(reader:*CrustReader,count:usize,cursor:usize,token:*CrustRead
 fn rr_type(reader:*CrustReader)->*CrustTypeSyntax {
     if !rr_enter(reader) { return null(*CrustTypeSyntax); }
     var result:*CrustTypeSyntax=null(*CrustTypeSyntax);
-    if (*reader).hooks!=null(*CrustReaderHooks) &&
-       (*(*reader).hooks).type_syntax!=null(fn(*CrustReader,*u8)->*CrustTypeSyntax) {
-        var count:usize=(*reader).token_count;
-        var token:CrustReaderToken=(*reader).token;
-        var cursor:usize=(*reader).offset;
-        var errors:usize=(*(*reader).context).error_count;
-        result=(*(*reader).hooks).type_syntax(reader,(*(*reader).hooks).user);
-        if !rr_hook_checked(reader,count,cursor,&token,result!=null(*CrustTypeSyntax),errors) {
-            rr_leave(reader);return null(*CrustTypeSyntax);
+    var hooks:*CrustReaderHooks=(*reader).hooks;
+    while hooks!=null(*CrustReaderHooks) && result==null(*CrustTypeSyntax) {
+        if (*hooks).type_syntax!=null(fn(*CrustReader,*u8)->*CrustTypeSyntax) {
+            var count:usize=(*reader).token_count;
+            var token:CrustReaderToken=(*reader).token;
+            var cursor:usize=(*reader).offset;
+            var errors:usize=(*(*reader).context).error_count;
+            result=(*hooks).type_syntax(reader,(*hooks).user);
+            if !rr_hook_checked(reader,count,cursor,&token,result!=null(*CrustTypeSyntax),errors) {
+                rr_leave(reader);return null(*CrustTypeSyntax);
+            }
         }
+        hooks=(*hooks).next;
     }
     if result==null(*CrustTypeSyntax) { result=rr_standard_type(reader); }
     rr_leave(reader);
@@ -259,16 +262,19 @@ fn rr_postfix_after(reader:*CrustReader,expression:*CrustExpr)->*CrustExpr {
 fn rr_prefix(reader:*CrustReader)->*CrustExpr {
     if !rr_enter(reader) { return null(*CrustExpr); }
     var result:*CrustExpr=null(*CrustExpr);
-    if (*reader).hooks!=null(*CrustReaderHooks) &&
-       (*(*reader).hooks).prefix!=null(fn(*CrustReader,*u8)->*CrustExpr) {
-        var count:usize=(*reader).token_count;
-        var token:CrustReaderToken=(*reader).token;
-        var cursor:usize=(*reader).offset;
-        var errors:usize=(*(*reader).context).error_count;
-        result=(*(*reader).hooks).prefix(reader,(*(*reader).hooks).user);
-        if !rr_hook_checked(reader,count,cursor,&token,result!=null(*CrustExpr),errors) {
-            rr_leave(reader);return null(*CrustExpr);
+    var hooks:*CrustReaderHooks=(*reader).hooks;
+    while hooks!=null(*CrustReaderHooks) && result==null(*CrustExpr) {
+        if (*hooks).prefix!=null(fn(*CrustReader,*u8)->*CrustExpr) {
+            var count:usize=(*reader).token_count;
+            var token:CrustReaderToken=(*reader).token;
+            var cursor:usize=(*reader).offset;
+            var errors:usize=(*(*reader).context).error_count;
+            result=(*hooks).prefix(reader,(*hooks).user);
+            if !rr_hook_checked(reader,count,cursor,&token,result!=null(*CrustExpr),errors) {
+                rr_leave(reader);return null(*CrustExpr);
+            }
         }
+        hooks=(*hooks).next;
     }
     if result==null(*CrustExpr) { result=rr_standard_prefix(reader); }
     rr_leave(reader);
@@ -390,19 +396,22 @@ fn rr_simple_statement(reader:*CrustReader)->*CrustStmt {
 fn rr_statement(reader:*CrustReader)->*CrustStmt {
     if (*reader).failed { return null(*CrustStmt); }
     var result:*CrustStmt=null(*CrustStmt);
-    if (*reader).hooks!=null(*CrustReaderHooks) &&
-       (*(*reader).hooks).statement!=null(fn(*CrustReader,*u8)->*CrustStmt) {
-        var count:usize=(*reader).token_count;
-        var token:CrustReaderToken=(*reader).token;
-        var cursor:usize=(*reader).offset;
-        var errors:usize=(*(*reader).context).error_count;
-        if !rr_enter(reader) { return null(*CrustStmt); }
-        result=(*(*reader).hooks).statement(reader,(*(*reader).hooks).user);
-        rr_leave(reader);
-        if !rr_hook_checked(reader,count,cursor,&token,result!=null(*CrustStmt),errors) { return null(*CrustStmt); }
-        if result!=null(*CrustStmt) && (*result).next!=null(*CrustStmt) {
-            rr_error(reader,token.offset,"statement hook must return one unlinked statement");return null(*CrustStmt);
+    var hooks:*CrustReaderHooks=(*reader).hooks;
+    while hooks!=null(*CrustReaderHooks) && result==null(*CrustStmt) {
+        if (*hooks).statement!=null(fn(*CrustReader,*u8)->*CrustStmt) {
+            var count:usize=(*reader).token_count;
+            var token:CrustReaderToken=(*reader).token;
+            var cursor:usize=(*reader).offset;
+            var errors:usize=(*(*reader).context).error_count;
+            if !rr_enter(reader) { return null(*CrustStmt); }
+            result=(*hooks).statement(reader,(*hooks).user);
+            rr_leave(reader);
+            if !rr_hook_checked(reader,count,cursor,&token,result!=null(*CrustStmt),errors) { return null(*CrustStmt); }
+            if result!=null(*CrustStmt) && (*result).next!=null(*CrustStmt) {
+                rr_error(reader,token.offset,"statement hook must return one unlinked statement");return null(*CrustStmt);
+            }
         }
+        hooks=(*hooks).next;
     }
     if result==null(*CrustStmt) { result=rr_standard_statement(reader); }
     return result;
@@ -514,7 +523,7 @@ fn rr_function_signature(reader:*CrustReader,result:*CrustDecl)->*CrustDecl {
 }
 
 // Require a successful function header. Consume its standard body or extern suffix.
-fn rr_function_end(reader:*CrustReader,result:*CrustDecl)->*CrustDecl {
+fn rr_standard_function_end(reader:*CrustReader,result:*CrustDecl)->*CrustDecl {
     if (*reader).failed { return null(*CrustDecl); }
     if (*result).kind==CRUST_D_FUNCTION { (*result).body=rr_block(reader); }
     else {
@@ -538,6 +547,27 @@ fn rr_function_end(reader:*CrustReader,result:*CrustDecl)->*CrustDecl {
     }
     if (*reader).failed { return null(*CrustDecl); }
     return result;
+}
+
+// Try root-selected endings after a header and its annotations. First match wins.
+fn rr_function_end(reader:*CrustReader,result:*CrustDecl)->*CrustDecl {
+    if (*reader).failed { return null(*CrustDecl); }
+    var hooks:*CrustReaderHooks=(*reader).hooks;
+    while hooks!=null(*CrustReaderHooks) {
+        if (*hooks).function_end!=null(fn(*CrustReader,*CrustDecl,*u8)->bool) {
+            var count:usize=(*reader).token_count;
+            var cursor:usize=(*reader).offset;
+            var token:CrustReaderToken=(*reader).token;
+            var errors:usize=(*(*reader).context).error_count;
+            if !rr_enter(reader) { return null(*CrustDecl); }
+            var handled:bool=(*hooks).function_end(reader,result,(*hooks).user);
+            rr_leave(reader);
+            if !rr_hook_checked(reader,count,cursor,&token,handled,errors) { return null(*CrustDecl); }
+            if handled { return result; }
+        }
+        hooks=(*hooks).next;
+    }
+    return rr_standard_function_end(reader,result);
 }
 
 // Consume a complete ordinary or extern function, including its final delimiter.
@@ -568,19 +598,22 @@ fn rr_standard_declaration(reader:*CrustReader)->*CrustDecl {
 fn rr_declaration(reader:*CrustReader)->*CrustDecl {
     if (*reader).failed { return null(*CrustDecl); }
     var result:*CrustDecl=null(*CrustDecl);
-    if (*reader).hooks!=null(*CrustReaderHooks) &&
-       (*(*reader).hooks).declaration!=null(fn(*CrustReader,*u8)->*CrustDecl) {
-        var count:usize=(*reader).token_count;
-        var token:CrustReaderToken=(*reader).token;
-        var cursor:usize=(*reader).offset;
-        var errors:usize=(*(*reader).context).error_count;
-        if !rr_enter(reader) { return null(*CrustDecl); }
-        result=(*(*reader).hooks).declaration(reader,(*(*reader).hooks).user);
-        rr_leave(reader);
-        if !rr_hook_checked(reader,count,cursor,&token,result!=null(*CrustDecl),errors) { return null(*CrustDecl); }
-        if result!=null(*CrustDecl) && (*result).next!=null(*CrustDecl) {
-            rr_error(reader,token.offset,"declaration hook must return one unlinked declaration");return null(*CrustDecl);
+    var hooks:*CrustReaderHooks=(*reader).hooks;
+    while hooks!=null(*CrustReaderHooks) && result==null(*CrustDecl) {
+        if (*hooks).declaration!=null(fn(*CrustReader,*u8)->*CrustDecl) {
+            var count:usize=(*reader).token_count;
+            var token:CrustReaderToken=(*reader).token;
+            var cursor:usize=(*reader).offset;
+            var errors:usize=(*(*reader).context).error_count;
+            if !rr_enter(reader) { return null(*CrustDecl); }
+            result=(*hooks).declaration(reader,(*hooks).user);
+            rr_leave(reader);
+            if !rr_hook_checked(reader,count,cursor,&token,result!=null(*CrustDecl),errors) { return null(*CrustDecl); }
+            if result!=null(*CrustDecl) && (*result).next!=null(*CrustDecl) {
+                rr_error(reader,token.offset,"declaration hook must return one unlinked declaration");return null(*CrustDecl);
+            }
         }
+        hooks=(*hooks).next;
     }
     if result==null(*CrustDecl) { result=rr_standard_declaration(reader); }
     return result;

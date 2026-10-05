@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Include api/crust0.crs and stages/overload/model.crs before this interface.
+// Include api/crust0.crs and the reader, source, and overload models.
 // Keep the context, stage, hooks, ABI domain, and source storage live through use.
 // Use a different ABI domain when type encodings, contracts, or calling rules differ.
-extern fn ov_init(stage:*OvStage, context:*CrustContext, abi:*u8, hooks:*OvHooks)->unit = "ov_init";
+extern fn ov_init(stage:*OvStage, context:*CrustContext, abi:*u8, hooks:*CsHooks)->unit = "ov_init";
 // Read a complete declaration range before preparation. Failures retain a diagnostic.
 extern fn ov_read(stage:*OvStage, source:*CrustSource, begin:usize, end:usize)->bool = "ov_read";
-// Collect, resolve, and mangle once. Run the next checker after success.
+// Add source interface endings to a reader chain. Retain hooks through reading.
+extern fn ov_reader_hooks(hooks:*CrustReaderHooks, next:*CrustReaderHooks)->unit = "ov_reader_hooks";
+// Collect signatures and provider references, resolve, and mangle once. Run the next checker after success.
 extern fn ov_prepare(stage:*OvStage)->bool = "ov_prepare";
 // Each operation requires successful completion of the previous operation.
 extern fn ov_collect(stage:*OvStage)->bool = "ov_collect";
@@ -31,12 +33,12 @@ extern fn ov_same(stage:*OvStage, a:*CrustTypeSyntax, b:*CrustTypeSyntax)->bool 
 // Distinct types need distinct payloads. Use ov_part or a fixed count of child encodings.
 // Use depth + 1 for child types. This operation enforces the type nesting bound.
 // A type hook can call ov_same and ov_select. These queries preserve its output prefix.
-extern fn ov_encode_type(stage:*OvStage, syntax:*CrustTypeSyntax, buffer:*OvText, depth:usize)->unit = "ov_encode_type";
-extern fn ov_text(stage:*OvStage, buffer:*OvText, text:*u8)->unit = "ov_text";
-extern fn ov_bytes(stage:*OvStage, buffer:*OvText, bytes:*u8, size:usize)->unit = "ov_bytes";
+extern fn ov_encode_type(stage:*OvStage, syntax:*CrustTypeSyntax, buffer:*CsText, depth:usize)->unit = "ov_encode_type";
+extern fn ov_text(stage:*OvStage, buffer:*CsText, text:*u8)->unit = "ov_text";
+extern fn ov_bytes(stage:*OvStage, buffer:*CsText, bytes:*u8, size:usize)->unit = "ov_bytes";
 // Append a decimal number with an underscore terminator, or a length-prefixed byte string.
-extern fn ov_number(stage:*OvStage, buffer:*OvText, value:u64)->unit = "ov_number";
-extern fn ov_part(stage:*OvStage, buffer:*OvText, bytes:*u8, size:usize)->unit = "ov_part";
+extern fn ov_number(stage:*OvStage, buffer:*CsText, value:u64)->unit = "ov_number";
+extern fn ov_part(stage:*OvStage, buffer:*CsText, bytes:*u8, size:usize)->unit = "ov_part";
 
 // Walk helpers retain original source types and rewrite selected function names.
 // Expected types select function values. A null expected type requires independent inference.

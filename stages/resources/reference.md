@@ -221,13 +221,15 @@ declaration has the source stage's unsafe marker. A safe source import can suppl
 a resource's drop function. It has the same exclusive-borrow signature and
 explicit-call restrictions as a local drop definition.
 
-The optional [overload adapter](../overload/resources.crs) reads bare function
-prototypes, selects calls with source borrow modes, and assigns structural native
-names. Initialize `RsStage`, then call `ov_resources_init`, `ov_resources_read`
-for each source, and `ov_resources_prepare`. Call `rs_prepare` after that sequence.
-Retain the two stages and the adapter hooks through overload preparation, and
-retain the resource stage through body emission. The resource reader alone does
-not add bare prototypes or overload selection.
+The [resource source provider](source.crs) supplies `CsHooks` for source type
+queries, traversal, contracts, and metadata references. Initialize `RsStage`,
+construct this provider with `rs_source_hooks`, and pass it to `ov_init`.
+Combine `rs_reader_hooks` and `ov_reader_hooks` in a reader chain, then call
+`rr_read` for each source. Call `ov_prepare`, then `rs_prepare`.
+The root chooses these providers and the pass order. Retain both stages and
+the chains through preparation, and retain the resource stage through emission.
+The [composition tutorial](../../examples/composition/README.md) also selects
+field ownership contracts and verification.
 
 The stage retains source signatures, storage identities, loans, and cleanup
 plans. It lowers a separate set of target declarations and bodies. Generated
@@ -242,7 +244,7 @@ alone omits the planned cleanup. `resource_program` completes output before
 its local stage ends; a retained context from that call cannot be used alone
 to emit the resource program again.
 
-The [Crust reader](../reader/README.md) is independent of resources. Its four hooks
+The [Crust reader](../reader/README.md) is independent of resources. Its ordered hooks
 can add declarations, statements, prefix expressions, and type syntax. A stage
 can also replace the complete reader. The reader contains no resource keyword.
 

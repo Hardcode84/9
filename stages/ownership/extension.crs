@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Include reader, source, resource, and ownership models. Keep their contexts live.
+extern fn os_init(stage:*OsStage, resources:*RsStage)->unit = "os_init";
+extern fn os_reader_hooks(stage:*OsStage, hooks:*CrustReaderHooks, next:*CrustReaderHooks)->unit = "os_reader_hooks";
+extern fn os_source_hooks(stage:*OsStage, hooks:*CsHooks, next:*CsHooks)->unit = "os_source_hooks";
+// Require complete, resolved source names and retained ownership contracts.
+// Lower, then verify, before emitting through the resource body callback.
+extern fn os_lower(stage:*OsStage)->bool = "os_lower";
+extern fn os_verify(stage:*OsStage)->bool = "os_verify";

@@ -1,0 +1,68 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_source_fields(query:*CsQuery, text:*CsText, fields:*OsField)->unit {
+    while fields != null(*OsField) {
+        cs_number((*query).context, text, 1u64);
+        cs_name((*query).context, text, (*fields).record_name); cs_name((*query).context, text, (*fields).name);
+        fields = (*fields).next;
+    }
+    cs_number((*query).context, text, 0u64);
+}
+
+fn os_source_native(query:*CsQuery, text:*CsText, stage:*OsStage, function:*OsFunction)->unit {
+    var effect:*OsNative = (*function).native;
+    while effect != null(*OsNative) {
+        var mode:u32 = 1u32;
+        if (*effect).mode != OS_ACQUIRE { mode = (*effect).mode - (*(*stage).resources).kind_base + 2u32; }
+        cs_number((*query).context, text, mode as u64);
+        cs_number((*query).context, text, cs_parameter((*query).context, (*function).declaration, (*effect).parameter) as u64);
+        cs_name((*query).context, text, (*effect).schema); cs_name((*query).context, text, (*effect).field);
+        effect = (*effect).next;
+    }
+    cs_number((*query).context, text, 0u64);
+}
+
+fn os_source_contract(query:*CsQuery, declaration:*CrustDecl, text:*CsText, user:*u8)->unit {
+    var stage:*OsStage = user as *OsStage;
+    var function:*OsFunction = crust_map_get(&(*stage).functions, declaration as usize) as *OsFunction;
+    if function == null(*OsFunction) {
+        cs_error((*query).context, &(*declaration).loc, "function requires an ownership interface"); return;
+    }
+    cs_part((*query).context, text, "ownership", 9usize);
+    cs_number((*query).context, text, (*function).effect as u64); cs_name((*query).context, text, (*function).domain);
+    cs_number((*query).context, text, (*function).foreign as u64);
+    cs_number((*query).context, text, (*function).has_modifies as u64);
+    os_source_fields(query, text, (*function).modifies);
+    os_source_fields(query, text, (*function).result_path);
+    var parameter:*CrustParam = (*declaration).params;
+    while parameter != null(*CrustParam) {
+        cs_number((*query).context, text, (os_field((*function).initializes, (*parameter).name) != null(*OsField)) as u64);
+        parameter = (*parameter).next;
+    }
+    var field:*OsField = (*function).initializes;
+    while field != null(*OsField) {
+        cs_parameter((*query).context, declaration, (*field).name); field = (*field).next;
+    }
+    os_source_native(query, text, stage, function);
+}
+
+fn os_source_published(query:*CsQuery, declaration:*CrustDecl, imported:bool, user:*u8)->unit {
+    if !imported { return; }
+    var stage:*OsStage = user as *OsStage;
+    if crust_map_get(&(*stage).imports, declaration as usize) == null(*u8) && !os_trusted(stage, declaration) {
+        cs_error((*query).context, &(*declaration).loc, "ownership source import requires a verified interface or explicit root trust"); return;
+    }
+    rs_put((*stage).resources, &(*stage).imports, declaration as usize, declaration as *u8);
+}
+
+// Add ownership contracts to the root-selected source query chain.
+// Include the resource provider as well. Source interfaces need verification or root trust.
+fn os_source_hooks(stage:*OsStage, hooks:*CsHooks, next:*CsHooks)->unit {
+    *hooks = make CsHooks {
+        next:next, user:stage as *u8, contract:os_source_contract, published:os_source_published,
+        type_key:null(fn(*CsQuery,*CrustTypeSyntax,*CsText,usize,*u8)->bool),
+        binding_type:null(fn(*CsQuery,*CrustTypeSyntax,*u8)->*CrustTypeSyntax),
+        expression:null(fn(*CsQuery,*CrustExpr,*CrustTypeSyntax,*u8)->*CrustTypeSyntax),
+        statement:null(fn(*CsQuery,*CrustStmt,*u8)->bool), references:null(fn(*CsQuery,*u8)->unit)
+    };
+}

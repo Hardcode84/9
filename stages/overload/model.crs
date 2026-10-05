@@ -1,16 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record OvText { data:*u8; size:usize; capacity:usize; }
-
-record OvHooks {
-    user:*u8;
-    type_key:fn(*OvStage,*CrustTypeSyntax,*OvText,usize,*u8)->bool;
-    binding_type:fn(*OvStage,*CrustTypeSyntax,*u8)->*CrustTypeSyntax;
-    expression:fn(*OvWalk,*CrustExpr,*CrustTypeSyntax,*u8)->*CrustTypeSyntax;
-    statement:fn(*OvWalk,*CrustStmt,*u8)->bool;
-    contract:fn(*OvStage,*CrustDecl,*u8)->*CrustName;
-}
-
 record OvGlobal {
     name:*CrustName;
     declaration:*CrustDecl;
@@ -34,15 +23,15 @@ record OvFunction {
 }
 
 record OvStage {
-    context:*CrustContext;
-    abi:*u8;
-    hooks:*OvHooks;
     globals:CrustMap;
     declarations:CrustMap;
     type_keys:CrustMap;
+    scratch:CsText;
+    context:*CrustContext;
+    abi:*u8;
+    hooks:*CsHooks;
     first_global:*OvGlobal;
     first_function:*OvFunction;
-    scratch:OvText;
     failed:bool;
 }
 

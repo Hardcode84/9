@@ -154,7 +154,7 @@ fn gp_read_with_hooks(program: *GsProgram, source: *CrustSource, hooks: *CrustRe
 
 // Copy and parse one source. Keep the program live through lowering and checking.
 fn gp_read(program: *GsProgram, source: *CrustSource) -> bool {
-    var hooks: CrustReaderHooks = make CrustReaderHooks {
+    var hooks: CrustReaderHooks = make CrustReaderHooks { next:null(*CrustReaderHooks), function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
         user: program as *u8, declaration: gp_reader_declaration,
         statement: null(fn(*CrustReader, *u8)->*CrustStmt),
         prefix: gp_reader_prefix, type_syntax: gp_reader_type

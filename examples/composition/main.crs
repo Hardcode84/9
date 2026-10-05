@@ -1,0 +1,20 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run,"setup.crs");
+if !composition_stages(run) { return 1i32; };
+host_source(run,"build.crs");
+
+var context:CrustContext=uninit;
+crust_context_init(&context,null(*CrustAllocator));
+var source:*CrustSource=host_input(run,"program.crs",1u64);
+var options:CBackendOptions=make CBackendOptions {
+    mode:0u32, output:host_path(run,"../../build/composition"), symbols:null(*u8),
+    cflags:null(**u8), cflag_count:0usize, ldflags:null(**u8), ldflag_count:0usize
+};
+var success:bool=source!=null(*CrustSource) && composition_build(&context,source,&options);
+if !success && context.error_count!=0usize {
+    crust_set_error((*run).context,context.error_loc.source,context.error_loc.offset,&context.error[0usize]);
+};
+crust_context_destroy(&context);
+if success { return 0i32; };
+return 1i32;

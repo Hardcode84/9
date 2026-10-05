@@ -52,7 +52,7 @@ ownership after selection.
 
 Optional callbacks supply type encodings, binding value types, expression
 and statement traversal, and declaration contracts. The standalone resolver
-has no ownership-specific type or syntax cases. The resource adapter uses
+has no ownership-specific type or syntax cases. The resource provider supplies
 these callbacks and preserves source import, unsafe, and drop contracts.
 
 The implementation passes a separate caller and provider test that formats
@@ -132,8 +132,9 @@ crust_ov1_d S(domain) n S(source_name) NativeParameters r Result c S(contract)
 
 Spaces in this notation are separators; they are not emitted.
 The standalone package uses domain `crust0_x64_v1` and contract `s`.
-The resource package uses domain `resources_x64_v1` and contract `safe` or
-`unsafe`. Its extension type payload starts with `S(resource_read)` or
+The resource package uses domain `resources_x64_v1`. Its contract is
+`s S(resources) N(unsafe) N(return_source_position)`, where the position is
+one-based, or zero for no returned loan. Its extension type payload starts with `S(resource_read)` or
 `S(resource_mut)`, followed by the encoded base type. Thus `read T`
 and `mut T` keep distinct names even when both lower to machine pointers.
 The encoding contains complete keys. Native names do not use a truncated hash.
@@ -148,52 +149,53 @@ crust_ov1_d13_crust0_x64_v1n5_twicea1_b4_rb4_c1_s
 
 ## Public composition API
 
-`model.crs` and `extension.crs` expose the stage state and operations.
-`ov_init` takes a context, an ABI domain, and optional hooks. Call `ov_read`
-for each source range, then `ov_prepare`. That last call runs `ov_collect`,
-`ov_resolve`, and `ov_mangle` in order. The individual operations are also
-public. After successful preparation, run the next checker and backend.
-Keep the context, source bytes, stage, and hooks live through their use.
-Operations on one context are serial; they share its arena and key buffer.
-Type hooks can call the public type and selection queries. A nested query
-preserves the bytes already appended by the enclosing hook, including when
-the shared buffer grows. Each query releases its temporary byte range on return.
-Keep source signatures and record fields unchanged between collection and
-mangling. Lower their type representations after overload preparation.
-Record field lookups use a name index built during collection. A constructor
-does not scan the complete record once per initializer.
+Load the reader and [source query models](../source/model.crs), then
+`model.crs` and `extension.crs`. `ov_init` takes a context, an ABI domain, and
+an optional `CsHooks` chain. Keep the context, sources, stages, and hook sets
+live through their use. Operations on one context are serial.
 
-| Hook | Contract |
-| --- | --- |
-| `type_key` | Append a self-delimiting ASCII type payload without NUL after the `x` tag; include a stable extension name; return false for an unknown type |
-| `binding_type` | Return the value type produced by reading a binding; return the input type when no change is needed |
-| `expression` | Visit a complete expression and return its source type; return null without changing an unhandled expression |
-| `statement` | Visit a complete statement; return false without changing an unhandled statement |
-| `contract` | Return a declaration contract interned in this context; equal parameter lists must have equal contracts |
+For overload syntax alone, call `ov_read` for each range. To combine readers,
+call `ov_reader_hooks` to construct its hook set, add other sets with `next`,
+and pass the head to `rr_read`.
 
-Expression and statement hooks run before the standard visitor. Standard
-visitor helpers bypass the current hook and retain hooks on child nodes.
-Distinct extension types must have distinct payloads. Use `ov_part` for a
-variable-length payload, or encode a fixed number of complete child types.
-Kind numbers belong to their context. Keep them out of type keys and native
-names so that stage initialization order cannot change linkage.
-Unknown syntax fails with a source diagnostic. `ov_error` records the first
-failure. Allocation failures and new context diagnostics from a hook also stop
-the operation. Type, expression, and statement traversal have bounded depth.
+After reading, call `ov_prepare` once. It runs these public operations:
 
-The resource adapter supplies these callbacks. It selects each drop function
-by `fn(mut Resource)->unit`, then publishes source ABI imports through
-`rs_source_import`. The resource checker retains all move, borrow, cleanup,
-unsafe-call, and function-cast rules. A cast does not bypass those rules.
-Source signatures and their imported safety contracts remain distinct from
-the lowered pointer signatures used by the C backend.
+1. `ov_collect` collects signatures and all provider contracts, then calls each
+   provider's `references` service.
+2. `ov_resolve` visits bodies and selects calls using source types.
+3. `ov_mangle` assigns names, retains one matching declaration, and calls each
+   provider's `published` service.
+
+The [source query contract](../source/README.md) defines forwarding, failure,
+keys, and callback lifetimes. Expression and statement providers run before
+standard traversal. The first handled result wins. Unhandled nodes reach the
+next provider, then the standard visitor. Unsupported syntax gets a diagnostic.
+Every selected contract callback contributes to declaration and native-name
+identity. Caller and provider must use the same provider order and encodings.
+
+Keep source signatures and record fields unchanged until mangling completes.
+Lower types after overload preparation. Record field lookups use the index
+built during collection. Nested type queries preserve the enclosing output
+prefix, including when the key buffer grows. Queries release their temporary
+byte ranges on return. Type, expression, and statement traversal is bounded.
+
+The resource stage supplies `rs_source_hooks`. Its reference callback selects
+each drop by `fn(mut Resource)->unit`. Its publication callback marks source
+imports through `rs_source_import`. The resource checker then enforces move,
+borrow, cleanup, unsafe-call, and function-cast rules.
+
+The ownership stage supplies `os_source_hooks` for field and function contracts.
+Select it together with the resource provider, then call `os_lower` and
+`os_verify` after `ov_prepare`. The
+[composition tutorial](../../examples/composition/README.md) shows the root
+setup, target code, and complete pass sequence.
 
 ## Validation and cost
 
 `make check-overload` checks exact type selection, function values, diagnostics,
-native symbols, separate objects, source roots, and resource composition.
+native symbols, separate objects, source roots, and resource and ownership composition.
 It also loads an ordinary copied library with a custom non-resource type and
-checks all five hook diagnostic paths. `make check-overload-alloc` injects
+checks provider diagnostic paths. `make check-overload-alloc` injects
 arena backing allocation failures with AddressSanitizer and UndefinedBehaviorSanitizer.
 
 The [measurement method](../../benchmarks/overload/README.md) separates the

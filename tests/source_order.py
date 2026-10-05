@@ -914,7 +914,12 @@ def check_examples(suite):
         shutil.copytree(ROOT / directory, package / directory)
     output = package / "build"
     output.mkdir()
-    for name in ("crust-c-library.so", "libcrust0_host.a"):
+    for name in (
+        "crust-c-library.so",
+        "crust-ownership-library.so",
+        "crust-overload-library.so",
+        "libcrust0_host.a",
+    ):
         shutil.copyfile(suite.build / name, output / name)
     elsewhere = package / "working directory"
     elsewhere.mkdir()
@@ -924,6 +929,9 @@ def check_examples(suite):
         result = suite.command([suite.runner, path, *arguments], cwd=elsewhere)
         assert not result.stdout and not result.stderr, (name, result)
         return path
+
+    compile_example("composition")
+    assert suite.command([output / "composition"]).stdout == b"!B"
 
     hello = compile_example("hello")
     assert suite.command([output / "hello"]).stdout == b"Hello, world!\n"

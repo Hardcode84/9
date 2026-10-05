@@ -240,36 +240,36 @@ Deferred overload.
 ```
 
 The [source](../../examples/overload/resources/main.crs) overloads `write`
-and the resource drop function `release`. The adapter in
-[resources.crs](resources.crs) selects each drop by `fn(mut Resource)->unit`.
-It preserves `read`, `mut`, and unsafe function contracts during selection.
+and the resource drop function `release`. The
+[resource provider](../resources/source.crs) selects each drop by
+`fn(mut Resource)->unit`. It preserves borrow modes, return dependencies, and
+unsafe contracts during selection.
 
-Both borrow modes eventually lower to pointers. Selecting overloads after
-that lowering would lose the distinction. The correct sequence is:
+Both borrow modes lower to pointers. Select overloads before that lowering:
 
-1. Initialize `RsStage`, then `ov_resources_init` with caller-owned hooks.
-2. Read all inputs with `ov_resources_read`.
-3. Call `ov_resources_prepare` to select calls and drops and assign names.
-4. Call `rs_prepare` to check ownership and construct cleanup plans.
-5. Emit with the resource stage's body callback.
+1. Initialize `RsStage`. Construct its `CsHooks` with `rs_source_hooks`.
+2. Pass that chain to `ov_init`.
+3. Combine `rs_reader_hooks` and `ov_reader_hooks`; read inputs with `rr_read`.
+4. Call `ov_prepare` to select calls and drops and assign names.
+5. Call `rs_prepare` to check moves and loans and construct cleanup plans.
+6. Emit with the resource stage's body callback.
 
-The adapter marks bodyless declarations as source ABI imports before
-resource preparation. Without that marker, the resource checker would
-treat them as native foreign calls and apply the wrong signature contract.
+The provider marks bodyless declarations as source ABI imports before resource
+preparation. It supplies its source rules through the shared
+[query interface](../source/README.md). The root selects providers in order.
+Unhandled nodes pass to the next provider, then the standard visitor. Unsupported
+syntax gets a diagnostic.
 
-`OvHooks` supplies type encoding, binding value types, expression traversal,
-statement traversal, and declaration contracts. The resolver itself has no
-resource-specific syntax cases. An unhandled expression or statement hook
-must leave the node unchanged. Unknown syntax must reach a diagnostic,
-not disappear from the walk. See [extension.crs](extension.crs) and the
-[hook reference](reference.md#public-composition-api) before writing a hook.
+To add field ownership checks, select `os_source_hooks` and `os_reader_hooks`,
+then call `os_lower` and `os_verify` after overload preparation. The
+[composition tutorial](../../examples/composition/README.md) separates the root
+setup from a complete target program.
 
 ## 6. Check costs and lifetimes
 
-The function reader hook uses one level of the reader's 256-level traversal
-budget. A function can contain 252 nested blocks around either a return or a
-scalar assignment. Composition with resource lowering reduces these values to
-250 and 249. These are the exact source shapes in the
+The reader has a 256-level traversal budget. A function can contain 253 nested
+blocks around a return, or 252 around a scalar assignment. Composition with
+resource lowering reduces these values to 250 and 249. These are the exact source shapes in the
 [stage limit table](../reader/README.md); other syntax can consume more levels.
 
 Keep the context, source bytes, stage, and hooks live through their uses.

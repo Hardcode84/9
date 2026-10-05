@@ -33,6 +33,7 @@ separates application rules from container-author obligations.
 | 11 | [One-way index](ownership-index/README.md) | Retire a symbol with incoming aliases and check local views from separate inputs |
 | 12 | [Generics](generics/README.md) | Declare type parameters beside records and functions; use explicit type arguments |
 | 13 | [Generics with ownership](generics/ownership/README.md) | Check generic payload contracts and use an intrusive container with plain and resource payloads |
+| 14 | [Stage composition](composition/README.md) | Select ownership and overload providers through ordered reader and source query chains |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -64,12 +65,14 @@ Each example has its own directory and README.
 | [resources/sqlite](resources/sqlite/README.md) | Own SQLite connections and statements; borrow column bytes | Typed rows and separate error codes |
 | [overload/hello](overload/hello/README.md) | Select overloads and a typed function value in the same file | Two greeting lines |
 | [overload/separate](overload/separate/README.md) | Link overloaded functions from a separate native object | `types: 42` |
+| [composition](composition/README.md) | Select independent ownership and overload stages in the root | `!B` |
 | [overload/resources](overload/resources/README.md) | Combine overloads, ownership, overloaded drops, and defer | Owned and deferred output |
 
 The root files select their compiler libraries explicitly. Resource examples
 require `make resource-stage`. The SQLite example also needs its pinned native
 SQLite input; its README gives the command.
-Overload examples require `make overload-stage`.
+Overload examples require `make overload-stage`. The composition example also
+requires `make ownership-stage`.
 The generics example requires `make generics-stage`.
 The ownership-generic example requires `make ownership-generics-stage`.
 The intrusive, ownership-basics, ownership-graphs, and ownership-index examples require

@@ -17,7 +17,7 @@ fn ov_reserved(name:*u8)->bool {
 fn ov_names(stage:*OvStage, function:*OvFunction)->unit {
     var result_key:*CrustName = ov_type_key(stage, (*(*function).syntax).base);
     if (*stage).failed { return; }
-    var buffer:*OvText = &(*stage).scratch;
+    var buffer:*CsText = &(*stage).scratch;
     var begin:usize = (*buffer).size;
     ov_text(stage, buffer, "crust_ov1_d");
     ov_part(stage, buffer, (*stage).abi, c_length((*stage).abi));
@@ -51,13 +51,7 @@ fn ov_add_function(stage:*OvStage, group:*OvGlobal, declaration:*CrustDecl)->uni
     var syntax:*CrustTypeSyntax = ov_function_syntax(stage, declaration);
     if (*stage).failed { return; }
     var parameters:*CrustName = ov_parameters(stage, syntax);
-    var contract:*CrustName = null(*CrustName);
-    var hooks:*OvHooks = (*stage).hooks;
-    if hooks != null(*OvHooks) && (*hooks).contract != null(fn(*OvStage,*CrustDecl,*u8)->*CrustName) {
-        var errors:usize = (*(*stage).context).error_count;
-        contract = (*hooks).contract(stage, declaration, (*hooks).user);
-        if (*(*stage).context).error_count != errors { (*stage).failed = true; }
-    } else { contract = ov_intern(stage, "s", 1usize); }
+    var contract:*CrustName = ov_source_contract(stage, declaration);
     if (*stage).failed { return; }
     if contract == null(*CrustName) {
         ov_error(stage, &(*declaration).loc, "overload contract callback returned no contract");
@@ -115,7 +109,7 @@ fn ov_collect(stage:*OvStage)->bool {
         }
         unit_value = (*unit_value).next;
     }
-    return ov_check_parameter_names(stage);
+    return ov_check_parameter_names(stage) && ov_source_references(stage);
 }
 
 // Require successful collection and resolution. Publish unique seed names once.
@@ -139,6 +133,8 @@ fn ov_mangle(stage:*OvStage)->bool {
                     if (*function).has_interface { (*declaration).link_name = (*function).native_name; }
                     if (*declaration).body == null(*CrustStmt) { (*declaration).kind = CRUST_D_EXTERN; }
                 }
+                ov_source_published(stage, declaration, (*function).has_interface && (*declaration).kind == CRUST_D_EXTERN);
+                if ov_hook_failed(stage) { return false; }
             }
             cursor = &(*declaration).next;
         }

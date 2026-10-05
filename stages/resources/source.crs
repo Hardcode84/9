@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn rs_source_type_key(query: *CsQuery, syntax: *CrustTypeSyntax,
+                         text: *CsText, depth: usize, user: *u8) -> bool {
+    if (*syntax).kind != rs_kind(user as *RsStage, RS_READ) && (*syntax).kind != rs_kind(user as *RsStage, RS_MUT) { return false; }
+    if (*syntax).kind == rs_kind(user as *RsStage, RS_READ) { cs_part((*query).context, text, "resource_read", 13usize); }
+    else { cs_part((*query).context, text, "resource_mut", 12usize); }
+    (*query).type_key(query, (*syntax).base, text, depth + 1usize);
+    return true;
+}
+
+fn rs_source_binding_type(query: *CsQuery, syntax: *CrustTypeSyntax,
+                             user: *u8) -> *CrustTypeSyntax {
+    if (*syntax).kind == rs_kind(user as *RsStage, RS_READ) || (*syntax).kind == rs_kind(user as *RsStage, RS_MUT) { return (*syntax).base; }
+    return null(*CrustTypeSyntax);
+}
+
+fn rs_source_expression(query: *CsQuery, expression: *CrustExpr,
+                           expected: *CrustTypeSyntax, user: *u8) -> *CrustTypeSyntax {
+    var kind: u32 = (*expression).kind;
+    var location: *CrustLoc = &(*expression).loc;
+    if kind == rs_kind(user as *RsStage, RS_MOVE) { return (*query).expression(query, (*expression).left, expected); }
+    if kind == rs_kind(user as *RsStage, RS_READ) || kind == rs_kind(user as *RsStage, RS_MUT) {
+        return rs_source_borrow(query,expression,expected);
+    }
+    if kind == CRUST_E_UNARY && (*expression).op == CRUST_OP_DEREF {
+        var operand: *CrustTypeSyntax = (*query).expression(query, (*expression).left, null(*CrustTypeSyntax));
+        if (*(*query).context).error_count != 0usize { return null(*CrustTypeSyntax); }
+        if (*operand).kind != CRUST_T_POINTER && (*operand).kind != rs_kind(user as *RsStage, RS_READ) && (*operand).kind != rs_kind(user as *RsStage, RS_MUT) {
+            cs_error((*query).context, location, "dereference requires a pointer or borrowed view");
+            return null(*CrustTypeSyntax);
+        }
+        return (*operand).base;
+    }
+    if kind == CRUST_E_FIELD || kind == CRUST_E_INDEX {
+        return rs_source_place(query,expression,user as *RsStage);
+    }
+    return null(*CrustTypeSyntax);
+}
+
+fn rs_source_statement(query: *CsQuery, statement: *CrustStmt, user: *u8) -> bool {
+    if (*statement).kind == rs_kind(user as *RsStage, RS_UNSAFE) {
+        (*query).statement(query, (*statement).body);
+        return true;
+    }
+    if (*statement).kind == rs_kind(user as *RsStage, RS_DEFER) || (*statement).kind == rs_kind(user as *RsStage, RS_FORGET) || (*statement).kind == rs_kind(user as *RsStage, RS_DROP) {
+        (*query).expression(query, (*statement).expr, null(*CrustTypeSyntax));
+        return true;
+    }
+    return false;
+}
+
+fn rs_source_borrow(query:*CsQuery,expression:*CrustExpr,expected:*CrustTypeSyntax)->*CrustTypeSyntax {
+    var location: *CrustLoc = &(*expression).loc;
+    var kind: u32 = (*expression).kind;
+    var operand_expected: *CrustTypeSyntax = null(*CrustTypeSyntax);
+    if expected != null(*CrustTypeSyntax) && (*expected).kind == kind {
+        operand_expected = (*expected).base;
+    }
+    var base: *CrustTypeSyntax = (*query).expression(query, (*expression).left, operand_expected);
+    if (*(*query).context).error_count != 0usize { return null(*CrustTypeSyntax); }
+    var result: *CrustTypeSyntax = cs_type((*query).context, kind, location);
+    if result != null(*CrustTypeSyntax) { (*result).base = base; }
+    return result;
+}
+
+fn rs_source_place(query:*CsQuery,expression:*CrustExpr,resources:*RsStage)->*CrustTypeSyntax {
+    var location: *CrustLoc = &(*expression).loc;
+    var kind: u32 = (*expression).kind;
+    var base: *CrustTypeSyntax = (*query).expression(query, (*expression).left, null(*CrustTypeSyntax));
+    if (*(*query).context).error_count != 0usize { return null(*CrustTypeSyntax); }
+    if (*base).kind == rs_kind(resources, RS_READ) || (*base).kind == rs_kind(resources, RS_MUT) { base = (*base).base; }
+    if kind == CRUST_E_FIELD {
+        if (*base).kind == CRUST_T_POINTER { base = (*base).base; }
+        return (*query).field_type(query, base, (*expression).field_name, location);
+    }
+    (*query).expression(query, (*expression).right, null(*CrustTypeSyntax));
+    if (*(*query).context).error_count != 0usize { return null(*CrustTypeSyntax); }
+    if (*base).kind != CRUST_T_ARRAY && (*base).kind != CRUST_T_POINTER {
+        cs_error((*query).context, location, "indexing requires an array or raw pointer");
+        return null(*CrustTypeSyntax);
+    }
+    return (*base).base;
+}
+
+fn rs_source_contract(query:*CsQuery, declaration:*CrustDecl, text:*CsText, user:*u8)->unit {
+    var stage:*RsStage = user as *RsStage;
+    cs_part((*query).context, text, "resources", 9usize);
+    var unsafe:bool = (*declaration).kind == CRUST_D_EXTERN ||
+        crust_map_get(&(*stage).unsafe_functions, declaration as usize) != null(*u8);
+    cs_number((*query).context, text, unsafe as u64);
+    var source:*CrustName = crust_map_get(&(*stage).return_sources, declaration as usize) as *CrustName;
+    cs_number((*query).context, text, cs_parameter((*query).context, declaration, source) as u64);
+}
+
+fn rs_source_references(query:*CsQuery, user:*u8)->unit {
+    var stage:*RsStage = user as *RsStage;
+    var resource:*RsResource = (*stage).resources;
+    while resource != null(*RsResource) && (*(*query).context).error_count == 0usize {
+        var location:*CrustLoc = &(*(*resource).declaration).loc;
+        var signature:*CrustTypeSyntax = cs_type((*query).context, CRUST_T_FUNCTION, location);
+        var parameter:*CrustTypeSyntax = cs_type((*query).context, rs_kind(stage, RS_MUT), location);
+        var record_type:*CrustTypeSyntax = cs_type((*query).context, CRUST_T_NAME, location);
+        var result:*CrustTypeSyntax = cs_type((*query).context, CRUST_T_UNIT, location);
+        var params:**CrustTypeSyntax = rs_alloc(stage, sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
+        if (*(*query).context).error_count != 0usize { return; }
+        (*record_type).name = (*(*resource).declaration).name;
+        (*parameter).base = record_type; params[0usize] = parameter;
+        (*signature).params = params; (*signature).param_count = 1usize; (*signature).base = result;
+        var selected:*CrustName = (*query).select(query, (*resource).drop_name, signature, location);
+        if selected == null(*CrustName) { return; }
+        (*resource).drop_name = selected;
+        resource = (*resource).next;
+    }
+}
+
+fn rs_source_published(query:*CsQuery, declaration:*CrustDecl, imported:bool, user:*u8)->unit {
+    if imported { rs_source_import(user as *RsStage, declaration); }
+}
+
+// Provide resource source rules to a consumer of CsHooks. Retain stage and hooks.
+fn rs_source_hooks(stage:*RsStage, hooks:*CsHooks, next:*CsHooks)->unit {
+    *hooks = make CsHooks {
+        next:next, user:stage as *u8, type_key:rs_source_type_key,
+        binding_type:rs_source_binding_type, expression:rs_source_expression,
+        statement:rs_source_statement, contract:rs_source_contract,
+        references:rs_source_references, published:rs_source_published
+    };
+}

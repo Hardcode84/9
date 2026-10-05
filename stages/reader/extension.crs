@@ -1,0 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Include api/crust0.crs and reader/model.crs. Keep the source and hook chain live.
+// First handled hook wins. Failure retains a diagnostic and publishes no unit.
+extern fn rr_read(context:*CrustContext, source:*CrustSource, begin:usize, end:usize,
+                 hooks:*CrustReaderHooks)->*CrustUnit = "rr_read";

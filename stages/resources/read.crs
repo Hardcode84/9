@@ -100,12 +100,18 @@ fn rs_read_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax {
     return syntax;
 }
 
-// Read one complete source range. Retain source storage through stage use.
-fn rs_read(stage: *RsStage, source: *CrustSource, begin: usize, end: usize) -> bool {
-    var hooks: CrustReaderHooks = make CrustReaderHooks {
+// Select this stage in a root-owned reader chain. Retain stage and hooks.
+fn rs_reader_hooks(stage:*RsStage, hooks:*CrustReaderHooks, next:*CrustReaderHooks)->unit {
+    *hooks = make CrustReaderHooks { next:next, function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
         user: stage as *u8, declaration: rs_read_declaration,
         statement: rs_read_statement, prefix: rs_read_prefix, type_syntax: rs_read_type
     };
+}
+
+// Read one complete source range. Retain source storage through stage use.
+// Publish no unit after a reader failure.
+fn rs_read(stage: *RsStage, source: *CrustSource, begin: usize, end: usize) -> bool {
+    var hooks:CrustReaderHooks=uninit; rs_reader_hooks(stage,&hooks,null(*CrustReaderHooks));
     var unit_value: *CrustUnit = rr_read((*stage).context, source, begin, end, &hooks);
     if unit_value == null(*CrustUnit) { (*stage).failed = true; return false; }
     return true;

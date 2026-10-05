@@ -1,37 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record KcStage { resources: *RsStage; wrapper: *KwStage; }
-
-fn kc_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
-    return rs_read_declaration(reader, (*(user as *KcStage)).resources as *u8);
-}
-
-fn kc_statement(reader: *CrustReader, user: *u8) -> *CrustStmt {
-    return rs_read_statement(reader, (*(user as *KcStage)).resources as *u8);
-}
-
-fn kc_prefix(reader: *CrustReader, user: *u8) -> *CrustExpr {
-    return rs_read_prefix(reader, (*(user as *KcStage)).resources as *u8);
-}
-
-fn kc_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax {
-    var stage: *KcStage = user as *KcStage;
-    var syntax: *CrustTypeSyntax = rs_read_type(reader, (*stage).resources as *u8);
-    if syntax != null(*CrustTypeSyntax) || (*reader).failed { return syntax; }
-    return kw_read_type(reader, (*stage).wrapper as *u8);
-}
-
 fn kc_build(context: *CrustContext, source: *CrustSource, output: *u8, reverse: bool) -> bool {
     var resources: RsStage = uninit;
     var wrapper: KwStage = uninit;
     if reverse { kw_init(&wrapper, context); rs_init(&resources, context); }
     else { rs_init(&resources, context); kw_init(&wrapper, context); }
     if (*context).error_count != 0usize { return false; }
-    var stage: KcStage = make KcStage { resources: &resources, wrapper: &wrapper };
-    var hooks: CrustReaderHooks = make CrustReaderHooks {
-        user: &stage as *u8, declaration: kc_declaration, statement: kc_statement,
-        prefix: kc_prefix, type_syntax: kc_type
+    var wrapper_hooks:CrustReaderHooks=make CrustReaderHooks {
+        next:null(*CrustReaderHooks), user:&wrapper as *u8,
+        function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
+        declaration:null(fn(*CrustReader,*u8)->*CrustDecl),
+        statement:null(fn(*CrustReader,*u8)->*CrustStmt),
+        prefix:null(fn(*CrustReader,*u8)->*CrustExpr), type_syntax:kw_read_type
     };
+    var hooks:CrustReaderHooks=uninit;
+    rs_reader_hooks(&resources,&hooks,&wrapper_hooks);
     if rr_read(context, source, 0usize, (*source).size, &hooks) == null(*CrustUnit) { return false; }
     kw_lower(&wrapper);
     if !rs_prepare(&resources) { return false; }

@@ -101,7 +101,7 @@ fn overload_program(request:*CrustBuild)->i32 {
     cli.root = (*request).source;
     cli.target_begin = (*request).target_begin;
     var overloads:OvStage = uninit;
-    ov_init(&overloads, context, "crust0_x64_v1", null(*OvHooks));
+    ov_init(&overloads, context, "crust0_x64_v1", null(*CsHooks));
     var result:i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
         result = ov_driver_build(&cli, &overloads, ov_read, ov_check,

@@ -46,7 +46,9 @@ different permissions. Resolving overloads after lowering would lose that
 source distinction. Drop selection also needs the exact `mut Output` or
 `mut Text` type before the resource checker can validate it.
 
-The [adapter source](../../../stages/overload/resources.crs) supplies the
-resolver's generic hooks. It also marks source ABI imports for the resource
-checker. The seed and C backend do not need a combined overload-and-resource
-feature. `make check-overload` checks this composition and its rejection paths.
+The [resource provider](../../../stages/resources/source.crs) supplies source
+query services and marks source ABI imports. The
+[compilation driver](../../../stages/overload/resource_program.crs) selects
+those services and the reader chain. `make check-overload` checks output and
+rejection paths. The [composition tutorial](../../composition/README.md) adds
+field ownership checks through the same query interface.

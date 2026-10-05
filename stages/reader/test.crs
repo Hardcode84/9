@@ -154,17 +154,37 @@ fn rt_bad_prefix(reader:*CrustReader,user:*u8)->*CrustExpr {
     return null(*CrustExpr);
 }
 
+fn rt_bad_end(reader:*CrustReader,declaration:*CrustDecl,user:*u8)->bool {
+    return rt_bad_hook(reader,user)!=null(*CrustDecl);
+}
+
+fn rt_unreachable(reader:*CrustReader,user:*u8)->*CrustDecl { trap; }
+
+fn rt_chain_counts(first:*ReaderTestHooks, second:*ReaderTestHooks)->bool {
+    return (*first).declarations==1usize && (*first).prefixes==1usize &&
+        (*first).statements==0usize && (*first).types==0usize &&
+        (*second).declarations==0usize && (*second).prefixes==0usize &&
+        (*second).statements==1usize && (*second).types==2usize;
+}
+
 fn rt_positive_hooks()->bool {
     var text:*u8="shape Box {value:word;} fn answer()->word {then return same 42u64;}";
     var source:CrustSource=make CrustSource {path:"reader-hook-test",bytes:text,size:rt_length(text),identity:1u64};
     var context:CrustContext=uninit;crust_context_init(&context,null(*CrustAllocator));
     var state:ReaderTestHooks=make ReaderTestHooks {declarations:0usize,statements:0usize,prefixes:0usize,types:0usize};
+    var later:ReaderTestHooks=make ReaderTestHooks {declarations:0usize,statements:0usize,prefixes:0usize,types:0usize};
+    var tail:CrustReaderHooks=make CrustReaderHooks {
+        next:null(*CrustReaderHooks),function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
+        user:&later as *u8,declaration:rt_declaration_hook,statement:rt_statement_hook,
+        prefix:rt_prefix_hook,type_syntax:rt_type_hook
+    };
     var hooks:CrustReaderHooks=make CrustReaderHooks {
-        user:&state as *u8,declaration:rt_declaration_hook,statement:rt_statement_hook,prefix:rt_prefix_hook,type_syntax:rt_type_hook
+        next:&tail,function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
+        user:&state as *u8,declaration:rt_declaration_hook,prefix:rt_prefix_hook,
+        statement:null(fn(*CrustReader,*u8)->*CrustStmt),type_syntax:null(fn(*CrustReader,*u8)->*CrustTypeSyntax)
     };
     var parsed:*CrustUnit=rr_read(&context,&source,0usize,source.size,&hooks);
-    var equal:bool=parsed!=null(*CrustUnit) && state.declarations==1usize && state.statements==1usize &&
-        state.prefixes==1usize && state.types==2usize;
+    var equal:bool=parsed!=null(*CrustUnit) && rt_chain_counts(&state,&later);
     var eval:*u8=null(*u8);
     if equal { equal=crust_collect(&context) && crust_resolve(&context) && crust_check(&context); }
     if equal {
@@ -185,11 +205,15 @@ fn rt_negative_hooks()->bool {
     var mode:usize=0usize;
     while mode<12usize {
         crust_context_init(&context,null(*CrustAllocator));
-        var hooks:CrustReaderHooks=make CrustReaderHooks {
+        var hooks:CrustReaderHooks=make CrustReaderHooks { next:null(*CrustReaderHooks), function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
             user:&mode as *u8,declaration:rt_bad_hook,statement:null(fn(*CrustReader,*u8)->*CrustStmt),
             prefix:null(fn(*CrustReader,*u8)->*CrustExpr),type_syntax:null(fn(*CrustReader,*u8)->*CrustTypeSyntax)
         };
-        var parsed:*CrustUnit=rr_read(&context,&source,0usize,source.size,&hooks);
+        var tail:CrustReaderHooks=hooks; tail.declaration=rt_unreachable;
+        hooks.next=&tail;
+        var head:CrustReaderHooks=hooks;
+        head.declaration=null(fn(*CrustReader,*u8)->*CrustDecl); head.next=&hooks;
+        var parsed:*CrustUnit=rr_read(&context,&source,0usize,source.size,&head);
         if parsed!=null(*CrustUnit) || context.error_count!=1usize || context.error_loc.offset!=0usize || context.units!=null(*CrustUnit) {
             equal=false;
         }
@@ -197,7 +221,7 @@ fn rt_negative_hooks()->bool {
         crust_context_destroy(&context);mode=mode+1usize;
     }
     crust_context_init(&context,null(*CrustAllocator));
-    var hooks:CrustReaderHooks=make CrustReaderHooks {
+    var hooks:CrustReaderHooks=make CrustReaderHooks { next:null(*CrustReaderHooks), function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
         user:null(*u8),declaration:null(fn(*CrustReader,*u8)->*CrustDecl),
         statement:null(fn(*CrustReader,*u8)->*CrustStmt),prefix:rt_bad_prefix,
         type_syntax:null(fn(*CrustReader,*u8)->*CrustTypeSyntax)
@@ -206,6 +230,27 @@ fn rt_negative_hooks()->bool {
     if parsed!=null(*CrustUnit) || !rt_text(&context.error[0usize],"unhandled reader hook consumed or changed its token") { equal=false; }
     crust_context_destroy(&context);
     return equal;
+}
+
+fn rt_negative_endings()->bool {
+    var text:*u8="fn answer()->u64;";
+    var source:CrustSource=make CrustSource {path:"reader-end-test",bytes:text,size:rt_length(text),identity:1u64};
+    var mode:usize=0usize;
+    while mode<4usize {
+        var context:CrustContext=uninit; crust_context_init(&context,null(*CrustAllocator));
+        var hooks:CrustReaderHooks=make CrustReaderHooks {
+            next:null(*CrustReaderHooks),user:&mode as *u8,function_end:rt_bad_end,
+            declaration:null(fn(*CrustReader,*u8)->*CrustDecl),statement:null(fn(*CrustReader,*u8)->*CrustStmt),
+            prefix:null(fn(*CrustReader,*u8)->*CrustExpr),type_syntax:null(fn(*CrustReader,*u8)->*CrustTypeSyntax)
+        };
+        var parsed:*CrustUnit=rr_read(&context,&source,0usize,source.size,&hooks);
+        var valid:bool=parsed==null(*CrustUnit) && context.error_count==1usize &&
+            context.error_loc.offset==source.size-1usize && context.units==null(*CrustUnit);
+        crust_context_destroy(&context);
+        if !valid { return false; }
+        mode=mode+1usize;
+    }
+    return true;
 }
 
 fn rt_token_budget()->bool {
@@ -225,6 +270,7 @@ fn rt_token_budget()->bool {
 fn rt_hooks()->bool {
     var equal:bool=rt_positive_hooks();
     equal=rt_negative_hooks() && equal;
+    equal=rt_negative_endings() && equal;
     return rt_token_budget() && equal;
 }
 

@@ -88,7 +88,7 @@ fn og_read_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax {
 // Trust is selected by the root. It applies to definitions read by this call.
 fn og_read_range(program: *OgProgram, source: *CrustSource,
                  begin: usize, end: usize, trusted: bool) -> bool {
-    var hooks: CrustReaderHooks = make CrustReaderHooks {
+    var hooks: CrustReaderHooks = make CrustReaderHooks { next:null(*CrustReaderHooks), function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
         user: program as *u8, declaration: og_read_declaration, statement: og_read_statement,
         prefix: og_read_prefix, type_syntax: og_read_type
     };

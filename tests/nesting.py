@@ -18,7 +18,7 @@ def main():
         ("crust0", 253, 252),
         ("crust-c", 253, 252),
         ("crust-resource", 250, 249),
-        ("crust-overload", 252, 252),
+        ("crust-overload", 253, 252),
         ("crust-overload-resource", 250, 249),
     ):
         for kind, limit, inner, suffix in (

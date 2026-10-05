@@ -24,23 +24,32 @@ punctuation uses its ASCII value. The `RR_*` constants describe other tokens.
 `rr_name`, and `rr_is_name` provide token access. `rr_expect` takes a complete
 error message. `rr_error` retains a diagnostic at an original source offset.
 
-`CrustReaderHooks` supplies an optional function for a declaration, statement,
-prefix expression, or type. Each function receives the reader and `user`.
-A null result means unhandled and must leave the token and cursor unchanged.
-A handled hook consumes its complete production. A new context diagnostic or
-`reader.failed` stops reading. Hooks return one unlinked declaration or
-statement; use a block to return several statements.
+`CrustReaderHooks` supplies callbacks for a declaration, statement, prefix
+expression, type, or function ending. Each set has its own `user` pointer and
+`next` pointer. The root owns this finite chain and selects its order. The first
+handled result wins. A null callback or an unhandled result tries the next set.
+The standard production runs when every set returns unhandled.
+
+A null node or false ending result means unhandled and must leave the token,
+cursor, and supplied declaration unchanged. A handled hook consumes its complete
+production. A new context diagnostic or `reader.failed` stops dispatch. A handled
+node hook returns one unlinked declaration or statement; use a block for several
+statements. The reader checks token preservation and progress at each callback.
 
 The `rr_standard_declaration`, `rr_standard_statement`, `rr_standard_prefix`,
-and `rr_standard_type` functions bypass the hook for that production. Nested
+and `rr_standard_type` functions bypass the chain for that production. Nested
 productions still use their hooks. `rr_record` consumes `RR_RECORD`, the name,
 the fields, and the closing brace. `rr_function` consumes a complete ordinary
 or extern function. `rr_function_header` consumes `fn` or `extern fn`, the
 name, the parameters, and the result type. It returns a declaration without a
-body or native symbol and leaves the next token current. A hook can inspect
-this token and consume its own suffix. To use the standard suffix, pass a
-successful header result to `rr_function_end`: it consumes the function body
-or the extern `= "native";` suffix. `rr_function` calls both helpers.
+body or native symbol and leaves the next token current.
+
+A declaration hook can consume its annotations, then call `rr_function_end`.
+That helper tries `function_end(reader, declaration, user)` in chain order.
+A handled callback consumes the ending, updates the supplied declaration, and
+returns true. `rr_standard_function_end` consumes the standard body or extern
+`= "native";` suffix. The overload provider uses the ending hook for bodyless
+source interfaces. Other stages can read their annotations before that ending.
 
 A declaration hook can extend a header after its name. `rr_record_body` reads
 from the opening brace through the closing brace. `rr_function_signature`
@@ -90,10 +99,9 @@ then `return 0i32;` after the nested blocks.
 | Driver | Return fixture | Assignment fixture |
 |---|---:|---:|
 | `crust0`, `crust-c` | 253 | 252 |
-| `crust-overload` | 252 | 252 |
+| `crust-overload` | 253 | 252 |
 | `crust-resource`, `crust-overload-resource` | 250 | 249 |
 
-The overload declaration hook uses one reader level while it reads a function.
 Resource lowering adds levels to the checked tree. Other expressions and hooks
 can use more levels. Each stage rejects exhausted traversal with a diagnostic.
 [The boundary test](../../tests/nesting.py) checks each listed limit and the
@@ -110,7 +118,7 @@ python3 stages/reader/test.py --backend c --cflag=-O3
 ```
 
 The tests compare acceptance, AST fields, source offsets, and diagnostics with
-the seed reader. They also exercise all four hooks, hook contract failures,
+the seed reader. They also exercise ordered hooks, first-match selection, hook contract failures,
 source ranges, nesting and token limits, and allocation failure. The seed
 compiler checks the reader source before each test build.
 Generated inputs and outputs go in `BUILD/reader-tests`, where `--build`

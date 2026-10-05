@@ -79,14 +79,13 @@ fn oa_check(sources:*CrustSource, count:usize, composed:bool)->i32 {
         var resources:RsStage = uninit;
         rs_init(&resources, &context);
         var stage:OvStage = uninit;
-        var hooks:OvHooks = uninit;
-        if composed { ov_resources_init(&stage, &resources, "resources_x64_v1", &hooks); }
-        else { ov_init(&stage, &context, "crust0_x64_v1", null(*OvHooks)); }
+        var hooks:CsHooks = uninit;
+        if composed { rs_source_hooks(&resources,&hooks,null(*CsHooks)); ov_init(&stage,&context,"resources_x64_v1",&hooks); }
+        else { ov_init(&stage, &context, "crust0_x64_v1", null(*CsHooks)); }
         var success:bool = oa_read(&stage, sources, count, composed);
         if success {
             state.phase = 1u32;
-            if composed { success = ov_resources_prepare(&stage); }
-            else { success = ov_prepare(&stage); }
+            success = ov_prepare(&stage);
         }
         var stage_complete:bool = success;
         if success {
@@ -164,7 +163,11 @@ fn oa_read(stage:*OvStage, sources:*CrustSource, count:usize, composed:bool)->bo
     var index:usize = 0usize;
     while index < count && success {
         if composed {
-            success = ov_resources_read(stage, &sources[index], 0usize, sources[index].size);
+            var resources:*RsStage=(*(*stage).hooks).user as *RsStage;
+            var source_hooks:CrustReaderHooks=uninit; ov_reader_hooks(&source_hooks,null(*CrustReaderHooks));
+            var reader_hooks:CrustReaderHooks=uninit; rs_reader_hooks(resources,&reader_hooks,&source_hooks);
+            success = rr_read((*stage).context,&sources[index],0usize,sources[index].size,&reader_hooks)!=null(*CrustUnit);
+            if !success { (*stage).failed=true; }
         } else { success = ov_read(stage, &sources[index], 0usize, sources[index].size); }
         index = index + 1usize;
     }
@@ -183,7 +186,6 @@ fn oa_valid(state:*OaAllocator, context:*CrustContext, stage:*OvStage, resources
     } else {
         valid = valid && (*state).rejected && (*context).error_count != 0usize && (*context).error[0usize] != 0u8;
         if !stage_complete { valid = valid && (*stage).failed; }
-        if composed { valid = valid && (*resources).failed; }
     }
     return valid;
 }

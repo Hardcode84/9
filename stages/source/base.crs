@@ -1,0 +1,71 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn cs_error(context:*CrustContext, location:*CrustLoc, message:*u8)->unit {
+    if (*context).error_count == 0usize {
+        crust_set_error(context, (*location).source, (*location).offset, message);
+    }
+}
+
+fn cs_type(context:*CrustContext, kind:u32, location:*CrustLoc)->*CrustTypeSyntax {
+    if (*context).error_count != 0usize { return null(*CrustTypeSyntax); }
+    var syntax:*CrustTypeSyntax = crust_try_alloc(context, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
+    if syntax != null(*CrustTypeSyntax) { (*syntax).kind = kind; (*syntax).loc = *location; }
+    return syntax;
+}
+
+fn cs_bytes(context:*CrustContext, buffer:*CsText, bytes:*u8, size:usize)->unit {
+    if (*context).error_count != 0usize { return; }
+    if size > 9223372036854775807usize - (*buffer).size {
+        crust_set_error(context, null(*CrustSource), 0usize, "source key size exceeds target limit"); return;
+    }
+    var needed:usize = (*buffer).size + size;
+    if needed > (*buffer).capacity {
+        var capacity:usize = (*buffer).capacity;
+        if capacity == 0usize { capacity = 128usize; }
+        while capacity < needed {
+            if capacity > 9223372036854775807usize / 2usize { capacity = needed; }
+            else { capacity = capacity * 2usize; }
+        }
+        var data:*u8 = crust_try_alloc(context, capacity, 1usize);
+        if data == null(*u8) { return; }
+        var index:usize = 0usize;
+        while index < (*buffer).size { data[index] = (*buffer).data[index]; index = index + 1usize; }
+        (*buffer).data = data; (*buffer).capacity = capacity;
+    }
+    var index:usize = 0usize;
+    while index < size { (*buffer).data[(*buffer).size + index] = bytes[index]; index = index + 1usize; }
+    (*buffer).size = needed;
+}
+
+fn cs_number(context:*CrustContext, buffer:*CsText, value:u64)->unit {
+    var digits:[u8;20] = uninit;
+    var index:usize = 20usize;
+    while true {
+        index = index - 1usize; digits[index] = (value % 10u64) as u8 + 48u8;
+        value = value / 10u64;
+        if value == 0u64 { break; }
+    }
+    cs_bytes(context, buffer, &digits[index], 20usize - index);
+    cs_bytes(context, buffer, "_", 1usize);
+}
+
+fn cs_part(context:*CrustContext, buffer:*CsText, bytes:*u8, size:usize)->unit {
+    cs_number(context, buffer, size as u64); cs_bytes(context, buffer, bytes, size);
+}
+
+fn cs_name(context:*CrustContext, buffer:*CsText, name:*CrustName)->unit {
+    if name == null(*CrustName) { cs_number(context, buffer, 0u64); }
+    else { cs_part(context, buffer, (*name).text, (*name).size); }
+}
+
+fn cs_parameter(context:*CrustContext, declaration:*CrustDecl, name:*CrustName)->usize {
+    if name == null(*CrustName) { return 0usize; }
+    var index:usize = 1usize;
+    var parameter:*CrustParam = (*declaration).params;
+    while parameter != null(*CrustParam) {
+        if (*parameter).name == name { return index; }
+        index = index + 1usize; parameter = (*parameter).next;
+    }
+    cs_error(context, &(*declaration).loc, "source contract names an absent parameter");
+    return 0usize;
+}

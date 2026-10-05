@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record CsText { data:*u8; size:usize; capacity:usize; }
+
+// Queries borrow the consumer's state for one callback. Retain neither pointer.
+// Expression and statement queries require a live body scope.
+record CsQuery {
+    context:*CrustContext;
+    user:*u8;
+    scope:*u8;
+    type_key:fn(*CsQuery,*CrustTypeSyntax,*CsText,usize)->unit;
+    expression:fn(*CsQuery,*CrustExpr,*CrustTypeSyntax)->*CrustTypeSyntax;
+    statement:fn(*CsQuery,*CrustStmt)->unit;
+    field_type:fn(*CsQuery,*CrustTypeSyntax,*CrustName,*CrustLoc)->*CrustTypeSyntax;
+    same:fn(*CsQuery,*CrustTypeSyntax,*CrustTypeSyntax)->bool;
+    select:fn(*CsQuery,*CrustName,*CrustTypeSyntax,*CrustLoc)->*CrustName;
+}
+
+// First handled query wins. Null or false forwards an unchanged input.
+// New context errors stop dispatch. Contract callbacks append independent keys.
+// Resolve references after signature collection, before body name rewriting.
+// Published receives each retained declaration after source names are assigned.
+// Keep the finite, acyclic chain and all callback state live through preparation.
+record CsHooks {
+    next:*CsHooks;
+    user:*u8;
+    type_key:fn(*CsQuery,*CrustTypeSyntax,*CsText,usize,*u8)->bool;
+    binding_type:fn(*CsQuery,*CrustTypeSyntax,*u8)->*CrustTypeSyntax;
+    expression:fn(*CsQuery,*CrustExpr,*CrustTypeSyntax,*u8)->*CrustTypeSyntax;
+    statement:fn(*CsQuery,*CrustStmt,*u8)->bool;
+    contract:fn(*CsQuery,*CrustDecl,*CsText,*u8)->unit;
+    references:fn(*CsQuery,*u8)->unit;
+    published:fn(*CsQuery,*CrustDecl,bool,*u8)->unit;
+}

@@ -169,3 +169,6 @@ record OsCheck {
 }
 
 record OsDeferred { contract: *OsFunction; arguments: **OsValue; location: *CrustLoc; count: usize; }
+
+record OsLoopSlot { slot: *OsSlot; next: *OsLoopSlot; }
+record OsLoop { entry: *OsState; exit: *OsState; bindings: *OsLoopSlot; parent: *OsLoop; }

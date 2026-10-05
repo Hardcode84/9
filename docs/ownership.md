@@ -644,3 +644,11 @@ record can also be passed, with its ordinary copy behavior at the call boundary.
 The same tutorial uses a generic intrusive node and owner. The root selects the
 pointer provider once. Each new payload gets its own layout and complete cleanup.
 The definitions and their parameter declarations stay beside the source code.
+
+## Combine ownership with overloads
+
+The root can select ownership and overloads through ordered reader and source
+query chains. Resolve calls while `read T` and `mut T` still have their source
+types. Then call ownership lowering and verification before output. The
+[composition tutorial](../examples/composition/README.md) has the setup and a
+complete program with overloaded functions, a destructor, and `defer`.

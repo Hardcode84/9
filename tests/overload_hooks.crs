@@ -32,11 +32,11 @@ fn oh_equal(a:*u8, b:*u8)->bool {
     return false;
 }
 
-fn oh_error(state:*OhState, stage:*OvStage, location:*CrustLoc, kind:u32)->bool {
+fn oh_error(state:*OhState, query:*CsQuery, location:*CrustLoc, kind:u32)->bool {
     if (*state).failure != kind { return false; }
     (*state).failures = (*state).failures + 1usize;
     (*state).error_offset = (*location).offset;
-    crust_set_error((*stage).context, (*location).source, (*location).offset,
+    crust_set_error((*query).context, (*location).source, (*location).offset,
         "external overload hook failed");
     return true;
 }
@@ -58,41 +58,41 @@ fn oh_read_type(reader:*CrustReader, user:*u8)->*CrustTypeSyntax {
     return syntax;
 }
 
-fn oh_type_key(stage:*OvStage, syntax:*CrustTypeSyntax, buffer:*OvText,
+fn oh_type_key(query:*CsQuery, syntax:*CrustTypeSyntax, buffer:*CsText,
                depth:usize, user:*u8)->bool {
     var state:*OhState = user as *OhState;
     if (*syntax).kind != (*state).kind_base && (*syntax).kind != (*state).kind_base + 1u32 { return false; }
     (*state).type_calls = (*state).type_calls + 1usize;
-    if oh_error(state, stage, &(*syntax).loc, 1u32) { return true; }
+    if oh_error(state, query, &(*syntax).loc, 1u32) { return true; }
     // Leave room for this key; the nested comparison must grow the shared buffer.
     var payload:*u8 = "units_of_measure_with_explicit_representation_contract_and_a_long_encoding_that_crosses_the_buffer_growth_boundary_v1";
-    ov_part(stage, buffer, payload, oh_length(payload));
-    ov_number(stage, buffer, ((*syntax).kind - (*state).kind_base) as u64);
-    var probe:*CrustTypeSyntax = ov_type(stage, CRUST_T_U32, &(*syntax).loc);
-    if (*stage).failed { return true; }
+    cs_part((*query).context, buffer, payload, oh_length(payload));
+    cs_number((*query).context, buffer, ((*syntax).kind - (*state).kind_base) as u64);
+    var probe:*CrustTypeSyntax = cs_type((*query).context, CRUST_T_U32, &(*syntax).loc);
+    if (*(*query).context).error_count != 0usize { return true; }
     if (*state).failure == 6u32 {
         (*probe).kind = (*state).kind_base + 2u32;
         (*state).failures = (*state).failures + 1usize;
         (*state).error_offset = (*syntax).loc.offset;
     }
     var capacity:usize = (*buffer).capacity;
-    if !ov_same(stage, (*syntax).base, probe) {
-        if !(*stage).failed { ov_error(stage, &(*syntax).loc, "unit type requires u32"); }
+    if !(*query).same(query, (*syntax).base, probe) {
+        if (*(*query).context).error_count == 0usize { cs_error((*query).context, &(*syntax).loc, "unit type requires u32"); }
         return true;
     }
     if (*buffer).capacity > capacity { (*state).nested_growth = true; }
-    ov_encode_type(stage, (*syntax).base, buffer, depth + 1usize);
+    (*query).type_key(query, (*syntax).base, buffer, depth + 1usize);
     return true;
 }
 
-fn oh_binding(stage:*OvStage, syntax:*CrustTypeSyntax, user:*u8)->*CrustTypeSyntax {
+fn oh_binding(query:*CsQuery, syntax:*CrustTypeSyntax, user:*u8)->*CrustTypeSyntax {
     var state:*OhState = user as *OhState;
     (*state).binding_calls = (*state).binding_calls + 1usize;
-    oh_error(state, stage, &(*syntax).loc, 2u32);
-    return syntax;
+    oh_error(state, query, &(*syntax).loc, 2u32);
+    return null(*CrustTypeSyntax);
 }
 
-fn oh_expression(walk:*OvWalk, expression:*CrustExpr,
+fn oh_expression(query:*CsQuery, expression:*CrustExpr,
                   expected:*CrustTypeSyntax, user:*u8)->*CrustTypeSyntax {
     var state:*OhState = user as *OhState;
     if (*expression).kind == CRUST_E_NAME && (oh_equal((*(*expression).name).text, "choose") ||
@@ -101,23 +101,37 @@ fn oh_expression(walk:*OvWalk, expression:*CrustExpr,
     }
     if (*expression).kind == CRUST_E_GROUP { (*state).group_calls = (*state).group_calls + 1usize; }
     if (*expression).kind == CRUST_E_CALL { (*state).call_calls = (*state).call_calls + 1usize; }
-    oh_error(state, (*walk).stage, &(*expression).loc, 3u32);
+    oh_error(state, query, &(*expression).loc, 3u32);
     return null(*CrustTypeSyntax);
 }
 
-fn oh_statement(walk:*OvWalk, statement:*CrustStmt, user:*u8)->bool {
+fn oh_statement(query:*CsQuery, statement:*CrustStmt, user:*u8)->bool {
     var state:*OhState = user as *OhState;
     (*state).statement_calls = (*state).statement_calls + 1usize;
-    oh_error(state, (*walk).stage, &(*statement).loc, 4u32);
+    oh_error(state, query, &(*statement).loc, 4u32);
     return false;
 }
 
-fn oh_contract(stage:*OvStage, declaration:*CrustDecl, user:*u8)->*CrustName {
-    var state:*OhState = user as *OhState;
-    (*state).contract_calls = (*state).contract_calls + 1usize;
-    var name:*CrustName = ov_intern(stage, "meter_safe", 10usize);
-    oh_error(state, stage, &(*declaration).loc, 5u32);
-    return name;
+fn oh_contract(query:*CsQuery, declaration:*CrustDecl, text:*CsText, user:*u8)->unit {
+    var state:*OhState=user as *OhState;
+    (*state).contract_calls=(*state).contract_calls+1usize;
+    cs_part((*query).context,text,"meter_safe",10usize);
+    oh_error(state,query,&(*declaration).loc,5u32);
+}
+
+fn oh_references(query:*CsQuery,user:*u8)->unit {
+    var declaration:*CrustDecl=(*(*(*query).context).units).declarations;
+    oh_error(user as *OhState,query,&(*declaration).loc,7u32);
+}
+
+fn oh_published(query:*CsQuery,declaration:*CrustDecl,imported:bool,user:*u8)->unit {
+    oh_error(user as *OhState,query,&(*declaration).loc,8u32);
+}
+
+fn oh_later_type(query:*CsQuery,syntax:*CrustTypeSyntax,text:*CsText,depth:usize,user:*u8)->bool {
+    var state:*OhState=user as *OhState;
+    if (*syntax).kind==(*state).kind_base || (*syntax).kind==(*state).kind_base+1u32 { trap; }
+    return false;
 }
 
 fn oh_test(failure:u32, output:*u8, shifted:bool)->bool {
@@ -134,18 +148,28 @@ fn oh_test(failure:u32, output:*u8, shifted:bool)->bool {
         bytes:"fn choose(value:meter u32)->u32{return 41u32;}\nfn choose(value:u32)->u32{return 42u32;}\nfn metered(value:meter u32)->u32{return (choose)(value);}\nfn plain(value:u32)->u32{return choose(value);}\nfn zero()->unit{}\nfn invoke()->unit{zero();}\nfn choose(value:second u32)->u32{return 43u32;}\nfn seconded(value:second u32)->u32{return choose(value);}\nfn run_target(argc:i32,argv:**u8)->i32{var sum:u32=metered(0u32 as meter u32)+plain(0u32)+seconded(0u32 as second u32);return sum as i32-126i32;}"
     };
     source.size = oh_length(source.bytes);
-    var reader_hooks:CrustReaderHooks = make CrustReaderHooks {
+    var reader_hooks:CrustReaderHooks = make CrustReaderHooks { next:null(*CrustReaderHooks), function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
         user:&state as *u8, declaration:null(fn(*CrustReader,*u8)->*CrustDecl),
         statement:null(fn(*CrustReader,*u8)->*CrustStmt),
         prefix:null(fn(*CrustReader,*u8)->*CrustExpr), type_syntax:oh_read_type
     };
     var parsed:*CrustUnit = rr_read(&context, &source, 0usize, source.size, &reader_hooks);
-    var hooks:OvHooks = make OvHooks {
+    var hooks:CsHooks = make CsHooks {
+        next:null(*CsHooks), references:oh_references, published:oh_published,
         user:&state as *u8, type_key:oh_type_key, binding_type:oh_binding,
         expression:oh_expression, statement:oh_statement, contract:oh_contract
     };
+    var tail:CsHooks=make CsHooks {
+        next:null(*CsHooks),user:&state as *u8,type_key:oh_later_type,
+        binding_type:null(fn(*CsQuery,*CrustTypeSyntax,*u8)->*CrustTypeSyntax),
+        expression:null(fn(*CsQuery,*CrustExpr,*CrustTypeSyntax,*u8)->*CrustTypeSyntax),
+        statement:null(fn(*CsQuery,*CrustStmt,*u8)->bool),contract:null(fn(*CsQuery,*CrustDecl,*CsText,*u8)->unit),
+        references:null(fn(*CsQuery,*u8)->unit),published:null(fn(*CsQuery,*CrustDecl,bool,*u8)->unit)
+    };
+    hooks.next=&tail;
+    var head:CsHooks=tail; head.next=&hooks; head.type_key=null(fn(*CsQuery,*CrustTypeSyntax,*CsText,usize,*u8)->bool);
     var stage:OvStage = uninit;
-    ov_init(&stage, &context, "meter_fixture_v1", &hooks);
+    ov_init(&stage, &context, "meter_fixture_v1", &head);
     var success:bool = parsed != null(*CrustUnit) && ov_prepare(&stage);
     var valid:bool = context.failure == null(*u8) && stage.scratch.size == 0usize;
     if failure != 0u32 {
@@ -172,7 +196,7 @@ fn oh_test(failure:u32, output:*u8, shifted:bool)->bool {
 fn main(argc:i32, argv:**u8)->i32 {
     if argc != 3i32 { return 2i32; }
     var kind:u32 = 0u32;
-    while kind <= 6u32 {
+    while kind <= 8u32 {
         if !oh_test(kind, argv[1usize], oh_equal(argv[2usize], "shifted")) { return 1i32; }
         kind = kind + 1u32;
     }

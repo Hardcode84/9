@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn ov_encode_type(stage:*OvStage, syntax:*CrustTypeSyntax, buffer:*OvText, depth:usize)->unit {
+fn ov_encode_type(stage:*OvStage, syntax:*CrustTypeSyntax, buffer:*CsText, depth:usize)->unit {
     if (*stage).failed { return; }
     if depth == 256usize {
         ov_error(stage, &(*syntax).loc, "overload type nesting exceeds 256");
@@ -107,14 +107,20 @@ fn ov_select(stage:*OvStage, group:*OvGlobal, syntax:*CrustTypeSyntax, parameter
     return found;
 }
 
-fn ov_encode_extension(stage:*OvStage,syntax:*CrustTypeSyntax,buffer:*OvText,depth:usize)->unit {
-    var hooks:*OvHooks = (*stage).hooks;
-    if hooks != null(*OvHooks) && (*hooks).type_key != null(fn(*OvStage,*CrustTypeSyntax,*OvText,usize,*u8)->bool) {
-        ov_text(stage, buffer, "x");
-        var errors:usize = (*(*stage).context).error_count;
-        var handled:bool = (*hooks).type_key(stage, syntax, buffer, depth, (*hooks).user);
-        if (*(*stage).context).error_count != errors { (*stage).failed = true; }
-        if handled || (*stage).failed { return; }
+fn ov_encode_extension(stage:*OvStage,syntax:*CrustTypeSyntax,buffer:*CsText,depth:usize)->unit {
+    var query:CsQuery=uninit; ov_query(stage,null(*OvWalk),&query);
+    ov_text(stage,buffer,"x");
+    var hooks:*CsHooks=(*stage).hooks;
+    while hooks!=null(*CsHooks) {
+        if (*hooks).type_key!=null(fn(*CsQuery,*CrustTypeSyntax,*CsText,usize,*u8)->bool) {
+            var begin:usize=(*buffer).size;
+            var handled:bool=(*hooks).type_key(&query,syntax,buffer,depth,(*hooks).user);
+            if ov_hook_failed(stage) || handled { return; }
+            if (*buffer).size!=begin {
+                ov_error(stage,&(*syntax).loc,"unhandled type hook changed its output");return;
+            }
+        }
+        hooks=(*hooks).next;
     }
-    ov_error(stage, &(*syntax).loc, "overload stage has no encoding for this type");
+    ov_error(stage,&(*syntax).loc,"overload stage has no encoding for this type");
 }

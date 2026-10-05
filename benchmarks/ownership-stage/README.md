@@ -122,3 +122,22 @@ the intervals. Package bootstrap and cache validation are separate costs.
 Use the measured source growth, trust burden, and frontend costs together when
 assessing this design for another stage. The port establishes a working arena
 boundary. A performance improvement requires its own measured comparison.
+
+## Compare a frontend change
+
+Keep the baseline capture. Run `measure.py` into a new candidate directory.
+Then use both compiled drivers on the baseline's exact source bytes:
+
+```sh
+python3 benchmarks/ownership-stage/compare.py \
+    --baseline build/ownership-stage-baseline \
+    --candidate build/ownership-stage-candidate \
+    --output build/ownership-stage-comparison --cpu 4 --rounds 40
+```
+
+The comparison verifies driver hashes, copies the input bytes, randomizes the
+paired process order, and checks every emitted C file and symbol map against
+the baseline. Its report includes phase medians, paired frontend ratios,
+bootstrap intervals, commands, and hashes. This isolates a compiler change from
+changes to the program being compiled. Use `measure.py` results for the native
+execution and rejection checks.

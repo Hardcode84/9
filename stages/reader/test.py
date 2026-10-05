@@ -98,6 +98,10 @@ def main():
         + b"".join(f"\\x{byte:02x}".encode() for byte in range(256))
         + b'";',
     }
+    keywords = re.findall(r'text:"([a-z0-9]+)"', (READER[1]).read_text())
+    for word in keywords:
+        for name in (word, word[:-1], word + "x", "x" + word):
+            extra["keyword-" + name] = f"fn {name}()->unit{{}}".encode()
     for name, data in extra.items():
         path = work / (name + ".crs")
         path.write_bytes(data)

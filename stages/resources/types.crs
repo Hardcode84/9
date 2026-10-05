@@ -14,8 +14,14 @@ fn rs_pointer(stage: *RsStage, base: *CrustTypeSyntax) -> *CrustTypeSyntax {
     return result;
 }
 
+fn rs_borrow_type(stage: *RsStage, syntax: *CrustTypeSyntax) -> bool {
+    return (*syntax).kind == rs_kind(stage, RS_READ) || (*syntax).kind == rs_kind(stage, RS_MUT);
+}
+
 fn rs_lower_type(stage: *RsStage, source: *CrustTypeSyntax) -> *CrustTypeSyntax {
     if source == null(*CrustTypeSyntax) || (*stage).failed { return null(*CrustTypeSyntax); }
+    // These leaves are unchanged by lowering and retain their source arena lifetime.
+    if (*source).kind <= CRUST_T_UNIT || (*source).kind == CRUST_T_NAME { return source; }
     var found: *CrustTypeSyntax = crust_map_get(&(*stage).lowered_types, source as usize) as *CrustTypeSyntax;
     if found != null(*CrustTypeSyntax) { return found; }
     var kind: u32 = (*source).kind;
@@ -23,15 +29,15 @@ fn rs_lower_type(stage: *RsStage, source: *CrustTypeSyntax) -> *CrustTypeSyntax 
     if target == null(*CrustTypeSyntax) { return target; }
     *target = *source;
     rs_put(stage, &(*stage).lowered_types, source as usize, target as *u8);
-    if kind == rs_kind(stage, RS_READ) || kind == rs_kind(stage, RS_MUT) {
-        if (*(*source).base).kind == rs_kind(stage, RS_READ) || (*(*source).base).kind == rs_kind(stage, RS_MUT) {
+    if rs_borrow_type(stage, source) {
+        if rs_borrow_type(stage, (*source).base) {
             rs_error(stage, &(*source).loc, "borrow modes require a value type, not another borrow mode");
             return null(*CrustTypeSyntax);
         }
         (*target).kind = CRUST_T_POINTER;
         (*target).base = rs_lower_type(stage, (*source).base);
     } else { if kind == CRUST_T_POINTER || kind == CRUST_T_ARRAY {
-        if (*(*source).base).kind == rs_kind(stage, RS_READ) || (*(*source).base).kind == rs_kind(stage, RS_MUT) {
+        if rs_borrow_type(stage, (*source).base) {
             rs_error(stage, &(*source).loc, "borrow types cannot be stored in pointers or arrays");
             return null(*CrustTypeSyntax);
         }

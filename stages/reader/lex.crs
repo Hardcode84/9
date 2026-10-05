@@ -1,39 +1,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 const rr_keywords:[CrustReaderKeyword;33]=make [CrustReaderKeyword;33] {
-    make CrustReaderKeyword {text:"record",size:6usize,kind:262u32,type:11u32},
-    make CrustReaderKeyword {text:"fn",size:2usize,kind:263u32,type:11u32},
-    make CrustReaderKeyword {text:"extern",size:6usize,kind:264u32,type:11u32},
-    make CrustReaderKeyword {text:"const",size:5usize,kind:265u32,type:11u32},
-    make CrustReaderKeyword {text:"var",size:3usize,kind:266u32,type:11u32},
-    make CrustReaderKeyword {text:"uninit",size:6usize,kind:267u32,type:11u32},
-    make CrustReaderKeyword {text:"if",size:2usize,kind:268u32,type:11u32},
-    make CrustReaderKeyword {text:"else",size:4usize,kind:269u32,type:11u32},
-    make CrustReaderKeyword {text:"while",size:5usize,kind:270u32,type:11u32},
-    make CrustReaderKeyword {text:"break",size:5usize,kind:271u32,type:11u32},
-    make CrustReaderKeyword {text:"continue",size:8usize,kind:272u32,type:11u32},
-    make CrustReaderKeyword {text:"return",size:6usize,kind:273u32,type:11u32},
-    make CrustReaderKeyword {text:"trap",size:4usize,kind:274u32,type:11u32},
     make CrustReaderKeyword {text:"as",size:2usize,kind:275u32,type:11u32},
-    make CrustReaderKeyword {text:"make",size:4usize,kind:276u32,type:11u32},
-    make CrustReaderKeyword {text:"null",size:4usize,kind:277u32,type:11u32},
-    make CrustReaderKeyword {text:"sizeof",size:6usize,kind:278u32,type:11u32},
-    make CrustReaderKeyword {text:"alignof",size:7usize,kind:279u32,type:11u32},
-    make CrustReaderKeyword {text:"offsetof",size:8usize,kind:280u32,type:11u32},
-    make CrustReaderKeyword {text:"true",size:4usize,kind:281u32,type:11u32},
-    make CrustReaderKeyword {text:"false",size:5usize,kind:282u32,type:11u32},
+    make CrustReaderKeyword {text:"fn",size:2usize,kind:263u32,type:11u32},
     make CrustReaderKeyword {text:"i8",size:2usize,kind:261u32,type:0u32},
+    make CrustReaderKeyword {text:"if",size:2usize,kind:268u32,type:11u32},
     make CrustReaderKeyword {text:"u8",size:2usize,kind:261u32,type:1u32},
     make CrustReaderKeyword {text:"i16",size:3usize,kind:261u32,type:2u32},
-    make CrustReaderKeyword {text:"u16",size:3usize,kind:261u32,type:3u32},
     make CrustReaderKeyword {text:"i32",size:3usize,kind:261u32,type:4u32},
-    make CrustReaderKeyword {text:"u32",size:3usize,kind:261u32,type:5u32},
     make CrustReaderKeyword {text:"i64",size:3usize,kind:261u32,type:6u32},
+    make CrustReaderKeyword {text:"u16",size:3usize,kind:261u32,type:3u32},
+    make CrustReaderKeyword {text:"u32",size:3usize,kind:261u32,type:5u32},
     make CrustReaderKeyword {text:"u64",size:3usize,kind:261u32,type:7u32},
+    make CrustReaderKeyword {text:"var",size:3usize,kind:266u32,type:11u32},
+    make CrustReaderKeyword {text:"bool",size:4usize,kind:261u32,type:10u32},
+    make CrustReaderKeyword {text:"else",size:4usize,kind:269u32,type:11u32},
+    make CrustReaderKeyword {text:"make",size:4usize,kind:276u32,type:11u32},
+    make CrustReaderKeyword {text:"null",size:4usize,kind:277u32,type:11u32},
+    make CrustReaderKeyword {text:"trap",size:4usize,kind:274u32,type:11u32},
+    make CrustReaderKeyword {text:"true",size:4usize,kind:281u32,type:11u32},
+    make CrustReaderKeyword {text:"unit",size:4usize,kind:261u32,type:11u32},
+    make CrustReaderKeyword {text:"break",size:5usize,kind:271u32,type:11u32},
+    make CrustReaderKeyword {text:"const",size:5usize,kind:265u32,type:11u32},
+    make CrustReaderKeyword {text:"false",size:5usize,kind:282u32,type:11u32},
     make CrustReaderKeyword {text:"isize",size:5usize,kind:261u32,type:8u32},
     make CrustReaderKeyword {text:"usize",size:5usize,kind:261u32,type:9u32},
-    make CrustReaderKeyword {text:"bool",size:4usize,kind:261u32,type:10u32},
-    make CrustReaderKeyword {text:"unit",size:4usize,kind:261u32,type:11u32}
+    make CrustReaderKeyword {text:"while",size:5usize,kind:270u32,type:11u32},
+    make CrustReaderKeyword {text:"extern",size:6usize,kind:264u32,type:11u32},
+    make CrustReaderKeyword {text:"record",size:6usize,kind:262u32,type:11u32},
+    make CrustReaderKeyword {text:"return",size:6usize,kind:273u32,type:11u32},
+    make CrustReaderKeyword {text:"sizeof",size:6usize,kind:278u32,type:11u32},
+    make CrustReaderKeyword {text:"uninit",size:6usize,kind:267u32,type:11u32},
+    make CrustReaderKeyword {text:"alignof",size:7usize,kind:279u32,type:11u32},
+    make CrustReaderKeyword {text:"continue",size:8usize,kind:272u32,type:11u32},
+    make CrustReaderKeyword {text:"offsetof",size:8usize,kind:280u32,type:11u32}
 };
 
 // Retain the first reader diagnostic at its original source offset.
@@ -73,16 +73,22 @@ fn rr_hex(byte:u8)->i32 {
     return -1i32;
 }
 
+// The keyword table is ordered by byte length, then by spelling.
 fn rr_keyword(text:*u8,size:usize)->*CrustReaderKeyword {
-    var index:usize=0usize;
-    while index<33usize {
-        var word:*CrustReaderKeyword=&rr_keywords[index];
+    if size<rr_keywords[0usize].size || size>rr_keywords[32usize].size { return null(*CrustReaderKeyword); }
+    var begin:usize=0usize;
+    var end:usize=33usize;
+    while begin<end {
+        var middle:usize=begin+(end-begin)/2usize;
+        var word:*CrustReaderKeyword=&rr_keywords[middle];
+        var before:bool=(*word).size<size;
         if (*word).size==size {
             var matched:usize=0usize;
             while matched<size && (*word).text[matched]==text[matched] { matched=matched+1usize; }
             if matched==size { return word; }
+            before=(*word).text[matched]<text[matched];
         }
-        index=index+1usize;
+        if before { begin=middle+1usize; } else { end=middle; }
     }
     return null(*CrustReaderKeyword);
 }

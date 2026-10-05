@@ -334,9 +334,27 @@ fn os_address(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVa
 }
 
 fn os_load(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
+    if (*expression).kind == CRUST_E_NAME {
+        // The lowerer rejects local/global name collisions before this pass.
+        var global: *RsGlobal = rs_global((*(*check).stage).resources, (*expression).name);
+        if global != null(*RsGlobal) { return os_constant(check, global, &(*expression).loc); }
+    }
     var slot: *OsSlot = os_place(check, state, expression);
     if slot == null(*OsSlot) || os_failed(check) { return null(*OsValue); }
     return os_read_slot(check, state, slot, &(*expression).loc);
+}
+
+fn os_constant(check: *OsCheck, global: *RsGlobal, location: *CrustLoc) -> *OsValue {
+    if (*(*global).source).kind != CRUST_D_CONST {
+        os_error(check, location, "value requires a visible local or constant");
+        return null(*OsValue);
+    }
+    // Scalar constants carry no storage origin. Other types need a storage contract.
+    if (*(*global).syntax).kind > CRUST_T_BOOL {
+        os_error(check, location, "constant value has no checked storage contract");
+        return null(*OsValue);
+    }
+    return os_value(check, (*global).syntax, null(*OsObject), false);
 }
 
 fn os_publish_owned(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {

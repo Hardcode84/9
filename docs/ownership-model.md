@@ -20,6 +20,13 @@ ended. It invalidates the binding without destroying the borrowed value or
 emitting code. Borrowed parameters cannot be dropped.
 Reborrows prevent conflicting use of their parent.
 
+Integer and Boolean constants can be read by name in checked bodies. The
+checker uses the declared type; the seed checks the constant initializer.
+Local bindings cannot hide a constant with the same name. Constants cannot be
+assigned. Copy a scalar constant into a local to borrow its storage.
+Pointer and aggregate constants require a checked storage contract and are
+rejected by the ownership checker.
+
 Liveness joins the uses from both branches. Each branch can end a view after
 its own last use. An outer view used inside a loop remains live on its backedge;
 a view declared inside the loop can end in that iteration. Loop exits use the

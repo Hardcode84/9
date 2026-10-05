@@ -11,6 +11,9 @@ from ownership_imports import import_arguments, publish
 from ownership_support import ROOT, command, execute, rejected
 
 HELPERS = """
+const CODE:i32=65i32;
+const OFFSET:i32=-1i32;
+const ENABLED:bool=true;
 extern fn emit(code:i32)->i32 foreign(scalar)="putchar";
 record View {value:read i64;}
 resource Trace {code:i32;} drop trace_drop;
@@ -31,8 +34,9 @@ fn step(count:mut i64)->bool {emit(78i32);count=count-1i64;return count>0i64;}
 """
 
 BODY = """
+if !ENABLED || CODE-OFFSET!=66i32 {trap;}
 var x:i64=0i64;
-set(mut x,mark(65i32));
+set(mut x,mark(CODE));
 if x!=65i64 {trap;}
 var sum:i64=mark(66i32)+mark(67i32);
 if sum!=133i64 {trap;}
@@ -87,6 +91,18 @@ def main_body(body):
 
 def bad_cases():
     return {
+        "constant-storage-origin": (
+            "const pointer:*i64=null(*i64);" + main_body("var p:*i64=pointer;"),
+            "constant value has no checked storage contract",
+        ),
+        "constant-write": (
+            "const value:i64=1i64;" + main_body("value=2i64;"),
+            "cannot write a constant place",
+        ),
+        "constant-shadow": (
+            "const value:i64=1i64;" + main_body("var value:i64=2i64;"),
+            "local name is already visible",
+        ),
         "pending-mutable-argument": (
             HELPERS + main_body("var x:i64=0i64;set(mut x,bump(mut x));"),
             "active",

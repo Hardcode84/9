@@ -246,3 +246,7 @@ tutorial source. Input file reads and native harness preparation are recorded
 separately. Target emission, GCC compilation, and linking are outside these
 measurements. Input copies, hashes, commands, and raw results stay in the selected
 build directory.
+
+For a stage optimization, use the [before/after comparison](../../benchmarks/generics/README.md).
+It measures the ownership container witness and the standalone pair control,
+with separate preparation and complete driver handoff results.

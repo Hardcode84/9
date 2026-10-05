@@ -28,6 +28,7 @@ removed during cleanup also has an unchanged local copy under
 | Local ownership, checked clients, and branch joins | [Ownership measurements](ownership/README.md) |
 | Overload selection and field lookup | [Overload measurements](overload/README.md) |
 | Highlighting and editor transport | [Highlight measurements](highlight/README.md) |
+| Generics frontend candidates | [Before/after comparison](generics/README.md) |
 | External union stage and reader token layout | [Tagged reader tokens](tagged-union/README.md) |
 
 Run correctness checks before timing. Compare the same work at each endpoint.

@@ -249,6 +249,13 @@ move. `scoped` requires a domain and forbids a destructor or stable storage.
 It produces an affine value whose origin is the current read or edit scope.
 The stage has no built-in cursor, list, tree, membership, or navigation rule.
 
+A loan of a local opaque handle protects that handle's storage. It permits
+other domain operations that preserve the handle. This rule applies to both
+resource handles and ordinary scoped handles. A view returned into opaque
+storage retains the domain alias restrictions: a shared view blocks edits,
+and an exclusive view blocks conflicting reads and writes. Moving or replacing
+a borrowed handle still requires its local loans to end.
+
 A domain declaration lists all types in one retention boundary. Each type can
 belong to one domain. The list determines membership, including in imported
 interfaces. Types can appear before or after the domain declaration. A missing

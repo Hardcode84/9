@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn su_checked_layout_depth(arena:read SuArena,decl:read SuDeclaration,depth:usize)->bool access(edit,CompilerArena){
+    if depth<256usize{return true;}
+    su_handle_error(read arena,read decl,false);return false;
+}
+fn su_checked_layout_record(arena:read SuArena,decl:read SuDeclaration,layout:read SuLayoutHandle,depth:usize)->bool access(edit,CompilerArena){
+    var data:SuLayoutData=su_handle_load(read layout);
+    if data.state==1u32{su_handle_error(read arena,read decl,true);return false;}
+    if data.state==2u32{return true;}
+    data.align=1u32;data.state=1u32;
+    su_handle_save(read layout,read data);
+    if !su_handle_publish(read arena,read decl,read layout){return false;}
+    if !su_handle_fill(read arena,read decl,read layout,depth){return false;}
+    data=su_handle_load(read layout);
+    data.size=su_handle_round(read arena,read decl,data.size,data.align);data.state=2u32;
+    su_handle_save(read layout,read data);
+    return !su_handle_failed(read arena);
+}

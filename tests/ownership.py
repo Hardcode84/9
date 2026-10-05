@@ -9,6 +9,7 @@ from pathlib import Path
 from ownership_boundaries import check_boundaries
 from ownership_ending import check_ending
 from ownership_expressions import check_expressions
+from ownership_handles import check_handles
 from ownership_heap import check_heap
 from ownership_liveness import check_liveness
 from ownership_loops import check_loops
@@ -326,6 +327,7 @@ def run(build, directory, sanitize):
     check_liveness(build, directory, sanitize)
     check_boundaries(build, directory, sanitize)
     check_heap(build, directory, sanitize)
+    check_handles(build, directory, sanitize)
     check_runtime(build, directory, ROOT, sanitize)
     for artifact in [compiler, build / "crust-ownership-library.so"]:
         assert b"z3" not in command(["ldd", artifact]).stdout.lower()

@@ -129,6 +129,10 @@ def prepare(experiment, sources):
         "field.crs",
         port + "\nfn probe_serial(stage:read SuStage)->usize { return stage.serial; }\n",
     )
+    provider = experiment.capture(HERE / "arena_provider.crs").read_text()
+    checked = experiment.capture(HERE / "arena_checked.crs").read_text()
+    experiment.write("arena.crs", port.replace(function, "") + "\n" + provider)
+    experiment.write("arena-checked.crs", checked)
     return dependencies, target, dependency_paths, exports
 
 
@@ -169,7 +173,7 @@ def compile_driver(experiment, sources):
     return driver
 
 
-def probe(experiment, driver, source, selected="*", mode="checked", expected=0):
+def probe(experiment, driver, source, selected="*", mode="checked", expected=0, client=None):
     return experiment.run(
         [
             driver,
@@ -178,6 +182,7 @@ def probe(experiment, driver, source, selected="*", mode="checked", expected=0):
             experiment.output / f"{source}.crs",
             experiment.output / f"{source}.c",
             experiment.output / f"{source}.rsp",
+            *([experiment.output / client] if client else []),
         ],
         expected,
     )
@@ -233,7 +238,7 @@ def native_checks(experiment, dependency_paths, exports, corpus):
     )
     runtime = experiment.write("runtime.crs", corpus.RUNTIME)
     artifacts = []
-    for name in ("raw", "opaque", "generic-raw", "generic"):
+    for name in ("raw", "opaque", "generic-raw", "generic", "arena"):
         obj = compile_object(experiment, name, flags)
         compiler = work / f"{name}-union"
         experiment.run(
@@ -316,10 +321,40 @@ def main():
     for declaration in functions:
         result = probe(experiment, driver, "opaque", declaration["name"], expected=1)
         rejected[declaration["name"]] = result.stderr
+    checked_source = (output / "arena-checked.crs").read_text()
+    checked_rejections = {}
+    for name, source, diagnostic in (
+        (
+            "private-representation",
+            checked_source.replace(
+                "var data:SuLayoutData=su_handle_load(read layout);",
+                "layout.pointer;var data:SuLayoutData=su_handle_load(read layout);",
+            ),
+            "opaque fields",
+        ),
+        (
+            "borrowed-drop",
+            checked_source.replace(
+                "var data:SuLayoutData=su_handle_load(read layout);",
+                "drop layout;var data:SuLayoutData=su_handle_load(read layout);",
+            ),
+            "borrowed value",
+        ),
+        (
+            "read-authority",
+            checked_source.replace("access(edit,CompilerArena)", "access(read,CompilerArena)"),
+            "stronger domain authority",
+        ),
+    ):
+        path = f"arena-reject-{name}.crs"
+        experiment.write(path, source)
+        result = probe(experiment, driver, "arena", client=path, expected=1)
+        assert diagnostic in result.stderr, (name, result.stderr)
+        checked_rejections[name] = result.stderr
     rng = random.Random(0)
     samples = []
     for _ in range(args.rounds):
-        modes = ["raw", "opaque", "generic-raw", "generic"]
+        modes = ["raw", "opaque", "generic-raw", "generic", "arena"]
         rng.shuffle(modes)
         sample = {}
         for mode in modes:
@@ -328,8 +363,15 @@ def main():
                 "opaque": "checked",
                 "generic-raw": "generic",
                 "generic": "checked",
+                "arena": "checked",
             }[mode]
-            result = probe(experiment, driver, mode, mode=frontend)
+            result = probe(
+                experiment,
+                driver,
+                mode,
+                mode=frontend,
+                client="arena-checked.crs" if mode == "arena" else None,
+            )
             sample[mode] = dict(
                 zip(
                     ("read_ns", "check_ns", "emit_ns"), map(int, result.stdout.split()), strict=True
@@ -337,11 +379,12 @@ def main():
             )
         samples.append(sample)
     report = {
-        "status": "generic cache argument accepted; arena client contracts still require repair",
+        "status": "checked arena cache algorithm passes; remaining union algorithms retain explicit trust",
         "scope": "union stage; raw reader and C backend dependencies behind native interfaces",
         "cpu": args.cpu,
         "attempts": attempts,
         "body_rejections": rejected,
+        "checked_client_rejections": checked_rejections,
         "burden": {
             "functions": len(functions),
             "trusted_functions": len(rejected),
@@ -359,6 +402,17 @@ def main():
         },
         "samples": samples,
         "checked_generic_frontend_ns": None,
+        "arena_slice": {
+            "checked_functions": 2,
+            "checked_source_lines": len((output / "arena-checked.crs").read_text().splitlines()),
+            "provider_source_lines": len((HERE / "arena_provider.crs").read_text().splitlines()),
+            "remaining_raw_functions": len(functions) - 1,
+            "boundary": "raw callback entry, nonnull arena handles, typed cache lookup, snapshots and updates, recursive field/variant algorithms",
+            "restructuring": "cache state distinguishes a new zeroed layout from cached computing/complete layouts; raw entry preserves null and allocation handling",
+        },
+        "checked_cache_frontend_ratio": statistics.median(
+            sum(s["arena"].values()) / sum(s["raw"].values()) for s in samples
+        ),
         "cost_scope": "fresh native process; read/copy and root trust selection, checks, emission timed separately; initialization, naming, teardown, file IO, GCC and linking excluded; opaque is a trust-only control",
         "control_frontend_ratio": statistics.median(
             sum(s["opaque"].values()) / sum(s["raw"].values()) for s in samples

@@ -57,7 +57,7 @@ fn probe_emit(program:*OgProgram,raw:bool,argv:**u8)->bool {
     return valid && probe_number(elapsed);
 }
 
-fn probe_compile(program:*OgProgram,source:*CrustSource,argv:**u8)->bool {
+fn probe_compile(program:*OgProgram,source:*CrustSource,client:*CrustSource,argv:**u8)->bool {
     var raw:bool=c_equal(argv[1usize],"raw");
     var checked:bool=c_equal(argv[1usize],"checked");
     var start:u64=probe_clock();
@@ -69,6 +69,7 @@ fn probe_compile(program:*OgProgram,source:*CrustSource,argv:**u8)->bool {
         if checked { valid=og_read(program,source,false) && probe_trust(program,argv[2usize]); }
         else { valid=gp_read(&program->generics,source); }
     }
+    if valid && client!=null(*CrustSource) { valid=og_read(program,client,false); }
     var read_time:u64=probe_clock()-start;
     start=probe_clock();
     if valid {
@@ -88,18 +89,26 @@ fn probe_compile(program:*OgProgram,source:*CrustSource,argv:**u8)->bool {
 }
 
 fn main(argc:i32,argv:**u8)->i32 {
-    if argc!=6i32 { return 2i32; }
+    if argc!=6i32 && argc!=7i32 { return 2i32; }
+    if argc==7i32 && !c_equal(argv[1usize],"checked") { return 2i32; }
     if !c_equal(argv[1usize],"raw") && !c_equal(argv[1usize],"checked") && !c_equal(argv[1usize],"generic") { return 2i32; }
     var bytes:*u8=null(*u8); var size:usize=0usize;
     if crust0_host_read_file(argv[3usize],&bytes,&size)!=0i32 { return 2i32; }
     var source:CrustSource=make CrustSource { path:argv[3usize],bytes:bytes,size:size,identity:1u64 };
+    var client_bytes:*u8=null(*u8);var client_size:usize=0usize;
+    if argc==7i32 && crust0_host_read_file(argv[6usize],&client_bytes,&client_size)!=0i32 {
+        crust0_host_free(bytes);return 2i32;
+    }
+    var client:CrustSource=make CrustSource {path:source.path,bytes:client_bytes,size:client_size,identity:2u64};
+    var client_source:*CrustSource=null(*CrustSource);
+    if argc==7i32 {client.path=argv[6usize];client_source=&client;}
     var program:OgProgram=uninit;
-    if c_equal(argv[1usize],"checked") { og_init(&program,null(*CrustAllocator),2u64); }
+    if c_equal(argv[1usize],"checked") { og_init(&program,null(*CrustAllocator),3u64); }
     else { gp_init(&program.generics,null(*CrustAllocator),2u64); }
-    var valid:bool=probe_compile(&program,&source,argv);
+    var valid:bool=probe_compile(&program,&source,client_source,argv);
     if program.generics.syntax.error_count!=0usize { c_driver_diagnostic(&program.generics.syntax,argv[0usize]); }
     if program.generics.context.error_count!=0usize { c_driver_diagnostic(&program.generics.context,argv[0usize]); }
-    og_destroy(&program); crust0_host_free(bytes);
+    og_destroy(&program); crust0_host_free(bytes);crust0_host_free(client_bytes);
     if valid { return 0i32; }
     return 1i32;
 }

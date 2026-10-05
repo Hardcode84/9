@@ -613,6 +613,12 @@ fails: a scoped view cannot outlive its access. Holding a mutable payload view
 also blocks other operations that could alias the payload. End that loan before
 editing or navigating through a conflicting handle.
 
+A loan of an opaque handle protects the local handle. Other handles in the
+same domain can still be used. A payload view, such as the result of
+`cursor_value`, also protects the shared storage behind the handle. End that
+view before an operation that can conflict with its access. The same rule
+applies to arena cursors used by compiler stages.
+
 A fresh nested `domain Graph` is a different instance. An outer owner cannot
 be inserted into its head. The compiler compares static identities, not pointer
 bits. No node registry or generation check is required.

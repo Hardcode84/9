@@ -53,12 +53,16 @@ the minimum trust possible after a different API design.
 
 ## Controls and costs
 
-Four controls must produce identical target C and symbol maps: the raw stage,
-the stage with opaque records and all its bodies trusted, and the generic
-lookup compiled by the standalone generic stage, and that lookup compiled by
-the ownership adapter with explicit body trust. Each control builds and runs
-the union runtime corpus and rejects the union error corpus. The stage,
-dependency implementations, and generated target use ASan and UBSan.
+Five builds must produce identical target C and symbol maps:
+
+1. The raw stage.
+2. Opaque records with all stage bodies trusted.
+3. Typed cache lookup through standalone generics.
+4. Typed cache lookup through ownership, with all stage bodies trusted.
+5. The arena cache algorithm with its body checked.
+
+Each build runs the union runtime corpus and rejects the union error corpus.
+The stage, dependency implementations, and generated target use ASan and UBSan.
 
 The compiled measurement driver times source reading, semantic checks, and
 emission separately. Samples use fresh processes and a randomized paired order
@@ -68,14 +72,34 @@ contains each sample, the median trust-only/raw ratio, and its bootstrap interva
 The trust-only control measures compiler work with union body checks bypassed.
 It supplies no checked-port speed result.
 
-## Contract repairs
+## Checked arena cache
 
-The typed cache lookup passes the ownership adapter's indirect type-argument
-contract. The report compares its output and cost with the other controls.
-Its bodies retain explicit trust in this control.
+[arena_checked.crs](arena_checked.crs) checks the depth limit, cache state,
+publication order, recursive-call status, and final layout state.
+[arena_provider.crs](arena_provider.crs) supplies its native boundary. The
+harness replaces the production `su_layout_record` body and runs the normal
+union compilation entry point with that replacement.
 
-The borrowed layout client and field-access probes retain their diagnostics.
-Use these inputs to repair the arena interface and continue the checked port.
-Accept the production port when client bodies pass, native behavior agrees,
-and the trusted boundary and restructuring burden have been reviewed. Keep
-checked-port timing separate from controls that bypass body checks.
+Native callers supply a valid stage and declaration from its context.
+The owning context keeps arena allocations live through the whole call. The boundary creates opaque
+scoped handles only after the existing null and allocation checks succeed.
+Each handle has one pointer. Read and edit scopes permit cache growth while
+excluding reclamation. The checked client reads scalar layout snapshots and
+publishes updates through the provider. No pointer validity test or runtime
+ownership state is added.
+
+The raw entry retains the null-result ABI. A new layout starts with state zero;
+the checked function sets state one before cache publication and recursion.
+State one detects cycles; state two permits cache reuse. The recursive field
+and variant algorithms call the same entry, so nested layout requests also
+run the checked cache algorithm.
+
+The checked source is a separate untrusted input. Three invalid variants must
+fail: access to private fields, destruction of a borrowed parameter, and edit
+calls from read authority. Runtime output must agree with the raw stage, and
+the normal union error corpus must fail under ASan and UBSan.
+
+The report separates checked source lines, provider lines, and remaining raw
+functions. It times the checked cache path against the raw stage. The remaining
+union algorithms still have explicit body trust; the full checked-stage timing
+stays unset. Use their recorded diagnostics to continue the port.

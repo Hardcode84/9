@@ -5,13 +5,13 @@
 // syntax node. A size with zero alignment ends field or variant iteration;
 // the context diagnostic distinguishes a failed step. Keep the arena live
 // through the edit scope. Only context destruction retires its storage.
-domain CompilerArena(SuArena,SuDeclaration,SuLayoutHandle,SuLocation,SuFields,SuVariants,SuTypeCursor,SuBuilder,SuName,SuSyntax,SuExpression,SuStatement);
+domain CompilerArena(SuArena,SuDeclaration,SuLayoutHandle,SuLocation,SuFields,SuVariants,SuTypeCursor,SuBuilder,SuName,SuSyntax,SuExpression,SuStatement,SuMatchNames);
 record SuArena{stage:*SuStage;} opaque;
 record SuDeclaration{pointer:*CrustDecl;} opaque scoped;
 record SuLayoutHandle{pointer:*SuLayout;} opaque scoped;
 record SuLocation{pointer:*CrustLoc;} opaque scoped;
 record SuFields{next:*CrustField;location:*CrustLoc;} opaque scoped;
-record SuVariants{names:CrustMap;next:*SuVariant;} opaque scoped;
+record SuVariants{sum:*SuType;next:*SuVariant;} opaque scoped;
 record SuTypeCursor{next:*CrustTypeSyntax;} opaque scoped;
 record SuTypeStep{size:u64;count:u64;align:u32;kind:u32;}
 record SuStorage{count:u64;carrier:u32;}
@@ -30,7 +30,7 @@ fn su_handle_save(layout:read SuLayoutHandle,value:read SuLayoutData)->unit acce
 fn su_handle_fill(arena:read SuArena,decl:read SuDeclaration,layout:read SuLayoutHandle,depth:usize)->bool access(edit,CompilerArena){
     var sum:*SuType=su_cache_get!(SuType)(&arena.stage->types,decl.pointer->name as usize);
     if sum!=null(*SuType){
-        var cursor:SuVariants=make SuVariants{names:make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize},next:sum->variants};
+        var cursor:SuVariants=make SuVariants{sum:sum,next:sum->variants};
         return su_checked_variants(read arena,read decl,read layout,mut cursor,depth);
     }
     var cursor:SuFields=make SuFields{next:decl.pointer->fields,location:&decl.pointer->loc};
@@ -52,10 +52,10 @@ fn su_variants_next(arena:read SuArena,cursor:mut SuVariants,depth:usize)->SuSiz
     var variant:*SuVariant=cursor.next;
     if variant==null(*SuVariant){return value;}
     cursor.next=variant->next;
-    if su_cache_get!(SuVariant)(&cursor.names,variant->name as usize)!=null(*SuVariant){
+    if su_cache_get!(SuVariant)(&cursor.sum->names,variant->name as usize)!=null(*SuVariant){
         su_error(arena.stage,&variant->syntax->loc,"duplicate union variant");return value;
     }
-    if !crust_try_map_set(arena.stage->context,&cursor.names,variant->name as usize,variant as *u8){return value;}
+    if !crust_try_map_set(arena.stage->context,&cursor.sum->names,variant->name as usize,variant as *u8){return value;}
     value.align=1u32;
     if variant->syntax->kind!=CRUST_T_UNIT {
         if !su_layout_syntax(arena.stage,variant->syntax,depth,&value.size,&value.align){value.align=0u32;}

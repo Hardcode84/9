@@ -76,13 +76,20 @@ the tag. A match binding copies its payload before the arm body starts. The
 checked code rejects a payload for a unit variant, a missing required payload,
 and a binding for a unit arm. It also builds each arm's tag comparison.
 
+Before it builds match branches, checked code walks the arm names. Each name
+must identify a declared variant and occur once. The final count must equal
+the union's variant count. The checked lowering walk then visits each lowered
+statement's body, alternative, and next sibling, with a depth limit of 256.
+
 [layout_handles.crs](layout_handles.crs) and [layout.crs](layout.crs) are the
 explicitly trusted provider. They handle arena pointers, cache lookup and
 insertion, type lookup, cursor steps, diagnostics, and AST storage construction.
 The typed cache helper is a generic function. [nodes.crs](nodes.crs) is the
 trusted AST builder. [lower.crs](lower.crs) bridges raw syntax to checked
-lowering and retains operation traversal, variant lookup, and match coverage
-checks. The reader, driver, and backend also have explicit raw-source trust.
+lowering and retains map access, operation dispatch, and branch linking.
+Layout retains its variant-name map for construction and match lookup. The
+map entries already belong to the arena; each union now keeps their map header.
+The reader, driver, and backend also have explicit raw-source trust.
 
 The owning context keeps arena storage live through a layout request. Opaque
 scoped handles contain live declaration, layout, and location pointers.
@@ -103,6 +110,13 @@ allocation diagnostic. The entry bridge publishes a statement only when the
 context has no errors. The builder keeps pointer writes behind typed
 interfaces. These interfaces add provider code; that code remains part of the
 trusted implementation and is included in the measurement.
+
+Match coverage uses a scoped arm cursor and a set of names seen in that match.
+An arm step advances the cursor and keeps the arm's diagnostic location.
+Statement handles also act as cursors: an empty statement has empty children
+and remains empty when advanced. Advancing a cursor requires `mut`; reading
+its children or testing exhaustion requires `read`. The pointer operations
+stay in the provider. The checked functions control iteration and rejection.
 
 The package uses the shared source-owned compiler selection and cache. Make
 builds the seed and test fixtures. The checker and backend bootstrap through

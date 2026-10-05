@@ -76,11 +76,39 @@ fn verify()->i32 {
     if count!=3u32 { return 35i32; }
     return 0i32;
 }
-fn main(argc:i32,argv:**u8)->i32 { var status:i32=verify();if status!=0i32{return status;}return verify_grid(); }
+fn main(argc:i32,argv:**u8)->i32 {
+    var status:i32=verify();if status!=0i32{return status;}
+    status=verify_grid();if status!=0i32{return status;}return verify_wide();
+}
 """
+
+# Exercise map growth, lookup of every tag, and arm order independent of declaration order.
+WIDE_COUNT = 48
+RUNTIME += "union Wide {" + "".join(f"V{i}:unit;" for i in range(WIDE_COUNT)) + "}\n"
+RUNTIME += "fn wide_read(value:*Wide)->u32 {match Wide(*value) {"
+RUNTIME += "".join(f"V{i} {{return {i}u32;}}" for i in reversed(range(WIDE_COUNT))) + "}}\n"
+RUNTIME += "fn verify_wide()->i32 {var value:Wide=uninit;"
+RUNTIME += "".join(
+    f"construct Wide.V{i}(value);if wide_read(&value)!={i}u32 {{return 39i32;}}"
+    for i in range(WIDE_COUNT)
+)
+RUNTIME += "return 0i32;}\n"
 
 HEADER = "union U { Value:u64; End:unit; }\n"
 REJECT = {
+    "lowering-depth": (
+        "union Deep {"
+        + "".join(f"V{i}:unit;" for i in range(260))
+        + "} fn f(p:*Deep)->unit {match Deep(*p) {"
+        + "".join(f"V{i} {{}}" for i in range(260))
+        + "}}",
+        "union lowering depth exceeded",
+    ),
+    "empty-match": (HEADER + "fn f(p:*U)->unit {match U(*p) {}}", "cover every"),
+    "duplicate-with-correct-count": (
+        HEADER + "fn f(p:*U)->unit {match U(*p) {Value {} Value {}}}",
+        "duplicate match",
+    ),
     "missing": (HEADER + "fn f(p:*U)->unit { match U(*p) { Value(v) {} } }", "cover every"),
     "duplicate-arm": (
         HEADER + "fn f(p:*U)->unit { match U(*p) { Value {} Value {} End {} } }",

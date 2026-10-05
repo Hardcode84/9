@@ -100,3 +100,17 @@ fn su_payload(builder:read SuBuilder,base:read SuExpression,syntax:read SuSyntax
     }
     return make SuExpression{pointer:result};
 }
+
+// Empty statements have empty children and remain empty when advanced.
+fn su_has_statement(cursor:read SuStatement)->bool access(read,CompilerArena){return cursor.pointer!=null(*CrustStmt);}
+fn su_statement_child(cursor:read SuStatement,otherwise:bool)->SuStatement access(read,CompilerArena){
+    var pointer:*CrustStmt=cursor.pointer;
+    if pointer!=null(*CrustStmt){
+        if otherwise{pointer=pointer->otherwise;}
+        else{pointer=pointer->body;}
+    }
+    return make SuStatement{pointer:pointer};
+}
+fn su_statement_advance(cursor:mut SuStatement)->unit access(read,CompilerArena){
+    if cursor.pointer!=null(*CrustStmt){cursor.pointer=cursor.pointer->next;}
+}

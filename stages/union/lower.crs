@@ -1,11 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn su_variant(stage:*SuStage,sum:*SuType,name:*CrustName,location:*CrustLoc)->*SuVariant {
-    var variant:*SuVariant=sum->variants;
-    while variant!=null(*SuVariant) {
-        if variant->name==name { return variant; }
-        variant=variant->next;
-    }
+    var variant:*SuVariant=su_cache_get!(SuVariant)(&sum->names,name as usize);
+    if variant!=null(*SuVariant){return variant;}
     su_error(stage,location,"unknown union variant");return null(*SuVariant);
 }
 
@@ -47,14 +44,16 @@ fn su_match_test(stage:*SuStage,snapshot:*CrustName,variant:*SuVariant,location:
 }
 
 fn su_match_arms(stage:*SuStage,sum:*SuType,op:*SuOperation,snapshot:*CrustName,location:*CrustLoc)->*CrustStmt {
-    var seen:CrustMap=make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize};
+    domain CompilerArena{edit CompilerArena{
+        var builder:SuBuilder=make SuBuilder{stage:stage,location:location};
+        var cursor:SuMatchNames=make SuMatchNames{seen:make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize},sum:sum,next:op->arms,location:location};
+        if !su_checked_coverage(read builder,mut cursor,sum->count){return null(*CrustStmt);}
+    }}
     var first:*CrustStmt=null(*CrustStmt);var tail:**CrustStmt=&first;
-    var arm:*SuArm=op->arms;var count:usize=0usize;
+    var arm:*SuArm=op->arms;
     while arm!=null(*SuArm) && stage->context->error_count==0usize {
-        var variant:*SuVariant=su_variant(stage,sum,arm->name,&arm->location);
-        if variant==null(*SuVariant) { return null(*CrustStmt); }
-        if crust_map_get(&seen,arm->name as usize)!=null(*u8) { su_error(stage,&arm->location,"duplicate match variant");return null(*CrustStmt); }
-        if !crust_try_map_set(stage->context,&seen,arm->name as usize,arm as *u8) { return null(*CrustStmt); }
+        // Coverage checking has resolved every arm name in the retained layout map.
+        var variant:*SuVariant=su_cache_get!(SuVariant)(&sum->names,arm->name as usize);
         var branch:*CrustStmt=su_stmt(stage,CRUST_S_IF,&arm->location);
         if branch==null(*CrustStmt) { return branch; }
         branch->expr=su_match_test(stage,snapshot,variant,&arm->location);
@@ -62,9 +61,8 @@ fn su_match_arms(stage:*SuStage,sum:*SuType,op:*SuOperation,snapshot:*CrustName,
         if stage->context->error_count!=0usize { return null(*CrustStmt); }
         *tail=branch;tail=&branch->otherwise;
         if arm->next==null(*SuArm) { *branch=*branch->body; }
-        count=count+1usize;arm=arm->next;
+        arm=arm->next;
     }
-    if count!=sum->count { su_error(stage,location,"match must cover every union variant");return null(*CrustStmt); }
     return first;
 }
 
@@ -85,20 +83,27 @@ fn su_match(stage:*SuStage,stmt:*CrustStmt,sum:*SuType,op:*SuOperation)->unit {
 }
 
 fn su_lower(stage:*SuStage,stmt:*CrustStmt,depth:usize)->unit {
-    if stmt==null(*CrustStmt) || stage->context->error_count!=0usize { return; }
-    if depth>=256usize { su_error(stage,&stmt->loc,"union lowering depth exceeded");return; }
-    while stmt!=null(*CrustStmt) && stage->context->error_count==0usize {
-        var kind:u32=stmt->kind;
-        if kind==stage->construct_kind || kind==stage->match_kind {
-            var op:*SuOperation=crust_map_get(&stage->operations,stmt as usize) as *SuOperation;
-            var sum:*SuType=crust_map_get(&stage->types,op->type_name as usize) as *SuType;
-            if sum==null(*SuType) { su_error(stage,&stmt->loc,"unknown union type");return; }
-            if kind==stage->construct_kind { su_construct(stage,stmt,sum,op); }
-            else { su_match(stage,stmt,sum,op); }
-        }
-        su_lower(stage,stmt->body,depth+1usize);su_lower(stage,stmt->otherwise,depth+1usize);
-        stmt=stmt->next;
-    }
+    domain CompilerArena{edit CompilerArena{
+        var arena:SuArena=make SuArena{stage:stage};
+        var cursor:SuStatement=make SuStatement{pointer:stmt};
+        su_checked_lower(read arena,mut cursor,depth);
+    }}
+}
+
+fn su_lower_operation(arena:read SuArena,cursor:read SuStatement)->unit access(edit,CompilerArena){
+    var stage:*SuStage=arena.stage;
+    var stmt:*CrustStmt=cursor.pointer;
+    if stmt==null(*CrustStmt){return;}
+    var kind:u32=stmt->kind;
+    if kind!=stage->construct_kind && kind!=stage->match_kind{return;}
+    var op:*SuOperation=su_cache_get!(SuOperation)(&stage->operations,stmt as usize);
+    var sum:*SuType=su_cache_get!(SuType)(&stage->types,op->type_name as usize);
+    if sum==null(*SuType){su_error(stage,&stmt->loc,"unknown union type");return;}
+    if kind==stage->construct_kind{su_construct(stage,stmt,sum,op);}
+    else{su_match(stage,stmt,sum,op);}
+}
+fn su_lower_depth_error(arena:read SuArena,cursor:read SuStatement)->unit access(edit,CompilerArena){
+    if cursor.pointer!=null(*CrustStmt){su_error(arena.stage,&cursor.pointer->loc,"union lowering depth exceeded");}
 }
 
 // Read declaration source with union, construct, and match statements enabled.
@@ -136,4 +141,30 @@ fn su_check(stage:*SuStage)->bool {
         input=input->next;
     }
     return stage->context->error_count==0usize && crust_resolve(stage->context) && su_check_payloads(stage) && crust_check(stage->context);
+}
+
+// The arm cursor keeps a live diagnostic location, including at exhaustion.
+// The union's name map is complete after layout. The seen map belongs to this
+// coverage check; its entries use the same arena lifetime as the source names.
+record SuMatchNames{seen:CrustMap;sum:*SuType;next:*SuArm;location:*CrustLoc;} opaque scoped;
+
+fn su_match_name_next(cursor:mut SuMatchNames)->SuName access(read,CompilerArena){
+    var arm:*SuArm=cursor.next;
+    if arm==null(*SuArm){return make SuName{pointer:null(*CrustName)};}
+    cursor.next=arm->next;cursor.location=&arm->location;
+    return make SuName{pointer:arm->name};
+}
+fn su_match_name_known(cursor:read SuMatchNames,name:read SuName)->bool access(read,CompilerArena){
+    return crust_map_get(&cursor.sum->names,name.pointer as usize)!=null(*u8);
+}
+fn su_match_name_insert(builder:read SuBuilder,cursor:mut SuMatchNames,name:read SuName)->bool access(edit,CompilerArena){
+    if crust_map_get(&cursor.seen,name.pointer as usize)!=null(*u8){return false;}
+    return crust_try_map_set(builder.stage->context,&cursor.seen,name.pointer as usize,name.pointer as *u8);
+}
+fn su_match_error(builder:read SuBuilder,cursor:read SuMatchNames,code:u32)->unit access(edit,CompilerArena){
+    var location:*CrustLoc=cursor.location;
+    var message:*u8="unknown union variant";
+    if code==SU_MATCH_DUPLICATE{message="duplicate match variant";}
+    if code==SU_MATCH_INCOMPLETE{message="match must cover every union variant";location=builder.location;}
+    su_error(builder.stage,location,message);
 }

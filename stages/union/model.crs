@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 record SuVariant { name:*CrustName; syntax:*CrustTypeSyntax; next:*SuVariant; tag:u32; }
-record SuType { declaration:*CrustDecl; variants:*SuVariant; next:*SuType; count:usize; }
+record SuType { names:CrustMap; declaration:*CrustDecl; variants:*SuVariant; next:*SuType; count:usize; }
 record SuLayout { declaration:*CrustDecl; size:u64; align:u32; state:u32; }
 record SuArm { location:CrustLoc; name:*CrustName; binding:*CrustName; body:*CrustStmt; next:*SuArm; }
 record SuOperation { arms:*SuArm; type_name:*CrustName; variant:*CrustName; }

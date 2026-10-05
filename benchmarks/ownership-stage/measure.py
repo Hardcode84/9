@@ -357,6 +357,27 @@ def main():
     checked_rejections = {}
     for name, source, diagnostic in (
         (
+            "coverage-private-representation",
+            checked_source.replace(
+                "var count:usize=0usize;", "cursor.seen;var count:usize=0usize;"
+            ),
+            "opaque fields",
+        ),
+        (
+            "shared-arm-cursor",
+            checked_source.replace(
+                "su_match_name_next(mut cursor)", "su_match_name_next(read cursor)"
+            ),
+            "borrow mode",
+        ),
+        (
+            "shared-statement-cursor",
+            checked_source.replace(
+                "su_statement_advance(mut cursor)", "su_statement_advance(read cursor)"
+            ),
+            "borrow mode",
+        ),
+        (
             "builder-private-representation",
             checked_source.replace("var name:SuName=", "destination.pointer;var name:SuName=", 1),
             "opaque fields",
@@ -421,7 +442,7 @@ def main():
             )
         samples.append(sample)
     report = {
-        "status": "production layout, construction and match-arm rules checked; pointer access, traversal and AST writes retain explicit trust",
+        "status": "production layout, construction, match coverage and lowering walk checked; pointer access, operation dispatch and AST writes retain explicit trust",
         "scope": "union stage; raw reader and C backend dependencies behind native interfaces",
         "cpu": args.cpu,
         "attempts": attempts,
@@ -464,8 +485,8 @@ def main():
                 for name in PROVIDER_FILES
                 for line in (ROOT / "stages/union" / name).read_text().splitlines()
             ),
-            "boundary": "raw entry, arena handles, type lookup, cursor steps, operation traversal, match coverage, AST allocation and writes",
-            "restructuring": "live layout handles; nullable typed AST fragments; raw bridges publish checked construction only when the context has no errors",
+            "boundary": "raw entry, arena handles, type lookup, cursor steps, operation dispatch, branch linking, AST allocation and writes",
+            "restructuring": "retained variant-name map; checked coverage preflight and bounded statement walk; nullable typed AST fragments; publication requires an error-free context",
         },
         "checked_production_frontend_ratio": statistics.median(
             sum(s["arena"].values()) / sum(s["raw"].values()) for s in samples

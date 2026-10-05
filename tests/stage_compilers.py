@@ -105,6 +105,18 @@ stage_source_option(stage,stage->sources.items[0usize],"b");
         rejected = run([seed, union_root], expected=1, cwd="/")
         assert diagnostic in rejected.stderr, rejected.stderr
         assert b"lower_checked.crs:" in rejected.stderr, rejected.stderr
+    checked.write_text(
+        original.replace("var count:usize=0usize;", "cursor.seen;var count:usize=0usize;")
+    )
+    assert b"opaque fields" in run([seed, union_root], expected=1, cwd="/").stderr
+    checked.write_text(
+        original.replace("su_match_name_next(mut cursor)", "su_match_name_next(read cursor)")
+    )
+    assert b"borrow mode" in run([seed, union_root], expected=1, cwd="/").stderr
+    checked.write_text(
+        original.replace("su_statement_advance(mut cursor)", "su_statement_advance(read cursor)")
+    )
+    assert b"borrow mode" in run([seed, union_root], expected=1, cwd="/").stderr
     checked.write_text(original.replace("access(edit,CompilerArena)", "access(read,CompilerArena)"))
     assert b"stronger domain authority" in run([seed, union_root], expected=1, cwd="/").stderr
     checked.write_text(original)

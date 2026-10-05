@@ -64,7 +64,7 @@ Five builds must produce identical target C and symbol maps:
 2. Opaque records with all stage bodies trusted.
 3. Typed cache lookup through standalone generics.
 4. Typed cache lookup through ownership, with all stage bodies trusted.
-5. The production layout, construction, and match-arm functions with their bodies checked.
+5. The production layout, construction, match coverage, and lowering walk with their bodies checked.
 
 Each build runs the union runtime corpus and rejects the union error corpus.
 The stage, dependency implementations, and generated target use ASan and UBSan.
@@ -94,19 +94,24 @@ and size, field and variant loops, alignment, overflow, storage carrier selectio
 and tag size. The provider owns
 raw arena access, type lookup, cursor steps, AST storage construction, and
 native entry points. Checked lowering controls construction payload rules,
-evaluation order, tag writes, match bindings, and tag comparisons. Its provider
-owns node allocation and pointer writes; it also retains operation traversal
-and match coverage. Other union functions retain explicit trust. The report
+evaluation order, tag writes, match bindings, tag comparisons, arm coverage,
+and bounded statement traversal. Layout retains the variant-name map for
+lookup. The provider owns node allocation, pointer writes, map operations,
+operation dispatch, and branch linking. Other union functions retain explicit
+trust. The report
 separates checked lines, provider lines and functions, and raw functions outside
 the provider files. Provider counts include all entry bridges and AST builders.
 A smaller checked function does not imply a smaller trusted implementation.
 
 Invalid checked clients must fail for both layout and AST building: private
-field access, destruction of a borrowed parameter, and edit calls from read
-authority. Each compiler must
+field access, destruction of a borrowed parameter, cursor advancement through
+a shared borrow, and edit calls from read authority. Each compiler must
 produce the same target C and symbol map, execute the union corpus, and reject
 the error corpus under ASan and UBSan. The package tests also apply these
 invalid edits to the production source and require normal bootstrap to fail.
+The runtime corpus includes 48 variants, reversed arm order, and construction
+of every tag. Rejected inputs include an empty match, a duplicate arm that
+leaves the total arm count correct, and excessive generated lowering depth.
 
 The report gives the checked-production/raw frontend ratio. The full-stage checked
 timing stays unset because the reader, lowering, and provider bodies retain

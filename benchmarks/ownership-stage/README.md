@@ -85,8 +85,9 @@ The harness compiles the production
 separate untrusted input. The normal union package uses the same sources and
 trust selections through its source-selected compiler.
 
-The checked code handles depth, cache state, publication order, array size,
-field and variant loops, alignment, overflow, and tag size. The provider owns
+The checked code handles depth, cache state, publication order, array traversal
+and size, field and variant loops, alignment, overflow, storage carrier selection,
+and tag size. The provider owns
 raw arena access, type lookup, cursor steps, AST storage construction, and
 native entry points. Other union functions retain explicit trust. The report
 separates checked lines, provider lines, and raw functions outside layout.

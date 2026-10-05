@@ -16,6 +16,14 @@ union Item { Point:Point; Array:[u8;9]; Link:*Item; Callback:fn(u64)->u64; End:u
 union Outer { Item:Item; End:unit; }
 union Flag { On:unit; Off:unit; }
 union Tiny { Byte:u8; Word:u16; }
+union Grid { Cells:[[u16;3];2]; End:unit; }
+fn verify_grid()->i32 {
+    if sizeof(Grid)!=16usize || alignof(Grid)!=4usize {return 36i32;}
+    var grid:Grid=uninit;
+    construct Grid.Cells(grid,make [[u16;3];2]{make [u16;3]{1u16,2u16,3u16},make [u16;3]{4u16,5u16,6u16}});
+    match Grid(grid) { Cells(cells) {if cells[1usize][2usize]!=6u16 {return 37i32;}} End {return 38i32;} }
+    return 0i32;
+}
 fn callback(value:u64)->u64 { return value+1u64; }
 fn destination(value:*Item,count:*u32)->*Item { *count=*count*10u32+1u32;return value; }
 fn payload(count:*u32)->u32 { *count=*count*10u32+2u32;return 7u32; }
@@ -67,7 +75,7 @@ fn verify()->i32 {
     if count!=3u32 { return 35i32; }
     return 0i32;
 }
-fn main(argc:i32,argv:**u8)->i32 { return verify(); }
+fn main(argc:i32,argv:**u8)->i32 { var status:i32=verify();if status!=0i32{return status;}return verify_grid(); }
 """
 
 HEADER = "union U { Value:u64; End:unit; }\n"

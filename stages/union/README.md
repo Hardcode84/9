@@ -65,8 +65,9 @@ conditional nesting also counts toward the seed's depth bound.
 
 The package checks [layout_checked.crs](layout_checked.crs) with the ownership
 and generics stage. This code handles cache publication and cycle detection,
-array count and size limits, field and variant loops, alignment, overflow,
-and the final tag size. The package treats this file as an untrusted input.
+array traversal and size limits, field and variant loops, alignment, overflow,
+storage carrier selection, and the final tag size. The package treats this file
+as an untrusted input.
 An invalid field access or borrow operation stops normal stage preparation.
 
 [layout_handles.crs](layout_handles.crs) and [layout.crs](layout.crs) are the
@@ -78,9 +79,13 @@ that those bodies have passed ownership checking.
 
 The owning context keeps arena storage live through a layout request. Opaque
 scoped handles contain live declaration, layout, and location pointers.
-Read and edit access permit allocation while excluding reclamation. Cursor
-steps return scalar size and alignment snapshots. Zero alignment ends a
-cursor; the context diagnostic distinguishes failure from exhaustion.
+Read and edit access permit allocation while excluding reclamation. Field and
+variant steps return scalar size and alignment snapshots. Zero alignment ends
+these cursors; the context diagnostic distinguishes failure from exhaustion.
+A type cursor stays on a live syntax node. A step advances to an array's base
+or reads a leaf type. Checked recursion controls depth and array multiplication.
+Checked code selects diagnostics and computes the storage plan. The provider
+attaches diagnostics to source locations and writes the planned AST fields.
 The provider must preserve these contracts. These annotations add no runtime
 ownership metadata or validity checks.
 

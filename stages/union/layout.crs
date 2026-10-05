@@ -1,64 +1,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn su_round(stage:*SuStage,size:u64,alignment:u32,location:*CrustLoc)->u64 {
-    domain CompilerArena { edit CompilerArena {
-        var arena:SuArena=make SuArena{stage:stage};
-        var site:SuLocation=make SuLocation{pointer:location};
-        return su_checked_round(read arena,read site,size,alignment);
-    } }
-}
-
 fn su_layout_syntax(stage:*SuStage,syntax:*CrustTypeSyntax,depth:usize,size:*u64,alignment:*u32)->bool {
-    if stage->context->error_count!=0usize { return false; }
-    if depth>=256usize { su_error(stage,&syntax->loc,"union layout depth exceeded");return false; }
-    var kind:u32=syntax->kind;
-    if kind<=CRUST_T_UNIT {
-        if kind==CRUST_T_UNIT { su_error(stage,&syntax->loc,"unit has no stored value");return false; }
-        *size=stage->context->builtins[kind as usize].size;
-        *alignment=stage->context->builtins[kind as usize].align;
-        return true;
-    }
-    if kind==CRUST_T_POINTER || kind==CRUST_T_FUNCTION {
-        *size=stage->context->builtins[CRUST_T_USIZE as usize].size;
-        *alignment=stage->context->builtins[CRUST_T_USIZE as usize].align;return true;
-    }
-    if kind==CRUST_T_ARRAY { return su_layout_array(stage,syntax,depth,size,alignment); }
-    if kind!=CRUST_T_NAME { su_error(stage,&syntax->loc,"union stage requires seed payload types");return false; }
-    var symbol:*CrustSymbol=crust_map_get(&stage->context->globals,syntax->name as usize) as *CrustSymbol;
-    if symbol==null(*CrustSymbol) { su_error(stage,&syntax->loc,"unknown payload type");return false; }
-    if symbol->kind!=CRUST_SYM_RECORD { su_error(stage,&syntax->loc,"payload name must denote a record or union");return false; }
-    var layout:*SuLayout=su_layout_record(stage,symbol->decl,depth+1usize);
-    if layout==null(*SuLayout) { return false; }
-    *size=layout->size;*alignment=layout->align;
-    return true;
-}
-
-fn su_layout_array(stage:*SuStage,syntax:*CrustTypeSyntax,depth:usize,size:*u64,alignment:*u32)->bool {
     domain CompilerArena { edit CompilerArena {
         var arena:SuArena=make SuArena{stage:stage};
-        var site:SuLocation=make SuLocation{pointer:&syntax->loc};
-        if !su_checked_array_count(read arena,read site,syntax->count){return false;}
-        if !su_layout_syntax(stage,syntax->base,depth+1usize,size,alignment){return false;}
-        *size=su_checked_array(read arena,read site,syntax->count,*size);
-        return !su_handle_failed(read arena);
+        var cursor:SuTypeCursor=make SuTypeCursor{next:syntax};
+        var value:SuSize=su_checked_syntax(read arena,mut cursor,depth);
+        *size=value.size;*alignment=value.align;
+        return value.align!=0u32;
     } }
 }
 
-fn su_storage_field(stage:*SuStage,sum:*SuType,size:u64,alignment:u32)->bool {
-    var decl:*CrustDecl=sum->declaration;
+fn su_storage_field(stage:*SuStage,decl:*CrustDecl,plan:*SuStorage)->bool {
     var tag:*CrustField=su_alloc(stage,sizeof(CrustField),alignof(CrustField)) as *CrustField;
-    var storage:*CrustField=su_alloc(stage,sizeof(CrustField),alignof(CrustField)) as *CrustField;
-    if tag==null(*CrustField) || storage==null(*CrustField) { return false; }
+    if tag==null(*CrustField) { return false; }
     tag->name=stage->tag_name;tag->loc=decl->loc;tag->syntax_type=su_type(stage,CRUST_T_U32,&decl->loc);
+    if tag->syntax_type==null(*CrustTypeSyntax) { return false; }
     decl->fields=tag;decl->field_count=1usize;
-    if size==0u64 { return tag->syntax_type!=null(*CrustTypeSyntax); }
-    var carrier:u32=CRUST_T_U32;
-    if alignment==8u32 { carrier=CRUST_T_U64; }
+    if plan->count==0u64 { return true; }
+    var storage:*CrustField=su_alloc(stage,sizeof(CrustField),alignof(CrustField)) as *CrustField;
+    if storage==null(*CrustField) { return false; }
     storage->name=stage->storage_name;storage->loc=decl->loc;
     storage->syntax_type=su_type(stage,CRUST_T_ARRAY,&decl->loc);
     if storage->syntax_type==null(*CrustTypeSyntax) { return false; }
-    storage->syntax_type->base=su_type(stage,carrier,&decl->loc);
-    storage->syntax_type->count=su_round(stage,size,alignment,&decl->loc)/alignment as u64;
+    storage->syntax_type->base=su_type(stage,plan->carrier,&decl->loc);
+    storage->syntax_type->count=plan->count;
     storage->next=tag;decl->fields=storage;decl->field_count=2usize;
     return stage->context->error_count==0usize;
 }

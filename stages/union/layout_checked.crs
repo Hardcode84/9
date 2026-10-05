@@ -1,35 +1,60 @@
 // SPDX-License-Identifier: Apache-2.0
 
+const SU_LAYOUT_OVERFLOW:u32=0u32;
+const SU_ARRAY_EMPTY:u32=1u32;
+const SU_ARRAY_OVERFLOW:u32=2u32;
+const SU_RECORD_OVERFLOW:u32=3u32;
+const SU_TAG_OVERFLOW:u32=4u32;
+const SU_RECORD_EMPTY:u32=5u32;
+const SU_LAYOUT_DEPTH:u32=6u32;
+const SU_LAYOUT_CYCLE:u32=7u32;
+const SU_UNIT_STORAGE:u32=8u32;
+const SU_PAYLOAD_TYPE:u32=9u32;
+
 fn su_checked_layout_depth(arena:read SuArena,decl:read SuDeclaration,depth:usize)->bool access(edit,CompilerArena){
     if depth<256usize{return true;}
-    su_handle_error(read arena,read decl,false);return false;
+    var location:SuLocation=su_handle_location(read decl);
+    su_layout_diagnostic(read arena,read location,SU_LAYOUT_DEPTH);return false;
 }
 fn su_checked_layout_record(arena:read SuArena,decl:read SuDeclaration,layout:read SuLayoutHandle,depth:usize)->bool access(edit,CompilerArena){
     var data:SuLayoutData=su_handle_load(read layout);
-    if data.state==1u32{su_handle_error(read arena,read decl,true);return false;}
+    if data.state==1u32{var location:SuLocation=su_handle_location(read decl);su_layout_diagnostic(read arena,read location,SU_LAYOUT_CYCLE);return false;}
     if data.state==2u32{return true;}
     data.align=1u32;data.state=1u32;
     su_handle_save(read layout,read data);
     if !su_handle_publish(read arena,read decl,read layout){return false;}
     if !su_handle_fill(read arena,read decl,read layout,depth){return false;}
     data=su_handle_load(read layout);
-    data.size=su_handle_round(read arena,read decl,data.size,data.align);data.state=2u32;
+    var location:SuLocation=su_handle_location(read decl);
+    data.size=su_checked_round(read arena,read location,data.size,data.align);data.state=2u32;
     su_handle_save(read layout,read data);
     return !su_handle_failed(read arena);
 }
 
 fn su_checked_round(arena:read SuArena,location:read SuLocation,size:u64,alignment:u32)->u64 access(edit,CompilerArena){
     var mask:u64=alignment as u64-1u64;
-    if size>9223372036854775807u64-mask{su_layout_diagnostic(read arena,read location,0u32);return 0u64;}
+    if size>9223372036854775807u64-mask{su_layout_diagnostic(read arena,read location,SU_LAYOUT_OVERFLOW);return 0u64;}
     return (size+mask)&~mask;
 }
-fn su_checked_array_count(arena:read SuArena,location:read SuLocation,count:u64)->bool access(edit,CompilerArena){
-    if count!=0u64{return true;}
-    su_layout_diagnostic(read arena,read location,1u32);return false;
+fn su_checked_syntax(arena:read SuArena,cursor:mut SuTypeCursor,depth:usize)->SuSize access(edit,CompilerArena){
+    var empty:SuSize=make SuSize{size:0u64,align:0u32};
+    if su_handle_failed(read arena){return empty;}
+    var location:SuLocation=su_type_location(read cursor);
+    if depth>=256usize{su_layout_diagnostic(read arena,read location,SU_LAYOUT_DEPTH);return empty;}
+    var value:SuTypeStep=su_type_step(read arena,mut cursor,depth);
+    if value.kind==CRUST_T_ARRAY{return su_checked_array(read arena,read location,mut cursor,value.count,depth);}
+    if value.kind==CRUST_T_UNIT{su_layout_diagnostic(read arena,read location,SU_UNIT_STORAGE);}
+    else {if value.align==0u32 && !su_handle_failed(read arena){su_layout_diagnostic(read arena,read location,SU_PAYLOAD_TYPE);}}
+    return make SuSize{size:value.size,align:value.align};
 }
-fn su_checked_array(arena:read SuArena,location:read SuLocation,count:u64,size:u64)->u64 access(edit,CompilerArena){
-    if count>9223372036854775807u64/size{su_layout_diagnostic(read arena,read location,2u32);return 0u64;}
-    return size*count;
+fn su_checked_array(arena:read SuArena,location:read SuLocation,cursor:mut SuTypeCursor,count:u64,depth:usize)->SuSize access(edit,CompilerArena){
+    var empty:SuSize=make SuSize{size:0u64,align:0u32};
+    if count==0u64{su_layout_diagnostic(read arena,read location,SU_ARRAY_EMPTY);return empty;}
+    var value:SuSize=su_checked_syntax(read arena,mut cursor,depth+1usize);
+    if value.align==0u32{return value;}
+    if count>9223372036854775807u64/value.size{su_layout_diagnostic(read arena,read location,SU_ARRAY_OVERFLOW);return empty;}
+    value.size=value.size*count;
+    return value;
 }
 fn su_checked_fields(arena:read SuArena,decl:read SuDeclaration,layout:read SuLayoutHandle,cursor:mut SuFields,depth:usize)->bool access(edit,CompilerArena){
     var data:SuLayoutData=su_handle_load(read layout);
@@ -40,11 +65,11 @@ fn su_checked_fields(arena:read SuArena,decl:read SuDeclaration,layout:read SuLa
         any=true;
         var location:SuLocation=su_fields_location(read cursor);
         data.size=su_checked_round(read arena,read location,data.size,value.align);
-        if value.size>9223372036854775807u64-data.size{su_layout_diagnostic(read arena,read location,3u32);return false;}
+        if value.size>9223372036854775807u64-data.size{su_layout_diagnostic(read arena,read location,SU_RECORD_OVERFLOW);return false;}
         data.size=data.size+value.size;
         if value.align>data.align{data.align=value.align;}
     }
-    if !any{su_handle_empty(read arena,read decl);}
+    if !any{var location:SuLocation=su_handle_location(read decl);su_layout_diagnostic(read arena,read location,SU_RECORD_EMPTY);}
     su_handle_save(read layout,read data);return !su_handle_failed(read arena);
 }
 fn su_checked_variants(arena:read SuArena,decl:read SuDeclaration,layout:read SuLayoutHandle,cursor:mut SuVariants,depth:usize)->bool access(edit,CompilerArena){
@@ -56,10 +81,14 @@ fn su_checked_variants(arena:read SuArena,decl:read SuDeclaration,layout:read Su
         if value.size>data.size{data.size=value.size;}
         if value.align>data.align{data.align=value.align;}
     }
-    if su_handle_failed(read arena) || !su_handle_storage(read arena,read decl,data.size,data.align){return false;}
+    if su_handle_failed(read arena){return false;}
     var location:SuLocation=su_handle_location(read decl);
     data.size=su_checked_round(read arena,read location,data.size,data.align);
-    if data.size>9223372036854775803u64{su_layout_diagnostic(read arena,read location,4u32);return false;}
+    if data.size>9223372036854775803u64{su_layout_diagnostic(read arena,read location,SU_TAG_OVERFLOW);return false;}
+    if su_handle_failed(read arena){return false;}
+    var plan:SuStorage=make SuStorage{count:data.size/data.align as u64,carrier:CRUST_T_U32};
+    if data.align==8u32{plan.carrier=CRUST_T_U64;}
+    if !su_handle_storage(read arena,read decl,read plan){return false;}
     data.size=data.size+4u64;
     su_handle_save(read layout,read data);return !su_handle_failed(read arena);
 }

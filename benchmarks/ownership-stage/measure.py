@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Test a bounded ownership and generics port of the production union stage."""
+"""Measure the production union stage through ownership and generics."""
 
 import argparse
 import hashlib
@@ -14,9 +14,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
-RAW_FILES = ("layout.crs", "nodes.crs", "lower.crs")
-PROVIDER_FILES = ("layout.crs", "layout_handles.crs", "nodes.crs", "lower.crs")
-CHECKED_FILES = ("layout_checked.crs", "lower_checked.crs")
+RAW_FILES = ("layout.crs", "nodes.crs", "lower.crs", "read.crs", "program.crs")
+PROVIDER_FILES = (*RAW_FILES, "layout_handles.crs", "passes.crs")
+CHECKED_FILES = (
+    "layout_checked.crs",
+    "lower_checked.crs",
+    "read_checked.crs",
+    "passes_checked.crs",
+)
 
 
 class Experiment:
@@ -81,6 +86,7 @@ def prepare(experiment, sources, raw_stage):
     for path in sources:
         if path.parent == ROOT / "stages/union" and path.name in (
             "layout_handles.crs",
+            "passes.crs",
             *CHECKED_FILES,
         ):
             continue
@@ -305,7 +311,7 @@ def main():
         "--raw-stage",
         type=Path,
         required=True,
-        help="directory with preserved raw layout.crs, nodes.crs, lower.crs under build/",
+        help="directory with preserved raw layout, nodes, lower, read and program .crs files under build/",
     )
     parser.add_argument("--rounds", type=int, default=7)
     parser.add_argument("--cpu", type=int, required=True)
@@ -317,7 +323,7 @@ def main():
     if not raw_stage.is_relative_to(ROOT / "build") or not all(
         (raw_stage / name).is_file() for name in RAW_FILES
     ):
-        parser.error("raw control must contain layout.crs, nodes.crs and lower.crs under build/")
+        parser.error("raw control must contain all five raw implementation files under build/")
     os.sched_setaffinity(0, {args.cpu})
     output.mkdir(parents=True)
     sys.path.insert(0, str(ROOT / "tests"))
@@ -357,9 +363,36 @@ def main():
     checked_rejections = {}
     for name, source, diagnostic in (
         (
+            "reader-private-state",
+            checked_source.replace(
+                "var sum:SuSum=su_reader_union", "reader.reader;var sum:SuSum=su_reader_union"
+            ),
+            "opaque fields",
+        ),
+        (
+            "reader-shared-builder",
+            checked_source.replace("mut sum,read name", "read sum,read name"),
+            "borrow mode",
+        ),
+        (
+            "passes-shared-cursor",
+            checked_source.replace("su_sums_advance(mut sums)", "su_sums_advance(read sums)"),
+            "borrow mode",
+        ),
+        (
+            "driver-private-state",
+            checked_source.replace("var index:usize=0usize;", "driver.cli;var index:usize=0usize;"),
+            "opaque fields",
+        ),
+        (
+            "shared-branch-chain",
+            checked_source.replace("mut chain,read test", "read chain,read test"),
+            "borrow mode",
+        ),
+        (
             "coverage-private-representation",
             checked_source.replace(
-                "var count:usize=0usize;", "cursor.seen;var count:usize=0usize;"
+                "var count:usize=0usize;", "cursor.seen;var count:usize=0usize;", 1
             ),
             "opaque fields",
         ),
@@ -442,13 +475,13 @@ def main():
             )
         samples.append(sample)
     report = {
-        "status": "production layout, construction, match coverage and lowering walk checked; pointer access, operation dispatch and AST writes retain explicit trust",
+        "status": "production union algorithms checked; arena, reader, AST, native driver and type adapters retain explicit trust",
         "scope": "union stage; raw reader and C backend dependencies behind native interfaces",
         "cpu": args.cpu,
         "attempts": attempts,
         "body_rejections": rejected,
         "checked_client_rejections": checked_rejections,
-        "burden": {
+        "raw_interface_probe_burden": {
             "functions": len(functions),
             "trusted_functions": len(rejected),
             "function_lines": sum(d["body_lines"] for d in functions),
@@ -464,8 +497,8 @@ def main():
             "client_budget_comparison": "tutorial client budgets exclude providers; no compiler-stage budget exists",
         },
         "samples": samples,
-        "checked_generic_frontend_ns": None,
-        "production_slice": {
+        "checked_generic_frontend_ns": statistics.median(sum(s["arena"].values()) for s in samples),
+        "production_port": {
             "checked_functions": sum(
                 line.startswith("fn ") for line in checked_source.splitlines()
             ),
@@ -480,13 +513,25 @@ def main():
                 if d["path"]
                 not in {str((raw_stage / name).relative_to(ROOT)) for name in RAW_FILES}
             ),
+            "dependency_source_lines": sum(len(path.read_text().splitlines()) for path in paths),
+            "model_source_lines": len((ROOT / "stages/union/model.crs").read_text().splitlines()),
+            "checked_borrow_parameters": checked_source.count(":read ")
+            + checked_source.count(":mut "),
+            "checked_effect_annotations": checked_source.count("access("),
             "provider_functions": sum(
                 line.startswith("fn ")
                 for name in PROVIDER_FILES
                 for line in (ROOT / "stages/union" / name).read_text().splitlines()
             ),
-            "boundary": "raw entry, arena handles, type lookup, cursor steps, operation dispatch, branch linking, AST allocation and writes",
-            "restructuring": "retained variant-name map; checked coverage preflight and bounded statement walk; nullable typed AST fragments; publication requires an error-free context",
+            "boundary": "arena and map storage, AST reads and writes, cursor representation, reader atoms, type adapters, native ABI and IO; model initialization remains raw",
+            "restructuring": "retained variant-name map; checked grammar, pass ordering and lowering; nullable scoped handles and mutable cursors; publication requires an error-free context",
+        },
+        "phase_median_ns": {
+            mode: {
+                phase: statistics.median(s[mode][phase] for s in samples)
+                for phase in ("read_ns", "check_ns", "emit_ns")
+            }
+            for mode in ("raw", "opaque", "generic-raw", "generic", "arena")
         },
         "checked_production_frontend_ratio": statistics.median(
             sum(s["arena"].values()) / sum(s["raw"].values()) for s in samples
@@ -521,7 +566,7 @@ def main():
     }
     experiment.write("report.json", json.dumps(report, indent=2) + "\n")
     print(report["status"])
-    print(json.dumps(report["burden"], indent=2))
+    print(json.dumps(report["production_port"], indent=2))
     print(f"Report: {output / 'report.json'}")
 
 

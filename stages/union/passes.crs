@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record SuSums{next:*SuType;} opaque scoped;
+record SuDeclarations{input:*CrustUnit;next:*CrustDecl;} opaque scoped;
+fn su_sums(arena:read SuArena)->SuSums access(read,CompilerArena){return make SuSums{next:arena.stage->first};}
+fn su_sums_more(cursor:read SuSums)->bool access(read,CompilerArena){return cursor.next!=null(*SuType);}
+fn su_sums_advance(cursor:mut SuSums)->unit access(read,CompilerArena){if cursor.next!=null(*SuType){cursor.next=cursor.next->next;}}
+fn su_sum_layout(arena:read SuArena,cursor:read SuSums)->bool access(edit,CompilerArena){
+    if cursor.next==null(*SuType){return true;}
+    return su_layout_record(arena.stage,cursor.next->declaration,0usize)!=null(*SuLayout);
+}
+fn su_sum_variants(cursor:read SuSums)->SuVariants access(read,CompilerArena){
+    var next:*SuVariant=null(*SuVariant);if cursor.next!=null(*SuType){next=cursor.next->variants;}
+    return make SuVariants{sum:cursor.next,next:next};
+}
+fn su_payloads_more(cursor:read SuVariants)->bool access(read,CompilerArena){return cursor.next!=null(*SuVariant);}
+fn su_payload_resolve(arena:read SuArena,cursor:mut SuVariants)->bool access(edit,CompilerArena){
+    if cursor.next==null(*SuVariant){return true;}
+    var result:*CrustType=crust_try_resolve_type(arena.stage->context,cursor.next->syntax);
+    cursor.next=cursor.next->next;return result!=null(*CrustType);
+}
+fn su_declarations_seek(cursor:*SuDeclarations)->unit{
+    while cursor->next==null(*CrustDecl) && cursor->input!=null(*CrustUnit){
+        cursor->next=cursor->input->declarations;cursor->input=cursor->input->next;
+    }
+}
+fn su_declarations(arena:read SuArena)->SuDeclarations access(read,CompilerArena){
+    var cursor:SuDeclarations=make SuDeclarations{input:arena.stage->context->units,next:null(*CrustDecl)};
+    su_declarations_seek(&cursor);return cursor;
+}
+fn su_declarations_more(cursor:read SuDeclarations)->bool access(read,CompilerArena){return cursor.next!=null(*CrustDecl);}
+fn su_declarations_advance(cursor:mut SuDeclarations)->unit access(read,CompilerArena){
+    if cursor.next!=null(*CrustDecl){cursor.next=cursor.next->next;}
+    su_declarations_seek(&cursor);
+}
+fn su_declaration_body(cursor:read SuDeclarations)->SuStatement access(read,CompilerArena){
+    var body:*CrustStmt=null(*CrustStmt);if cursor.next!=null(*CrustDecl){body=cursor.next->body;}
+    return make SuStatement{pointer:body};
+}
+fn su_collect(arena:read SuArena)->bool access(edit,CompilerArena){return crust_collect(arena.stage->context);}
+fn su_resolve(arena:read SuArena)->bool access(edit,CompilerArena){return crust_resolve(arena.stage->context);}
+fn su_seed_check(arena:read SuArena)->bool access(edit,CompilerArena){return crust_check(arena.stage->context);}
+
+// Lower every selected union operation, then check the resulting seed program.
+fn su_check(stage:*SuStage)->bool{
+    domain CompilerArena{edit CompilerArena{
+        var arena:SuArena=make SuArena{stage:stage};return su_checked_passes(read arena);
+    }}
+}

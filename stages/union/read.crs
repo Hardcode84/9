@@ -1,94 +1,118 @@
 // SPDX-License-Identifier: Apache-2.0
 
+// The reader borrows a live callback frame. Nullable result handles remain
+// usable after a reader or allocation error; publication requires success.
+record SuReader{reader:*CrustReader;stage:*SuStage;} opaque scoped;
+record SuSum{pointer:*SuType;tail:*SuVariant;} opaque scoped;
+record SuArmHandle{pointer:*SuArm;} opaque scoped;
+record SuParsedOperation{statement:*CrustStmt;operation:*SuOperation;tail:*SuArm;} opaque scoped;
+
 fn su_word(reader:*CrustReader,text:*u8)->bool {
-    if reader->token.kind!=RR_NAME { return false; }
+    if reader->token.kind!=RR_NAME{return false;}
     var index:usize=0usize;
-    while index<reader->token.length {
-        if text[index]==0u8 || reader->token.text[index]!=text[index] { return false; }
+    while index<reader->token.length{
+        if text[index]==0u8 || reader->token.text[index]!=text[index]{return false;}
         index=index+1usize;
     }
     return text[index]==0u8;
 }
-
-fn su_read_union(reader:*CrustReader,user:*u8)->*CrustDecl {
-    if !su_word(reader,"union") { return null(*CrustDecl); }
-    var stage:*SuStage=user as *SuStage;
-    var result:*CrustDecl=rr_new_decl(reader,CRUST_D_RECORD,reader->token.offset);
-    var sum:*SuType=su_alloc(stage,sizeof(SuType),alignof(SuType)) as *SuType;
-    if result==null(*CrustDecl) || sum==null(*SuType) || !rr_next(reader) { return null(*CrustDecl); }
-    result->name=rr_name(reader);sum->declaration=result;
-    if !rr_expect(reader,123u32,"expected '{'") { return null(*CrustDecl); }
-    if !su_read_variants(reader,stage,sum) { return null(*CrustDecl); }
-    if !crust_try_map_set(stage->context,&stage->types,result->name as usize,sum as *u8) { return null(*CrustDecl); }
-    sum->next=stage->first;stage->first=sum;
-    return result;
+fn su_read_union(reader:*CrustReader,user:*u8)->*CrustDecl{
+    if !su_word(reader,"union"){return null(*CrustDecl);}
+    domain CompilerArena{edit CompilerArena{
+        var session:SuReader=make SuReader{reader:reader,stage:user as *SuStage};
+        var sum:SuSum=su_checked_union(read session);
+        if reader->failed || reader->context->error_count!=0usize || sum.pointer==null(*SuType){return null(*CrustDecl);}
+        return sum.pointer->declaration;
+    }}
 }
-
-fn su_read_variants(reader:*CrustReader,stage:*SuStage,sum:*SuType)->bool {
-    var tail:**SuVariant=&sum->variants;
-    while reader->token.kind!=125u32 && !reader->failed {
-        var variant:*SuVariant=su_alloc(stage,sizeof(SuVariant),alignof(SuVariant)) as *SuVariant;
-        if variant==null(*SuVariant) { return false; }
-        variant->name=rr_name(reader);
-        if !rr_expect(reader,58u32,"expected ':'") { return false; }
-        variant->syntax=rr_type(reader);
-        if !rr_expect(reader,59u32,"expected ';'") { return false; }
-        if sum->count==4294967295usize { rr_error(reader,reader->token.offset,"too many union variants");return false; }
-        variant->tag=sum->count as u32;sum->count=sum->count+1usize;
-        *tail=variant;tail=&variant->next;
-    }
-    if sum->count==0usize { rr_error(reader,reader->token.offset,"union requires at least one variant");return false; }
-    return rr_expect(reader,125u32,"expected '}'");
-}
-
-fn su_read_arm(reader:*CrustReader,stage:*SuStage)->*SuArm {
-    var arm:*SuArm=su_alloc(stage,sizeof(SuArm),alignof(SuArm)) as *SuArm;
-    if arm==null(*SuArm) { return arm; }
-    arm->location=make CrustLoc{source:reader->source,offset:reader->token.offset};
-    arm->name=rr_name(reader);
-    if rr_take(reader,40u32) {
-        arm->binding=rr_name(reader);
-        if !rr_expect(reader,41u32,"expected ')'") { return null(*SuArm); }
-    }
-    arm->body=rr_block(reader);
-    if reader->failed { return null(*SuArm); }
-    return arm;
-}
-
-fn su_read_match(reader:*CrustReader,stage:*SuStage,stmt:*CrustStmt,op:*SuOperation)->bool {
-    if !rr_expect(reader,40u32,"expected '(' after match type") { return false; }
-    stmt->expr=rr_expression(reader);
-    if !rr_expect(reader,41u32,"expected ')'") || !rr_expect(reader,123u32,"expected '{'") { return false; }
-    var tail:**SuArm=&op->arms;
-    while reader->token.kind!=125u32 && !reader->failed {
-        *tail=su_read_arm(reader,stage);
-        if *tail==null(*SuArm) { return false; }
-        tail=&(*tail)->next;
-    }
-    return rr_expect(reader,125u32,"expected '}'");
-}
-
-fn su_read_construct(reader:*CrustReader,stmt:*CrustStmt,op:*SuOperation)->bool {
-    if !rr_expect(reader,46u32,"expected '.' after construct type") { return false; }
-    op->variant=rr_name(reader);
-    if !rr_expect(reader,40u32,"expected '('") { return false; }
-    stmt->expr=rr_expression(reader);
-    if rr_take(reader,44u32) { stmt->value=rr_expression(reader); }
-    return rr_expect(reader,41u32,"expected ')'") && rr_expect(reader,59u32,"expected ';'");
-}
-
-fn su_read_statement(reader:*CrustReader,user:*u8)->*CrustStmt {
+fn su_read_statement(reader:*CrustReader,user:*u8)->*CrustStmt{
     var is_match:bool=su_word(reader,"match");
-    if !is_match && !su_word(reader,"construct") { return null(*CrustStmt); }
-    var stage:*SuStage=user as *SuStage;
-    var kind:u32=stage->construct_kind;
-    if is_match { kind=stage->match_kind; }
-    var stmt:*CrustStmt=rr_new_stmt(reader,kind,reader->token.offset);
-    var op:*SuOperation=su_alloc(stage,sizeof(SuOperation),alignof(SuOperation)) as *SuOperation;
-    if stmt==null(*CrustStmt) || op==null(*SuOperation) || !rr_next(reader) { return null(*CrustStmt); }
-    op->type_name=rr_name(reader);
-    if is_match { if !su_read_match(reader,stage,stmt,op) { return null(*CrustStmt); } }
-    else { if !su_read_construct(reader,stmt,op) { return null(*CrustStmt); } }
-    if !crust_try_map_set(stage->context,&stage->operations,stmt as usize,op as *u8) { return null(*CrustStmt); }
-    return stmt;
+    if !is_match && !su_word(reader,"construct"){return null(*CrustStmt);}
+    domain CompilerArena{edit CompilerArena{
+        var session:SuReader=make SuReader{reader:reader,stage:user as *SuStage};
+        var result:SuParsedOperation=su_checked_read_statement(read session,is_match);
+        if reader->failed || reader->context->error_count!=0usize{return null(*CrustStmt);}
+        return result.statement;
+    }}
+}
+fn su_reader_expect(session:read SuReader,kind:u32)->bool access(edit,CompilerArena){
+    var message:*u8="expected ';'";
+    if kind==123u32{message="expected '{'";}
+    if kind==125u32{message="expected '}'";}
+    if kind==58u32{message="expected ':'";}
+    if kind==40u32{message="expected '('";}
+    if kind==41u32{message="expected ')'";}
+    if kind==46u32{message="expected '.' after construct type";}
+    return rr_expect(session.reader,kind,message);
+}
+fn su_reader_more(session:read SuReader)->bool access(read,CompilerArena){
+    return session.reader->token.kind!=125u32 && !session.reader->failed && session.stage->context->error_count==0usize;
+}
+fn su_reader_take(session:read SuReader,kind:u32)->bool access(edit,CompilerArena){return rr_take(session.reader,kind);}
+fn su_reader_name(session:read SuReader)->SuName access(edit,CompilerArena){return make SuName{pointer:rr_name(session.reader)};}
+fn su_reader_type(session:read SuReader)->SuSyntax access(edit,CompilerArena){return make SuSyntax{pointer:rr_type(session.reader)};}
+fn su_reader_expression(session:read SuReader)->SuExpression access(edit,CompilerArena){return make SuExpression{pointer:rr_expression(session.reader)};}
+fn su_reader_block(session:read SuReader)->SuStatement access(edit,CompilerArena){return make SuStatement{pointer:rr_block(session.reader)};}
+fn su_reader_error(session:read SuReader,overflow:bool)->unit access(edit,CompilerArena){
+    var message:*u8="union requires at least one variant";
+    if overflow{message="too many union variants";}
+    rr_error(session.reader,session.reader->token.offset,message);
+}
+fn su_reader_union(session:read SuReader)->SuSum access(edit,CompilerArena){
+    var decl:*CrustDecl=rr_new_decl(session.reader,CRUST_D_RECORD,session.reader->token.offset);
+    var sum:*SuType=su_alloc(session.stage,sizeof(SuType),alignof(SuType)) as *SuType;
+    if decl!=null(*CrustDecl) && sum!=null(*SuType){
+        sum->declaration=decl;
+        if rr_next(session.reader){decl->name=rr_name(session.reader);}
+    }
+    return make SuSum{pointer:sum,tail:null(*SuVariant)};
+}
+fn su_reader_variant(session:read SuReader,sum:mut SuSum,name:read SuName,syntax:read SuSyntax,tag:u32)->unit access(edit,CompilerArena){
+    if sum.pointer==null(*SuType) || session.stage->context->error_count!=0usize{return;}
+    var variant:*SuVariant=su_alloc(session.stage,sizeof(SuVariant),alignof(SuVariant)) as *SuVariant;
+    if variant==null(*SuVariant){return;}
+    variant->name=name.pointer;variant->syntax=syntax.pointer;variant->tag=tag;
+    if sum.tail==null(*SuVariant){sum.pointer->variants=variant;}else{sum.tail->next=variant;}
+    sum.tail=variant;
+}
+fn su_reader_publish(session:read SuReader,sum:read SuSum,count:usize)->unit access(edit,CompilerArena){
+    if session.reader->failed || session.stage->context->error_count!=0usize || sum.pointer==null(*SuType){return;}
+    sum.pointer->count=count;
+    if !crust_try_map_set(session.stage->context,&session.stage->types,sum.pointer->declaration->name as usize,sum.pointer as *u8){return;}
+    sum.pointer->next=session.stage->first;session.stage->first=sum.pointer;
+}
+fn su_reader_arm(session:read SuReader)->SuArmHandle access(edit,CompilerArena){
+    var arm:*SuArm=su_alloc(session.stage,sizeof(SuArm),alignof(SuArm)) as *SuArm;
+    if arm!=null(*SuArm){arm->location=make CrustLoc{source:session.reader->source,offset:session.reader->token.offset};}
+    return make SuArmHandle{pointer:arm};
+}
+fn su_arm_name(arm:read SuArmHandle,name:read SuName,binding:bool)->unit access(edit,CompilerArena){
+    if arm.pointer==null(*SuArm){return;}
+    if binding{arm.pointer->binding=name.pointer;}else{arm.pointer->name=name.pointer;}
+}
+fn su_arm_body(arm:read SuArmHandle,body:read SuStatement)->unit access(edit,CompilerArena){
+    if arm.pointer!=null(*SuArm){arm.pointer->body=body.pointer;}
+}
+fn su_reader_operation(session:read SuReader,is_match:bool)->SuParsedOperation access(edit,CompilerArena){
+    var kind:u32=session.stage->construct_kind;if is_match{kind=session.stage->match_kind;}
+    var stmt:*CrustStmt=rr_new_stmt(session.reader,kind,session.reader->token.offset);
+    var op:*SuOperation=su_alloc(session.stage,sizeof(SuOperation),alignof(SuOperation)) as *SuOperation;
+    if stmt!=null(*CrustStmt) && op!=null(*SuOperation){if rr_next(session.reader){op->type_name=rr_name(session.reader);}}
+    return make SuParsedOperation{statement:stmt,operation:op,tail:null(*SuArm)};
+}
+fn su_operation_value(op:read SuParsedOperation,value:read SuExpression,payload:bool)->unit access(edit,CompilerArena){
+    if op.statement==null(*CrustStmt){return;}
+    if payload{op.statement->value=value.pointer;}else{op.statement->expr=value.pointer;}
+}
+fn su_operation_variant(op:read SuParsedOperation,name:read SuName)->unit access(edit,CompilerArena){
+    if op.operation!=null(*SuOperation){op.operation->variant=name.pointer;}
+}
+fn su_operation_arm(op:mut SuParsedOperation,arm:read SuArmHandle)->unit access(edit,CompilerArena){
+    if op.operation==null(*SuOperation) || arm.pointer==null(*SuArm){return;}
+    if op.tail==null(*SuArm){op.operation->arms=arm.pointer;}else{op.tail->next=arm.pointer;}
+    op.tail=arm.pointer;
+}
+fn su_operation_publish(session:read SuReader,op:read SuParsedOperation)->unit access(edit,CompilerArena){
+    if session.reader->failed || session.stage->context->error_count!=0usize{return;}
+    crust_try_map_set(session.stage->context,&session.stage->operations,op.statement as usize,op.operation as *u8);
 }

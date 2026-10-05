@@ -1,0 +1,44 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn su_checked_passes(arena:read SuArena)->bool access(edit,CompilerArena){
+    if !su_collect(read arena){return false;}
+    var sums:SuSums=su_sums(read arena);
+    while su_sums_more(read sums){
+        if !su_sum_layout(read arena,read sums){return false;}
+        su_sums_advance(mut sums);
+    }
+    var declarations:SuDeclarations=su_declarations(read arena);
+    while su_declarations_more(read declarations) && !su_handle_failed(read arena){
+        var body:SuStatement=su_declaration_body(read declarations);
+        su_checked_lower(read arena,mut body,0usize);
+        su_declarations_advance(mut declarations);
+    }
+    if su_handle_failed(read arena) || !su_resolve(read arena){return false;}
+    var payloads:SuSums=su_sums(read arena);
+    while su_sums_more(read payloads){
+        var variants:SuVariants=su_sum_variants(read payloads);
+        while su_payloads_more(read variants){
+            if !su_payload_resolve(read arena,mut variants){return false;}
+        }
+        su_sums_advance(mut payloads);
+    }
+    return su_seed_check(read arena);
+}
+
+fn su_checked_inputs(driver:read SuDriver)->bool access(edit,CompilerArena){
+    if !su_input_root(read driver){return false;}
+    var index:usize=0usize;
+    while index<su_input_count(read driver){
+        if !su_input_read(read driver,index){return false;}
+        index=index+1usize;
+    }
+    return true;
+}
+
+fn su_checked_driver(driver:read SuDriver,arena:read SuArena)->i32 access(edit,CompilerArena){
+    if !su_checked_inputs(read driver){return 1i32;}
+    if !su_checked_passes(read arena) || !su_exports(read driver){return 1i32;}
+    if su_driver_mode(read driver)==3u32{return 0i32;}
+    if !su_names(read driver){return 1i32;}
+    return su_output(read driver,su_driver_mode(read driver)==4u32);
+}

@@ -2,7 +2,7 @@
 
 # Production-stage ownership gate
 
-This experiment attempts a bounded port of the production union stage through
+This experiment measures the production union stage through
 the ownership and generics checker. It preserves the stage's arena storage,
 layout algorithm, reader callbacks, and generated target program.
 
@@ -15,8 +15,9 @@ python3 benchmarks/ownership-stage/measure.py \
     --raw-stage build/raw-control
 ```
 
-Select preserved raw `layout.crs`, `nodes.crs`, and `lower.crs` implementations
-as the control. Keep these files under `build/` with their capture metadata.
+Select preserved raw `layout.crs`, `nodes.crs`, `lower.crs`, `read.crs`, and
+`program.crs` implementations as the control. Keep these files under `build/`
+with their capture metadata.
 The harness records their exact bytes and hashes. It uses current reader and
 backend dependencies for both candidates.
 Use a new output directory for each run. The script captures source bytes,
@@ -64,7 +65,7 @@ Five builds must produce identical target C and symbol maps:
 2. Opaque records with all stage bodies trusted.
 3. Typed cache lookup through standalone generics.
 4. Typed cache lookup through ownership, with all stage bodies trusted.
-5. The production layout, construction, match coverage, and lowering walk with their bodies checked.
+5. The production stage with its grammar, layout, lowering, and pass bodies checked.
 
 Each build runs the union runtime corpus and rejects the union error corpus.
 The stage, dependency implementations, and generated target use ASan and UBSan.
@@ -79,42 +80,45 @@ It supplies no checked-port speed result.
 
 ## Checked production code
 
-The harness compiles the production
-[checked layout](../../stages/union/layout_checked.crs),
-[handle provider](../../stages/union/layout_handles.crs), and
-[pointer adapter](../../stages/union/layout.crs). It also compiles
-[checked lowering](../../stages/union/lower_checked.crs), the
-[AST builder](../../stages/union/nodes.crs), and its
-[entry bridges](../../stages/union/lower.crs). The checked sources form a
-separate untrusted input. The normal union package uses the same sources and
-trust selections through its source-selected compiler.
+The production package selects four checked inputs: grammar, layout, lowering,
+and pass control. The [stage reference](../../stages/union/README.md#checked-implementation-boundary)
+lists each file and its contract. The harness uses these exact files as a
+separate untrusted input. It selects the same provider implementations as the
+normal package.
 
-The checked code handles depth, cache state, publication order, array traversal
-and size, field and variant loops, alignment, overflow, storage carrier selection,
-and tag size. The provider owns
-raw arena access, type lookup, cursor steps, AST storage construction, and
-native entry points. Checked lowering controls construction payload rules,
-evaluation order, tag writes, match bindings, tag comparisons, arm coverage,
-and bounded statement traversal. Layout retains the variant-name map for
-lookup. The provider owns node allocation, pointer writes, map operations,
-operation dispatch, and branch linking. Other union functions retain explicit
-trust. The report
-separates checked lines, provider lines and functions, and raw functions outside
-the provider files. Provider counts include all entry bridges and AST builders.
-A smaller checked function does not imply a smaller trusted implementation.
+Opaque scoped handles keep arena addresses behind typed interfaces. Mutable
+cursors express iteration; checked code controls token order, pass order,
+recursion, layout arithmetic, construction, and match coverage. The retained
+variant-name map serves layout, construction, and matching. The provider
+performs reader calls, type adaptation, allocation, map access, AST writes,
+cursor steps, native calls, and file-buffer release. Model initialization also
+retains explicit trust. These responsibilities remain in the trust count.
 
-Invalid checked clients must fail for both layout and AST building: private
-field access, destruction of a borrowed parameter, cursor advancement through
-a shared borrow, and edit calls from read authority. Each compiler must
-produce the same target C and symbol map, execute the union corpus, and reject
-the error corpus under ASan and UBSan. The package tests also apply these
-invalid edits to the production source and require normal bootstrap to fail.
-The runtime corpus includes 48 variants, reversed arm order, and construction
-of every tag. Rejected inputs include an empty match, a duplicate arm that
-leaves the total arm count correct, and excessive generated lowering depth.
+The report separates checked source lines, borrow and effect annotations,
+provider lines and functions, model lines, and dependency source lines. Small
+pointer adapters increase source size. A checked algorithm count alone is
+insufficient to assess this cost. The raw-interface rejection inventory and
+the production port counts are separate report entries.
 
-The report gives the checked-production/raw frontend ratio. The full-stage checked
-timing stays unset because the reader, lowering, and provider bodies retain
-explicit trust. Target GCC compilation and linking remain outside the timed
-intervals. Package bootstrap and cache validation are separate from this
-native frontend measurement.
+Invalid checked clients must fail for private representation access, destruction
+of a borrowed value, mutation through a shared borrow, and insufficient edit
+authority. Probes cover layout, AST building, parser state, branch chains,
+declaration cursors, and the driver. The package tests apply invalid edits to
+the actual checked files and require normal bootstrap to fail.
+
+Every native control must emit the same target C and symbol map, execute the
+union corpus, and reject the complete error corpus under ASan and UBSan.
+The corpus includes many variants, reversed arm order, payload replacement,
+recursive storage, malformed grammar, and excessive generated lowering depth.
+The normal stage tests also cover multiple inputs, empty units, input errors,
+library output, evaluator execution, and allocation failure.
+
+The report includes the complete port's frontend time and its ratio to the raw
+control. This measures the implementation with its explicit provider trust.
+It does not assert that provider pointer operations were checked. Per-phase
+medians separate reading, checking, and emission. GCC and linking remain outside
+the intervals. Package bootstrap and cache validation are separate costs.
+
+Use the measured source growth, trust burden, and frontend costs together when
+assessing this design for another stage. The port establishes a working arena
+boundary. A performance improvement requires its own measured comparison.

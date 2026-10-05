@@ -5,7 +5,7 @@
 // syntax node. A size with zero alignment ends field or variant iteration;
 // the context diagnostic distinguishes a failed step. Keep the arena live
 // through the edit scope. Only context destruction retires its storage.
-domain CompilerArena(SuArena,SuDeclaration,SuLayoutHandle,SuLocation,SuFields,SuVariants,SuTypeCursor,SuBuilder,SuName,SuSyntax,SuExpression,SuStatement,SuMatchNames);
+domain CompilerArena(SuArena,SuDeclaration,SuLayoutHandle,SuLocation,SuFields,SuVariants,SuTypeCursor,SuBuilder,SuName,SuSyntax,SuExpression,SuStatement,SuMatchNames,SuReader,SuSum,SuArmHandle,SuParsedOperation,SuArms,SuBranches,SuSums,SuDeclarations,SuDriver);
 record SuArena{stage:*SuStage;} opaque;
 record SuDeclaration{pointer:*CrustDecl;} opaque scoped;
 record SuLayoutHandle{pointer:*SuLayout;} opaque scoped;

@@ -120,6 +120,31 @@ stage_source_option(stage,stage->sources.items[0usize],"b");
     checked.write_text(original.replace("access(edit,CompilerArena)", "access(read,CompilerArena)"))
     assert b"stronger domain authority" in run([seed, union_root], expected=1, cwd="/").stderr
     checked.write_text(original)
+    for filename, before, after, diagnostic in (
+        (
+            "read_checked.crs",
+            "var count:usize=",
+            "reader.reader;var count:usize=",
+            b"opaque fields",
+        ),
+        ("read_checked.crs", "mut sum,read name", "read sum,read name", b"borrow mode"),
+        (
+            "passes_checked.crs",
+            "su_sums_advance(mut sums)",
+            "su_sums_advance(read sums)",
+            b"borrow mode",
+        ),
+        ("passes_checked.crs", "var index:usize=", "driver.cli;var index:usize=", b"opaque fields"),
+        ("lower_checked.crs", "mut chain,read test", "read chain,read test", b"borrow mode"),
+    ):
+        checked = work / "stages/union" / filename
+        original = checked.read_text()
+        assert before in original
+        checked.write_text(original.replace(before, after, 1))
+        rejected = run([seed, union_root], expected=1, cwd="/")
+        assert diagnostic in rejected.stderr, rejected.stderr
+        assert filename.encode() + b":" in rejected.stderr, rejected.stderr
+        checked.write_text(original)
     print(
         "stage compilers: source selection, compiler and option invalidation, failures, cycles, checked union passed"
     )

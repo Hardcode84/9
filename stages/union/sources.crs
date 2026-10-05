@@ -4,14 +4,21 @@ var raw_index:usize=stage->sources.count;
 stage_include(stage, "../c/sources.crs");
 stage_include(stage, "../reader/sources.crs");
 stage_source(stage, "model.crs");
-stage_source(stage, "read.crs");
-stage_source(stage, "lower.crs");
-stage_source(stage, "program.crs");
 
 while raw_index<stage->sources.count {
     if !stage_source_option(stage,stage->sources.items[raw_index],"raw"){return 1i32;}
     raw_index=raw_index+1usize;
 };
+stage_source(stage,"program.crs");
+stage_source_option(stage,stage->sources.items[stage->sources.count-1usize],"trusted");
+stage_source(stage,"passes.crs");
+stage_source_option(stage,stage->sources.items[stage->sources.count-1usize],"trusted");
+stage_source(stage,"passes_checked.crs");
+stage_source(stage,"lower.crs");
+stage_source_option(stage,stage->sources.items[stage->sources.count-1usize],"trusted");
+stage_source(stage,"read.crs");
+stage_source_option(stage,stage->sources.items[stage->sources.count-1usize],"trusted");
+stage_source(stage,"read_checked.crs");
 stage_source(stage,"nodes.crs");
 stage_source_option(stage,stage->sources.items[stage->sources.count-1usize],"trusted");
 stage_source(stage,"layout.crs");

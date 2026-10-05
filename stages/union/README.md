@@ -63,65 +63,72 @@ conditional nesting also counts toward the seed's depth bound.
 
 ## Checked implementation boundary
 
-The package checks [layout_checked.crs](layout_checked.crs) with the ownership
-and generics stage. This code handles cache publication and cycle detection,
-array traversal and size limits, field and variant loops, alignment, overflow,
-storage carrier selection, and the final tag size. The package treats this file
-as an untrusted input.
-An invalid field access or borrow operation stops normal stage preparation.
+The package compiles its algorithms through the ownership and generics stage.
+Four files have checked bodies:
 
-[lower_checked.crs](lower_checked.crs) checks construction and match-arm rules.
-Construction evaluates the destination once, writes the payload, then writes
-the tag. A match binding copies its payload before the arm body starts. The
-checked code rejects a payload for a unit variant, a missing required payload,
-and a binding for a unit arm. It also builds each arm's tag comparison.
+| Source | Responsibility |
+|---|---|
+| [read_checked.crs](read_checked.crs) | Union grammar, variant limits, construction arguments, and match arms |
+| [layout_checked.crs](layout_checked.crs) | Depth, cache state, cycle rejection, array sizes, layout folds, alignment, overflow, and storage selection |
+| [lower_checked.crs](lower_checked.crs) | Operation dispatch, payload rules, evaluation order, arm coverage, branch order, and bounded statement traversal |
+| [passes_checked.crs](passes_checked.crs) | Input iteration, layout and lowering passes, payload resolution, seed checks, and output mode selection |
 
-Before it builds match branches, checked code walks the arm names. Each name
-must identify a declared variant and occur once. The final count must equal
-the union's variant count. The checked lowering walk then visits each lowered
-statement's body, alternative, and next sibling, with a depth limit of 256.
+These files are untrusted package inputs. Invalid field access, borrowed-value
+consumption, cursor mutation through `read`, or insufficient edit authority
+stops normal package preparation. The typed layout-cache lookup is a generic
+function instantiated for the map's result type.
 
-[layout_handles.crs](layout_handles.crs) and [layout.crs](layout.crs) are the
-explicitly trusted provider. They handle arena pointers, cache lookup and
-insertion, type lookup, cursor steps, diagnostics, and AST storage construction.
-The typed cache helper is a generic function. [nodes.crs](nodes.crs) is the
-trusted AST builder. [lower.crs](lower.crs) bridges raw syntax to checked
-lowering and retains map access, operation dispatch, and branch linking.
-Layout retains its variant-name map for construction and match lookup. The
-map entries already belong to the arena; each union now keeps their map header.
-The reader, driver, and backend also have explicit raw-source trust.
+The owning context keeps arena storage live until all compiler operations
+finish. The provider exposes opaque handles under the `CompilerArena` domain.
+A handle cannot escape its access scope. Cursor mutation requires `mut`;
+observing a handle requires `read`. Allocation and AST writes require edit
+authority. The native entry owns the context reference and driver frames across
+the checked call. Destruction occurs after the call returns.
 
-The owning context keeps arena storage live through a layout request. Opaque
-scoped handles contain live declaration, layout, and location pointers.
-Read and edit access permit allocation while excluding reclamation. Field and
-variant steps return scalar size and alignment snapshots. Zero alignment ends
-these cursors; the context diagnostic distinguishes failure from exhaustion.
-A type cursor stays on a live syntax node. A step advances to an array's base
-or reads a leaf type. Checked recursion controls depth and array multiplication.
-Checked code selects diagnostics and computes the storage plan. The provider
-attaches diagnostics to source locations and writes the planned AST fields.
-The provider must preserve these contracts. These annotations add no runtime
-ownership metadata or validity checks.
+The explicitly trusted code has these responsibilities:
 
-The AST builder uses scoped name, type, expression, and statement handles.
-Each node handle contains one arena pointer. An empty handle represents an
-absent fragment or a failed allocation. Constructors retain the context's
-allocation diagnostic. The entry bridge publishes a statement only when the
-context has no errors. The builder keeps pointer writes behind typed
-interfaces. These interfaces add provider code; that code remains part of the
-trusted implementation and is included in the measurement.
+- [model.crs](model.crs) initializes raw state and allocates nodes.
+- [read.crs](read.crs) adapts reader callbacks and token operations, allocates
+  parse results, and links variants and arms.
+- [layout_handles.crs](layout_handles.crs) and [layout.crs](layout.crs) adapt
+  type lookup, arena maps, layout cursors, diagnostics, and storage fields.
+- [nodes.crs](nodes.crs) allocates typed AST fragments and writes their fields.
+- [lower.crs](lower.crs) adapts raw operations to checked calls, provides name
+  lookup and cursors, and links the selected branches.
+- [passes.crs](passes.crs) provides declaration cursors and seed API calls.
+- [program.crs](program.crs) owns the native call frames, copies and releases
+  file buffers, and calls the backend.
 
-Match coverage uses a scoped arm cursor and a set of names seen in that match.
-An arm step advances the cursor and keeps the arm's diagnostic location.
-Statement handles also act as cursors: an empty statement has empty children
-and remains empty when advanced. Advancing a cursor requires `mut`; reading
-its children or testing exhaustion requires `read`. The pointer operations
-stay in the provider. The checked functions control iteration and rejection.
+Reader and backend dependencies also have explicit raw-source trust. The
+provider must keep every exposed address live, preserve node kinds and list
+links, and retain allocation errors. Ownership checking cannot prove the
+provider's pointer operations. The measurement counts all provider files and
+raw model functions, including small adapters.
 
-The package uses the shared source-owned compiler selection and cache. Make
-builds the seed and test fixtures. The checker and backend bootstrap through
-package dependencies. The [measurement harness](../../benchmarks/ownership-stage/README.md)
-compares generated target bytes, rejection behavior, and frontend costs.
+Declaration, layout, and location handles contain live non-null pointers.
+A type cursor stays on a live syntax node. Its step advances to an array base
+or reads a leaf. Field and variant layout steps return scalar snapshots;
+zero alignment means exhaustion or failure, distinguished by the context
+error. Checked code controls recursion, arithmetic, and storage selection.
+
+AST fragment and parser result handles can be empty. Their operations remain
+valid after allocation failure. Publication requires an error-free context.
+The checked parser controls token order and limits; the reader provider handles
+seed grammar atoms. Match coverage validates names and counts before branch
+construction. Its cursor retains the current diagnostic location. Layout keeps
+an arena-owned variant-name map for construction and match lookup. Declaration
+cursors skip empty source units. The checked passes also resolve payloads in
+unused variants.
+
+These contracts add no runtime ownership metadata or validity checks. They do
+add source interfaces and compiler work. The
+[measurement harness](../../benchmarks/ownership-stage/README.md) counts that
+cost and compares target bytes, diagnostics, and execution against the raw
+control. It includes a compiled provider and the actual checked algorithms.
+
+The package uses source-owned compiler selection and caching. Make builds the
+seed and test fixtures. The checker and backend bootstrap through package
+dependencies.
 
 ## Compilation API
 
@@ -133,7 +140,7 @@ context; the return value is the build status.
 The library includes the C backend adapter. Its lower-level source interface is:
 
 1. Include [sources.crs](sources.crs) in a package. It selects the checked
-   layout sources, their trusted provider, and the ownership compiler.
+   checked sources, their trusted provider, and the ownership compiler.
    Export the `su_` entry points that your consumer requires.
 2. Call `su_init` with stage storage and an empty context.
 3. Call `su_read` for each declaration source range.

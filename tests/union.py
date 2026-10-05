@@ -96,6 +96,17 @@ RUNTIME += "return 0i32;}\n"
 
 HEADER = "union U { Value:u64; End:unit; }\n"
 REJECT = {
+    "missing-union-brace": ("union U A:unit; }", "expected '{'"),
+    "missing-variant-colon": ("union U { A unit; }", "expected ':'"),
+    "missing-variant-semicolon": ("union U { A:unit }", "expected ';'"),
+    "unterminated-union": ("union U { A:unit;", "expected"),
+    "missing-construct-dot": (HEADER + "fn f(p:*U)->unit {construct U End(*p);}", "expected '.'"),
+    "missing-construct-close": (HEADER + "fn f(p:*U)->unit {construct U.End(*p;}", "expected ')'"),
+    "missing-match-open": (
+        HEADER + "fn f(p:*U)->unit {match U *p) {End {} Value {}}}",
+        "expected '('",
+    ),
+    "unterminated-match": (HEADER + "fn f(p:*U)->unit {match U(*p) {End {}", "expected"),
     "lowering-depth": (
         "union Deep {"
         + "".join(f"V{i}:unit;" for i in range(260))
@@ -214,6 +225,31 @@ def sanitized_compiler(build, work):
     return executable
 
 
+def check_inputs(compiler, work):
+    empty = work / "empty.crs"
+    types = work / "types.crs"
+    use = work / "use.crs"
+    empty.write_text("")
+    types.write_text(HEADER)
+    use.write_text(
+        "fn main(argc:i32,argv:**u8)->i32 {var value:U=uninit;construct U.End(value);return 0i32;}"
+    )
+    inputs = [empty, use, empty, types]
+    run([compiler, "--check", *inputs])
+    output = work / "multiple-inputs"
+    run([compiler, *inputs, "-o", output])
+    run([output])
+    run([compiler, "--library", "--emit-c", "--export", "main", *inputs, "-o", work / "library.c"])
+    missing = subprocess.run(
+        [str(compiler), "--check", str(work / "absent.crs")],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert missing.returncode == 1 and "cannot read input" in missing.stderr, missing.stderr
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=ROOT / "build")
@@ -231,6 +267,7 @@ def main():
     source = work / "runtime.crs"
     source.write_text(RUNTIME)
     run([compiler, "--verify", source])
+    check_inputs(compiler, work)
     for backend in ("c", "asm"):
         output = work / backend
         if backend == "c":

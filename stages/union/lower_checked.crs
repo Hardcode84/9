@@ -68,11 +68,36 @@ fn su_checked_lower(arena:read SuArena,cursor:mut SuStatement,depth:usize)->unit
     if !su_has_statement(read cursor) || su_handle_failed(read arena){return;}
     if depth>=256usize{su_lower_depth_error(read arena,read cursor);return;}
     while su_has_statement(read cursor) && !su_handle_failed(read arena){
-        su_lower_operation(read arena,read cursor);
+        su_checked_operation(read arena,read cursor);
         var body:SuStatement=su_statement_child(read cursor,false);
         su_checked_lower(read arena,mut body,depth+1usize);
         var otherwise:SuStatement=su_statement_child(read cursor,true);
         su_checked_lower(read arena,mut otherwise,depth+1usize);
         su_statement_advance(mut cursor);
     }
+}
+
+fn su_checked_operation(arena:read SuArena,cursor:read SuStatement)->unit access(edit,CompilerArena){
+    var kind:u32=su_operation_kind(read arena,read cursor);
+    if kind==0u32{return;}
+    var sum:SuSum=su_operation_type(read arena,read cursor);
+    if !su_has_sum(read sum){su_operation_type_error(read arena,read cursor);return;}
+    if kind==1u32{su_construct_operation(read arena,read cursor,read sum);}
+    else{su_match_operation(read arena,read cursor,read sum);}
+}
+
+fn su_checked_match(builder:read SuBuilder,coverage:mut SuMatchNames,arms:mut SuArms,type_name:read SuName,value:read SuExpression,count:usize)->SuStatement access(edit,CompilerArena){
+    var name:SuName=su_fresh(read builder);
+    var syntax:SuSyntax=su_named(read builder,read type_name);
+    var snapshot:SuStatement=su_variable(read builder,read name,read syntax,read value);
+    if !su_checked_coverage(read builder,mut coverage,count){return su_no_statements();}
+    var chain:SuBranches=su_branches();
+    while su_arms_more(read arms){
+        var test:SuExpression=su_arm_test(read arms,read name);
+        var body:SuStatement=su_arm_binding(read arms,read name);
+        su_arms_advance(mut arms);
+        su_branch_append(read builder,mut chain,read test,read body,!su_arms_more(read arms));
+    }
+    var branches:SuStatement=su_branch_result(read chain);
+    return su_sequence(read snapshot,read branches);
 }

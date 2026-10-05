@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn inventory_text(text:*u8, size:usize)->bool {
+    return crust0_host_write_stream(1u32,text,size)==0i32;
+}
+
+fn inventory_number(value:usize)->bool {
+    var bytes:[u8;21]=uninit; var at:usize=20usize;
+    bytes[at]=32u8;
+    while true {
+        at=at-1usize; bytes[at]=(value%10usize) as u8+48u8; value=value/10usize;
+        if value==0usize { break; }
+    }
+    return inventory_text(&bytes[at],21usize-at);
+}
+
+fn inventory_opaque(decl:*CrustDecl)->usize {
+    var field:*CrustField=decl->fields;
+    while field!=null(*CrustField) {
+        var kind:u32=field->syntax_type->kind;
+        if kind==CRUST_T_POINTER || kind==CRUST_T_ARRAY || kind==CRUST_T_FUNCTION { return 1usize; }
+        field=field->next;
+    }
+    return 0usize;
+}
+
+fn inventory(source:*CrustSource,context:*CrustContext)->bool {
+    var offset:usize=0usize;
+    while offset<source->size {
+        var action:CrustAction=uninit;
+        if !crust_read_one(context,source,offset,source->size,&action) { return false; }
+        offset=action.end;
+        var decl:*CrustDecl=action.declaration;
+        if action.statement!=null(*CrustStmt) { return false; }
+        if decl!=null(*CrustDecl) {
+            var body:usize=action.end;
+            if decl->body!=null(*CrustStmt) { body=decl->body->loc.offset; }
+            if !inventory_number(decl->kind as usize) || !inventory_number(decl->loc.offset) ||
+               !inventory_number(body) || !inventory_number(action.end) || !inventory_number(inventory_opaque(decl)) ||
+               !inventory_text(decl->name->text,decl->name->size) || !inventory_text("\n",1usize) { return false; }
+        }
+    }
+    return true;
+}
+
+if run->argc!=1i32 { return 1i32; };
+var source:*CrustSource=host_input(run,run->argv[0usize],1u64);
+if source==null(*CrustSource) { return 1i32; };
+if !inventory(source,run->context) { return 1i32; };
+return 0i32;

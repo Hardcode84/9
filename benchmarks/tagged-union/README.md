@@ -9,7 +9,7 @@ an isolated directory. It keeps the production reader unchanged.
 Run from the repository root, with an allowed CPU number:
 
 ```sh
-make all c-stage union-stage check-union check-reader ccn-stage
+make all test-tools build/crust0 check-union check-reader
 python3 benchmarks/tagged-union/measure.py \
     --cpu 4 --rounds 20 --output build/tagged-token-run
 ```

@@ -893,7 +893,7 @@ operations explicitly.
 
 This program creates and removes a directly linked stack node. The driver
 selects `main` as its hosted entry. Only the output function is external.
-Build the tools with `make all c-stage` from the repository root, then save the
+Build the tools with `make all` from the repository root, then save the
 following source as `build/seed-list.crs`.
 
 ~~~text
@@ -1072,7 +1072,7 @@ the optimizer removes a cost without inspecting the emitted result.
 The C99 seed supplies the reader, checker, evaluator, and root runner. Its
 public declarations are in `include/`; generated Crust bindings are in `api/`.
 Build the seed with `make build/crust`. Its evaluator can run backend source
-to construct a first native generation. `make all c-stage` builds the ASM and
+to construct a first native generation. `make all` builds the ASM and
 C backends. Their next generations compile through their own output.
 
 Module management, ownership, cleanup, overloads, highlighting, cache policy,

@@ -112,7 +112,7 @@ def main():
     report = {
         "revision": BASE.capture(["git", "rev-parse", "HEAD"]),
         "environment": BASE.environment(args.cpu),
-        "current_make_recipe": BASE.capture(["make", "-nB", "all", "c-stage"]),
+        "current_make_recipe": BASE.capture(["make", "-nB", "all", "test-tools"]),
         "commands": commands,
         "tools": tools,
         "hashes": hashes,

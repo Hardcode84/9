@@ -8,8 +8,8 @@ checkouts. Preserve the baseline before changing the implementation.
 ```sh
 mkdir -p build/backend-before
 git archive HEAD | tar -x -C build/backend-before
-make -C build/backend-before all
-make all c-stage
+make -C build/backend-before all test-tools build/crust0
+make all test-tools build/crust0
 python3 benchmarks/backend-cache/measure.py --before build/backend-before --rounds 20 --output build/backend-cache.json
 ```
 

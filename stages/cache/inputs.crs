@@ -99,3 +99,15 @@ fn cache_loaded_sources(root: *CrustRun, inputs: *CacheInputs) -> bool {
     }
     return true;
 }
+
+fn cache_libc(context: *CrustContext, inputs: *CacheInputs) -> *u8 {
+    var index: usize = 0usize;
+    while index < inputs->count {
+        var path: *u8 = inputs->items[index]->path;
+        var size: usize = native_strlen(path);
+        if size >= 10usize && cache_strcmp(path + (size - 10usize) as isize, "/libc.so.6") == 0i32 { return path; }
+        index = index + 1usize;
+    }
+    native_error(context, "stage link requires captured libc.so.6");
+    return null(*u8);
+}

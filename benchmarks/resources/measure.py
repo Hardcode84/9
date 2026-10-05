@@ -495,13 +495,19 @@ def main():
             "boundary": "resource check includes cleanup and scalar ABI lowering; C syntax stops after semantic checks",
         }
         print(workload["name"], workload["median_ms"], flush=True)
-    makefile = Path("Makefile").read_text()
 
     def make_words(name):
-        value = re.search(r"^" + name + r"\s*=\s*(.*)$", makefile, re.M).group(1)
-        while "$(" in value:
-            value = re.sub(r"\$\((\w+)\)", lambda item: " ".join(make_words(item.group(1))), value)
-        return value.split()
+        result = run(
+            [
+                "make",
+                "--no-print-directory",
+                "-s",
+                "--eval",
+                f"package-inputs:;@printf '%s\\n' $({name})",
+                "package-inputs",
+            ]
+        )
+        return result.stdout.decode().split()
 
     stage_sources = make_words("RESOURCE_LIBRARY")
     exports = make_words("RESOURCE_EXPORTS")

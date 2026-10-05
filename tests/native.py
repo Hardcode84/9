@@ -62,7 +62,6 @@ def check_output(suite):
     for directory in ("api", "stages", "examples/native"):
         shutil.copytree(ROOT / directory, copied / directory, dirs_exist_ok=True)
     (copied / "build").mkdir(exist_ok=True)
-    shutil.copyfile(suite.build / "crust-asm-library.so", copied / "build/crust-asm-library.so")
     result = suite.command([suite.build / "crust", copied / "examples/native/main.crs"], cwd="/")
     assert not result.stderr, result
     assert suite.command([copied / "build/native-hello"]).stdout.startswith(b"Hello from")

@@ -54,7 +54,7 @@ translation-unit boundaries. `make check-amalgamation` checks generation and
 the exported symbols in both modes.
 
 ```sh
-make
+make all test-tools build/crust0
 build/crust0 -S -o build/intrusive.s examples/intrusive/raw.crs
 gcc -no-pie build/intrusive.s build/libcrust0_host.a -o build/intrusive
 build/intrusive
@@ -342,10 +342,11 @@ registers. This checks the replacement stage's native calling contract.
 This is stage execution through Crust0. The seed compiler remains C99. The
 [C backend stage](c-backend.md) separately implements a complete backend and
 driver in Crust0 and compiles itself through its own output. The seed reader,
-checker, evaluator, and runner remain C99. `make c-stage` interprets the C
-stage through `stages/c/bootstrap.crs`, then compiles its next generation.
-The assembly stage is also Crust source. `make check-asm` checks its successive
-generations. `make check-cache` checks source-only bootstrap and artifact reuse.
+checker, evaluator, and runner remain C99. Application roots prepare these
+backends through the [shared package loader](../stages/build/README.md).
+`make all` builds the seed. `make test-tools` prepares native test drivers.
+`make check-asm` checks successive assembly stage generations.
+`make check-cache` checks source-only bootstrap and artifact reuse.
 `make check-c` builds the next generation, compares generated C and native
 symbol response files across all three generations, and uses the final
 generation to build and run the direct-list program. No cache is used.
@@ -435,7 +436,7 @@ make CC=clang BUILD=build/clang check
 ASAN_OPTIONS=detect_leaks=1:detect_stack_use_after_return=1:abort_on_error=1 \
 UBSAN_OPTIONS=halt_on_error=1 make CC=gcc BUILD=build/sanitize \
   CFLAGS='-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer' \
-  LDFLAGS='-fsanitize=address,undefined' all c-stage check-stage
+  LDFLAGS='-fsanitize=address,undefined' all check-stage
 ```
 
 This configuration enables leak scanning. Allocation tests also count live

@@ -159,7 +159,7 @@ compares the installed native backend and the source-interpreted backend on
 the same inputs. No stage result is cached.
 
 ```sh
-make c-stage
+make test-tools
 python3 benchmarks/native/measure.py --output build/native-measurement.json
 ```
 

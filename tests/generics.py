@@ -6,6 +6,7 @@ import argparse
 import shutil
 from pathlib import Path
 
+from prepare import sources as package_sources
 from source_order import ROOT, Suite
 
 PROVIDER = """
@@ -33,11 +34,8 @@ def build_driver(suite, filename, evaluator=False):
     if evaluator:
         sources.append(ROOT / "api/crust0_eval.crs")
     sources += [
-        path
-        for path in sorted((ROOT / "stages/generics").glob("*.crs"))
-        if path.name not in ("api.crs", "source_api.crs", "source_extension.crs")
+        path for path in package_sources(suite.build, "generics/package.crs") if path not in sources
     ]
-    sources += [ROOT / "stages/reader" / name for name in ("model.crs", "lex.crs", "parse.crs")]
     output = suite.work / filename
     flags = [item for flag in suite.cflags for item in ("--cflag", flag)]
     libraries = [suite.build / "libcrust0.a", suite.build / "libcrust0_host.a"]
@@ -204,14 +202,9 @@ def check_allocations(suite):
 
 def tutorial_package(suite):
     package = suite.work / "copied package with spaces"
-    for directory in ("api", "stages/modules", "stages/generics", "examples/generics"):
+    for directory in ("api", "stages", "examples/generics"):
         shutil.copytree(ROOT / directory, package / directory, dirs_exist_ok=True)
-    (package / "stages/c").mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(ROOT / "stages/c/api.crs", package / "stages/c/api.crs")
-    output = package / "build"
-    output.mkdir(exist_ok=True)
-    for library in ("crust-c-library.so", "crust-generics-library.so", "crust-asm-library.so"):
-        shutil.copyfile(suite.build / library, output / library)
+    (package / "build").mkdir(exist_ok=True)
     return package
 
 
@@ -238,13 +231,12 @@ def check_tutorial_assembly(suite, package):
     root = package / "examples/generics/main.crs"
     setup = root.with_name("setup.crs")
     source = setup.read_text()
-    original = 'host_link(root, "../../build/crust-c-library.so")'
-    assert source.count(original) == 1
+    assert source.count("    return ") == 1
     setup.write_text(
         source.replace(
-            original,
-            'host_source(root, "../../api/crust0_x64.crs") &&\n'
-            '           host_link(root, "../../build/crust-asm-library.so")',
+            "    return ",
+            '    return host_source(root, "../../api/crust0_x64.crs") &&\n'
+            '        stage_load(stages, "stages/asm/package.crs") &&\n        ',
         )
     )
     helper = root.with_name("build.crs")

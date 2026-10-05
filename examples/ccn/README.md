@@ -10,7 +10,6 @@ Run from the repository root:
 ```sh
 make all
 build/crust examples/ccn/main.crs examples/ccn/program.crs
-make c-stage
 build/crust examples/ccn/build.crs
 build/ccn-example
 ```
@@ -29,5 +28,5 @@ The report command takes input paths relative to the working directory.
 The build root resolves its input and output relative to itself. Its output
 is `build/ccn-example`. It uses the existing C backend library.
 
-Use `make ccn-stage` to build the native `build/crust-ccn` command. Run
+Use `build/crust stages/build/run.crs stages/ccn/tool.crs` for the native checker. Run
 `make check-ccn` to check both commands and the compilation example.

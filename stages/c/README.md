@@ -18,28 +18,27 @@ follows a call from source to C, builds that output by hand, and shows where
 another stage can supply its own function bodies. Use the
 [backend reference](../../docs/c-backend.md) for the full API and output contract.
 
-The Make build interprets [bootstrap.crs](bootstrap.crs) to build the first
-native C compiler, then uses that compiler for the next generation. It needs
-no assembly backend in the C99 seed.
+The shared [package loader](../build/README.md) interprets C emission for its
+first native backend build. It validates cached input and output bytes on later
+runs. Other stages use the resulting native compiler.
 
 ## 1. Select the backend
 
 Run from the repository root on Linux x86-64:
 
 ```sh
-make all c-stage
+make all
 build/crust examples/hello/main.crs
 build/hello
 ```
 
-The root loads [api.crs](api.crs), the helper [build.crs](build.crs), and
-`build/crust-c-library.so`. Its final `c_build` call passes the unread source
-range and an output argument array. The target prints `Hello, world!`.
+The root prepares [package.crs](package.crs) and loads [build.crs](build.crs).
+Its final `c_build` call passes the unread source range and output arguments.
+The target prints `Hello, world!`.
 
-The build also supplies `build/crust-c`, a command wrapper for the same
-backend. It takes target declaration files directly. It does not execute
-root setup actions. We will use it to inspect a small target without
-changing the Hello World compilation program.
+`build/crust stages/build/run.crs stages/c/tool.crs` prepares the same backend
+and invokes its command interface. It takes target declaration files directly.
+Use it below to inspect a target without changing the Hello World root.
 
 ## 2. Make evaluation order visible
 
@@ -70,7 +69,7 @@ must preserve it before GCC starts optimization.
 Emit C and its symbol response file:
 
 ```sh
-build/crust-c --emit-c -o build/tutorial-c/order.c \
+build/crust stages/build/run.crs stages/c/tool.crs --emit-c -o build/tutorial-c/order.c \
     --symbols build/tutorial-c/order.rsp build/tutorial-c/order.crs
 cat build/tutorial-c/order.c
 cat build/tutorial-c/order.rsp
@@ -103,7 +102,7 @@ gcc -std=c99 -pedantic-errors -O2 -fstack-clash-protection \
     -o build/tutorial-c/order.raw.o
 objcopy @build/tutorial-c/order.rsp \
     build/tutorial-c/order.raw.o build/tutorial-c/order.o
-gcc -no-pie build/tutorial-c/order.o build/libcrust0_host.a \
+gcc -no-pie build/tutorial-c/order.o \
     -o build/tutorial-c/order
 build/tutorial-c/order
 ```
@@ -237,8 +236,8 @@ the emitter for a new source feature.
 These commands exclude target GCC compilation and linking:
 
 ```sh
-build/crust-c --check build/tutorial-c/order.crs
-build/crust-c --prepare build/tutorial-c/order.crs
+build/crust stages/build/run.crs stages/c/tool.crs --check build/tutorial-c/order.crs
+build/crust stages/build/run.crs stages/c/tool.crs --prepare build/tutorial-c/order.crs
 ```
 
 `--check` stops after semantic checks. `--prepare` also builds all C and

@@ -7,7 +7,7 @@ Read the [overload tutorial](../../../stages/overload/README.md) and
 shows where their source contracts meet. Run from the repository root:
 
 ```sh
-make all overload-stage
+make all
 build/crust examples/overload/resources/main.crs
 build/overload-resources
 ```

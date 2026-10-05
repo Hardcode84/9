@@ -1,0 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage, "../c/sources.crs");
+stage_include(stage, "../reader/sources.crs");
+stage_source(stage, "model.crs");
+stage_source(stage, "read.crs");
+stage_source(stage, "layout.crs");
+stage_source(stage, "nodes.crs");
+stage_source(stage, "lower.crs");
+stage_source(stage, "program.crs");

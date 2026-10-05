@@ -5,7 +5,7 @@
 Run the commands below from the repository root. Build the tools once:
 
 ```sh
-make all c-stage
+make all
 ```
 
 ## Tutorials
@@ -70,15 +70,11 @@ Each example has its own directory and README.
 | [composition](composition/README.md) | Select independent ownership and overload stages in the root | `!B` |
 | [overload/resources](overload/resources/README.md) | Combine overloads, ownership, overloaded drops, and defer | Owned and deferred output |
 
-The root files select their compiler libraries explicitly. Resource examples
-require `make resource-stage`. The SQLite example also needs its pinned native
-SQLite input; its README gives the command.
-Overload examples require `make overload-stage`. The composition example also
-requires `make ownership-stage`.
-The generics example requires `make generics-stage`.
-The ownership-generic example requires `make ownership-generics-stage`.
-The intrusive, ownership-basics, ownership-graphs, and ownership-index examples require
-`make ownership-stage`. The intrusive `raw-main.crs` root contains the unchecked seed-language bootstrap witness.
+The root files prepare their compiler stages from captured source packages.
+Run `make all` to build the seed. Each root reuses the shared bootstrap and
+cache code. The SQLite example also needs its pinned native SQLite input;
+its README gives the command. The intrusive `raw-main.crs` root contains the
+unchecked seed-language bootstrap witness.
 Paths passed to `host_source`, `host_input`, and `host_path` are relative to the
 root file. A raw `-o` argument passed to the C backend is relative to the working
 directory. Each example states its output path. A root builds an executable;

@@ -12,7 +12,7 @@ head fields are the complete runtime representation.
 From the repository root:
 
 ```sh
-make all ownership-stage
+make all
 build/crust examples/intrusive/main.crs
 build/intrusive-checked
 ```

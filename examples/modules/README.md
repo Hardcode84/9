@@ -8,7 +8,7 @@ source bindings, native names, and context lifetimes.
 Run from the repository root:
 
 ```sh
-make all c-stage
+make all
 build/crust examples/modules/main.crs
 build/modules
 ```

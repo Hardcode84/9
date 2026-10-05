@@ -11,7 +11,8 @@ seed syntax. A trusted workspace can select another Crust service.
 Run from the repository root on Linux x86-64:
 
 ```sh
-make all highlight-stage vscode
+make all test-tools
+python3 editors/vscode/package.py --binary build/crust-highlight --output build/crust-vscode.vsix
 code --install-extension build/crust-vscode.vsix
 ```
 

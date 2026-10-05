@@ -11,7 +11,7 @@ The compiler checks that each match covers every variant.
 Run from the repository root:
 
 ```sh
-make all c-stage union-stage
+make all
 build/crust examples/union/main.crs
 build/union
 ```
@@ -26,10 +26,13 @@ including `--check` and `--emit-c`.
 The setup loads three small interfaces and one compiled library:
 
 ```crust
-host_source(run, "../../api/crust0_stage.crs");
+host_source(run, "../../stages/build/load.crs");
+if !stage_setup(run, "../..") { return 1i32; };
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) { return 1i32; };
 host_source(run, "../../stages/union/api.crs");
 host_source(run, "../../stages/union/build.crs");
-host_link(run, "../../build/crust-union-library.so");
+if !stage_load(stages, "stages/union/package.crs") { return 1i32; };
 ```
 
 `union_build` receives the source range and command-line arguments. This example

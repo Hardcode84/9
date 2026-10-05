@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-host_source(run, "../../../api/crust0_stage.crs");
+host_source(run, "../../../stages/build/load.crs");
+if !stage_setup(run, "../../..") { return 1i32; };
+var stages: *StageSession = stage_open(run, "../../..", "../../../build/stage-cache");
+if stages == null(*StageSession) { return 1i32; };
 host_source(run, "../../../stages/overload/resource_api.crs");
-host_link(run, "../../../build/crust-overload-resource-library.so");
+if !stage_load(stages, "stages/overload/resources-package.crs") { return 1i32; };
 
 var arguments:[*u8;2] = make [*u8;2] {
     "-o", host_path(run, "../../../build/overload-resources")

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-host_link(run, "../../build/crust-asm-library.so");
+host_source(run, "../../stages/build/load.crs");
+if !stage_setup(run, "../..") { return 1i32; };
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) { return 1i32; };
+var assembly: *u8 = stage_library(stages, "stages/asm/package.crs");
+if assembly == null(*u8) || !crust_run_link(run, assembly) { return 1i32; };
 host_source(run, "../../api/crust0_x64.crs");
-host_source(run, "../../api/crust0_stage.crs");
-host_source(run, "../../stages/c/api.crs");
-host_source(run, "../../stages/native/model.crs");
 host_source(run, "../../stages/native/api.crs");
-host_source(run, "../../stages/native/linux.crs");
 host_source(run, "../../stages/native/asm.crs");
 host_source(run, "../../stages/native/bootstrap.crs");
 
@@ -28,11 +29,11 @@ var state: BuildState = make BuildState {
     counter: &counter, callback: increment, original: increment,
     first: null(fn(*CrustRun, *u8) -> i32), output: host_path(run, "../../build/native-hello")
 };
-var libraries: [*u8; 1] = make [*u8; 1] { host_path(run, "../../build/crust-asm-library.so") };
+var libraries: [*u8; 2] = make [*u8; 2] { assembly, stages->backend };
 var session: NativeSession = make NativeSession {
     images: null(*NativeImage), compile: native_asm_image,
     user: &state as *u8, temporary: host_path(run, "../../build"),
-    libraries: &libraries[0usize], library_count: 1usize
+    libraries: &libraries[0usize], library_count: 2usize
 };
 var sources: [*u8; 17] = make [*u8; 17] {
     "../../api/crust0.crs", "../../api/crust0_host.crs", "../../api/crust0_eval.crs",

@@ -725,26 +725,10 @@ class Suite:
         elif name in ("source-root-hello", "source-root-separate", "source-root-resources"):
             example = name.removeprefix("source-root-")
             package = self.work / name
-            interface = "resource_api.crs" if example == "resources" else "api.crs"
-            examples = (ROOT / "examples/overload" / example).glob("*.crs")
-            for relative in (
-                Path("api/crust0_stage.crs"),
-                Path("stages/overload") / interface,
-                *[path.relative_to(ROOT) for path in examples],
-            ):
-                destination = package / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(ROOT / relative, destination)
-            library = package / "build/selected backend.plugin"
-            library.parent.mkdir()
-            original_library = (
-                "crust-overload-resource-library.so"
-                if example == "resources"
-                else "crust-overload-library.so"
-            )
-            shutil.copyfile(self.build / original_library, library)
+            for directory in ("api", "stages", "examples/overload/" + example):
+                shutil.copytree(ROOT / directory, package / directory)
+            (package / "build").mkdir()
             source = package / "examples/overload" / example / "main.crs"
-            source.write_text(source.read_text().replace(original_library, library.name))
             result = self.command([self.build / "crust", source])
             if result.stdout or result.stderr:
                 raise Failure(

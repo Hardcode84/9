@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "load.crs");
+if !stage_setup(run, "../..") { return 1i32; };
+
+// Print package inputs or prepare a library. Paths remain source-relative.
+if run->argc != 3i32 {
+    crust_set_error(run->context, run->source, run->cursor, "expected sources|exports|library PACKAGE CACHE-DIRECTORY");
+    return 1i32;
+};
+var package: StagePackage = uninit;
+stage_init(&package, run, "../..");
+if !stage_include(&package, run->argv[1usize]) { return 1i32; };
+if cache_strcmp(run->argv[0usize], "sources") == 0i32 {
+    var index: usize = 0usize;
+    while index < package.sources.count {
+        var path: *u8 = package.sources.items[index]->path;
+        if crust0_host_write_stream(1u32, path, native_strlen(path)) != 0i32 ||
+           crust0_host_write_stream(1u32, "\n", 1usize) != 0i32 { return 1i32; }
+        index = index + 1usize;
+    }
+    return 0i32;
+};
+if cache_strcmp(run->argv[0usize], "exports") == 0i32 {
+    var item: *StageName = package.exports;
+    while item != null(*StageName) {
+        if crust0_host_write_stream(1u32, item->text, native_strlen(item->text)) != 0i32 ||
+           crust0_host_write_stream(1u32, "\n", 1usize) != 0i32 { return 1i32; }
+        item = item->next;
+    }
+    return 0i32;
+};
+if cache_strcmp(run->argv[0usize], "library") != 0i32 {
+    crust_set_error(run->context, run->source, run->cursor, "expected sources, exports, or library");
+    return 1i32;
+};
+var session: *StageSession = stage_open(run, "../..", run->argv[2usize]);
+if session == null(*StageSession) { return 1i32; };
+var artifact: *u8 = stage_library(session, run->argv[1usize]);
+if artifact == null(*u8) { return 1i32; };
+if crust0_host_write_stream(1u32, artifact, native_strlen(artifact)) != 0i32 ||
+   crust0_host_write_stream(1u32, "\n", 1usize) != 0i32 { return 1i32; };
+return 0i32;

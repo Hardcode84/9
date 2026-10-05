@@ -63,7 +63,7 @@ baseline. Its report also stays under `build/benchmarks/resources/`.
 After the baseline succeeds, run:
 
 ```sh
-make all resource-stage
+make all test-tools build/crust0
 python3 examples/resources/sqlite/verify.py --sanitizers
 python3 benchmarks/resources/measure.py \
   --output build/benchmarks/resources/performance.json

@@ -86,6 +86,8 @@ class Suite:
         self.build = arguments.build.resolve()
         self.runner = self.build / "crust"
         self.work = self.build / "source-order-tests"
+        if getattr(arguments, "group", None) == "examples":
+            self.work = self.build / "source-order-examples-tests"
         self.work.mkdir(parents=True, exist_ok=True)
         self.cc = shlex.split(arguments.cc)
         self.cflags = shlex.split(arguments.cflags)
@@ -914,12 +916,7 @@ def check_examples(suite):
         shutil.copytree(ROOT / directory, package / directory)
     output = package / "build"
     output.mkdir()
-    for name in (
-        "crust-c-library.so",
-        "crust-ownership-library.so",
-        "crust-overload-library.so",
-        "libcrust0_host.a",
-    ):
+    for name in ("libcrust0_host.a",):
         shutil.copyfile(suite.build / name, output / name)
     elsewhere = package / "working directory"
     elsewhere.mkdir()

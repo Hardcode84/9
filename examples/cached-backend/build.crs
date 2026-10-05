@@ -8,7 +8,8 @@ fn backend_tools(context: *CrustContext, request: *CacheBuild, assembly: *u8, ob
     var assemble: [*u8; 6] = make [*u8; 6] {
         "/usr/bin/as", "--64", assembly, "-o", object, null(*u8)
     };
-    var libc: *u8 = backend_libc(context, request);
+    var inputs: CacheInputs = make CacheInputs { items: request->inputs, count: request->count, capacity: request->count };
+    var libc: *u8 = cache_libc(context, &inputs);
     if libc == null(*u8) { return false; }
     var link: [*u8; 14] = make [*u8; 14] {
         "/usr/bin/ld", "-shared", "-Bsymbolic", "-z", "text", "-z", "relro", "-z", "now", object, libc, "-o", output, null(*u8)
@@ -85,16 +86,4 @@ fn backend_interpreter_names(context: *CrustContext) -> unit {
         }
         unit_value = (*unit_value).next;
     }
-}
-
-fn backend_libc(context: *CrustContext, request: *CacheBuild) -> *u8 {
-    var index: usize = 0usize;
-    while index < (*request).count {
-        var path: *u8 = (*(*request).inputs[index]).path;
-        var size: usize = native_strlen(path);
-        if size >= 10usize && cache_strcmp(path + (size - 10usize) as isize, "/libc.so.6") == 0i32 { return path; }
-        index = index + 1usize;
-    }
-    native_error(context, "backend link requires the captured libc.so.6 input");
-    return null(*u8);
 }

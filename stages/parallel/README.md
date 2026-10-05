@@ -7,7 +7,7 @@ selects the jobs, worker count, and dependencies. This library adds no scheduler
 or thread state to the C99 core.
 
 ```sh
-make parallel-stage check-parallel
+make test-tools check-parallel
 ```
 
 Load `model.crs`, `api.crs`, and the compiled library through ordinary root

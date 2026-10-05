@@ -65,7 +65,7 @@ compilation and linking. The seed and the default compilation path have no overl
 ## Use from a compilation program
 
 ```sh
-make all overload-stage
+make all
 build/crust examples/overload/hello/main.crs
 build/overload-hello
 build/crust examples/overload/separate/main.crs

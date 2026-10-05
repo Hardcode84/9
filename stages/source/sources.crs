@@ -1,0 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_source(stage, "model.crs");
+stage_source(stage, "base.crs");

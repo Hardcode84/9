@@ -11,7 +11,7 @@ Run from the repository root on Linux x86-64. Use an allowed CPU and a new
 output directory under `build/`:
 
 ```sh
-make all c-stage
+make all test-tools build/crust0
 python3 benchmarks/build-time/measure.py --cpu 4 --output build/build-time/run-1
 ```
 

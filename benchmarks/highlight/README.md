@@ -11,7 +11,7 @@ preparation cost, raw samples, medians, and percentiles.
 Run from the repository root with a new report path:
 
 ```sh
-make all c-stage
+make all test-tools build/crust0
 python3 benchmarks/highlight/measure.py --output build/benchmarks/highlight.json
 ```
 

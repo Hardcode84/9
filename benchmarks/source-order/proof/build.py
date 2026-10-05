@@ -33,7 +33,9 @@ def main():
         "libcrust0_host.a",
     ):
         if not (build / name).is_file():
-            raise SystemExit("missing input " + str(build / name) + "; run make all c-stage first")
+            raise SystemExit(
+                "missing input " + str(build / name) + "; run make all test-tools first"
+            )
     work.mkdir(parents=True, exist_ok=True)
     (work / "san").mkdir(exist_ok=True)
     for name in (

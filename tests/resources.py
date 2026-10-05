@@ -1520,20 +1520,10 @@ class Suite:
                     raise Failure(f"failed compilation changed {output}")
         elif name == "cli-source-root":
             package = self.work / "ordinary resource package"
-            for relative in (
-                "api/crust0_stage.crs",
-                "stages/resources/api.crs",
-                "examples/resources/hello/main.crs",
-            ):
-                destination = package / relative
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(ROOT / relative, destination)
+            for directory in ("api", "stages", "examples/resources/hello"):
+                shutil.copytree(ROOT / directory, package / directory)
             output = package / "build/resource-hello"
             output.parent.mkdir()
-            shutil.copyfile(
-                self.build / "crust-resource-library.so",
-                output.parent / "crust-resource-library.so",
-            )
             source = package / "examples/resources/hello/main.crs"
             runner = self.build / "crust"
             result = self.command([runner, source], cwd=self.work)

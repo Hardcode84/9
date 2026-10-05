@@ -16,7 +16,7 @@ curl -fL https://sqlite.org/2025/sqlite-amalgamation-3500400.zip -o .profile-cac
 printf '%s  %s\n' 1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032 .profile-cache/sqlite.download | sha256sum -c -
 unzip -jo .profile-cache/sqlite.download 'sqlite-amalgamation-3500400/sqlite3.[ch]' -d .profile-cache/sources
 python3 benchmarks/resources/verify.py
-make all resource-stage
+make all
 build/crust examples/resources/sqlite/main.crs
 build/sqlite-resource .profile-cache/resources-baseline/normal.db
 python3 examples/resources/sqlite/verify.py --sanitizers

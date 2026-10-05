@@ -16,7 +16,7 @@ is reused.
 Build the compiler and the combined external stage:
 
 ```sh
-make all c-stage ownership-generics-stage
+make all
 build/crust examples/generics/ownership/main.crs
 build/generics-ownership
 ```
@@ -28,10 +28,13 @@ For a program with checked generic helpers, load these interfaces in your
 compilation program:
 
 ```crust
-host_source(run, "../../../api/crust0_stage.crs");
+host_source(run, "../../../stages/build/load.crs");
+if !stage_setup(run, "../../..") { return 1i32; };
+var stages: *StageSession = stage_open(run, "../../..", "../../../build/stage-cache");
+if stages == null(*StageSession) { return 1i32; };
 host_source(run, "../../../stages/generics/ownership/api.crs");
 host_source(run, "../../../stages/generics/ownership/build.crs");
-host_link(run, "../../../build/crust-ownership-generics-library.so");
+if !stage_load(stages, "stages/generics/ownership/package.crs") { return 1i32; };
 
 return ownership_generics_build(null(*CrustSource), 0usize,
     (*run).argc, (*run).argv, null(*CrustSource), 0usize);

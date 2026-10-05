@@ -2,7 +2,7 @@
 
 # Compiler and program arguments
 
-Run from the repository root after `make all c-stage`:
+Run from the repository root after `make all`:
 
 ```sh
 build/crust examples/arguments/main.crs -o build/arguments

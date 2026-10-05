@@ -8,7 +8,7 @@ source declaration. Read [overloaded hello](../hello/README.md) first.
 Run from the repository root:
 
 ```sh
-make all overload-stage
+make all
 build/crust examples/overload/separate/main.crs
 build/overload-separate
 nm -g build/overload-format.o

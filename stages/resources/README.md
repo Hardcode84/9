@@ -21,7 +21,7 @@ plans. The [reference](reference.md) gives the complete source and API rules.
 Run from the repository root on Linux x86-64:
 
 ```sh
-make all resource-stage
+make all
 build/crust examples/resources/hello/main.crs
 build/resource-hello
 ```

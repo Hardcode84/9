@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage, "sources.crs");
+stage_export(stage, "rr_read");
+stage_export(stage, "rs_reader_hooks");
+stage_export(stage, "rs_source_hooks");
+stage_export(stage, "resource_build");
+stage_export(stage, "resource_program");
+stage_export(stage, "rs_init");
+stage_export(stage, "rs_kind");
+stage_export(stage, "rs_read");
+stage_export(stage, "rs_prepare");
+stage_export(stage, "rs_prepare_delegated");
+stage_export(stage, "rs_c_body");
+stage_export(stage, "rs_source_import");
+stage_export(stage, "rs_return_from");

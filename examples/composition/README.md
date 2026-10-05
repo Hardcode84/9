@@ -11,7 +11,7 @@ The resource destructor and `defer` run when the target function returns.
 From the repository root:
 
 ```sh
-make all ownership-stage overload-stage
+make all
 build/crust examples/composition/main.crs
 build/composition
 ```

@@ -12,6 +12,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from prepare import sources as package_sources
+
 ROOT = Path(__file__).resolve().parents[1]
 PHASES = (
     "generic_read_ns",
@@ -55,11 +57,8 @@ def prepare(args, work):
     strict = ["-std=c99", "-pedantic-errors", "-Wall", "-Wextra", "-Werror"]
     clock_command = [*compiler, *cflags, *strict, "-c", str(clock_source), "-o", str(clock)]
     sources = [ROOT / "api/crust0.crs", ROOT / "api/crust0_host.crs"]
-    sources += [ROOT / f"stages/reader/{name}.crs" for name in ("model", "lex", "parse")]
     sources += [
-        path
-        for path in sorted((ROOT / "stages/generics").glob("*.crs"))
-        if path.name not in {"api.crs", "source_api.crs", "source_extension.crs"}
+        path for path in package_sources(args.build, "generics/package.crs") if path not in sources
     ]
     sources += [ROOT / "tests/generics_cost.crs"]
     command = [str(args.build / "crust-c"), "-o", str(executable), *map(str, sources)]

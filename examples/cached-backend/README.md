@@ -78,7 +78,7 @@ The native tools and libraries must stay unchanged while the request runs.
 
 ```sh
 make check-cache
-make all c-stage
+make all
 python3 benchmarks/backend-cache/measure.py --rounds 20 --output build/cache-measurement.json
 ```
 

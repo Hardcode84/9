@@ -17,7 +17,7 @@ repository root. The [bootstrap guide](../../docs/bootstrap.md) describes
 the build tools in more detail.
 
 ```sh
-make all c-stage
+make all
 build/crust examples/hello/main.crs
 build/hello
 ```
@@ -28,7 +28,8 @@ The last command prints this line and returns zero:
 Hello, world!
 ```
 
-`make` prepares the launcher and compiler library. `build/crust` executes the
+`make` prepares the seed launcher. `build/crust` prepares the selected backend
+from source through the cache, then executes the
 compilation program, which produces `build/hello`. Only the last command runs
 the target program.
 
@@ -39,25 +40,23 @@ compares complete C and assembly builds of the intrusive-list example.
 
 ## Read the compilation program
 
-The first four lines load declarations, a helper, and compiled stage code:
+The first actions prepare the backend and load a build helper:
 
 ```crust
-host_source(run, "../../api/crust0_stage.crs");
-host_source(run, "../../stages/c/api.crs");
+host_source(run, "../../stages/build/load.crs");
+if !stage_setup(run, "../..") { return 1i32; };
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) { return 1i32; };
 host_source(run, "../../stages/c/build.crs");
-host_link(run, "../../build/crust-c-library.so");
 ```
 
 The launcher supplies `run`, a pointer to the current root execution state.
-It also supplies the core compiler and host interfaces. Do not load those
-interfaces again. The first added file declares the target build request.
-The second declares the C backend calls. The third defines `c_build`, which
-creates and releases a target compiler context for one build.
-
-`host_source` reads and checks a complete declaration unit. `host_link` loads
-an ordinary shared library for native calls. The runner does not recognize
-the backend by its name or path. Its public declarations and compiled code
-must agree.
+`stage_setup` loads the shared preparation code and C backend interface.
+`stage_open` obtains native backend code from captured sources. A valid cache
+entry supplies that code on later runs. A changed stage input causes a rebuild.
+The last file defines `c_build`, which creates and releases a target compiler
+context for one build. The [stage preparation guide](../../stages/build/README.md)
+explains package files and cache inputs.
 
 The next lines select the target output and start compilation:
 

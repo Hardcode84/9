@@ -24,26 +24,26 @@ The selected host and target are Linux x86-64, LP64, and the System V ABI.
 GCC and GNU `objcopy` must be available through `PATH`.
 
 ```sh
-make c-stage
-build/crust-c -o build/list examples/intrusive/raw.crs --ldflag build/libcrust0_host.a
-build/list
+make all
+build/crust examples/hello/main.crs
+build/hello
+build/crust stages/build/run.crs stages/c/tool.crs --check examples/intrusive/raw.crs
 ```
 
-The program prints `intrusive: ok`. It removes and destroys separate nodes,
-then reuses storage while the list remains live.
+`stages/build/run.crs` with `stages/c/tool.crs` accepts the backend options below. It prepares the backend
+through the shared [stage preparation API](../stages/build/README.md), then
+passes its arguments to `c_program`.
 
-`make c-stage` first runs `stages/c/bootstrap.crs` through the backend-free
-seed. This interprets C emission and invokes GCC to produce `build/crust-c-seed`. That program compiles the same Crust0 files through C and GCC
-to produce `build/crust-c`. Both programs use the same C99 frontend library.
-It also builds `build/crust-c-library.so` with the same compiler. That library
-exports `c_program`, `c_backend_build`, and the public body-emission services.
-It omits the standalone `main`.
-Its build uses `-fno-semantic-interposition` with `-Bsymbolic`. Both options
-keep internal calls bound to this library's definitions. The compiler option
-also permits the same inlining as the standalone backend.
-This is self-compilation of the backend and driver. The reader and checker
-remain C99. The default `make` target builds the C driver to compile the
-assembly stage. `make c-stage` also builds the C shared library.
+The package in `stages/c/package.crs` selects the C backend sources and public
+exports. On the first build, the seed interprets C emission and GCC produces
+a native library. The source-owned cache validates inputs before each reuse.
+Other stages use this native provider to prepare their own libraries.
+
+The shared library exports `c_program`, `c_backend_build`, and the public
+body-emission services. Its build uses `-fno-semantic-interposition` and
+`-Bsymbolic` to keep internal calls bound to its definitions. The reader and
+checker remain C99. `make check-c` prepares separate native test drivers and
+checks successive backend generations.
 
 Use `wc -l stages/c/*.crs` to count the stage, public interfaces, and root helper.
 Tests and generated seed API declarations are separate.
@@ -298,9 +298,10 @@ before optimization.
 Use both artifacts when compiling dumped C by hand:
 
 ```sh
-build/crust-c --emit-c -o build/list.c --symbols build/list.rsp examples/intrusive/raw.crs
+build/crust stages/build/run.crs stages/c/tool.crs --emit-c -o build/list.c --symbols build/list.rsp examples/intrusive/raw.crs
 gcc -std=c99 -pedantic-errors -O2 -fstack-clash-protection -Wno-overlength-strings -c build/list.c -o build/list.raw.o
 objcopy @build/list.rsp build/list.raw.o build/list.o
+make build/libcrust0_host.a
 gcc -no-pie build/list.o build/libcrust0_host.a -o build/list
 ```
 

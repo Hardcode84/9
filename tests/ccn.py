@@ -192,14 +192,9 @@ def check_large(suite, commands):
 
 def check_tutorial(suite):
     copy = suite.work / "copied project"
-    for path in ("examples/ccn", "stages/ccn", "stages/modules"):
+    for path in ("api", "stages", "examples/ccn"):
         shutil.copytree(ROOT / path, copy / path, dirs_exist_ok=True)
-    (copy / "stages/c").mkdir(parents=True, exist_ok=True)
-    (copy / "api").mkdir(exist_ok=True)
     (copy / "build").mkdir(exist_ok=True)
-    shutil.copyfile(ROOT / "stages/c/api.crs", copy / "stages/c/api.crs")
-    shutil.copyfile(ROOT / "api/crust0_stage.crs", copy / "api/crust0_stage.crs")
-    shutil.copyfile(suite.backend, copy / "build/crust-c-library.so")
     root = copy / "examples/ccn/main.crs"
     build = copy / "examples/ccn/build.crs"
     target = copy / "examples/ccn/program.crs"

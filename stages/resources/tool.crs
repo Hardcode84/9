@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage, "sources.crs");
+stage_source(stage, "main.crs");
+stage_export_as(stage, "main", "crust_tool_main");

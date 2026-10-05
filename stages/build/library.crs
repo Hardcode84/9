@@ -1,0 +1,118 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn stage_tool_inputs(context: *CrustContext, inputs: *CacheInputs, directory: *u8) -> bool {
+    var work: CacheWork = make CacheWork { directory: null(*u8), manifest: null(*u8), digest: null(*u8), artifact: null(*u8), checksum: null(*u8) };
+    if !cache_work(context, directory, &work) {
+        cache_cleanup(context, &work);
+        return false;
+    }
+    var query: [*u8; 3] = make [*u8; 3] { "/usr/bin/gcc", "-print-prog-name=cc1", null(*u8) };
+    var success: bool = cache_tool(context, &query[0usize], work.digest);
+    var compiler: CrustSource = uninit;
+    if success { success = cache_read(context, work.digest, &compiler); }
+    if success {
+        if compiler.size == 0usize || compiler.bytes[0usize] != 47u8 { success = native_error(context, "GCC must report an absolute cc1 path"); }
+        else {
+            compiler.bytes[compiler.size - 1usize] = 0u8;
+            var paths: [*u8; 5] = make [*u8; 5] { "/usr/bin/gcc", compiler.bytes, "/usr/bin/as", "/usr/bin/objcopy", "/usr/bin/ld" };
+            success = cache_tools(context, inputs, &paths[0usize], 5usize, directory);
+        }
+    }
+    var headers: *u8 = "#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#include <limits.h>\n";
+    if success { success = cache_save(context, work.manifest, headers, native_strlen(headers)); }
+    if success { success = stage_gcc(context, work.manifest, work.digest, true); }
+    if success {
+        var captured: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+        success = captured != null(*CrustSource) && cache_read(context, work.digest, captured);
+        if success { captured->path = "stage-system-headers"; success = cache_add(context, inputs, captured); }
+    }
+    if success { success = stage_gcc_specs(context, inputs, work.digest); }
+    if !cache_cleanup(context, &work) { success = false; }
+    return success;
+}
+
+fn stage_artifact(session: *StageSession, package: *StagePackage, interpreted: bool, result: *CacheArtifact) -> bool {
+    var context: *CrustContext = session->root->context;
+    var inputs: CacheInputs = make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize };
+    var counts: [usize; 4] = make [usize; 4] {
+        package->inputs.count, package->sources.count, session->inputs.count, interpreted as usize
+    };
+    var recipe: CrustSource = make CrustSource {
+        path: "crust-stage-build-v1", bytes: &counts[0usize] as *u8,
+        size: sizeof([usize; 4]), identity: 0u64
+    };
+    if !cache_add(context, &inputs, &recipe) { return false; }
+    var groups: [*CacheInputs; 3] = make [*CacheInputs; 3] { &package->inputs, &package->sources, &session->inputs };
+    var group: usize = 0usize;
+    while group < 3usize {
+        var index: usize = 0usize;
+        while index < groups[group]->count {
+            if !cache_add(context, &inputs, groups[group]->items[index]) { return false; }
+            index = index + 1usize;
+        }
+        group = group + 1usize;
+    }
+    if !stage_export_inputs(context, package, &inputs) { return false; }
+    if !interpreted && !cache_input(context, &inputs, session->backend) { return false; }
+    var build: StageBuild = make StageBuild { package: package, interpreter: null(*CrustRun), emitter: null(*CrustDecl), interpreted: interpreted };
+    var request: CacheBuild = make CacheBuild { inputs: inputs.items, count: inputs.count, build: stage_build, user: &build as *u8 };
+    return cache_artifact(context, session->directory, &request, result);
+}
+
+// Capture the toolchain once and bootstrap the C provider. Keep the root and
+// caller-owned cache directory live through all uses of this session.
+fn stage_open(root: *CrustRun, base: *u8, directory: *u8) -> *StageSession {
+    var context: *CrustContext = root->context;
+    var session: *StageSession = crust_try_alloc(context, sizeof(StageSession), alignof(StageSession)) as *StageSession;
+    if session == null(*StageSession) { return session; }
+    session->root = root;
+    session->base = base;
+    session->directory = host_path(root, directory);
+    session->inputs = make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize };
+    if session->directory == null(*u8) || !cache_directory(context, session->directory) ||
+       !cache_loaded_sources(root, &session->inputs) || !cache_loaded_inputs(context, &session->inputs) ||
+       !stage_tool_inputs(context, &session->inputs, session->directory) { return null(*StageSession); }
+    var package: StagePackage = uninit;
+    stage_init(&package, root, base);
+    if !stage_include(&package, "stages/c/package.crs") { return null(*StageSession); }
+    var artifact: CacheArtifact = uninit;
+    if !stage_artifact(session, &package, true, &artifact) || !crust_run_link(root, artifact.path) { return null(*StageSession); }
+    session->backend = artifact.path;
+    return session;
+}
+
+// Return a validated library from captured package sources. Loading is explicit.
+fn stage_library(session: *StageSession, manifest: *u8) -> *u8 {
+    var package: StagePackage = uninit;
+    stage_init(&package, session->root, session->base);
+    if !stage_include(&package, manifest) { return null(*u8); }
+    var artifact: CacheArtifact = uninit;
+    if !stage_artifact(session, &package, false, &artifact) { return null(*u8); }
+    return artifact.path;
+}
+
+fn stage_load(session: *StageSession, manifest: *u8) -> bool {
+    var path: *u8 = stage_library(session, manifest);
+    return path != null(*u8) && crust_run_link(session->root, path);
+}
+
+fn stage_export_inputs(context: *CrustContext, package: *StagePackage, inputs: *CacheInputs) -> bool {
+    var item: *StageName = package->exports;
+    while item != null(*StageName) {
+        var captured: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+        if captured == null(*CrustSource) { return false; }
+        *captured = make CrustSource { path: item->text, bytes: item->link, size: native_strlen(item->link), identity: 0u64 };
+        if !cache_add(context, inputs, captured) { return false; }
+        item = item->next;
+    }
+    return true;
+}
+
+fn stage_gcc_specs(context: *CrustContext, inputs: *CacheInputs, scratch: *u8) -> bool {
+    var arguments: [*u8; 3] = make [*u8; 3] { "/usr/bin/gcc", "-dumpspecs", null(*u8) };
+    if !cache_tool(context, &arguments[0usize], scratch) { return false; }
+    var captured: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+    if captured == null(*CrustSource) || !cache_read(context, scratch, captured) { return false; }
+    captured->path = "stage-gcc-specs";
+    return cache_add(context, inputs, captured);
+}

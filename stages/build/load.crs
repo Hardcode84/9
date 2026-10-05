@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Load shared preparation code once. Base is the source package directory,
+// relative to the root. Keep the root live through all stage calls.
+fn stage_setup(root: *CrustRun, base: *u8) -> bool {
+    var paths: [*u8; 12] = make [*u8; 12] {
+        "api/crust0_stage.crs", "stages/c/api.crs",
+        "stages/native/model.crs", "stages/native/linux.crs",
+        "stages/cache/model.crs", "stages/cache/linux.crs",
+        "stages/cache/artifact.crs", "stages/cache/inputs.crs",
+        "stages/build/model.crs", "stages/build/package.crs",
+        "stages/build/compile.crs", "stages/build/library.crs"
+    };
+    var index: usize = 0usize;
+    while index < 12usize {
+        var path: *u8 = stage_path(root, base, paths[index]);
+        if path == null(*u8) || !host_source(root, path) { return false; }
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn stage_path(root: *CrustRun, base: *u8, path: *u8) -> *u8 {
+    if path[0usize] == 47u8 { return host_path(root, path); }
+    var a: usize = 0usize;
+    var b: usize = 0usize;
+    while base[a] != 0u8 { a = a + 1usize; }
+    while path[b] != 0u8 { b = b + 1usize; }
+    if a >= ~0usize - b - 1usize {
+        crust_set_error(root->context, root->source, root->cursor, "stage path is too long");
+        return null(*u8);
+    }
+    var joined: *u8 = crust_try_alloc(root->context, a + b + 2usize, 1usize);
+    if joined == null(*u8) { return joined; }
+    var index: usize = 0usize;
+    while index < a { joined[index] = base[index]; index = index + 1usize; }
+    joined[a] = 47u8;
+    index = 0usize;
+    while index <= b { joined[a + 1usize + index] = path[index]; index = index + 1usize; }
+    return host_path(root, joined);
+}

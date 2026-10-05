@@ -25,8 +25,12 @@ passes it the input files.
 [main.crs](main.crs) is the compilation program:
 
 ```crust
+host_source(run, "../../stages/build/load.crs");
+if !stage_setup(run, "../..") { return 1i32; };
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) { return 1i32; };
 host_source(run, "setup.crs");
-if !load_example_stages(run) { return 1i32; };
+if !load_example_stages(run, stages) { return 1i32; };
 host_source(run, "build.crs");
 
 var inputs: [*u8; 3] = make [*u8; 3] { "types.crs", "pair.crs", "program.crs" };
@@ -41,7 +45,7 @@ backend and the generics stage. Its generics calls are:
 host_source(root, "../../stages/generics/model.crs");
 host_source(root, "../../stages/generics/source_model.crs");
 host_source(root, "../../stages/generics/source_api.crs");
-host_link(root, "../../build/crust-generics-library.so");
+stage_load(stages, "stages/generics/package.crs");
 ```
 
 `generic_build` reads the selected inputs into one module, checks the program,
@@ -124,7 +128,7 @@ ownership contracts and the ownership stage.
 Run from the repository root:
 
 ```sh
-make all c-stage generics-stage
+make all
 build/crust examples/generics/main.crs
 build/generics
 ```

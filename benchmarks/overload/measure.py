@@ -8,7 +8,6 @@ import json
 import os
 import platform
 import random
-import re
 import shutil
 import statistics
 from pathlib import Path
@@ -25,13 +24,18 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def make_words(makefile, name):
-    value = re.search(r"^" + name + r"\s*=\s*(.*)$", makefile, re.M).group(1)
-    while "$(" in value:
-        value = re.sub(
-            r"\$\((\w+)\)", lambda item: " ".join(make_words(makefile, item.group(1))), value
-        )
-    return value.split()
+def make_words(name):
+    result = HELPERS.run(
+        [
+            "make",
+            "--no-print-directory",
+            "-s",
+            "--eval",
+            f"package-inputs:;@printf '%s\\n' $({name})",
+            "package-inputs",
+        ]
+    )
+    return result.stdout.decode().split()
 
 
 def source_pair(count, calls, overloaded, short):
@@ -95,7 +99,6 @@ def main():
     os.chdir(ROOT)
     os.sched_setaffinity(0, {args.cpu})
     args.work.mkdir(parents=True, exist_ok=True)
-    makefile = Path("Makefile").read_text()
     frozen_paths = [
         args.compiler,
         Path(__file__).resolve().relative_to(ROOT),
@@ -112,12 +115,12 @@ def main():
         Path("Makefile"),
         Path("build/libcrust0.a"),
         Path("build/libcrust0_host.a"),
-        *map(Path, make_words(makefile, "C_STAGE")),
+        *map(Path, make_words("C_STAGE")),
     ]
     if args.stage_compiler:
         frozen_paths.append(args.stage_compiler)
         frozen_paths += [
-            *map(Path, make_words(makefile, "OVERLOAD_LIBRARY")),
+            *map(Path, make_words("OVERLOAD_LIBRARY")),
             Path("stages/overload/main.crs"),
         ]
     frozen = {str(path): sha(path) for path in frozen_paths}
@@ -321,8 +324,8 @@ def main():
         print(workload["family_members"], workload["median_ms"], flush=True)
     native_preparation = None
     if args.measure_stage_preparation:
-        stage_sources = make_words(makefile, "OVERLOAD_LIBRARY")
-        exports = make_words(makefile, "OVERLOAD_EXPORTS")
+        stage_sources = make_words("OVERLOAD_LIBRARY")
+        exports = make_words("OVERLOAD_EXPORTS")
         stage_object = args.work / "prepared-overload-stage.o"
         stage_library = args.work / "prepared-overload-stage.so"
         commands = [

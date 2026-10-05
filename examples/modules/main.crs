@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
-host_source(run, "../../api/crust0_stage.crs");
-host_source(run, "../../stages/c/api.crs");
+host_source(run, "../../stages/build/load.crs");
+if !stage_setup(run, "../..") { return 1i32; };
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) { return 1i32; };
 host_source(run, "../../stages/modules/library.crs");
-host_link(run, "../../build/crust-c-library.so");
 
 fn prepare_modules(provider: *CrustModule, consumer: *CrustModule, root: *CrustRun) -> bool {
     var provider_path: *u8 = host_path(root, "provider.crs");

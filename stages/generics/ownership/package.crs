@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage, "sources.crs");
+stage_export(stage, "ownership_generics_program");
+stage_export(stage, "og_init");
+stage_export(stage, "og_read");
+stage_export(stage, "og_read_range");
+stage_export(stage, "og_prove");
+stage_export(stage, "og_check");
+stage_export(stage, "og_destroy");
+stage_export(stage, "og_library_publish");
+stage_export(stage, "og_library_import");

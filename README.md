@@ -33,7 +33,7 @@ development headers and library.
 From the repository root:
 
 ```sh
-make all c-stage
+make all
 build/crust examples/hello/main.crs
 build/hello
 ```

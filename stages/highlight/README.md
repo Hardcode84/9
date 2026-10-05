@@ -82,16 +82,15 @@ The interpreted root is useful for composition. Compile the same library
 once for repeated editor requests:
 
 ```sh
-make highlight-stage
-build/crust-highlight --html examples/hello/main.crs > build/hello-native.html
-build/crust-highlight --tokens examples/hello/main.crs > build/hello-native.tokens.json
+make all
+build/crust stages/build/run.crs stages/highlight/tool.crs --html examples/hello/main.crs > build/hello-native.html
+build/crust stages/build/run.crs stages/highlight/tool.crs --tokens examples/hello/main.crs > build/hello-native.tokens.json
 cmp build/hello.tokens.json build/hello-native.tokens.json
 ```
 
-`cmp` must report no difference. `make highlight-stage` uses the Crust C
-backend and system GCC to prepare `build/crust-highlight`. Each subsequent
-highlight request runs that executable. It has no GCC dependency at run
-time. Helper compilation is separate from highlighting measurements.
+`cmp` must report no difference. The shared package runner prepares a native
+highlight library and validates its cached inputs on each invocation. Native
+highlighting follows that preparation. Measure these steps separately.
 
 Both interfaces accept `[--html|--tokens] SOURCE`. HTML is the default.
 Input paths are relative to the working directory. Prefix a path that
@@ -163,7 +162,7 @@ Create an incomplete string followed by a valid function:
 
 ```sh
 printf '"unfinished\nfn after()->unit{}\n' > build/incomplete.crs
-build/crust-highlight --html build/incomplete.crs > build/incomplete.html
+build/crust stages/build/run.crs stages/highlight/tool.crs --html build/incomplete.crs > build/incomplete.html
 ```
 
 The string has the `invalid` class. The function on the next line still

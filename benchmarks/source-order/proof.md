@@ -80,7 +80,7 @@ From the repository root, prepare the compiler once, build the proof, and run
 its checks. `build.py` does not run timing samples.
 
 ```sh
-make all c-stage
+make all test-tools build/crust0
 python3 benchmarks/source-order/proof/build.py --cpu 6
 python3 benchmarks/source-order/proof/measure.py
 ```

@@ -25,28 +25,30 @@ HOST = $(BUILD)/host.o $(BUILD)/host_posix.o
 PRELUDE = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/host.crs
 API_HEADERS = $(addprefix include/,$(addsuffix .h,crust0 crust0_host crust0_x64 crust0_stage crust0_eval crust0_run))
 API_GENERATED = $(patsubst include/%.h,api/%.crs,$(API_HEADERS)) include/crust0_abi.h stages/asm/model.crs
-C_LIBRARY = api/crust0.crs api/crust0_host.crs api/crust0_stage.crs stages/c/model.crs stages/c/base.crs stages/c/types.crs stages/c/emit.crs stages/c/driver.crs stages/c/program.crs
+C_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources c/package.crs),$(error Stage package query failed))
+RESOURCE_EXPORTS = $(or $(shell python3 tests/prepare.py --build $(BUILD) --exports resources/package.crs),$(error Stage package query failed))
+OVERLOAD_EXPORTS = $(or $(shell python3 tests/prepare.py --build $(BUILD) --exports overload/package.crs),$(error Stage package query failed))
 C_STAGE = $(C_LIBRARY) stages/c/main.crs
-ASM_LIBRARY = api/crust0.crs stages/asm/model.crs stages/asm/output.crs stages/asm/plan.crs stages/asm/emit.crs stages/asm/program.crs
-READER = stages/reader/model.crs stages/reader/lex.crs stages/reader/parse.crs
-HIGHLIGHT = api/crust0.crs api/crust0_host.crs stages/reader/model.crs stages/reader/lex.crs stages/highlight/model.crs stages/highlight/scan.crs stages/highlight/output.crs stages/highlight/program.crs
-CCN = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/ccn/count.crs stages/ccn/read.crs stages/ccn/report.crs stages/ccn/program.crs
-RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources/read.crs stages/resources/types.crs stages/resources/constants.crs stages/resources/state.crs stages/resources/cleanup.crs stages/resources/drop.crs stages/resources/places.crs stages/resources/outputs.crs stages/resources/expr.crs stages/resources/control.crs stages/resources/emit.crs stages/resources/program.crs stages/resources/build.crs stages/resources/source.crs
-SOURCE = stages/source/model.crs stages/source/base.crs
-RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(SOURCE) $(RESOURCE)
-RESOURCE_EXPORTS = rr_read rs_reader_hooks rs_source_hooks resource_build resource_program rs_init rs_kind rs_read rs_prepare rs_prepare_delegated rs_c_body rs_source_import rs_return_from
-OWNERSHIP = stages/ownership/abstract.crs stages/ownership/abstract_expr.crs stages/ownership/model.crs stages/ownership/trust.crs stages/ownership/base.crs stages/ownership/native_read.crs stages/ownership/native.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/fields.crs stages/ownership/loans.crs stages/ownership/views.crs stages/ownership/view_results.crs stages/ownership/results.crs stages/ownership/origins.crs stages/ownership/selections.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/conditions.crs stages/ownership/calls.crs stages/ownership/entry.crs stages/ownership/flow.crs stages/ownership/contracts.crs stages/ownership/effects.crs stages/ownership/scopes.crs stages/ownership/defer.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/live.crs stages/ownership/live_end.crs stages/ownership/program.crs stages/ownership/source.crs
-OWNERSHIP_IMPORTS = api/crust0_eval.crs api/crust0_run.crs stages/native/model.crs stages/native/linux.crs stages/cache/model.crs stages/cache/linux.crs stages/cache/artifact.crs stages/cache/inputs.crs stages/ownership/library_model.crs stages/ownership/interface.crs stages/ownership/artifact.crs stages/ownership/publish.crs stages/ownership/imports.crs
-OWNERSHIP_LIBRARY = $(RESOURCE_LIBRARY) $(OWNERSHIP) $(OWNERSHIP_IMPORTS)
-OVERLOAD = stages/overload/model.crs stages/overload/base.crs stages/overload/types.crs stages/overload/collect.crs stages/overload/resolve.crs stages/overload/read.crs stages/overload/program.crs stages/overload/source.crs
-OVERLOAD_LIBRARY = $(C_LIBRARY) $(READER) $(SOURCE) $(OVERLOAD)
-OVERLOAD_EXPORTS = ov_reader_hooks overload_build overload_program ov_init ov_read ov_prepare ov_collect ov_resolve ov_mangle ov_alloc ov_error ov_put ov_type ov_intern ov_global ov_function_syntax ov_select ov_same ov_encode_type ov_text ov_bytes ov_number ov_part ov_expression ov_statement ov_standard_expression ov_standard_statement ov_scope ov_leave_scope ov_lookup ov_bind ov_block ov_field_type ov_driver_build ov_check
-OVERLOAD_RESOURCE_LIBRARY = $(RESOURCE_LIBRARY) $(OVERLOAD) stages/overload/resource_program.crs
-OVERLOAD_RESOURCE_EXPORTS = $(RESOURCE_EXPORTS) $(OVERLOAD_EXPORTS) overload_resource_build overload_resource_program
+ASM_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources asm/package.crs),$(error Stage package query failed))
+READER = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources reader/package.crs),$(error Stage package query failed))
+HIGHLIGHT = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources highlight/package.crs),$(error Stage package query failed))
+CCN = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources ccn/package.crs),$(error Stage package query failed))
+SOURCE = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources source/package.crs),$(error Stage package query failed))
+RESOURCE_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources resources/package.crs),$(error Stage package query failed))
+OWNERSHIP_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources ownership/package.crs),$(error Stage package query failed))
+OVERLOAD = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources overload/local-sources.crs),$(error Stage package query failed))
+OVERLOAD_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources overload/package.crs),$(error Stage package query failed))
+OVERLOAD_RESOURCE_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources overload/resources-package.crs),$(error Stage package query failed))
 
-.PHONY: all clean check witness api c-stage resource-stage overload-stage highlight-stage check-highlight ccn-stage check-ccn vscode check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native check-asm check-cache
+.PHONY: all clean check witness api test-tools check-highlight check-ccn check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native check-asm check-cache
 .PHONY: amalgamate check-amalgamation FORCE
-all: $(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a $(BUILD)/crust-asm-library.so
+all: $(BUILD)/crust
+
+.PHONY: test-tools
+test-tools: $(BUILD)/crust $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a
+	python3 tests/prepare.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+
+$(BUILD)/crust-c $(BUILD)/crust-c-seed $(BUILD)/crust-highlight $(BUILD)/crust-ccn $(BUILD)/crust-resource $(BUILD)/crust-overload $(BUILD)/crust-overload-resource $(BUILD)/crust-asm-library.o: test-tools
 
 $(API_GENERATED) &: tools/api.py $(API_HEADERS)
 	python3 tools/api.py
@@ -103,187 +105,79 @@ $(BUILD)/libcrust0.a: $(CORE) Makefile
 $(BUILD)/libcrust0_host.a: $(HOST)
 	$(AR) rcs $@ $^
 
-$(BUILD)/crust-c-seed: $(BUILD)/crust $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(C_STAGE) stages/c/bootstrap.crs stages/c/build.crs
-	$(BUILD)/crust stages/c/bootstrap.crs -o $@ $(filter-out api/crust0.crs,$(C_STAGE)) $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
-
-$(BUILD)/crust-c: $(BUILD)/crust-c-seed
-	$< -o $@ $(C_STAGE) $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
-
-$(BUILD)/c-exports: $(BUILD)/crust stages/modules/library.crs stages/modules/exports.crs stages/c/api.crs stages/c/extension.crs Makefile
-	$< stages/modules/exports.crs stages/c/api.crs stages/c/extension.crs > $@.tmp
-	mv $@.tmp $@
-
-$(BUILD)/crust-c-library.o: $(BUILD)/crust-c $(C_LIBRARY) $(BUILD)/c-exports Makefile
-	crust_exports=$$(cat $(BUILD)/c-exports) && $< --library --object $$crust_exports --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(C_LIBRARY)
-
-$(BUILD)/crust-c-library.so: $(BUILD)/crust-c-library.o
-	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
-
-$(BUILD)/asm-exports: $(BUILD)/crust stages/modules/library.crs stages/modules/exports.crs api/crust0_x64.crs Makefile
-	$< stages/modules/exports.crs api/crust0_x64.crs > $@.tmp
-	mv $@.tmp $@
-
-$(BUILD)/crust-asm-library.o: $(BUILD)/crust-c $(ASM_LIBRARY) $(BUILD)/asm-exports Makefile
-	crust_exports=$$(cat $(BUILD)/asm-exports) && $< --library --object $$crust_exports --export crust_x64_default_ops --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(ASM_LIBRARY)
-
 $(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
 	$(AR) rcs $@ $^
 
-$(BUILD)/crust-asm-library.so: $(BUILD)/crust-asm-library.o
-	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
+GENERIC_OWNERSHIP = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources generics/ownership/package.crs),$(error Stage package query failed))
 
-GENERICS = stages/generics/model.crs stages/generics/base.crs stages/generics/definition.crs stages/generics/key.crs stages/generics/types.crs stages/generics/clone.crs stages/generics/instances.crs
-GENERICS_SOURCE = $(READER) stages/generics/source_model.crs stages/generics/read.crs stages/generics/source_key.crs stages/generics/normalize.crs stages/generics/source.crs
-
-$(BUILD)/generics-exports: $(BUILD)/crust stages/modules/library.crs stages/modules/exports.crs stages/generics/api.crs stages/generics/source_api.crs stages/generics/source_extension.crs Makefile
-	$< stages/modules/exports.crs stages/generics/api.crs stages/generics/source_api.crs stages/generics/source_extension.crs > $@.tmp
-	mv $@.tmp $@
-
-$(BUILD)/crust-generics-library.o: $(BUILD)/crust-c $(GENERICS) $(GENERICS_SOURCE) $(BUILD)/generics-exports Makefile
-	crust_exports=$$(cat $(BUILD)/generics-exports) && $< --library --object $$crust_exports --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ api/crust0.crs $(GENERICS) $(GENERICS_SOURCE)
-
-$(BUILD)/crust-generics-library.so: $(BUILD)/crust-generics-library.o
-	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(LDFLAGS) -o $@
-
-GENERIC_OWNERSHIP = $(OWNERSHIP_LIBRARY) $(GENERICS) $(filter-out $(READER),$(GENERICS_SOURCE)) stages/generics/ownership/model.crs stages/generics/ownership/read.crs stages/generics/ownership/clone.crs stages/generics/ownership/domains.crs stages/generics/ownership/domains_seal.crs stages/generics/ownership/arguments.crs stages/generics/ownership/proof.crs stages/generics/ownership/check.crs stages/generics/ownership/program.crs stages/generics/ownership/library_model.crs stages/generics/ownership/library_bindings.crs stages/generics/ownership/library_bytes.crs stages/generics/ownership/library.crs
-
-$(BUILD)/crust-ownership-generics-test: $(BUILD)/crust-c $(GENERIC_OWNERSHIP) tests/ownership_input.crs tests/ownership_generics_driver.crs Makefile
+$(BUILD)/crust-ownership-generics-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_generics_driver.crs Makefile
 	$< -o $@ $(GENERIC_OWNERSHIP) tests/ownership_input.crs tests/ownership_generics_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-$(BUILD)/crust-ownership-generics-library.o: $(BUILD)/crust-c $(GENERIC_OWNERSHIP) Makefile
-	$< --library --object --export ownership_generics_program --export og_init --export og_read --export og_read_range --export og_prove --export og_check --export og_destroy --export og_library_publish --export og_library_import --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(GENERIC_OWNERSHIP)
+.PHONY: test-tools check-ownership-generics
 
-$(BUILD)/crust-ownership-generics-library.so: $(BUILD)/crust-ownership-generics-library.o
-	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(LDFLAGS) -o $@
-
-.PHONY: ownership-generics-stage check-ownership-generics
-ownership-generics-stage: $(BUILD)/crust-ownership-generics-library.so
-
-$(BUILD)/crust-ownership-generics-clone: $(BUILD)/crust-c $(GENERIC_OWNERSHIP) tests/ownership_generics_clone.crs Makefile
+$(BUILD)/crust-ownership-generics-clone: $(BUILD)/crust-c tests/ownership_generics_clone.crs Makefile
 	$< -o $@ $(GENERIC_OWNERSHIP) tests/ownership_generics_clone.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-check-ownership-generics: all c-stage ownership-generics-stage $(BUILD)/crust-ownership-generics-test $(BUILD)/crust-ownership-generics-clone
+check-ownership-generics: all test-tools $(BUILD)/crust-ownership-generics-test $(BUILD)/crust-ownership-generics-clone
 	$(BUILD)/crust-ownership-generics-clone
 	python3 tests/ownership_generics.py --build $(BUILD) --sanitize
 	python3 tests/generics_ownership_imports.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 	python3 tests/ownership_generics_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --sources $(GENERIC_OWNERSHIP)
 
-.PHONY: generics-stage check-generics
-generics-stage: $(BUILD)/crust-generics-library.so
+.PHONY: test-tools check-generics
 
-check-generics: all c-stage generics-stage
+check-generics: all test-tools
 	python3 tests/generics.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 	python3 tests/generics_source.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
-UNION = stages/union/model.crs stages/union/read.crs stages/union/layout.crs stages/union/nodes.crs stages/union/lower.crs stages/union/program.crs
-UNION_LIBRARY = $(C_LIBRARY) $(READER) $(UNION)
+UNION_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources union/package.crs),$(error Stage package query failed))
 
-.PHONY: union-stage check-union check-union-alloc
-union-stage: $(BUILD)/crust-union-library.so
+.PHONY: test-tools check-union check-union-alloc
 
-$(BUILD)/crust-union-library.o: $(BUILD)/crust-c $(UNION_LIBRARY) Makefile
-	$< --library --object --export union_program --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(UNION_LIBRARY)
-
-$(BUILD)/crust-union-library.so: $(BUILD)/crust-union-library.o
-	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(LDFLAGS) -o $@
-
-$(BUILD)/crust-union-test: $(BUILD)/crust-c $(UNION_LIBRARY) api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a
+$(BUILD)/crust-union-test: $(BUILD)/crust-c api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a
 	$< -o $@ $(UNION_LIBRARY) api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0_run.a --ldflag=-ldl --ldflag=-lffi --ldflag $(BUILD)/libcrust_asm.a --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-check-union: all c-stage union-stage $(BUILD)/crust-union-test
+check-union: all test-tools $(BUILD)/crust-union-test
 	python3 tests/union.py --build $(BUILD)
 
-check-union-alloc: all c-stage union-stage $(BUILD)/crust-union-test
+check-union-alloc: all test-tools $(BUILD)/crust-union-test
 	python3 tests/union.py --build $(BUILD) --sanitize-stage
 
-c-stage: $(BUILD)/crust-c $(BUILD)/crust-c-library.so
-
-$(BUILD)/crust-highlight: $(BUILD)/crust-c $(HIGHLIGHT) stages/highlight/main.crs
-	$< -o $@ $(HIGHLIGHT) stages/highlight/main.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
-
-highlight-stage: $(BUILD)/crust-highlight
-
-check-highlight: all highlight-stage
+check-highlight: all test-tools
 	python3 stages/highlight/test.py --build $(BUILD)
 
-$(BUILD)/crust-ccn: $(BUILD)/crust-c $(CCN) stages/ccn/main.crs $(BUILD)/libcrust0_run.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a Makefile
-	$< -o $@ $(CCN) stages/ccn/main.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0_run.a --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a --ldflag=-ldl --ldflag=-lffi $(foreach flag,$(LDFLAGS),--ldflag $(flag))
-
-ccn-stage: $(BUILD)/crust-ccn
-
-check-ccn: all c-stage ccn-stage
+check-ccn: all test-tools
 	python3 tests/ccn.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
-vscode: highlight-stage
-	python3 editors/vscode/package.py --binary $(BUILD)/crust-highlight --output $(BUILD)/crust-vscode.vsix
-
-check-vscode: highlight-stage $(BUILD)/crust
+check-vscode: test-tools $(BUILD)/crust
 	CRUST_HIGHLIGHT=$(abspath $(BUILD))/crust-highlight CRUST_LAUNCHER=$(abspath $(BUILD))/crust bun test ./editors/vscode
 
-$(BUILD)/crust-resource: $(BUILD)/crust-c $(RESOURCE_LIBRARY) stages/resources/main.crs
-	$< -o $@ $(RESOURCE_LIBRARY) stages/resources/main.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
-
-$(BUILD)/crust-resource-library.o: $(BUILD)/crust-c $(RESOURCE_LIBRARY) Makefile
-	$< --library --object $(foreach name,$(RESOURCE_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(RESOURCE_LIBRARY)
-
-$(BUILD)/crust-resource-library.so: $(BUILD)/crust-resource-library.o
-	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
-
-resource-stage: $(BUILD)/crust-resource $(BUILD)/crust-resource-library.so
-
-$(BUILD)/crust-ownership-test: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_driver.crs Makefile
+$(BUILD)/crust-ownership-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_driver.crs Makefile
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-$(BUILD)/crust-ownership-library.o: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) Makefile
-	$< --library --object --export ownership_program --export ownership_publish --export ownership_import_program $(foreach name,$(RESOURCE_EXPORTS),--export $(name)) --export os_init --export os_reader_hooks --export os_source_hooks --export os_lower --export os_verify --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(OWNERSHIP_LIBRARY)
-
-$(BUILD)/crust-ownership-library.so: $(BUILD)/crust-ownership-library.o
-	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(LDFLAGS) -o $@
-
-$(BUILD)/crust-ownership-erasure: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_erasure.crs Makefile
+$(BUILD)/crust-ownership-erasure: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_erasure.crs Makefile
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_erasure.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-$(BUILD)/crust-ownership-import-test: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_import_driver.crs Makefile
+$(BUILD)/crust-ownership-import-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_import_driver.crs Makefile
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_import_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 .PHONY: check-ownership-imports
 check-ownership-imports: $(BUILD)/crust-ownership-import-test
 	python3 tests/ownership_imports.py --build $(BUILD)
 
-.PHONY: ownership-stage check-ownership check-ownership-alloc check-ownership-ergonomics
-ownership-stage: $(BUILD)/crust-ownership-test $(BUILD)/crust-ownership-library.so
+.PHONY: test-tools check-ownership check-ownership-alloc check-ownership-ergonomics
 
-check-ownership: all ownership-stage $(BUILD)/crust-ownership-erasure $(BUILD)/crust-ownership-import-test
+check-ownership: all test-tools $(BUILD)/crust-ownership-test $(BUILD)/crust-ownership-erasure $(BUILD)/crust-ownership-import-test
 	python3 tests/ownership.py --build $(BUILD)
 	python3 tests/ownership_index.py --build $(BUILD)
 	python3 tests/ownership_views.py --build $(BUILD)
 	python3 tests/ownership_native.py --build $(BUILD)
 
-check-ownership-ergonomics: all ownership-stage
+check-ownership-ergonomics: all test-tools $(BUILD)/crust-ownership-test
 	python3 tests/ownership_ergonomics.py --build $(BUILD)
 
-check-ownership-alloc: all c-stage
+check-ownership-alloc: all test-tools
 	python3 tests/ownership_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --sources $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_alloc.crs
-
-$(BUILD)/crust-overload: $(BUILD)/crust-c $(OVERLOAD_LIBRARY) stages/overload/main.crs
-	$< -o $@ $(OVERLOAD_LIBRARY) stages/overload/main.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
-
-$(BUILD)/crust-overload-library.o: $(BUILD)/crust-c $(OVERLOAD_LIBRARY) Makefile
-	$< --library --object $(foreach name,$(OVERLOAD_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(OVERLOAD_LIBRARY)
-
-$(BUILD)/crust-overload-library.so: $(BUILD)/crust-overload-library.o
-	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
-
-$(BUILD)/crust-overload-resource: $(BUILD)/crust-c $(OVERLOAD_RESOURCE_LIBRARY) stages/overload/resource_main.crs
-	$< -o $@ $(OVERLOAD_RESOURCE_LIBRARY) stages/overload/resource_main.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
-
-$(BUILD)/crust-overload-resource-library.o: $(BUILD)/crust-c $(OVERLOAD_RESOURCE_LIBRARY) Makefile
-	$< --library --object $(foreach name,$(OVERLOAD_RESOURCE_EXPORTS),--export $(name)) --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(OVERLOAD_RESOURCE_LIBRARY)
-
-$(BUILD)/crust-overload-resource-library.so: $(BUILD)/crust-overload-resource-library.o
-	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $^ $(LDFLAGS) -o $@
-
-overload-stage: $(BUILD)/crust-overload $(BUILD)/crust-overload-library.so $(BUILD)/crust-overload-resource $(BUILD)/crust-overload-resource-library.so
 
 $(BUILD)/intrusive.s: $(BUILD)/crust0 examples/intrusive/raw.crs
 	$(BUILD)/crust0 -S -o $@ examples/intrusive/raw.crs
@@ -319,7 +213,7 @@ api:
 check-amalgamation:
 	python3 tools/check_amalgamation.py --cc '$(CC)' --cflags='$(CFLAGS) $(STRICT)'
 
-check: all $(BUILD)/core_test $(BUILD)/arena_test $(BUILD)/read_test $(BUILD)/check_test $(BUILD)/host_test $(BUILD)/parallel_test $(BUILD)/x64_test $(BUILD)/eval_test
+check: all $(BUILD)/crust0 $(BUILD)/core_test $(BUILD)/arena_test $(BUILD)/read_test $(BUILD)/check_test $(BUILD)/host_test $(BUILD)/parallel_test $(BUILD)/x64_test $(BUILD)/eval_test
 	$(BUILD)/core_test
 	$(BUILD)/arena_test
 	$(BUILD)/read_test
@@ -331,65 +225,58 @@ check: all $(BUILD)/core_test $(BUILD)/arena_test $(BUILD)/read_test $(BUILD)/ch
 	python3 tools/api.py --check
 	python3 tests/run.py --compiler $(BUILD)/crust0 --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
-check-c: c-stage
+check-c: test-tools
 	python3 tests/run.py --backend c --compiler $(BUILD)/crust-c --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 	python3 tests/c_body.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
-check-reader: all c-stage
+check-reader: all test-tools
 	python3 stages/reader/test.py --build $(BUILD) --cc '$(CC)' --ldflags='$(LDFLAGS)'
 
-$(BUILD)/kind_composition: $(BUILD)/crust-c $(RESOURCE_LIBRARY) tests/kind_wrapper.crs tests/kind_composition.crs Makefile
+$(BUILD)/kind_composition: $(BUILD)/crust-c tests/kind_wrapper.crs tests/kind_composition.crs Makefile
 	$< -o $@ $(RESOURCE_LIBRARY) tests/kind_wrapper.crs tests/kind_composition.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-check-resources: all resource-stage $(BUILD)/kind_composition
+check-resources: all test-tools $(BUILD)/kind_composition
 	python3 tests/resources.py --build $(BUILD)
 	python3 tests/resource_returns.py --build $(BUILD)
 	python3 tests/extension_kinds.py --build $(BUILD)
 
-$(BUILD)/composition-test: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) $(OVERLOAD) examples/composition/build.crs tests/composition_driver.crs Makefile
+$(BUILD)/composition-test: $(BUILD)/crust-c   examples/composition/build.crs tests/composition_driver.crs Makefile
 	$< -o $@ $(OWNERSHIP_LIBRARY) $(OVERLOAD) examples/composition/build.crs tests/composition_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-check-overload: all overload-stage resource-stage $(BUILD)/composition-test
+check-overload: all test-tools $(BUILD)/composition-test
 	python3 tests/overload.py --build $(BUILD)
 	python3 tests/overload_resources.py --build $(BUILD)
 	python3 tests/overload_hooks.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 	python3 tests/nesting.py --build $(BUILD)
 	python3 tests/composition.py --build $(BUILD)
 
-check-overload-alloc: all c-stage
+check-overload-alloc: all test-tools
 	python3 tests/overload_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION)
 
-check-resource-alloc: all c-stage
+check-resource-alloc: all test-tools
 	python3 tests/resources_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION)
 
-check-stage: all c-stage ownership-stage overload-stage
-	python3 tests/source_order.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
-	python3 tests/abi.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)' --amalgamation $(AMALGAMATION)
-
-check-examples: all c-stage ownership-stage overload-stage
+check-examples: all test-tools
 	python3 tests/source_order.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)' --group examples
 
-check-modules: all c-stage
+check-modules: all test-tools
 	python3 tests/modules.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
-check-asm: all
+check-asm: all test-tools
 	python3 tests/asm.py --build $(BUILD) --cc '$(CC)' --ldflags='$(LDFLAGS)'
 
 check-cache: $(BUILD)/crust
+	python3 tests/stage_packages.py --build $(BUILD)
 	python3 tests/cache.py --build $(BUILD)
 
-check-native: all
+check-native: all test-tools
 	python3 tests/native.py --build $(BUILD)
 
-PARALLEL = api/crust0.crs stages/parallel/model.crs stages/parallel/linux_x64.crs
+PARALLEL = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources parallel/package.crs),$(error Stage package query failed))
 
-$(BUILD)/crust-parallel-library.so: $(BUILD)/crust-c $(PARALLEL)
-	$< --library --export parallel_run --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag=-shared --ldflag=-pthread --ldflag=-Wl,-Bsymbolic,-z,text,-z,relro,-z,now $(foreach flag,$(LDFLAGS),--ldflag $(flag)) -o $@ $(PARALLEL)
+.PHONY: test-tools check-parallel
 
-.PHONY: parallel-stage check-parallel
-parallel-stage: $(BUILD)/crust-parallel-library.so
-
-check-parallel: all c-stage parallel-stage
+check-parallel: all test-tools
 	python3 tests/parallel.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
 clean:
@@ -400,9 +287,13 @@ clean:
 $(BUILD)/ownership-clock.o: benchmarks/ownership/clock_linux_x64.c | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -c $< -o $@
 
-$(BUILD)/ownership-cost: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) tests/ownership_input.crs benchmarks/ownership/driver.crs $(BUILD)/ownership-clock.o
+$(BUILD)/ownership-cost: $(BUILD)/crust-c tests/ownership_input.crs benchmarks/ownership/driver.crs $(BUILD)/ownership-clock.o
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs benchmarks/ownership/driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/ownership-clock.o --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 .PHONY: ownership-benchmark-config
 ownership-benchmark-config:
 	@printf '%s\n' 'CC=$(CC) CFLAGS=$(CFLAGS) LDFLAGS=$(LDFLAGS) AMALGAMATION=$(AMALGAMATION)'
+
+check-stage: all test-tools
+	python3 tests/source_order.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+	python3 tests/abi.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)' --amalgamation $(AMALGAMATION)

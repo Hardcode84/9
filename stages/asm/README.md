@@ -7,18 +7,17 @@ The C99 seed contains no assembly emitter. A root can interpret this source,
 compile it, or load its compiled library through the ordinary runner API.
 
 ```sh
-make all
+make all test-tools build/crust0
 build/crust0 -o build/list.s examples/intrusive/raw.crs
 gcc -no-pie build/list.s build/libcrust0_host.a -o build/list
 build/list
 make check-asm
 ```
 
-`crust0` is a standalone consumer of this stage. The Make build first interprets
-[the C bootstrap](../c/bootstrap.crs), then uses that compiler to build this
-library. The [cache tutorial](../../examples/cached-backend/README.md) instead
-interprets this assembly stage directly to prepare its first native library.
-Neither route needs a checked-in generated backend file or binary.
+`crust0` is a native test driver linked to this stage. Application roots use
+[package.crs](package.crs) with the [shared loader](../build/README.md).
+The [cache tutorial](../../examples/cached-backend/README.md) also shows how to
+interpret the assembly stage directly for a first native library.
 
 ## Interface
 
@@ -26,7 +25,7 @@ The [C header](../../include/crust0_x64.h) defines the public layout and functio
 contract. `tools/api.py` generates both the
 [consumer declarations](../../api/crust0_x64.crs) and [model](model.crs).
 A native C consumer links `libcrust_asm.a` before `libcrust0.a`. A source root
-loads `crust-asm-library.so` explicitly before it calls these functions.
+prepares `stages/asm/package.crs` before it calls these functions.
 
 `crust_x64_prepare` requires checked declarations with assigned native names.
 An empty name selects an owned private definition. External declarations need

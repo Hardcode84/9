@@ -112,7 +112,7 @@ status 2 with a diagnostic.
 ## 4. Add the check to a compilation program
 
 ```sh
-make c-stage
+make all
 build/crust examples/ccn/build.crs
 build/ccn-example
 ```
@@ -155,21 +155,20 @@ it rejects a custom grammar instead of executing reader changes from its input.
 ## 5. Build the checker as a native program
 
 ```sh
-make ccn-stage
-build/crust-ccn --CCN 15 stages/ccn/count.crs
-build/crust-ccn -w --CCN 15 stages/ccn/*.crs
+make all
+build/crust stages/build/run.crs stages/ccn/tool.crs --CCN 15 stages/ccn/count.crs
+build/crust stages/build/run.crs stages/ccn/tool.crs -w --CCN 15 stages/ccn/*.crs
 ```
 
 The first invocation lists each function. The second returns status 0 without
 report rows. The native entry point uses the same checker as the root program.
 The C backend builds it with GCC. Analysis itself does not invoke a backend.
-The native tool links the existing run library for its source diagnostic
-printer.
+The seed supplies the native compiler API and source diagnostic printer.
 
 The repository's `crust-ccn` pre-commit hook runs this native checker with
 `-w --CCN 15`. It checks every `.crs` file in `api/`, `stages/`, and `tests/`,
-including the checker itself. It calls `make ccn-stage` before analysis so
-changes to the compiler or checker rebuild the executable. A failed build,
+including the checker itself. It builds the seed, then uses the shared package runner so
+changes to the compiler or checker rebuild the cached library. A failed build,
 invalid input, or function above the limit fails the hook.
 
 ```sh

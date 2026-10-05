@@ -5,7 +5,7 @@
 Run the compiled-backend single-worker gate first:
 
 ```sh
-make all c-stage parallel-stage
+make all test-tools build/crust0
 python3 benchmarks/source-order/gate.py --cpu 0 --rounds 20 --output build/application-gate.json
 python3 benchmarks/parallel/measure.py --cpu 0 --rounds 20 --output build/parallel-gate.json
 ```

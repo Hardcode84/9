@@ -19,7 +19,7 @@ all selection rules, hook contracts, and native name encodings.
 Run from the repository root on Linux x86-64:
 
 ```sh
-make all overload-stage
+make all
 build/crust examples/overload/hello/main.crs
 build/overload-hello
 ```

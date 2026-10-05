@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage, "sources.crs");
+stage_include(stage, "../resources/package.crs");
+stage_export(stage, "ownership_program");
+stage_export(stage, "ownership_publish");
+stage_export(stage, "ownership_import_program");
+stage_export(stage, "os_init");
+stage_export(stage, "os_reader_hooks");
+stage_export(stage, "os_source_hooks");
+stage_export(stage, "os_lower");
+stage_export(stage, "os_verify");

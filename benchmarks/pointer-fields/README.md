@@ -10,7 +10,7 @@ parentheses when the pointer operand requires them, such as `(*pointer)` in
 Run from the repository root with prepared native backends and a new directory:
 
 ```sh
-make all c-stage
+make all test-tools build/crust0
 python3 benchmarks/pointer-fields/measure.py --output build/pointer-fields/run-1
 ```
 

@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     try:
         built = subprocess.run(
-            ["make", "--no-print-directory", "-s", "BUILD=build", "ccn-stage"], cwd=ROOT
+            ["make", "--no-print-directory", "-s", "BUILD=build", "all"], cwd=ROOT
         )
         if built.returncode:
             return built.returncode
@@ -22,7 +22,17 @@ def main():
             for path in (ROOT / directory).rglob("*.crs")
         )
         return subprocess.run(
-            ["build/crust-ccn", "-w", "--CCN", "15", "--", *sources], cwd=ROOT
+            [
+                "build/crust",
+                "stages/build/run.crs",
+                "stages/ccn/tool.crs",
+                "-w",
+                "--CCN",
+                "15",
+                "--",
+                *sources,
+            ],
+            cwd=ROOT,
         ).returncode
     except OSError as error:
         print(f"Crust CCN check: {error}", file=sys.stderr)

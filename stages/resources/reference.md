@@ -7,7 +7,7 @@ The C99 seed has no resource policy or new keyword. The root program chooses
 the library with ordinary source calls.
 
 ```sh
-make all resource-stage
+make all
 build/crust examples/resources/hello/main.crs
 build/resource-hello
 make check-reader check-resources

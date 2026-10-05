@@ -8,7 +8,7 @@ a non-owning parent pointer. There is no second ownership chain or tree rule
 in the checker.
 
 ```sh
-make all ownership-stage
+make all
 build/crust examples/ownership-graphs/main.crs
 build/ownership-graphs
 ```

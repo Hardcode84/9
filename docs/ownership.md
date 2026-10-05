@@ -40,7 +40,7 @@ The [stage contract](ownership-model.md) gives the declaration and checking rule
 Run these commands from the repository root:
 
 ```sh
-make all ownership-stage
+make all
 build/crust examples/ownership-basics/main.crs
 build/ownership-basics
 ```

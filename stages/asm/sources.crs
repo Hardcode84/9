@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_source(stage, "../../api/crust0.crs");
+stage_source(stage, "model.crs");
+stage_source(stage, "output.crs");
+stage_source(stage, "plan.crs");
+stage_source(stage, "emit.crs");
+stage_source(stage, "program.crs");

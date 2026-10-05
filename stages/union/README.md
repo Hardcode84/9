@@ -4,7 +4,7 @@
 
 This stage adds `union`, `construct`, and `match` through the Crust reader hooks.
 The [tutorial](../../examples/union/README.md) shows setup, definitions, and use.
-Build the shared library with `make union-stage`. Run `make check-union` for
+Prepare this package with the [shared stage loader](../build/README.md). Run `make check-union` for
 construction, layout, evaluation order, exhaustive matching, rejection tests,
 and output from both backends. `make check-union-alloc` repeats these checks
 with the stage, core, and evaluator built under ASan and UBSan.

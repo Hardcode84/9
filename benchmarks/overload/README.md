@@ -11,7 +11,7 @@ the same result and direct calls without runtime dispatch.
 Run from the repository root with a new report path:
 
 ```sh
-make all overload-stage
+make all test-tools build/crust0
 python3 benchmarks/overload/measure.py \
   --stage-compiler build/crust-overload --measure-stage-preparation \
   --output build/benchmarks/overload/selection.json

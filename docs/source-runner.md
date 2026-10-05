@@ -20,11 +20,11 @@ required `build` function, or backend selector in the launcher.
 
 The installed host profile is Linux x86-64 System V. Build the C99 seed with
 a C99 compiler, Make, Python 3, and libffi development headers and library.
-The full build below also needs GCC, GNU assembler, and GNU `objcopy` to prepare
-the external backends. `make build/crust` builds only the seed launcher.
+The source-selected backend needs GCC, GNU assembler, and GNU `objcopy`.
+`make all` builds only the seed launcher. The root prepares its stages.
 
 ```sh
-make all c-stage
+make all
 build/crust examples/hello/main.crs
 build/hello
 make check check-c check-stage
@@ -38,10 +38,11 @@ The [hello example](../examples/hello/main.crs) contains the complete build
 description and target program in one file:
 
 ```crust
-host_source(run, "../../api/crust0_stage.crs");
-host_source(run, "../../stages/c/api.crs");
+host_source(run, "../../stages/build/load.crs");
+if !stage_setup(run, "../..") { return 1i32; };
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) { return 1i32; };
 host_source(run, "../../stages/c/build.crs");
-host_link(run, "../../build/crust-c-library.so");
 
 var arguments: [*u8; 2] = make [*u8; 2] {
     "-o", host_path(run, "../../build/hello")
@@ -462,9 +463,9 @@ allowed by the host. Use a new output path for each run.
 ```sh
 mkdir -p build/native-before
 git archive HEAD | tar -x -C build/native-before
-make -C build/native-before all c-stage
+make -C build/native-before all test-tools build/crust0
 # Make the source change, then build and compare it.
-make all c-stage
+make all
 python3 benchmarks/native/cold.py --before build/native-before --cpu 0 --rounds 20 --output build/native-cold.json
 ```
 

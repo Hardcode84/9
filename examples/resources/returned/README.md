@@ -10,7 +10,7 @@ the updated value.
 Run these commands from the repository root on Linux x86-64:
 
 ```sh
-make all resource-stage
+make all
 build/crust examples/resources/returned/main.crs
 build/resource-returned
 ```

@@ -45,7 +45,7 @@ a generic body resolve in this fixed input environment.
 
 ## Compile source inputs
 
-Build the library with `make generics-stage`. Load [source_model.crs](source_model.crs),
+Prepare this package with the [shared stage loader](../build/README.md). Load [source_model.crs](source_model.crs),
 [source_api.crs](source_api.crs), and `build/crust-generics-library.so` in the root.
 
 | Call | Contract |
@@ -105,7 +105,7 @@ captures. It uses the same syntax-copy operations as the source interface.
 
 ### Load and call the procedural stage
 
-Build the library with `make generics-stage`. A root loads
+Prepare this package with the [shared stage loader](../build/README.md). A root loads
 [model.crs](model.crs), [api.crs](api.crs), and the resulting
 `build/crust-generics-library.so`. The model contains ordinary compilation-time
 records. The API exposes these calls:

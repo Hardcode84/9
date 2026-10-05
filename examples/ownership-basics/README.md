@@ -9,7 +9,7 @@ uses the same resource operations and separate intrusive-list examples.
 From the repository root:
 
 ```sh
-make all ownership-stage
+make all
 build/crust examples/ownership-basics/main.crs
 build/ownership-basics
 ```

@@ -16,7 +16,7 @@ sets native link names. No module keywords or compiler registration are used.
 Run these commands from the repository root:
 
 ```sh
-make all c-stage
+make all
 build/crust examples/modules/main.crs
 build/modules
 ```
@@ -152,7 +152,7 @@ build/crust stages/modules/exports.crs stages/c/api.crs stages/c/extension.crs
 
 The root reads every supplied path, then emits one `--export NAME` argument
 for each external function declaration. It checks all names before it writes
-output. The Makefile uses this output to select the C backend library exports.
+output. The package loader reads these interfaces to select library exports.
 Changing a consumer declaration changes the next library build's exports.
 The library also exports the generated public API digest constants. The root
 loader checks these constants when it loads the library.

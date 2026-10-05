@@ -272,7 +272,7 @@ The following is a complete target program for the example's provider. Save it
 as `build/intrusive-small.crs`. From the repository root, run:
 
 ```sh
-make all ownership-stage
+make all
 build/crust examples/intrusive/main.crs -o build/intrusive-small \
     build/intrusive-small.crs
 build/intrusive-small
@@ -442,7 +442,7 @@ do not assume an optimizer will erase extra bookkeeping.
 Run from the repository root:
 
 ```sh
-make all ownership-stage
+make all
 make check-ownership check-ownership-imports check-ownership-alloc
 make check-ownership-ergonomics
 ```

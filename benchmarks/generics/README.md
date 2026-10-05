@@ -11,7 +11,7 @@ tutorial is a control. Both drivers use compiled stages and a compiled backend.
 Build the tools, then capture the baseline before editing stage sources:
 
 ```sh
-make all c-stage
+make all test-tools build/crust0
 python3 benchmarks/generics/prepare.py --work build/generics-before
 ```
 

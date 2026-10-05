@@ -222,7 +222,7 @@ def main():
         "--before",
         type=Path,
         required=True,
-        help="frozen checkout with make all c-stage outputs in build/",
+        help="frozen checkout with make all test-tools outputs in build/",
     )
     parser.add_argument("--build", type=Path, default=ROOT / "build")
     parser.add_argument("--output", type=Path, required=True)

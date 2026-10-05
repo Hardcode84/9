@@ -141,10 +141,13 @@ stack for their budget and native callees. See the
 [execution contract](source-runner.md#execution-and-lifetime).
 
 `host_source` checks a host declaration unit. `host_link` loads an explicit
-shared-library path. It does not compile changed library source. Stage code
-must already be available before a call uses it; preparing that code is an
-explicit build dependency. A root can also define and execute stage functions
-directly, as the [reader switch](../examples/reader-switch/README.md) does.
+shared-library path. Application roots use the shared
+[stage preparation API](../stages/build/README.md) to obtain that code from
+captured sources. Each package selects its own source dependencies and public
+exports. The root validates the content cache before loading a library.
+Make builds the seed and test fixtures. Stage preparation belongs to Crust
+source. A root can also define and execute stage functions directly, as the
+[reader switch](../examples/reader-switch/README.md) does.
 
 The native execution stage starts with a small setup prefix in the seed.
 An early root action selects a backend, prepares its native code with an
@@ -303,11 +306,12 @@ The `crust` executable and `libcrust0.a` contain neither emitter. `crust0`
 is a standalone consumer linked to the external assembly stage. The C stage
 uses the same frontend services and ordinary native host calls.
 
-The Make build interprets [bootstrap.crs](../stages/c/bootstrap.crs) to compile
-the first C backend with GCC. That backend compiles itself, then builds the
-assembly stage. No generated C, object, or archive is a source dependency.
-`make check-c check-asm` checks successive backend generations and runs the
-intrusive-list program built by each final generation.
+The shared [package loader](../stages/build/README.md) interprets C emission
+for the first backend build. Its native output prepares the selected stages,
+including the assembly stage. Source-owned caching validates their inputs.
+`make all` builds the seed. `make check-c check-asm` prepares native test
+drivers, checks successive backend generations, and runs the intrusive-list
+program built by each final generation.
 
 The [cached root](../examples/cached-backend/README.md) provides another
 bootstrap route. It interprets the assembly stage in a separate context on

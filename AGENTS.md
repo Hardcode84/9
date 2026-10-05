@@ -13,6 +13,9 @@ does not veto the selected capability.
   Research proposals are not implemented contracts or accepted syntax.
 - Sources: `.crs`. Command: `crust main.crs`. Root selects inputs, stages,
   outputs through ordinary calls.
+- `make all`: C99 seed only. Make may build test fixtures. Application stages
+  bootstrap dependencies in Crust through shared package/cache code. No copied
+  bootstrap sequences or Make-owned stage source graphs.
 - C99 seed: reader, checker, evaluator, runner. Seed builds without a backend.
   Backends, caching, bootstrap, execution policy: ordinary Crust stages.
   Test source bootstrap and successive stage generations.

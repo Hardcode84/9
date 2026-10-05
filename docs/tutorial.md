@@ -21,20 +21,21 @@ The current target is Linux x86-64. You need GCC, GNU Make, GNU binutils,
 Python 3, and the libffi development headers and library.
 
 ```sh
-make all c-stage
+make all
 mkdir -p build/learn
 ```
 
-`make` builds the launcher and prepares the C backend. The `build/learn`
+`make` builds the seed launcher. The root prepares the C backend. The `build/learn`
 directory will hold your source files and executables for this tutorial.
 
 Save this as `build/learn/main.crs`:
 
 ```crust
-host_source(run, "../../api/crust0_stage.crs");
-host_source(run, "../../stages/c/api.crs");
+host_source(run, "../../stages/build/load.crs");
+if !stage_setup(run, "../..") { return 1i32; };
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) { return 1i32; };
 host_source(run, "../../stages/c/build.crs");
-host_link(run, "../../build/crust-c-library.so");
 
 var arguments: [*u8; 2] = make [*u8; 2] {
     "-o", host_path(run, "hello")
@@ -282,12 +283,14 @@ The setup uses these helpers:
 | Call | Effect |
 | --- | --- |
 | `host_source(run, path)` | Read and check a whole file of declarations for the compilation program |
+| `stage_open(run, base, cache)` | Prepare the C provider and capture toolchain inputs |
+| `stage_load(stages, package)` | Prepare and load a selected source package |
 | `host_link(run, path)` | Load a shared library containing native functions |
 | `host_path(run, path)` | Resolve a path relative to the root source file |
 | `c_build(source, begin, argc, argv)` | Compile the selected target source with the C backend |
 
-The first three loaded source files declare the build request, C backend calls,
-and `c_build` helper. The shared library supplies the compiled backend.
+The shared preparation code supplies the build request and C backend interface.
+The root loads `c_build` separately. The validated library supplies native backend code.
 The launcher already supplies the core compiler and host interfaces.
 
 `(*run).source` points to the root's captured source bytes. `(*run).cursor`
@@ -384,11 +387,12 @@ when to call it.
 Keep `program.crs` from the previous section. Replace `main.crs` with:
 
 ```crust
-host_source(run, "../../api/crust0_stage.crs");
-host_source(run, "../../stages/c/api.crs");
+host_source(run, "../../stages/build/load.crs");
+if !stage_setup(run, "../..") { return 1i32; };
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) { return 1i32; };
 host_source(run, "../../stages/modules/library.crs");
 host_source(run, "../../stages/ccn/count.crs");
-host_link(run, "../../build/crust-c-library.so");
 
 const COMPLEXITY_LIMIT: usize = 8usize;
 
@@ -488,7 +492,7 @@ fn main(argc: i32, argv: **u8) -> i32 {
 Select the ownership stage with its supplied root:
 
 ```sh
-make ownership-stage
+make test-tools
 build/crust examples/ownership-basics/main.crs \
     -o build/learn/borrow build/learn/borrow.crs
 build/learn/borrow
@@ -575,8 +579,8 @@ a complete reader for an input language of your own.
 
 ## Prepare backends and run compilation code natively
 
-The examples above load a C backend prepared by `make c-stage`. The root
-evaluates its setup calls, and calls into that backend run native code.
+The examples above prepare a C backend through the shared package loader.
+The root validates cached code against captured inputs, then calls native code.
 The assembly backend is another Crust library; it produces x86-64 assembly
 for the GNU assembler. The backend you choose must support the operations
 and stage output used by your target.

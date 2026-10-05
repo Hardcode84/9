@@ -8,7 +8,7 @@ also remove those references. This example shows that obligation with the same
 ownership stage used by the [intrusive list](../intrusive/README.md).
 
 ```sh
-make all ownership-stage
+make all
 build/crust examples/ownership-index/main.crs
 build/ownership-index
 ```

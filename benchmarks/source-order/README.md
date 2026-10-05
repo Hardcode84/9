@@ -7,7 +7,7 @@ root execution, stage loading, target frontend work, complete C and native-symbo
 output, and cleanup. Target GCC compilation and linking are excluded. An installed
 backend and a source-built backend are different configurations.
 
-Run from the repository root after `make all c-stage`. Select an allowed CPU
+Run from the repository root after `make all test-tools build/crust0`. Select an allowed CPU
 and a new output path for each command:
 
 ```sh

@@ -8,7 +8,7 @@ design, implementation, custom reader service, editor adapter, and checks.
 Run from the repository root:
 
 ```sh
-make all highlight-stage
+make all
 build/crust examples/highlight/main.crs --html examples/hello/main.crs > build/hello.html
 build/crust-highlight --tokens examples/hello/main.crs > build/hello.tokens.json
 build/crust examples/highlight/reader-switch.crs --html examples/reader-switch/main.crs > build/reader-switch.html

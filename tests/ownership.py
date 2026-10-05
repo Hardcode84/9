@@ -28,6 +28,25 @@ def rejects():
     head = "var head:ReadyHead=uninit;ready_init(&head);"
     cursor = "var cursor:Cursor=ready_first(read head);"
     return {
+        "cursor-under-reclaim": (
+            body(
+                owner
+                + head
+                + "ready_insert(mut head,read owner);"
+                + cursor
+                + "drop owner;var value:read i64=cursor_value(read cursor);if value!=1i64{trap;}"
+            ),
+            "scoped result requires a read or edit access scope",
+        ),
+        "forwarded-cursor-under-reclaim": (
+            "fn first(head:read ReadyHead)->Cursor access(read,Graph) {return ready_first(read head);}"
+            + body(head + "var saved:Cursor=first(read head);"),
+            "scoped result requires a read or edit access scope",
+        ),
+        "cursor-in-nested-domain": (
+            body("read Graph {domain Graph {" + head + cursor + "}}"),
+            "scoped result requires a read or edit access scope",
+        ),
         "copy-owner": (body(owner + "var copy:Owner=owner;"), "explicit move"),
         "double-drop": (body(owner + "drop owner;drop owner;"), "has been moved"),
         "after-drop": (

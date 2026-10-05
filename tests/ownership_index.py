@@ -28,6 +28,19 @@ def body(text):
 
 def rejects():
     return {
+        "selection-under-reclaim": (
+            body(
+                SETUP
+                + SELECT
+                + REMOVE
+                + "var value:read i64=selection_value(read selected);if value!=41i64{trap;}"
+            ),
+            "scoped result requires a read or edit access scope",
+        ),
+        "selection-after-owner-drop": (
+            body(SETUP + SELECT + "drop index;var value:read i64=selection_value(read selected);"),
+            "scoped result requires a read or edit access scope",
+        ),
         "remove-during-read": (
             body(SETUP + "read Symbols {" + SELECT + REMOVE + "}"),
             "stronger domain authority",

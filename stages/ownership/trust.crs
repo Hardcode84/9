@@ -66,7 +66,8 @@ fn os_scope_origin(check: *OsCheck, state: *OsState, domain: *CrustName, locatio
     var scope: *OsScope = (*state).scope;
     while scope != null(*OsScope) && !(*scope).access { scope = (*scope).parent; }
     if scope == null(*OsScope) && (*(*check).function).effect != OS_RECLAIM { scope = (*state).scope; }
-    if scope == null(*OsScope) || (*state).domain != domain {
+    // A fresh domain is an access scope, but its reclamation permission cannot protect a cursor.
+    if scope == null(*OsScope) || (*state).domain != domain || (*state).effect == OS_RECLAIM {
         os_error(check, location, "scoped result requires a read or edit access scope"); return null(*OsScope);
     }
     return scope;

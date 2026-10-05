@@ -64,6 +64,13 @@ after it form the target program. `c_build` receives the remaining source,
 compiles it, and returns a status. The C backend produces C code and calls GCC
 and the native linker to make the executable.
 
+GCC work can dominate the total build time on this path. Crust's compilation-speed
+gate covers frontend work and emission; it excludes target GCC compilation and
+linking. The assembly backend produces x86-64 assembly directly and still needs
+an assembler and linker to make an executable. The
+[complete-build benchmark](../benchmarks/build-time/README.md) measures both
+paths through the finished executable.
+
 ```mermaid
 flowchart LR
     A[crust main.crs] --> B[Execute compilation setup]

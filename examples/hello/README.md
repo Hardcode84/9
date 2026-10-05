@@ -32,6 +32,11 @@ Hello, world!
 compilation program, which produces `build/hello`. Only the last command runs
 the target program.
 
+This build uses the C backend and includes GCC compilation and linking.
+GCC work can dominate its total time. The frontend speed gate excludes those
+steps; the [complete-build benchmark](../../benchmarks/build-time/README.md)
+compares complete C and assembly builds of the intrusive-list example.
+
 ## Read the compilation program
 
 The first four lines load declarations, a helper, and compiled stage code:

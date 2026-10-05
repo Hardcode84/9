@@ -372,6 +372,12 @@ Correctness checks compile and run the output outside the timing samples. Keep
 raw samples, commands, source and tool hashes, and confidence intervals in the
 ignored report. A result applies to its recorded builds, inputs, and host.
 
+The [complete-build benchmark](../benchmarks/build-time/README.md) also measures
+the time through a finished executable, including native toolchain costs. It
+compares the C backend's default GCC optimization with direct assembly emission
+on the same example. Use that endpoint when assessing the time a user waits
+for a build.
+
 The application speed gate uses an identified compiled backend. Measure source
 bootstrap and automatic cache validation separately. A configuration that
 changes a project stage includes its preparation cost. The

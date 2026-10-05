@@ -19,6 +19,7 @@ removed during cleanup also has an unchanged local copy under
 | Seed checking, assembly, and memory use | [Bootstrap guide](../docs/bootstrap.md#validation-and-measurements) |
 | Seed AST layout and frontend memory | [AST layout experiment](ast-layout/README.md) |
 | C emission | [C backend guide](../docs/c-backend.md#compilation-measurements) |
+| Complete C and assembly builds | [Build-time comparison](build-time/README.md) |
 | Root execution and native handoff | [Source-order measurements](source-order/README.md) |
 | Independent module jobs and dependency chains | [Parallel measurements](parallel/README.md) |
 | Backend preparation and artifact reuse | [Cache measurements](backend-cache/README.md) |

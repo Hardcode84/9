@@ -11,7 +11,7 @@ language they need through ordinary libraries, and pay only for what they use.
 
 ## Design principles
 
-- **Fast by default.** Keep the basic compilation path close to C. Select
+- **Fast by default.** Target C-level speed through backend handoff. Select
   stronger language checks when their capabilities justify more compiler work.
 - **A small, extensible core.** Add language features through libraries.
   Keep the compiler interfaces open to replacement readers, checkers, and
@@ -42,6 +42,13 @@ The program prints `Hello, world!`. The [example source](examples/hello/main.crs
 contains both the compilation program and the target program. The first
 command builds the compiler and C backend; the second builds the example;
 the third runs it.
+
+This example uses the C backend. Its total build time includes GCC compilation
+and linking; GCC work can dominate that time. The compilation-speed gate
+covers Crust frontend work and emission. The assembly backend emits x86-64
+assembly directly, then uses the native assembler and linker. See the
+[complete-build measurement method](benchmarks/build-time/README.md) for both
+paths and their costs.
 
 ## Documentation
 

@@ -60,6 +60,24 @@ have a function CCN. An empty file succeeds without report rows. If a file has a
 syntax error, no rows from that file are printed. Rows from earlier files can
 already have been printed.
 
+### Ownership and generic sources
+
+Select the ownership reader for annotated source:
+
+```sh
+build/crust stages/build/run.crs stages/ccn/ownership-tool.crs -w --CCN 15 stages/union/layout_checked.crs
+```
+
+This tool calls the existing ownership and generic reader productions. It
+counts source functions before lowering or generic instantiation. It also
+reads seed declarations and root actions. It executes no input action and
+requires no name resolution or ownership proof. The repository hook uses this
+reader for all implementation sources.
+
+`ccn_read_using` accepts an action-reader callback and caller data. Both readers
+use the same syntax counter and reporting functions. `ccn_program_using`
+accepts a file callback so an adapter can own its reader state through reporting.
+
 ## 2. Define the count
 
 The counter uses this rule for each function:

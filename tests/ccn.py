@@ -246,8 +246,25 @@ def main():
     suite = Suite(parser.parse_args())
     suite.work = suite.build / "ccn-tests"
     suite.work.mkdir(exist_ok=True)
-    commands = [[suite.build / "crust-ccn"], [suite.runner, ROOT / "examples/ccn/main.crs"]]
+    commands = [
+        [suite.build / "crust-ccn"],
+        [suite.runner, ROOT / "examples/ccn/main.crs"],
+        [suite.runner, ROOT / "stages/build/run.crs", "stages/ccn/ownership-tool.crs"],
+    ]
     compare_lizard(suite, commands)
+    ownership = suite.write(
+        "ownership-syntax.crs",
+        """
+domain Arena(Handle);
+record Handle { value:*u8; } opaque scoped;
+fn choose!(Item)(handle:read Handle,value:Item)->Item access(edit,Arena) {
+    if true && false { return move value; }
+    while false { if true { break; } }
+    return move value;
+}
+""",
+    )
+    assert counts(suite.command([*commands[-1], ownership]).stdout) == {"choose": 5}
     check_inputs(suite, commands)
     wide = check_large(suite, commands)
     check_tutorial(suite)

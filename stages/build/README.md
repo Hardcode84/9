@@ -83,12 +83,73 @@ name. Conflicting native names for the same definition are errors.
 function declarations. The selected definitions must exist in the package.
 The producer exports the generated API digest constants as well.
 
+## Select a package compiler
+
+A package can select a compiler implemented by another package:
+
+```crust
+stage_compiler(stage, "../generics/ownership/compiler-package.crs", "og_stage_compile");
+stage_source(stage, "program.crs");
+```
+
+The compiler package is built through the same loader. Its exported function
+has type `fn(*StageCompile) -> bool`. The request in
+[interface.crs](interface.crs) contains captured sources, source options,
+exports, a diagnostic context, and paths for C text and a symbol map. The
+callback must write both outputs on success. It must retain a diagnostic on
+failure. It owns its parser and checker storage through emission and must copy
+any diagnostic into the request context before it releases that storage.
+The shared builder runs GCC and the linker and publishes the cached artifact.
+
+The compiler receives captured bytes. It must include each selected export
+and the native API digest constants that its output requires. The shared
+`stage_names` helper assigns those names to a seed-compatible checked tree.
+A compiler with another representation can assign them itself. Compiler
+selection and source options are ordinary package calls. The loader has no
+ownership or union rules.
+
+`stage_source_option(stage, source, option)` attaches a compiler-defined string
+to a captured source. Repeated equal options are accepted. Conflicting options
+fail. The ownership compiler accepts these options:
+
+| Option | Contract |
+| --- | --- |
+| Empty string, the default | Check ownership and generic contracts |
+| `trusted` | Trust bodies; retain the source's explicit record contracts |
+| `raw` | Trust bodies and expose records as opaque representations |
+
+Select trust at the point where the package captures the source. For example,
+a package that adds a new provider can use:
+
+```crust
+stage_source(stage, "provider.crs");
+stage_source_option(stage, stage->sources.items[stage->sources.count - 1usize], "trusted");
+stage_source(stage, "client.crs");
+```
+
+Use the source's existing entry when it was already captured. The
+[union package](../union/sources.crs) uses these calls to check its layout
+algorithms and select its pointer provider. It bootstraps its checker from
+source on a cache miss. Compiler dependency nesting has a limit of 64; a cycle
+produces a diagnostic.
+
+To emit a package for a test or a measurement, use the shared emission root:
+
+```sh
+build/crust stages/build/emit.crs PACKAGE C-OUTPUT SYMBOLS-OUTPUT
+```
+
+This selects the package compiler and stops after C emission. Paths are
+relative to `stages/build`; absolute paths also work. The caller can compile
+and link this output with its selected test flags.
+
 ## Cache inputs and failures
 
 A session captures the seed executable, loaded native libraries, preparation
 sources, tools, and system header output. A library key includes these inputs,
 all included package files, captured declaration units, selected exports, and
-the compiled backend used to emit it. Changes to transitive sources invalidate
+the compiled backend used to emit it. A selected compiler adds its native
+image and entry name to the key. Source options are also key inputs. Changes to transitive sources invalidate
 the library even when file modification times stay the same.
 
 The build callback reads the captured declaration bytes. A source file change

@@ -5,8 +5,11 @@ fn stage_init(package: *StagePackage, root: *CrustRun, base: *u8) -> unit {
     package->base = base;
     package->sources = make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize };
     package->inputs = package->sources;
+    package->options = package->sources;
     package->exports = null(*StageName);
     package->depth = 0usize;
+    package->compiler = null(*u8);
+    package->entry = null(*u8);
 }
 
 fn stage_capture(package: *StagePackage, path: *u8, inputs: *CacheInputs) -> bool {

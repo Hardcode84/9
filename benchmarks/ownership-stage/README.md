@@ -11,9 +11,13 @@ Build the seed and native test tools. Select a CPU allowed by the host:
 ```sh
 make all test-tools
 python3 benchmarks/ownership-stage/measure.py \
-    --cpu 4 --rounds 20 --output build/ownership-stage-run
+    --cpu 4 --rounds 20 --output build/ownership-stage-run \
+    --raw-layout build/raw-control/layout.crs
 ```
 
+Select a preserved raw layout implementation as the control. Keep it under
+`build/` with its capture metadata. The harness records its exact bytes and
+hash. It uses current reader and backend dependencies for both candidates.
 Use a new output directory for each run. The script captures source bytes,
 hashes, commands, toolchain identity, diagnostics, timings, and generated code
 under that directory. Results stay outside version control.
@@ -59,7 +63,7 @@ Five builds must produce identical target C and symbol maps:
 2. Opaque records with all stage bodies trusted.
 3. Typed cache lookup through standalone generics.
 4. Typed cache lookup through ownership, with all stage bodies trusted.
-5. The arena cache algorithm with its body checked.
+5. The production layout arithmetic and field/variant loops with their bodies checked.
 
 Each build runs the union runtime corpus and rejects the union error corpus.
 The stage, dependency implementations, and generated target use ASan and UBSan.
@@ -72,34 +76,31 @@ contains each sample, the median trust-only/raw ratio, and its bootstrap interva
 The trust-only control measures compiler work with union body checks bypassed.
 It supplies no checked-port speed result.
 
-## Checked arena cache
+## Checked production layout
 
-[arena_checked.crs](arena_checked.crs) checks the depth limit, cache state,
-publication order, recursive-call status, and final layout state.
-[arena_provider.crs](arena_provider.crs) supplies its native boundary. The
-harness replaces the production `su_layout_record` body and runs the normal
-union compilation entry point with that replacement.
+The harness compiles the production
+[checked layout](../../stages/union/layout_checked.crs),
+[handle provider](../../stages/union/layout_handles.crs), and
+[pointer adapter](../../stages/union/layout.crs). The checked source is a
+separate untrusted input. The normal union package uses the same sources and
+trust selections through its source-selected compiler.
 
-Native callers supply a valid stage and declaration from its context.
-The owning context keeps arena allocations live through the whole call. The boundary creates opaque
-scoped handles only after the existing null and allocation checks succeed.
-Each handle has one pointer. Read and edit scopes permit cache growth while
-excluding reclamation. The checked client reads scalar layout snapshots and
-publishes updates through the provider. No pointer validity test or runtime
-ownership state is added.
+The checked code handles depth, cache state, publication order, array size,
+field and variant loops, alignment, overflow, and tag size. The provider owns
+raw arena access, type lookup, cursor steps, AST storage construction, and
+native entry points. Other union functions retain explicit trust. The report
+separates checked lines, provider lines, and raw functions outside layout.
+Provider counts include the wrappers required to expose the arena operations.
+A smaller checked function does not imply a smaller trusted implementation.
 
-The raw entry retains the null-result ABI. A new layout starts with state zero;
-the checked function sets state one before cache publication and recursion.
-State one detects cycles; state two permits cache reuse. The recursive field
-and variant algorithms call the same entry, so nested layout requests also
-run the checked cache algorithm.
+Three invalid checked clients must fail: private field access, destruction of
+a borrowed parameter, and edit calls from read authority. Each compiler must
+produce the same target C and symbol map, execute the union corpus, and reject
+the error corpus under ASan and UBSan. The package tests also apply these
+invalid edits to the production source and require normal bootstrap to fail.
 
-The checked source is a separate untrusted input. Three invalid variants must
-fail: access to private fields, destruction of a borrowed parameter, and edit
-calls from read authority. Runtime output must agree with the raw stage, and
-the normal union error corpus must fail under ASan and UBSan.
-
-The report separates checked source lines, provider lines, and remaining raw
-functions. It times the checked cache path against the raw stage. The remaining
-union algorithms still have explicit body trust; the full checked-stage timing
-stays unset. Use their recorded diagnostics to continue the port.
+The report gives the checked-layout/raw frontend ratio. The full-stage checked
+timing stays unset because the reader, lowering, and provider bodies retain
+explicit trust. Target GCC compilation and linking remain outside the timed
+intervals. Package bootstrap and cache validation are separate from this
+native frontend measurement.

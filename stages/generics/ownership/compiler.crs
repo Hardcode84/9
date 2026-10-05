@@ -1,0 +1,52 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Raw inputs expose opaque records and trusted bodies. Checked clients cannot
+// inspect those records. Annotated providers use the separate trusted option.
+fn og_stage_raw(program:*OgProgram)->unit {
+    var declaration:*CrustDecl=program->generics.syntax.last_unit->declarations;
+    while declaration!=null(*CrustDecl) {
+        if declaration->kind==CRUST_D_RECORD {
+            var contract:*OsRecord=crust_map_get(&program->parsed.records,declaration as usize) as *OsRecord;
+            contract->opaque=true;
+        }
+        declaration=declaration->next;
+    }
+}
+
+fn og_stage_inputs(program:*OgProgram,request:*StageCompile)->bool {
+    var index:usize=0usize;
+    while index<request->sources.count {
+        var input:*CrustSource=request->sources.items[index];
+        var option:*u8=stage_compile_option(request,input);
+        var raw:bool=c_equal(option,"raw");
+        var trusted:bool=c_equal(option,"trusted");
+        if !raw && !trusted && !c_equal(option,"") {
+            crust_set_error(&program->generics.syntax,input,0usize,"ownership compiler expects raw, trusted, or empty source options");return false;
+        }
+        var source:*CrustSource=crust_try_alloc(&program->generics.syntax,sizeof(CrustSource),alignof(CrustSource)) as *CrustSource;
+        if source==null(*CrustSource){return false;}
+        *source=*input;source->identity=index as u64+1u64;
+        if !og_read(program,source,raw || trusted){return false;}
+        if raw{og_stage_raw(program);}
+        index=index+1usize;
+    }
+    return true;
+}
+
+// Compile captured inputs with explicit source trust and emit C plus symbols.
+// Diagnostics outlive the temporary checker and its arena.
+fn og_stage_compile(request:*StageCompile)->bool {
+    var program:OgProgram=uninit;
+    og_init(&program,&request->context->arena.allocator,request->sources.count as u64+1u64);
+    var success:bool=og_stage_inputs(&program,request) && og_check(&program) &&
+        stage_names(request->exports,&program.generics.context);
+    if success {
+        var options:CBackendOptions=make CBackendOptions{mode:2u32,output:request->output,symbols:request->symbols,
+            cflags:null(**u8),cflag_count:0usize,ldflags:null(**u8),ldflag_count:0usize};
+        success=c_backend_build_with_body(&program.generics.context,null(*CrustDecl),&options,rs_c_body,&program.resources as *u8)==0i32;
+    }
+    og_driver_diagnostic(request->context,&program.generics.syntax);
+    og_driver_diagnostic(request->context,&program.generics.context);
+    og_destroy(&program);
+    return success;
+}

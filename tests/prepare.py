@@ -74,6 +74,26 @@ def compile_tool(build, name, cflags, ldflags, seed=False):
     subprocess.run(command, cwd=ROOT, check=True)
 
 
+def compile_package(build, manifest, output, cflags, ldflags):
+    output = Path(output).resolve()
+    source, symbols = output.with_suffix(".c"), output.with_suffix(".symbols")
+    obj, renamed = output.with_suffix(".input.o"), output.with_suffix(".o")
+    commands = [
+        [
+            build / "crust",
+            ROOT / "stages/build/emit.crs",
+            Path(manifest).resolve(),
+            source,
+            symbols,
+        ],
+        ["gcc", "-std=c99", "-pedantic-errors", *cflags, "-c", source, "-o", obj],
+        ["objcopy", f"@{symbols}", obj, renamed],
+        ["gcc", renamed, *ldflags, "-o", output],
+    ]
+    for command in commands:
+        subprocess.run(list(map(str, command)), cwd=ROOT, check=True)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=Path("build"))
@@ -81,8 +101,21 @@ def main():
     parser.add_argument("--ldflags", default="")
     parser.add_argument("--sources")
     parser.add_argument("--exports")
+    parser.add_argument("--compile-package", type=Path)
+    parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     build = args.build.resolve()
+    if args.compile_package:
+        if not args.output:
+            parser.error("--compile-package requires --output")
+        compile_package(
+            build,
+            args.compile_package,
+            args.output,
+            shlex.split(args.cflags),
+            shlex.split(args.ldflags),
+        )
+        return
     if args.sources:
         print("\n".join(map(str, sources(build, args.sources))))
         return

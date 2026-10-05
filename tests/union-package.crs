@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage,"../stages/union/sources.crs");
+var first:usize=stage->sources.count;
+stage_source(stage,"../api/crust0_x64.crs");
+stage_source(stage,"../api/crust0_eval.crs");
+stage_source(stage,"union_alloc.crs");
+stage_source(stage,"union_driver.crs");
+while first<stage->sources.count {
+    if !stage_source_option(stage,stage->sources.items[first],"raw"){return 1i32;}
+    first=first+1usize;
+};
+stage_export(stage,"main");
+stage_export_as(stage,"CRUST_ABI_crust0","union_test_core_abi");
+stage_export_as(stage,"CRUST_ABI_crust0_x64","union_test_asm_abi");

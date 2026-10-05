@@ -1,18 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record StageName { text: *u8; link: *u8; next: *StageName; }
 record StagePackage {
     sources: CacheInputs;
     inputs: CacheInputs;
+    options: CacheInputs;
     exports: *StageName;
     root: *CrustRun;
     base: *u8;
+    compiler: *u8;
+    entry: *u8;
     depth: usize;
 }
 record StageBuild {
     package: *StagePackage;
     interpreter: *CrustRun;
     emitter: *CrustDecl;
+    compile: fn(*StageCompile)->bool;
     interpreted: bool;
 }
 extern fn stage_realpath(path: *u8, result: *u8) -> *u8 = "realpath";
@@ -23,4 +26,5 @@ record StageSession {
     base: *u8;
     directory: *u8;
     backend: *u8;
+    depth: usize;
 }

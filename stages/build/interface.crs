@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record StageName { text: *u8; link: *u8; next: *StageName; }
+record StageCompile {
+    sources: CacheInputs;
+    options: CacheInputs;
+    exports: *StageName;
+    context: *CrustContext;
+    output: *u8;
+    symbols: *u8;
+}

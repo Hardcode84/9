@@ -61,6 +61,34 @@ permitted. Payload types must be seed types or union declarations in the same
 stage. Layout and lowering recursion are bounded at 256 levels; generated
 conditional nesting also counts toward the seed's depth bound.
 
+## Checked implementation boundary
+
+The package checks [layout_checked.crs](layout_checked.crs) with the ownership
+and generics stage. This code handles cache publication and cycle detection,
+array count and size limits, field and variant loops, alignment, overflow,
+and the final tag size. The package treats this file as an untrusted input.
+An invalid field access or borrow operation stops normal stage preparation.
+
+[layout_handles.crs](layout_handles.crs) and [layout.crs](layout.crs) are the
+explicitly trusted provider. They handle arena pointers, cache lookup and
+insertion, type lookup, cursor steps, diagnostics, and AST storage construction.
+The typed cache helper is a generic function. The other union files, reader,
+and backend also have explicit raw-source trust. The package does not claim
+that those bodies have passed ownership checking.
+
+The owning context keeps arena storage live through a layout request. Opaque
+scoped handles contain live declaration, layout, and location pointers.
+Read and edit access permit allocation while excluding reclamation. Cursor
+steps return scalar size and alignment snapshots. Zero alignment ends a
+cursor; the context diagnostic distinguishes failure from exhaustion.
+The provider must preserve these contracts. These annotations add no runtime
+ownership metadata or validity checks.
+
+The package uses the shared source-owned compiler selection and cache. Make
+builds the seed and test fixtures. The checker and backend bootstrap through
+package dependencies. The [measurement harness](../../benchmarks/ownership-stage/README.md)
+compares generated target bytes, rejection behavior, and frontend costs.
+
 ## Compilation API
 
 [api.crs](api.crs) declares `union_program`. It accepts a `CrustBuild` with an
@@ -70,8 +98,9 @@ context; the return value is the build status.
 
 The library includes the C backend adapter. Its lower-level source interface is:
 
-1. Include the reader sources and `model.crs`, `read.crs`, `layout.crs`,
-   `nodes.crs`, and `lower.crs` in your compilation program.
+1. Include [sources.crs](sources.crs) in a package. It selects the checked
+   layout sources, their trusted provider, and the ownership compiler.
+   Export the `su_` entry points that your consumer requires.
 2. Call `su_init` with stage storage and an empty context.
 3. Call `su_read` for each declaration source range.
 4. Call `su_check` once. This collects declarations, lays out union storage,

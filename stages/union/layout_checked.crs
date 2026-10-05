@@ -1,0 +1,65 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn su_checked_layout_depth(arena:read SuArena,decl:read SuDeclaration,depth:usize)->bool access(edit,CompilerArena){
+    if depth<256usize{return true;}
+    su_handle_error(read arena,read decl,false);return false;
+}
+fn su_checked_layout_record(arena:read SuArena,decl:read SuDeclaration,layout:read SuLayoutHandle,depth:usize)->bool access(edit,CompilerArena){
+    var data:SuLayoutData=su_handle_load(read layout);
+    if data.state==1u32{su_handle_error(read arena,read decl,true);return false;}
+    if data.state==2u32{return true;}
+    data.align=1u32;data.state=1u32;
+    su_handle_save(read layout,read data);
+    if !su_handle_publish(read arena,read decl,read layout){return false;}
+    if !su_handle_fill(read arena,read decl,read layout,depth){return false;}
+    data=su_handle_load(read layout);
+    data.size=su_handle_round(read arena,read decl,data.size,data.align);data.state=2u32;
+    su_handle_save(read layout,read data);
+    return !su_handle_failed(read arena);
+}
+
+fn su_checked_round(arena:read SuArena,location:read SuLocation,size:u64,alignment:u32)->u64 access(edit,CompilerArena){
+    var mask:u64=alignment as u64-1u64;
+    if size>9223372036854775807u64-mask{su_layout_diagnostic(read arena,read location,0u32);return 0u64;}
+    return (size+mask)&~mask;
+}
+fn su_checked_array_count(arena:read SuArena,location:read SuLocation,count:u64)->bool access(edit,CompilerArena){
+    if count!=0u64{return true;}
+    su_layout_diagnostic(read arena,read location,1u32);return false;
+}
+fn su_checked_array(arena:read SuArena,location:read SuLocation,count:u64,size:u64)->u64 access(edit,CompilerArena){
+    if count>9223372036854775807u64/size{su_layout_diagnostic(read arena,read location,2u32);return 0u64;}
+    return size*count;
+}
+fn su_checked_fields(arena:read SuArena,decl:read SuDeclaration,layout:read SuLayoutHandle,cursor:mut SuFields,depth:usize)->bool access(edit,CompilerArena){
+    var data:SuLayoutData=su_handle_load(read layout);
+    var any:bool=false;
+    while true {
+        var value:SuSize=su_fields_next(read arena,mut cursor,depth);
+        if value.align==0u32{break;}
+        any=true;
+        var location:SuLocation=su_fields_location(read cursor);
+        data.size=su_checked_round(read arena,read location,data.size,value.align);
+        if value.size>9223372036854775807u64-data.size{su_layout_diagnostic(read arena,read location,3u32);return false;}
+        data.size=data.size+value.size;
+        if value.align>data.align{data.align=value.align;}
+    }
+    if !any{su_handle_empty(read arena,read decl);}
+    su_handle_save(read layout,read data);return !su_handle_failed(read arena);
+}
+fn su_checked_variants(arena:read SuArena,decl:read SuDeclaration,layout:read SuLayoutHandle,cursor:mut SuVariants,depth:usize)->bool access(edit,CompilerArena){
+    var data:SuLayoutData=su_handle_load(read layout);
+    data.align=4u32;
+    while true {
+        var value:SuSize=su_variants_next(read arena,mut cursor,depth);
+        if value.align==0u32{break;}
+        if value.size>data.size{data.size=value.size;}
+        if value.align>data.align{data.align=value.align;}
+    }
+    if su_handle_failed(read arena) || !su_handle_storage(read arena,read decl,data.size,data.align){return false;}
+    var location:SuLocation=su_handle_location(read decl);
+    data.size=su_checked_round(read arena,read location,data.size,data.align);
+    if data.size>9223372036854775803u64{su_layout_diagnostic(read arena,read location,4u32);return false;}
+    data.size=data.size+4u64;
+    su_handle_save(read layout,read data);return !su_handle_failed(read arena);
+}

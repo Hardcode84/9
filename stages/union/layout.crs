@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn su_round(stage:*SuStage,size:u64,alignment:u32,location:*CrustLoc)->u64 {
-    var mask:u64=alignment as u64-1u64;
-    if size>9223372036854775807u64-mask { su_error(stage,location,"union layout exceeds isize limit");return 0u64; }
-    return (size+mask)&~mask;
+    domain CompilerArena { edit CompilerArena {
+        var arena:SuArena=make SuArena{stage:stage};
+        var site:SuLocation=make SuLocation{pointer:location};
+        return su_checked_round(read arena,read site,size,alignment);
+    } }
 }
 
 fn su_layout_syntax(stage:*SuStage,syntax:*CrustTypeSyntax,depth:usize,size:*u64,alignment:*u32)->bool {
@@ -32,26 +34,14 @@ fn su_layout_syntax(stage:*SuStage,syntax:*CrustTypeSyntax,depth:usize,size:*u64
 }
 
 fn su_layout_array(stage:*SuStage,syntax:*CrustTypeSyntax,depth:usize,size:*u64,alignment:*u32)->bool {
-    if syntax->count==0u64 { su_error(stage,&syntax->loc,"array count must be positive");return false; }
-    if !su_layout_syntax(stage,syntax->base,depth+1usize,size,alignment) { return false; }
-    if syntax->count>9223372036854775807u64 / *size { su_error(stage,&syntax->loc,"union payload array exceeds isize limit");return false; }
-    *size=*size*syntax->count;
-    return true;
-}
-
-fn su_layout_fields(stage:*SuStage,layout:*SuLayout,depth:usize)->bool {
-    var field:*CrustField=layout->declaration->fields;
-    if field==null(*CrustField) { su_error(stage,&layout->declaration->loc,"records must have at least one field");return false; }
-    while field!=null(*CrustField) {
-        var size:u64=0u64;var alignment:u32=0u32;
-        if !su_layout_syntax(stage,field->syntax_type,depth,&size,&alignment) { return false; }
-        layout->size=su_round(stage,layout->size,alignment,&field->loc);
-        if size>9223372036854775807u64-layout->size { su_error(stage,&field->loc,"record payload exceeds isize limit");return false; }
-        layout->size=layout->size+size;
-        if alignment>layout->align { layout->align=alignment; }
-        field=field->next;
-    }
-    return stage->context->error_count==0usize;
+    domain CompilerArena { edit CompilerArena {
+        var arena:SuArena=make SuArena{stage:stage};
+        var site:SuLocation=make SuLocation{pointer:&syntax->loc};
+        if !su_checked_array_count(read arena,read site,syntax->count){return false;}
+        if !su_layout_syntax(stage,syntax->base,depth+1usize,size,alignment){return false;}
+        *size=su_checked_array(read arena,read site,syntax->count,*size);
+        return !su_handle_failed(read arena);
+    } }
 }
 
 fn su_storage_field(stage:*SuStage,sum:*SuType,size:u64,alignment:u32)->bool {
@@ -71,46 +61,4 @@ fn su_storage_field(stage:*SuStage,sum:*SuType,size:u64,alignment:u32)->bool {
     storage->syntax_type->count=su_round(stage,size,alignment,&decl->loc)/alignment as u64;
     storage->next=tag;decl->fields=storage;decl->field_count=2usize;
     return stage->context->error_count==0usize;
-}
-
-fn su_layout_variants(stage:*SuStage,sum:*SuType,layout:*SuLayout,depth:usize)->bool {
-    var names:CrustMap=make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize};
-    var variant:*SuVariant=sum->variants;
-    layout->align=4u32;
-    while variant!=null(*SuVariant) {
-        if crust_map_get(&names,variant->name as usize)!=null(*u8) { su_error(stage,&variant->syntax->loc,"duplicate union variant");return false; }
-        if !crust_try_map_set(stage->context,&names,variant->name as usize,variant as *u8) { return false; }
-        var size:u64=0u64;var alignment:u32=1u32;
-        if variant->syntax->kind!=CRUST_T_UNIT {
-            if !su_layout_syntax(stage,variant->syntax,depth,&size,&alignment) { return false; }
-        }
-        if size>layout->size { layout->size=size; }
-        if alignment>layout->align { layout->align=alignment; }
-        variant=variant->next;
-    }
-    if !su_storage_field(stage,sum,layout->size,layout->align) { return false; }
-    layout->size=su_round(stage,layout->size,layout->align,&sum->declaration->loc);
-    if layout->size>9223372036854775803u64 { su_error(stage,&sum->declaration->loc,"tagged storage exceeds isize limit");return false; }
-    layout->size=layout->size+4u64;
-    return true;
-}
-
-fn su_layout_record(stage:*SuStage,decl:*CrustDecl,depth:usize)->*SuLayout {
-    if depth>=256usize { su_error(stage,&decl->loc,"union layout depth exceeded");return null(*SuLayout); }
-    var layout:*SuLayout=crust_map_get(&stage->layouts,decl as usize) as *SuLayout;
-    if layout!=null(*SuLayout) {
-        if layout->state==1u32 { su_error(stage,&decl->loc,"by-value cycle in union payload");return null(*SuLayout); }
-        return layout;
-    }
-    layout=su_alloc(stage,sizeof(SuLayout),alignof(SuLayout)) as *SuLayout;
-    if layout==null(*SuLayout) { return layout; }
-    layout->declaration=decl;layout->align=1u32;layout->state=1u32;
-    if !crust_try_map_set(stage->context,&stage->layouts,decl as usize,layout as *u8) { return null(*SuLayout); }
-    var sum:*SuType=crust_map_get(&stage->types,decl->name as usize) as *SuType;
-    if sum!=null(*SuType) {
-        if !su_layout_variants(stage,sum,layout,depth) { return null(*SuLayout); }
-    } else { if !su_layout_fields(stage,layout,depth) { return null(*SuLayout); } }
-    layout->size=su_round(stage,layout->size,layout->align,&decl->loc);layout->state=2u32;
-    if stage->context->error_count!=0usize { return null(*SuLayout); }
-    return layout;
 }

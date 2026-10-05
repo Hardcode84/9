@@ -25,7 +25,7 @@ def main():
             [
                 "build/crust",
                 "stages/build/run.crs",
-                "stages/ccn/tool.crs",
+                "stages/ccn/ownership-tool.crs",
                 "-w",
                 "--CCN",
                 "15",

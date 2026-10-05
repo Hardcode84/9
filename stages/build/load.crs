@@ -3,16 +3,16 @@
 // Load shared preparation code once. Base is the source package directory,
 // relative to the root. Keep the root live through all stage calls.
 fn stage_setup(root: *CrustRun, base: *u8) -> bool {
-    var paths: [*u8; 12] = make [*u8; 12] {
+    var paths: [*u8; 15] = make [*u8; 15] {
         "api/crust0_stage.crs", "stages/c/api.crs",
         "stages/native/model.crs", "stages/native/linux.crs",
         "stages/cache/model.crs", "stages/cache/linux.crs",
         "stages/cache/artifact.crs", "stages/cache/inputs.crs",
-        "stages/build/model.crs", "stages/build/package.crs",
-        "stages/build/compile.crs", "stages/build/library.crs"
+        "stages/build/interface.crs", "stages/build/model.crs", "stages/build/names.crs", "stages/build/package.crs",
+        "stages/build/compiler.crs", "stages/build/compile.crs", "stages/build/library.crs"
     };
     var index: usize = 0usize;
-    while index < 12usize {
+    while index < 15usize {
         var path: *u8 = stage_path(root, base, paths[index]);
         if path == null(*u8) || !host_source(root, path) { return false; }
         index = index + 1usize;

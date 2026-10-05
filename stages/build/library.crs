@@ -34,17 +34,17 @@ fn stage_tool_inputs(context: *CrustContext, inputs: *CacheInputs, directory: *u
 fn stage_artifact(session: *StageSession, package: *StagePackage, interpreted: bool, result: *CacheArtifact) -> bool {
     var context: *CrustContext = session->root->context;
     var inputs: CacheInputs = make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize };
-    var counts: [usize; 4] = make [usize; 4] {
-        package->inputs.count, package->sources.count, session->inputs.count, interpreted as usize
+    var counts: [usize; 5] = make [usize; 5] {
+        package->inputs.count, package->sources.count, session->inputs.count, interpreted as usize, package->options.count
     };
     var recipe: CrustSource = make CrustSource {
-        path: "crust-stage-build-v1", bytes: &counts[0usize] as *u8,
-        size: sizeof([usize; 4]), identity: 0u64
+        path: "crust-stage-build-v2", bytes: &counts[0usize] as *u8,
+        size: sizeof([usize; 5]), identity: 0u64
     };
     if !cache_add(context, &inputs, &recipe) { return false; }
-    var groups: [*CacheInputs; 3] = make [*CacheInputs; 3] { &package->inputs, &package->sources, &session->inputs };
+    var groups: [*CacheInputs; 4] = make [*CacheInputs; 4] { &package->inputs, &package->sources, &session->inputs, &package->options };
     var group: usize = 0usize;
-    while group < 3usize {
+    while group < 4usize {
         var index: usize = 0usize;
         while index < groups[group]->count {
             if !cache_add(context, &inputs, groups[group]->items[index]) { return false; }
@@ -54,7 +54,8 @@ fn stage_artifact(session: *StageSession, package: *StagePackage, interpreted: b
     }
     if !stage_export_inputs(context, package, &inputs) { return false; }
     if !interpreted && !cache_input(context, &inputs, session->backend) { return false; }
-    var build: StageBuild = make StageBuild { package: package, interpreter: null(*CrustRun), emitter: null(*CrustDecl), interpreted: interpreted };
+    var build: StageBuild = make StageBuild { package: package, interpreter: null(*CrustRun), emitter: null(*CrustDecl), compile: null(fn(*StageCompile)->bool), interpreted: interpreted };
+    if !stage_compiler_load(session, package, &inputs, &build) { return false; }
     var request: CacheBuild = make CacheBuild { inputs: inputs.items, count: inputs.count, build: stage_build, user: &build as *u8 };
     return cache_artifact(context, session->directory, &request, result);
 }
@@ -66,6 +67,7 @@ fn stage_open(root: *CrustRun, base: *u8, directory: *u8) -> *StageSession {
     var session: *StageSession = crust_try_alloc(context, sizeof(StageSession), alignof(StageSession)) as *StageSession;
     if session == null(*StageSession) { return session; }
     session->root = root;
+    session->depth = 0usize;
     session->base = base;
     session->directory = host_path(root, directory);
     session->inputs = make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize };
@@ -87,7 +89,11 @@ fn stage_library(session: *StageSession, manifest: *u8) -> *u8 {
     stage_init(&package, session->root, session->base);
     if !stage_include(&package, manifest) { return null(*u8); }
     var artifact: CacheArtifact = uninit;
-    if !stage_artifact(session, &package, false, &artifact) { return null(*u8); }
+    if session->depth == 64usize { native_error(session->root->context, "stage compiler dependency depth exceeds 64"); return null(*u8); }
+    session->depth = session->depth + 1usize;
+    var success: bool = stage_artifact(session, &package, false, &artifact);
+    session->depth = session->depth - 1usize;
+    if !success { return null(*u8); }
     return artifact.path;
 }
 
@@ -115,4 +121,30 @@ fn stage_gcc_specs(context: *CrustContext, inputs: *CacheInputs, scratch: *u8) -
     if captured == null(*CrustSource) || !cache_read(context, scratch, captured) { return false; }
     captured->path = "stage-gcc-specs";
     return cache_add(context, inputs, captured);
+}
+
+fn stage_compiler_load(session:*StageSession,package:*StagePackage,inputs:*CacheInputs,build:*StageBuild)->bool {
+    if package->compiler==null(*u8){
+        if package->options.count!=0usize{return native_error(session->root->context,"source options require a selected compiler");}
+        return true;
+    }
+    var path:*u8=stage_library(session,package->compiler);
+    var root:*CrustRun=session->root;
+    var context:*CrustContext=root->context;
+    if path==null(*u8) || !cache_input(context,inputs,path) || !crust_run_link(root,path){return false;}
+    var selection:*CrustSource=crust_try_alloc(context,sizeof(CrustSource),alignof(CrustSource)) as *CrustSource;
+    if selection==null(*CrustSource){return false;}
+    *selection=make CrustSource{path:"stage-compiler-entry",bytes:package->entry,size:native_strlen(package->entry),identity:0u64};
+    if !cache_add(context,inputs,selection){return false;}
+    var name:*CrustName=crust_try_intern(context,"stage_compiler_abi",18usize);
+    if name==null(*CrustName){return false;}
+    var prototype:*CrustSymbol=crust_map_get(&context->globals,name as usize) as *CrustSymbol;
+    var declaration:*CrustDecl=crust_try_alloc(context,sizeof(CrustDecl),alignof(CrustDecl)) as *CrustDecl;
+    if declaration==null(*CrustDecl){return false;}
+    *declaration=*prototype->decl;
+    declaration->next=null(*CrustDecl);
+    declaration->identity=0u64;
+    declaration->unit_identity=0u64;
+    declaration->link_name=package->entry;
+    return crust_eval_function(root->eval,declaration,&build->compile as *u8);
 }

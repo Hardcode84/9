@@ -58,6 +58,10 @@ fn main(argc: i32, argv: **u8) -> i32 {
 }
 ```
 
+A stage package can select another source-built compiler through
+`stage_compiler`. The [package contract](../stages/build/README.md#select-a-package-compiler)
+defines its callback, source trust options, and cache dependencies.
+
 The source selects an ordinary shared library. A copy with another filename
 works through the same interface. The [C backend](c-backend.md) is all Crust0.
 Its output does not depend on the root evaluator or compiler libraries.

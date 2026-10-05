@@ -6,6 +6,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from prepare import compile_package
+
 ROOT = Path(__file__).resolve().parents[1]
 
 RUNTIME = """
@@ -116,6 +118,18 @@ REJECT = {
     "empty-record": ("record R {} union U { A:[R;2]; }", "expected an identifier"),
     "by-value-cycle": ("union U { A:R; } record R { value:U; }", "by-value cycle"),
     "overflow": ("union U { A:[u64;9223372036854775807]; }", "exceeds isize limit"),
+    "record-size-overflow": (
+        "record R { a:[u8;9223372036854775807]; b:u8; } union U { A:R; }",
+        "record payload exceeds isize limit",
+    ),
+    "rounding-overflow": (
+        "union U { A:[u8;9223372036854775807]; }",
+        "union layout exceeds isize limit",
+    ),
+    "tag-size-overflow": (
+        "union U { A:[u8;9223372036854775804]; }",
+        "tagged storage exceeds isize limit",
+    ),
     "unknown-pointee": ("union U { A:*Missing; }", "unknown name"),
     "unit-pointee": ("union U { A:*unit; }", "unit is not a pointer target"),
     "invalid-callback": ("record R{x:u32;} union U { A:fn()->R; }", "results must be scalar"),
@@ -143,37 +157,22 @@ def sanitized_compiler(build, work):
     flags = "-O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
     libraries = [target / f"libcrust0{suffix}.a" for suffix in ("", "_run", "_host")]
     run(["make", f"BUILD={target}", f"CFLAGS={flags}", *libraries])
-    sources = run(
-        [
-            "make",
-            "-s",
-            "--no-print-directory",
-            "--eval",
-            'union-inputs:;@printf "%s\\n" $(UNION_LIBRARY)',
-            "union-inputs",
-        ]
-    ).splitlines()
     executable = target / "crust-union-test"
-    run(
+    compile_package(
+        build,
+        ROOT / "tests/union-package.crs",
+        executable,
+        flags.split(),
         [
-            build / "crust-c",
-            *sources,
-            "api/crust0_x64.crs",
-            "api/crust0_eval.crs",
-            "tests/union_alloc.crs",
-            "tests/union_driver.crs",
-            *[f"--cflag={flag}" for flag in flags.split()],
-            "--ldflag=-fsanitize=address,undefined",
-            "--ldflag=-no-pie",
-            f"--ldflag={libraries[1]}",
-            f"--ldflag={build / 'libcrust_asm.a'}",
-            f"--ldflag={libraries[0]}",
-            f"--ldflag={libraries[2]}",
-            "--ldflag=-ldl",
-            "--ldflag=-lffi",
-            "-o",
-            executable,
-        ]
+            "-fsanitize=address,undefined",
+            "-no-pie",
+            str(libraries[1]),
+            str(build / "libcrust_asm.a"),
+            str(libraries[0]),
+            str(libraries[2]),
+            "-ldl",
+            "-lffi",
+        ],
     )
     return executable
 

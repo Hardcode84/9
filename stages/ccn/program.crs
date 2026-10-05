@@ -37,39 +37,44 @@ fn ccn_options(argc: i32, argv: **u8, options: *CcnOptions) -> bool {
     return (*options).begin < argc;
 }
 
-fn ccn_file(path: *u8, options: *CcnOptions) -> i32 {
-    var context: CrustContext = uninit;
-    crust_context_init(&context, null(*CrustAllocator));
+fn ccn_file_using(context:*CrustContext,path:*u8,options:*CcnOptions,
+                   reader_action:fn(*CrustContext,*CrustSource,usize,usize,*CrustAction,*u8)->bool,user:*u8)->i32 {
     var source: CrustSource = make CrustSource {
         path: path, bytes: null(*u8), size: 0usize, identity: 1u64
     };
     var status: i32 = 2i32;
     if crust0_host_read_file(path, &source.bytes, &source.size) != 0i32 {
-        crust_set_error(&context, &source, 0usize, "cannot read CCN input");
+        crust_set_error(context, &source, 0usize, "cannot read CCN input");
     } else {
         var rows: *CcnRow = null(*CcnRow);
-        if ccn_read(&context, &source, &rows) {
-            status = ccn_report(&context, &source, rows, (*options).limit, (*options).warnings);
+        if ccn_read_using(context, &source, &rows, reader_action, user) {
+            status = ccn_report(context, &source, rows, (*options).limit, (*options).warnings);
         }
     }
-    if context.error_count != 0usize { crust_run_diagnostic(&context); }
-    crust_context_destroy(&context);
+    if context->error_count != 0usize { crust_run_diagnostic(context); }
     crust0_host_free(source.bytes);
     return status;
 }
 
 // Arguments exclude the executable name. Inspect files without executing them.
 // Return 0 within limit, 1 over limit, or 2 for argument, source, or I/O errors.
-fn ccn_program(argc: i32, argv: **u8) -> i32 {
+fn ccn_program_using(argc:i32,argv:**u8,file:fn(*u8,*CcnOptions)->i32)->i32 {
     if argc == 1i32 && ccn_equal(argv[0usize], "--help") { return ccn_usage(1u32); }
     var options: CcnOptions = uninit;
     if !ccn_options(argc, argv, &options) { ccn_usage(2u32); return 2i32; }
     var status: i32 = 0i32;
     while options.begin < argc {
-        var file_status: i32 = ccn_file(argv[options.begin as usize], &options);
+        var file_status: i32 = file(argv[options.begin as usize], &options);
         if file_status == 2i32 { return file_status; }
         if file_status > status { status = file_status; }
         options.begin = options.begin + 1i32;
     }
     return status;
 }
+
+fn ccn_file(path:*u8,options:*CcnOptions)->i32 {
+    var context:CrustContext=uninit;crust_context_init(&context,null(*CrustAllocator));
+    var status:i32=ccn_file_using(&context,path,options,ccn_seed_action,null(*u8));
+    crust_context_destroy(&context);return status;
+}
+fn ccn_program(argc:i32,argv:**u8)->i32{return ccn_program_using(argc,argv,ccn_file);}

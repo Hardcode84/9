@@ -180,7 +180,7 @@ fn rr_skip(reader:*CrustReader)->bool {
             (*reader).offset=(*reader).offset+1usize;
         }
         if (*reader).end-(*reader).offset<2usize || source[(*reader).offset]!=47u8 || source[(*reader).offset+1usize]!=47u8 {
-            return true;
+            break;
         }
         (*reader).offset=(*reader).offset+2usize;
         while (*reader).offset<(*reader).end && source[(*reader).offset]!=10u8 {
@@ -190,7 +190,7 @@ fn rr_skip(reader:*CrustReader)->bool {
             (*reader).offset=(*reader).offset+1usize;
         }
     }
-    return false;
+    return true;
 }
 
 fn rr_lex(reader:*CrustReader)->bool {

@@ -10,35 +10,6 @@ fn stage_read(package: *StagePackage, context: *CrustContext) -> bool {
     return crust_collect(context) && crust_resolve(context) && crust_check(context);
 }
 
-fn stage_names(package: *StagePackage, context: *CrustContext) -> bool {
-    var unit_value: *CrustUnit = context->units;
-    while unit_value != null(*CrustUnit) {
-        var declaration: *CrustDecl = unit_value->declarations;
-        while declaration != null(*CrustDecl) {
-            if declaration->kind != CRUST_D_EXTERN { declaration->link_name = ""; }
-            if declaration->kind == CRUST_D_CONST && native_abi_name(declaration->name->text) {
-                declaration->link_name = declaration->name->text;
-            }
-            declaration = declaration->next;
-        }
-        unit_value = unit_value->next;
-    }
-    var item: *StageName = package->exports;
-    while item != null(*StageName) {
-        var name: *CrustName = crust_try_intern(context, item->text, native_strlen(item->text));
-        if name == null(*CrustName) { return false; }
-        var symbol: *CrustSymbol = crust_map_get(&context->globals, name as usize) as *CrustSymbol;
-        if symbol == null(*CrustSymbol) || (symbol->decl->kind != CRUST_D_FUNCTION && symbol->decl->kind != CRUST_D_CONST) {
-            var message: *u8 = native_join(context, "stage export is not a function or constant: ", item->text);
-            if message == null(*u8) { return false; }
-            return native_error(context, message);
-        }
-        symbol->decl->link_name = item->link;
-        item = item->next;
-    }
-    return true;
-}
-
 fn stage_emit(build: *StageBuild, context: *CrustContext, source: *u8, symbols: *u8) -> bool {
     var options: CBackendOptions = make CBackendOptions {
         mode: 2u32, output: source, symbols: symbols,
@@ -78,11 +49,8 @@ fn stage_build(context: *CrustContext, request: *CacheBuild, output: *u8) -> boo
     var source: *u8 = native_join(context, output, ".c");
     var symbols: *u8 = native_join(context, output, ".symbols");
     var success: bool = source != null(*u8) && symbols != null(*u8) &&
-        stage_read(build->package, &target) && stage_names(build->package, &target) &&
-        stage_build_emit(build, &target, source, symbols) && stage_tools(context, &inputs, output);
-    if target.error_count != 0usize {
-        crust_set_error(context, target.error_loc.source, target.error_loc.offset, &target.error[0usize]);
-    }
+        stage_compile_emit(build, &target, source, symbols) && stage_tools(context, &inputs, output);
+    stage_diagnostic(context, &target);
     crust_context_destroy(&target);
     var suffixes: [*u8; 4] = make [*u8; 4] { ".c", ".symbols", ".o", ".renamed" };
     var index: usize = 0usize;
@@ -112,7 +80,7 @@ fn stage_build_emit(build: *StageBuild, target: *CrustContext, source: *u8, symb
         } else { success = false; }
     }
     if initialized && !crust_run_destroy(&interpreter) { success = false; }
-    if compiler.error_count != 0usize { crust_set_error(target, compiler.error_loc.source, compiler.error_loc.offset, &compiler.error[0usize]); }
+    stage_diagnostic(target, &compiler);
     crust_context_destroy(&compiler);
     return success;
 }
@@ -129,4 +97,21 @@ fn stage_gcc(context: *CrustContext, source: *u8, output: *u8, preprocess: bool)
         arguments[15usize] = "-dD";
     }
     return cache_tool(context, &arguments[0usize], null(*u8));
+}
+
+fn stage_compile_emit(build:*StageBuild,target:*CrustContext,source:*u8,symbols:*u8)->bool {
+    if build->compile!=null(fn(*StageCompile)->bool){return stage_compile_custom(build,target,source,symbols);}
+    return stage_read(build->package,target) && stage_names(build->package->exports,target) &&
+        stage_build_emit(build,target,source,symbols);
+}
+
+fn stage_compile_custom(build:*StageBuild,context:*CrustContext,source:*u8,symbols:*u8)->bool {
+    var package:*StagePackage=build->package;
+    var request:StageCompile=make StageCompile{
+        sources:package->sources,options:package->options,exports:package->exports,
+        context:context,output:source,symbols:symbols
+    };
+    var success:bool=build->compile(&request);
+    if !success && context->error_count==0usize{return native_error(context,"selected stage compiler failed without a diagnostic");}
+    return success && context->error_count==0usize;
 }

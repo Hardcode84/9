@@ -131,12 +131,10 @@ check-generics: all test-tools
 	python3 tests/generics.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 	python3 tests/generics_source.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
-UNION_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources union/package.crs),$(error Stage package query failed))
-
 .PHONY: test-tools check-union check-union-alloc
 
 $(BUILD)/crust-union-test: $(BUILD)/crust-c api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a test-tools
-	$< -o $@ $(UNION_LIBRARY) api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0_run.a --ldflag=-ldl --ldflag=-lffi --ldflag $(BUILD)/libcrust_asm.a --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/union-package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0_run.a -ldl -lffi $(BUILD)/libcrust_asm.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(LDFLAGS)'
 
 check-union: all test-tools $(BUILD)/crust-union-test
 	python3 tests/union.py --build $(BUILD)

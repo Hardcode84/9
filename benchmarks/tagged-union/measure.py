@@ -94,27 +94,29 @@ def main():
     links = [f"--ldflag={item}" for item in libraries]
     library_sources = execute(
         [
-            "make",
-            "-s",
-            "--no-print-directory",
-            "--eval",
-            'union-inputs:;@printf "%s\\n" $(UNION_LIBRARY)',
-            "union-inputs",
+            "build/crust",
+            "stages/build/main.crs",
+            "sources",
+            ROOT / "stages/union/package.crs",
+            ROOT / "build/stage-cache",
         ]
     ).splitlines()
-    inspector = output / "inspect"
-    execute(
-        [
-            "build/crust-c",
-            "-o",
-            inspector,
-            *library_sources,
-            "stages/ccn/count.crs",
-            "benchmarks/tagged-union/inspect.crs",
-            f"--ldflag={host}",
-            *links,
-        ]
+    manifest = output / "inspector-package.crs"
+    manifest.write_text(
+        f'stage_include(stage,"{ROOT / "stages/union/sources.crs"}");\n'
+        f'stage_source(stage,"{ROOT / "stages/ccn/count.crs"}");\n'
+        'stage_source_option(stage,stage->sources.items[stage->sources.count-1usize],"raw");\n'
+        f'stage_source(stage,"{ROOT / "benchmarks/tagged-union/inspect.crs"}");\n'
+        'stage_source_option(stage,stage->sources.items[stage->sources.count-1usize],"raw");\n'
+        'stage_export(stage,"main");\n'
     )
+    inspector = output / "inspect"
+    c_source, symbols = output / "inspect.c", output / "inspect.symbols"
+    obj, renamed = output / "inspect.input.o", output / "inspect.o"
+    execute(["build/crust", "stages/build/emit.crs", manifest, c_source, symbols])
+    execute(["gcc", "-std=c99", "-pedantic-errors", "-O2", "-c", c_source, "-o", obj])
+    execute(["objcopy", f"@{symbols}", obj, renamed])
+    execute(["gcc", renamed, host, *libraries, "-o", inspector])
     corpus = sorted((ROOT / "build/reader-tests").glob("syntax-*.crs")) + sorted(
         (ROOT / "build/reader-tests").glob("depth-*.crs")
     )

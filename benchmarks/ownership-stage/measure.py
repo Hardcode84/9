@@ -72,11 +72,14 @@ def opaque(declaration):
     return declaration["text"] + (" opaque;" if declaration["opaque"] else "")
 
 
-def prepare(experiment, sources):
+def prepare(experiment, sources, raw_layout):
     dependencies, target, exports = [], [], []
     dependency_paths = []
     for path in sources:
-        declarations = experiment.declarations(path)
+        if path.name in ("layout_handles.crs", "layout_checked.crs"):
+            continue
+        selected = raw_layout if path == ROOT / "stages/union/layout.crs" else path
+        declarations = experiment.declarations(selected)
         if path.parent == ROOT / "stages/union":
             target.extend(declarations)
             continue
@@ -129,9 +132,14 @@ def prepare(experiment, sources):
         "field.crs",
         port + "\nfn probe_serial(stage:read SuStage)->usize { return stage.serial; }\n",
     )
-    provider = experiment.capture(HERE / "arena_provider.crs").read_text()
-    checked = experiment.capture(HERE / "arena_checked.crs").read_text()
-    experiment.write("arena.crs", port.replace(function, "") + "\n" + provider)
+    provider = experiment.capture(ROOT / "stages/union/layout.crs").read_text()
+    provider += "\n" + experiment.capture(ROOT / "stages/union/layout_handles.crs").read_text()
+    checked = experiment.capture(ROOT / "stages/union/layout_checked.crs").read_text()
+    candidate = port
+    for declaration in target:
+        if declaration["path"] == str(raw_layout.relative_to(ROOT)):
+            candidate = candidate.replace(declaration["text"], "")
+    experiment.write("arena.crs", candidate + "\n" + provider)
     experiment.write("arena-checked.crs", checked)
     return dependencies, target, dependency_paths, exports
 
@@ -280,12 +288,18 @@ def native_checks(experiment, dependency_paths, exports, corpus):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--raw-layout", type=Path, required=True, help="preserved raw layout control under build/"
+    )
     parser.add_argument("--rounds", type=int, default=7)
     parser.add_argument("--cpu", type=int, required=True)
     args = parser.parse_args()
     output = args.output.resolve()
     if output.exists() or not output.is_relative_to(ROOT / "build") or args.rounds < 3:
         parser.error("use a new directory under build/ and at least three rounds")
+    raw_layout = args.raw_layout.resolve()
+    if not raw_layout.is_relative_to(ROOT / "build"):
+        parser.error("raw control must be a preserved input under build/")
     os.sched_setaffinity(0, {args.cpu})
     output.mkdir(parents=True)
     sys.path.insert(0, str(ROOT / "tests"))
@@ -301,7 +315,7 @@ def main():
     ):
         experiment.capture(path)
     dependencies, target, paths, exports = prepare(
-        experiment, packages.sources(ROOT / "build", "union/package.crs")
+        experiment, packages.sources(ROOT / "build", "union/package.crs"), raw_layout
     )
     driver = compile_driver(
         experiment, packages.sources(ROOT / "build", "generics/ownership/package.crs")
@@ -379,7 +393,7 @@ def main():
             )
         samples.append(sample)
     report = {
-        "status": "checked arena cache algorithm passes; remaining union algorithms retain explicit trust",
+        "status": "production layout arithmetic and field/variant folds checked; pointer access and AST writes retain explicit trust",
         "scope": "union stage; raw reader and C backend dependencies behind native interfaces",
         "cpu": args.cpu,
         "attempts": attempts,
@@ -402,15 +416,22 @@ def main():
         },
         "samples": samples,
         "checked_generic_frontend_ns": None,
-        "arena_slice": {
-            "checked_functions": 2,
+        "layout_slice": {
+            "checked_functions": sum(
+                line.startswith("fn ") for line in checked_source.splitlines()
+            ),
             "checked_source_lines": len((output / "arena-checked.crs").read_text().splitlines()),
-            "provider_source_lines": len((HERE / "arena_provider.crs").read_text().splitlines()),
-            "remaining_raw_functions": len(functions) - 1,
-            "boundary": "raw callback entry, nonnull arena handles, typed cache lookup, snapshots and updates, recursive field/variant algorithms",
+            "provider_source_lines": sum(
+                len((ROOT / "stages/union" / name).read_text().splitlines())
+                for name in ("layout.crs", "layout_handles.crs")
+            ),
+            "raw_functions_outside_layout": sum(
+                d["kind"] == 1 for d in target if d["path"] != str(raw_layout.relative_to(ROOT))
+            ),
+            "boundary": "raw entry, nonnull arena handles, type lookup, cursor steps, AST allocation and storage updates",
             "restructuring": "cache state distinguishes a new zeroed layout from cached computing/complete layouts; raw entry preserves null and allocation handling",
         },
-        "checked_cache_frontend_ratio": statistics.median(
+        "checked_layout_frontend_ratio": statistics.median(
             sum(s["arena"].values()) / sum(s["raw"].values()) for s in samples
         ),
         "cost_scope": "fresh native process; read/copy and root trust selection, checks, emission timed separately; initialization, naming, teardown, file IO, GCC and linking excluded; opaque is a trust-only control",

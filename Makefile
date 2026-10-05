@@ -229,7 +229,7 @@ $(BUILD)/crust-ownership-import-test: $(BUILD)/crust-c $(OWNERSHIP_LIBRARY) test
 check-ownership-imports: $(BUILD)/crust-ownership-import-test
 	python3 tests/ownership_imports.py --build $(BUILD)
 
-.PHONY: ownership-stage check-ownership check-ownership-alloc
+.PHONY: ownership-stage check-ownership check-ownership-alloc check-ownership-ergonomics
 ownership-stage: $(BUILD)/crust-ownership-test $(BUILD)/crust-ownership-library.so
 
 check-ownership: all ownership-stage $(BUILD)/crust-ownership-erasure $(BUILD)/crust-ownership-import-test
@@ -237,6 +237,9 @@ check-ownership: all ownership-stage $(BUILD)/crust-ownership-erasure $(BUILD)/c
 	python3 tests/ownership_index.py --build $(BUILD)
 	python3 tests/ownership_views.py --build $(BUILD)
 	python3 tests/ownership_native.py --build $(BUILD)
+
+check-ownership-ergonomics: all ownership-stage
+	python3 tests/ownership_ergonomics.py --build $(BUILD)
 
 check-ownership-alloc: all c-stage
 	python3 tests/ownership_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --sources $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_alloc.crs

@@ -11,8 +11,9 @@ The [Crust0 specification](../crust0-spec.md) now defines the bootstrap language
 The richer syntax and checked rules below remain research candidates, not seed
 features. Module management is a library stage under that specification.
 The [checked ownership target](../design.md#checked-ownership) now requires
-function and field contracts without whole-program analysis. Its user-facing
-model must be no more complex than Rust's, including container implementations.
+function and field contracts without whole-program analysis. The
+[client comparison gate](../ownership-rust.md#measured-client-gate) records
+annotation costs and required program structure against executable Rust ports.
 This target supersedes the broader proof work proposed below. Retain the
 experiments as evidence; they do not establish acceptance of the modular model.
 The [current modular stage](../ownership-model.md) uses local facts and explicit

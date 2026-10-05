@@ -31,7 +31,9 @@ does not veto the selected capability.
 ## Ownership
 
 - Follow [design](docs/ownership-design.md) and [contract](docs/ownership-model.md).
-  User model complexity <= Rust, for application and container authors.
+  Keep the [measured client budget](docs/ownership-rust.md#measured-client-gate).
+  Compare matched behavior, annotations, required restructuring, trust boundary.
+  No general complexity ranking from token counts. Provider burden stays explicit.
   No hidden proof scripts, ghost lemmas, or solver predicates.
 - Bounded local rules. No Z3, general theorem prover, equivalent solver, or graph
   solver. No whole-program analysis. Check each body using function/field
@@ -163,6 +165,7 @@ Code changes: `make all`, then applicable checks:
 | Native bootstrap/handoff | `check-native` |
 | Ownership/RAII/defer | `check-resources check-resource-alloc` |
 | Ownership/field contracts | `check-ownership check-ownership-alloc` |
+| Ownership/Rust client budget | `check-ownership-ergonomics` |
 | Verified ownership imports | `check-ownership-imports` |
 | Overloads/resource composition | `check-overload check-overload-alloc` |
 | Compilation examples | `check-examples` |

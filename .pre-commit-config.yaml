@@ -94,3 +94,9 @@ repos:
         files: ^((api|stages|tests)/.*\.crs|(src|include|runtime)/.*\.[ch]|tools/(check_crust_ccn|api|prelude)\.py|Makefile|\.pre-commit-config\.yaml)$
         pass_filenames: false
         require_serial: true
+      - id: ownership-client-budget
+        name: ownership client annotation and restructuring audit
+        language: python
+        entry: python tests/ownership_ergonomics.py --counts-only
+        files: ^(examples/(ownership-basics|intrusive|ownership-graphs|ownership-index)/.*\.(crs|rs)|tests/ownership_ergonomics\.(py|json)|\.pre-commit-config\.yaml)$
+        pass_filenames: false

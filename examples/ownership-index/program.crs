@@ -36,20 +36,17 @@ fn main(argc: i32, argv: **u8) -> i32 {
         index_alias(mut index, 11i64, 1i64);
         index_alias(mut index, 20i64, 2i64);
         var expected: i64 = 41i64;
-        read Symbols {
-            expect_alias(read index, 10i64, read expected);
-            expect_alias(read index, 11i64, read expected);
-        }
+        expect_alias(read index, 10i64, read expected);
+        expect_alias(read index, 11i64, read expected);
         remove_required(mut index, 1i64);
         expected = 42i64;
-        read Symbols {
-            expect_unbound(read index, 10i64);
-            expect_unbound(read index, 11i64);
-            expect_alias(read index, 20i64, read expected);
-        }
+        expect_unbound(read index, 10i64);
+        expect_unbound(read index, 11i64);
+        expect_alias(read index, 20i64, read expected);
         // Reuse of the key or allocation must not revive the old aliases.
         index_insert(mut index, 1i64, 43i64);
-        read Symbols { expect_unbound(read index, 10i64); expect_unbound(read index, 11i64); }
+        expect_unbound(read index, 10i64);
+        expect_unbound(read index, 11i64);
         edit Symbols {
             // A selection keeps the old target while the alias changes.
             var old: Selection = index_select(read index, 20i64);
@@ -59,13 +56,13 @@ fn main(argc: i32, argv: **u8) -> i32 {
             if value != 42i64 { trap; }
         }
         expected = 43i64;
-        read Symbols { expect_alias(read index, 20i64, read expected); }
+        expect_alias(read index, 20i64, read expected);
         remove_required(mut index, 2i64);
-        read Symbols { expect_alias(read index, 20i64, read expected); }
+        expect_alias(read index, 20i64, read expected);
         remove_required(mut index, 1i64);
         var removed: bool = index_remove(mut index, 1i64);
         if removed { trap; }
-        read Symbols { expect_unbound(read index, 20i64); }
+        expect_unbound(read index, 20i64);
         // Leave live entries for automatic cleanup. The loop size is a runtime value.
         var key: i64 = 0i64;
         var count: i64 = argc as i64 + 16i64;
@@ -75,7 +72,7 @@ fn main(argc: i32, argv: **u8) -> i32 {
             key = key + 1i64;
         }
         expected = count - 1i64;
-        read Symbols { expect_alias(read index, count + 99i64, read expected); }
+        expect_alias(read index, count + 99i64, read expected);
     }
     emit(79i32); emit(75i32); emit(10i32);
     return 0i32;

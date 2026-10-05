@@ -21,10 +21,8 @@ fn set_code(ticket: &mut Ticket, code: i32) {
 fn main() {
     let first = Ticket { code: 65 };
     let mut ticket = first;
-    {
-        let code = ticket_code(&ticket);
-        assert_eq!(*code, 65);
-    }
+    let code = ticket_code(&ticket);
+    assert_eq!(*code, 65);
     set_code(&mut ticket, 66);
     drop(ticket);
     {

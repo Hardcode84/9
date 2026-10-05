@@ -444,6 +444,7 @@ Run from the repository root:
 ```sh
 make all ownership-stage
 make check-ownership check-ownership-imports check-ownership-alloc
+make check-ownership-ergonomics
 ```
 
 The checks cover trusted direct-pointer providers and checked clients: two-hook
@@ -462,6 +463,10 @@ can also break safety. The root selects the implementation whose correctness
 it relies on. Native tests and checked-client rejections cover different parts
 of this boundary.
 
-The [Rust comparison](ownership-rust.md) describes the annotations needed by
-application and container authors. The tutorials show complete provider and
-client sources alongside their build commands.
+The [Rust comparison](ownership-rust.md#measured-client-gate) records ownership
+tokens per client function, required access blocks, and manually reviewed
+changes in program structure. A source change requires a new review of those
+counts and duties. The gate runs both versions and checks rejected Rust loans.
+These measurements support a client regression budget. They do not establish
+a general complexity ordering for either application or container authors.
+The tutorials supply the complete providers and clients for this comparison.

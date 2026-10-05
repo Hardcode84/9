@@ -1,0 +1,248 @@
+{
+  "audit": {
+    "scope": "program.crs and program.rs only; providers and compilation roots excluded",
+    "required_view_drops": 0,
+    "extra_plain_scopes": 0,
+    "loop_control_flags": 0,
+    "extra_access_scopes": {
+      "ownership-basics": 0,
+      "intrusive": 2,
+      "ownership-graphs": 2,
+      "ownership-index": 1
+    },
+    "rust_intrusive_unsafe_operations": 3,
+    "rust_intrusive_pin_bindings": 2,
+    "review": "Named domain blocks also set cleanup order in Rust. Count read/edit blocks separately. All remaining plain blocks and owner drops preserve requested cleanup order. Intrusive Rust cursor validity is a caller obligation, so it has no safety-equivalent relative score."
+  },
+  "sources": {
+    "ownership-basics": {
+      "crs": {
+        "audit_sha256": "55f57c5ec0321a1240f283cc4b89bd7e5defc6199ccc148d8ea7cd508039e7db",
+        "functions": {
+          "ticket_drop": {
+            "annotations": {
+              "loans": 1
+            }
+          },
+          "ticket_code": {
+            "annotations": {
+              "loans": 3,
+              "contracts": 3
+            }
+          },
+          "set_code": {
+            "annotations": {
+              "loans": 1
+            }
+          },
+          "main": {
+            "annotations": {
+              "loans": 3,
+              "moves": 1,
+              "cleanup": 1
+            }
+          },
+          "<declarations>": {
+            "annotations": {
+              "cleanup": 1,
+              "contracts": 1
+            }
+          }
+        }
+      },
+      "rs": {
+        "audit_sha256": "a5dd01f8150b145dd6ff38aeae70056595345591c3db1b904082c09e4dda3956",
+        "functions": {
+          "drop": {
+            "annotations": {
+              "loans": 2
+            }
+          },
+          "ticket_code": {
+            "annotations": {
+              "loans": 3
+            }
+          },
+          "set_code": {
+            "annotations": {
+              "loans": 2
+            }
+          },
+          "main": {
+            "annotations": {
+              "loans": 4,
+              "cleanup": 1
+            }
+          },
+          "<declarations>": {
+            "annotations": {
+              "cleanup": 1
+            }
+          }
+        }
+      }
+    },
+    "intrusive": {
+      "crs": {
+        "audit_sha256": "882fe939c14ed1887d9ea6392c3624e5143458da3c528b19d65fc66dca61b558",
+        "functions": {
+          "main": {
+            "annotations": {
+              "loans": 32,
+              "cleanup": 1,
+              "access": 6
+            },
+            "access_scopes": {
+              "domain": 1,
+              "read": 1,
+              "edit": 1
+            }
+          },
+          "<declarations>": {
+            "annotations": {}
+          }
+        },
+        "provider_sha256": "076fb4e298cf64b1964a316e9c66fad9c48b1591901f0988fa4ed9784dc61bf3"
+      },
+      "rs": {
+        "audit_sha256": "58fca15c8d5372ccbb480224e96fcb7a6dac5582b07e41c86203bf518d30b149",
+        "functions": {
+          "main": {
+            "annotations": {
+              "loans": 17,
+              "cleanup": 1,
+              "unsafe": 3,
+              "pin": 2
+            }
+          },
+          "<declarations>": {
+            "annotations": {}
+          }
+        },
+        "provider_sha256": "43d4c1bf05b3a0bfe0010861479803cdeee52cd6e062fa56a176d2608982ccfe"
+      }
+    },
+    "ownership-graphs": {
+      "crs": {
+        "audit_sha256": "d81fff4b754286e5ea85948cadd57bc057b38cecbc1e4520d155ed96871df326",
+        "functions": {
+          "main": {
+            "annotations": {
+              "loans": 12,
+              "moves": 2,
+              "cleanup": 1,
+              "contracts": 3,
+              "access": 4
+            },
+            "access_scopes": {
+              "read": 2
+            }
+          },
+          "<declarations>": {
+            "annotations": {}
+          }
+        },
+        "provider_sha256": "ee8d60e2e461d9bd185316d1aa1545198e037fc16c871b251de431d63b0b5fe0"
+      },
+      "rs": {
+        "audit_sha256": "f8bf7cdf872c256e9252ec0ce15b9504832a906f3e8c2224e2fd83d2bca89a10",
+        "functions": {
+          "main": {
+            "annotations": {
+              "loans": 14,
+              "cleanup": 1
+            }
+          },
+          "<declarations>": {
+            "annotations": {}
+          }
+        },
+        "provider_sha256": "80a794c30b9f57daa9abdbf39d2332c1878ef75316cb22b883f19e6dd0f899b3"
+      }
+    },
+    "ownership-index": {
+      "crs": {
+        "audit_sha256": "c1e2fc7f0c43669e461aa100a14dcc8dd51c67af082fec53d2a79ba222bdde72",
+        "functions": {
+          "comparison_equal": {
+            "annotations": {
+              "loans": 1
+            }
+          },
+          "expect_alias": {
+            "annotations": {
+              "loans": 9,
+              "contracts": 3
+            }
+          },
+          "expect_unbound": {
+            "annotations": {
+              "loans": 3,
+              "contracts": 3
+            }
+          },
+          "remove_required": {
+            "annotations": {
+              "loans": 2,
+              "contracts": 3
+            }
+          },
+          "main": {
+            "annotations": {
+              "loans": 33,
+              "access": 4
+            },
+            "access_scopes": {
+              "domain": 1,
+              "edit": 1
+            }
+          },
+          "<declarations>": {
+            "annotations": {
+              "loans": 2
+            }
+          }
+        },
+        "provider_sha256": "004e0c02ca880ab4f3afeffd56a2a13f7b47c48c67e2f02c90f91d6a81d71c29"
+      },
+      "rs": {
+        "audit_sha256": "d84aed1012e6d2f8ecbad9fc4bf33688f095af92f49f92fa723bb19317b4e0ab",
+        "functions": {
+          "comparison_equal": {
+            "annotations": {
+              "loans": 1,
+              "contracts": 2
+            }
+          },
+          "expect_alias": {
+            "annotations": {
+              "loans": 5
+            }
+          },
+          "expect_unbound": {
+            "annotations": {
+              "loans": 2
+            }
+          },
+          "remove_required": {
+            "annotations": {
+              "loans": 2
+            }
+          },
+          "main": {
+            "annotations": {
+              "loans": 47
+            }
+          },
+          "<declarations>": {
+            "annotations": {
+              "loans": 2,
+              "contracts": 4
+            }
+          }
+        },
+        "provider_sha256": "6aba883cbb91f7d302db23b2cbb41edc62816fdd156ed31817d1734ad62bd82f"
+      }
+    }
+  }
+}

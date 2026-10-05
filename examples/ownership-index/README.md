@@ -116,3 +116,14 @@ imported client. Rejection cases cover stale selections, escaped payloads,
 reclamation during access, private fields, unreported observers, handle aliases,
 and direct or deferred destructor calls. It checks ordinary and imported
 reclamation helpers. All checks use the existing stage API.
+
+## Rust comparison
+
+[program.rs](program.rs) runs the same client operations with
+[provider.rs](provider.rs). The Rust client uses a safe interface over individual symbol allocations.
+Selections borrow the index. Alias rebinding uses `Cell`; removal needs an
+exclusive index reference.
+
+Run `make check-ownership-ergonomics` from the repository root to build and run
+both versions. The [comparison guide](../../docs/ownership-rust.md#measured-client-gate)
+defines the annotation count, scope audit, and differences in checked guarantees.

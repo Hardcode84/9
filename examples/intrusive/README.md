@@ -84,7 +84,6 @@ read Graph {
     while !cursor_equal(read cursor, read end) {
         var value: read i64 = cursor_value(read cursor);
         if value < 65i64 || value > 66i64 { trap; }
-        drop value;
         cursor_advance(mut cursor);
     }
 }
@@ -92,7 +91,7 @@ read Graph {
 
 A cursor keeps the access scope alive. It does not expose a raw pointer or own
 the node. It can move through the declared navigation interface. A payload view
-is a separate loan. `drop value` ends that loan before cursor advancement.
+is a separate loan. Its last use ends the loan before cursor advancement.
 The payload remains alive. The loop condition calls `cursor_equal` before each
 iteration; its temporary argument loans end before the body starts.
 `cursor_mut` requires edit access. While its mutable result is live, the checker
@@ -140,3 +139,13 @@ cost from target GCC compilation and linking.
 
 [raw.crs](raw.crs) and [raw-main.crs](raw-main.crs) retain the raw seed backend
 witness. They do not select ownership checks or establish memory safety.
+
+## Rust comparison
+
+[program.rs](program.rs) runs the same client operations with
+[provider.rs](provider.rs). The Rust client uses pinned stack heads and three unsafe cursor operations.
+The caller proves cursor validity and payload access for those operations.
+
+Run `make check-ownership-ergonomics` from the repository root to build and run
+both versions. The [comparison guide](../../docs/ownership-rust.md#measured-client-gate)
+defines the annotation count, scope audit, and differences in checked guarantees.

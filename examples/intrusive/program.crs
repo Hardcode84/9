@@ -21,7 +21,6 @@ fn main(argc: i32, argv: **u8) -> i32 {
                 while !cursor_equal(read cursor, read end) {
                     var value: read i64 = cursor_value(read cursor);
                     if value < 65i64 || value > 66i64 { trap; }
-                    drop value;
                     count = count + 1usize;
                     cursor_advance(mut cursor);
                 }
@@ -41,10 +40,8 @@ fn main(argc: i32, argv: **u8) -> i32 {
                 value = 68i64;
             }
         }
-        read Graph {
-            var value: read i64 = owner_value(read second);
-            if value != 68i64 { trap; }
-        }
+        var value: read i64 = owner_value(read second);
+        if value != 68i64 { trap; }
     }
     emit(79i32); emit(75i32); emit(10i32);
     return 0i32;

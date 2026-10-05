@@ -16,8 +16,8 @@ build/ownership-basics
 
 The output is `BC` and a newline. [program.crs](program.crs) moves a resource,
 borrows its field, changes it, and checks explicit and scope-exit destruction.
-The local owner controls cleanup. `drop code` ends the field loan before
-the owner changes. The next example applies the same loan rules to heap storage.
+The local owner controls cleanup. The field loan ends after its last use,
+before the owner changes. The next example applies these rules to heap storage.
 
 ```sh
 build/crust examples/ownership-basics/main.crs -o build/ownership-heap \

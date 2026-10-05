@@ -39,3 +39,13 @@ The client tests ownership transfer, navigation to a parent, removal, individual
 release, replacement, and subtree cleanup. `make check-ownership` also compares
 emitted C and symbols before and after checking. Run
 `python3 tests/ownership.py --build build --sanitize` for native ASan and UBSan.
+
+## Rust comparison
+
+[program.rs](program.rs) runs the same client operations with
+[provider.rs](provider.rs). The Rust client uses a safe interface over a provider with raw parent and
+child links. Cursor lifetimes borrow the tree. Destruction is iterative.
+
+Run `make check-ownership-ergonomics` from the repository root to build and run
+both versions. The [comparison guide](../../docs/ownership-rust.md#measured-client-gate)
+defines the annotation count, scope audit, and differences in checked guarantees.

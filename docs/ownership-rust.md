@@ -105,3 +105,153 @@ A Crust result record uses one origin set for all borrowed fields. Rust can give
 separate fields distinct lifetime parameters. Crust code can use separate
 factory calls to preserve those independent origins. The index and stored-view
 examples combine such results locally and replace a local view after `drop`.
+
+## Measured client gate
+
+Run the comparison from the repository root. It requires `rustc` with Rust
+2024 edition support, in addition to the normal Crust build tools.
+
+```sh
+make check-ownership-ergonomics
+python3 tests/ownership_ergonomics.py --report
+```
+
+The first command checks the reviewed source budget, builds both languages at
+optimization levels 0 and 2, and runs each program with two argument lists.
+Both versions must pass their internal assertions, return zero, and produce
+the expected output. The test also checks five Rust rejection cases: tree
+destruction and editing with live cursors, index destruction and removal with
+live selections, and cursor dereference without `unsafe`.
+
+The comparison uses these complete programs:
+
+| Program | Crust client | Rust client | Output |
+| --- | --- | --- | --- |
+| Resource move, field loan, cleanup | [basics](../examples/ownership-basics/program.crs) | [basics](../examples/ownership-basics/program.rs) | `BC` |
+| Two intrusive memberships, individual retirement, payload edit | [intrusive](../examples/intrusive/program.crs) | [intrusive](../examples/intrusive/program.rs) | `OK` |
+| Owning tree, parent view, detach, retirement | [tree](../examples/ownership-graphs/program.crs) | [tree](../examples/ownership-graphs/program.rs) | `OK` |
+| One-way aliases, retained selection, rebind, retirement | [index](../examples/ownership-index/program.crs) | [index](../examples/ownership-index/program.rs) | `OK` |
+
+Each output ends with a newline. Providers keep direct links and individual
+allocations. The tree ports use parent links for iterative destruction. Both
+index providers clear incoming aliases before release. The Rust index uses
+`Cell` for alias rebinding through a shared index reference; a selection keeps
+an ordinary index loan that blocks removal. This permits the same old-selection
+test after rebinding. It also permits rebinding while a shared payload loan is
+live; Crust's domain rule rejects that operation.
+
+The Rust intrusive provider pins stack heads and unlinks nodes on destruction.
+Its cursor retains a raw address. The client must prove that address remains
+live for cursor access, and must exclude conflicting payload access. Three
+explicit unsafe operations carry these duties. The Crust client gets these
+checks from its access scopes and trusted provider contract. Thus the intrusive
+row compares source costs and behavior across different checking guarantees.
+Its Rust count supplies no safety-equivalent bound. Rust's
+[pinning contract](https://doc.rust-lang.org/std/pin/index.html#an-intrusive-doubly-linked-list)
+describes address stability and destruction; the
+[unsafe contract](https://doc.rust-lang.org/reference/unsafe-keyword.html)
+assigns additional obligations to unsafe callers.
+
+### Count ownership syntax
+
+The [counter](../tests/ownership_ergonomics.py) reports each function and a
+separate declaration total. It reads `program.crs` and `program.rs`; provider
+implementation and compilation setup are outside the count. The providers are
+available beside the clients. Their source hashes are part of the review.
+
+Count written syntax with these rules:
+
+- Count each `read`, `mut`, and `&`. This includes Rust local `mut` bindings
+  and Crust addresses passed to head initializers. Count each explicit `move`.
+- Count each cleanup `drop`, `defer`, and `forget`, plus Rust's `Drop` trait
+  name. Exclude the function name in `fn drop`.
+- Count each ownership type marker, such as `resource`, and each Rust lifetime
+  token, including `'_`. A declared and a used lifetime each count once.
+- Count `from` and each identifier in its origin paths. Count `access` and
+  its permission and domain names. Punctuation has no weight.
+- Count an access block's mode and domain name. Report the number of these
+  blocks separately. Count each written `unsafe` and `pin!` invocation.
+- Exclude comments, string contents, general type names, dereference operators,
+  ordinary punctuation, implicit reborrows, and inferred lifetimes. Rust's
+  [elision rules](https://doc.rust-lang.org/reference/lifetime-elision.html)
+  define when lifetime annotations can be omitted.
+
+This lexical metric measures explicit syntax. The programs have no local macros
+that hide ownership operations. Standard assertion and printing macros are
+outside the count. Moving code into a helper or provider changes the review
+boundary and requires a new review.
+
+| Client / function | Crust tokens | Rust tokens |
+| --- | ---: | ---: |
+| Basics / destructor | 1 | 2 |
+| Basics / `ticket_code` | 6 | 3 |
+| Basics / `set_code` | 1 | 2 |
+| Basics / `main` | 5 | 5 |
+| Basics / declarations | 2 | 1 |
+| Intrusive / `main` | 39 | 23 |
+| Tree / `main` | 22 | 15 |
+| Index / `comparison_equal` | 1 | 3 |
+| Index / `expect_alias` | 12 | 5 |
+| Index / `expect_unbound` | 6 | 2 |
+| Index / `remove_required` | 5 | 2 |
+| Index / `main` | 37 | 47 |
+| Index / declarations | 2 | 6 |
+
+The intrusive Rust count includes three `unsafe` tokens and two `pin!` calls.
+The other Rust clients use safe interfaces. The basics total is 15 versus 13;
+the tree total is 22 versus 15; the index total is 63 versus 65. These counts
+do not meet a universal bound of Crust annotations less than or equal to Rust.
+
+### Count required changes in program structure
+
+Review the purpose of each scope, explicit view drop, and loop-control flag.
+Syntax alone cannot tell whether a block is required by the checker or by the
+program's cleanup order. The review in
+[the budget file](../tests/ownership_ergonomics.json) records this distinction.
+
+| Required structure | Basics | Intrusive | Tree | Index |
+| --- | ---: | ---: | ---: | ---: |
+| Crust read/edit blocks omitted by the Rust port | 0 | 2 | 2 | 1 |
+| Extra plain blocks needed only by the Crust checker | 0 | 0 | 0 | 0 |
+| Explicit view drops needed only by the Crust checker | 0 | 0 | 0 | 0 |
+| Flags used instead of `break` or `continue` | 0 | 0 | 0 | 0 |
+| Rust pin bindings for stable stack heads | 0 | 2 | 0 | 0 |
+
+The intrusive and index clients each also have one named Crust domain block.
+The Rust versions have an ordinary block there to preserve cleanup order.
+The head and replacement-owner blocks in the intrusive example, and the last
+ticket block in the basics example, also preserve required destruction order.
+Explicit owner destruction serves the same purpose in both languages.
+
+### Acceptance rule
+
+Keep the recorded per-function counts and restructuring audit as the regression
+budget for these four clients. The pre-commit check compares counts and hashes
+of tokens against the reviewed budget. Any source change requires review,
+including a reduction in tokens. This prevents a change in behavior, trust, or
+hidden helper work from passing only because it has a smaller count.
+
+For an update, run `--report`, compare the changed operations and guarantees,
+review all scopes and cleanup sites, and run the executable comparison. Update
+the budget and these tables together. An increase needs a concrete program
+requirement and an explanation at the affected API or example. Lower counts
+must preserve the paired behavior and the stated checks. The script prints
+candidate counts; it never accepts them automatically.
+
+The measured claim is a stable, reviewed client budget. Provider author effort,
+diagnostic quality, learnability, and the full set of accepted programs need
+different evidence. A general claim that the entire ownership model is at most
+as complex as Rust exceeds what this gate measures. All local safety contracts,
+erasure checks, and trusted-provider tests remain required.
+
+For native memory checks, run:
+
+```sh
+python3 tests/ownership_ergonomics.py --sanitize
+```
+
+This adds ASan and UBSan to the Crust output and ASan to the Rust ports. The
+Rust command uses the installed compiler's `-Zsanitizer=address` pass with
+`RUSTC_BOOTSTRAP=1`. A compiler without that pass fails the command explicitly.
+Generated artifacts stay under `build/`. These runs check native behavior;
+they supply no compilation-speed result.

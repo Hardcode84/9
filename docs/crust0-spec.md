@@ -25,8 +25,11 @@ is checked; its pointer implementation must uphold the declared contracts.
 The ownership model must not require whole-program analysis. Function interfaces
 and type and field declarations must encode all safety conditions needed across
 function boundaries. Check each body against those contracts, with local flow
-analysis. The user-facing model must be no more complex than Rust's for both
-application and container authors. The [checked ownership overview](design.md#checked-ownership)
+analysis. The [measured client gate](ownership-rust.md#measured-client-gate)
+sets per-function annotation budgets and records required changes in program
+structure against executable Rust ports. Its claim covers the selected clients.
+Container implementation duties and differences in checked guarantees must
+remain explicit. The [checked ownership overview](design.md#checked-ownership)
 defines the acceptance gate. The [ownership stage contract](ownership-model.md)
 describes an external implementation based on local ownership facts and
 explicit trusted-container interfaces. The [intrusive tutorial](../examples/intrusive/README.md)

@@ -112,4 +112,11 @@ fn rs_init(stage: *RsStage, context: *CrustContext) -> unit {
     while index < sizeof(RsStage) { bytes[index] = 0u8; index = index + 1usize; }
     (*stage).context = context;
     (*stage).next_name = 1usize;
+    (*stage).kind_base = crust_allocate_kinds(context, RS_END);
+    (*stage).failed = (*stage).kind_base == 0u32;
+}
+
+// Offset is one of the RS_ syntax offsets. Keep the owning stage live.
+fn rs_kind(stage: *RsStage, offset: u32) -> u32 {
+    return (*stage).kind_base + offset;
 }

@@ -116,7 +116,7 @@ Use letters, digits, and underscores for portable domain names.
 | Pointer | `p Type` |
 | Array | `a N(count) Type` |
 | Function value | `f N(arity) Parameters r Result` |
-| Extension type | `x N(kind) Payload` from the type callback |
+| Extension type | `x Payload` from the type callback, including its stable extension name |
 
 `Parameters` is the concatenation of the encoded parameter types.
 The `NativeParameters` encoding is `a N(arity) Parameters`.
@@ -133,7 +133,8 @@ crust_ov1_d S(domain) n S(source_name) NativeParameters r Result c S(contract)
 Spaces in this notation are separators; they are not emitted.
 The standalone package uses domain `crust0_x64_v1` and contract `s`.
 The resource package uses domain `resources_x64_v1` and contract `safe` or
-`unsafe`. Its extension type payload is the encoded base type. Thus `read T`
+`unsafe`. Its extension type payload starts with `S(resource_read)` or
+`S(resource_mut)`, followed by the encoded base type. Thus `read T`
 and `mut T` keep distinct names even when both lower to machine pointers.
 The encoding contains complete keys. Native names do not use a truncated hash.
 Interning compares all key bytes when hashes collide.
@@ -164,7 +165,7 @@ does not scan the complete record once per initializer.
 
 | Hook | Contract |
 | --- | --- |
-| `type_key` | Append a self-delimiting ASCII type payload without NUL after the extension kind tag; return false for an unknown type |
+| `type_key` | Append a self-delimiting ASCII type payload without NUL after the `x` tag; include a stable extension name; return false for an unknown type |
 | `binding_type` | Return the value type produced by reading a binding; return the input type when no change is needed |
 | `expression` | Visit a complete expression and return its source type; return null without changing an unhandled expression |
 | `statement` | Visit a complete statement; return false without changing an unhandled statement |
@@ -174,6 +175,8 @@ Expression and statement hooks run before the standard visitor. Standard
 visitor helpers bypass the current hook and retain hooks on child nodes.
 Distinct extension types must have distinct payloads. Use `ov_part` for a
 variable-length payload, or encode a fixed number of complete child types.
+Kind numbers belong to their context. Keep them out of type keys and native
+names so that stage initialization order cannot change linkage.
 Unknown syntax fails with a source diagnostic. `ov_error` records the first
 failure. Allocation failures and new context diagnostics from a hook also stop
 the operation. Type, expression, and statement traversal have bounded depth.

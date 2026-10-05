@@ -92,7 +92,8 @@ typedef enum {
     CRUST_T_ARRAY,
     CRUST_T_FUNCTION,
     CRUST_T_RECORD,
-    CRUST_T_NAME
+    CRUST_T_NAME,
+    CRUST_T_END /* Exclusive end of seed type kinds; not a seed node kind. */
 } CrustTypeKind;
 
 struct CrustTypeSyntax {
@@ -102,7 +103,7 @@ struct CrustTypeSyntax {
     CrustTypeSyntax **params;
     size_t param_count;
     uint64_t count;
-    CrustTypeKind kind;
+    uint32_t kind;
 };
 
 struct CrustType {
@@ -159,7 +160,8 @@ typedef enum {
     CRUST_E_NULL,
     CRUST_E_SIZEOF,
     CRUST_E_ALIGNOF,
-    CRUST_E_OFFSETOF
+    CRUST_E_OFFSETOF,
+    CRUST_E_END /* Exclusive end of seed expression kinds; not a seed node kind. */
 } CrustExprKind;
 
 struct CrustInit {
@@ -186,7 +188,7 @@ struct CrustExpr {
     CrustType *type;
     CrustSymbol *symbol;
     CrustField *field;
-    CrustExprKind kind;
+    uint32_t kind;
     CrustOp op;
     CrustTypeKind literal_type;
     bool place;
@@ -203,7 +205,8 @@ typedef enum {
     CRUST_S_RETURN,
     CRUST_S_TRAP,
     CRUST_S_EXPR,
-    CRUST_S_ASSIGN
+    CRUST_S_ASSIGN,
+    CRUST_S_END /* Exclusive end of seed statement kinds; not a seed node kind. */
 } CrustStmtKind;
 
 /* Branch and loop bodies introduce lexical scopes even when their root is not
@@ -218,7 +221,7 @@ struct CrustStmt {
     CrustName *name;
     CrustTypeSyntax *syntax_type;
     CrustSymbol *symbol;
-    CrustStmtKind kind;
+    uint32_t kind;
     bool uninitialized;
 };
 
@@ -318,6 +321,7 @@ struct CrustContext {
     CrustUnit *last_unit;
     CrustFailureFrame *failure;
     size_t error_count;
+    uint32_t next_kind;
 };
 
 /* An initialized arena owns all returned storage until destruction. */
@@ -328,6 +332,13 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment);
 
 void crust_context_init(CrustContext *ctx, const CrustAllocator *allocator);
 void crust_context_destroy(CrustContext *ctx);
+
+/* Reserve count consecutive extension kinds for type syntax, expressions, or
+   statements. Ranges are disjoint within this context and exceed all seed kinds.
+   Count must be positive. Return the first kind, or zero with a retained
+   diagnostic on failure. Kinds stay reserved until context destruction.
+   Remap extension kinds when copying syntax into a different context. */
+uint32_t crust_allocate_kinds(CrustContext *ctx, uint32_t count);
 /* The C callback must permit a nonlocal exit. False retains its diagnostic. */
 bool crust_run_stage(CrustContext *ctx, void (*stage)(CrustContext *, void *), void *data);
 /* Record a diagnostic without a nonlocal exit. */

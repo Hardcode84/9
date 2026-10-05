@@ -247,6 +247,19 @@ data, and user state live through execution. The callbacks receive the captured
 user pointer as an explicit argument. A change to `run.user` selects state for
 the next action. The captured operations and state finish the current action.
 
+Syntax extensions reserve a kind range with
+`crust_allocate_kinds(context, count)`. Each stage instance stores its returned
+base and adds its local offsets. Ranges are disjoint within one context and
+start after all seed kinds. Type syntax, expression, and statement nodes store
+these IDs in a `u32` field. The enum end markers define the seed ranges.
+The allocator adds one counter to the context; syntax nodes keep their size.
+
+A range belongs to its context until destruction. Copying extended syntax to
+another context requires a kind mapping from the source stage to the destination
+stage. Extension payloads and their lifetimes remain the stage's responsibility.
+Before seed checking, lower extension nodes to seed syntax. The seed checker
+reports an unlowered kind at its source location.
+
 Check a source rule before lowering discards the facts that express it.
 For example, overload selection must distinguish `read T` from `mut T`
 before both become pointers. The resource checker must retain cleanup plans

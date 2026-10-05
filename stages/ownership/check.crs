@@ -30,7 +30,7 @@ fn os_validate_names(check: *OsCheck, global: *RsGlobal, fields: *OsField) -> un
 fn os_validate_field(check: *OsCheck, contract: *OsRecord, field: *CrustField) -> unit {
     var owner: *OsField = os_field((*contract).owns, (*field).name);
     if owner != null(*OsField) { os_validate_owner(check, contract, field); return; }
-    if os_borrowed((*field).syntax_type) { os_validate_view_field(check, field); return; }
+    if os_borrowed(check, (*field).syntax_type) { os_validate_view_field(check, field); return; }
     if rs_owns((*(*check).stage).resources, (*field).syntax_type) {
         os_validate_embedded(check, contract, field); return;
     }
@@ -75,7 +75,7 @@ fn os_exclusive_storage(check: *OsCheck, contract: *OsRecord) -> bool {
     var field: *CrustField = (*declaration).fields;
     while field != null(*CrustField) && !os_failed(check) {
         var syntax: *CrustTypeSyntax = (*field).syntax_type;
-        if os_borrowed(syntax) {
+        if os_borrowed(check, syntax) {
             os_error(check, &(*field).loc, "exclusive heap storage cannot retain borrowed fields");
         } else { if (*syntax).kind == CRUST_T_NAME && !os_parameter_type((*check).stage, syntax) {
             os_exclusive_storage(check, os_record((*check).stage, syntax));
@@ -114,7 +114,7 @@ fn os_validate_foreign(check: *OsCheck, contract: *OsFunction) -> unit {
 fn os_parameter(check: *OsCheck, state: *OsState, parameter: *CrustParam) -> unit {
     var syntax: *CrustTypeSyntax = (*parameter).syntax_type;
     var base: *CrustTypeSyntax = syntax;
-    var borrowed: bool = os_borrowed(syntax);
+    var borrowed: bool = os_borrowed(check, syntax);
     var pointer: bool = (*syntax).kind == CRUST_T_POINTER;
     if borrowed || pointer { base = (*syntax).base; }
     var output: bool = os_field((*(*check).function).initializes, (*parameter).name) != null(*OsField);
@@ -157,7 +157,7 @@ fn os_function_exit(check: *OsCheck, state: *OsState, location: *CrustLoc) -> un
         var value: *OsValue = os_bound(state, slot);
         if (*slot).argument && value != null(*OsValue) && (*value).object != null(*OsObject) {
             if (*slot).authority { os_destructor_end(check, state, (*value).object, location); }
-            else { if ((*(*slot).syntax).kind == RS_READ || (*(*slot).syntax).kind == RS_MUT) &&
+            else { if ((*(*slot).syntax).kind == rs_kind((*(*check).stage).resources, RS_READ) || (*(*slot).syntax).kind == rs_kind((*(*check).stage).resources, RS_MUT)) &&
                         !os_initialized(check, state, (*value).object) {
                 os_error(check, location, "borrowed parameter must be initialized on return");
             } }
@@ -199,7 +199,7 @@ fn os_validate_borrows(check: *OsCheck, declaration: *CrustDecl) -> unit {
     var parameter: *CrustParam = (*declaration).params;
     while parameter != null(*CrustParam) && !os_failed(check) {
         var kind: u32 = (*(*parameter).syntax_type).kind;
-        if kind == RS_READ || kind == RS_MUT { os_validate_borrow_parameter(check, parameter); }
+        if kind == rs_kind((*(*check).stage).resources, RS_READ) || kind == rs_kind((*(*check).stage).resources, RS_MUT) { os_validate_borrow_parameter(check, parameter); }
         parameter = (*parameter).next;
     }
 }

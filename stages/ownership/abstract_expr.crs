@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn os_abstract_base(syntax: *CrustTypeSyntax) -> *CrustTypeSyntax {
-    if os_borrowed(syntax) { return (*syntax).base; }
+fn os_abstract_base(check: *OsCheck, syntax: *CrustTypeSyntax) -> *CrustTypeSyntax {
+    if os_borrowed(check, syntax) { return (*syntax).base; }
     return syntax;
 }
 
@@ -13,14 +13,14 @@ fn os_abstract_empty_return(check: *OsCheck, location: *CrustLoc) -> unit {
 
 fn os_abstract_condition(check: *OsCheck, value: *OsValue, location: *CrustLoc) -> unit {
     if !os_abstract_active(check) || value == null(*OsValue) { return; }
-    if (*os_abstract_base((*value).syntax)).kind != CRUST_T_BOOL {
+    if (*os_abstract_base(check, (*value).syntax)).kind != CRUST_T_BOOL {
         os_error(check, location, "condition requires bool");
     }
 }
 
 fn os_abstract_unary(check: *OsCheck, expression: *CrustExpr, value: *OsValue) -> bool {
     if !os_abstract_active(check) { return true; }
-    var kind: u32 = (*os_abstract_base((*value).syntax)).kind;
+    var kind: u32 = (*os_abstract_base(check, (*value).syntax)).kind;
     var valid: bool = kind < CRUST_T_BOOL;
     if (*expression).op == CRUST_OP_NOT { valid = kind == CRUST_T_BOOL; }
     if !valid { os_error(check, &(*expression).loc, "unary operator requires its scalar operand type"); }
@@ -29,8 +29,8 @@ fn os_abstract_unary(check: *OsCheck, expression: *CrustExpr, value: *OsValue) -
 
 fn os_abstract_binary(check: *OsCheck, expression: *CrustExpr, left: *OsValue, right: *OsValue) -> bool {
     if !os_abstract_active(check) { return true; }
-    var a: *CrustTypeSyntax = os_abstract_base((*left).syntax);
-    var b: *CrustTypeSyntax = os_abstract_base((*right).syntax);
+    var a: *CrustTypeSyntax = os_abstract_base(check, (*left).syntax);
+    var b: *CrustTypeSyntax = os_abstract_base(check, (*right).syntax);
     if !os_abstract_same(check, a, b, &(*expression).loc) { return false; }
     var kind: u32 = (*a).kind;
     var equality: bool = (*expression).op == CRUST_OP_EQ || (*expression).op == CRUST_OP_NE;
@@ -42,7 +42,7 @@ fn os_abstract_binary(check: *OsCheck, expression: *CrustExpr, left: *OsValue, r
 fn os_abstract_cast(check: *OsCheck, target: *CrustTypeSyntax, source: *CrustTypeSyntax, location: *CrustLoc) -> bool {
     if !os_abstract_active(check) { return true; }
     if !os_abstract_type(check, target, false) { return false; }
-    source = os_abstract_base(source);
+    source = os_abstract_base(check, source);
     if ((*source).kind < CRUST_T_BOOL && (*target).kind < CRUST_T_BOOL) ||
        ((*source).kind == CRUST_T_POINTER && (*target).kind == CRUST_T_POINTER) { return true; }
     os_error(check, location, "cast requires integer types or pointer types with checked storage");

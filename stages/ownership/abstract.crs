@@ -101,14 +101,14 @@ fn os_abstract_type_inner(check: *OsCheck, syntax: *CrustTypeSyntax, result: boo
         return;
     }
     if kind == CRUST_T_FUNCTION { os_abstract_signature(check, syntax); return; }
-    if kind != CRUST_T_POINTER && kind != CRUST_T_ARRAY && kind != RS_READ && kind != RS_MUT {
+    if kind != CRUST_T_POINTER && kind != CRUST_T_ARRAY && kind != rs_kind((*(*check).stage).resources, RS_READ) && kind != rs_kind((*(*check).stage).resources, RS_MUT) {
         os_error(check, &(*syntax).loc, "unsupported abstract type"); return;
     }
     os_abstract_container(check, syntax);
 }
 
 fn os_abstract_container(check: *OsCheck, syntax: *CrustTypeSyntax) -> unit {
-    if os_borrowed((*syntax).base) {
+    if os_borrowed(check, (*syntax).base) {
         os_error(check, &(*syntax).loc, "borrow types cannot be nested or stored in pointers or arrays"); return;
     }
     if (*syntax).kind == CRUST_T_ARRAY && (*syntax).count == 0u64 {
@@ -132,7 +132,7 @@ fn os_abstract_signature(check: *OsCheck, syntax: *CrustTypeSyntax) -> unit {
 fn os_abstract_same(check: *OsCheck, expected: *CrustTypeSyntax,
                      actual: *CrustTypeSyntax, location: *CrustLoc) -> bool {
     if !os_abstract_active(check) { return true; }
-    if !os_borrowed(expected) && os_borrowed(actual) { actual = (*actual).base; }
+    if !os_borrowed(check, expected) && os_borrowed(check, actual) { actual = (*actual).base; }
     if rs_same((*(*check).stage).resources, expected, actual) { return true; }
     os_error(check, location, "type mismatch under abstract parameter contracts");
     return false;

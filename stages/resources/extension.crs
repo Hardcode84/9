@@ -8,6 +8,10 @@
 // Source trees, lowered trees, and cleanup plans belong to the context arena.
 extern fn rs_init(stage: *RsStage, context: *CrustContext) -> unit = "rs_init";
 
+// Return this stage's node kind for an RS_ syntax offset below RS_END.
+// Require successful initialization. Keep the owning context live.
+extern fn rs_kind(stage: *RsStage, offset: u32) -> u32 = "rs_kind";
+
 // Read a complete declaration range before preparation. Locations retain full-source offsets.
 // Retain each source descriptor and its bytes until context destruction.
 // On failure, return false and retain the diagnostic in stage.context.

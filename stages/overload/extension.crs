@@ -26,7 +26,8 @@ extern fn ov_function_syntax(stage:*OvStage, declaration:*CrustDecl)->*CrustType
 extern fn ov_select(stage:*OvStage, group:*OvGlobal, syntax:*CrustTypeSyntax, parameters_only:bool, loc:*CrustLoc)->*OvFunction = "ov_select";
 extern fn ov_same(stage:*OvStage, a:*CrustTypeSyntax, b:*CrustTypeSyntax)->bool = "ov_same";
 
-// Type hooks append a self-delimiting ASCII payload without NUL after the kind tag.
+// Type hooks append a self-delimiting ASCII payload without NUL after the x tag.
+// Include a stable extension name. Context-owned kind numbers must not enter keys.
 // Distinct types need distinct payloads. Use ov_part or a fixed count of child encodings.
 // Use depth + 1 for child types. This operation enforces the type nesting bound.
 // A type hook can call ov_same and ov_select. These queries preserve its output prefix.

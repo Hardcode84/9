@@ -49,7 +49,7 @@ fn gs_make_instance(definition: *GsDefinition, arguments: **CrustType, count: us
     if (*context).error_count != 0usize { return null(*GsInstance); }
     if !gs_capture_instance(instance) { gs_instance_error(instance); return null(*GsInstance); }
     var clone: GsClone = make GsClone {
-        context: &(*instance).context, user: instance as *u8,
+        kind: null(fn(*GsClone,u32)->u32), context: &(*instance).context, user: instance as *u8,
         type_syntax: gs_instance_type, expression: null(fn(*GsClone,*CrustExpr,u32)->*CrustExpr),
         statement: null(fn(*GsClone,*CrustStmt,*CrustStmt)->unit),
         body: null(fn(*GsClone,*CrustDecl,u32)->*CrustStmt)

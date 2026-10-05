@@ -21,11 +21,11 @@ fn os_read_owners(reader: *CrustReader, fields: **OsField) -> unit {
     rr_expect(reader, 41u32, "expected ')' after owned fields");
 }
 
-fn os_native_mode(reader: *CrustReader) -> u32 {
+fn os_native_mode(reader: *CrustReader, stage: *OsStage) -> u32 {
     if rr_is_name(reader, "acquire") { return OS_ACQUIRE; }
-    if rr_is_name(reader, "read") { return RS_READ; }
-    if rr_is_name(reader, "mut") { return RS_MUT; }
-    if rr_is_name(reader, "move") { return RS_MOVE; }
+    if rr_is_name(reader, "read") { return rs_kind((*stage).resources, RS_READ); }
+    if rr_is_name(reader, "mut") { return rs_kind((*stage).resources, RS_MUT); }
+    if rr_is_name(reader, "move") { return rs_kind((*stage).resources, RS_MOVE); }
     rr_error(reader, (*reader).token.offset, "expected acquire, read, mut, or move foreign effect");
     return 0u32;
 }
@@ -35,7 +35,7 @@ fn os_read_native(reader: *CrustReader, stage: *OsStage, function: *OsFunction) 
     while !(*reader).failed {
         var effect: *OsNative = rr_alloc(reader, sizeof(OsNative), alignof(OsNative)) as *OsNative;
         if effect == null(*OsNative) { return; }
-        (*effect).mode = os_native_mode(reader);
+        (*effect).mode = os_native_mode(reader, stage);
         rr_next(reader);
         if (*effect).mode != OS_ACQUIRE {
             (*effect).parameter = rr_name(reader);

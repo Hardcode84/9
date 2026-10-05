@@ -1,0 +1,66 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record KcStage { resources: *RsStage; wrapper: *KwStage; }
+
+fn kc_declaration(reader: *CrustReader, user: *u8) -> *CrustDecl {
+    return rs_read_declaration(reader, (*(user as *KcStage)).resources as *u8);
+}
+
+fn kc_statement(reader: *CrustReader, user: *u8) -> *CrustStmt {
+    return rs_read_statement(reader, (*(user as *KcStage)).resources as *u8);
+}
+
+fn kc_prefix(reader: *CrustReader, user: *u8) -> *CrustExpr {
+    return rs_read_prefix(reader, (*(user as *KcStage)).resources as *u8);
+}
+
+fn kc_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax {
+    var stage: *KcStage = user as *KcStage;
+    var syntax: *CrustTypeSyntax = rs_read_type(reader, (*stage).resources as *u8);
+    if syntax != null(*CrustTypeSyntax) || (*reader).failed { return syntax; }
+    return kw_read_type(reader, (*stage).wrapper as *u8);
+}
+
+fn kc_build(context: *CrustContext, source: *CrustSource, output: *u8, reverse: bool) -> bool {
+    var resources: RsStage = uninit;
+    var wrapper: KwStage = uninit;
+    if reverse { kw_init(&wrapper, context); rs_init(&resources, context); }
+    else { rs_init(&resources, context); kw_init(&wrapper, context); }
+    if (*context).error_count != 0usize { return false; }
+    var stage: KcStage = make KcStage { resources: &resources, wrapper: &wrapper };
+    var hooks: CrustReaderHooks = make CrustReaderHooks {
+        user: &stage as *u8, declaration: kc_declaration, statement: kc_statement,
+        prefix: kc_prefix, type_syntax: kc_type
+    };
+    if rr_read(context, source, 0usize, (*source).size, &hooks) == null(*CrustUnit) { return false; }
+    kw_lower(&wrapper);
+    if !rs_prepare(&resources) { return false; }
+    var entry: *CrustDecl = (*(*context).units).declarations;
+    while true {
+        if (*entry).kind == CRUST_D_FUNCTION && (*entry).link_name == null(*u8) {
+            (*entry).link_name = "";
+        }
+        if (*entry).next == null(*CrustDecl) { break; }
+        entry = (*entry).next;
+    }
+    var options: CBackendOptions = make CBackendOptions {
+        mode: 0u32, output: output, symbols: null(*u8),
+        cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
+    };
+    return c_backend_build_with_body(context, entry, &options, rs_c_body, &resources as *u8) == 0i32;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 3i32 { return 2i32; }
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var text: *u8 = "extern fn putchar(code:i32)->i32=\"putchar\"; fn emit(code:i32)->unit{unsafe{putchar(code);}} resource Token{id:wrapped i32;} drop dispose; fn dispose(token:mut wrapped Token)->unit{unsafe{putchar(token.id);}} fn value(token:wrapped read wrapped Token)->i32{unsafe{return token.id;}} fn main(argc:i32,argv:**u8)->i32{unsafe{var token:wrapped wrapped Token=make Token{id:65i32};var result:i32=value(read token);defer emit(66i32);if result!=65i32{return 1i32;}}return 0i32;}";
+    var source: CrustSource = make CrustSource {
+        path: "kind-composition", bytes: text, size: c_length(text), identity: 1u64
+    };
+    var success: bool = kc_build(&context, &source, argv[1usize], c_equal(argv[2usize], "reverse"));
+    if !success { c_driver_diagnostic(&context, "kind composition"); }
+    crust_context_destroy(&context);
+    if success { return 0i32; }
+    return 1i32;
+}

@@ -9,6 +9,7 @@ record GsClone {
     type_syntax: fn(*GsClone,*CrustTypeSyntax,u32)->*CrustTypeSyntax;
     expression: fn(*GsClone,*CrustExpr,u32)->*CrustExpr;
     statement: fn(*GsClone,*CrustStmt,*CrustStmt)->unit;
+    kind: fn(*GsClone,u32)->u32;
     body: fn(*GsClone,*CrustDecl,u32)->*CrustStmt;
 }
 

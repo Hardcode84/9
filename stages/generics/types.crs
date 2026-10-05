@@ -95,7 +95,7 @@ fn gs_clone_standard_type(clone: *GsClone, source: *CrustTypeSyntax, depth: u32)
     var target: *CrustTypeSyntax = crust_try_alloc(context, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
     if target == null(*CrustTypeSyntax) { return target; }
     (*target).loc = (*source).loc;
-    (*target).kind = (*source).kind;
+    (*target).kind = gs_clone_kind(clone, (*source).kind, CRUST_T_END, &(*source).loc);
     (*target).count = (*source).count;
     (*target).name = gs_name(context, (*source).name);
     (*target).base = gs_clone_type(clone, (*source).base, depth + 1u32);
@@ -114,4 +114,16 @@ fn gs_instance_type(clone: *GsClone, source: *CrustTypeSyntax, depth: u32) -> *C
         }
     }
     return gs_clone_standard_type(clone, source, depth);
+}
+
+// Map extension kinds into the destination context. The callback must return a
+// destination extension kind, or zero when it does not own the source kind.
+fn gs_clone_kind(clone: *GsClone, kind: u32, seed_end: u32, location: *CrustLoc) -> u32 {
+    if kind < seed_end { return kind; }
+    if (*clone).kind != null(fn(*GsClone,u32)->u32) {
+        var mapped: u32 = (*clone).kind(clone, kind);
+        if mapped >= seed_end { return mapped; }
+    }
+    gs_error((*clone).context, location, "unhandled extension kind in generic clone");
+    return 0u32;
 }

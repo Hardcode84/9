@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn os_borrowed(syntax: *CrustTypeSyntax) -> bool {
-    return syntax != null(*CrustTypeSyntax) && ((*syntax).kind == RS_READ || (*syntax).kind == RS_MUT);
+fn os_borrowed(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {
+    return syntax != null(*CrustTypeSyntax) && ((*syntax).kind == rs_kind((*(*check).stage).resources, RS_READ) || (*syntax).kind == rs_kind((*(*check).stage).resources, RS_MUT));
 }
 
 fn os_loan_flags(state: *OsState, loan: *OsLoan) -> u32 {
@@ -78,7 +78,7 @@ fn os_loan_permission(check: *OsCheck, state: *OsState, through: *OsLoan,
     if through != null(*OsLoan) && (os_loan_flags(state, through) & OS_LIVE) == 0u32 {
         os_error(check, location, "access uses an expired payload loan"); return false;
     }
-    if through != null(*OsLoan) && write && (*through).mode != RS_MUT {
+    if through != null(*OsLoan) && write && (*through).mode != rs_kind((*(*check).stage).resources, RS_MUT) {
         os_error(check, location, "shared loan cannot grant mutable access"); return false;
     }
     return true;
@@ -142,7 +142,7 @@ fn os_region_conflicts(check: *OsCheck, state: *OsState, object: *OsObject, slot
 
 fn os_loan_conflict(check: *OsCheck, state: *OsState, object: *OsObject, slot: *OsSlot,
                     loan: *OsLoan, write: bool, location: *CrustLoc) -> bool {
-    if (write || (*loan).mode == RS_MUT) && os_regions_overlap(check, state, object, slot, loan, location) { return true; }
+    if (write || (*loan).mode == rs_kind((*(*check).stage).resources, RS_MUT)) && os_regions_overlap(check, state, object, slot, loan, location) { return true; }
     return os_view_conflict(check, state, object, slot, (*loan).object, write, (*loan).mode, location);
 }
 
@@ -156,12 +156,12 @@ fn os_loan_new(check: *OsCheck, state: *OsState, value: *OsValue,
     if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
         os_error(check, location, "loan requires initialized storage"); return null(*OsLoan);
     }
-    if object != null(*OsObject) && !os_storage_access(check, state, object, (*value).loan, mode == RS_MUT, location) {
+    if object != null(*OsObject) && !os_storage_access(check, state, object, (*value).loan, mode == rs_kind((*(*check).stage).resources, RS_MUT), location) {
         return null(*OsLoan);
     }
-    if !os_loan_place_access(check, state, (*value).place, (*value).loan, mode == RS_MUT, location) { return null(*OsLoan); }
-    if !os_region_access(check, state, object, os_original((*value).place), (*value).loan, mode == RS_MUT, location) { return null(*OsLoan); }
-    if !os_view_access(check, state, (*value).object, (*value).loan, mode == RS_MUT, location) { return null(*OsLoan); }
+    if !os_loan_place_access(check, state, (*value).place, (*value).loan, mode == rs_kind((*(*check).stage).resources, RS_MUT), location) { return null(*OsLoan); }
+    if !os_region_access(check, state, object, os_original((*value).place), (*value).loan, mode == rs_kind((*(*check).stage).resources, RS_MUT), location) { return null(*OsLoan); }
+    if !os_view_access(check, state, (*value).object, (*value).loan, mode == rs_kind((*(*check).stage).resources, RS_MUT), location) { return null(*OsLoan); }
     return os_loan_create(check, state, value, object, mode);
 }
 
@@ -176,7 +176,7 @@ fn os_loan_via(check: *OsCheck, state: *OsState, loan: *OsLoan, through: *OsLoan
     (*inherited).via = through;
     (*inherited).scope = (*state).scope;
     (*inherited).next = null(*OsLoan);
-    if (*through).mode == RS_READ { (*inherited).mode = RS_READ; }
+    if (*through).mode == rs_kind((*(*check).stage).resources, RS_READ) { (*inherited).mode = rs_kind((*(*check).stage).resources, RS_READ); }
     var ready: u32 = os_loan_flags(state, loan) & os_loan_flags(state, through) & OS_READY;
     os_set(check, state, inherited as *u8, null(*OsValue), OS_LIVE | ready);
     return inherited;
@@ -224,12 +224,12 @@ fn os_loan_keep(check: *OsCheck, state: *OsState, value: *OsValue) -> unit {
        (os_loan_flags(state, (*value).loan) & OS_READY) == 0u32 {
         os_error(check, &(*(*value).syntax).loc, "stored cursor requires a named source loan"); return;
     }
-    if !os_borrowed((*value).syntax) || (*value).loan == null(*OsLoan) { return; }
+    if !os_borrowed(check, (*value).syntax) || (*value).loan == null(*OsLoan) { return; }
     os_set(check, state, (*value).loan as *u8, null(*OsValue), OS_LIVE | OS_READY);
 }
 
 fn os_loan_end(check: *OsCheck, state: *OsState, value: *OsValue) -> unit {
-    if !os_borrowed((*value).syntax) || (*value).loan == null(*OsLoan) { return; }
+    if !os_borrowed(check, (*value).syntax) || (*value).loan == null(*OsLoan) { return; }
     os_set(check, state, (*value).loan as *u8, null(*OsValue), 0u32);
 }
 
@@ -249,7 +249,7 @@ fn os_loan_slot(check: *OsCheck, slot: *OsSlot, loan: *OsLoan) -> *OsSlot {
 }
 
 fn os_loan_parameter(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue) -> unit {
-    if !os_borrowed((*slot).syntax) || (*slot).authority { return; }
+    if !os_borrowed(check, (*slot).syntax) || (*slot).authority { return; }
     var target: *OsSlot = os_loan_storage(check, state, (*(*slot).syntax).base, (*value).object);
     if target == null(*OsSlot) { return; }
     (*value).place = target;
@@ -288,7 +288,7 @@ fn os_call_loans(check: *OsCheck, state: *OsState, arguments: **OsValue,
     var loan: *OsLoan = (*check).loans;
     while loan != null(*OsLoan) && !os_failed(check) {
         if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && (*loan).object != null(*OsObject) &&
-           (*(*loan).object).brand == (*state).brand && (effect >= OS_EDIT || (*loan).mode == RS_MUT) && !os_edit_loan_source(check, state, loan, arguments, count, location) {
+           (*(*loan).object).brand == (*state).brand && (effect >= OS_EDIT || (*loan).mode == rs_kind((*(*check).stage).resources, RS_MUT)) && !os_edit_loan_source(check, state, loan, arguments, count, location) {
             os_error(check, location, "call authority conflicts with an active domain loan"); return false;
         }
         loan = (*loan).next;

@@ -937,6 +937,45 @@ done:
     crust_context_destroy(&ctx);
 }
 
+static void test_extension_rejection(void)
+{
+    unsigned which;
+    for (which = 0; which < 3; ++which) {
+        CrustContext ctx;
+        CrustSource source = source_text("fn f() -> i32 { return 1i32; }", 86);
+        CrustUnit *unit;
+        CrustLoc location;
+        uint32_t kind;
+        const char *expected;
+        crust_context_init(&ctx, NULL);
+        kind = crust_allocate_kinds(&ctx, 1);
+        if (!crust_read(&ctx, &source, &unit)) {
+            check(false, "extension rejection fixture parses");
+            crust_context_destroy(&ctx);
+            continue;
+        }
+        if (which == 0) {
+            unit->declarations->syntax_type->kind = kind;
+            location = unit->declarations->syntax_type->loc;
+            expected = "unlowered or invalid type syntax kind";
+        } else if (which == 1) {
+            unit->declarations->body->body->expr->kind = kind;
+            location = unit->declarations->body->body->expr->loc;
+            expected = "unlowered or invalid expression kind";
+        } else {
+            unit->declarations->body->body->kind = kind;
+            location = unit->declarations->body->body->loc;
+            expected = "unlowered or invalid statement kind";
+        }
+        check(!(crust_collect(&ctx) && crust_resolve(&ctx) && crust_check(&ctx)),
+              "seed rejects unlowered extension syntax");
+        check(strcmp(ctx.error, expected) == 0 && ctx.error_loc.source == location.source &&
+                  ctx.error_loc.offset == location.offset && ctx.failure == NULL,
+              "unlowered syntax retains its diagnostic and original location");
+        crust_context_destroy(&ctx);
+    }
+}
+
 int main(void)
 {
     test_witness_rules();
@@ -955,6 +994,7 @@ int main(void)
     test_root_checks();
     test_unit_checks();
     test_injected_root_local();
+    test_extension_rejection();
     printf("checker: %u/%u checks passed\n", checks - failures, checks);
     return failures == 0 ? 0 : 1;
 }

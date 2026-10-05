@@ -55,11 +55,25 @@ def main():
             check=True,
             timeout=120,
         )
-        target = work / "target"
-        subprocess.run([str(harness), str(target)], cwd=ROOT, check=True, timeout=30)
-        subprocess.run([str(target)], cwd=ROOT, check=True, timeout=30)
+        names = []
+        for order in ("first", "shifted"):
+            target = work / order
+            subprocess.run([str(harness), str(target), order], cwd=ROOT, check=True, timeout=30)
+            subprocess.run([str(target)], cwd=ROOT, check=True, timeout=30)
+            symbols = subprocess.run(
+                ["nm", "--defined-only", str(target)],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=10,
+            ).stdout
+            names.append(
+                sorted(line.split()[-1] for line in symbols.splitlines() if "crust_ov1_" in line)
+            )
+        if not names[0] or names[0] != names[1]:
+            raise SystemExit("extension kind allocation order changed native names")
     print(
-        "Overload hooks: nested type queries, buffer growth, target execution, and diagnostics passed"
+        "Overload hooks: type queries, buffer growth, stable names, execution, and diagnostics passed"
     )
 
 

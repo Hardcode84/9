@@ -23,7 +23,7 @@ fn rs_place_access(function: *RsFunction, value: *RsValue, write: bool,
     if (*value).local != null(*RsLocal) {
         rs_access(function, (*value).local, write, location);
     } else {
-        if write && (*value).mode == RS_READ {
+        if write && (*value).mode == rs_kind((*function).stage, RS_READ) {
             rs_error((*function).stage, location, "cannot write a constant place");
         }
     }
@@ -41,7 +41,7 @@ fn rs_place_base(function: *RsFunction, source: *CrustExpr,
     }
     var value: *RsValue = rs_expr(function, source, output);
     if (*stage).failed || value == null(*RsValue) { return null(*RsValue); }
-    if (*(*value).syntax).kind == RS_READ || (*(*value).syntax).kind == RS_MUT {
+    if (*(*value).syntax).kind == rs_kind(stage, RS_READ) || (*(*value).syntax).kind == rs_kind(stage, RS_MUT) {
         var place: *RsValue = rs_value(function, (*(*value).syntax).base,
             rs_unary(stage, CRUST_OP_DEREF, (*value).expression, &(*source).loc));
         if place != null(*RsValue) {
@@ -61,7 +61,7 @@ fn rs_borrow_place(function: *RsFunction, source: *CrustExpr,
     if (*source).kind != CRUST_E_CALL { return rs_place(function, source, output, write, false); }
     var value: *RsValue = rs_place_base(function, source, output);
     if (*(*function).stage).failed { return null(*RsValue); }
-    if (*value).mode != RS_READ && (*value).mode != RS_MUT {
+    if (*value).mode != rs_kind((*function).stage, RS_READ) && (*value).mode != rs_kind((*function).stage, RS_MUT) {
         rs_error((*function).stage, &(*source).loc, "borrow requires a checked place or returned view");
         return null(*RsValue);
     }
@@ -152,7 +152,7 @@ fn rs_place_name(function: *RsFunction, source: *CrustExpr, write: bool, initial
     }
     var value: *RsValue = rs_value(function, (*global).syntax,
         rs_named(stage, (*(*global).lowered).name, location));
-    if value != null(*RsValue) { (*value).mode = RS_READ; }
+    if value != null(*RsValue) { (*value).mode = rs_kind(stage, RS_READ); }
     return value;
 }
 
@@ -189,10 +189,10 @@ fn rs_place_field(function: *RsFunction, source: *CrustExpr, output: *RsStatemen
 
 fn rs_field_view(function: *RsFunction, value: *RsValue, write: bool, location: *CrustLoc) -> unit {
     var syntax: *CrustTypeSyntax = (*value).syntax;
-    if (*syntax).kind != RS_READ && (*syntax).kind != RS_MUT { return; }
+    if (*syntax).kind != rs_kind((*function).stage, RS_READ) && (*syntax).kind != rs_kind((*function).stage, RS_MUT) { return; }
     var mode: u32 = (*syntax).kind;
-    if (*value).mode == RS_READ { mode = RS_READ; }
-    if write && mode == RS_READ {
+    if (*value).mode == rs_kind((*function).stage, RS_READ) { mode = rs_kind((*function).stage, RS_READ); }
+    if write && mode == rs_kind((*function).stage, RS_READ) {
         rs_error((*function).stage, location, "shared field view permits only reads"); return;
     }
     (*value).syntax = (*syntax).base;
@@ -245,7 +245,7 @@ fn rs_place_deref(function: *RsFunction, source: *CrustExpr, output: *RsStatemen
     var operand: *RsValue = rs_expr(function, (*source).left, output);
     if (*stage).failed || operand == null(*RsValue) { return null(*RsValue); }
     var operand_kind: u32 = (*(*operand).syntax).kind;
-    if operand_kind != CRUST_T_POINTER && operand_kind != RS_READ && operand_kind != RS_MUT {
+    if operand_kind != CRUST_T_POINTER && operand_kind != rs_kind(stage, RS_READ) && operand_kind != rs_kind(stage, RS_MUT) {
         rs_error(stage, location, "dereference requires a pointer or borrowed view");
         return null(*RsValue);
     }
@@ -256,7 +256,7 @@ fn rs_place_deref(function: *RsFunction, source: *CrustExpr, output: *RsStatemen
     var value: *RsValue = rs_value(function, (*(*operand).syntax).base,
         rs_unary(stage, CRUST_OP_DEREF, (*operand).expression, location));
     if value == null(*RsValue) { return null(*RsValue); }
-    if operand_kind == RS_READ || operand_kind == RS_MUT {
+    if operand_kind == rs_kind(stage, RS_READ) || operand_kind == rs_kind(stage, RS_MUT) {
         (*value).local = (*operand).local;
         (*value).mode = operand_kind;
     }

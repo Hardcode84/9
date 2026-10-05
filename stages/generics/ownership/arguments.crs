@@ -57,7 +57,7 @@ fn og_payload_record(arguments: *OgArguments, syntax: *CrustTypeSyntax) -> bool 
     if schema == null(*OsRecord) {
         os_error(check, &(*syntax).loc, "generic ownership argument requires a declared record"); return false;
     }
-    if (*schema).opaque || (*schema).stable || (*schema).scoped || (*schema).view_mode >= RS_READ ||
+    if (*schema).opaque || (*schema).stable || (*schema).scoped || (*schema).view_mode >= rs_kind((*stage).resources, RS_READ) ||
        (*schema).domain != null(*CrustName) {
         os_error(check, &(*syntax).loc, "generic payload requires a movable closed record with domain-free cleanup"); return false;
     }

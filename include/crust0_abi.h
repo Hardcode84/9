@@ -4,7 +4,7 @@
 #ifndef CRUST0_ABI_H
 #define CRUST0_ABI_H
 
-#define CRUST_ABI_DIGEST "fad7e198d278cf13d42bde4bf98ccf35c63c34c441565c6669b056c300127a1a"
+#define CRUST_ABI_DIGEST "b069ee8d0626dc1c153730d3588601858e432e85b7e3fb6e7669f9b38dd8b43c"
 /* clang-format off */
 #define CRUST_ABI_NAMES {"CRUST_ABI_crust0", "CRUST_ABI_crust0_host", "CRUST_ABI_crust0_x64", "CRUST_ABI_crust0_stage", "CRUST_ABI_crust0_eval", "CRUST_ABI_crust0_run"}
 /* clang-format on */

@@ -113,7 +113,7 @@ fn os_pin(check: *OsCheck, state: *OsState, object: *OsObject) -> unit {
 
 fn os_field_value(check: *OsCheck, state: *OsState, slot: *OsSlot) -> *OsValue {
     var syntax: *CrustTypeSyntax = (*slot).syntax;
-    if os_borrowed(syntax) { return os_view_parameter(check, state, slot); }
+    if os_borrowed(check, syntax) { return os_view_parameter(check, state, slot); }
     var owner: *OsField = os_owned_field(slot);
     if owner != null(*OsField) && !(*owner).storage { return os_native_value(check, owner); }
     var target: *OsObject = null(*OsObject);
@@ -175,7 +175,7 @@ fn os_initialized(check: *OsCheck, state: *OsState, object: *OsObject) -> bool {
 fn os_initialized_field(check: *OsCheck, state: *OsState, slot: *OsSlot) -> bool {
     var value: *OsValue = os_bound(state, slot);
     if value == null(*OsValue) { return false; }
-    if os_borrowed((*slot).syntax) { return (*value).loan != null(*OsLoan) && (os_loan_flags(state, (*value).loan) & OS_LIVE) != 0u32; }
+    if os_borrowed(check, (*slot).syntax) { return (*value).loan != null(*OsLoan) && (os_loan_flags(state, (*value).loan) & OS_LIVE) != 0u32; }
     if (*value).object == null(*OsObject) { return true; }
     if (*value).pointer {
         if !(*slot).owns || (os_flags(state, (*value).object) & OS_ABSENT) != 0u32 { return true; }

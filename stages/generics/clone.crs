@@ -43,7 +43,7 @@ fn gs_clone_standard_expression(clone: *GsClone, source: *CrustExpr, depth: u32)
     var target: *CrustExpr = crust_try_alloc(context, sizeof(CrustExpr), alignof(CrustExpr)) as *CrustExpr;
     if target == null(*CrustExpr) { return target; }
     (*target).loc = (*source).loc;
-    (*target).kind = (*source).kind;
+    (*target).kind = gs_clone_kind(clone, (*source).kind, CRUST_E_END, &(*source).loc);
     (*target).op = (*source).op;
     (*target).literal_type = (*source).literal_type;
     (*target).integer = (*source).integer;
@@ -80,7 +80,7 @@ fn gs_clone_statement(clone: *GsClone, source: *CrustStmt, depth: u32) -> *Crust
     var target: *CrustStmt = crust_try_alloc(context, sizeof(CrustStmt), alignof(CrustStmt)) as *CrustStmt;
     if target == null(*CrustStmt) { return target; }
     (*target).loc = (*source).loc;
-    (*target).kind = (*source).kind;
+    (*target).kind = gs_clone_kind(clone, (*source).kind, CRUST_S_END, &(*source).loc);
     (*target).uninitialized = (*source).uninitialized;
     (*target).name = gs_name(context, (*source).name);
     (*target).syntax_type = gs_clone_type(clone, (*source).syntax_type, depth + 1u32);

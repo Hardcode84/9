@@ -253,6 +253,16 @@ that consumer's published invariants. There is no second defensive validation
 of every internal node.
 
 Zero-initialize newly constructed nodes. Set the fields required by their kind.
+`CrustTypeSyntax`, `CrustExpr`, and `CrustStmt` store kinds as `uint32_t`.
+The exclusive seed range ends are `CRUST_T_END`, `CRUST_E_END`, and
+`CRUST_S_END`. Reserve extension ranges with `crust_allocate_kinds(ctx, count)`.
+It returns the first kind, or zero with a retained diagnostic. Count must be
+positive. Ranges are disjoint in one context and remain reserved until its
+destruction. This operation uses a context counter and allocates no storage.
+Lower extension nodes before seed checking. The seed checker reports unlowered
+type, expression, and statement kinds. When copying extended syntax between
+contexts, remap its kinds to ranges reserved in the destination context.
+
 Expression and statement nodes form trees of occurrences. Each occurrence has
 its own node. Do not share these nodes between parents or function bodies.
 Declarations and complete type facts can be shared under the rules below.

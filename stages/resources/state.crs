@@ -104,16 +104,16 @@ fn rs_access(function: *RsFunction, local: *RsLocal, write: bool, location: *Cru
         return;
     }
     if !(*(*function).stage).delegate_memory &&
-       ((*local).exclusive || (write && ((*local).readers != 0usize || (*local).mode == RS_READ))) {
+       ((*local).exclusive || (write && ((*local).readers != 0usize || (*local).mode == rs_kind((*function).stage, RS_READ)))) {
         rs_error((*function).stage, location, "access conflicts with an active borrow");
     }
 }
 
 fn rs_lend(function: *RsFunction, local: *RsLocal, mode: u32, location: *CrustLoc) -> unit {
-    rs_access(function, local, mode == RS_MUT, location);
+    rs_access(function, local, mode == rs_kind((*function).stage, RS_MUT), location);
     if (*(*function).stage).failed || (*(*function).stage).delegate_memory { return; }
     rs_note(function, local);
-    if mode == RS_MUT { (*local).exclusive = true; }
+    if mode == rs_kind((*function).stage, RS_MUT) { (*local).exclusive = true; }
     else { (*local).readers = (*local).readers + 1usize; }
 }
 
@@ -122,7 +122,7 @@ fn rs_end_loan(function: *RsFunction, local: *RsLocal) -> unit {
     if (*(*function).stage).delegate_memory { rs_live(function, local, false); return; }
     var parent: *RsLocal = (*local).parent_loan;
     rs_note(function, parent);
-    if (*local).mode == RS_MUT { (*parent).exclusive = false; }
+    if (*local).mode == rs_kind((*function).stage, RS_MUT) { (*parent).exclusive = false; }
     else { (*parent).readers = (*parent).readers - 1usize; }
     rs_live(function, local, false);
 }
@@ -132,7 +132,7 @@ fn rs_return_loan_parent(function: *RsFunction, argument: *RsLocal) -> *RsLocal 
     rs_end_loan(function, argument);
     rs_live(function, argument, false);
     while parent != null(*RsLocal) && (*parent).name == null(*CrustName) &&
-          ((*parent).mode == RS_READ || (*parent).mode == RS_MUT) {
+          ((*parent).mode == rs_kind((*function).stage, RS_READ) || (*parent).mode == rs_kind((*function).stage, RS_MUT)) {
         if (*parent).readers != 0usize || (*parent).exclusive { break; }
         var ancestor: *RsLocal = (*parent).parent_loan;
         rs_end_loan(function, parent);
@@ -145,7 +145,7 @@ fn rs_return_loan_parent(function: *RsFunction, argument: *RsLocal) -> *RsLocal 
 fn rs_release_scope(function: *RsFunction, scope: *RsScope) -> unit {
     var local: *RsLocal = (*scope).first;
     while local != null(*RsLocal) && !(*(*function).stage).failed {
-        if (*local).mode == RS_READ || (*local).mode == RS_MUT { rs_end_loan(function, local); }
+        if (*local).mode == rs_kind((*function).stage, RS_READ) || (*local).mode == rs_kind((*function).stage, RS_MUT) { rs_end_loan(function, local); }
         local = (*local).next;
     }
 }
@@ -193,7 +193,7 @@ fn rs_local(function: *RsFunction, name: *CrustName, syntax: *CrustTypeSyntax,
     if local == null(*RsLocal) { return local; }
     (*local).name = name;
     (*local).syntax = syntax;
-    if (*syntax).kind == RS_READ || (*syntax).kind == RS_MUT {
+    if (*syntax).kind == rs_kind(stage, RS_READ) || (*syntax).kind == rs_kind(stage, RS_MUT) {
         (*local).mode = (*syntax).kind;
         (*local).syntax = (*syntax).base;
         (*local).indirect = true;
@@ -258,14 +258,14 @@ fn rs_capture(function: *RsFunction, output: *RsStatements, value: *RsValue, loc
     rs_transfer_after(function, (*output).last, value);
     (*local).initialized = true;
     if (*value).owned && (*value).local != null(*RsLocal) { rs_live(function, (*value).local, false); }
-    if (*(*value).syntax).kind == RS_READ || (*(*value).syntax).kind == RS_MUT {
+    if (*(*value).syntax).kind == rs_kind(stage, RS_READ) || (*(*value).syntax).kind == rs_kind(stage, RS_MUT) {
         (*local).parent_loan = (*(*value).local).parent_loan;
         rs_live(function, (*value).local, false);
     }
     var result: *RsValue = rs_value(function, (*value).syntax, rs_named(stage, (*local).storage, location));
     if result != null(*RsValue) {
         (*result).local = local;
-        if (*(*value).syntax).kind == RS_READ || (*(*value).syntax).kind == RS_MUT { (*result).mode = (*(*value).syntax).kind; }
+        if (*(*value).syntax).kind == rs_kind(stage, RS_READ) || (*(*value).syntax).kind == rs_kind(stage, RS_MUT) { (*result).mode = (*(*value).syntax).kind; }
         (*result).owned = (*local).owning;
     }
     return result;

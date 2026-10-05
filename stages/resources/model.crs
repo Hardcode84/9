@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
-const RS_READ: u32 = 100u32;
-const RS_MUT: u32 = 101u32;
-const RS_MOVE: u32 = 102u32;
-const RS_DEFER: u32 = 103u32;
-const RS_UNSAFE: u32 = 104u32;
-const RS_FORGET: u32 = 105u32;
-const RS_DROP: u32 = 106u32;
+// Offsets in the range owned by one RsStage. Obtain a node kind with rs_kind.
+const RS_READ: u32 = 0u32;
+const RS_MUT: u32 = 1u32;
+const RS_MOVE: u32 = 2u32;
+const RS_DEFER: u32 = 3u32;
+const RS_UNSAFE: u32 = 4u32;
+const RS_FORGET: u32 = 5u32;
+const RS_DROP: u32 = 6u32;
+const RS_END: u32 = 7u32;
 
 record RsResource {
     declaration: *CrustDecl;
@@ -52,6 +54,7 @@ record RsStage {
     last_helper: *CrustDecl;
     next_helper_identity: u64;
     next_name: usize;
+    kind_base: u32;
     delegate_memory: bool;
     delegate_return_loans: bool;
     failed: bool;

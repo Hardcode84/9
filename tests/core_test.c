@@ -330,6 +330,37 @@ static void test_wrapper_allocation_failures(void)
     }
 }
 
+static void test_extension_kinds(void)
+{
+    AllocationCounts counts = {0, 0, 1};
+    CrustAllocator allocator = {&counts, count_allocate, count_release};
+    CrustContext first;
+    CrustContext second;
+    uint32_t start;
+    uint32_t next;
+    crust_context_init(&first, &allocator);
+    crust_context_init(&second, NULL);
+    start = crust_allocate_kinds(&first, 7);
+    check(start >= CRUST_T_END && start >= CRUST_E_END && start >= CRUST_S_END,
+          "extension kinds exceed every seed range");
+    next = crust_allocate_kinds(&first, 2);
+    check(next == start + 7, "independent stages receive disjoint ranges");
+    check(crust_allocate_kinds(&second, 1) == start, "kind allocation belongs to each context");
+    check(crust_allocate_kinds(&first, UINT32_MAX - (next + 2)) == next + 2,
+          "kind range can reach the representable limit");
+    check(crust_allocate_kinds(&first, 1) == 0 && first.next_kind == UINT32_MAX &&
+              strstr(first.error, "exhausted") != NULL,
+          "exhaustion reports an error without wrapping or reusing kinds");
+    check(crust_allocate_kinds(&second, 0) == 0 && second.next_kind == start + 1 &&
+              strstr(second.error, "empty") != NULL,
+          "empty range is rejected without consuming kinds");
+    check(crust_allocate_kinds(&second, 1) == 0 && second.error_count == 1,
+          "kind allocation preserves a pending diagnostic");
+    check(counts.calls == 0, "kind ranges need no allocator storage");
+    crust_context_destroy(&second);
+    crust_context_destroy(&first);
+}
+
 int main(void)
 {
     CrustContext ctx;
@@ -337,6 +368,7 @@ int main(void)
     CrustAllocator allocator = {&counts, count_allocate, count_release};
     test_arena();
     test_arena_growth();
+    test_extension_kinds();
     crust_context_init(&ctx, NULL);
     crust_set_error(&ctx, NULL, 0, "first diagnostic");
     crust_set_error(&ctx, NULL, 3, ctx.error);

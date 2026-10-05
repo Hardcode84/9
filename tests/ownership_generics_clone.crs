@@ -58,7 +58,7 @@ fn clone_contracts(program: *OgProgram) -> bool {
     if (*write).effect != OS_EDIT || (*write).modifies == null(*OsField) || (*borrow).result_path == null(*OsField) { return false; }
     if (*(*write).modifies).record_name != (*box).name || !clone_text((*(*write).modifies).name, "value") { return false; }
     if !clone_text((*(*borrow).result_path).name, "value") || (*take).native == null(*OsNative) { return false; }
-    return (*(*take).native).schema == (*ticket).name && (*(*take).native).mode == RS_MOVE;
+    return (*(*take).native).schema == (*ticket).name && (*(*take).native).mode == rs_kind(&(*program).resources, RS_MOVE);
 }
 
 fn clone_blocks(program: *OgProgram) -> bool {
@@ -67,7 +67,7 @@ fn clone_blocks(program: *OgProgram) -> bool {
     var block: *CrustStmt = (*(*exercise).body).body;
     var access: *OsAccess = crust_map_get(&(*program).ownership.blocks, block as usize) as *OsAccess;
     if access == null(*OsAccess) || (*access).effect != OS_READ || !clone_text((*access).domain, "Graph") { return false; }
-    if (*(*block).body).kind != RS_DEFER { return false; }
+    if (*(*block).body).kind != rs_kind(&(*program).resources, RS_DEFER) { return false; }
     var borrow: *CrustDecl = clone_instance(program, "borrow");
     var source: *CrustName = crust_map_get(&(*program).resources.return_sources, borrow as usize) as *CrustName;
     if !clone_text(source, "box") { return false; }
@@ -79,15 +79,48 @@ fn clone_blocks(program: *OgProgram) -> bool {
     return true;
 }
 
+fn clone_unknown_kind(which: u32) -> bool {
+    var program: GsProgram = uninit;
+    gp_init(&program, null(*CrustAllocator), 20000u64);
+    var text: *u8 = "fn value()->i32{return 1i32;}";
+    var source: CrustSource = make CrustSource {
+        path: "unhandled-clone-kind", bytes: text, size: clone_length(text), identity: 1u64
+    };
+    var success: bool = gp_read(&program, &source);
+    if success {
+        var declaration: *CrustDecl = (*program.syntax.units).declarations;
+        var kind: u32 = crust_allocate_kinds(&program.syntax, 1u32);
+        var location: CrustLoc = (*(*declaration).syntax_type).loc;
+        if which == 0u32 { (*(*declaration).syntax_type).kind = kind; }
+        else { if which == 1u32 {
+            (*(*(*(*declaration).body).body).expr).kind = kind;
+            location = (*(*(*(*declaration).body).body).expr).loc;
+        } else {
+            (*(*(*declaration).body).body).kind = kind;
+            location = (*(*(*declaration).body).body).loc;
+        } }
+        success = !gp_lower(&program) && program.context.error_loc.source == location.source &&
+            program.context.error_loc.offset == location.offset &&
+            c_equal(&program.context.error[0usize], "unhandled extension kind in generic clone");
+    }
+    gp_destroy(&program);
+    return success;
+}
+
 fn main(argc: i32, argv: **u8) -> i32 {
     if argc != 1i32 { return 1i32; }
     var text: *u8 = "domain Graph(Box); record Plain{value:i32;} resource Box!(Element){value:Element;} opaque drop destroy!(Element); fn destroy!(Element)(box:mut Box!(Element))->unit access(reclaim,Graph) {} fn borrow!(Element)(box:read Box!(Element))->read Element access(read,Graph) from box.value{return read box.value;} fn write!(Element)(box:mut Box!(Element),value:Element)->unit access(edit,Graph) modifies(Box!(Element).value){box.value=move value;} resource Ticket!(Element){handle:isize;} owns(handle=-1isize) drop dispose!(Element); fn dispose!(Element)(ticket:mut Ticket!(Element))->unit{ticket.handle=-1isize;} extern fn take(value:isize)->unit foreign(move value:Ticket!(Plain).handle)=\"consume\"; extern fn trace(value:i32)->unit foreign(scalar)=\"trace\"; fn exercise(box:mut Box!(Plain))->unit access(edit,Graph){read Graph{defer trace(1i32);var view:read Plain=borrow!(Plain)(read box);drop view;}write!(Plain)(box,make Plain{value:2i32});}";
     var source: CrustSource = make CrustSource { path: "generic-contract-clone", bytes: text, size: clone_length(text), identity: 1u64 };
     var program: OgProgram = uninit;
     og_init(&program, null(*CrustAllocator), 10000u64);
+    // Another source extension reserves kinds before the resource reader starts.
+    if crust_allocate_kinds(&program.generics.syntax, 3u32) == 0u32 { return 1i32; }
+    rs_init(&program.parsed_resources, &program.generics.syntax);
     var success: bool = og_read(&program, &source, true) && og_lower_syntax(&program);
     if success { success = clone_contracts(&program) && clone_blocks(&program); }
     gp_destroy(&program.generics);
-    if success { return 0i32; }
+    if success && clone_unknown_kind(0u32) && clone_unknown_kind(1u32) && clone_unknown_kind(2u32) {
+        return 0i32;
+    }
     return 1i32;
 }

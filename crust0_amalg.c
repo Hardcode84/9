@@ -114,6 +114,11 @@ void crust_context_init(CrustContext *ctx, const CrustAllocator *allocator)
     size_t index;
     memset(ctx, 0, sizeof(*ctx));
     crust_arena_init(&ctx->arena, allocator);
+    ctx->next_kind = (uint32_t)CRUST_T_END;
+    if (ctx->next_kind < (uint32_t)CRUST_E_END)
+        ctx->next_kind = (uint32_t)CRUST_E_END;
+    if (ctx->next_kind < (uint32_t)CRUST_S_END)
+        ctx->next_kind = (uint32_t)CRUST_S_END;
     for (index = 0; index < sizeof(sizes) / sizeof(sizes[0]); ++index) {
         ctx->builtins[index].kind = (CrustTypeKind)index;
         ctx->builtins[index].size = sizes[index];
@@ -125,6 +130,20 @@ void crust_context_destroy(CrustContext *ctx)
 {
     crust_arena_destroy(&ctx->arena);
     memset(ctx, 0, sizeof(*ctx));
+}
+
+uint32_t crust_allocate_kinds(CrustContext *ctx, uint32_t count)
+{
+    uint32_t first;
+    if (ctx->error_count != 0)
+        return 0;
+    if (count == 0 || count > UINT32_MAX - ctx->next_kind) {
+        crust_set_error(ctx, NULL, 0, "extension kind range is empty or exhausted");
+        return 0;
+    }
+    first = ctx->next_kind;
+    ctx->next_kind += count;
+    return first;
 }
 
 bool crust_run_stage(CrustContext *ctx, void (*stage)(CrustContext *, void *), void *data)
@@ -2075,7 +2094,7 @@ static CrustType *resolve_syntax(CrustContext *ctx, CrustTypeSyntax *syntax, uns
         return NULL;
     }
     check_depth(ctx, syntax->loc, depth);
-    if (syntax->kind >= CRUST_T_I8 && syntax->kind <= CRUST_T_UNIT)
+    if (syntax->kind <= CRUST_T_UNIT)
         return &ctx->builtins[syntax->kind];
     switch (syntax->kind) {
     case CRUST_T_NAME:
@@ -2123,7 +2142,7 @@ static CrustType *resolve_syntax(CrustContext *ctx, CrustTypeSyntax *syntax, uns
         }
         return type;
     default:
-        crust_fail(ctx, syntax->loc, "invalid type syntax");
+        crust_fail(ctx, syntax->loc, "unlowered or invalid type syntax kind");
         return NULL;
     }
 }
@@ -3088,6 +3107,7 @@ static CrustType *check_typed_expr(Checker *checker, CrustExpr *expr)
         type = &ctx->builtins[CRUST_T_USIZE];
         break;
     default:
+        crust_fail(ctx, expr->loc, "unlowered or invalid expression kind");
         break;
     }
     return type;
@@ -3278,7 +3298,7 @@ static bool check_stmt_impl(Checker *checker, CrustStmt *stmt)
     case CRUST_S_ASSIGN:
         return check_assignment(checker, stmt);
     }
-    crust_fail(ctx, stmt->loc, "invalid statement kind");
+    crust_fail(ctx, stmt->loc, "unlowered or invalid statement kind");
     return false;
 }
 

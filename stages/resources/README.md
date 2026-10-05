@@ -294,6 +294,14 @@ only its context after the call does not retain an API for emitting again.
 For custom composition, follow [extension.crs](extension.crs) and keep the
 stage yourself.
 
+`rs_init` reserves a syntax kind range in the context. `RS_READ` through
+`RS_DROP` are local offsets. Use `rs_kind(stage, offset)` to obtain a node kind.
+Each resource stage instance has its own range. Compose type hooks with other
+readers, then lower their types before `rs_prepare`. When copying resource
+syntax between contexts, map kinds to the destination resource stage's range.
+The [composition test](../../tests/kind_composition.crs) combines this reader
+with an independent type wrapper and checks both initialization orders.
+
 The retained function plan also maps checked blocks to source scopes. Actions
 retain their registration scope; exits retain their start and stop scopes.
 Deferred captures name the scope that holds their storage. Owning copies and

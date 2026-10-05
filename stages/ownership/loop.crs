@@ -25,7 +25,7 @@ fn os_loop_find(bindings: *OsLoopSlot, slot: *OsSlot) -> *OsLoopSlot {
 fn os_loop_widen(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> *OsValue {
     var value: *OsValue = os_bound(state, slot);
     if (*slot).owns { return os_loop_owner(check, state, slot, location); }
-    if value == null(*OsValue) || os_borrowed((*slot).syntax) || (*value).object != null(*OsObject) || (*value).pointer {
+    if value == null(*OsValue) || os_borrowed(check, (*slot).syntax) || (*value).object != null(*OsObject) || (*value).pointer {
         os_error(check, location, "loop assignment requires an initialized scalar or owner"); return null(*OsValue);
     }
     return os_value(check, (*slot).syntax, null(*OsObject), false);
@@ -34,7 +34,7 @@ fn os_loop_widen(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *Cru
 fn os_loop_owner_ready(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *CrustLoc) -> bool {
     var value: *OsValue = os_bound(state, slot);
     if value == null(*OsValue) || (*value).object == null(*OsObject) || (*value).pointer ||
-       os_view_mode(check, (*slot).syntax) >= RS_READ {
+       os_view_mode(check, (*slot).syntax) >= rs_kind((*(*check).stage).resources, RS_READ) {
         os_error(check, location, "loop owner requires an initialized resource record without stored loans"); return false;
     }
     if !os_initialized(check, state, (*value).object) {
@@ -62,7 +62,7 @@ fn os_loop_assignment(check: *OsCheck, state: *OsState, expression: *CrustExpr,
     while (*expression).kind == CRUST_E_GROUP { expression = (*expression).left; }
     if (*expression).kind != CRUST_E_NAME { return; }
     var slot: *OsSlot = os_local(state, (*expression).name);
-    if slot != null(*OsSlot) && os_borrowed((*slot).syntax) {
+    if slot != null(*OsSlot) && os_borrowed(check, (*slot).syntax) {
         var value: *OsValue = os_bound(state, slot);
         if value != null(*OsValue) && (*value).loan != null(*OsLoan) { slot = (*(*value).loan).place; }
     }

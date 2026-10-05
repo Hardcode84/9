@@ -13,6 +13,7 @@ fn gp_init(program: *GsProgram, allocator: *CrustAllocator, namespace: u64) -> u
     (*program).output_tail = null(*CrustDecl);
     (*program).clone_user = null(*u8);
     (*program).clone_statement = null(fn(*GsClone,*CrustStmt,*CrustStmt)->unit);
+    (*program).clone_kind = null(fn(*GsClone,u32)->u32);
     (*program).clone_body = null(fn(*GsClone,*CrustDecl,u32)->*CrustStmt);
     (*program).clone_declaration = null(fn(*GsClone,*CrustDecl,*CrustDecl)->unit);
     (*program).namespace = namespace;
@@ -129,7 +130,7 @@ fn gp_clone_definition(program: *GsProgram, definition: *GpDefinition,
     var clone: GsClone = make GsClone {
         context: &(*program).context, user: &environment as *u8,
         type_syntax: gp_clone_type, expression: gp_clone_expression,
-        statement: (*program).clone_statement, body: (*program).clone_body
+        statement: (*program).clone_statement, kind: (*program).clone_kind, body: (*program).clone_body
     };
     var declaration: *CrustDecl = gs_clone_declaration(&clone, (*definition).source);
     if declaration == null(*CrustDecl) { return declaration; }

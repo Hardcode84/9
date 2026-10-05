@@ -112,7 +112,7 @@ fn rs_initialize(function: *RsFunction, local: *RsLocal, value: *RsValue,
                  syntax: *CrustTypeSyntax, output: *RsStatements, location: *CrustLoc) -> unit {
     if !rs_require_value(function, value, syntax, location) { return; }
     var stage: *RsStage = (*function).stage;
-    if (*local).mode == RS_READ || (*local).mode == RS_MUT {
+    if (*local).mode == rs_kind(stage, RS_READ) || (*local).mode == rs_kind(stage, RS_MUT) {
         var parent: *RsLocal = (*(*value).local).parent_loan;
         if parent != null(*RsLocal) && !rs_outer(parent, (*local).scope) {
             rs_error(stage, location, "borrow would outlive its source storage");
@@ -161,7 +161,7 @@ fn rs_lower_statement(function: *RsFunction, source: *CrustStmt, output: *RsStat
     var kind: u32 = (*source).kind;
     var location: *CrustLoc = &(*source).loc;
     if kind == CRUST_S_BLOCK { return rs_lower_block(function, source, output); }
-    if kind == RS_UNSAFE {
+    if kind == rs_kind(stage, RS_UNSAFE) {
         (*function).unsafe_depth = (*function).unsafe_depth + 1usize;
         var falls: bool = rs_lower_block(function, (*source).body, output);
         (*function).unsafe_depth = (*function).unsafe_depth - 1usize;
@@ -183,7 +183,7 @@ fn rs_lower_statement(function: *RsFunction, source: *CrustStmt, output: *RsStat
     if kind == CRUST_S_VAR {
         return rs_lower_variable(function, source, output);
     }
-    if kind == RS_DROP { return rs_lower_drop(function, source, output); }
+    if kind == rs_kind(stage, RS_DROP) { return rs_lower_drop(function, source, output); }
     return rs_lower_effect(function, source, output);
 }
 
@@ -375,12 +375,12 @@ fn rs_lower_effect(function: *RsFunction, source: *CrustStmt, output: *RsStateme
     if kind == CRUST_S_RETURN {
         rs_lower_return(function, source, output, &effects); return false;
     }
-    if kind == RS_DEFER {
+    if kind == rs_kind(stage, RS_DEFER) {
         var call: *CrustExpr = (*source).expr;
         while (*call).kind == CRUST_E_GROUP { call = (*call).left; }
         if (*call).kind != CRUST_E_CALL { rs_error(stage, location, "defer requires a call expression"); return false; }
         rs_call(function, call, &effects, enclosing);
-    } else { if kind == RS_FORGET {
+    } else { if kind == rs_kind(stage, RS_FORGET) {
         if (*function).unsafe_depth == 0usize { rs_error(stage, location, "forget requires an unsafe region"); return false; }
         var value: *RsValue = rs_expr(function, (*source).expr, &effects);
         if (*stage).failed { return false; }

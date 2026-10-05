@@ -2,14 +2,16 @@
 
 fn ov_resources_type_key(stage: *OvStage, syntax: *CrustTypeSyntax,
                          text: *OvText, depth: usize, user: *u8) -> bool {
-    if (*syntax).kind != RS_READ && (*syntax).kind != RS_MUT { return false; }
+    if (*syntax).kind != rs_kind(user as *RsStage, RS_READ) && (*syntax).kind != rs_kind(user as *RsStage, RS_MUT) { return false; }
+    if (*syntax).kind == rs_kind(user as *RsStage, RS_READ) { ov_part(stage, text, "resource_read", 13usize); }
+    else { ov_part(stage, text, "resource_mut", 12usize); }
     ov_encode_type(stage, (*syntax).base, text, depth + 1usize);
     return true;
 }
 
 fn ov_resources_binding_type(stage: *OvStage, syntax: *CrustTypeSyntax,
                              user: *u8) -> *CrustTypeSyntax {
-    if (*syntax).kind == RS_READ || (*syntax).kind == RS_MUT { return (*syntax).base; }
+    if (*syntax).kind == rs_kind(user as *RsStage, RS_READ) || (*syntax).kind == rs_kind(user as *RsStage, RS_MUT) { return (*syntax).base; }
     return syntax;
 }
 
@@ -18,14 +20,14 @@ fn ov_resources_expression(walk: *OvWalk, expression: *CrustExpr,
     var stage: *OvStage = (*walk).stage;
     var kind: u32 = (*expression).kind;
     var location: *CrustLoc = &(*expression).loc;
-    if kind == RS_MOVE { return ov_expression(walk, (*expression).left, expected); }
-    if kind == RS_READ || kind == RS_MUT {
+    if kind == rs_kind(user as *RsStage, RS_MOVE) { return ov_expression(walk, (*expression).left, expected); }
+    if kind == rs_kind(user as *RsStage, RS_READ) || kind == rs_kind(user as *RsStage, RS_MUT) {
         return ov_resources_borrow(walk,expression,expected);
     }
     if kind == CRUST_E_UNARY && (*expression).op == CRUST_OP_DEREF {
         var operand: *CrustTypeSyntax = ov_expression(walk, (*expression).left, null(*CrustTypeSyntax));
         if (*stage).failed { return null(*CrustTypeSyntax); }
-        if (*operand).kind != CRUST_T_POINTER && (*operand).kind != RS_READ && (*operand).kind != RS_MUT {
+        if (*operand).kind != CRUST_T_POINTER && (*operand).kind != rs_kind(user as *RsStage, RS_READ) && (*operand).kind != rs_kind(user as *RsStage, RS_MUT) {
             ov_error(stage, location, "dereference requires a pointer or borrowed view");
             return null(*CrustTypeSyntax);
         }
@@ -38,11 +40,11 @@ fn ov_resources_expression(walk: *OvWalk, expression: *CrustExpr,
 }
 
 fn ov_resources_statement(walk: *OvWalk, statement: *CrustStmt, user: *u8) -> bool {
-    if (*statement).kind == RS_UNSAFE {
+    if (*statement).kind == rs_kind(user as *RsStage, RS_UNSAFE) {
         ov_statement(walk, (*statement).body);
         return true;
     }
-    if (*statement).kind == RS_DEFER || (*statement).kind == RS_FORGET {
+    if (*statement).kind == rs_kind(user as *RsStage, RS_DEFER) || (*statement).kind == rs_kind(user as *RsStage, RS_FORGET) {
         ov_expression(walk, (*statement).expr, null(*CrustTypeSyntax));
         return true;
     }
@@ -122,7 +124,7 @@ fn ov_resources_drop_names(stage: *OvStage) -> bool {
     while resource != null(*RsResource) && !(*stage).failed {
         var location: *CrustLoc = &(*(*resource).declaration).loc;
         var signature: *CrustTypeSyntax = ov_type(stage, CRUST_T_FUNCTION, location);
-        var parameter: *CrustTypeSyntax = ov_type(stage, RS_MUT, location);
+        var parameter: *CrustTypeSyntax = ov_type(stage, rs_kind((*(*stage).hooks).user as *RsStage, RS_MUT), location);
         var record_type: *CrustTypeSyntax = ov_type(stage, CRUST_T_NAME, location);
         var result: *CrustTypeSyntax = ov_type(stage, CRUST_T_UNIT, location);
         var parameters: **CrustTypeSyntax = ov_alloc(stage, sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
@@ -188,7 +190,7 @@ fn ov_resources_place(walk:*OvWalk,expression:*CrustExpr)->*CrustTypeSyntax {
     var kind: u32 = (*expression).kind;
     var base: *CrustTypeSyntax = ov_expression(walk, (*expression).left, null(*CrustTypeSyntax));
     if (*stage).failed { return null(*CrustTypeSyntax); }
-    if (*base).kind == RS_READ || (*base).kind == RS_MUT { base = (*base).base; }
+    if (*base).kind == rs_kind((*(*stage).hooks).user as *RsStage, RS_READ) || (*base).kind == rs_kind((*(*stage).hooks).user as *RsStage, RS_MUT) { base = (*base).base; }
     if kind == CRUST_E_FIELD {
         if (*base).kind == CRUST_T_POINTER { base = (*base).base; }
         return ov_field_type(stage, base, (*expression).field_name, location);

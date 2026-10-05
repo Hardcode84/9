@@ -17,6 +17,7 @@ fn og_init(program: *OgProgram, allocator: *CrustAllocator, namespace: u64) -> u
     (*program).parsed.reference_user = program as *u8;
     (*program).parsed.read_reference = og_read_reference;
     (*program).generics.clone_user = program as *u8;
+    (*program).generics.clone_kind = og_clone_kind;
     (*program).generics.clone_statement = og_clone_statement;
     (*program).generics.clone_declaration = og_clone_declaration;
 }

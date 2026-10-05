@@ -63,6 +63,7 @@ fn og_clone_native(clone: *GsClone, source: *OsNative) -> *OsNative {
         (*effect).schema = og_clone_reference(clone, (*source).schema, CRUST_D_RECORD);
         (*effect).field = gs_name((*clone).context, (*source).field);
         (*effect).mode = (*source).mode;
+        if (*source).mode != OS_ACQUIRE { (*effect).mode = og_clone_kind(clone, (*source).mode); }
         *tail = effect; tail = &(*effect).next;
         source = (*source).next;
     }
@@ -169,4 +170,11 @@ fn og_clone_statement(clone: *GsClone, source: *CrustStmt, target: *CrustStmt) -
     (*copy).effect = (*access).effect;
     (*copy).fresh = (*access).fresh;
     rs_put(&(*program).resources, &(*program).ownership.blocks, target as usize, copy as *u8);
+}
+
+fn og_clone_kind(clone: *GsClone, kind: u32) -> u32 {
+    var program: *OgProgram = og_clone_program(clone);
+    var first: u32 = (*program).parsed_resources.kind_base;
+    if kind < first || kind - first >= RS_END { return 0u32; }
+    return (*program).resources.kind_base + kind - first;
 }

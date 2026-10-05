@@ -24,7 +24,7 @@ fn os_result_step(check: *OsCheck, state: *OsState, value: *OsValue,
     }
     var slot: *OsSlot = os_object_slot(check, state, (*value).object, (*field).name);
     if slot == null(*OsSlot) { os_error(check, location, "returned view path names an absent field"); return null(*OsValue); }
-    if os_borrowed((*slot).syntax) {
+    if os_borrowed(check, (*slot).syntax) {
         return os_view_origin(check, state, slot, location);
     }
     var result: *OsValue = os_copy(check, os_bound(state, slot));
@@ -100,7 +100,7 @@ fn os_call_view(check: *OsCheck, state: *OsState, contract: *OsFunction,
 fn os_result_type(check: *OsCheck, state: *OsState, value: *OsValue,
                    syntax: *CrustTypeSyntax, location: *CrustLoc) -> bool {
     var current: *CrustTypeSyntax = (*value).syntax;
-    if (*value).pointer || os_borrowed(current) { current = (*current).base; }
+    if (*value).pointer || os_borrowed(check, current) { current = (*current).base; }
     if rs_same((*(*check).stage).resources, syntax, current) { return true; }
     os_error(check, location, "returned view type does not match its field path");
     return false;

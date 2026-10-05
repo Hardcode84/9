@@ -107,6 +107,11 @@ void crust_context_init(CrustContext *ctx, const CrustAllocator *allocator)
     size_t index;
     memset(ctx, 0, sizeof(*ctx));
     crust_arena_init(&ctx->arena, allocator);
+    ctx->next_kind = (uint32_t)CRUST_T_END;
+    if (ctx->next_kind < (uint32_t)CRUST_E_END)
+        ctx->next_kind = (uint32_t)CRUST_E_END;
+    if (ctx->next_kind < (uint32_t)CRUST_S_END)
+        ctx->next_kind = (uint32_t)CRUST_S_END;
     for (index = 0; index < sizeof(sizes) / sizeof(sizes[0]); ++index) {
         ctx->builtins[index].kind = (CrustTypeKind)index;
         ctx->builtins[index].size = sizes[index];
@@ -118,6 +123,20 @@ void crust_context_destroy(CrustContext *ctx)
 {
     crust_arena_destroy(&ctx->arena);
     memset(ctx, 0, sizeof(*ctx));
+}
+
+uint32_t crust_allocate_kinds(CrustContext *ctx, uint32_t count)
+{
+    uint32_t first;
+    if (ctx->error_count != 0)
+        return 0;
+    if (count == 0 || count > UINT32_MAX - ctx->next_kind) {
+        crust_set_error(ctx, NULL, 0, "extension kind range is empty or exhausted");
+        return 0;
+    }
+    first = ctx->next_kind;
+    ctx->next_kind += count;
+    return first;
 }
 
 bool crust_run_stage(CrustContext *ctx, void (*stage)(CrustContext *, void *), void *data)

@@ -65,6 +65,18 @@ to this helper to support these operations.
 `rr_new_type`, and `rr_new_decl` take a kind and original offset. These helpers
 do not impose extension syntax or semantic policy.
 
+For new type, expression, or statement kinds, call
+`crust_allocate_kinds(context, count)` when initializing the stage. Store the
+returned base in the stage and add local offsets to form kinds. Check for zero:
+it means an empty or exhausted range, or a pending context error. Allocated
+ranges in one context cannot overlap. Declaration kinds remain seed kinds.
+
+`CRUST_T_END`, `CRUST_E_END`, and `CRUST_S_END` mark the exclusive ends of the
+seed ranges. Lower allocated kinds before seed checking. The checker reports
+an unlowered kind at the node's source location. Keep kind IDs within their
+owning context; remap them when copying syntax into a different context.
+The root composes the reader hooks and selects the lowering order.
+
 The reader has a traversal budget of 256 levels. Recursive productions and
 active hooks use that budget. It does not permit 256 arbitrary nested blocks.
 The seed checker has a separate 256-level traversal budget. A stage that adds

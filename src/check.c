@@ -479,7 +479,7 @@ static CrustType *resolve_syntax(CrustContext *ctx, CrustTypeSyntax *syntax, uns
         return NULL;
     }
     check_depth(ctx, syntax->loc, depth);
-    if (syntax->kind >= CRUST_T_I8 && syntax->kind <= CRUST_T_UNIT)
+    if (syntax->kind <= CRUST_T_UNIT)
         return &ctx->builtins[syntax->kind];
     switch (syntax->kind) {
     case CRUST_T_NAME:
@@ -527,7 +527,7 @@ static CrustType *resolve_syntax(CrustContext *ctx, CrustTypeSyntax *syntax, uns
         }
         return type;
     default:
-        crust_fail(ctx, syntax->loc, "invalid type syntax");
+        crust_fail(ctx, syntax->loc, "unlowered or invalid type syntax kind");
         return NULL;
     }
 }
@@ -1492,6 +1492,7 @@ static CrustType *check_typed_expr(Checker *checker, CrustExpr *expr)
         type = &ctx->builtins[CRUST_T_USIZE];
         break;
     default:
+        crust_fail(ctx, expr->loc, "unlowered or invalid expression kind");
         break;
     }
     return type;
@@ -1682,7 +1683,7 @@ static bool check_stmt_impl(Checker *checker, CrustStmt *stmt)
     case CRUST_S_ASSIGN:
         return check_assignment(checker, stmt);
     }
-    crust_fail(ctx, stmt->loc, "invalid statement kind");
+    crust_fail(ctx, stmt->loc, "unlowered or invalid statement kind");
     return false;
 }
 

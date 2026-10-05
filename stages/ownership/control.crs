@@ -28,8 +28,8 @@ fn os_statement_inner(check: *OsCheck, state: *OsState, statement: *CrustStmt) -
         return;
     }
     if kind == CRUST_S_RETURN { os_return(check, state, statement); return; }
-    if kind == RS_DEFER { os_defer(check, state, (*statement).expr); return; }
-    if kind == RS_DROP { os_drop_statement(check, state, statement); return; }
+    if kind == rs_kind((*(*check).stage).resources, RS_DEFER) { os_defer(check, state, (*statement).expr); return; }
+    if kind == rs_kind((*(*check).stage).resources, RS_DROP) { os_drop_statement(check, state, statement); return; }
     if kind == CRUST_S_TRAP { (*state).flow = OS_TRAP; return; }
     os_error(check, &(*statement).loc, "statement has no modular ownership contract");
 }
@@ -275,7 +275,7 @@ fn os_return_value(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> u
     var value: *OsValue = os_expr(check, state, (*statement).expr);
     if value == null(*OsValue) || os_failed(check) || !os_plain(check, value, &(*statement).loc) { return; }
     if !os_abstract_same(check, (*(*(*check).function).declaration).syntax_type, (*value).syntax, &(*statement).loc) { return; }
-    if (*value).object != null(*OsObject) && !(*value).pointer && !os_borrowed((*value).syntax) {
+    if (*value).object != null(*OsObject) && !(*value).pointer && !os_borrowed(check, (*value).syntax) {
         os_publish_value(check, state, (*value).object, &(*statement).loc);
     }
     if !os_transferable(check, state, value, &(*statement).loc) || !os_brand_return(check, state, value, &(*statement).loc) { return; }
@@ -293,9 +293,9 @@ fn os_result_ready(check: *OsCheck, state: *OsState, value: *OsValue, location: 
 }
 
 fn os_return_lifetime(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> unit {
-    if !os_borrowed((*value).syntax) && os_view_mode(check, (*value).syntax) >= RS_READ {
+    if !os_borrowed(check, (*value).syntax) && os_view_mode(check, (*value).syntax) >= rs_kind((*(*check).stage).resources, RS_READ) {
         os_return_view_record(check, state, (*value).object, location);
     }
-    if os_borrowed((*value).syntax) { os_return_view(check, state, value, location); }
+    if os_borrowed(check, (*value).syntax) { os_return_view(check, state, value, location); }
     else { if (*value).pointer { os_error(check, location, "returning a cursor requires a declared lifetime interface"); } }
 }

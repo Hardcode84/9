@@ -56,7 +56,7 @@ fn os_native_argument(check: *OsCheck, state: *OsState, value: *OsValue,
     if (*value).presence != OS_PRESENT {
         os_error(check, location, "native use requires a successful acquisition check"); return;
     }
-    if (*effect).mode == RS_MOVE {
+    if (*effect).mode == rs_kind((*(*check).stage).resources, RS_MOVE) {
         if !(*value).owner { os_error(check, location, "native consumption requires an explicit move"); }
         return;
     }

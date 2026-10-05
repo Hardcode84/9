@@ -54,7 +54,7 @@ fn os_scope_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> unit {
 }
 
 fn os_end_local(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue, location: *CrustLoc) -> unit {
-    if os_borrowed((*slot).syntax) { os_loan_end(check, state, value); return; }
+    if os_borrowed(check, (*slot).syntax) { os_loan_end(check, state, value); return; }
     if (*value).native != null(*OsField) {
         if (*value).presence != OS_ABSENT { os_error(check, location, "owned value must be consumed or moved before its scope ends"); }
         return;
@@ -96,7 +96,7 @@ fn os_expire_owned(check: *OsCheck, state: *OsState, object: *OsObject, location
     var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
-        if value != null(*OsValue) && os_borrowed((*slot).syntax) { os_loan_end(check, state, value); }
+        if value != null(*OsValue) && os_borrowed(check, (*slot).syntax) { os_loan_end(check, state, value); }
         else { if value != null(*OsValue) && (*value).object != null(*OsObject) {
             if (*slot).owns && (*value).pointer {
                 os_expire_owned(check, state, (*value).object, location);

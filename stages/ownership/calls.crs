@@ -48,7 +48,7 @@ fn os_no_cursors(check: *OsCheck, state: *OsState, domain: *CrustName, location:
             var value: *OsValue = os_bound(state, slot);
             if value != null(*OsValue) && !(*slot).owns && !(*slot).authority && (*value).object != null(*OsObject) &&
                (((*value).pointer && (*(*value).object).aliased) ||
-                (os_borrowed((*slot).syntax) && !os_handle_loan(check, state, (*value).loan))) {
+                (os_borrowed(check, (*slot).syntax) && !os_handle_loan(check, state, (*value).loan))) {
                 if (*(*value).object).brand == (*state).brand {
                     os_error(check, location, "reclamation conflicts with an active domain cursor");
                     return false;
@@ -148,7 +148,7 @@ fn os_scalar_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, cont
 fn os_call_argument(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
     var source: *CrustExpr = expression;
     while (*source).kind == CRUST_E_GROUP { source = (*source).left; }
-    if (*source).kind == RS_READ || (*source).kind == RS_MUT { return os_borrow(check, state, source); }
+    if (*source).kind == rs_kind((*(*check).stage).resources, RS_READ) || (*source).kind == rs_kind((*(*check).stage).resources, RS_MUT) { return os_borrow(check, state, source); }
     return os_expr(check, state, expression);
 }
 
@@ -172,8 +172,8 @@ fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contr
 fn os_local_result(check: *OsCheck, state: *OsState, contract: *OsFunction,
                    source: *OsValue, location: *CrustLoc) -> *OsValue {
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
-    if os_borrowed(syntax) { return os_call_view(check, state, contract, source, location); }
-    if os_view_mode(check, syntax) >= RS_READ { return os_call_view_record(check, state, contract, source, location); }
+    if os_borrowed(check, syntax) { return os_call_view(check, state, contract, source, location); }
+    if os_view_mode(check, syntax) >= rs_kind((*(*check).stage).resources, RS_READ) { return os_call_view_record(check, state, contract, source, location); }
     return os_call_owned(check, state, contract, location);
 }
 
@@ -230,7 +230,7 @@ fn os_mutable_call(check: *OsCheck, state: *OsState, contract: *OsFunction,
     var index: usize = 0usize;
     while parameter != null(*CrustParam) && !os_failed(check) {
         var value: *OsValue = arguments[index];
-        if os_view_mode(check, (*parameter).syntax_type) == RS_MUT {
+        if os_view_mode(check, (*parameter).syntax_type) == rs_kind((*(*check).stage).resources, RS_MUT) {
             os_mutable_value(check, state, value, contract, location);
         }
         parameter = (*parameter).next;
@@ -263,8 +263,8 @@ fn os_mutable_fields(check: *OsCheck, state: *OsState, object: *OsObject, contra
 
 fn os_mutable_field(check: *OsCheck, state: *OsState, slot: *OsSlot,
                      value: *OsValue, contract: *OsFunction, location: *CrustLoc) -> unit {
-    if os_borrowed((*slot).syntax) {
-        if (*(*slot).syntax).kind == RS_MUT { os_mutable_value(check, state, value, contract, location); }
+    if os_borrowed(check, (*slot).syntax) {
+        if (*(*slot).syntax).kind == rs_kind((*(*check).stage).resources, RS_MUT) { os_mutable_value(check, state, value, contract, location); }
         return;
     }
     if (*slot).owns && ((*value).pointer || (*value).native != null(*OsField)) {
@@ -290,7 +290,7 @@ fn os_argument(check: *OsCheck, state: *OsState, contract: *OsFunction, paramete
     if !os_plain(check, value, location) || !os_brand_access(check, state, (*value).object, location) { return; }
     var syntax: *CrustTypeSyntax = (*parameter).syntax_type;
     if !os_abstract_same(check, syntax, (*value).syntax, location) { return; }
-    if (*syntax).kind == RS_READ || (*syntax).kind == RS_MUT {
+    if (*syntax).kind == rs_kind((*(*check).stage).resources, RS_READ) || (*syntax).kind == rs_kind((*(*check).stage).resources, RS_MUT) {
         os_borrow_argument(check, state, contract, syntax, value, location);
         return;
     }
@@ -317,7 +317,7 @@ fn os_borrow_argument(check: *OsCheck, state: *OsState, contract: *OsFunction,
     if (*value).loan == null(*OsLoan) || (*(*value).syntax).kind != (*syntax).kind {
         os_error(check, location, "borrow parameter requires an explicit checked borrow"); return;
     }
-    if (*value).object != null(*OsObject) && !os_access_through(check, state, (*value).object, (*value).loan, (*syntax).kind == RS_MUT, location) { return; }
+    if (*value).object != null(*OsObject) && !os_access_through(check, state, (*value).object, (*value).loan, (*syntax).kind == rs_kind((*(*check).stage).resources, RS_MUT), location) { return; }
     if (*value).object != null(*OsObject) && !os_initialized(check, state, (*value).object) {
         os_error(check, location, "borrowed argument must be fully initialized"); return;
     }

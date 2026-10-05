@@ -210,6 +210,15 @@ argument types to ordinary concrete type syntax. Internal record aliases use
 names that source code cannot spell, which prevents accidental name capture.
 Source locations continue to identify the copied definition text.
 
+The source interface exposes `program.clone_kind(clone, kind)`. When standard
+cloning encounters an extension kind, this callback must return the kind
+reserved for that extension in the destination context. Return zero for an
+unhandled kind. A missing callback or an unhandled kind produces a diagnostic
+at the source node. Seed kinds are copied directly. The callback covers type
+syntax, expressions, and statements; declaration kinds remain seed kinds.
+The ownership adapter uses it to map resource kinds between its source and
+concrete contexts. Side tables must use the same mapping for retained modes.
+
 Collection reserves record identities before layout resolution. Pointer-recursive
 records and forward function references use the seed's existing rules. Inline
 record cycles receive the seed diagnostic. Syntax and type traversal have an

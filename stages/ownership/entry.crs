@@ -51,7 +51,7 @@ fn os_parameter_bind(check: *OsCheck, state: *OsState, parameter: *CrustParam, v
     os_set(check, state, slot as *u8, value, OS_READY);
     os_loan_parameter(check, state, slot, value);
     var syntax: *CrustTypeSyntax = (*parameter).syntax_type;
-    if os_borrowed(syntax) { syntax = (*syntax).base; }
+    if os_borrowed(check, syntax) { syntax = (*syntax).base; }
     (*check).parameters = os_binding(check, (*parameter).name, value, (*check).parameters);
     if (*check).parameters != null(*OsBinding) { (*(*check).parameters).value = value; }
 }
@@ -89,7 +89,7 @@ fn os_output_argument(check: *OsCheck, state: *OsState, contract: *OsFunction,
             os_error(check, location, "initializes cannot replace published storage"); return;
         }
         if os_access_through(check, state, object, (*value).loan, true, location) {
-            (*value).loan = os_loan_create(check, state, value, object, RS_MUT);
+            (*value).loan = os_loan_create(check, state, value, object, rs_kind((*(*check).stage).resources, RS_MUT));
         }
     } else { os_publish_value(check, state, object, location); }
 }

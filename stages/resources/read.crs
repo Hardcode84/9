@@ -57,16 +57,17 @@ fn rs_read_function(reader: *CrustReader, stage: *RsStage) -> *CrustDecl {
 }
 
 fn rs_read_statement(reader: *CrustReader, user: *u8) -> *CrustStmt {
+    var stage: *RsStage = user as *RsStage;
     var kind: u32 = 0u32;
-    if rr_is_name(reader, "defer") { kind = RS_DEFER; }
-    else { if rr_is_name(reader, "unsafe") { kind = RS_UNSAFE; }
-    else { if rr_is_name(reader, "forget") { kind = RS_FORGET; }
-    else { if rr_is_name(reader, "drop") { kind = RS_DROP; }
+    if rr_is_name(reader, "defer") { kind = rs_kind(stage, RS_DEFER); }
+    else { if rr_is_name(reader, "unsafe") { kind = rs_kind(stage, RS_UNSAFE); }
+    else { if rr_is_name(reader, "forget") { kind = rs_kind(stage, RS_FORGET); }
+    else { if rr_is_name(reader, "drop") { kind = rs_kind(stage, RS_DROP); }
     else { return null(*CrustStmt); } } } }
     var statement: *CrustStmt = rr_new_stmt(reader, kind, (*reader).token.offset);
     rr_next(reader);
     if (*reader).failed { return null(*CrustStmt); }
-    if kind == RS_UNSAFE { (*statement).body = rr_block(reader); }
+    if kind == rs_kind(stage, RS_UNSAFE) { (*statement).body = rr_block(reader); }
     else {
         (*statement).expr = rr_expression(reader);
         rr_expect(reader, 59u32, "expected ';' after resource statement");
@@ -75,10 +76,11 @@ fn rs_read_statement(reader: *CrustReader, user: *u8) -> *CrustStmt {
 }
 
 fn rs_read_prefix(reader: *CrustReader, user: *u8) -> *CrustExpr {
+    var stage: *RsStage = user as *RsStage;
     var kind: u32 = 0u32;
-    if rr_is_name(reader, "move") { kind = RS_MOVE; }
-    else { if rr_is_name(reader, "read") { kind = RS_READ; }
-    else { if rr_is_name(reader, "mut") { kind = RS_MUT; }
+    if rr_is_name(reader, "move") { kind = rs_kind(stage, RS_MOVE); }
+    else { if rr_is_name(reader, "read") { kind = rs_kind(stage, RS_READ); }
+    else { if rr_is_name(reader, "mut") { kind = rs_kind(stage, RS_MUT); }
     else { return null(*CrustExpr); } } }
     var expression: *CrustExpr = rr_new_expr(reader, kind, (*reader).token.offset);
     rr_next(reader);
@@ -87,9 +89,10 @@ fn rs_read_prefix(reader: *CrustReader, user: *u8) -> *CrustExpr {
 }
 
 fn rs_read_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax {
+    var stage: *RsStage = user as *RsStage;
     var kind: u32 = 0u32;
-    if rr_is_name(reader, "read") { kind = RS_READ; }
-    else { if rr_is_name(reader, "mut") { kind = RS_MUT; }
+    if rr_is_name(reader, "read") { kind = rs_kind(stage, RS_READ); }
+    else { if rr_is_name(reader, "mut") { kind = rs_kind(stage, RS_MUT); }
     else { return null(*CrustTypeSyntax); } }
     var syntax: *CrustTypeSyntax = rr_new_type(reader, kind, (*reader).token.offset);
     rr_next(reader);

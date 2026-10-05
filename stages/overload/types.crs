@@ -108,11 +108,9 @@ fn ov_select(stage:*OvStage, group:*OvGlobal, syntax:*CrustTypeSyntax, parameter
 }
 
 fn ov_encode_extension(stage:*OvStage,syntax:*CrustTypeSyntax,buffer:*OvText,depth:usize)->unit {
-    var kind:u32=(*syntax).kind;
     var hooks:*OvHooks = (*stage).hooks;
     if hooks != null(*OvHooks) && (*hooks).type_key != null(fn(*OvStage,*CrustTypeSyntax,*OvText,usize,*u8)->bool) {
         ov_text(stage, buffer, "x");
-        ov_number(stage, buffer, kind as u64);
         var errors:usize = (*(*stage).context).error_count;
         var handled:bool = (*hooks).type_key(stage, syntax, buffer, depth, (*hooks).user);
         if (*(*stage).context).error_count != errors { (*stage).failed = true; }

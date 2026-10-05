@@ -701,6 +701,13 @@ ABI. A caller builds against that package's version. User libraries can use
 their own syntax trees, type systems, and IR, then construct the input of the
 next selected consumer. There is no mandatory universal language IR.
 
+The public syntax nodes accept context-owned extension kinds. A stage reserves
+disjoint ranges with `crust_allocate_kinds` and retains the returned base.
+The seed enum end markers delimit the built-in ranges. A stage lowers its
+extension nodes before seed checking. Unlowered type, expression, and statement
+kinds produce diagnostics. Copying syntax between contexts requires a mapping
+for extension kinds. See the [construction API](bootstrap.md) for the C contract.
+
 The source runner checks a native library's generated public API digest at
 load time. Missing and different digests are errors. The library must carry
 its own marker. The [runner contract](source-runner.md#files-and-native-inputs)

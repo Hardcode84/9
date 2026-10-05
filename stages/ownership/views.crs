@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn os_view_mode(check: *OsCheck, syntax: *CrustTypeSyntax) -> u32 {
-    if os_borrowed(syntax) { return (*syntax).kind; }
+    if os_borrowed(check, syntax) { return (*syntax).kind; }
     var schema: *OsRecord = os_record((*check).stage, syntax);
     if schema == null(*OsRecord) { return 1u32; }
     if (*schema).opaque { return 1u32; }
@@ -21,7 +21,7 @@ fn os_view_mode(check: *OsCheck, syntax: *CrustTypeSyntax) -> u32 {
 
 fn os_affine(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {
     return os_scoped(check, syntax) || rs_owns((*(*check).stage).resources, syntax) ||
-        ((*syntax).kind == CRUST_T_NAME && os_view_mode(check, syntax) >= RS_READ);
+        ((*syntax).kind == CRUST_T_NAME && os_view_mode(check, syntax) >= rs_kind((*(*check).stage).resources, RS_READ));
 }
 
 fn os_view_parameter(check: *OsCheck, state: *OsState, slot: *OsSlot) -> *OsValue {
@@ -62,7 +62,7 @@ fn os_view_lifetime(check: *OsCheck, state: *OsState, object: *OsObject,
     while field != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, field);
         if value != null(*OsValue) {
-            if os_borrowed((*field).syntax) {
+            if os_borrowed(check, (*field).syntax) {
                 if !os_scope_contains((*value).borrow_scope, scope) {
                     os_error(check, location, "stored view would outlive its source loan");
                 }
@@ -94,7 +94,7 @@ fn os_view_has_loan(check: *OsCheck, state: *OsState, value: *OsValue,
                      loan: *OsLoan, location: *CrustLoc) -> bool {
     if os_loan_ancestor(check, loan, (*value).loan) { return true; }
     var object: *OsObject = (*value).object;
-    if object == null(*OsObject) || os_view_mode(check, (*object).syntax) < RS_READ { return false; }
+    if object == null(*OsObject) || os_view_mode(check, (*object).syntax) < rs_kind((*(*check).stage).resources, RS_READ) { return false; }
     if !os_enter(check, location) { return false; }
     var field: *OsSlot = os_fields(state, object);
     var found: bool = false;
@@ -112,7 +112,7 @@ fn os_validate_view_record(check: *OsCheck, global: *RsGlobal, contract: *OsReco
     var syntax: *CrustTypeSyntax = os_syntax(check, CRUST_T_NAME, &(*declaration).loc);
     if syntax == null(*CrustTypeSyntax) { return; }
     (*syntax).name = (*declaration).name;
-    if os_view_mode(check, syntax) >= RS_READ && ((*contract).domain != null(*CrustName) || (*global).resource != null(*RsResource)) {
+    if os_view_mode(check, syntax) >= rs_kind((*(*check).stage).resources, RS_READ) && ((*contract).domain != null(*CrustName) || (*global).resource != null(*RsResource)) {
         os_error(check, &(*declaration).loc, "stored loans require a scoped view record, not persistent domain storage"); return;
     }
 }
@@ -127,7 +127,7 @@ fn os_validate_view_field(check: *OsCheck, field: *CrustField) -> unit {
 // A view loan protects its stored references and the access they grant.
 fn os_view_access(check: *OsCheck, state: *OsState, object: *OsObject,
                   through: *OsLoan, write: bool, location: *CrustLoc) -> bool {
-    if object == null(*OsObject) || os_view_mode(check, (*object).syntax) < RS_READ { return true; }
+    if object == null(*OsObject) || os_view_mode(check, (*object).syntax) < rs_kind((*(*check).stage).resources, RS_READ) { return true; }
     if !os_enter(check, location) { return false; }
     var field: *OsSlot = os_fields(state, object);
     while field != null(*OsSlot) && !os_failed(check) {
@@ -141,13 +141,13 @@ fn os_view_access(check: *OsCheck, state: *OsState, object: *OsObject,
 
 fn os_view_field_access(check: *OsCheck, state: *OsState, field: *OsSlot,
                         value: *OsValue, through: *OsLoan, write: bool, location: *CrustLoc) -> unit {
-    if os_borrowed((*field).syntax) {
+    if os_borrowed(check, (*field).syntax) {
         var loan: *OsLoan = (*value).loan;
         if loan != null(*OsLoan) {
             var authority: OsLoan = *loan;
             authority.parent = loan;
             authority.via = through;
-            var exclusive: bool = write && (*(*field).syntax).kind == RS_MUT;
+            var exclusive: bool = write && (*(*field).syntax).kind == rs_kind((*(*check).stage).resources, RS_MUT);
             if os_loan_permission(check, state, loan, exclusive, location) {
                 os_place_conflicts(check, state, (*loan).place, &authority, exclusive, location);
             }
@@ -157,7 +157,7 @@ fn os_view_field_access(check: *OsCheck, state: *OsState, field: *OsSlot,
 
 fn os_view_conflict(check: *OsCheck, state: *OsState, object: *OsObject, slot: *OsSlot,
                     view: *OsObject, write: bool, mode: u32, location: *CrustLoc) -> bool {
-    if view == null(*OsObject) || os_view_mode(check, (*view).syntax) < RS_READ { return false; }
+    if view == null(*OsObject) || os_view_mode(check, (*view).syntax) < rs_kind((*(*check).stage).resources, RS_READ) { return false; }
     if !os_enter(check, location) { return false; }
     var field: *OsSlot = os_fields(state, view);
     var conflict: bool = false;
@@ -172,9 +172,9 @@ fn os_view_conflict(check: *OsCheck, state: *OsState, object: *OsObject, slot: *
 
 fn os_view_field_conflict(check: *OsCheck, state: *OsState, object: *OsObject, slot: *OsSlot,
                           value: *OsValue, write: bool, mode: u32, location: *CrustLoc) -> bool {
-    if os_borrowed((*value).syntax) && (*value).loan != null(*OsLoan) {
+    if os_borrowed(check, (*value).syntax) && (*value).loan != null(*OsLoan) {
         var loan: OsLoan = *(*value).loan;
-        if mode == RS_READ { loan.mode = RS_READ; }
+        if mode == rs_kind((*(*check).stage).resources, RS_READ) { loan.mode = rs_kind((*(*check).stage).resources, RS_READ); }
         return os_loan_conflict(check, state, object, slot, &loan, write, location);
     }
     if (*value).pointer { return false; }

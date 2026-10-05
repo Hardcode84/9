@@ -33,7 +33,7 @@ HIGHLIGHT = api/crust0.crs api/crust0_host.crs stages/reader/model.crs stages/re
 CCN = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/ccn/count.crs stages/ccn/read.crs stages/ccn/report.crs stages/ccn/program.crs
 RESOURCE = stages/resources/model.crs stages/resources/base.crs stages/resources/read.crs stages/resources/types.crs stages/resources/constants.crs stages/resources/state.crs stages/resources/cleanup.crs stages/resources/drop.crs stages/resources/places.crs stages/resources/outputs.crs stages/resources/expr.crs stages/resources/control.crs stages/resources/emit.crs stages/resources/program.crs stages/resources/build.crs
 RESOURCE_LIBRARY = $(C_LIBRARY) $(READER) $(RESOURCE)
-RESOURCE_EXPORTS = resource_build resource_program rs_init rs_read rs_prepare rs_prepare_delegated rs_c_body rs_source_import rs_return_from
+RESOURCE_EXPORTS = resource_build resource_program rs_init rs_kind rs_read rs_prepare rs_prepare_delegated rs_c_body rs_source_import rs_return_from
 OWNERSHIP = stages/ownership/abstract.crs stages/ownership/abstract_expr.crs stages/ownership/model.crs stages/ownership/trust.crs stages/ownership/base.crs stages/ownership/native_read.crs stages/ownership/native.crs stages/ownership/read.crs stages/ownership/objects.crs stages/ownership/fields.crs stages/ownership/loans.crs stages/ownership/views.crs stages/ownership/view_results.crs stages/ownership/results.crs stages/ownership/places.crs stages/ownership/expressions.crs stages/ownership/conditions.crs stages/ownership/calls.crs stages/ownership/entry.crs stages/ownership/flow.crs stages/ownership/contracts.crs stages/ownership/effects.crs stages/ownership/scopes.crs stages/ownership/defer.crs stages/ownership/loop.crs stages/ownership/control.crs stages/ownership/check.crs stages/ownership/program.crs
 OWNERSHIP_IMPORTS = api/crust0_eval.crs api/crust0_run.crs stages/native/model.crs stages/native/linux.crs stages/cache/model.crs stages/cache/linux.crs stages/cache/artifact.crs stages/cache/inputs.crs stages/ownership/library_model.crs stages/ownership/interface.crs stages/ownership/artifact.crs stages/ownership/publish.crs stages/ownership/imports.crs
 OWNERSHIP_LIBRARY = $(RESOURCE_LIBRARY) $(OWNERSHIP) $(OWNERSHIP_IMPORTS)
@@ -313,9 +313,13 @@ check-c: c-stage
 check-reader: all c-stage
 	python3 stages/reader/test.py --build $(BUILD) --cc '$(CC)' --ldflags='$(LDFLAGS)'
 
-check-resources: all resource-stage
+$(BUILD)/kind_composition: $(BUILD)/crust-c $(RESOURCE_LIBRARY) tests/kind_wrapper.crs tests/kind_composition.crs Makefile
+	$< -o $@ $(RESOURCE_LIBRARY) tests/kind_wrapper.crs tests/kind_composition.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+check-resources: all resource-stage $(BUILD)/kind_composition
 	python3 tests/resources.py --build $(BUILD)
 	python3 tests/resource_returns.py --build $(BUILD)
+	python3 tests/extension_kinds.py --build $(BUILD)
 
 check-overload: all overload-stage resource-stage
 	python3 tests/overload.py --build $(BUILD)

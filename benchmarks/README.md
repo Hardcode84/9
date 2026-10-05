@@ -17,6 +17,7 @@ removed during cleanup also has an unchanged local copy under
 | --- | --- |
 | C, C++, and Rust frontend profiles | [Method and commands](../docs/exploration/compiler-profiles.md) |
 | Seed checking, assembly, and memory use | [Bootstrap guide](../docs/bootstrap.md#validation-and-measurements) |
+| Seed AST layout and frontend memory | [AST layout experiment](ast-layout/README.md) |
 | C emission | [C backend guide](../docs/c-backend.md#compilation-measurements) |
 | Root execution and native handoff | [Source-order measurements](source-order/README.md) |
 | Independent module jobs and dependency chains | [Parallel measurements](parallel/README.md) |

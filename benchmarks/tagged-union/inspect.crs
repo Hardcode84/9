@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn ub_row(name:*u8,value:u64)->i32="ub_row";
+
+fn main(argc:i32,argv:**u8)->i32 {
+    var context:CrustContext=uninit;crust_context_init(&context,null(*CrustAllocator));
+    var cli:CCli=uninit;var stage:SuStage=uninit;
+    var valid:bool=c_driver_init(&cli,&context,argc-1i32) && su_init(&stage,&context);
+    valid=valid && c_driver_parse(&cli,argc-1i32,argv+1isize,0i32) && su_inputs(&cli,&stage) && su_check(&stage);
+    var counter:CcnCounter=uninit;ccn_init(&counter,&context);
+    var input:*CrustUnit=context.units;
+    while input!=null(*CrustUnit) && valid {
+        var decl:*CrustDecl=input->declarations;
+        while decl!=null(*CrustDecl) && valid {
+            if decl->kind==CRUST_D_FUNCTION && decl->body!=null(*CrustStmt) {
+                var count:usize=0usize;
+                valid=ccn_function(&counter,decl,&count) && ub_row(decl->name->text,count as u64)>=0i32;
+            }
+            decl=decl->next;
+        }
+        input=input->next;
+    }
+    if context.error_count!=0usize { c_driver_diagnostic(&context,"union statistics"); }
+    c_stage_destroy(&cli.stage);crust_context_destroy(&context);
+    if valid { return 0i32; }return 1i32;
+}

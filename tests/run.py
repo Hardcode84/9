@@ -730,6 +730,11 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
 
     for name, source in {
         "flat-depth": "fn f()->u32{return " + "+".join(["1u32"] * 10000) + ";}",
+        "arrow-depth": "record N{next:*N;} fn f(p:*N)->*N{return p" + "->next" * 10000 + ";}",
+        "arrow-record": "record R{x:u8;} fn f(p:R)->u8{return p->x;}",
+        "arrow-scalar": "fn f(p:*u8)->u8{return p->x;}",
+        "arrow-double-pointer": "record R{x:u8;} fn f(p:**R)->u8{return p->x;}",
+        "arrow-unknown-field": "record R{x:u8;} fn f(p:*R)->u8{return p->missing;}",
         "record-depth": "".join(f"record R{i}{{field:R{i + 1};}}" for i in range(2000))
         + "record R2000{field:u8;}",
         "unknown-value": "fn f()->u32{return absent;}",

@@ -1141,6 +1141,23 @@ static CrustExpr *read_primary(Reader *reader)
     }
 }
 
+static CrustExpr *read_field(Reader *reader, CrustExpr *base)
+{
+    CrustLoc loc = reader->token.loc;
+    CrustExpr *field;
+    if (reader->token.kind == TOK_ARROW) {
+        CrustExpr *deref = new_expr(reader, CRUST_E_UNARY, loc);
+        deref->op = CRUST_OP_DEREF;
+        deref->left = base;
+        base = deref;
+    }
+    next_token(reader);
+    field = new_expr(reader, CRUST_E_FIELD, loc);
+    field->left = base;
+    field->field_name = read_name(reader);
+    return field;
+}
+
 static CrustExpr *read_postfix(Reader *reader)
 {
     CrustExpr *expr = read_primary(reader);
@@ -1156,10 +1173,8 @@ static CrustExpr *read_postfix(Reader *reader)
             next->left = expr;
             next->right = read_expr(reader);
             expect(reader, ']', "']'");
-        } else if (take(reader, '.')) {
-            next = new_expr(reader, CRUST_E_FIELD, loc);
-            next->left = expr;
-            next->field_name = read_name(reader);
+        } else if (reader->token.kind == '.' || reader->token.kind == TOK_ARROW) {
+            next = read_field(reader, expr);
         } else {
             return expr;
         }

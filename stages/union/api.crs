@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Require an empty initialized context and source bytes live through context destruction.
+// Apply union syntax and checks, then run the selected C-driver output mode.
+extern fn union_program(request:*CrustBuild)->i32="union_program";

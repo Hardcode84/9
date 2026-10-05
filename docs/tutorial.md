@@ -217,6 +217,11 @@ continues to refer to the same storage as the original pointer.
 `*totals` refers to the record at that address. `(*totals).sum` selects its
 `sum` field. The caller's local remains live while `add` runs.
 
+Use `totals->sum` as a shorter form of `(*totals).sum`. The arrow dereferences
+one pointer and selects a field. You can chain it as `node->next->value` and
+take a field's address as `&node->value`. These operations have the same raw
+pointer preconditions as explicit dereference.
+
 For a pointer `p: *T`, `p[index]` accesses an element with a `usize` index.
 `p + offset` advances by elements with an `isize` offset. When passing an array
 to a function, use `&values[0usize]` and pass its length separately.
@@ -606,3 +611,6 @@ dependencies and the point where it waits for results.
 - The [source runner contract](source-runner.md) describes action boundaries,
   callbacks, source identities, and their lifetimes.
 - The [bootstrap guide](bootstrap.md) covers builds, tests, and the C99 seed.
+
+For variant payloads and exhaustive dispatch, see the
+[external tagged-union tutorial](../examples/union/README.md).

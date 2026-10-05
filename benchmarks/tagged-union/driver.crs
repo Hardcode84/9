@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn ub_print(value:u64)->i32="ub_print";
+
+fn main(argc:i32,argv:**u8)->i32 {
+    if argc!=2i32 { return 1i32; }
+    var bytes:*u8=null(*u8);var size:usize=0usize;
+    if crust0_host_read_file(argv[1usize],&bytes,&size)!=0i32 { return 2i32; }
+    var source:CrustSource=make CrustSource{path:argv[1usize],bytes:bytes,size:size,identity:1u64};
+    var round:usize=0usize;var valid:bool=true;
+    while round<100usize && valid {
+        var context:CrustContext=uninit;crust_context_init(&context,null(*CrustAllocator));
+        valid=rr_read(&context,&source,0usize,size,null(*CrustReaderHooks))!=null(*CrustUnit);
+        valid=valid && crust_collect(&context) && crust_resolve(&context) && crust_check(&context);
+        crust_context_destroy(&context);round=round+1usize;
+    }
+    crust0_host_free(bytes);
+    if !valid { return 3i32; }
+    if ub_print(sizeof(CrustReaderToken) as u64)<0i32 { return 4i32; }
+    return 0i32;
+}

@@ -109,6 +109,14 @@ static void test_grammar_corpus(void)
            "fn f(a: u32) -> unit {} fn test() -> unit { f(1u32,); }", true);
     SYNTAX("syntax: pointer_place", "record R { a: u8; } fn test(p: *R) -> unit { (*p).a = 1u8; }",
            true);
+    SYNTAX("syntax: arrow_place", "record R { a: u8; } fn test(p: *R) -> unit { p->a = 1u8; }",
+           true);
+    SYNTAX("syntax: arrow_chain", "fn f()->unit{ get()->next->items[0usize].field(); }", true);
+    SYNTAX("syntax: arrow_address", "fn f()->unit{ &p->field; *p->field; }", true);
+    SYNTAX("syntax: arrow_comments", "fn f()->unit{ p // base\n -> // field\n name; }", true);
+    SYNTAX("syntax: arrow_missing_field", "fn f()->unit{ p->; }", false);
+    SYNTAX("syntax: arrow_keyword_field", "fn f()->unit{ p->return; }", false);
+    SYNTAX("syntax: split_arrow", "fn f()->unit{ p - > name; }", false);
     SYNTAX("syntax: pointer_index", "fn test(p: *u8) -> u8 { return p[0usize]; }", true);
     SYNTAX("syntax: nested_blocks", "fn test() -> unit { { { var n: u8 = 0u8; } } }", true);
     SYNTAX("syntax: uninitialized_storage", "fn test() -> unit { var n: u8 = uninit; n = 1u8; }",

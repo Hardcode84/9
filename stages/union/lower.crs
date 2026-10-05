@@ -1,0 +1,130 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn su_construct(stage:*SuStage,stmt:*CrustStmt,sum:*SuType,op:*SuOperation)->unit {
+    var location:*CrustLoc=&stmt->loc;
+    var variant:*SuVariant=su_variant(stage,sum,op->variant,location);
+    if variant==null(*SuVariant) { return; }
+    if (variant->syntax->kind==CRUST_T_UNIT)!=(stmt->value==null(*CrustExpr)) {
+        su_error(stage,location,"construction requires the variant payload, or no payload for unit");return;
+    }
+    var name:*CrustName=su_fresh(stage);
+    var syntax:*CrustTypeSyntax=su_pointer(stage,su_named(stage,op->type_name,location),location);
+    var target:*CrustStmt=su_variable(stage,name,syntax,su_unary(stage,CRUST_OP_ADDRESS,stmt->expr,location),location);
+    var base:*CrustExpr=su_unary(stage,CRUST_OP_DEREF,su_name(stage,name,location),location);
+    var tag:*CrustStmt=su_assign(stage,su_field(stage,base,stage->tag_name,location),su_number(stage,variant->tag,location),location);
+    if stage->context->error_count!=0usize { return; }
+    target->next=tag;
+    if stmt->value!=null(*CrustExpr) {
+        var write:*CrustStmt=su_assign(stage,su_payload(stage,base,variant->syntax,location),stmt->value,location);
+        if write==null(*CrustStmt) { return; }
+        target->next=write;write->next=tag;
+    }
+    stmt->kind=CRUST_S_BLOCK;stmt->body=target;stmt->expr=null(*CrustExpr);stmt->value=null(*CrustExpr);
+}
+
+fn su_match_arm(stage:*SuStage,arm:*SuArm,variant:*SuVariant,snapshot:*CrustName)->*CrustStmt {
+    var block:*CrustStmt=su_stmt(stage,CRUST_S_BLOCK,&arm->location);
+    if block==null(*CrustStmt) { return block; }
+    block->body=arm->body;
+    if arm->binding!=null(*CrustName) {
+        if variant->syntax->kind==CRUST_T_UNIT { su_error(stage,&arm->location,"unit variant has no binding");return null(*CrustStmt); }
+        var value:*CrustExpr=su_payload(stage,su_name(stage,snapshot,&arm->location),variant->syntax,&arm->location);
+        var binding:*CrustStmt=su_variable(stage,arm->binding,variant->syntax,value,&arm->location);
+        if binding==null(*CrustStmt) { return null(*CrustStmt); }
+        block->body=binding;binding->next=arm->body;
+    }
+    return block;
+}
+
+fn su_match_test(stage:*SuStage,snapshot:*CrustName,variant:*SuVariant,location:*CrustLoc)->*CrustExpr {
+    var condition:*CrustExpr=su_expr(stage,CRUST_E_BINARY,location);
+    if condition==null(*CrustExpr) { return condition; }
+    condition->op=CRUST_OP_EQ;
+    condition->left=su_field(stage,su_name(stage,snapshot,location),stage->tag_name,location);
+    condition->right=su_number(stage,variant->tag,location);
+    return condition;
+}
+
+fn su_match_arms(stage:*SuStage,sum:*SuType,op:*SuOperation,snapshot:*CrustName,location:*CrustLoc)->*CrustStmt {
+    var seen:CrustMap=make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize};
+    var first:*CrustStmt=null(*CrustStmt);var tail:**CrustStmt=&first;
+    var arm:*SuArm=op->arms;var count:usize=0usize;
+    while arm!=null(*SuArm) && stage->context->error_count==0usize {
+        var variant:*SuVariant=su_variant(stage,sum,arm->name,&arm->location);
+        if variant==null(*SuVariant) { return null(*CrustStmt); }
+        if crust_map_get(&seen,arm->name as usize)!=null(*u8) { su_error(stage,&arm->location,"duplicate match variant");return null(*CrustStmt); }
+        if !crust_try_map_set(stage->context,&seen,arm->name as usize,arm as *u8) { return null(*CrustStmt); }
+        var branch:*CrustStmt=su_stmt(stage,CRUST_S_IF,&arm->location);
+        if branch==null(*CrustStmt) { return branch; }
+        branch->expr=su_match_test(stage,snapshot,variant,&arm->location);
+        branch->body=su_match_arm(stage,arm,variant,snapshot);
+        if stage->context->error_count!=0usize { return null(*CrustStmt); }
+        *tail=branch;tail=&branch->otherwise;
+        if arm->next==null(*SuArm) { *branch=*branch->body; }
+        count=count+1usize;arm=arm->next;
+    }
+    if count!=sum->count { su_error(stage,location,"match must cover every union variant");return null(*CrustStmt); }
+    return first;
+}
+
+fn su_match(stage:*SuStage,stmt:*CrustStmt,sum:*SuType,op:*SuOperation)->unit {
+    var name:*CrustName=su_fresh(stage);
+    var snapshot:*CrustStmt=su_variable(stage,name,su_named(stage,op->type_name,&stmt->loc),stmt->expr,&stmt->loc);
+    var arms:*CrustStmt=su_match_arms(stage,sum,op,name,&stmt->loc);
+    if stage->context->error_count!=0usize { return; }
+    snapshot->next=arms;stmt->kind=CRUST_S_BLOCK;stmt->body=snapshot;stmt->expr=null(*CrustExpr);
+}
+
+fn su_lower(stage:*SuStage,stmt:*CrustStmt,depth:usize)->unit {
+    if stmt==null(*CrustStmt) || stage->context->error_count!=0usize { return; }
+    if depth>=256usize { su_error(stage,&stmt->loc,"union lowering depth exceeded");return; }
+    while stmt!=null(*CrustStmt) && stage->context->error_count==0usize {
+        var kind:u32=stmt->kind;
+        if kind==stage->construct_kind || kind==stage->match_kind {
+            var op:*SuOperation=crust_map_get(&stage->operations,stmt as usize) as *SuOperation;
+            var sum:*SuType=crust_map_get(&stage->types,op->type_name as usize) as *SuType;
+            if sum==null(*SuType) { su_error(stage,&stmt->loc,"unknown union type");return; }
+            if kind==stage->construct_kind { su_construct(stage,stmt,sum,op); }
+            else { su_match(stage,stmt,sum,op); }
+        }
+        su_lower(stage,stmt->body,depth+1usize);su_lower(stage,stmt->otherwise,depth+1usize);
+        stmt=stmt->next;
+    }
+}
+
+// Read declaration source with union, construct, and match statements enabled.
+fn su_read(stage:*SuStage,source:*CrustSource,begin:usize,end:usize)->bool {
+    return rr_read(stage->context,source,begin,end,&stage->hooks)!=null(*CrustUnit);
+}
+
+fn su_check_payloads(stage:*SuStage)->bool {
+    var sum:*SuType=stage->first;
+    while sum!=null(*SuType) {
+        var variant:*SuVariant=sum->variants;
+        while variant!=null(*SuVariant) {
+            if crust_try_resolve_type(stage->context,variant->syntax)==null(*CrustType) { return false; }
+            variant=variant->next;
+        }
+        sum=sum->next;
+    }
+    return true;
+}
+
+// Lower every selected union operation, then check the resulting seed program.
+fn su_check(stage:*SuStage)->bool {
+    if !crust_collect(stage->context) { return false; }
+    var sum:*SuType=stage->first;
+    while sum!=null(*SuType) {
+        if su_layout_record(stage,sum->declaration,0usize)==null(*SuLayout) { return false; }
+        sum=sum->next;
+    }
+    var input:*CrustUnit=stage->context->units;
+    while input!=null(*CrustUnit) {
+        var declaration:*CrustDecl=input->declarations;
+        while declaration!=null(*CrustDecl) {
+            su_lower(stage,declaration->body,0usize);declaration=declaration->next;
+        }
+        input=input->next;
+    }
+    return stage->context->error_count==0usize && crust_resolve(stage->context) && su_check_payloads(stage) && crust_check(stage->context);
+}

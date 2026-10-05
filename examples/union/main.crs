@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "../../api/crust0_stage.crs");
+host_source(run, "../../stages/union/api.crs");
+host_source(run, "../../stages/union/build.crs");
+host_link(run, "../../build/crust-union-library.so");
+
+var arguments: [*u8; 3] = make [*u8; 3] {
+    "-o", host_path(run, "../../build/union"), host_path(run, "program.crs")
+};
+return union_build(null(*CrustSource), 0usize, 3i32, &arguments[0usize]);

@@ -187,7 +187,7 @@ Multiply    = Cast { ( "*" | "/" | "%" ) Cast } ;
 Cast        = Unary { "as" Type } ;
 Unary       = ( "!" | "~" | "-" | "*" | "&" ) Unary | Postfix ;
 Postfix     = Primary {
-                "(" [ Arguments ] ")" | "[" Expr "]" | "." Name
+                "(" [ Arguments ] ")" | "[" Expr "]" | ( "." | "->" ) Name
               } ;
 Arguments   = Expr { "," Expr } [ "," ] ;
 Primary     = Name | Integer | String | "true" | "false"
@@ -413,8 +413,14 @@ A place is a local or parameter, a constant, a pointer dereference, a field
 of a record place, an element of an array place, or a pointer index.
 Parentheses preserve place status. A field or array element of a temporary
 value can be read but has no addressable place. Function names are values,
-not data places. There is no implicit dereference on field selection.
-Field selection requires a record and an existing field. Indexing requires
+not data places. `value.field` requires a record and an existing field.
+`pointer->field` means `(*pointer).field`: it dereferences one data pointer,
+then selects a record field. The pointer expression is evaluated once.
+Both forms have postfix precedence and associate to the left. Thus
+`p->next->value` means `(*(*p).next).value`, and `&p->value` takes the field's
+address. Neither form adds a null check. The reader represents an arrow with
+the existing dereference and field nodes; both nodes use the arrow's source
+position. Indexing requires
 an array or data pointer. Dereference requires a data pointer; address-taking
 requires a place. Computing a place does not read its stored value. A place
 used as a value reads only the selected field or element, not its whole record.

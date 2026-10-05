@@ -34,6 +34,7 @@ separates application rules from container-author obligations.
 | 12 | [Generics](generics/README.md) | Declare type parameters beside records and functions; use explicit type arguments |
 | 13 | [Generics with ownership](generics/ownership/README.md) | Check generic payload contracts and use an intrusive container with plain and resource payloads |
 | 14 | [Stage composition](composition/README.md) | Select ownership and overload providers through ordered reader and source query chains |
+| 15 | [Tagged unions](union/README.md) | Define variants and select an arm with an exhaustive match in an external stage |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -50,6 +51,7 @@ Each example has its own directory and README.
 | [arguments](arguments/README.md) | Separate compiler arguments from target arguments | Each target argument on its own line |
 | [multiple-files](multiple-files/README.md) | Select and compile two target files | `Hello from another source file!` |
 | [modules](modules/README.md) | Compile separate namespaces and import selected names | `modules: 42` |
+| [union](union/README.md) | Construct events and handle each variant | `union: OK` |
 | [generics](generics/README.md) | Specialize a shared pair definition for two payload types | `generics: OK` |
 | [native](native/README.md) | Bootstrap stages and execute compilation functions natively | `Hello from a bootstrapped native stage!` |
 | [intrusive](intrusive/README.md) | Check two intrusive memberships with node and head destructors | `OK` |
@@ -114,3 +116,6 @@ example. This check needs `lizard==1.21.6` in the Python environment.
 
 The [benchmark tools](../benchmarks/README.md) use the current example paths.
 Keep generated reports and their input hashes in ignored build storage.
+
+Run `make check-union check-union-alloc` for union syntax, layout, both backends,
+evaluator execution, and allocation-failure checks under ASan and UBSan.

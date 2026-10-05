@@ -18,6 +18,7 @@ removed during cleanup also has an unchanged local copy under
 | C, C++, and Rust frontend profiles | [Method and commands](../docs/exploration/compiler-profiles.md) |
 | Seed checking, assembly, and memory use | [Bootstrap guide](../docs/bootstrap.md#validation-and-measurements) |
 | Seed AST layout and frontend memory | [AST layout experiment](ast-layout/README.md) |
+| Pointer-field syntax and stage token counts | [Pointer-field measurements](pointer-fields/README.md) |
 | C emission | [C backend guide](../docs/c-backend.md#compilation-measurements) |
 | Complete C and assembly builds | [Build-time comparison](build-time/README.md) |
 | Root execution and native handoff | [Source-order measurements](source-order/README.md) |
@@ -27,6 +28,7 @@ removed during cleanup also has an unchanged local copy under
 | Local ownership, checked clients, and branch joins | [Ownership measurements](ownership/README.md) |
 | Overload selection and field lookup | [Overload measurements](overload/README.md) |
 | Highlighting and editor transport | [Highlight measurements](highlight/README.md) |
+| External union stage and reader token layout | [Tagged reader tokens](tagged-union/README.md) |
 
 Run correctness checks before timing. Compare the same work at each endpoint.
 Separate checking, lowering, emission, stage preparation, and target toolchain

@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn su_word(reader:*CrustReader,text:*u8)->bool {
+    if reader->token.kind!=RR_NAME { return false; }
+    var index:usize=0usize;
+    while index<reader->token.length {
+        if text[index]==0u8 || reader->token.text[index]!=text[index] { return false; }
+        index=index+1usize;
+    }
+    return text[index]==0u8;
+}
+
+fn su_read_union(reader:*CrustReader,user:*u8)->*CrustDecl {
+    if !su_word(reader,"union") { return null(*CrustDecl); }
+    var stage:*SuStage=user as *SuStage;
+    var result:*CrustDecl=rr_new_decl(reader,CRUST_D_RECORD,reader->token.offset);
+    var sum:*SuType=su_alloc(stage,sizeof(SuType),alignof(SuType)) as *SuType;
+    if result==null(*CrustDecl) || sum==null(*SuType) || !rr_next(reader) { return null(*CrustDecl); }
+    result->name=rr_name(reader);sum->declaration=result;
+    if !rr_expect(reader,123u32,"expected '{'") { return null(*CrustDecl); }
+    if !su_read_variants(reader,stage,sum) { return null(*CrustDecl); }
+    if !crust_try_map_set(stage->context,&stage->types,result->name as usize,sum as *u8) { return null(*CrustDecl); }
+    sum->next=stage->first;stage->first=sum;
+    return result;
+}
+
+fn su_read_variants(reader:*CrustReader,stage:*SuStage,sum:*SuType)->bool {
+    var tail:**SuVariant=&sum->variants;
+    while reader->token.kind!=125u32 && !reader->failed {
+        var variant:*SuVariant=su_alloc(stage,sizeof(SuVariant),alignof(SuVariant)) as *SuVariant;
+        if variant==null(*SuVariant) { return false; }
+        variant->name=rr_name(reader);
+        if !rr_expect(reader,58u32,"expected ':'") { return false; }
+        variant->syntax=rr_type(reader);
+        if !rr_expect(reader,59u32,"expected ';'") { return false; }
+        if sum->count==4294967295usize { rr_error(reader,reader->token.offset,"too many union variants");return false; }
+        variant->tag=sum->count as u32;sum->count=sum->count+1usize;
+        *tail=variant;tail=&variant->next;
+    }
+    if sum->count==0usize { rr_error(reader,reader->token.offset,"union requires at least one variant");return false; }
+    return rr_expect(reader,125u32,"expected '}'");
+}
+
+fn su_read_arm(reader:*CrustReader,stage:*SuStage)->*SuArm {
+    var arm:*SuArm=su_alloc(stage,sizeof(SuArm),alignof(SuArm)) as *SuArm;
+    if arm==null(*SuArm) { return arm; }
+    arm->location=make CrustLoc{source:reader->source,offset:reader->token.offset};
+    arm->name=rr_name(reader);
+    if rr_take(reader,40u32) {
+        arm->binding=rr_name(reader);
+        if !rr_expect(reader,41u32,"expected ')'") { return null(*SuArm); }
+    }
+    arm->body=rr_block(reader);
+    if reader->failed { return null(*SuArm); }
+    return arm;
+}
+
+fn su_read_match(reader:*CrustReader,stage:*SuStage,stmt:*CrustStmt,op:*SuOperation)->bool {
+    if !rr_expect(reader,40u32,"expected '(' after match type") { return false; }
+    stmt->expr=rr_expression(reader);
+    if !rr_expect(reader,41u32,"expected ')'") || !rr_expect(reader,123u32,"expected '{'") { return false; }
+    var tail:**SuArm=&op->arms;
+    while reader->token.kind!=125u32 && !reader->failed {
+        *tail=su_read_arm(reader,stage);
+        if *tail==null(*SuArm) { return false; }
+        tail=&(*tail)->next;
+    }
+    return rr_expect(reader,125u32,"expected '}'");
+}
+
+fn su_read_construct(reader:*CrustReader,stmt:*CrustStmt,op:*SuOperation)->bool {
+    if !rr_expect(reader,46u32,"expected '.' after construct type") { return false; }
+    op->variant=rr_name(reader);
+    if !rr_expect(reader,40u32,"expected '('") { return false; }
+    stmt->expr=rr_expression(reader);
+    if rr_take(reader,44u32) { stmt->value=rr_expression(reader); }
+    return rr_expect(reader,41u32,"expected ')'") && rr_expect(reader,59u32,"expected ';'");
+}
+
+fn su_read_statement(reader:*CrustReader,user:*u8)->*CrustStmt {
+    var is_match:bool=su_word(reader,"match");
+    if !is_match && !su_word(reader,"construct") { return null(*CrustStmt); }
+    var stage:*SuStage=user as *SuStage;
+    var kind:u32=stage->construct_kind;
+    if is_match { kind=stage->match_kind; }
+    var stmt:*CrustStmt=rr_new_stmt(reader,kind,reader->token.offset);
+    var op:*SuOperation=su_alloc(stage,sizeof(SuOperation),alignof(SuOperation)) as *SuOperation;
+    if stmt==null(*CrustStmt) || op==null(*SuOperation) || !rr_next(reader) { return null(*CrustStmt); }
+    op->type_name=rr_name(reader);
+    if is_match { if !su_read_match(reader,stage,stmt,op) { return null(*CrustStmt); } }
+    else { if !su_read_construct(reader,stmt,op) { return null(*CrustStmt); } }
+    if !crust_try_map_set(stage->context,&stage->operations,stmt as usize,op as *u8) { return null(*CrustStmt); }
+    return stmt;
+}

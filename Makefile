@@ -175,6 +175,27 @@ check-generics: all c-stage generics-stage
 	python3 tests/generics.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 	python3 tests/generics_source.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
+UNION = stages/union/model.crs stages/union/read.crs stages/union/layout.crs stages/union/nodes.crs stages/union/lower.crs stages/union/program.crs
+UNION_LIBRARY = $(C_LIBRARY) $(READER) $(UNION)
+
+.PHONY: union-stage check-union check-union-alloc
+union-stage: $(BUILD)/crust-union-library.so
+
+$(BUILD)/crust-union-library.o: $(BUILD)/crust-c $(UNION_LIBRARY) Makefile
+	$< --library --object --export union_program --cflag=-fPIC --cflag=-fno-semantic-interposition $(foreach flag,$(CFLAGS),--cflag $(flag)) -o $@ $(UNION_LIBRARY)
+
+$(BUILD)/crust-union-library.so: $(BUILD)/crust-union-library.o
+	$(CC) -shared -Wl,-Bsymbolic,-z,text,-z,relro,-z,now $< $(LDFLAGS) -o $@
+
+$(BUILD)/crust-union-test: $(BUILD)/crust-c $(UNION_LIBRARY) api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a
+	$< -o $@ $(UNION_LIBRARY) api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0_run.a --ldflag=-ldl --ldflag=-lffi --ldflag $(BUILD)/libcrust_asm.a --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+check-union: all c-stage union-stage $(BUILD)/crust-union-test
+	python3 tests/union.py --build $(BUILD)
+
+check-union-alloc: all c-stage union-stage $(BUILD)/crust-union-test
+	python3 tests/union.py --build $(BUILD) --sanitize-stage
+
 c-stage: $(BUILD)/crust-c $(BUILD)/crust-c-library.so
 
 $(BUILD)/crust-highlight: $(BUILD)/crust-c $(HIGHLIGHT) stages/highlight/main.crs

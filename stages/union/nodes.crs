@@ -1,0 +1,79 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn su_fresh(stage:*SuStage)->*CrustName {
+    var bytes:[u8;32]=uninit;
+    var cursor:usize=32usize;var number:usize=stage->serial;
+    stage->serial=stage->serial+1usize;
+    while true {
+        cursor=cursor-1usize;bytes[cursor]=(number%10usize) as u8+48u8;number=number/10usize;
+        if number==0usize { break; }
+    }
+    cursor=cursor-1usize;bytes[cursor]=36u8;
+    return crust_try_intern(stage->context,&bytes[cursor],32usize-cursor);
+}
+
+fn su_named(stage:*SuStage,name:*CrustName,location:*CrustLoc)->*CrustTypeSyntax {
+    var syntax:*CrustTypeSyntax=su_type(stage,CRUST_T_NAME,location);
+    if syntax!=null(*CrustTypeSyntax) { syntax->name=name; }
+    return syntax;
+}
+
+fn su_name(stage:*SuStage,name:*CrustName,location:*CrustLoc)->*CrustExpr {
+    var result:*CrustExpr=su_expr(stage,CRUST_E_NAME,location);
+    if result!=null(*CrustExpr) { result->name=name; }
+    return result;
+}
+
+fn su_unary(stage:*SuStage,op:u32,operand:*CrustExpr,location:*CrustLoc)->*CrustExpr {
+    var result:*CrustExpr=su_expr(stage,CRUST_E_UNARY,location);
+    if result!=null(*CrustExpr) { result->op=op;result->left=operand; }
+    return result;
+}
+
+fn su_field(stage:*SuStage,base:*CrustExpr,name:*CrustName,location:*CrustLoc)->*CrustExpr {
+    var result:*CrustExpr=su_expr(stage,CRUST_E_FIELD,location);
+    if result!=null(*CrustExpr) { result->left=base;result->field_name=name; }
+    return result;
+}
+
+fn su_number(stage:*SuStage,value:u32,location:*CrustLoc)->*CrustExpr {
+    var result:*CrustExpr=su_expr(stage,CRUST_E_INTEGER,location);
+    if result!=null(*CrustExpr) { result->integer=value as u64;result->literal_type=CRUST_T_U32; }
+    return result;
+}
+
+fn su_pointer(stage:*SuStage,base:*CrustTypeSyntax,location:*CrustLoc)->*CrustTypeSyntax {
+    var result:*CrustTypeSyntax=su_type(stage,CRUST_T_POINTER,location);
+    if result!=null(*CrustTypeSyntax) { result->base=base; }
+    return result;
+}
+
+fn su_variable(stage:*SuStage,name:*CrustName,syntax:*CrustTypeSyntax,value:*CrustExpr,location:*CrustLoc)->*CrustStmt {
+    var result:*CrustStmt=su_stmt(stage,CRUST_S_VAR,location);
+    if result!=null(*CrustStmt) { result->name=name;result->syntax_type=syntax;result->value=value; }
+    return result;
+}
+
+fn su_assign(stage:*SuStage,place:*CrustExpr,value:*CrustExpr,location:*CrustLoc)->*CrustStmt {
+    var result:*CrustStmt=su_stmt(stage,CRUST_S_ASSIGN,location);
+    if result!=null(*CrustStmt) { result->expr=place;result->value=value; }
+    return result;
+}
+
+fn su_payload(stage:*SuStage,base:*CrustExpr,syntax:*CrustTypeSyntax,location:*CrustLoc)->*CrustExpr {
+    var storage:*CrustExpr=su_field(stage,base,stage->storage_name,location);
+    var address:*CrustExpr=su_unary(stage,CRUST_OP_ADDRESS,storage,location);
+    var cast:*CrustExpr=su_expr(stage,CRUST_E_CAST,location);
+    if cast==null(*CrustExpr) { return cast; }
+    cast->left=address;cast->syntax_type=su_pointer(stage,syntax,location);
+    return su_unary(stage,CRUST_OP_DEREF,cast,location);
+}
+
+fn su_variant(stage:*SuStage,sum:*SuType,name:*CrustName,location:*CrustLoc)->*SuVariant {
+    var variant:*SuVariant=sum->variants;
+    while variant!=null(*SuVariant) {
+        if variant->name==name { return variant; }
+        variant=variant->next;
+    }
+    su_error(stage,location,"unknown union variant");return null(*SuVariant);
+}

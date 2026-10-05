@@ -226,6 +226,22 @@ fn rr_postfix(reader:*CrustReader)->*CrustExpr {
     return rr_postfix_after(reader,expression);
 }
 
+// Consume a dot or arrow and a field name after a successful base expression.
+fn rr_field(reader:*CrustReader,expression:*CrustExpr)->*CrustExpr {
+    var offset:usize=(*reader).token.offset;
+    if (*reader).token.kind==RR_ARROW {
+        var deref:*CrustExpr=rr_new_expr(reader,CRUST_E_UNARY,offset);
+        if deref==null(*CrustExpr) { return deref; }
+        (*deref).op=CRUST_OP_DEREF;(*deref).left=expression;
+        expression=deref;
+    }
+    rr_next(reader);
+    var field:*CrustExpr=rr_new_expr(reader,CRUST_E_FIELD,offset);
+    if field==null(*CrustExpr) { return field; }
+    (*field).left=expression;(*field).field_name=rr_name(reader);
+    return field;
+}
+
 // Consume standard postfix operations after a successful primary expression.
 fn rr_postfix_after(reader:*CrustReader,expression:*CrustExpr)->*CrustExpr {
     while !(*reader).failed {
@@ -243,10 +259,9 @@ fn rr_postfix_after(reader:*CrustReader,expression:*CrustExpr)->*CrustExpr {
                 (*next).left=expression;(*next).right=rr_expression(reader);
                 if !rr_expect(reader,93u32,"expected ']'") { return null(*CrustExpr); }
             } else {
-                if rr_take(reader,46u32) {
-                    next=rr_new_expr(reader,CRUST_E_FIELD,offset);
+                if (*reader).token.kind==46u32 || (*reader).token.kind==RR_ARROW {
+                    next=rr_field(reader,expression);
                     if next==null(*CrustExpr) { return next; }
-                    (*next).left=expression;(*next).field_name=rr_name(reader);
                 } else {
                     if (*reader).failed { return null(*CrustExpr); }
                     return expression;

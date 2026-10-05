@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn ut_puts(text:*u8)->i32="puts";
+
+record UtAllocator { calls:usize; fail_at:usize; live:usize; }
+
+fn ut_allocate(user:*u8,size:usize)->*u8 {
+    var state:*UtAllocator=user as *UtAllocator;
+    state->calls=state->calls+1usize;
+    if state->calls==state->fail_at { return null(*u8); }
+    var bytes:*u8=crust0_host_alloc(size,16usize);
+    if bytes!=null(*u8) { state->live=state->live+1usize; }
+    return bytes;
+}
+
+fn ut_release(user:*u8,bytes:*u8)->unit {
+    var state:*UtAllocator=user as *UtAllocator;
+    if state->live==0usize { trap; }
+    state->live=state->live-1usize;crust0_host_free(bytes);
+}
+
+fn ut_attempt(source:*CrustSource,fail_at:usize,calls:*usize)->bool {
+    var state:UtAllocator=make UtAllocator{calls:0usize,fail_at:fail_at,live:0usize};
+    var allocator:CrustAllocator=make CrustAllocator{user:&state as *u8,allocate:ut_allocate,release:ut_release};
+    var context:CrustContext=uninit;crust_context_init(&context,&allocator);
+    var stage:SuStage=uninit;
+    var success:bool=su_init(&stage,&context) && su_read(&stage,source,0usize,source->size) && su_check(&stage);
+    *calls=state.calls;
+    var valid:bool=success && fail_at==0usize;
+    if fail_at!=0usize { valid=!success && context.error_count!=0usize; }
+    crust_context_destroy(&context);
+    return valid && state.live==0usize;
+}
+
+fn ut_verify(source:*CrustSource)->bool {
+    var calls:usize=0usize;
+    if !ut_attempt(source,0usize,&calls) { return false; }
+    var index:usize=1usize;
+    while index<=calls {
+        var used:usize=0usize;
+        if !ut_attempt(source,index,&used) { return false; }
+        index=index+1usize;
+    }
+    return true;
+}
+
+fn ut_evaluate(source:*CrustSource)->bool {
+    var context:CrustContext=uninit;crust_context_init(&context,null(*CrustAllocator));
+    var stage:SuStage=uninit;var result:bool=false;var eval:*u8=null(*u8);
+    if su_init(&stage,&context) && su_read(&stage,source,0usize,source->size) && su_check(&stage) {
+        var name:*CrustName=crust_try_intern(&context,"verify",6usize);
+        var symbol:*CrustSymbol=crust_map_get(&context.globals,name as usize) as *CrustSymbol;
+        if symbol!=null(*CrustSymbol) {
+            eval=crust_eval_create(&context,null(*CrustEvalOptions));var status:i32=1i32;
+            result=eval!=null(*u8) && crust_eval_call(eval,symbol->decl,null(**u8),0usize,&status as *u8) && status==0i32;
+        }
+    }
+    if context.error_count!=0usize { c_driver_diagnostic(&context,"union evaluation"); }
+    crust_eval_destroy(eval);crust_context_destroy(&context);return result;
+}
+
+fn union_verify(path:*u8)->i32 {
+    var bytes:*u8=null(*u8);var size:usize=0usize;
+    if crust0_host_read_file(path,&bytes,&size)!=0i32 { ut_puts("cannot read union verification input\n");return 1i32; }
+    var source:CrustSource=make CrustSource{path:path,bytes:bytes,size:size,identity:1u64};
+    var valid:bool=ut_verify(&source) && ut_evaluate(&source);
+    crust0_host_free(bytes);
+    if !valid { ut_puts("union allocation sweep or evaluation failed\n");return 1i32; }
+    return 0i32;
+}

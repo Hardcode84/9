@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn su_inputs(cli:*CCli,stage:*SuStage)->bool {
+    if cli->root!=null(*CrustSource) {
+        if !su_read(stage,cli->root,cli->target_begin,cli->root->size) { return false; }
+    }
+    var index:usize=0usize;
+    while index<cli->source_count {
+        var source:*CrustSource=&cli->sources[index];
+        var bytes:*u8=null(*u8);var size:usize=0usize;
+        if crust0_host_read_file(source->path,&bytes,&size)!=0i32 {
+            c_driver_io_error(&cli->driver,"cannot read input",source->path,*c_driver_errno());return false;
+        }
+        source->bytes=crust_try_copy_string(stage->context,bytes,size);source->size=size;
+        crust0_host_free(bytes);
+        if source->bytes==null(*u8) || !su_read(stage,source,0usize,size) { return false; }
+        index=index+1usize;
+    }
+    return true;
+}
+
+fn su_driver_build(cli:*CCli,stage:*SuStage)->i32 {
+    if !su_inputs(cli,stage) || !su_check(stage) || !c_driver_exports(cli) { return 1i32; }
+    if cli->mode==3u32 { return 0i32; }
+    if !c_driver_names(&cli->driver) { return 1i32; }
+    var entry:*CrustDecl=null(*CrustDecl);
+    if !cli->library { entry=c_driver_entry(cli);if entry==null(*CrustDecl) { return 1i32; } }
+    if cli->mode==4u32 { if c_emit(&cli->stage,entry) { return 0i32; }return 1i32; }
+    return c_backend_build(stage->context,entry,&cli->options);
+}
+
+// Require an empty initialized context. Keep request source bytes live until context destruction.
+// Accept C-driver options. Retain diagnostics and return the build status.
+fn union_program(request:*CrustBuild)->i32 {
+    var cli:CCli=uninit;var stage:SuStage=uninit;var result:i32=1i32;
+    var success:bool=c_driver_init(&cli,request->context,request->argc);
+    cli.root=request->source;cli.target_begin=request->target_begin;
+    if success && su_init(&stage,request->context) && c_driver_parse(&cli,request->argc,request->argv,0i32) {
+        result=su_driver_build(&cli,&stage);
+    }
+    c_stage_destroy(&cli.stage);return result;
+}

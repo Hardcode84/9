@@ -171,6 +171,7 @@ Code changes: `make all`, then applicable checks:
 | Compilation examples | `check-examples` |
 | Modules/bindings/exports | `check-modules` |
 | Generic definitions/instances | `check-generics` |
+| External union syntax/layout | `check-union check-union-alloc` |
 | Generic ownership/contracts/imports | `check-ownership-generics` |
 | Native jobs | `check-parallel` |
 | Highlight/editor | `check-highlight check-vscode` |

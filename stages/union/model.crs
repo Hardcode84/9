@@ -1,0 +1,64 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record SuVariant { name:*CrustName; syntax:*CrustTypeSyntax; next:*SuVariant; tag:u32; }
+record SuType { declaration:*CrustDecl; variants:*SuVariant; next:*SuType; count:usize; }
+record SuLayout { declaration:*CrustDecl; size:u64; align:u32; state:u32; }
+record SuArm { location:CrustLoc; name:*CrustName; binding:*CrustName; body:*CrustStmt; next:*SuArm; }
+record SuOperation { arms:*SuArm; type_name:*CrustName; variant:*CrustName; }
+record SuStage {
+    hooks:CrustReaderHooks;
+    types:CrustMap;
+    layouts:CrustMap;
+    operations:CrustMap;
+    context:*CrustContext;
+    first:*SuType;
+    storage_name:*CrustName;
+    tag_name:*CrustName;
+    serial:usize;
+    construct_kind:u32;
+    match_kind:u32;
+}
+
+fn su_error(stage:*SuStage,location:*CrustLoc,message:*u8)->unit {
+    if stage->context->error_count==0usize { crust_set_error(stage->context,location->source,location->offset,message); }
+}
+
+fn su_alloc(stage:*SuStage,size:usize,alignment:usize)->*u8 {
+    return crust_try_alloc(stage->context,size,alignment);
+}
+
+fn su_type(stage:*SuStage,kind:u32,location:*CrustLoc)->*CrustTypeSyntax {
+    var result:*CrustTypeSyntax=su_alloc(stage,sizeof(CrustTypeSyntax),alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
+    if result!=null(*CrustTypeSyntax) { result->kind=kind;result->loc=*location; }
+    return result;
+}
+
+fn su_expr(stage:*SuStage,kind:u32,location:*CrustLoc)->*CrustExpr {
+    var result:*CrustExpr=su_alloc(stage,sizeof(CrustExpr),alignof(CrustExpr)) as *CrustExpr;
+    if result!=null(*CrustExpr) { result->kind=kind;result->loc=*location; }
+    return result;
+}
+
+fn su_stmt(stage:*SuStage,kind:u32,location:*CrustLoc)->*CrustStmt {
+    var result:*CrustStmt=su_alloc(stage,sizeof(CrustStmt),alignof(CrustStmt)) as *CrustStmt;
+    if result!=null(*CrustStmt) { result->kind=kind;result->loc=*location; }
+    return result;
+}
+
+fn su_init(stage:*SuStage,context:*CrustContext)->bool {
+    *stage=make SuStage {
+        context:context,types:make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize},
+        layouts:make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize},
+        operations:make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize},
+        hooks:make CrustReaderHooks{next:null(*CrustReaderHooks),function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
+            user:stage as *u8,declaration:su_read_union,statement:su_read_statement,
+            prefix:null(fn(*CrustReader,*u8)->*CrustExpr),type_syntax:null(fn(*CrustReader,*u8)->*CrustTypeSyntax)},
+        first:null(*SuType),storage_name:null(*CrustName),tag_name:null(*CrustName),serial:0usize,
+        construct_kind:0u32,match_kind:0u32
+    };
+    stage->construct_kind=crust_allocate_kinds(context,2u32);
+    stage->match_kind=stage->construct_kind+1u32;
+    stage->storage_name=crust_try_intern(context,"$union.storage",14usize);
+    stage->tag_name=crust_try_intern(context,"$union.tag",10usize);
+    return stage->construct_kind!=0u32 && context->error_count==0usize;
+}

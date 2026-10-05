@@ -1,0 +1,247 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_selection_value(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax,
+                       sources: *OsChoice, location: *CrustLoc) -> *OsValue {
+    var target: *OsObject = null(*OsObject);
+    if (*(*syntax).base).kind == CRUST_T_NAME {
+        target = os_object(check, state, (*syntax).base, null(*OsObject), (*state).scope, true);
+        if target == null(*OsObject) { return null(*OsValue); }
+        os_abstract_value(check, state, target, true);
+    }
+    var place: *OsSlot = os_loan_storage(check, state, (*syntax).base, target);
+    if place == null(*OsSlot) { return null(*OsValue); }
+    var value: *OsValue = os_copy(check, os_bound(state, place));
+    var selection: *OsSelection = os_alloc(check, sizeof(OsSelection), alignof(OsSelection)) as *OsSelection;
+    if value == null(*OsValue) || selection == null(*OsSelection) { return null(*OsValue); }
+    (*value).place = place;
+    (*value).loan = os_loan_new(check, state, value, (*syntax).kind, location);
+    if (*value).loan == null(*OsLoan) { return null(*OsValue); }
+    (*selection).target = value; (*selection).sources = sources;
+    (*(*value).loan).selection = selection;
+    (*value).syntax = syntax;
+    os_selection_metadata(value, sources);
+    return value;
+}
+
+fn os_selection_ancestor(check: *OsCheck, ancestor: *OsLoan, selection: *OsSelection, budget: usize) -> bool {
+    if selection == null(*OsSelection) { return false; }
+    var source: *OsChoice = (*selection).sources;
+    while source != null(*OsChoice) {
+        if os_loan_search(check, ancestor, (*(*source).value).loan, budget) { return true; }
+        source = (*source).next;
+    }
+    return false;
+}
+
+fn os_selection_conflict(check: *OsCheck, state: *OsState, object: *OsObject, slot: *OsSlot,
+                         loan: *OsLoan, write: bool, location: *CrustLoc) -> bool {
+    if (*loan).selection == null(*OsSelection) { return false; }
+    if !os_enter(check, location) { return false; }
+    var choice: *OsChoice = (*(*loan).selection).sources;
+    var conflict: bool = false;
+    while choice != null(*OsChoice) && !conflict && !os_failed(check) {
+        var source: OsLoan = *(*(*choice).value).loan;
+        source.mode = (*loan).mode;
+        conflict = os_loan_conflict(check, state, object, slot, &source, write, location);
+        choice = (*choice).next;
+    }
+    (*check).depth = (*check).depth - 1usize;
+    return conflict;
+}
+
+fn os_selection_live(check: *OsCheck, state: *OsState, selection: *OsSelection) -> unit {
+    if selection == null(*OsSelection) { return; }
+    var source: *OsChoice = (*selection).sources;
+    while source != null(*OsChoice) && !os_failed(check) {
+        os_live_loan(check, state, (*(*source).value).loan); source = (*source).next;
+    }
+}
+
+fn os_selection_end(check: *OsCheck, state: *OsState, loan: *OsLoan) -> unit {
+    if (*loan).selection == null(*OsSelection) { return; }
+    var value: *OsValue = (*(*loan).selection).target;
+    if (*loan).mode == rs_kind((*(*check).stage).resources, RS_MUT) && !os_initialized(check, state, (*value).object) {
+        os_error(check, &(*(*value).syntax).loc, "selected borrowed storage must be initialized before its loan ends");
+    }
+}
+
+// Find the field containing an inline value or an owned allocation.
+fn os_selection_field(check: *OsCheck, state: *OsState, parent: *OsObject, object: *OsObject) -> *OsSlot {
+    var field: *OsSlot = os_fields(state, parent);
+    while field != null(*OsSlot) {
+        var value: *OsValue = os_bound(state, field);
+        if value != null(*OsValue) && (*value).object == object { return field; }
+        field = (*field).next;
+    }
+    return null(*OsSlot);
+}
+
+fn os_selection_path(check: *OsCheck, state: *OsState, value: *OsValue,
+                      target: *OsValue, path: **OsField, location: *CrustLoc) -> bool {
+    if os_result_same(value, target) { return true; }
+    var place: *OsSlot = os_original((*value).place);
+    var object: *OsObject = (*value).object;
+    var depth: usize = 0usize;
+    while !os_failed(check) && depth < 128usize {
+        if place == null(*OsSlot) || (*place).field == null(*CrustField) {
+            if object == null(*OsObject) { return false; }
+            if object == (*target).object { return true; }
+            var parent: *OsObject = (*object).parent;
+            if parent == null(*OsObject) { parent = os_owner(state, object); }
+            if parent == null(*OsObject) { return false; }
+            place = os_selection_field(check, state, parent, object);
+            if place == null(*OsSlot) { return false; }
+        }
+        var field: *OsField = os_alloc(check, sizeof(OsField), alignof(OsField)) as *OsField;
+        if field == null(*OsField) { return false; }
+        (*field).name = (*place).name; (*field).next = *path; *path = field;
+        object = (*place).object; place = null(*OsSlot);
+        if object == (*target).object { return true; }
+        depth = depth + 1usize;
+    }
+    os_error(check, location, "returned view projection exceeds 128"); return false;
+}
+
+fn os_selection_return(check: *OsCheck, state: *OsState, value: *OsValue,
+                        selection: *OsSelection, location: *CrustLoc) -> bool {
+    var origin: OsOrigin = make OsOrigin { parameter:null(*CrustName), path:null(*OsField), next:null(*OsOrigin), index:0usize };
+    if !os_selection_path(check, state, value, (*selection).target, &origin.path, location) { return false; }
+    var source: *OsChoice = (*selection).sources;
+    while source != null(*OsChoice) && !os_failed(check) {
+        var projected: *OsValue = os_result_path(check, state, &origin, (*source).value, location);
+        if projected == null(*OsValue) || !os_return_origin(check, state, projected, location) { return false; }
+        source = (*source).next;
+    }
+    return !os_failed(check);
+}
+
+fn os_selection_mutable(check: *OsCheck, state: *OsState, contract: *OsFunction,
+                         arguments: **OsValue, location: *CrustLoc) -> unit {
+    // Later writes through the result can change any source, regardless of the callee's frame.
+    var writes: OsFunction = *contract;
+    writes.has_modifies = false;
+    var origin: *OsOrigin = (*contract).origins;
+    while origin != null(*OsOrigin) && !os_failed(check) {
+        var value: *OsValue = os_result_path(check, state, origin, arguments[(*origin).index], location);
+        if value == null(*OsValue) { return; }
+        if (*value).object != null(*OsObject) { os_mutable_value(check, state, value, &writes, location); }
+        else {
+            var slot: *OsSlot = os_original((*value).place);
+            var changed: *OsValue = os_copy(check, os_bound(state, slot));
+            if changed != null(*OsValue) { os_set(check, state, slot as *u8, changed, OS_READY); }
+        }
+        origin = (*origin).next;
+    }
+}
+
+fn os_selection_stored(check: *OsCheck, state: *OsState, field: *OsSlot,
+                        loan: *OsLoan, selection: *OsSelection, location: *CrustLoc) -> unit {
+    var field_value: *OsValue = os_copy(check, os_bound(state, field));
+    if field_value == null(*OsValue) { return; }
+    (*field_value).place = field;
+    var origin: OsOrigin = make OsOrigin { parameter:null(*CrustName), path:null(*OsField), next:null(*OsOrigin), index:0usize };
+    if !os_selection_path(check, state, field_value, (*selection).target, &origin.path, location) {
+        os_error(check, location, "stored view has no path from the selected storage"); return;
+    }
+    var derived: *OsSelection = os_alloc(check, sizeof(OsSelection), alignof(OsSelection)) as *OsSelection;
+    if derived == null(*OsSelection) { return; }
+    (*derived).target = os_copy(check, os_bound(state, (*loan).place));
+    if (*derived).target == null(*OsValue) { return; }
+    (*(*derived).target).place = (*loan).place;
+    var source: *OsChoice = (*selection).sources;
+    while source != null(*OsChoice) && !os_failed(check) {
+        var value: *OsValue = os_result_path(check, state, &origin, (*source).value, location);
+        if value == null(*OsValue) { return; }
+        (*value).loan = os_loan_via(check, state, (*value).loan, (*(*source).value).loan);
+        if (*value).loan == null(*OsLoan) { return; }
+        os_choices_add(check, state, &(*derived).sources, value, (*value).loan, location);
+        source = (*source).next;
+    }
+    (*loan).selection = derived;
+}
+
+fn os_selection_domain(check: *OsCheck, state: *OsState, loan: *OsLoan,
+                        arguments: **OsValue, count: usize, effect: u32, reclaim: bool, location: *CrustLoc) -> bool {
+    if (*loan).selection == null(*OsSelection) { return false; }
+    if !os_enter(check, location) { return false; }
+    var choice: *OsChoice = (*(*loan).selection).sources;
+    var conflict: bool = false;
+    while choice != null(*OsChoice) && !conflict && !os_failed(check) {
+        var source: OsLoan = *(*(*choice).value).loan;
+        source.mode = (*loan).mode;
+        // Source identity remains stable for ancestry checks at call boundaries.
+        if reclaim || !os_edit_loan_source(check, state, (*(*choice).value).loan, arguments, count, location) {
+            conflict = os_domain_loan_conflict(check, state, &source, arguments, count, effect, reclaim, location);
+        }
+        choice = (*choice).next;
+    }
+    (*check).depth = (*check).depth - 1usize;
+    return conflict;
+}
+
+// Each selection reserves a set of concrete places. Shared choices are expanded once.
+fn os_choices_add(check: *OsCheck, state: *OsState, choices: **OsChoice,
+                    value: *OsValue, authority: *OsLoan, location: *CrustLoc) -> unit {
+    if !os_enter(check, location) { return; }
+    var selection: *OsSelection = null(*OsSelection);
+    if (*value).loan != null(*OsLoan) { selection = (*(*value).loan).selection; }
+    if selection == null(*OsSelection) { os_choice_reserve(check, state, choices, value, authority); }
+    else { os_choices_expand(check, state, choices, value, authority, location); }
+    (*check).depth = (*check).depth - 1usize;
+}
+
+fn os_choices_expand(check: *OsCheck, state: *OsState, choices: **OsChoice,
+                      value: *OsValue, authority: *OsLoan, location: *CrustLoc) -> unit {
+    var selection: *OsSelection = (*(*value).loan).selection;
+    var origin: OsOrigin = make OsOrigin { parameter:null(*CrustName), path:null(*OsField), next:null(*OsOrigin), index:0usize };
+    if !os_selection_path(check, state, value, (*selection).target, &origin.path, location) {
+        os_error(check, location, "returned view has no path from the selected storage"); return;
+    }
+    var source: *OsChoice = (*selection).sources;
+    while source != null(*OsChoice) && !os_failed(check) {
+        var projected: *OsValue = os_result_path(check, state, &origin, (*source).value, location);
+        if projected == null(*OsValue) { return; }
+        os_choices_add(check, state, choices, projected, authority, location);
+        source = (*source).next;
+    }
+}
+
+fn os_choice_reserve(check: *OsCheck, state: *OsState, choices: **OsChoice,
+                      value: *OsValue, authority: *OsLoan) -> unit {
+    var previous: *OsChoice = *choices;
+    while previous != null(*OsChoice) {
+        if os_result_same(value, (*previous).value) { return; }
+        previous = (*previous).next;
+    }
+    value = os_copy(check, value);
+    if value == null(*OsValue) { return; }
+    (*value).loan = os_loan_via(check, state, (*value).loan, authority);
+    if (*value).loan == null(*OsLoan) { return; }
+    var object: *OsObject = (*value).object;
+    if object == null(*OsObject) && (*value).place != null(*OsSlot) { object = (*(*value).place).object; }
+    (*value).loan = os_loan_create(check, state, value, object, (*authority).mode);
+    if (*value).loan == null(*OsLoan) { return; }
+    (*(*value).loan).selection = null(*OsSelection);
+    if (*value).borrow_scope == null(*OsScope) || os_scope_contains((*value).borrow_scope, (*authority).scope) {
+        (*value).borrow_scope = (*authority).scope;
+    }
+    os_set(check, state, (*value).loan as *u8, null(*OsValue), 0u32);
+    var choice: *OsChoice = os_choice(check, value);
+    if choice == null(*OsChoice) { return; }
+    (*choice).next = *choices; *choices = choice;
+}
+
+fn os_selection_metadata(value: *OsValue, sources: *OsChoice) -> unit {
+    // Retained references cannot acquire ownership authority through a selection.
+    while sources != null(*OsChoice) {
+        var source: *OsValue = (*sources).value;
+        var scope: *OsScope = (*source).borrow_scope;
+        if (*value).borrow_scope == null(*OsScope) || os_scope_contains((*value).borrow_scope, scope) {
+            (*value).borrow_scope = scope;
+        }
+        if (*value).object != null(*OsObject) && (*source).object != null(*OsObject) && (*os_root((*source).object)).aliased {
+            (*(*value).object).aliased = true;
+        }
+        sources = (*sources).next;
+    }
+}

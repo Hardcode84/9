@@ -26,7 +26,7 @@ The checked interface uses these concepts:
 | Resource field | `owns(field)` applies to a native resource, including an integer handle. Storage ownership also grants access to an allocation. |
 | Shared loan | `read` permits reads and prevents conflicting changes and destruction. |
 | Exclusive loan | `mut` permits changes and prevents conflicting access. |
-| Stored or returned loan | Local facts retain origins; returned views declare one exact input path. |
+| Stored or returned loan | Local facts retain origins; returned views declare a finite set of input paths. |
 | Cleanup | Scope exit, explicit `drop`, and `defer` use the same ownership and access checks as an ordinary call. |
 | Stable storage | After construction, the value cannot move or be overwritten before its destructor completes. Its owning pointer can move. |
 | Opaque resource | Clients can use its exported operations. They cannot inspect, construct, copy, cast, or overwrite its representation. |
@@ -63,20 +63,25 @@ An interface contains types, ownership modes, loan origins, initialization
 outputs, access effects, and cleanup requirements. These are finite type and
 effect facts. They are not Boolean formulas about arbitrary objects.
 
-A returned view declares one exact input path with `from parameter.path`.
-Every borrowed field of a returned view record must derive from that path.
-Local view records can combine loans from several inputs. A function cannot
-return that combination through one `from` path or replace stored origins
-through a borrowed parameter. Return single-origin views separately, then
-combine them in the caller. To change a local view's origin, drop that view
-and assign a new result.
+A returned view declares a finite set of input paths with
+`from parameter.path, other.path`. Each return derives from a listed path.
+Forwarded results retain all possible origins. The caller keeps every listed
+source borrowed while the result is live. This check uses declared paths and
+local loans. It requires no lifetime variables or graph solver.
 
-The [one-way index](../examples/ownership-index/README.md) checks this boundary:
-a helper compares a selected payload with a separate caller input through a
-local view record. The [stored-view example](../examples/ownership-basics/views.crs)
-combines two single-origin factory results and replaces a local view after
-ending its old loan. Both forms preserve the origins declared at function
-boundaries.
+Each borrowed field of a returned view record uses the declared set. Separate
+calls can give separate result fields independent origins. A function cannot
+replace stored origins through a borrowed parameter. To change a local view's
+origin, drop that view and assign a new result.
+
+The [returned-origin example](../examples/ownership-basics/origins.crs) selects
+an input, projects a field, and forwards a borrowed result. A selected mutable
+target must be initialized before its loan ends. The checker discards validity
+facts for each possible target because later writes can affect any of them.
+
+The [one-way index](../examples/ownership-index/README.md) and
+[stored-view example](../examples/ownership-basics/views.crs) combine separate
+origins in local records. Each field retains its own source loan.
 
 Borrowed storage must be initialized again before return. A mutable call
 invalidates scalar facts for its declared writable places. Native-handle
@@ -333,7 +338,7 @@ The checker uses the same rules for all these interfaces:
 | Hash table or one-way observer index | Remove every retained entry before target retirement, or keep an ordinary loan on the target. | Do not turn an index cursor into an owner or let it outlive access. |
 | Intrusive work queue with two memberships | Maintain both hooks and detach both before node release. | No destruction during traversal or payload borrowing. |
 | File or integer-like native handle | Obey acquisition, borrowing, invalid-value, and release contracts. | Move ownership once and do not close through a borrower. No domain is needed for ordinary use. |
-| Local record containing views from two inputs | Create checked loans for both fields. | Keep both source loans until their dependent views end; return them through separate declared interfaces. |
+| Local record containing views from two inputs | Create checked loans for both fields. | Keep both source loans until their dependent views end; a returned record declares their union. |
 
 A one-way index cannot claim cheap individual deletion if its representation
 has no way to find or remove incoming entries. It must supply that algorithm,

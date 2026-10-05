@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn emit(code:i32)->i32 foreign(scalar)="putchar";
+
+fn pick(left:read i64, right:read i64, first:bool)->read i64 from left, right {
+    if first {return read left;}
+    return read right;
+}
+
+fn pick_mut(left:mut i64, right:mut i64, first:bool)->mut i64 from left, right {
+    if first {return mut left;}
+    return mut right;
+}
+
+record Pair {left:i64;right:i64;}
+
+fn pick_field(pair:read Pair, first:bool)->read i64 from pair.left, pair.right {
+    if first {return read pair.left;}
+    return read pair.right;
+}
+
+record View {value:read i64;}
+
+fn pick_view(left:read i64, right:read i64, first:bool)->View from left, right {
+    return make View{value:pick(read left,read right,first)};
+}
+
+fn forward(left:read i64, right:read i64, first:bool)->read i64 from left, right {
+    return pick(read left,read right,first);
+}
+
+fn print(value:read i64)->unit {emit(value as i32);}
+
+fn main(argc:i32,argv:**u8)->i32 {
+    var left:i64=65i64;
+    var right:i64=66i64;
+    var first:read i64=forward(read left,read right,true);
+    if first!=65i64 {trap;}
+    var second:View=pick_view(read left,read right,false);
+    if second.value!=66i64 {trap;}
+    // Both loans ended at their last use. The mutable result keeps both inputs borrowed.
+    var selected:mut i64=pick_mut(mut left,mut right,false);
+    selected=67i64;
+    if selected!=67i64 {trap;}
+    if left!=65i64 || right!=67i64 {trap;}
+    var pair:Pair=make Pair{left:68i64,right:69i64};
+    var field:read i64=pick_field(read pair,false);
+    if field!=69i64 {trap;}
+    {
+        var pending:read i64=pick(read left,read right,true);
+        defer print(read pending);
+    }
+    emit(10i32);
+    return 0i32;
+}

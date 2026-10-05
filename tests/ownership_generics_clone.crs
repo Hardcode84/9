@@ -55,9 +55,9 @@ fn clone_contracts(program: *OgProgram) -> bool {
     var borrow: *OsFunction = crust_map_get(&(*program).ownership.functions, clone_instance(program, "borrow") as usize) as *OsFunction;
     var take: *OsFunction = crust_map_get(&(*program).ownership.functions, clone_ordinary(program, "take") as usize) as *OsFunction;
     if write == null(*OsFunction) || borrow == null(*OsFunction) || take == null(*OsFunction) { return false; }
-    if (*write).effect != OS_EDIT || (*write).modifies == null(*OsField) || (*borrow).result_path == null(*OsField) { return false; }
+    if (*write).effect != OS_EDIT || (*write).modifies == null(*OsField) || (*(*borrow).origins).path == null(*OsField) { return false; }
     if (*(*write).modifies).record_name != (*box).name || !clone_text((*(*write).modifies).name, "value") { return false; }
-    if !clone_text((*(*borrow).result_path).name, "value") || (*take).native == null(*OsNative) { return false; }
+    if !clone_text((*(*(*borrow).origins).path).name, "value") || (*take).native == null(*OsNative) { return false; }
     return (*(*take).native).schema == (*ticket).name && (*(*take).native).mode == rs_kind(&(*program).resources, RS_MOVE);
 }
 

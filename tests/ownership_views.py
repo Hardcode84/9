@@ -35,11 +35,11 @@ def reject_cases():
         "escape-local": (
             READING
             + "fn bad(x:read i64)->View from x {var y:i64=0i64;return make View{value:read y};}",
-            "stored result does not derive from its declared source parameter",
+            "returned loan does not match its declared source parameter or storage path",
         ),
         "missing-origin": (
             READING + "fn bad(x:read i64)->View {return make View{value:read x};}",
-            "view record result requires a from parameter",
+            "view result requires a from parameter",
         ),
         "copy-view": (
             READING + main_body(local + "var duplicate:View=view;"),
@@ -80,7 +80,7 @@ def reject_cases():
             "record Pair {first:read i64;second:read i64;}"
             "fn pair(a:read i64,b:read i64)->Pair from a {"
             "return make Pair{first:read a,second:read b};}",
-            "stored result does not derive from its declared source parameter",
+            "returned loan does not match its declared source parameter or storage path",
         ),
         "local-first-origin": (
             "record Pair {first:read i64;second:read i64;}"
@@ -127,7 +127,7 @@ def reject_cases():
         "wrong-field-origin": (
             READING + "record Pair {first:i64;second:i64;} "
             "fn wrong(pair:read Pair)->View from pair.first {return make View{value:read pair.second};}",
-            "returned loan does not match its declared storage path",
+            "returned loan does not match its declared source parameter or storage path",
         ),
         "wrong-target-type": (
             READING + "fn wrong(x:read i32)->View from x {trap;}",
@@ -135,7 +135,7 @@ def reject_cases():
         ),
         "shared-to-mutable-result": (
             EDITING + "fn wrong(x:read i64)->View from x {trap;}",
-            "mutable stored result requires a mutable source parameter",
+            "mutable result requires a mutable source parameter",
         ),
         "pointer-loan-field": (
             "record View {value:read *i64;}",
@@ -231,7 +231,7 @@ def lifetime_cases():
         "same-value-wrong-parameter": (
             READING
             + "fn wrong(a:read i64,b:read i64)->View from a {return make View{value:read b};}",
-            "stored result does not derive from its declared source parameter",
+            "returned loan does not match its declared source parameter or storage path",
         ),
         "stored-temporary": (
             READING

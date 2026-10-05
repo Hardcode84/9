@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ownership import RUNTIME_TREE
 from ownership_loops import LOOPS
+from ownership_origins import RECORDS
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -100,8 +101,12 @@ def main():
         runtime_tree.write_text(RUNTIME_TREE)
         loops = work / "loops.crs"
         loops.write_text(LOOPS)
+        origins = work / "origins.crs"
+        origins.write_text(RECORDS)
         for source, trusted in [
+            (origins, ""),
             (loops, ""),
+            ("examples/ownership-basics/origins.crs", ""),
             ("examples/ownership-basics/last-use.crs", ""),
             (runtime_tree, "examples/ownership-graphs/provider.crs"),
             ("examples/intrusive/program.crs", "examples/intrusive/links.crs"),

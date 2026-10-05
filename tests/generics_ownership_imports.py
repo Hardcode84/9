@@ -16,16 +16,23 @@ HELPERS = """
 fn transfer!(Payload)(value:Payload)->Payload {return move value;}
 fn discard!(Payload)(value:Payload)->unit {drop value;}
 fn answer()->i32 {return 37i32;}
+fn pick!(Payload)(left:read Payload,right:read Payload,first:bool)->read Payload from left,right {
+    if first{return read left;}return read right;
+}
 """
 
 CLIENT = """
 extern fn emit(value:i32)->i32 foreign(scalar)="putchar";
 resource Value {code:i32;} drop value_drop;
+record Number {value:i64;}
 fn value_drop(value:mut Value)->unit {emit(value.code);}
 fn main(argc:i32,argv:**u8)->i32 {
     var first:Value=make Value {code:65i32};
     var second:Value=transfer!(Value)(move first);
     discard!(Value)(move second);
+    var a:Number=make Number{value:1i64};var b:Number=make Number{value:2i64};
+    var selected:read Number=pick!(Number)(read a,read b,false);
+    if selected.value!=2i64 {trap;}
     return answer()-37i32;
 }
 """
@@ -92,6 +99,20 @@ def check_checked_library(suite, driver, sanitize):
         import_args(suite, driver, "checked/bad", cache, receipt, [rejected]), expected=1
     )
     assert b"explicit move" in result.stderr, result.stderr
+    for name, text, diagnostic in (
+        ("borrow-second", CLIENT.replace("if selected", "b.value=3i64;if selected"), b"active"),
+        (
+            "narrow-origin",
+            CLIENT + "fn bad(a:read Number,b:read Number)->read Number from a{"
+            "return pick!(Number)(read a,read b,true);}",
+            b"declared source",
+        ),
+    ):
+        source = suite.write(f"checked/{name}.crs", text)
+        result = suite.command(
+            import_args(suite, driver, f"checked/{name}", cache, receipt, [source]), expected=1
+        )
+        assert diagnostic in result.stderr, result.stderr
     return args, receipt
 
 

@@ -32,9 +32,9 @@ does not need them to understand a move or repair a loan conflict.
 | Transfer an owner | Explicit `move` | Move for a non-`Copy` value |
 | Shared or exclusive access | `read T`, `mut T` | `&T`, `&mut T` |
 | End a named loan | Last use at a statement boundary, scope exit, or explicit `drop` | Borrow checking can end it after its last use |
-| Return a view | One exact `from parameter.path` origin | Declared lifetime relationships, with elision where applicable |
+| Return a view | Finite `from parameter.path, other.path` set | Declared lifetime relationships, with elision where applicable |
 | Store several local origins | View record fields retain their loans | References with lifetime parameters |
-| Return several distinct origins | Rejected by the one-origin result contract; return separately or construct in the caller | Distinct declared lifetimes can express the relationship |
+| Return several distinct origins | One origin set shared by all result fields; separate calls retain independent field origins | Distinct declared lifetimes can express the relationship |
 | Replace a stored origin through a borrower | Rejected; replace a local view after consuming it | Must satisfy the declared reference lifetimes |
 | Own an integer handle | Native acquisition and consumption contracts on `owns(field)` | A wrapper owns the handle; native implementation establishes its contract |
 | Own an allocation | `owns(field: storage)` with local loans; transparent owned trees need no domain | `Box<T>` with ordinary reference lifetimes |
@@ -90,8 +90,18 @@ trusted pointer bodies. The compiler has no rules for those field names or
 operations. Safety depends on correct trusted providers and foreign contracts.
 The stage is not a concurrency model or a formal proof of the compiler.
 
-The index client combines two input loans in a local comparison record. The
-stored-view client combines separate factory results and replaces a local view
-after `drop`. These examples retain the single-origin result interface.
-Returning independent origins through one `from` path, or replacing origins
-through a borrowed view, produces a diagnostic.
+The [returned-origin example](../examples/ownership-basics/origins.crs) uses
+`from left, right` to select either borrowed input. The caller keeps both inputs
+borrowed while the result is live. Rust expresses this case with a shared
+lifetime parameter on both inputs and the result:
+
+```rust
+fn pick<'a>(left: &'a i64, right: &'a i64, first: bool) -> &'a i64 {
+    if first { left } else { right }
+}
+```
+
+A Crust result record uses one origin set for all borrowed fields. Rust can give
+separate fields distinct lifetime parameters. Crust code can use separate
+factory calls to preserve those independent origins. The index and stored-view
+examples combine such results locally and replace a local view after `drop`.

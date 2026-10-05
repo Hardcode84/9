@@ -1,0 +1,129 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_read_origins(reader: *CrustReader, function: *OsFunction) -> unit {
+    var tail: **OsOrigin = &(*function).origins;
+    while !(*reader).failed {
+        var origin: *OsOrigin = rr_alloc(reader, sizeof(OsOrigin), alignof(OsOrigin)) as *OsOrigin;
+        if origin == null(*OsOrigin) { return; }
+        (*origin).parameter = rr_name(reader);
+        os_read_result_path(reader, origin);
+        *tail = origin; tail = &(*origin).next;
+        if (*reader).token.kind != 44u32 { return; }
+        rr_next(reader);
+    }
+}
+
+fn os_resolve_origin(check: *OsCheck, contract: *OsFunction, origin: *OsOrigin, mode: u32) -> unit {
+    var declaration: *CrustDecl = (*contract).declaration;
+    var parameter: *CrustParam = (*declaration).params;
+    (*origin).index = 0usize;
+    while parameter != null(*CrustParam) && (*parameter).name != (*origin).parameter {
+        parameter = (*parameter).next; (*origin).index = (*origin).index + 1usize;
+    }
+    if parameter == null(*CrustParam) || !os_borrowed(check, (*parameter).syntax_type) {
+        os_error(check, &(*declaration).loc, "returned loan source must name a borrow parameter"); return;
+    }
+    if mode == rs_kind((*(*check).stage).resources, RS_MUT) && (*(*parameter).syntax_type).kind != mode {
+        os_error(check, &(*declaration).loc, "mutable result requires a mutable source parameter"); return;
+    }
+    var schema: *OsRecord = os_record((*check).stage, (*(*parameter).syntax_type).base);
+    if os_opaque(schema) && (*origin).path == null(*OsField) { return; }
+    var target: *CrustTypeSyntax = os_view_source_type(check, origin, (*parameter).syntax_type);
+    if target != null(*CrustTypeSyntax) { os_view_result_types(check, (*declaration).syntax_type, target); }
+}
+
+fn os_resolve_view_result(check: *OsCheck, contract: *OsFunction) -> unit {
+    var declaration: *CrustDecl = (*contract).declaration;
+    var mode: u32 = os_view_mode(check, (*declaration).syntax_type);
+    var origin: *OsOrigin = (*contract).origins;
+    if mode < rs_kind((*(*check).stage).resources, RS_READ) {
+        if origin != null(*OsOrigin) { os_error(check, &(*declaration).loc, "from requires a borrowed result or view record"); }
+        return;
+    }
+    if origin == null(*OsOrigin) { os_error(check, &(*declaration).loc, "view result requires a from parameter"); return; }
+    while origin != null(*OsOrigin) && !os_failed(check) {
+        os_resolve_origin(check, contract, origin, mode);
+        origin = (*origin).next;
+    }
+}
+
+fn os_origin_accepts(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> bool {
+    var origin: *OsOrigin = (*(*check).function).origins;
+    while origin != null(*OsOrigin) && !os_failed(check) {
+        var source: *OsValue = os_parameter_value(check, state, (*origin).parameter);
+        var expected: *OsValue = os_result_path(check, state, origin, source, location);
+        if expected == null(*OsValue) { return false; }
+        if os_loan_ancestor(check, (*expected).loan, (*value).loan) {
+            if (*source).object != null(*OsObject) && os_opaque((*(*source).object).contract) && (*origin).path == null(*OsField) { return true; }
+            if os_result_same(value, expected) { return true; }
+        }
+        origin = (*origin).next;
+    }
+    return false;
+}
+
+fn os_result_same(actual: *OsValue, expected: *OsValue) -> bool {
+    if (*actual).object != (*expected).object { return false; }
+    if (*actual).object != null(*OsObject) && (*expected).pointer { return true; }
+    return os_original((*actual).place) == os_original((*expected).place);
+}
+
+fn os_return_view(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> bool {
+    if os_return_origin(check, state, value, location) { return true; }
+    os_error(check, location, "returned loan does not match its declared source parameter or storage path");
+    return false;
+}
+
+fn os_return_origin(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> bool {
+    if !os_enter(check, location) { return false; }
+    var accepted: bool = os_origin_accepts(check, state, value, location);
+    if !accepted && !os_failed(check) && (*value).loan != null(*OsLoan) && (*(*value).loan).selection != null(*OsSelection) {
+        accepted = os_selection_return(check, state, value, (*(*value).loan).selection, location);
+    }
+    (*check).depth = (*check).depth - 1usize;
+    return accepted;
+}
+
+fn os_choice(check: *OsCheck, value: *OsValue) -> *OsChoice {
+    var choice: *OsChoice = os_alloc(check, sizeof(OsChoice), alignof(OsChoice)) as *OsChoice;
+    if choice != null(*OsChoice) { (*choice).value = value; }
+    return choice;
+}
+
+fn os_call_origins(check: *OsCheck, state: *OsState, contract: *OsFunction,
+                    syntax: *CrustTypeSyntax, arguments: **OsValue, location: *CrustLoc) -> *OsValue {
+    var origin: *OsOrigin = (*contract).origins;
+    if (*origin).next == null(*OsOrigin) {
+        return os_call_view(check, state, syntax, origin, arguments[(*origin).index], location);
+    }
+    if (*syntax).kind == rs_kind((*(*check).stage).resources, RS_MUT) {
+        os_selection_mutable(check, state, contract, arguments, location);
+    }
+    var first: *OsChoice = null(*OsChoice);
+    while origin != null(*OsOrigin) && !os_failed(check) {
+        var value: *OsValue = os_origin_candidate(check, state, syntax, origin, arguments[(*origin).index], location);
+        if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+        os_choices_add(check, state, &first, value, (*value).loan, location);
+        // The selection reserves these places, including after argument loans end.
+        os_set(check, state, (*value).loan as *u8, null(*OsValue), 0u32);
+        origin = (*origin).next;
+    }
+    return os_selection_value(check, state, syntax, first, location);
+}
+
+fn os_origin_candidate(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax,
+                        origin: *OsOrigin, source: *OsValue, location: *CrustLoc) -> *OsValue {
+    if (*source).object != null(*OsObject) && os_opaque((*(*source).object).contract) && (*origin).path == null(*OsField) {
+        return os_opaque_view(check, state, syntax, source, location);
+    }
+    var value: *OsValue = os_result_path(check, state, origin, source, location);
+    if value == null(*OsValue) || !os_result_type(check, state, value, (*syntax).base, location) { return null(*OsValue); }
+    (*value).loan = os_loan_via(check, state, (*value).loan, (*source).loan);
+    if !os_loan_place_access(check, state, (*value).place, (*value).loan, (*syntax).kind == rs_kind((*(*check).stage).resources, RS_MUT), location) { return null(*OsValue); }
+    var object: *OsObject = (*value).object;
+    if object == null(*OsObject) && (*value).place != null(*OsSlot) { object = (*(*value).place).object; }
+    if !os_region_conflicts(check, state, object, os_original((*value).place), (*value).loan, (*syntax).kind == rs_kind((*(*check).stage).resources, RS_MUT), location) { return null(*OsValue); }
+    (*value).loan = os_loan_create(check, state, value, object, (*syntax).kind);
+    (*value).borrow_scope = (*source).borrow_scope;
+    return value;
+}

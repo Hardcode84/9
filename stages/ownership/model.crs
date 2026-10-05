@@ -62,7 +62,7 @@ record OsNative {
 record OsFunction {
     declaration: *CrustDecl;
     domain: *CrustName;
-    result_path: *OsField;
+    origins: *OsOrigin;
     initializes: *OsField;
     modifies: *OsField;
     native: *OsNative;
@@ -70,6 +70,10 @@ record OsFunction {
     foreign: u32;
     has_modifies: bool;
 }
+
+record OsOrigin { parameter: *CrustName; path: *OsField; next: *OsOrigin; index: usize; }
+record OsChoice { value: *OsValue; next: *OsChoice; }
+record OsSelection { target: *OsValue; sources: *OsChoice; }
 
 record OsAccess { domain: *CrustName; effect: u32; fresh: bool; }
 
@@ -140,9 +144,11 @@ record OsLoan {
     place: *OsSlot;
     parent: *OsLoan;
     via: *OsLoan;
+    selection: *OsSelection;
     scope: *OsScope;
     next: *OsLoan;
     live_stamp: usize;
+    ancestry_stamp: usize;
     mode: u32;
 }
 
@@ -168,6 +174,7 @@ record OsCheck {
     loop: *OsLoop;
     liveness: *OsLivePlan;
     depth: usize;
+    ancestry_stamp: usize;
     drop: bool;
 }
 

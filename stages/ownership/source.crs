@@ -33,7 +33,14 @@ fn os_source_contract(query:*CsQuery, declaration:*CrustDecl, text:*CsText, user
     cs_number((*query).context, text, (*function).foreign as u64);
     cs_number((*query).context, text, (*function).has_modifies as u64);
     os_source_fields(query, text, (*function).modifies);
-    os_source_fields(query, text, (*function).result_path);
+    var origin:*OsOrigin = (*function).origins;
+    while origin != null(*OsOrigin) {
+        cs_number((*query).context, text, 1u64);
+        cs_number((*query).context, text, cs_parameter((*query).context, declaration, (*origin).parameter) as u64);
+        os_source_fields(query, text, (*origin).path);
+        origin = (*origin).next;
+    }
+    cs_number((*query).context, text, 0u64);
     var parameter:*CrustParam = (*declaration).params;
     while parameter != null(*CrustParam) {
         cs_number((*query).context, text, (os_field((*function).initializes, (*parameter).name) != null(*OsField)) as u64);

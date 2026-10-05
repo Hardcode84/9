@@ -52,6 +52,9 @@ fn os_view_place(check: *OsCheck, state: *OsState, field: *OsSlot,
     }
     var loan: *OsLoan = os_loan_via(check, state, (*value).loan, through);
     if loan == null(*OsLoan) { return null(*OsSlot); }
+    if through != null(*OsLoan) && (*through).selection != null(*OsSelection) {
+        os_selection_stored(check, state, field, loan, (*through).selection, location);
+    }
     return os_loan_slot(check, (*loan).place, loan);
 }
 

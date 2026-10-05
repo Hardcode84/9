@@ -144,9 +144,9 @@ fn os_read_function_suffix(reader: *CrustReader, stage: *OsStage, declaration: *
     while !(*reader).failed && os_read_function_clause(reader, stage, function) { }
     if rr_is_name(reader, "from") {
         rr_next(reader);
-        var name: *CrustName = rr_name(reader);
-        if !rs_return_from((*stage).resources, declaration, name) { (*reader).failed = true; }
-        os_read_result_path(reader, function);
+        os_read_origins(reader, function);
+        // Resource lowering needs one ABI anchor; ownership verifies the complete set.
+        if !(*reader).failed && !rs_return_from((*stage).resources, declaration, (*(*function).origins).parameter) { (*reader).failed = true; }
     }
     return rr_function_end(reader, declaration);
 }

@@ -5,6 +5,7 @@ fn os_live_loan(check:*OsCheck,state:*OsState,loan:*OsLoan)->unit {
     if !os_enter(check,&(*(*(*check).function).declaration).loc) { return; }
     (*loan).live_stamp=(*(*check).liveness).stamp;
     os_live_loan(check,state,(*loan).parent); os_live_loan(check,state,(*loan).via);
+    os_selection_live(check,state,(*loan).selection);
     os_live_object(check,state,(*loan).object);
     (*check).depth=(*check).depth-1usize;
 }

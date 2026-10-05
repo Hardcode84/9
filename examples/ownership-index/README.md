@@ -94,10 +94,10 @@ escape those inputs.
 
 The [stored-view example](../ownership-basics/views.crs) also obtains separate
 single-origin results, combines them locally, and replaces a local view after
-`drop`. Keep these interfaces for this ownership profile. Returning several
-independent origins in one record, or replacing origins through `mut View`,
-is rejected. Accepting either would require an explicit origin map on the
-function boundary. These examples do not require that additional interface.
+`drop`. A returned record can instead declare the union with `from left, right`.
+Each result field then retains both sources. Separate calls keep the field
+origins independent. Replacing origins through `mut View` is rejected; the
+interface has no origin-replacement contract.
 
 ## Check the boundary
 

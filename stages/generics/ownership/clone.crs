@@ -90,7 +90,7 @@ fn og_clone_function(clone: *GsClone, source: *OsFunction, target: *CrustDecl) -
     if function == null(*OsFunction) { return; }
     (*function).declaration = target;
     (*function).domain = og_clone_reference(clone, (*source).domain, CRUST_D_CONST);
-    (*function).result_path = og_clone_fields(clone, (*source).result_path);
+    (*function).origins = og_clone_origins(clone, (*source).origins);
     (*function).initializes = og_clone_fields(clone, (*source).initializes);
     (*function).modifies = og_clone_fields(clone, (*source).modifies);
     (*function).native = og_clone_native(clone, (*source).native);
@@ -177,4 +177,17 @@ fn og_clone_kind(clone: *GsClone, kind: u32) -> u32 {
     var first: u32 = (*program).parsed_resources.kind_base;
     if kind < first || kind - first >= RS_END { return 0u32; }
     return (*program).resources.kind_base + kind - first;
+}
+
+fn og_clone_origins(clone: *GsClone, source: *OsOrigin) -> *OsOrigin {
+    var first: *OsOrigin = null(*OsOrigin);
+    var tail: **OsOrigin = &first;
+    while source != null(*OsOrigin) && (*(*clone).context).error_count == 0usize {
+        var origin: *OsOrigin = crust_try_alloc((*clone).context, sizeof(OsOrigin), alignof(OsOrigin)) as *OsOrigin;
+        if origin == null(*OsOrigin) { return null(*OsOrigin); }
+        (*origin).parameter = gs_name((*clone).context, (*source).parameter);
+        (*origin).path = og_clone_fields(clone, (*source).path);
+        *tail = origin; tail = &(*origin).next; source = (*source).next;
+    }
+    return first;
 }

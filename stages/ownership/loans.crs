@@ -11,17 +11,21 @@ fn os_loan_flags(state: *OsState, loan: *OsLoan) -> u32 {
 }
 
 fn os_loan_ancestor(check: *OsCheck, ancestor: *OsLoan, loan: *OsLoan) -> bool {
+    (*check).ancestry_stamp = (*check).ancestry_stamp + 1usize;
     var budget: usize = 128usize;
-    return os_loan_search(check, ancestor, loan, &budget);
+    return os_loan_search(check, ancestor, loan, budget);
 }
 
-fn os_loan_search(check: *OsCheck, ancestor: *OsLoan, loan: *OsLoan, budget: *usize) -> bool {
+fn os_loan_search(check: *OsCheck, ancestor: *OsLoan, loan: *OsLoan, budget: usize) -> bool {
     while loan != null(*OsLoan) {
         if loan == ancestor { return true; }
-        if *budget == 0usize {
+        if (*loan).ancestry_stamp == (*check).ancestry_stamp { return false; }
+        (*loan).ancestry_stamp = (*check).ancestry_stamp;
+        if budget == 0usize {
             os_error(check, &(*(*(*check).function).declaration).loc, "loan ancestry exceeds 128"); return false;
         }
-        *budget = *budget - 1usize;
+        budget = budget - 1usize;
+        if os_selection_ancestor(check, ancestor, (*loan).selection, budget) { return true; }
         if (*loan).via != null(*OsLoan) && os_loan_search(check, ancestor, (*loan).via, budget) { return true; }
         loan = (*loan).parent;
     }
@@ -143,7 +147,8 @@ fn os_region_conflicts(check: *OsCheck, state: *OsState, object: *OsObject, slot
 fn os_loan_conflict(check: *OsCheck, state: *OsState, object: *OsObject, slot: *OsSlot,
                     loan: *OsLoan, write: bool, location: *CrustLoc) -> bool {
     if (write || (*loan).mode == rs_kind((*(*check).stage).resources, RS_MUT)) && os_regions_overlap(check, state, object, slot, loan, location) { return true; }
-    return os_view_conflict(check, state, object, slot, (*loan).object, write, (*loan).mode, location);
+    return os_selection_conflict(check, state, object, slot, loan, write, location) ||
+        os_view_conflict(check, state, object, slot, (*loan).object, write, (*loan).mode, location);
 }
 
 fn os_loan_new(check: *OsCheck, state: *OsState, value: *OsValue,
@@ -193,6 +198,7 @@ fn os_loan_create(check: *OsCheck, state: *OsState, value: *OsValue, object: *Os
         os_set(check, state, (*loan).place as *u8, value, OS_READY);
     }
     (*loan).parent = (*value).loan;
+    if (*value).loan != null(*OsLoan) { (*loan).selection = (*(*value).loan).selection; }
     (*loan).scope = (*state).scope;
     (*loan).mode = mode;
     (*loan).next = (*check).loans;
@@ -230,13 +236,14 @@ fn os_loan_keep(check: *OsCheck, state: *OsState, value: *OsValue) -> unit {
 
 fn os_loan_end(check: *OsCheck, state: *OsState, value: *OsValue) -> unit {
     if !os_borrowed(check, (*value).syntax) || (*value).loan == null(*OsLoan) { return; }
+    os_selection_end(check, state, (*value).loan);
     os_set(check, state, (*value).loan as *u8, null(*OsValue), 0u32);
 }
 
 fn os_end_expression(check: *OsCheck, state: *OsState, before: *OsLoan) -> unit {
     var loan: *OsLoan = (*check).loans;
     while loan != before && loan != null(*OsLoan) && !os_failed(check) {
-        if os_loan_flags(state, loan) == OS_LIVE { os_set(check, state, loan as *u8, null(*OsValue), 0u32); }
+        if os_loan_flags(state, loan) == OS_LIVE { os_selection_end(check, state, loan); os_set(check, state, loan as *u8, null(*OsValue), 0u32); }
         loan = (*loan).next;
     }
 }
@@ -287,8 +294,8 @@ fn os_call_loans(check: *OsCheck, state: *OsState, arguments: **OsValue,
                        count: usize, effect: u32, location: *CrustLoc) -> bool {
     var loan: *OsLoan = (*check).loans;
     while loan != null(*OsLoan) && !os_failed(check) {
-        if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && (*loan).object != null(*OsObject) &&
-           (*(*loan).object).brand == (*state).brand && (effect >= OS_EDIT || (*loan).mode == rs_kind((*(*check).stage).resources, RS_MUT)) && !os_edit_loan_source(check, state, loan, arguments, count, location) {
+        if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 &&
+           os_domain_loan_conflict(check, state, loan, arguments, count, effect, false, location) {
             os_error(check, location, "call authority conflicts with an active domain loan"); return false;
         }
         loan = (*loan).next;
@@ -310,8 +317,8 @@ fn os_handle_loan(check: *OsCheck, state: *OsState, loan: *OsLoan) -> bool {
 fn os_no_domain_loans(check: *OsCheck, state: *OsState, domain: *CrustName, location: *CrustLoc) -> bool {
     var loan: *OsLoan = (*check).loans;
     while loan != null(*OsLoan) && !os_failed(check) {
-        if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 && (*loan).object != null(*OsObject) &&
-           (*(*loan).object).brand == (*state).brand && !os_handle_loan(check, state, loan) {
+        if (os_loan_flags(state, loan) & OS_LIVE) != 0u32 &&
+           os_domain_loan_conflict(check, state, loan, null(**OsValue), 0usize, OS_RECLAIM, true, location) {
             os_error(check, location, "reclamation conflicts with an active domain loan"); return false;
         }
         loan = (*loan).next;
@@ -339,4 +346,14 @@ fn os_join_loans(check: *OsCheck, target: *OsState, left: *OsState, right: *OsSt
         if flags != os_loan_flags(target, loan) { os_set(check, target, loan as *u8, null(*OsValue), flags); }
         loan = (*loan).next;
     }
+}
+
+fn os_domain_loan_conflict(check: *OsCheck, state: *OsState, loan: *OsLoan,
+                           arguments: **OsValue, count: usize, effect: u32, reclaim: bool, location: *CrustLoc) -> bool {
+    if (*loan).object != null(*OsObject) && (*(*loan).object).brand == (*state).brand {
+        if reclaim { if !os_handle_loan(check, state, loan) { return true; } }
+        else { if (effect >= OS_EDIT || (*loan).mode == rs_kind((*(*check).stage).resources, RS_MUT)) &&
+                  !os_edit_loan_source(check, state, loan, arguments, count, location) { return true; } }
+    }
+    return os_selection_domain(check, state, loan, arguments, count, effect, reclaim, location);
 }

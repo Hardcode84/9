@@ -157,23 +157,22 @@ fn os_local_call(check: *OsCheck, state: *OsState, expression: *CrustExpr, contr
     if os_failed(check) { return null(*OsValue); }
     os_end_output_arguments(check, state, arguments, (*expression).arg_count);
     if !os_call_effect(check, state, contract, &(*expression).loc) { return null(*OsValue); }
-    var source: *OsValue = os_source_argument(check, contract, arguments);
     if (*contract).effect != 0u32 && !os_call_loans(check, state, arguments, (*expression).arg_count, (*contract).effect, &(*expression).loc) {
         return null(*OsValue);
     }
     os_apply_contract(check, state, contract, arguments, &(*expression).loc);
     os_mutable_call(check, state, contract, arguments, &(*expression).loc);
     os_consume_owned_arguments(check, state, arguments, (*expression).arg_count, &(*expression).loc);
-    var result: *OsValue = os_local_result(check, state, contract, source, &(*expression).loc);
+    var result: *OsValue = os_local_result(check, state, contract, arguments, &(*expression).loc);
     os_end_call_arguments(check, state, arguments, (*expression).arg_count);
     return result;
 }
 
 fn os_local_result(check: *OsCheck, state: *OsState, contract: *OsFunction,
-                   source: *OsValue, location: *CrustLoc) -> *OsValue {
+                   arguments: **OsValue, location: *CrustLoc) -> *OsValue {
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
-    if os_borrowed(check, syntax) { return os_call_view(check, state, contract, source, location); }
-    if os_view_mode(check, syntax) >= rs_kind((*(*check).stage).resources, RS_READ) { return os_call_view_record(check, state, contract, source, location); }
+    if os_borrowed(check, syntax) { return os_call_origins(check, state, contract, syntax, arguments, location); }
+    if os_view_mode(check, syntax) >= rs_kind((*(*check).stage).resources, RS_READ) { return os_call_view_record(check, state, contract, arguments, location); }
     return os_call_owned(check, state, contract, location);
 }
 
@@ -339,16 +338,4 @@ fn os_arguments(check: *OsCheck, state: *OsState, expression: *CrustExpr, contra
     }
     if os_failed(check) { return null(**OsValue); }
     return arguments;
-}
-
-fn os_source_argument(check: *OsCheck, contract: *OsFunction, arguments: **OsValue) -> *OsValue {
-    var name: *CrustName = os_result_parameter(check, contract);
-    var parameter: *CrustParam = (*(*contract).declaration).params;
-    var index: usize = 0usize;
-    while parameter != null(*CrustParam) {
-        if (*parameter).name == name { return arguments[index]; }
-        index = index + 1usize;
-        parameter = (*parameter).next;
-    }
-    return null(*OsValue);
 }

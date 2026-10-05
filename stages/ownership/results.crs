@@ -1,20 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn os_read_result_path(reader: *CrustReader, function: *OsFunction) -> unit {
+fn os_read_result_path(reader: *CrustReader, origin: *OsOrigin) -> unit {
     var last: *OsField = null(*OsField);
     while (*reader).token.kind == 46u32 && !(*reader).failed {
         rr_next(reader);
         var field: *OsField = rr_alloc(reader, sizeof(OsField), alignof(OsField)) as *OsField;
         if field == null(*OsField) { return; }
         (*field).name = rr_name(reader);
-        if last == null(*OsField) { (*function).result_path = field; }
+        if last == null(*OsField) { (*origin).path = field; }
         else { (*last).next = field; }
         last = field;
     }
-}
-
-fn os_result_parameter(check: *OsCheck, contract: *OsFunction) -> *CrustName {
-    return crust_map_get(&(*(*(*check).stage).resources).return_sources, (*contract).declaration as usize) as *CrustName;
 }
 
 fn os_result_step(check: *OsCheck, state: *OsState, value: *OsValue,
@@ -35,11 +31,11 @@ fn os_result_step(check: *OsCheck, state: *OsState, value: *OsValue,
     return result;
 }
 
-fn os_result_path(check: *OsCheck, state: *OsState, contract: *OsFunction,
+fn os_result_path(check: *OsCheck, state: *OsState, origin: *OsOrigin,
                    source: *OsValue, location: *CrustLoc) -> *OsValue {
     var value: *OsValue = os_copy(check, source);
     if value == null(*OsValue) { return value; }
-    var field: *OsField = (*contract).result_path;
+    var field: *OsField = (*origin).path;
     while field != null(*OsField) && !os_failed(check) {
         value = os_result_step(check, state, value, field, location);
         if value == null(*OsValue) { return value; }
@@ -48,42 +44,16 @@ fn os_result_path(check: *OsCheck, state: *OsState, contract: *OsFunction,
     return value;
 }
 
-fn os_result_matches(check: *OsCheck, state: *OsState, actual: *OsValue,
-                      expected: *OsValue, location: *CrustLoc) -> bool {
-    if (*actual).object == (*expected).object && os_original((*actual).place) == os_original((*expected).place) { return true; }
-    if (*actual).object != null(*OsObject) && (*actual).object == (*expected).object && (*expected).pointer { return true; }
-    os_error(check, location, "returned loan does not match its declared storage path");
-    return false;
-}
-
-fn os_return_view(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> bool {
-    var contract: *OsFunction = (*check).function;
-    var name: *CrustName = os_result_parameter(check, contract);
-    var slot: *OsSlot = os_local(state, name);
-    var source: *OsValue = os_bound(state, slot);
-    if source == null(*OsValue) || (*source).loan == null(*OsLoan) {
-        os_error(check, location, "returned loan does not derive from its declared source parameter"); return false;
-    }
-    var expected: *OsValue = os_result_path(check, state, contract, source, location);
-    if expected == null(*OsValue) { return false; }
-    if !os_loan_ancestor(check, (*expected).loan, (*value).loan) {
-        os_error(check, location, "returned loan does not derive from its declared source parameter"); return false;
-    }
-    if (*source).object != null(*OsObject) && os_opaque((*(*source).object).contract) && (*contract).result_path == null(*OsField) { return true; }
-    return os_result_matches(check, state, value, expected, location);
-}
-
-fn os_call_view(check: *OsCheck, state: *OsState, contract: *OsFunction,
+fn os_call_view(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax, origin: *OsOrigin,
                   source: *OsValue, location: *CrustLoc) -> *OsValue {
     if source == null(*OsValue) { os_error(check, location, "returned view requires its source loan"); return null(*OsValue); }
-    if (*source).object != null(*OsObject) && os_opaque((*(*source).object).contract) && (*contract).result_path == null(*OsField) {
-        return os_opaque_view(check, state, (*(*contract).declaration).syntax_type, source, location);
+    if (*source).object != null(*OsObject) && os_opaque((*(*source).object).contract) && (*origin).path == null(*OsField) {
+        return os_opaque_view(check, state, syntax, source, location);
     }
-    var result: *OsValue = os_result_path(check, state, contract, source, location);
+    var result: *OsValue = os_result_path(check, state, origin, source, location);
     if result == null(*OsValue) { return result; }
     (*result).loan = os_loan_via(check, state, (*result).loan, (*source).loan);
     if (*result).loan == null(*OsLoan) { return null(*OsValue); }
-    var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
     if !os_result_type(check, state, result, (*syntax).base, location) { return null(*OsValue); }
     if (*result).object != null(*OsObject) {
         os_mark(check, state, (*result).object, (os_flags(state, (*result).object) | OS_NONNULL) & ~OS_ABSENT);

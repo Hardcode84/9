@@ -408,7 +408,7 @@ A shared loan of an `Editing` record also permits only reads of `value`.
 `move`, or changing `count` while the mutable view remains active. Keep the
 source alive and put direct access after the last view use.
 
-The result contract names one exact origin for every borrowed result field.
+The result contract gives every borrowed result field the same set of possible origins.
 A helper cannot return a view of a local variable or replace stored origins
 through a borrowed record. Use a fresh result with `from` instead. View records
 are scoped values; persistent graph links belong inside an explicitly trusted opaque implementation.
@@ -432,6 +432,39 @@ second = 4i64;
 
 Each assignment uses the existing single-origin factory interface. No
 replacement-origin contract is needed for a local whose old loan has ended.
+
+### Select an input
+
+List each possible source after `from`:
+
+```crust
+fn pick(left: read i64, right: read i64, first: bool) -> read i64 from left, right {
+    if first { return read left; }
+    return read right;
+}
+
+var left: i64 = 1i64;
+var right: i64 = 2i64;
+var selected: read i64 = pick(read left, read right, false);
+if selected != 2i64 { trap; }
+left = 3i64;
+right = 4i64;
+```
+
+The result keeps both inputs borrowed until its last use. Move either assignment
+before the use of `selected` and the checker rejects it. The caller uses the
+function's contract even when the branch argument is a constant. A forwarding
+function must also declare both origins. A path can name a field, as in
+`from pair.left, pair.right`.
+
+Use `mut` on both parameters and the result to return an exclusive selection.
+Writes through that result affect the selected input. The checker discards
+validity facts for all possible targets. Restore any moved fields before the
+loan ends. Check a nullable field again before access through an original owner.
+
+The [complete example](../examples/ownership-basics/origins.crs) also returns a
+view record and passes a selected view to a deferred call. Each borrowed field
+of a returned record retains the declared origin set.
 
 ## 6. Own a heap allocation
 
@@ -616,13 +649,12 @@ separate aliases to them. A symbol has no reverse alias link. Its retirement
 operation scans and clears incoming aliases before it frees the symbol.
 The client uses the same read, edit, and reclamation scopes as the list.
 
-Returned views state one exact input path with `from`. Stored views can combine
-several local origins, but a returned view record currently requires all its
-borrowed fields to use that one declared path. Split such results into separate
-calls, or construct the combined view in the caller. Replacing origins through
-a borrowed view record is rejected: its interface has no replacement map.
-The index and stored-view examples exercise these forms. This profile keeps
-the single-origin boundary and rejects interfaces that need an origin map.
+Returned views state their possible input paths with `from`. A result can use
+`from left, right` to select either input. The caller retains loans against both
+inputs. Each borrowed field in a returned view record uses that same origin
+set. Separate factory calls let fields retain independent origins. Replacing
+origins through a borrowed view record requires an origin-replacement contract;
+this stage rejects that operation. A local view can be replaced after `drop`.
 
 Independent libraries retain the same types, effects, origins, and selected
 trust in their receipts. See the [stage contract](ownership-model.md#independent-libraries).

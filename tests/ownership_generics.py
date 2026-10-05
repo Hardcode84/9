@@ -29,6 +29,12 @@ fn inspect_view!(Value)(value:read Value)->unit {}
 fn discard!(Value)(value:Value)->unit {drop value;}
 fn observe!(Value)(value:read Value)->read Value from value {return read value;}
 fn edit!(Value)(value:mut Value)->mut Value from value {return mut value;}
+fn select!(Value)(left:read Value,right:read Value,first:bool)->read Value from left,right {
+    if first {return read left;}return read right;
+}
+fn select_mut!(Value)(left:mut Value,right:mut Value,first:bool)->mut Value from left,right {
+    if first {return mut left;}return mut right;
+}
 fn choose!(Left,Right)(left:Left,right:Right)->Left {
     discard!(Right)(move right);return transfer!(Left)(move left);
 }
@@ -45,13 +51,20 @@ fn main(argc:i32,argv:**u8)->i32 {
     var plain:Plain=make Plain{value:7i64};
     var copied:Plain=transfer!(Plain)(plain);
     discard!(Plain)(copied);
+    var other:Plain=make Plain{value:9i64};
+    var choice:read Plain=select!(Plain)(read plain,read other,false);
+    if choice.value!=9i64{trap;}
+    var edit_choice:mut Plain=select_mut!(Plain)(mut plain,mut other,true);
+    edit_choice.value=11i64;
+    if edit_choice.value!=11i64{trap;}
+    if plain.value!=11i64 || other.value!=9i64{trap;}
     var first:Ticket=make Ticket{value:65i64};
     var second:Ticket=make Ticket{value:66i64};
     var selected:Ticket=choose!(Ticket,Ticket)(move first,move second);
     {var view:read Ticket=observe!(Ticket)(read selected);if view.value!=65i64 {trap;}}
     {var view:mut Ticket=edit!(Ticket)(mut selected);view.value=67i64;}
     delayed!(Ticket)(move selected);
-    {var boxed:Box!(Plain)=wrap!(Plain)(plain);if boxed.value.value!=7i64 {trap;}}
+    {var boxed:Box!(Plain)=wrap!(Plain)(plain);if boxed.value.value!=11i64 {trap;}}
     {var value:Ticket=make Ticket{value:68i64};var boxed:Box!(Ticket)=wrap!(Ticket)(move value);}
     {var value:Ticket=make Ticket{value:69i64};
         var wrapped:Wrapper!(Ticket)=make Wrapper!(Ticket){value:move value};}
@@ -72,6 +85,15 @@ def emit_c(compiler, directory, name, sources, trusted=None):
 
 def rejection_cases():
     return {
+        "narrowed-origins": (
+            "fn bad!(T)(a:read T,b:read T)->read T from a{return select!(T)(read a,read b,true);}",
+            "declared source",
+        ),
+        "second-origin-live": (
+            "fn bad(a:Plain,b:Plain)->unit{var x:read Plain=select!(Plain)(read a,read b,true);"
+            "b.value=0i64;var later:i64=x.value;}",
+            "active",
+        ),
         "unused-copy": ("fn bad!(T)(value:T)->T{return value;}", "movable owned"),
         "unused-release-type": (
             'extern fn release(value:*u8)->unit foreign(release)="free";'

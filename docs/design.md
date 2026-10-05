@@ -377,9 +377,9 @@ Fresh domain scopes have distinct compile-time identities. No domain value,
 pool, counter, generation tag, hidden ownership chain, or runtime pointer check
 is added. Verification leaves emitted C and native symbols unchanged.
 Native resource contracts cover both integer and opaque-pointer handles.
-Returned views state one exact input path. Local records can combine views
-from several sources. Return those views separately and combine them in the
-caller. To change a local view's origin, drop it and assign a new result.
+Returned views state a finite set of possible input paths. Each borrowed field
+of a returned view record retains that set. Separate factory calls give fields
+independent origins. To change a local view's origin, drop it and assign a new result.
 Replacement through a borrowed view is rejected.
 
 Independent library receipts bind bodyless interfaces, objects, checker images,

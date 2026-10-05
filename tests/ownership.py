@@ -12,6 +12,7 @@ from ownership_expressions import check_expressions
 from ownership_heap import check_heap
 from ownership_liveness import check_liveness
 from ownership_loops import check_loops
+from ownership_origins import check_origins
 from ownership_places import check_places
 from ownership_runtime import check_runtime
 from ownership_support import ROOT, SCALAR_FLOW, command, execute
@@ -298,6 +299,7 @@ def run(build, directory, sanitize):
     duplicate.write_text(body("var head:ReadyHead=uninit;twice(&head,&head);"))
     result = command([compiler, "trusted", duplicate_provider, "--check", duplicate], expected=1)
     assert b"active" in result.stderr, result.stderr
+    check_origins(build, directory, sanitize)
     check_places(build, directory, sanitize)
     check_expressions(build, directory, sanitize)
     check_loops(build, directory, sanitize)

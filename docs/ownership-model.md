@@ -182,23 +182,36 @@ Last use, scope exit, `drop`, or a consuming call ends its held loans without
 destroying the borrowed storage. Outstanding reborrows still prevent conflicting
 access. The record cannot move into a scope that outlives any held loan.
 
-A returned view record requires `from parameter.path`, with a borrowed source
-parameter. Every borrowed field in the result must refer to that exact storage
-path and derive from its loan. A mutable result field requires a mutable source.
-The path can pass through stored view fields. The caller reconstructs the result
-loans from this interface, including for a bodyless imported function.
+A returned view or view record requires a finite origin list:
+`from parameter.path, other.path`. Each parameter must be borrowed. Each
+returned loan must derive from a listed path. All listed paths must have the
+borrowed target type. A mutable result requires mutable source parameters.
+Paths can pass through stored view fields.
+
+The caller retains a result loan against every listed source. A function that
+forwards that result must list every possible origin. Each borrowed field of a
+returned view record uses the same origin list. Separate factory calls allow
+independent origins for separate fields. Two mutable result fields with this
+shared origin set conflict at the call. Return those fields through separate
+contracts to preserve their independent sources.
+
+A result with several origins identifies one selected target. The checker uses
+an initialized target with unknown field values. A successful call does not
+establish a null or native-handle validity fact for each alternative. A mutable
+result invalidates those facts for all its possible targets. Restore moved
+fields before the selected loan ends. The caller can check each original field
+again after the result loan ends.
 
 A function cannot replace a view record through a borrowed parameter. Its
 signature has no contract to replace stored origins. Construct a new result
-with a declared origin, then consume or drop the old local view. Results that
-contain loans from different input paths require separate results or calls;
-one `from` path cannot describe those independent origins.
+with declared origins, then consume or drop the old local view.
 
-This is the selected interface boundary for this profile. The
+The [returned-origin example](../examples/ownership-basics/origins.crs) selects
+between two inputs, forwards the result, and returns a view record. The
 [index tutorial](../examples/ownership-index/README.md) combines independent
-loans in a checked local record. The stored-view example combines separate
-single-origin results and replaces a local view after `drop`. These local
-operations retain each source loan until the corresponding view ends.
+loans in a checked local record. These operations retain every source loan
+until its dependent views end. Bodyless library interfaces carry the complete
+origin list. Their receipts cover the interface bytes and the checker inputs.
 
 View checks use local owner and loan facts. Each stored loan lowers to one
 ordinary pointer. View-only records need no generated

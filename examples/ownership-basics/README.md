@@ -59,6 +59,24 @@ An outer view used inside a loop remains live at its backedge. Declare the
 view inside the loop to end it in each iteration. A last use ends at a
 statement boundary. `drop view` remains available for an explicit ending.
 
+## Select between inputs
+
+[origins.crs](origins.crs) returns a view of either input. Its contract lists
+both: `from left, right`. The caller keeps both inputs borrowed until the result
+and its dependent views end. The example also selects a record field, forwards
+a result, returns a view record, and retains a view for a deferred call.
+
+```sh
+build/crust examples/ownership-basics/main.crs -o build/ownership-origins \
+    examples/ownership-basics/origins.crs
+build/ownership-origins
+```
+
+The output is `A` and a newline. `pick_mut` changes the selected input through
+an exclusive view. Both original inputs become available after that view's
+last use. For a returned record, each borrowed field uses the full origin set.
+Separate factory calls give separate fields independent origins.
+
 ## Native handles
 
 [handles.crs](handles.crs) owns POSIX file descriptors and opaque C streams.
@@ -141,14 +159,15 @@ The stage retains each field's loan, checks its source scope, and rejects
 conflicting access. Function bodies must establish their declared result
 origins. Callers use those declarations without inspecting bodies. Borrowed
 record parameters must retain their stored origins. A returned record's borrowed
-fields must all derive from its one declared `from` path.
+fields must each derive from a path in its declared `from` set.
 
 `Comparison` combines two independently returned views locally. A helper can
 borrow that record without a new result-origin contract. The example also
 drops a local `Reading`, assigns a new factory result, and changes the old
 source. The new source remains borrowed until the replacement view ends.
-Replacing a view through `mut Reading`, or returning both independent origins
-through one `from` path, is rejected.
+Replacing a view through `mut Reading` is rejected. A returned record can
+declare both origins with `from left, right`; each field then retains both
+sources. Separate calls preserve independent field origins.
 
 Resource lowering turns stored views into pointer fields and ordinary loads
 or stores. Ownership facts remain in the checker. The example checks pointer

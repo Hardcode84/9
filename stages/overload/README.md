@@ -32,7 +32,8 @@ Hello, overloads!
 ```
 
 Open [main.crs](../../examples/overload/hello/main.crs). Its compilation
-program loads [api.crs](api.crs) and `build/crust-overload-library.so`.
+program loads [api.crs](api.crs) and calls
+`stage_load(stages, "stages/overload/package.crs")` to prepare the library.
 The final `overload_build` call passes the unread range of the same file.
 The runner treats this as an ordinary library call.
 
@@ -75,7 +76,7 @@ fn main(argc: i32, argv: **u8) -> i32 {
     return 0i32;
 }
 EOF
-build/crust-overload --check build/tutorial-overload/types.crs
+build/crust stages/build/run.crs stages/overload/tool.crs --check build/tutorial-overload/types.crs
 ```
 
 The last command must return one with this diagnostic:
@@ -90,7 +91,7 @@ conversions. Make the choice explicit by changing the argument type:
 ```sh
 sed 's/1u64/1u32/' build/tutorial-overload/types.crs \
     > build/tutorial-overload/exact.crs
-build/crust-overload --check build/tutorial-overload/exact.crs
+build/crust stages/build/run.crs stages/overload/tool.crs --check build/tutorial-overload/exact.crs
 ```
 
 This command must succeed. A cast to `u32` would also give the call an exact

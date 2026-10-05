@@ -275,6 +275,73 @@ before both become pointers. The resource checker must retain cleanup plans
 through emission. Its checked operation trees alone omit cleanup that the
 body emitter obtains from those plans.
 
+### Source-stage composition contract
+
+Crust uses explicit adapters for interacting source features. Each adapter
+selects the reader hooks, preserves the required source facts, and calls passes
+in a fixed dependency order. Loading two stage libraries makes their functions
+available. The compilation program must select an adapter to combine their
+language rules. This is the supported composition model.
+
+The source representation consists of syntax trees and tables owned by each
+stage. `CsHooks` provides shared queries over those facts. The overload pass
+uses these queries for source types, declaration contracts, and references.
+Each checker still owns its typing and validation rules. There is no common
+typed source tree or automatic pass scheduler.
+
+The supplied semantic combinations are bounded to these entries:
+
+| Features | Adapter and required order | Validation |
+| --- | --- | --- |
+| Resources, moves, loans, and cleanup | [Resource stage](../stages/resources/README.md): read, prepare resource checks and cleanup, emit with the resource body callback | `make check-resources` |
+| Ownership with resources | [Ownership stage](ownership-model.md): read contracts, `os_lower`, `os_verify`, emit with the resource body callback | `make check-ownership` |
+| Overloads with resources | [Overload resource adapter](../stages/overload/resource_program.crs): `ov_prepare` through resource query providers, `rs_prepare`, resource emission | `make check-overload` |
+| Overloads with ownership and resources | [Composition example](../examples/composition/README.md): `ov_prepare` through ownership and resource providers, `os_lower`, `os_verify`, resource emission | `make check-overload` |
+| Generics with ownership and resources | [Generic ownership adapter](../stages/generics/ownership/README.md): check abstract definitions, specialize syntax and contracts, lower concrete resources, validate arguments and ownership, resource emission | `make check-ownership-generics` |
+
+Standalone generics, overloads, and tagged unions have their own entry points.
+The generic ownership adapter applies its declared record-parameter contract;
+it does not inherit the standalone generic stage's full argument set.
+Generics with overloads, unions with generics, and unions with ownership have
+no supplied adapter. Combining all three also has no supplied adapter. In
+particular, union payload copies and replacement have no checked resource
+transfer or cleanup contract. Use the listed combinations for checked programs.
+
+An adapter must meet these requirements:
+
+1. Keep source nodes, locations, extension kinds, and stage tables live through
+   their last consumer. A context owns its extension kind range.
+2. Preserve source distinctions until all dependent passes finish. Overload
+   selection needs borrow modes. Ownership verification needs the retained
+   source contracts even after `os_lower` has checked the generated seed code.
+3. When cloning syntax, substitute references in annotations and remap node
+   keys and extension kinds into the destination context. Copy each fact to
+   the declaration or statement that it describes.
+4. Preserve the distinction between a checked definition, an imported checked
+   interface, and explicit root trust. Transfer a generic definition receipt
+   only after its argument contracts pass. New concrete seed checks still run.
+5. Stop on a diagnostic. Pass checked seed operations and every required plan
+   to the emitter. Resource output requires `rs_c_body` and its live stage.
+
+Reader hooks and query hooks cover parts of this contract. The generic
+ownership adapter also uses the generic stage's clone callbacks. Its
+[clone operations](../stages/generics/ownership/clone.crs) substitute destructor
+references, owned fields, function effects, return origins, and access blocks.
+Its [proof operations](../stages/generics/ownership/proof.crs) check definitions
+under symbolic parameters; its [check operations](../stages/generics/ownership/check.crs)
+validate concrete arguments and transfer receipts. A type query alone cannot
+perform these transfers.
+
+A replacement for these adapters needs a shared contract for substitution,
+fact transfer, symbolic parameter checks, and receipt validity. `CsHooks`
+currently defines queries and publication callbacks, with no source-to-target
+clone mapping or parameter-check operation. Those missing contracts belong in
+external Crust libraries; they require no new seed keyword or node kind.
+Before adding such a layer, demonstrate the generic intrusive container with
+its checked clients, individual destruction, and native output. Preserve its
+rejection and import tests, and measure compilation work and storage against
+the current adapter. Extending query dispatch alone does not meet that gate.
+
 A user frontend can instead keep its own syntax, type system, checker, and
 IR. Seed types do not have to represent every target type. Reusing a seed
 consumer still requires its input contract; using another consumer requires

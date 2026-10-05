@@ -7,6 +7,12 @@ the ownership checker. The [tutorial](../../../examples/generics/ownership/READM
 shows setup, definitions, and calls. The ordinary ownership stage and standalone
 generic stage remain separate entry points.
 
+This is a dedicated adapter under the
+[source-stage composition contract](../../../docs/design.md#source-stage-composition-contract).
+It combines reading, syntax substitution, ownership facts, and definition
+receipts. Select this entry point for the combined rules. Loading the two
+standalone packages does not perform this composition.
+
 ## Parameter contract
 
 Every declaration-local type parameter in this profile denotes a sized movable

@@ -15,7 +15,8 @@ language they need through ordinary libraries, and pay only for what they use.
   stronger language checks when their capabilities justify more compiler work.
 - **A small, extensible core.** Add language features through libraries.
   Keep the compiler interfaces open to replacement readers, checkers, and
-  backends.
+  backends. Combine interacting features through
+  [explicit stage adapters](docs/design.md#source-stage-composition-contract).
 - **Compilation is a program.** `crust main.crs` executes the source from
   the beginning. That program selects inputs, stages, and outputs. It can
   change how the following source is read.
@@ -40,8 +41,8 @@ build/hello
 
 The program prints `Hello, world!`. The [example source](examples/hello/main.crs)
 contains both the compilation program and the target program. The first
-command builds the compiler and C backend; the second builds the example;
-the third runs it.
+command builds the seed compiler. The example's compilation program prepares
+the C backend and builds the target. The third command runs the target.
 
 This example uses the C backend. Its total build time includes GCC compilation
 and linking; GCC work can dominate that time. The compilation-speed gate

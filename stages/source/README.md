@@ -12,6 +12,13 @@ with a provider that needs its arena and key helpers. The interface is ordinary
 Crust code. The [composition tutorial](../../examples/composition/README.md)
 selects resource, ownership, and overload services from a root program.
 
+`CsHooks` is the query part of the
+[source-stage composition contract](../../docs/design.md#source-stage-composition-contract).
+The supplied combinations use explicit adapters. Each adapter also owns pass
+order and any transfer of facts when syntax changes. Generic ownership uses
+clone callbacks to substitute its annotations and separate checks to transfer
+definition receipts. These operations are outside this query interface.
+
 ## Dispatch
 
 Set `next` to the next provider, or null at the end. The root owns the finite,

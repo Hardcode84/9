@@ -79,9 +79,14 @@ The library includes the C backend adapter. Its lower-level source interface is:
 5. Pass the checked context to a backend or evaluator. Destroy the context after
    all consumers finish.
 
-`SuStage.hooks` can participate in a reader-hook chain. The caller must arrange
-lowering order when composing stages. Composition with generics or ownership requires an adapter that orders type
-normalization, union lowering, and contract checks.
+`SuStage.hooks` can participate in a reader-hook chain. Semantic composition
+requires an adapter under the
+[source-stage composition contract](../../docs/design.md#source-stage-composition-contract).
+The supplied stage accepts seed payload types and other unions. There is no
+supplied adapter for generic or ownership-checked payloads. Such an adapter must
+normalize payload types before layout and check transfer, replacement, and
+cleanup before lowering erases the active variant operations. Reader-hook order
+alone cannot establish those contracts.
 
 The C99 seed has no union-specific type, keyword, node, or backend rule. The stage
 uses context-allocated extension kinds, reader hooks, maps, arenas, and ordinary

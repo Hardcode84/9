@@ -23,6 +23,16 @@ SPEC.loader.exec_module(SUPPORT)
 checked, execute = SUPPORT.command, SUPPORT.execute
 
 
+WORKLOADS = {
+    "intrusive": ("examples/intrusive/program.crs", "examples/intrusive/links.crs"),
+    "tree": ("examples/ownership-graphs/program.crs", "examples/ownership-graphs/provider.crs"),
+    "index": ("examples/ownership-index/program.crs", "examples/ownership-index/provider.crs"),
+    "handles": ("examples/ownership-basics/handles.crs", None),
+    "views": ("examples/ownership-basics/views.crs", None),
+    "heap": ("examples/ownership-basics/heap.crs", None),
+}
+
+
 def run(command):
     usage_start = resource.getrusage(resource.RUSAGE_CHILDREN)
     start = time.perf_counter_ns()
@@ -189,14 +199,6 @@ def main():
     args.work.mkdir(parents=True, exist_ok=False)
     driver = args.build.resolve() / "ownership-cost"
     rng = random.Random(173)
-    workloads = {
-        "intrusive": ("examples/intrusive/program.crs", "examples/intrusive/links.crs"),
-        "tree": ("examples/ownership-graphs/program.crs", "examples/ownership-graphs/provider.crs"),
-        "index": ("examples/ownership-index/program.crs", "examples/ownership-index/provider.crs"),
-        "handles": ("examples/ownership-basics/handles.crs", None),
-        "views": ("examples/ownership-basics/views.crs", None),
-        "heap": ("examples/ownership-basics/heap.crs", None),
-    }
     report = {
         "driver_sha256": digest(driver),
         "build_command": "make build/ownership-cost",
@@ -223,13 +225,13 @@ def main():
     report["source_hashes"].update(
         {
             str(Path(path)): digest(ROOT / path)
-            for pair in workloads.values()
+            for pair in WORKLOADS.values()
             for path in pair
             if path
         }
     )
     passed = True
-    for name, (client, provider) in workloads.items():
+    for name, (client, provider) in WORKLOADS.items():
         results = [
             measure(
                 driver,

@@ -31,7 +31,7 @@ does not need them to understand a move or repair a loan conflict.
 | --- | --- | --- |
 | Transfer an owner | Explicit `move` | Move for a non-`Copy` value |
 | Shared or exclusive access | `read T`, `mut T` | `&T`, `&mut T` |
-| End a named loan | Lexical scope or `drop` of the local view | Borrow checking can end it after its last use |
+| End a named loan | Last use at a statement boundary, scope exit, or explicit `drop` | Borrow checking can end it after its last use |
 | Return a view | One exact `from parameter.path` origin | Declared lifetime relationships, with elision where applicable |
 | Store several local origins | View record fields retain their loans | References with lifetime parameters |
 | Return several distinct origins | Rejected by the one-origin result contract; return separately or construct in the caller | Distinct declared lifetimes can express the relationship |
@@ -41,9 +41,11 @@ does not need them to understand a move or repair a loan conflict.
 | Direct graph access | Opaque scoped view and domain permission | A safe library interface over implementation-specific invariants |
 
 Rust's [borrowing chapter](https://doc.rust-lang.org/book/ch04-02-references-and-borrowing.html)
-explains shared and mutable references and last-use lifetimes. Crust's lexical
-loans can require explicit `drop` or an additional scope. This implementation
-does not claim equal expressiveness or equal ergonomics.
+explains shared and mutable references and last-use lifetimes. Crust ends local
+views at statement boundaries and joins uses across branches. An outer view
+used in a loop remains live at the loop backedge. Child views and deferred
+captures retain their source loans. These are bounded body-local rules; the
+table gives the function and stored-origin boundaries.
 
 ## Container authors
 

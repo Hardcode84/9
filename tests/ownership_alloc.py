@@ -102,6 +102,7 @@ def main():
         loops.write_text(LOOPS)
         for source, trusted in [
             (loops, ""),
+            ("examples/ownership-basics/last-use.crs", ""),
             (runtime_tree, "examples/ownership-graphs/provider.crs"),
             ("examples/intrusive/program.crs", "examples/intrusive/links.crs"),
             ("examples/ownership-graphs/program.crs", "examples/ownership-graphs/provider.crs"),

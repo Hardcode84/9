@@ -241,9 +241,9 @@ fn rs_prepare(stage: *RsStage) -> bool {
     return rs_prepare_policy(stage, false);
 }
 
-// Delegate memory overlap and plain-value initialization checks to the caller.
+// Delegate memory overlap, loan lifetimes, and non-owning initialization to the caller.
 // Require a proof of every reachable read, write, transfer, and cleanup before output.
-// Owner construction, moves, loan bindings, and cleanup retain their source checks.
+// Owner construction, resource moves, and cleanup retain their source checks.
 fn rs_prepare_delegated(stage: *RsStage) -> bool {
     return rs_prepare_policy(stage, true);
 }

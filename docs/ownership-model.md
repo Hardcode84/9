@@ -12,11 +12,20 @@ implemented in Crust. Read the [tutorial](ownership.md) for examples and the
 `resource` adds a destructor. `move` transfers its cleanup duty. `read T` lends
 shared access; `mut T` lends exclusive access. Ordinary values remain copyable.
 The checker rejects use after move, duplicate owners, uninitialized reads,
-conflicting loans, and destruction through a borrower. Named local loans end
-at `drop` or lexical scope exit. Explicit ending requires all child loans and
-deferred uses to have ended. It invalidates the binding without destroying the
-borrowed value or emitting code. Borrowed parameters cannot be dropped.
+conflicting loans, and destruction through a borrower. A local view ends after
+its last use, at a statement boundary, once its child loans and deferred captures
+also end. This includes stored views and pointers obtained through a named loan.
+Explicit `drop` can end a local view; all child loans and deferred uses must have
+ended. It invalidates the binding without destroying the borrowed value or
+emitting code. Borrowed parameters cannot be dropped.
 Reborrows prevent conflicting use of their parent.
+
+Liveness joins the uses from both branches. Each branch can end a view after
+its own last use. An outer view used inside a loop remains live on its backedge;
+a view declared inside the loop can end in that iteration. Loop exits use the
+uses after the loop. Parameters retain their declared loan contracts. Resource
+cleanup keeps its scope order.
+
 Direct fields of an ordinary record can be borrowed separately. A loan of the
 whole record covers all its fields. Moving, replacing, or destroying a record
 requires every conflicting field loan to have ended.
@@ -169,9 +178,9 @@ Field access reads or writes the borrowed target. It does not replace the
 stored reference. A shared loan of the containing record permits only reads,
 even when the field declares `mut`. A view record is affine: use `move` to
 transfer it. This rule also applies to records that contain only shared loans.
-Scope exit, `drop`, or a consuming call ends its held loans without destroying
-the borrowed storage. Outstanding reborrows still prevent conflicting access.
-The record cannot move into a scope that outlives any held loan.
+Last use, scope exit, `drop`, or a consuming call ends its held loans without
+destroying the borrowed storage. Outstanding reborrows still prevent conflicting
+access. The record cannot move into a scope that outlives any held loan.
 
 A returned view record requires `from parameter.path`, with a borrowed source
 parameter. Every borrowed field in the result must refer to that exact storage

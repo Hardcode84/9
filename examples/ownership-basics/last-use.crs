@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record Editing { value: mut i64; }
+
+extern fn emit(value: i32) -> i32 foreign(scalar) = "putchar";
+
+fn show(value: read i64) -> unit { emit(value as i32); }
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    var count: i64 = 1i64;
+    var view: read i64 = read count;
+    var saved: i64 = view;
+    count = 2i64;
+    if saved != 1i64 { trap; }
+
+    var parent: mut i64 = mut count;
+    var child: mut i64 = mut parent;
+    child = 3i64;
+    parent = 4i64;
+    count = 5i64;
+
+    var editing: Editing = make Editing { value: mut count };
+    editing.value = 6i64;
+    count = 7i64;
+
+    while count < 9i64 {
+        var current: mut i64 = mut count;
+        current = current + 1i64;
+        if count > 9i64 { trap; }
+    }
+    if count != 9i64 { trap; }
+
+    var letter: i64 = 65i64;
+    {
+        var captured: read i64 = read letter;
+        defer show(read captured);
+    }
+    letter = 66i64;
+    show(read letter);
+    emit(10i32);
+    return 0i32;
+}

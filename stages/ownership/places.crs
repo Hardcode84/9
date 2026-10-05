@@ -80,7 +80,10 @@ fn os_named_place(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *
     if local == null(*OsSlot) { os_error(check, &(*expression).loc, "ownership place requires a local binding"); return local; }
     if os_borrowed(check, (*local).syntax) {
         var borrowed: *OsValue = os_bound(state, local);
-        if borrowed != null(*OsValue) && (*borrowed).loan != null(*OsLoan) {
+        if borrowed == null(*OsValue) {
+            os_error(check, &(*expression).loc, "value is uninitialized or has been moved"); return null(*OsSlot);
+        }
+        if (*borrowed).loan != null(*OsLoan) {
             return os_loan_slot(check, (*(*borrowed).loan).place, (*borrowed).loan);
         }
     }

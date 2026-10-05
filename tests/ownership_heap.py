@@ -85,9 +85,9 @@ def good_cases():
 def bad_cases():
     borrowed = START + "var view:read Cell=cell_view(read owner);"
     return {
-        "drop-borrowed-owner": (main(borrowed + "drop owner;"), "active"),
-        "replace-borrowed-owner": (main(borrowed + "refresh(mut owner);"), "active"),
-        "consume-borrowed-owner": (main(borrowed + "consume(move owner);"), "active"),
+        "drop-borrowed-owner": (main(borrowed + "drop owner;drop view;"), "active"),
+        "replace-borrowed-owner": (main(borrowed + "refresh(mut owner);drop view;"), "active"),
+        "consume-borrowed-owner": (main(borrowed + "consume(move owner);drop view;"), "active"),
         "borrow-after-owner-argument": (
             main(START + "var raw:*Cell=owner.cell;consume_with_view(move owner,read *raw);"),
             "active",

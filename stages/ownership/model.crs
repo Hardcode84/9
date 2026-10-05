@@ -90,6 +90,7 @@ record OsObject {
     scope: *OsScope;
     brand: *OsScope;
     next: *OsObject;
+    live_stamp: usize;
     heap: bool;
     abstract: bool;
     uncertain: bool;
@@ -141,6 +142,7 @@ record OsLoan {
     via: *OsLoan;
     scope: *OsScope;
     next: *OsLoan;
+    live_stamp: usize;
     mode: u32;
 }
 
@@ -164,6 +166,7 @@ record OsCheck {
     parameters: *OsBinding;
     origin: *OsScope;
     loop: *OsLoop;
+    liveness: *OsLivePlan;
     depth: usize;
     drop: bool;
 }
@@ -172,3 +175,10 @@ record OsDeferred { contract: *OsFunction; arguments: **OsValue; location: *Crus
 
 record OsLoopSlot { slot: *OsSlot; next: *OsLoopSlot; }
 record OsLoop { entry: *OsState; exit: *OsState; bindings: *OsLoopSlot; parent: *OsLoop; }
+
+record OsLivePlan { names:CrustMap; points:CrustMap; words:usize; stamp:usize; }
+record OsLivePoint {
+    source:*CrustStmt; previous:*OsLivePoint; body:*OsLivePoint; otherwise:*OsLivePoint;
+    before:*u64; after:*u64;
+}
+record OsLiveLoop { before:*u64; after:*u64; }

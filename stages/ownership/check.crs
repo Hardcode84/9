@@ -190,6 +190,8 @@ fn os_check_function(stage: *OsStage, global: *RsGlobal, contract: *OsFunction) 
         os_parameter(&check, &state, parameter);
         parameter = (*parameter).next;
     }
+    os_live_prepare(&check, (*declaration).body);
+    if os_failed(&check) { return; }
     os_statement(&check, &state, (*declaration).body);
     if os_failed(&check) { return; }
     if state.flow == OS_NORMAL { os_function_fallthrough(&check, &state, declaration); }

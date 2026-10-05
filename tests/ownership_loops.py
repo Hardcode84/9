@@ -113,20 +113,23 @@ def bad_cases():
             + main_body(
                 "var x:i64=0i64;var loan:read i64=read x;while argc>0i32 {drop loan;continue;}"
             ),
-            "loop edges",
+            "loop backedge",
         ),
         "break-outer-loan-stays-active": (
             HELPERS
-            + main_body("var x:i64=0i64;var loan:read i64=read x;" "while true {break;}x=7i64;"),
+            + main_body(
+                "var x:i64=0i64;var loan:read i64=read x;"
+                "while true {break;}x=7i64;var later:i64=loan;"
+            ),
             "active payload loan",
         ),
         "break-borrow-disagreement": (
             HELPERS
             + main_body(
                 "var x:i64=0i64;var loan:read i64=read x;while true {"
-                "if argc>0i32 {drop loan;break;} else {break;}}"
+                "if argc>0i32 {drop loan;break;} else {break;}}var later:i64=loan;"
             ),
-            "continuing paths",
+            "has been moved",
         ),
         "break-scalar-not-initialized": (
             main_body("var x:i64=uninit;while argc>0i32 {x=7i64;break;}if x!=7i64 {trap;}"),

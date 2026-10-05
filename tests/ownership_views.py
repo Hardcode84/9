@@ -24,7 +24,7 @@ def reject_cases():
     local = "var x:i64=1i64;var view:View=make View{value:read x};"
     return {
         "write-under-view": (
-            READING + main_body(local + "x=2i64;"),
+            READING + main_body(local + "x=2i64;var later:i64=view.value;"),
             "active payload loan",
         ),
         "escape-block": (
@@ -62,7 +62,10 @@ def reject_cases():
         ),
         "write-under-view-after-join": (
             READING
-            + main_body(local + "var n:i64=0i64;if argc>1i32 {n=view.value;} else {n=2i64;}x=n;"),
+            + main_body(
+                local
+                + "var n:i64=0i64;if argc>1i32 {n=view.value;} else {n=2i64;}x=n;var later:i64=view.value;"
+            ),
             "active payload loan",
         ),
         "double-drop": (
@@ -83,7 +86,7 @@ def reject_cases():
             "record Pair {first:read i64;second:read i64;}"
             + main_body(
                 "var a:i64=1i64;var b:i64=2i64;"
-                "var pair:Pair=make Pair{first:read a,second:read b};a=3i64;"
+                "var pair:Pair=make Pair{first:read a,second:read b};a=3i64;var later:i64=pair.first;"
             ),
             "active",
         ),
@@ -91,7 +94,7 @@ def reject_cases():
             "record Pair {first:read i64;second:read i64;}"
             + main_body(
                 "var a:i64=1i64;var b:i64=2i64;"
-                "var pair:Pair=make Pair{first:read a,second:read b};b=3i64;"
+                "var pair:Pair=make Pair{first:read a,second:read b};b=3i64;var later:i64=pair.second;"
             ),
             "active",
         ),
@@ -145,7 +148,8 @@ def reject_cases():
         "one-branch-drops": (
             EDITING
             + main_body(
-                "var x:i64=1i64;var v:View=make View{value:mut x};" "if argc==0i32 {drop v;}x=2i64;"
+                "var x:i64=1i64;var v:View=make View{value:mut x};"
+                "if argc==0i32 {drop v;}v.value=2i64;"
             ),
             "continuing paths must agree on owner consumption",
         ),
@@ -199,9 +203,12 @@ def lifetime_cases():
         "var view:View=make View{target:read item};"
     )
     return {
-        "destroy-borrowed-source": (owner + prefix + "drop item;}", "active payload loan"),
+        "destroy-borrowed-source": (
+            owner + prefix + "drop item;var later:i64=view.target.value;}",
+            "active payload loan",
+        ),
         "move-borrowed-source": (
-            owner + prefix + "var moved:Owned=move item;}",
+            owner + prefix + "var moved:Owned=move item;var later:i64=view.target.value;}",
             "active payload loan",
         ),
         "stored-reborrow-alias": (
@@ -209,7 +216,7 @@ def lifetime_cases():
             + main_body(
                 "var x:i64=1i64;var v:View=make View{value:mut x};"
                 "var a:View=make View{value:mut v.value};"
-                "var b:View=make View{value:mut v.value};"
+                "var b:View=make View{value:mut v.value};a.value=3i64;"
             ),
             "active payload loan",
         ),
@@ -217,7 +224,7 @@ def lifetime_cases():
             EDITING
             + main_body(
                 "var x:i64=1i64;var v:View=make View{value:mut x};"
-                "var y:read i64=read v.value;drop v;x=2i64;"
+                "var y:read i64=read v.value;drop v;x=2i64;var later:i64=y;"
             ),
             "active payload loan",
         ),

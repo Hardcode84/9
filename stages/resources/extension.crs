@@ -43,9 +43,9 @@ extern fn rs_return_from(stage: *RsStage, declaration: *CrustDecl, parameter: *C
 // On failure, return false and retain the diagnostic in stage.context.
 extern fn rs_prepare(stage: *RsStage) -> bool = "rs_prepare";
 
-// Delegate raw memory and plain-value initialization checks to the caller.
-// Plain values have no resource cleanup obligation and are not read or mut bindings.
-// Keep source checks for owner construction, moves, loans, and cleanup eligibility.
+// Delegate raw memory, loan lifetimes, and non-owning initialization to the caller.
+// Include read and mut bindings. Keep checks for owner construction, resource moves,
+// and cleanup eligibility.
 // Before output, prove every reachable read, write, transfer, and cleanup, including
 // initialization through aliases on all branch and loop paths. Taking an address
 // does not initialize storage or construct an owner. Other rs_prepare conditions apply.

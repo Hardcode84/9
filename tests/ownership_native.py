@@ -67,7 +67,7 @@ def rejects(provider):
             body(stream + "free(p);", 'extern fn free(p:*u8)->unit foreign(release)="free";'),
             "declared resource effect",
         ),
-        "borrow-owner-drop": (body(start + "var v:read File=read f;drop f;"), "active"),
+        "borrow-owner-drop": (body(start + "var v:read File=read f;drop f;drop v;"), "active"),
         "consume-shared": (
             provider
             + "fn bad(f:read File)->unit {if f.handle != -1i32 {close_fd(move f.handle);}}",

@@ -50,17 +50,20 @@ def good_cases():
 
 def bad_cases():
     cases = {
-        "live-mut-child": ("var child:mut i64=mut parent;drop parent;", "child loans"),
-        "live-shared-child": ("var child:read i64=read parent;drop parent;", "child loans"),
+        "live-mut-child": ("var child:mut i64=mut parent;drop parent;drop child;", "child loans"),
+        "live-shared-child": (
+            "var child:read i64=read parent;drop parent;drop child;",
+            "child loans",
+        ),
         "ended-read": ("drop parent;var n:i64=parent;", "has been moved"),
         "ended-write": ("drop parent;parent=2i64;", "has been moved"),
         "ended-twice": ("drop parent;drop parent;", "has been moved"),
         "child-parent-still-live": (
-            "var child:read i64=read parent;drop child;x=2i64;",
+            "var child:read i64=read parent;drop child;x=2i64;parent=3i64;",
             "active",
         ),
-        "branch-disagreement": ("if argc>0i32 {drop parent;}", "continuing paths"),
-        "loop-consumes-outer": ("while argc>0i32 {drop parent;}", "loop edges"),
+        "branch-disagreement": ("if argc>0i32 {drop parent;}parent=3i64;", "has been moved"),
+        "loop-consumes-outer": ("while argc>0i32 {drop parent;}", "loop backedge"),
     }
     results = {name: (main(LOCAL + text), message) for name, (text, message) in cases.items()}
     results["deferred-child"] = (
@@ -69,18 +72,18 @@ def bad_cases():
     )
     results["stored-child"] = (
         "record View {value:read i64;}"
-        + main(LOCAL + "var view:View=make View{value:read parent};drop parent;"),
+        + main(LOCAL + "var view:View=make View{value:read parent};drop parent;drop view;"),
         "child loans",
     )
     results["returned-child"] = (
-        IDENTITY + main(LOCAL + "var child:mut i64=identity(mut parent);drop parent;"),
+        IDENTITY + main(LOCAL + "var child:mut i64=identity(mut parent);drop parent;drop child;"),
         "child loans",
     )
     results["projected-view-child"] = (
         "record View {value:mut i64;}"
         + main(
             "var x:i64=1i64;var view:View=make View{value:mut x};"
-            "var all:mut View=mut view;var child:mut i64=mut all.value;drop all;"
+            "var all:mut View=mut view;var child:mut i64=mut all.value;drop all;drop child;"
         ),
         "child loans",
     )
@@ -97,7 +100,7 @@ def bad_cases():
         "fn through(view:mut View)->mut i64 from view.value {return mut view.value;}"
         + main(
             "var x:i64=1i64;var view:View=make View{value:mut x};"
-            "var all:mut View=mut view;var child:mut i64=through(mut all);drop all;"
+            "var all:mut View=mut view;var child:mut i64=through(mut all);drop all;drop child;"
         ),
         "child loans",
     )
@@ -127,12 +130,12 @@ def check_import(build, directory):
     receipt = publish(driver, cache, [provider])
     provider.unlink()
     client = directory / "ending-client.crs"
-    client.write_text(main("var x:i64=1i64;var view:mut i64=identity(mut x);drop view;x=2i64;"))
+    client.write_text(main("var x:i64=1i64;var view:mut i64=identity(mut x);view=3i64;x=2i64;"))
     output = directory / "ending-client"
     args = import_arguments(driver, cache, receipt, client, output)
     import_command(args)
     command([output])
-    client.write_text(main(LOCAL + "var view:mut i64=identity(mut parent);drop parent;"))
+    client.write_text(main(LOCAL + "var view:mut i64=identity(mut parent);drop parent;drop view;"))
     result = import_command(args, success=False)
     assert "child loans" in result.stderr, result.stderr
 

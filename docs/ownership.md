@@ -270,51 +270,56 @@ The view uses ordinary field access. A borrowed scalar also uses its name
 directly: write `view = 7i64`, rather than `*view = 7i64`.
 
 Several shared views can coexist. An exclusive view excludes conflicting
-reads and writes through other access paths. A named local view lasts until
-`drop view` or the end of its lexical scope, even if its last read occurs earlier.
-
-**Rejected: changing a value while a named shared view is in scope.**
+reads and writes through other access paths. A local view ends after its last
+use, at a statement boundary, once its child views and deferred uses also end.
 
 ```crust
 var count: i64 = 1i64;
 var view: read i64 = read count;
-if view != 1i64 { trap; }
+var saved: i64 = view;
 count = 2i64;
+if saved != 1i64 { trap; }
 ```
 
-**Correction: end the local view before the change.**
+Copying the integer into `saved` ends the need for `view`. The assignment to
+`count` is valid. A pointer or another view keeps its source loan alive.
+
+**Rejected: changing the source before a later view use.**
 
 ```crust
 var count: i64 = 1i64;
 var view: read i64 = read count;
-if view != 1i64 { trap; }
-drop view;
 count = 2i64;
+if view != 1i64 { trap; }
 ```
 
-`drop view` ends the local binding. The borrowed value stays alive, and this
-operation emits no code. Later use of `view` is an error. A lexical block can
-also end a view. End all child loans and deferred uses first. The function's
-borrowed parameters remain available to its caller, so `drop` rejects them.
+Put the change after the last use of `view`. The same rule applies before
+moving or destroying a borrowed owner.
 
-Use the same repair before moving or destroying a borrowed owner. Copying a
-scalar out of a view does not keep that view alive. A pointer or another
-borrowed view still depends on the original storage.
+`drop view` can end the local binding explicitly. The borrowed value stays
+alive, and this operation emits no code. Later use of `view` is an error.
+End all child loans and deferred uses first. Borrowed parameters keep their
+function contract, so `drop` rejects them.
 
 A reborrow temporarily borrows through an existing view:
 
 ```crust
 var count: i64 = 0i64;
-{
-    var view: mut i64 = mut count;
-    { var child: mut i64 = mut view; child = 3i64; }
-    view = 7i64;
-}
+var view: mut i64 = mut count;
+var child: mut i64 = mut view;
+child = 3i64;
+view = 7i64;
 if count != 7i64 { trap; }
 ```
 
-The parent view cannot be used while a conflicting child view remains live.
-In this example, the inner block ends before `view = 7i64`.
+The write through `child` is its last use. The parent view becomes available
+for the next write. The write through `view` then ends its loan too.
+
+Branches can end a view after their own last use. An outer view used inside a
+loop remains live at the loop backedge. A view declared inside the loop can
+end in that iteration. After a loop exit, only later uses retain the view.
+A deferred call keeps its captured views until that call runs. Resources keep
+their usual cleanup order, even when their last read occurs earlier.
 
 ### Borrow separate fields
 
@@ -395,13 +400,13 @@ var count: i64 = 1i64;
 ```
 
 The move transfers the held loan. `drop moved` ends that loan; it does not
-destroy `count`. Ending the block has the same effect. A record with `read`
-fields uses the same move rule, but permits shared access to its targets.
+destroy `count`. A last use or scope exit also ends a local view. A record with
+`read` fields uses the same move rule, but permits shared access to its targets.
 A shared loan of an `Editing` record also permits only reads of `value`.
 
 **Rejected:** moving the view outside its source scope, copying it without
 `move`, or changing `count` while the mutable view remains active. Keep the
-view in a smaller scope, or drop it before direct access to the source.
+source alive and put direct access after the last view use.
 
 The result contract names one exact origin for every borrowed result field.
 A helper cannot return a view of a local variable or replace stored origins

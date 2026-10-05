@@ -22,7 +22,7 @@ def rejections():
     main = "fn main(argc:i32,argv:**u8)->i32{"
     owner = "var ticket:Ticket=make Ticket{value:65i32};"
     yield "use-after-move", common + main + owner + "var other:Ticket=move ticket;choose(read ticket);return 0i32;}", "value is uninitialized or has been moved"
-    yield "exclusive-conflict", common + main + owner + "var view:read Ticket=read ticket;choose(mut ticket);return 0i32;}", "active"
+    yield "exclusive-conflict", common + main + owner + "var view:read Ticket=read ticket;choose(mut ticket);drop view;return 0i32;}", "active"
     yield "wrong-overload", common + main + "choose(1i32);return 0i32;}", "no overload matches"
     yield "unverified-import", common + "fn external(value:read Ticket)->unit;" + main + owner + "external(read ticket);return 0i32;}", "verified interface or explicit root trust"
     yield "result-contract", common + "fn borrow(a:read Ticket,b:read Ticket)->read Ticket from a;fn borrow(a:read Ticket,b:read Ticket)->read Ticket from b{return read b;}" + main + "return 0i32;}", "different contracts"

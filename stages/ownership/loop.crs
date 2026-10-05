@@ -195,6 +195,8 @@ fn os_checked_loop(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> u
     os_condition(check, state, (*statement).expr, &body, &exit);
     os_end_expression(check, &body, before);
     os_end_expression(check, &exit, before);
+    var point:*OsLivePoint=os_live_point(check,statement);
+    if point!=null(*OsLivePoint) { os_live_end(check,&exit,(*point).after,&(*statement).loc); }
     if rs_loop_forever((*statement).expr) { exit.flow = OS_STOP; }
     if !os_failed(check) { os_statement(check, &body, (*statement).body); }
     (*check).loop = loop.parent;

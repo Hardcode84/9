@@ -46,11 +46,16 @@ which resource places are initialized. Put cleanup or reinitialization in the
 branches when they would otherwise disagree. Ordinary scalar initialization
 uses intersection at a join.
 
-Loans have lexical scopes. Explicit `drop` of a view ends its loan. The target
-remains borrowed until the view's scope ends or the view is consumed, even
-after its last read. Use `drop` or an inner block to end a local view before
-the surrounding scope. Explicit ending requires all child loans to have ended.
-Borrowed parameters cannot be dropped.
+A backward pass records local view uses at statement boundaries. Branches join
+their uses. An outer view used inside a loop stays live at its declared backedge;
+a loop-local view can end in that iteration. Exits use the uses after the loop.
+The forward check ends a dead local view once its dependent loans and deferred
+captures also end. Stored views and borrowed pointers retain their source loans.
+The analysis uses the current body and declared call contracts. It emits no code
+and leaves resource cleanup order unchanged.
+
+Explicit `drop` of a local view remains valid. It requires all child loans and
+deferred uses to have ended. Borrowed parameters cannot be dropped.
 
 ## 2. Function boundaries
 

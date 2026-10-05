@@ -10,6 +10,7 @@ from ownership_boundaries import check_boundaries
 from ownership_ending import check_ending
 from ownership_expressions import check_expressions
 from ownership_heap import check_heap
+from ownership_liveness import check_liveness
 from ownership_loops import check_loops
 from ownership_places import check_places
 from ownership_runtime import check_runtime
@@ -66,7 +67,7 @@ def rejects():
                 head
                 + "edit Graph {"
                 + cursor
-                + "var a:mut i64=cursor_mut(mut cursor);var b:mut i64=cursor_mut(mut cursor);}"
+                + "var a:mut i64=cursor_mut(mut cursor);var b:mut i64=cursor_mut(mut cursor);a=2i64;}"
             ),
             "active",
         ),
@@ -75,7 +76,7 @@ def rejects():
                 head
                 + "edit Graph {"
                 + cursor
-                + "var a:mut i64=cursor_mut(mut cursor);ready_count(read head);}"
+                + "var a:mut i64=cursor_mut(mut cursor);ready_count(read head);a=2i64;}"
             ),
             "active domain loan",
         ),
@@ -85,7 +86,7 @@ def rejects():
                 + head
                 + "edit Graph {"
                 + cursor
-                + "var a:read i64=cursor_value(read cursor);ready_insert(mut head,read owner);}"
+                + "var a:read i64=cursor_value(read cursor);ready_insert(mut head,read owner);var later:i64=a;}"
             ),
             "active domain loan",
         ),
@@ -106,7 +107,7 @@ def rejects():
             "stronger domain authority",
         ),
         "borrowed-retirement": (
-            body(owner + "read Graph {var view:read Owner=read owner;drop owner;}"),
+            body(owner + "read Graph {var view:read Owner=read owner;drop owner;drop view;}"),
             "active",
         ),
         "unapproved-type": ("record Private {p:*u8;} opaque;", "explicit trust"),
@@ -301,6 +302,7 @@ def run(build, directory, sanitize):
     check_expressions(build, directory, sanitize)
     check_loops(build, directory, sanitize)
     check_ending(build, directory, sanitize)
+    check_liveness(build, directory, sanitize)
     check_boundaries(build, directory, sanitize)
     check_heap(build, directory, sanitize)
     check_runtime(build, directory, ROOT, sanitize)

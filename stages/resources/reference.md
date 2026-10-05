@@ -186,8 +186,8 @@ signature even when their lowered pointer representation is the same.
 
 To delegate memory checking, use `rs_prepare_delegated` in step 3. It permits
 raw accesses without `unsafe` and delegates memory overlap checks and
-initialization of plain values to the caller. A plain value has no resource cleanup obligation and is not a
-`read` or `mut` binding. The caller must prove every reachable memory access, transfer, and
+initialization of non-owning values, including `read` and `mut` bindings, to the
+caller. The caller must prove every reachable memory access, transfer, and
 cleanup before step 4. Each read needs initialized storage, including reads
 through aliases and on branch and loop paths. Address formation does not
 initialize storage. A delegated raw address can come from a shared loan. The
@@ -195,8 +195,8 @@ caller must preserve its access permission when checking pointer uses. The
 [intrusive stages](../../examples/intrusive/README.md) provide these checks
 and stop output if they fail.
 
-Owner construction, moves, loan binding initialization, and cleanup eligibility
-remain checked by the resource stage. The caller checks loan conflicts,
+Owner construction, resource moves, and cleanup eligibility remain checked by
+the resource stage. The caller checks view binding lifetimes and loan conflicts,
 including field overlap, reborrows, and destruction under active loans. A raw output store does not construct an
 owner or create its cleanup obligation. Assign an owning result to the whole
 binding for that operation. These states must still agree at continuing

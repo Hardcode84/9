@@ -22,7 +22,10 @@ fn stream_drop(value:mut Stream)->unit {
 """
 
 DEFINITIONS = """
-fn transfer!(Value)(value:Value)->Value {return move value;}
+fn transfer!(Value)(value:Value)->Value {
+    var view:read Value=observe!(Value)(read value);inspect_view!(Value)(read view);return move value;
+}
+fn inspect_view!(Value)(value:read Value)->unit {}
 fn discard!(Value)(value:Value)->unit {drop value;}
 fn observe!(Value)(value:read Value)->read Value from value {return read value;}
 fn edit!(Value)(value:mut Value)->mut Value from value {return mut value;}
@@ -138,7 +141,7 @@ def rejection_cases():
         "mut-move": ("fn bad!(T)(value:mut T)->T{return move value;}", "borrowed value"),
         "mut-drop": ("fn bad!(T)(value:mut T)->unit{drop value;}", "borrowed value"),
         "borrowed-owner-drop": (
-            "fn bad!(T)(value:T)->unit{var loan:read T=read value;drop value;}",
+            "fn bad!(T)(value:T)->unit{var loan:read T=read value;drop value;drop loan;}",
             "active payload loan",
         ),
         "defer-owner-drop": (
@@ -174,12 +177,12 @@ def rejection_cases():
             "incompatible type",
         ),
         "client-retained-loan": (
-            "fn use(value:Ticket)->unit{var view:read Ticket=observe!(Ticket)(read value);drop value;}",
+            "fn use(value:Ticket)->unit{var view:read Ticket=observe!(Ticket)(read value);drop value;drop view;}",
             "active",
         ),
         "client-mut-alias": (
             "fn use(value:Ticket)->unit{var a:mut Ticket=edit!(Ticket)(mut value);"
-            "var b:mut Ticket=edit!(Ticket)(mut value);}",
+            "var b:mut Ticket=edit!(Ticket)(mut value);drop a;}",
             "active",
         ),
         "nested-stored-loan": (

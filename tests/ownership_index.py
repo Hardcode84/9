@@ -77,7 +77,7 @@ def rejects():
                 + "edit Symbols {"
                 + SELECT
                 + "var value:read i64=selection_value(read selected);"
-                + "index_bind(mut index,10i64,1i64);}"
+                + "index_bind(mut index,10i64,1i64);drop value;}"
             ),
             "active domain loan",
         ),
@@ -102,11 +102,13 @@ def rejects():
         "direct-destructor": (body(SETUP + "index_drop(mut index);"), "destructor"),
         "deferred-destructor": (body(SETUP + "defer index_drop(mut index);"), "destructor"),
         "double-mutable-handle": (
-            body(SETUP + "var first:mut Index=mut index;var second:mut Index=mut index;"),
+            body(
+                SETUP + "var first:mut Index=mut index;var second:mut Index=mut index;drop first;"
+            ),
             "active",
         ),
         "drop-with-handle-loan": (
-            body(SETUP + "var borrowed:read Index=read index;drop index;"),
+            body(SETUP + "var borrowed:read Index=read index;drop index;drop borrowed;"),
             "active",
         ),
     }
@@ -117,14 +119,17 @@ def payload_rejects():
     return {
         "payload-from-owner": (
             body(
-                SETUP + "var other:Index=index_new();" + payload + "index_remove(mut other,1i64);"
+                SETUP
+                + "var other:Index=index_new();"
+                + payload
+                + "index_remove(mut other,1i64);drop value;"
             ),
             "active domain loan",
         ),
         "payload-from-borrowed-owner": (
             "fn bad(index:read Index,other:mut Index)->unit access(reclaim,Symbols) {"
             + payload
-            + "index_remove(mut other,1i64);}",
+            + "index_remove(mut other,1i64);drop value;}",
             "active domain loan",
         ),
         "opaque-interior-owner": (
@@ -132,7 +137,7 @@ def payload_rejects():
             "active domain loan",
         ),
         "deferred-remove-with-payload": (
-            body(SETUP + payload + "defer remove(mut index);"),
+            body(SETUP + payload + "defer remove(mut index);drop value;"),
             "active",
         ),
     }

@@ -50,3 +50,20 @@ separately and does not classify it as C-level.
 All samples include child CPU time. A separate observation records peak RSS
 for each route. At least 20 paired samples are required. The source-free client
 also contributes to the acceptance result.
+
+To compare a stage change, save the compiled `ownership-cost` driver, its
+revision, and its build flags before the change. Build the candidate with the
+same flags. Run the comparison on an idle machine:
+
+```sh
+python3 benchmarks/ownership/compare.py \
+    --baseline build/ownership-baseline/ownership-cost \
+    --baseline-revision BASELINE_REVISION \
+    --work build/ownership-comparison
+```
+
+This compares candidate and baseline verification on identical inputs, at three
+sizes. It reports the ownership-pass and total-frontend ratios separately.
+Each ratio has paired samples and a bootstrap interval. The report records
+source and driver hashes, flags, commands, and CPU affinity. Keep it under
+ignored `build/` storage.

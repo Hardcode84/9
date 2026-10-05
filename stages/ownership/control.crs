@@ -3,6 +3,9 @@
 fn os_statement(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     if statement == null(*CrustStmt) || (*state).flow != OS_NORMAL { return; }
     if !os_enter(check, &(*statement).loc) { return; }
+    var point:*OsLivePoint=os_live_point(check,statement);
+    if point!=null(*OsLivePoint) { os_live_end(check,state,(*point).before,&(*statement).loc); }
+    if os_failed(check) { return; }
     var before: *OsLoan = (*check).loans;
     os_statement_inner(check, state, statement);
     os_end_expression(check, state, before);
@@ -44,7 +47,11 @@ fn os_block(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
         os_statement(check, state, child);
         child = (*child).next;
     }
-    if (*state).flow == OS_NORMAL { os_scope_end(check, state, &(*statement).loc); }
+    if (*state).flow == OS_NORMAL {
+        var point:*OsLivePoint=os_live_point(check,statement);
+        if point!=null(*OsLivePoint) { os_live_end(check,state,(*point).after,&(*statement).loc); }
+        os_scope_end(check, state, &(*statement).loc);
+    }
 }
 
 fn os_access_scope(check: *OsCheck, state: *OsState, access: *OsAccess, location: *CrustLoc) -> unit {
@@ -86,6 +93,10 @@ fn os_if(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     if os_failed(check) { return; }
     os_statement(check, &yes, (*statement).body);
     os_statement(check, &no, (*statement).otherwise);
+    var point:*OsLivePoint=os_live_point(check,statement);
+    if point!=null(*OsLivePoint) && (*statement).otherwise==null(*CrustStmt) && no.flow==OS_NORMAL {
+        os_live_end(check,&no,(*point).after,&(*statement).loc);
+    }
     if yes.flow != OS_NORMAL { *state = no; if no.flow != OS_NORMAL { (*state).flow = yes.flow; } return; }
     if no.flow != OS_NORMAL { *state = yes; return; }
     os_join(check, state, &yes, &no, &(*statement).loc);

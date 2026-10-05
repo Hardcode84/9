@@ -62,18 +62,20 @@ def bad_cases():
         "replace-container": "var a:read i64=read p.left;p=make Pair{left:3i64,right:4i64};",
         "read-borrowed-field": "var a:mut i64=mut p.left;var value:i64=p.left;",
     }
-    results = {name: (PAIR + main(LOCAL + body), "active") for name, body in cases.items()}
+    results = {
+        name: (PAIR + main(LOCAL + body + "drop a;"), "active") for name, body in cases.items()
+    }
     results["shared-parent-write"] = (
         PAIR + "fn bad(p:read Pair)->unit {var a:mut i64=mut p.left;}",
         "shared",
     )
     results["parent-reborrow-write"] = (
-        PAIR + main(LOCAL + "var a:mut Pair=mut p;var b:read i64=read a.left;a.left=3i64;"),
+        PAIR + main(LOCAL + "var a:mut Pair=mut p;var b:read i64=read a.left;a.left=3i64;drop b;"),
         "active",
     )
     results["drop-container"] = (
         "resource Pair {left:i64;right:i64;} drop destroy;fn destroy(p:mut Pair)->unit {}"
-        + main(LOCAL + "var a:read i64=read p.left;drop p;"),
+        + main(LOCAL + "var a:read i64=read p.left;drop p;drop a;"),
         "active",
     )
     results["nested-parent-access"] = (
@@ -81,7 +83,7 @@ def bad_cases():
         + "record Outer {pair:Pair;}"
         + main(
             "var p:Outer=make Outer{pair:make Pair{left:1i64,right:2i64}};"
-            "var a:mut i64=mut p.pair.left;var b:read Pair=read p.pair;"
+            "var a:mut i64=mut p.pair.left;var b:read Pair=read p.pair;drop a;"
         ),
         "active",
     )
@@ -101,7 +103,7 @@ def bad_cases():
         "record View {value:mut i64;}"
         + main(
             "var x:i64=1i64;var v:View=make View{value:mut x};"
-            "var all:read View=read v;v.value=3i64;"
+            "var all:read View=read v;v.value=3i64;drop all;"
         ),
         "active",
     )
@@ -113,7 +115,8 @@ def bad_cases():
             PAIR
             + "record View {value:mut Pair;}"
             + main(
-                LOCAL + "var view:View=make View{value:mut p};" "var all:read View=read view;" + use
+                LOCAL + "var view:View=make View{value:mut p};"
+                "var all:read View=read view;" + use + "drop all;"
             ),
             "active",
         )
@@ -122,7 +125,11 @@ def bad_cases():
             "record View {value:mut i64;}"
             + main(
                 "var x:i64=1i64;var view:View=make View{value:mut x};"
-                "var child:mut i64=mut view.value;var all:" + mode + " View=" + mode + " view;"
+                "var child:mut i64=mut view.value;var all:"
+                + mode
+                + " View="
+                + mode
+                + " view;drop child;"
             ),
             "active",
         )
@@ -152,7 +159,7 @@ def check_imports(build, directory):
     args = import_arguments(driver, cache, receipt, client, output)
     import_command(args, env=dict(os.environ))
     command([output])
-    client.write_text(main(LOCAL + "var a:mut i64=left(mut p);p.left=5i64;"))
+    client.write_text(main(LOCAL + "var a:mut i64=left(mut p);p.left=5i64;drop a;"))
     result = import_command(args, success=False)
     assert "active" in result.stderr, result.stderr
 

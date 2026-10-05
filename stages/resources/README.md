@@ -309,15 +309,13 @@ consuming pointer reads have transfer facts attached to their checked
 assignment. These facts let another stage check source lifetimes and consumed
 values without changing emitted C.
 
-`rs_prepare_delegated(stage)` delegates raw memory and plain-value initialization
-checks to the caller's stage. Plain values have no resource cleanup obligation
-and are not `read` or `mut` bindings. The caller must prove every reachable read, write,
+`rs_prepare_delegated(stage)` delegates raw memory, loan lifetimes, and initialization
+of non-owning values to the caller's stage. This includes `read` and `mut` bindings. The caller must prove every reachable read, write,
 transfer, and cleanup before emission. This includes initialization through
 aliases and all branch and loop paths. Taking an address does not initialize
 storage. Delegated address formation can read a shared loan; the caller must
 check the resulting pointer's access permission before use. Owner construction,
-moves, loan bindings, and cleanup eligibility keep
-their source checks. Their states must still agree at continuing control-flow
+resource moves, and cleanup eligibility keep their source checks. Their states must still agree at continuing control-flow
 edges. The [intrusive tutorial](../../examples/intrusive/README.md) describes
 the modular checker. Plain `rs_prepare` retains
 whole-binding initialization checks and its explicit `unsafe` requirement.

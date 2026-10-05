@@ -1,0 +1,160 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_live_candidate(check:*OsCheck, syntax:*CrustTypeSyntax)->bool {
+    return (*syntax).kind==CRUST_T_POINTER || os_view_mode(check,syntax)>=rs_kind((*(*check).stage).resources,RS_READ);
+}
+
+fn os_live_names(check:*OsCheck, statement:*CrustStmt)->unit {
+    var names:*CrustMap=&(*(*check).liveness).names;
+    while statement!=null(*CrustStmt) && !os_failed(check) {
+        if !os_enter(check,&(*statement).loc) { return; }
+        if (*statement).kind==CRUST_S_VAR && os_live_candidate(check,(*statement).syntax_type) &&
+           crust_map_get(names,(*statement).name as usize)==null(*u8) {
+            rs_put((*(*check).stage).resources,names,(*statement).name as usize,((*names).count+1usize) as *u8);
+        }
+        os_live_names(check,(*statement).body); os_live_names(check,(*statement).otherwise);
+        (*check).depth=(*check).depth-1usize;
+        statement=(*statement).next;
+    }
+}
+
+fn os_live_set(check:*OsCheck, source:*u64)->*u64 {
+    var words:usize=(*(*check).liveness).words;
+    var result:*u64=os_alloc(check,words*sizeof(u64),alignof(u64)) as *u64;
+    if result!=null(*u64) && source!=null(*u64) {
+        var index:usize=0usize;
+        while index<words { result[index]=source[index]; index=index+1usize; }
+    }
+    return result;
+}
+
+fn os_live_index(check:*OsCheck,name:*CrustName)->usize {
+    return crust_map_get(&(*(*check).liveness).names,name as usize) as usize;
+}
+
+fn os_live_name(check:*OsCheck,bits:*u64,name:*CrustName,used:bool)->unit {
+    var index:usize=os_live_index(check,name);
+    if index==0usize || os_failed(check) { return; }
+    index=index-1usize;
+    var mask:u64=1u64<<((index%64usize) as u64);
+    if used { bits[index/64usize]=bits[index/64usize]|mask; }
+    else { bits[index/64usize]=bits[index/64usize]&~mask; }
+}
+
+fn os_live_used(check:*OsCheck,bits:*u64,name:*CrustName)->bool {
+    var index:usize=os_live_index(check,name);
+    if index==0usize { return true; }
+    index=index-1usize;
+    return (bits[index/64usize]&(1u64<<((index%64usize) as u64)))!=0u64;
+}
+
+fn os_live_union(check:*OsCheck,target:*u64,other:*u64)->unit {
+    if os_failed(check) { return; }
+    var index:usize=0usize;
+    while index<(*(*check).liveness).words { target[index]=target[index]|other[index]; index=index+1usize; }
+}
+
+fn os_live_expression(check:*OsCheck,expression:*CrustExpr,bits:*u64)->unit {
+    if expression==null(*CrustExpr) || !os_enter(check,&(*expression).loc) { return; }
+    if (*expression).kind==CRUST_E_NAME { os_live_name(check,bits,(*expression).name,true); }
+    os_live_expression(check,(*expression).left,bits); os_live_expression(check,(*expression).right,bits);
+    var index:usize=0usize;
+    while index<(*expression).arg_count && !os_failed(check) {
+        os_live_expression(check,(*expression).args[index],bits); index=index+1usize;
+    }
+    var field:*CrustInit=(*expression).inits;
+    while field!=null(*CrustInit) && !os_failed(check) {
+        os_live_expression(check,(*field).value,bits); field=(*field).next;
+    }
+    (*check).depth=(*check).depth-1usize;
+}
+
+fn os_live_points(check:*OsCheck,statement:*CrustStmt)->*OsLivePoint {
+    var previous:*OsLivePoint=null(*OsLivePoint);
+    while statement!=null(*CrustStmt) && !os_failed(check) {
+        if !os_enter(check,&(*statement).loc) { return null(*OsLivePoint); }
+        var point:*OsLivePoint=os_alloc(check,sizeof(OsLivePoint),alignof(OsLivePoint)) as *OsLivePoint;
+        if point==null(*OsLivePoint) { return null(*OsLivePoint); }
+        (*point).source=statement; (*point).previous=previous;
+        (*point).body=os_live_points(check,(*statement).body);
+        (*point).otherwise=os_live_points(check,(*statement).otherwise);
+        rs_put((*(*check).stage).resources,&(*(*check).liveness).points,statement as usize,point as *u8);
+        (*check).depth=(*check).depth-1usize;
+        previous=point; statement=(*statement).next;
+    }
+    return previous;
+}
+
+// Outer views used by a loop remain live at its declared backedge.
+// Declarations inside the loop get their own per-iteration lifetimes.
+fn os_live_loop_uses(check:*OsCheck,statement:*CrustStmt,used:*u64,declared:*u64)->unit {
+    while statement!=null(*CrustStmt) && !os_failed(check) {
+        if !os_enter(check,&(*statement).loc) { return; }
+        if (*statement).kind==CRUST_S_VAR { os_live_name(check,declared,(*statement).name,true); }
+        os_live_expression(check,(*statement).expr,used); os_live_expression(check,(*statement).value,used);
+        os_live_loop_uses(check,(*statement).body,used,declared);
+        os_live_loop_uses(check,(*statement).otherwise,used,declared);
+        (*check).depth=(*check).depth-1usize; statement=(*statement).next;
+    }
+}
+
+fn os_live_while(check:*OsCheck,point:*OsLivePoint,after:*u64)->*u64 {
+    var statement:*CrustStmt=(*point).source;
+    var before:*u64=os_live_set(check,after);
+    var used:*u64=os_live_set(check,null(*u64));
+    var declared:*u64=os_live_set(check,null(*u64));
+    if os_failed(check) { return null(*u64); }
+    os_live_expression(check,(*statement).expr,before);
+    os_live_loop_uses(check,(*statement).body,used,declared);
+    var index:usize=0usize;
+    while index<(*(*check).liveness).words && !os_failed(check) {
+        before[index]=before[index]|(used[index]&~declared[index]); index=index+1usize;
+    }
+    var loop:OsLiveLoop=make OsLiveLoop {before:before,after:after};
+    os_live_sequence(check,(*point).body,before,&loop);
+    return before;
+}
+
+fn os_live_statement(check:*OsCheck,point:*OsLivePoint,after:*u64,loop:*OsLiveLoop)->*u64 {
+    var source:*CrustStmt=(*point).source;
+    var kind:u32=(*source).kind;
+    if kind==CRUST_S_BLOCK { return os_live_sequence(check,(*point).body,after,loop); }
+    if kind==CRUST_S_WHILE { return os_live_while(check,point,after); }
+    if kind==CRUST_S_IF {
+        var before:*u64=os_live_set(check,os_live_sequence(check,(*point).body,after,loop));
+        os_live_union(check,before,os_live_sequence(check,(*point).otherwise,after,loop));
+        os_live_expression(check,(*source).expr,before); return before;
+    }
+    if kind==CRUST_S_BREAK || kind==CRUST_S_CONTINUE {
+        if loop==null(*OsLiveLoop) { os_error(check,&(*source).loc,"loop exit outside a loop"); return null(*u64); }
+        if kind==CRUST_S_BREAK { return (*loop).after; } return (*loop).before;
+    }
+    if kind==CRUST_S_RETURN || kind==CRUST_S_TRAP { after=null(*u64); }
+    var before:*u64=os_live_set(check,after);
+    if kind==CRUST_S_VAR { os_live_name(check,before,(*source).name,false); }
+    os_live_expression(check,(*source).expr,before); os_live_expression(check,(*source).value,before);
+    return before;
+}
+
+fn os_live_sequence(check:*OsCheck,point:*OsLivePoint,after:*u64,loop:*OsLiveLoop)->*u64 {
+    while point!=null(*OsLivePoint) && !os_failed(check) {
+        if !os_enter(check,&(*(*point).source).loc) { return null(*u64); }
+        (*point).after=after;
+        (*point).before=os_live_statement(check,point,after,loop);
+        after=(*point).before; point=(*point).previous;
+        (*check).depth=(*check).depth-1usize;
+    }
+    return after;
+}
+
+fn os_live_prepare(check:*OsCheck,body:*CrustStmt)->unit {
+    var plan:*OsLivePlan=os_alloc(check,sizeof(OsLivePlan),alignof(OsLivePlan)) as *OsLivePlan;
+    if plan==null(*OsLivePlan) { return; }
+    (*check).liveness=plan; os_live_names(check,body);
+    if (*plan).names.count==0usize { (*check).liveness=null(*OsLivePlan); return; }
+    (*plan).words=(*plan).names.count/64usize;
+    if (*plan).names.count%64usize!=0usize { (*plan).words=(*plan).words+1usize; }
+    var points:*OsLivePoint=os_live_points(check,body);
+    var empty:*u64=os_live_set(check,null(*u64));
+    if !os_failed(check) { os_live_sequence(check,points,empty,null(*OsLiveLoop)); }
+}

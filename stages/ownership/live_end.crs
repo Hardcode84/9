@@ -1,0 +1,107 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_live_loan(check:*OsCheck,state:*OsState,loan:*OsLoan)->unit {
+    if loan==null(*OsLoan) || (*loan).live_stamp==(*(*check).liveness).stamp || os_failed(check) { return; }
+    if !os_enter(check,&(*(*(*check).function).declaration).loc) { return; }
+    (*loan).live_stamp=(*(*check).liveness).stamp;
+    os_live_loan(check,state,(*loan).parent); os_live_loan(check,state,(*loan).via);
+    os_live_object(check,state,(*loan).object);
+    (*check).depth=(*check).depth-1usize;
+}
+
+fn os_live_value(check:*OsCheck,state:*OsState,value:*OsValue)->unit {
+    if value==null(*OsValue) { return; }
+    if (*value).pointer || os_borrowed(check,(*value).syntax) {
+        os_live_loan(check,state,(*value).loan);
+    }
+    os_live_object(check,state,(*value).object);
+}
+
+fn os_live_object(check:*OsCheck,state:*OsState,object:*OsObject)->unit {
+    if object==null(*OsObject) || (*object).live_stamp==(*(*check).liveness).stamp ||
+       os_view_mode(check,(*object).syntax)<rs_kind((*(*check).stage).resources,RS_READ) { return; }
+    if !os_enter(check,&(*(*object).syntax).loc) { return; }
+    (*object).live_stamp=(*(*check).liveness).stamp;
+    var field:*OsSlot=os_fields(state,object);
+    while field!=null(*OsSlot) && !os_failed(check) {
+        os_live_value(check,state,os_bound(state,field)); field=(*field).next;
+    }
+    (*check).depth=(*check).depth-1usize;
+}
+
+fn os_live_deferred(check:*OsCheck,state:*OsState,deferred:*OsDeferred)->unit {
+    if deferred==null(*OsDeferred) { return; }
+    var index:usize=0usize;
+    while index<(*deferred).count && !os_failed(check) {
+        os_live_value(check,state,(*deferred).arguments[index]); index=index+1usize;
+    }
+}
+
+fn os_live_roots(check:*OsCheck,state:*OsState,bits:*u64)->unit {
+    var scope:*OsScope=(*state).scope;
+    while scope!=null(*OsScope) && !os_failed(check) {
+        var slot:*OsSlot=(*scope).locals;
+        while slot!=null(*OsSlot) && !os_failed(check) {
+            os_live_deferred(check,state,(*slot).deferred);
+            if (*slot).argument || os_live_used(check,bits,(*slot).name) {
+                os_live_value(check,state,os_bound(state,slot));
+            }
+            slot=(*slot).next;
+        }
+        scope=(*scope).parent;
+    }
+}
+
+fn os_live_needed(check:*OsCheck,state:*OsState,value:*OsValue)->bool {
+    if value==null(*OsValue) { return false; }
+    var stamp:usize=(*(*check).liveness).stamp;
+    if (*value).loan!=null(*OsLoan) && (*(*value).loan).live_stamp==stamp { return true; }
+    if (*value).pointer || os_borrowed(check,(*value).syntax) { return false; }
+    var object:*OsObject=(*value).object;
+    if object==null(*OsObject) || os_view_mode(check,(*object).syntax)<rs_kind((*(*check).stage).resources,RS_READ) { return false; }
+    if (*object).live_stamp==stamp { return true; }
+    if !os_enter(check,&(*(*object).syntax).loc) { return true; }
+    var field:*OsSlot=os_fields(state,object);
+    var needed:bool=false;
+    while field!=null(*OsSlot) && !needed && !os_failed(check) {
+        needed=os_live_needed(check,state,os_bound(state,field)); field=(*field).next;
+    }
+    (*check).depth=(*check).depth-1usize; return needed;
+}
+
+fn os_live_end_slot(check:*OsCheck,state:*OsState,slot:*OsSlot,location:*CrustLoc)->unit {
+    if (*slot).argument { return; }
+    var value:*OsValue=os_bound(state,slot);
+    if value==null(*OsValue) || os_live_needed(check,state,value) { return; }
+    if os_borrowed(check,(*slot).syntax) { os_loan_end(check,state,value); }
+    else { if (*value).pointer {
+        if (*slot).owns || (*value).loan==null(*OsLoan) { return; }
+    } else {
+        if rs_owns((*(*check).stage).resources,(*slot).syntax) ||
+           os_view_mode(check,(*slot).syntax)<rs_kind((*(*check).stage).resources,RS_READ) { return; }
+        if !os_initialized(check,state,(*value).object) { return; }
+        // Dead view records have no cleanup. All dependent loans were retained above.
+        os_expire_owned(check,state,(*value).object,location);
+    } }
+    os_set(check,state,slot as *u8,null(*OsValue),0u32);
+}
+
+fn os_live_end(check:*OsCheck,state:*OsState,bits:*u64,location:*CrustLoc)->unit {
+    if (*check).liveness==null(*OsLivePlan) || (*check).loans==null(*OsLoan) || os_failed(check) { return; }
+    (*(*check).liveness).stamp=(*(*check).liveness).stamp+1usize;
+    os_live_roots(check,state,bits);
+    var scope:*OsScope=(*state).scope;
+    while scope!=null(*OsScope) && !os_failed(check) {
+        var slot:*OsSlot=(*scope).locals;
+        while slot!=null(*OsSlot) && !os_failed(check) {
+            if !os_live_used(check,bits,(*slot).name) { os_live_end_slot(check,state,slot,location); }
+            slot=(*slot).next;
+        }
+        scope=(*scope).parent;
+    }
+}
+
+fn os_live_point(check:*OsCheck,statement:*CrustStmt)->*OsLivePoint {
+    if (*check).liveness==null(*OsLivePlan) { return null(*OsLivePoint); }
+    return crust_map_get(&(*(*check).liveness).points,statement as usize) as *OsLivePoint;
+}

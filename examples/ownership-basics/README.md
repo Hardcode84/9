@@ -38,6 +38,27 @@ rustc --edition=2024 examples/ownership-basics/program.rs -o build/ownership-rus
 build/ownership-rust
 ```
 
+## Last use
+
+[last-use.crs](last-use.crs) uses a scalar view, a reborrow, a stored view,
+and a view declared inside a loop. Each loan ends after its last use. The next
+statement can change the original value. Child views retain their parent loans.
+A deferred call retains its captured views until the call runs. Resource cleanup
+keeps its scope order.
+
+```sh
+build/crust examples/ownership-basics/main.crs -o build/ownership-last-use \
+    examples/ownership-basics/last-use.crs
+build/ownership-last-use
+```
+
+The output is `AB` and a newline. `A` comes from the deferred call. After that
+scope ends, the program changes the letter and prints `B`.
+
+An outer view used inside a loop remains live at its backedge. Declare the
+view inside the loop to end it in each iteration. A last use ends at a
+statement boundary. `drop view` remains available for an explicit ending.
+
 ## Native handles
 
 [handles.crs](handles.crs) owns POSIX file descriptors and opaque C streams.

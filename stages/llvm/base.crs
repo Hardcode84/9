@@ -302,3 +302,43 @@ fn ll_offset(function: *LlFunction, base: *u8, offset: *u8) -> *u8 {
     ll_text(function, "\n");
     return result;
 }
+
+// Index a typed element in the stated pointer address space. Indices are LLVM integers.
+fn ll_element(
+    function: *LlFunction,
+    element: *u8,
+    pointer: *u8,
+    base: *u8,
+    index_type: *u8,
+    index: *u8
+) -> *u8 {
+    var result: *u8 = ll_register(function);
+    ll_line(function, result, "getelementptr ");
+    ll_text(function, element);
+    ll_text(function, ", ");
+    ll_text(function, pointer);
+    ll_text(function, " ");
+    ll_text(function, base);
+    ll_text(function, ", ");
+    ll_text(function, index_type);
+    ll_text(function, " ");
+    ll_text(function, index);
+    ll_text(function, "\n");
+    return result;
+}
+fn ll_member(function: *LlFunction, type: *CrustType, base: *u8, field: *CrustField) -> *u8 {
+    var member: *CrustField = type -> record_decl -> fields;
+    var index: u64 = 0u64;
+    while member != field {
+        index = index + 1u64;
+        member = member -> next;
+    }
+    return ll_element(
+        function,
+        ll_type(function -> stage, type),
+        "ptr",
+        base,
+        "i32",
+        ll_join(function -> stage, "0, i32 ", ll_number(function -> stage, index))
+    );
+}

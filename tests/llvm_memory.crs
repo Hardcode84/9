@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
+record Padded {
+    flag: u8;
+    value: u64;
+}
 record Pair {
     first: u64;
     second: u64;
@@ -78,5 +82,30 @@ fn main(argc: i32, argv: **u8) -> i32 {
     if skipped != 42i32 {
         return 6i32;
     }
+    if !padded_offsets() {
+        return 7i32;
+    }
     return 0i32;
+}
+
+fn padded_offsets() -> bool {
+    var padded: [Padded; 2] = make [Padded; 2] {
+        make Padded {
+            flag: 1u8,
+            value: 17u64
+        },
+        make Padded {
+            flag: 2u8,
+            value: 23u64
+        }
+    };
+    var last: *Padded = &padded[1usize];
+    var previous: *Padded = last - 1isize;
+    if previous -> flag != 1u8 || previous -> value != 17u64 {
+        return false;
+    }
+    if (previous + 1isize) -> value != 23u64 {
+        return false;
+    }
+    return true;
 }

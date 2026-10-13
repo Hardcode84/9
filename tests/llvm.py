@@ -87,7 +87,9 @@ def raw(suite):
     suite.execute(
         suite.emit("intrusive", paths=["examples/intrusive/raw.crs"]), output=b"intrusive: ok\n"
     )
-    suite.execute(suite.emit("memory", paths=["tests/llvm_memory.crs"]))
+    memory = suite.emit("memory", paths=["tests/llvm_memory.crs"])
+    assert "getelementptr i8," not in memory.read_text()
+    suite.execute(memory)
     native_names(suite)
     runtime_definition(suite)
     for kind, (bits, signed) in TYPES.items():

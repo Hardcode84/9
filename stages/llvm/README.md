@@ -184,3 +184,10 @@ python3 tests/llvm_packages.py --llvm build/toolchains/llvm/main-build
 
 The [measurement tool](../../benchmarks/llvm/README.md) separates complete
 frontend and IR text construction from LLVM tool execution and linking.
+
+Typed field and element access uses LLVM `getelementptr` with the declared
+record or element type. Record padding and array stride come from that type.
+`ll_element` accepts explicit element, pointer, and index types. An adapter can
+use an address-space-qualified pointer and a 32-bit index. `ll_offset` remains
+available for explicit byte access. Neither helper adds `inbounds` promises.
+The default emitter still uses the Linux x86-64 layout and scalar ABI.

@@ -64,22 +64,25 @@ fn ll_place_value(function: *LlFunction, input: *CrustExpr) -> *u8 {
     } else {
         base = ll_place(function, left);
     }
+    var container: *CrustType = left -> type;
+    if container -> kind == CRUST_T_POINTER {
+        container = container -> base;
+    }
     if input -> kind == CRUST_E_FIELD {
-        return ll_offset(
-            function,
-            base,
-            ll_number(function -> stage, input -> field -> offset)
-        );
+        return ll_member(function, container, base, input -> field);
     }
     var index: *u8 = ll_value(function, input -> right);
-    var offset: *u8 = ll_instruction(
+    if left -> type -> kind == CRUST_T_ARRAY {
+        index = ll_join(function -> stage, "0, i64 ", index);
+    }
+    return ll_element(
         function,
-        "mul",
+        ll_type(function -> stage, container),
+        "ptr",
+        base,
         "i64",
-        index,
-        ll_number(function -> stage, input -> type -> size)
+        index
     );
-    return ll_offset(function, base, offset);
 }
 fn ll_expression(function: *LlFunction, input: *CrustExpr) -> *u8 {
     var kind: u32 = input -> kind;
@@ -208,17 +211,17 @@ fn ll_binary(function: *LlFunction, input: *CrustExpr) -> *u8 {
     var right: *u8 = ll_value(function, input -> right);
     var type: *CrustType = input -> left -> type;
     if type -> kind == CRUST_T_POINTER && (op == CRUST_OP_ADD || op == CRUST_OP_SUB) {
-        var offset: *u8 = ll_instruction(
-            function,
-            "mul",
-            "i64",
-            right,
-            ll_number(function -> stage, type -> base -> size)
-        );
         if op == CRUST_OP_SUB {
-            offset = ll_instruction(function, "sub", "i64", "0", offset);
+            right = ll_instruction(function, "sub", "i64", "0", right);
         }
-        return ll_offset(function, left, offset);
+        return ll_element(
+            function,
+            ll_type(function -> stage, type -> base),
+            "ptr",
+            left,
+            "i64",
+            right
+        );
     }
     ll_arithmetic_guard(function, op, type, left, right);
     var operation: *u8 = LL_BINARY[op as usize];
@@ -340,18 +343,28 @@ fn ll_aggregate(function: *LlFunction, input: *CrustExpr) -> *u8 {
     var index: usize = 0usize;
     while init != null(*CrustInit) || index < input -> arg_count {
         var item: *CrustExpr = null(*CrustExpr);
-        var offset: u64 = 0u64;
+        var address: *u8 = "";
         if input -> kind == CRUST_E_RECORD {
             item = init -> value;
-            offset = init -> field -> offset;
+            address = ll_member(function, input -> type, slot, init -> field);
             init = init -> next;
         } else {
             item = input -> args[index];
-            offset = index as u64 * input -> type -> base -> size;
+            address = ll_element(
+                function,
+                ll_type(function -> stage, input -> type),
+                "ptr",
+                slot,
+                "i32",
+                ll_join(
+                    function -> stage,
+                    "0, i64 ",
+                    ll_number(function -> stage, index as u64)
+                )
+            );
             index = index + 1usize;
         }
         var value: *u8 = ll_value(function, item);
-        var address: *u8 = ll_offset(function, slot, ll_number(function -> stage, offset));
         ll_store(function, item -> type, address, value);
     }
     return slot;

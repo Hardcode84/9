@@ -44,3 +44,14 @@ extern fn ll_branch(function: *LlFunction, condition: *u8, yes: *u8, no: *u8) ->
 extern fn ll_jump(function: *LlFunction, destination: *u8) -> unit = "ll_jump";
 extern fn ll_block(function: *LlFunction, destination: *u8) -> unit = "ll_block";
 extern fn ll_error(stage: *LlStage, message: *u8) -> unit = "ll_error";
+
+// Emit typed element addressing without host byte offsets or inbounds promises.
+// Pointer and index types are explicit LLVM types; base/index are LLVM operands.
+extern fn ll_element(
+    function: *LlFunction,
+    element: *u8,
+    pointer: *u8,
+    base: *u8,
+    index_type: *u8,
+    index: *u8
+) -> *u8 = "ll_element";

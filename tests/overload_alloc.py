@@ -39,6 +39,7 @@ STAGE = [
             "outputs",
             "expr",
             "control",
+            "lower",
             "source",
         )
     ],

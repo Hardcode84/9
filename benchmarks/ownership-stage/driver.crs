@@ -45,7 +45,7 @@ fn probe_emit(program:*OgProgram,raw:bool,argv:**u8)->bool {
     var start:u64=probe_clock();
     var valid:bool=false;
     if raw { valid=c_emit(&stage,null(*CrustDecl)); }
-    else { valid=c_emit_with_body(&stage,null(*CrustDecl),rs_c_body,&program->resources as *u8); }
+    else { valid=c_emit(&stage,null(*CrustDecl)); }
     var elapsed:u64=probe_clock()-start;
     if valid {
         c_buffer_bytes(&stage.header,stage.body.data,stage.body.size);

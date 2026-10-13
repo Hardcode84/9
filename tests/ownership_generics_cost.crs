@@ -117,12 +117,12 @@ fn ogc_emit(ownership: *OsStage, program: *OgProgram, stats: *OgcStats, argv: **
     var entry: *CrustDecl = null(*CrustDecl);
     if valid { entry = resource_driver_entry(&cli, resources); valid = entry != null(*CrustDecl); }
     var erase: bool = c_equal(argv[2usize], "erasure");
-    if valid && erase { valid = c_emit_with_body(&before, entry, rs_c_body, resources as *u8); }
+    if valid && erase { valid = c_emit(&before, entry); }
     var start: u64 = ogc_clock();
     if valid { valid = os_verify(ownership); }
     (*stats).times[5usize] = ogc_clock() - start;
     start = ogc_clock();
-    if valid { valid = c_emit_with_body(&cli.stage, entry, rs_c_body, resources as *u8); }
+    if valid { valid = c_emit(&cli.stage, entry); }
     (*stats).times[6usize] = ogc_clock() - start;
     if valid && erase {
         valid = ogc_equal(&before.header, &cli.stage.header) && ogc_equal(&before.body, &cli.stage.body) &&

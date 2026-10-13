@@ -60,7 +60,7 @@ fn gli_emit(program: *OgProgram, output: *u8, symbols: *u8) -> bool {
         mode: 2u32, output: output, symbols: symbols, cflags: null(**u8), cflag_count: 0usize,
         ldflags: null(**u8), ldflag_count: 0usize
     };
-    return c_backend_build_with_body(context, (*global).lowered, &options, rs_c_body, &(*program).resources as *u8) == 0i32;
+    return c_backend_build(context, (*global).lowered, &options) == 0i32;
 }
 
 fn gli_import(program: *OgProgram, argc: i32, argv: **u8) -> bool {

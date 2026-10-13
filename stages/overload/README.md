@@ -270,7 +270,7 @@ setup from a complete target program.
 
 The reader has a 256-level traversal budget. A function can contain 253 nested
 blocks around a return, or 252 around a scalar assignment. Composition with
-resource lowering reduces these values to 250 and 249. These are the exact source shapes in the
+the resource reader accepts 252 blocks for either fixture. These are the exact source shapes in the
 [stage limit table](../reader/README.md); other syntax can consume more levels.
 
 Keep the context, source bytes, stage, and hooks live through their uses.

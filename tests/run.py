@@ -671,6 +671,34 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
                 env=stack_environment,
             )
 
+    command(
+        [
+            executable(
+                "labels-jumps",
+                """
+fn other()->i32 {goto done;label done;return 1i32;}
+fn main(argc:i32,argv:**u8)->i32 {
+    var count:i32=0i32;
+    goto start;
+    count=99i32;
+    label start;
+    count=count+1i32;
+    if count<40i32 {goto start;}
+    while true {{count=count+other();goto done;}}
+    label done;
+    if count!=41i32 {return 1i32;}
+    goto initialize;
+    var skipped:i32=99i32;
+    label initialize;
+    skipped=42i32;
+    if skipped!=42i32 {return 2i32;}
+    return 0i32;
+}
+""",
+            )
+        ]
+    )
+
     arithmetic_checks = 0
     for kind, (bits, signed) in TYPES.items():
         cases = integer_cases(kind, bits, signed)
@@ -729,6 +757,12 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
     print(f"required traps: {len(traps) + len(dynamic_traps)} processes passed")
 
     for name, source in {
+        "unknown-label": "fn f()->unit{goto missing;}",
+        "duplicate-label": "fn f()->unit{label same;label same;}",
+        "cross-function-label": "fn a()->unit{goto b;}fn other()->unit{label b;}",
+        "nested-label": "fn f()->unit{goto inner;{label inner;}}",
+        "sibling-label": "fn f()->unit{{goto other;}{label other;}}",
+        "label-missing-return": "fn f()->i32{goto end;return 1i32;label end;}",
         "flat-depth": "fn f()->u32{return " + "+".join(["1u32"] * 10000) + ";}",
         "arrow-depth": "record N{next:*N;} fn f(p:*N)->*N{return p" + "->next" * 10000 + ";}",
         "arrow-record": "record R{x:u8;} fn f(p:R)->u8{return p->x;}",

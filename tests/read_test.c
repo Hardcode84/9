@@ -86,6 +86,10 @@ static void test_grammar_corpus(void)
 {
     SYNTAX("syntax: empty_unit", "", true);
     SYNTAX("syntax: empty_function", "fn test() -> unit {}", true);
+    SYNTAX("syntax: labels and jumps", "fn f()->unit{goto end;label again;goto again;label end;}",
+           true);
+    SYNTAX("syntax: missing jump target", "fn f()->unit{goto;}", false);
+    SYNTAX("syntax: missing label semicolon", "fn f()->unit{label end}", false);
     SYNTAX("syntax: return_unit", "fn test() -> unit { return; }", true);
     SYNTAX("syntax: trailing_parameter_comma", "fn test(a: u32,) -> u32 { return a; }", true);
     SYNTAX("syntax: record_fields", "record Pair { left: u8; right: *Pair; }", true);

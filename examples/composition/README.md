@@ -94,8 +94,8 @@ the read.
 
 After reading, the helper calls `ov_prepare`, `os_lower`, and `os_verify` in that
 order. Overload selection needs the original `read` and `mut` types. Ownership
-checking then validates the selected calls. The final backend call uses
-`rs_c_body` to emit both the checked operations and their cleanup plans.
+checking then validates the selected calls. Cleanup is explicit in the lowered
+seed bodies. The final call to `c_backend_build` uses ordinary C emission.
 
 Each stage supplies its own rules through the shared
 [source query interface](../../stages/source/README.md). The root selects the

@@ -181,7 +181,7 @@ signature even when their lowered pointer representation is the same.
 1. Initialize a context and `RsStage`.
 2. Call `rs_read` for each retained source range.
 3. Call `rs_prepare` after all source units have been read.
-4. Assign native link names and pass `rs_c_body` to the C backend's body callback.
+4. Assign native link names and pass the complete seed bodies to the selected backend.
 5. Destroy the context after output is complete.
 
 To delegate memory checking, use `rs_prepare_delegated` in step 3. It permits
@@ -227,22 +227,20 @@ construct this provider with `rs_source_hooks`, and pass it to `ov_init`.
 Combine `rs_reader_hooks` and `ov_reader_hooks` in a reader chain, then call
 `rr_read` for each source. Call `ov_prepare`, then `rs_prepare`.
 The root chooses these providers and the pass order. Retain both stages and
-the chains through preparation, and retain the resource stage through emission.
+the chains through preparation. Retain the context through emission.
 The [composition tutorial](../../examples/composition/README.md) also selects
 field ownership contracts and verification.
 
-The stage retains source signatures, storage identities, loans, and cleanup
-plans. It lowers a separate set of target declarations and bodies. Generated
-drop helpers are checked seed functions with private C linkage. Source
-locations retain offsets in the original complete file. The seed checker
+The stage retains source signatures, storage identities, and loans through
+preparation. It lowers complete target declarations and bodies with explicit
+cleanup calls. Generated drop helpers are seed functions with private linkage.
+Source locations retain offsets in the original complete file. The seed checker
 checks generated types and operations; it does not prove ownership.
 
-The checked operation trees alone are not an equivalent seed program. Exit
-cleanup remains in the retained plans. Use `rs_c_body`, or an emitter that reads
-both representations. Ordinary seed evaluation or emission of those trees
-alone omits the planned cleanup. `resource_program` completes output before
-its local stage ends; a retained context from that call cannot be used alone
-to emit the resource program again.
+After all selected checks pass, ordinary seed evaluation or backend emission
+runs the complete program, including cleanup. Keep the context and source
+storage live. The backend does not need the resource stage object or side tables.
+A successful `resource_program` call leaves complete bodies in its context.
 
 The [Crust reader](../reader/README.md) is independent of resources. Its ordered hooks
 can add declarations, statements, prefix expressions, and type syntax. A stage

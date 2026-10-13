@@ -12,8 +12,7 @@ fn os_publish_object(cli: *CCli, stage: *OsStage, work: *OsLibraryWork,
     (*cli).options.mode = 1u32;
     (*cli).options.output = (*work).files.checksum;
     if !c_driver_names(&(*cli).driver) { return false; }
-    if c_backend_build_with_body(context, null(*CrustDecl), &(*cli).options,
-                                rs_c_body, (*stage).resources as *u8) != 0i32 { return false; }
+    if c_backend_build(context, null(*CrustDecl), &(*cli).options) != 0i32 { return false; }
     return cache_read(context, (*work).files.checksum, object);
 }
 

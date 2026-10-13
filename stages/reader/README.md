@@ -100,7 +100,7 @@ then `return 0i32;` after the nested blocks.
 |---|---:|---:|
 | `crust0`, `crust-c` | 253 | 252 |
 | `crust-overload` | 253 | 252 |
-| `crust-resource`, `crust-overload-resource` | 250 | 249 |
+| `crust-resource`, `crust-overload-resource` | 252 | 252 |
 
 Resource lowering adds levels to the checked tree. Other expressions and hooks
 can use more levels. Each stage rejects exhausted traversal with a diagnostic.

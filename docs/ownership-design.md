@@ -14,7 +14,8 @@ A defect in that implementation can cause memory errors. The compiler does not
 prove its pointer algorithms correct.
 
 The stage is written in Crust. It reads annotations, checks each body against
-declared interfaces, and passes cleanup plans to the C backend.
+declared interfaces, and lowers cleanup to ordinary seed code. The selected
+backend consumes complete bodies after these checks pass.
 
 ## 1. The checked language
 

@@ -190,6 +190,24 @@ evaluates the right side when the left side is true; `||` evaluates it when
 the left side is false. These rules let you put a pointer check before an
 access in the same condition.
 
+Raw Crust also has `label name;` and `goto name;`. A jump can target a label
+in the same block or an enclosing block of the same function. It can go
+forward or backward. It cannot enter another scope. Cleanup stages use these
+statements to share exit code:
+
+```crust
+fn count()->i32 {
+    var value:i32 = 0i32;
+    label again;
+    value = value + 1i32;
+    if value < 3i32 { goto again; }
+    return value;
+}
+```
+
+The resource and ownership stages require structured source control flow.
+Their generated raw code can contain labels and jumps after the checks pass.
+
 Use `//` for a comment through the end of the line. Statements such as variable
 declarations, assignments, and returns end with a semicolon.
 

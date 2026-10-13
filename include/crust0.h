@@ -206,6 +206,8 @@ typedef enum {
     CRUST_S_TRAP,
     CRUST_S_EXPR,
     CRUST_S_ASSIGN,
+    CRUST_S_LABEL,
+    CRUST_S_GOTO,
     CRUST_S_END /* Exclusive end of seed statement kinds; not a seed node kind. */
 } CrustStmtKind;
 
@@ -216,6 +218,8 @@ struct CrustStmt {
     CrustStmt *next;
     CrustStmt *body;
     CrustStmt *otherwise;
+    /* Checked label: containing block. Checked goto: destination label. */
+    CrustStmt *target;
     CrustExpr *expr;
     CrustExpr *value;
     CrustName *name;

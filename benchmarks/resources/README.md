@@ -138,3 +138,20 @@ SQLite defines the relevant contracts in its documentation for
 [finalization](https://www.sqlite.org/c3ref/finalize.html),
 [close](https://www.sqlite.org/c3ref/close.html), and
 [heap limits](https://www.sqlite.org/c3ref/hard_heap_limit64.html).
+
+## Compare cleanup lowering
+
+Retain the baseline native resource compiler before changing the stage. Run a
+paired comparison with the candidate compiler on the same generated inputs:
+
+```sh
+python3 benchmarks/resources/cleanup.py \
+  --baseline build/baseline-resource --candidate build/crust-resource \
+  --output build/cleanup-comparison --cpu 0 --rounds 20
+```
+
+Choose an available CPU. The report contains compiler and input hashes, exact
+commands, paired samples, output sizes, and confidence intervals. Each compiler
+must produce the expected destructor counts on every tested exit before timing
+starts. The timed boundary ends after C output; target compilation and execution
+are separate checks. Keep the captured compiler and report under `build/`.

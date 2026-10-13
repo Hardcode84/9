@@ -15,7 +15,7 @@ stage_source(stage, "places.crs");
 stage_source(stage, "outputs.crs");
 stage_source(stage, "expr.crs");
 stage_source(stage, "control.crs");
-stage_source(stage, "emit.crs");
+stage_source(stage, "lower.crs");
 stage_source(stage, "program.crs");
 stage_source(stage, "build.crs");
 stage_source(stage, "source.crs");

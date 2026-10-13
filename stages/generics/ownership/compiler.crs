@@ -43,7 +43,7 @@ fn og_stage_compile(request:*StageCompile)->bool {
     if success {
         var options:CBackendOptions=make CBackendOptions{mode:2u32,output:request->output,symbols:request->symbols,
             cflags:null(**u8),cflag_count:0usize,ldflags:null(**u8),ldflag_count:0usize};
-        success=c_backend_build_with_body(&program.generics.context,null(*CrustDecl),&options,rs_c_body,&program.resources as *u8)==0i32;
+        success=c_backend_build(&program.generics.context,null(*CrustDecl),&options)==0i32;
     }
     og_driver_diagnostic(request->context,&program.generics.syntax);
     og_driver_diagnostic(request->context,&program.generics.context);

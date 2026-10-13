@@ -36,6 +36,7 @@ struct EvalFrame {
     EvalPlan *plan;
     unsigned char *storage;
     EvalFrame *next;
+    CrustStmt *jump;
 };
 
 struct EvalPlan {
@@ -79,7 +80,7 @@ struct CrustEval {
     unsigned active_depth;
 };
 
-typedef enum { EVAL_NEXT, EVAL_RETURN, EVAL_BREAK, EVAL_CONTINUE } EvalFlow;
+typedef enum { EVAL_NEXT, EVAL_RETURN, EVAL_BREAK, EVAL_CONTINUE, EVAL_GOTO } EvalFlow;
 
 static bool eval_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
                             EvalValue *result);
@@ -378,7 +379,8 @@ bool crust_eval_prepare(CrustEval *eval, CrustDecl *declaration)
         return crust_try_map_set(eval->context, &eval->declarations, (uintptr_t)declaration, same);
     if (declaration->kind == CRUST_D_EXTERN && declaration->link_name == NULL)
         return error_at(eval, declaration->loc, "external function has no native link name");
-    if (declaration->link_name != NULL) {
+    if (declaration->link_name != NULL &&
+        (declaration->kind == CRUST_D_EXTERN || declaration->link_name[0] != '\0')) {
         name = native_link_name(eval, declaration);
         if (name == NULL)
             return false;
@@ -1002,11 +1004,17 @@ static bool eval_block(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, 
                        EvalValue *result)
 {
     CrustStmt *child;
-    for (child = statement->body; child != NULL; child = child->next) {
+    child = statement->body;
+    while (child != NULL) {
         if (!eval_statement(eval, frame, child, flow, result))
             return false;
-        if (*flow != EVAL_NEXT)
+        if (*flow == EVAL_GOTO && frame->jump->target == statement) {
+            child = frame->jump;
+            *flow = EVAL_NEXT;
+        } else if (*flow != EVAL_NEXT) {
             break;
+        }
+        child = child->next;
     }
     return true;
 }
@@ -1047,7 +1055,7 @@ static bool eval_while(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, 
             return true;
         if (!eval_statement(eval, frame, statement->body, flow, result))
             return false;
-        if (*flow == EVAL_RETURN)
+        if (*flow == EVAL_RETURN || *flow == EVAL_GOTO)
             return true;
         if (*flow == EVAL_BREAK) {
             *flow = EVAL_NEXT;
@@ -1055,6 +1063,15 @@ static bool eval_while(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, 
         }
         *flow = EVAL_NEXT;
     }
+}
+
+static bool eval_return(CrustEval *eval, EvalFrame *frame, CrustStmt *statement, EvalFlow *flow,
+                        EvalValue *result)
+{
+    if (statement->expr != NULL && !eval_expression(eval, frame, statement->expr, result))
+        return false;
+    *flow = EVAL_RETURN;
+    return true;
 }
 
 static bool eval_statement_impl(CrustEval *eval, EvalFrame *frame, CrustStmt *statement,
@@ -1072,6 +1089,12 @@ static bool eval_statement_impl(CrustEval *eval, EvalFrame *frame, CrustStmt *st
         return eval_if(eval, frame, statement, flow, result);
     case CRUST_S_WHILE:
         return eval_while(eval, frame, statement, flow, result);
+    case CRUST_S_LABEL:
+        return true;
+    case CRUST_S_GOTO:
+        frame->jump = statement->target;
+        *flow = EVAL_GOTO;
+        return true;
     case CRUST_S_BREAK:
         *flow = EVAL_BREAK;
         return true;
@@ -1079,10 +1102,7 @@ static bool eval_statement_impl(CrustEval *eval, EvalFrame *frame, CrustStmt *st
         *flow = EVAL_CONTINUE;
         return true;
     case CRUST_S_RETURN:
-        if (statement->expr != NULL && !eval_expression(eval, frame, statement->expr, result))
-            return false;
-        *flow = EVAL_RETURN;
-        return true;
+        return eval_return(eval, frame, statement, flow, result);
     case CRUST_S_TRAP:
         required_trap(eval, statement->loc);
         return false;

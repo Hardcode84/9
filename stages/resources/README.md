@@ -198,10 +198,10 @@ Read the implementation in this order:
 | [types.crs](types.crs) | Source contracts, owning types, and separate lowered ABI types |
 | [state.crs](state.crs) | Access checks, loan state, rollback, and cleanup chain construction |
 | [expr.crs](expr.crs) | Move and call checking, capture order, temporary lifetimes, and defer |
+| [lower.crs](lower.crs) | Complete seed bodies with shared cleanup labels and jumps |
 | [control.crs](control.crs) | Branch joins, loop edges, return capture, and `rs_prepare` |
 | [cleanup.crs](cleanup.crs) | Shared record drop functions and reverse array loops |
 | [drop.crs](drop.crs) | Explicit value destruction and consumed-place facts |
-| [emit.crs](emit.crs) | `rs_c_body` emits function bodies with cleanup branches |
 
 The reader extends ordinary identifier tokens with library rules. For
 example, `rs_read_declaration` uses the record reader, then reads the
@@ -249,15 +249,17 @@ cat build/tutorial-resources/trace.c
 ```
 
 Find the function containing `"drop"` and `"defer"`. Its return path goes
-through `rs_exit_` labels. Follow the branches to the deferred print and the
-drop call, then to the saved return value. Label numbers are emitter details.
+through generated labels. Follow the branches to the deferred print and the
+drop call, then to the saved return value. Label names are emitter details.
 
 `RsAction` describes a drop or a captured deferred call. `RsChain` pairs an
 action with its next continuation. `rs_chain` shares a suffix only when
 both the action and continuation agree. Sharing a drop sequence across
 different destinations would send control to the wrong return or loop edge.
 
-`return`, `break`, `continue`, and normal block exits refer to these plans.
+`lower.crs` turns these plans into ordinary seed labels and jumps. The output
+contains the full cleanup code for `return`, `break`, `continue`, and normal
+block exits.
 A return captures its result before cleanup. Record drops run before the
 record's owned fields; fields and array elements then drop in reverse order.
 Array cleanup uses a loop, so a large array does not create one emitted
@@ -267,32 +269,33 @@ Each owning record type gets one private drop helper when cleanup first needs
 it. A parent record calls its children's helpers. A record with two fields
 of the same type does not copy the child's cleanup code twice. Calls still
 run separately for the two values. This keeps generated code proportional
-to the used record definitions. The exit plan still selects which whole
+to the used record definitions. Static ownership state selects which whole
 bindings are live; a helper never decides whether a moved binding is live.
 An owning field assignment calls only that field's helper before the store.
 
-The helpers are ordinary checked seed functions. Their empty C link names
+The helpers are ordinary checked seed functions. Their empty native link names
 select private definitions, so separately compiled files cannot export or
 capture one another's helpers. The stage keeps their declaration identities
 separate from the source declarations.
 
-### Retain the plan through emission
+### Pass complete code to the backend
 
-`rs_prepare` checks source ownership, builds lowered operations and cleanup
-plans, then calls the seed checker on generated operations. These checked
-trees alone are not a complete replacement program: exit cleanup remains
-in side tables.
+`rs_prepare` checks source ownership and lowers the program to ordinary Crust0
+syntax trees. Cleanup is explicit: exits jump through shared destructor and
+deferred calls, then reach the return or loop destination. Normal scope exits
+use the same mechanism. The seed checker then checks the generated types and
+operations. The output uses the raw seed language; it has no resource syntax or implicit ownership operations.
 
-The driver passes `rs_c_body` and the live `RsStage` to the C backend's
-complete body callback. It emits ordinary statements plus branches through
-the retained plans. Passing only the checked tree to ordinary seed emission
-or evaluation would omit the planned cleanup.
+Select any backend that accepts checked seed bodies. The C driver calls
+`c_backend_build`; an assembly driver can call `crust_x64_emit`. The seed
+evaluator can execute the same bodies. No resource-specific emitter is required.
+The [backend test](../../tests/resource_backends.crs) shows this handoff after
+the resource stage object has left scope.
 
-Keep source storage, the context, and resource stage alive through output.
-`resource_program` completes emission while its local stage is live. Keeping
-only its context after the call does not retain an API for emitting again.
-For custom composition, follow [extension.crs](extension.crs) and keep the
-stage yourself.
+Keep the context and source storage live through output. The resource stage
+must remain live through preparation and any checks that use its source facts.
+After those checks pass, the backend needs only the complete seed program.
+For custom composition, follow [extension.crs](extension.crs).
 
 `rs_init` reserves a syntax kind range in the context. `RS_READ` through
 `RS_DROP` are local offsets. Use `rs_kind(stage, offset)` to obtain a node kind.
@@ -336,10 +339,14 @@ contracts.
 ## 6. Check the proof and cost boundaries
 
 Resource lowering adds levels to the tree passed to the seed checker. For the
-exact fixtures in the [stage limit table](../reader/README.md), 250 nested blocks
-around a return pass; 249 around a scalar assignment pass. The next depth fails
+exact fixtures in the [stage limit table](../reader/README.md), 252 nested blocks
+around a return or a scalar assignment pass. The next depth fails
 with a diagnostic. Overload composition has the same bounds. The 256-level
 traversal budget is not a promise to accept 256 nested source blocks.
+
+Source `label` and `goto` statements belong to raw Crust. The resource checker
+rejects them because its ownership rules require structured source control flow.
+The lowerer emits jumps after it checks that control flow.
 
 The emitted program has no runtime cleanup table, dynamic registration,
 reference count, owner header, or hidden drop flag. It does execute the
@@ -348,10 +355,9 @@ and indirect-call null checks can also have a cost. Inspect optimized native
 output before calling a specific use free.
 
 This checker proves local ownership and loans. Native adapters still require
-correct foreign contracts. The optional combined stage checks direct intrusive
-links through actual function bodies and cleanup plans. Its checks do not make
-the standalone resource stage a memory checker or provide reusable ownership
-summaries for separately checked callers.
+correct foreign contracts. The combined ownership stage checks client bodies
+against function and field contracts. An explicitly trusted provider supplies
+the intrusive pointer implementation. See the [ownership contract](../../docs/ownership-model.md).
 
 Run `make check-resources check-resource-alloc` for language, cleanup, and
 allocation failure checks. `--check` stops after semantic checks;

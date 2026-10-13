@@ -160,7 +160,7 @@ def main():
         ),
         "move-borrowed-bytes": (
             "fn bad(value:read Bytes)->Bytes { return move value; }",
-            "whole local owner",
+            "cannot move out of a borrowed value",
         ),
         "store-loan": (
             "record Bad { value:read Bytes; }",

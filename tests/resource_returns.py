@@ -364,7 +364,7 @@ if success {
     text += ",symbols:null(*u8),cflags:&flags[0usize],cflag_count:"
     text += f"{len(flags)}usize,ldflags:&links[0usize],ldflag_count:{len(links)}usize}};\n"
     text += """
-        status=c_backend_build_with_body(&context,(*symbol).decl,&options,rs_c_body,&stage as *u8);
+        status=c_backend_build(&context,(*symbol).decl,&options);
     }
 }
 if context.error_count!=0usize {crust_run_diagnostic(&context);}

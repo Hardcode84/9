@@ -419,6 +419,40 @@ done:
     crust_context_destroy(&context);
 }
 
+static void test_jumps(void)
+{
+    const char *text = "fn one()->i32{label end;return 1i32;}"
+                       "fn two()->i32{goto end;label end;return 2i32;}"
+                       "extern fn missing()->i32=\"missing\";"
+                       "fn run()->i32{var n:i32=0i32;label again;n=n+one();"
+                       "if n<40i32{goto again;}while true{{n=n+two();goto end;}}"
+                       "label end;return n;}";
+    CrustSource source = source_text(text);
+    CrustContext context;
+    CrustUnit *unit;
+    CrustEval *eval = NULL;
+    Resolver resolver;
+    int32_t value = 0;
+    crust_context_init(&context, NULL);
+    if (!parse(&context, &source, &unit)) {
+        check(false, "jump source checks");
+        goto done;
+    }
+    named(unit, "one")->link_name = "";
+    named(unit, "two")->link_name = "";
+    eval = new_eval(&context, &resolver);
+    check(crust_eval_call(eval, named(unit, "run"), NULL, 0, &value) && value == 42,
+          "backward jumps and outward jumps preserve private function identities");
+    check(resolver.lookups == 0, "private functions need no native lookup");
+    named(unit, "missing")->link_name = "";
+    check(!crust_eval_prepare(eval, named(unit, "missing")) &&
+              strstr(context.error, "native link name is empty") != NULL,
+          "external functions still reject empty native names");
+done:
+    crust_eval_destroy(eval);
+    crust_context_destroy(&context);
+}
+
 static void test_callback_types(void)
 {
     const char *text =
@@ -487,7 +521,8 @@ static void test_root(void)
     const char *text =
         "var total:i32=1i32;"
         "var p:*i32=&total;"
-        "{var nested:i32=2i32;total=total+nested;};"
+        "{var nested:i32=0i32;label again;nested=nested+1i32;"
+        "if nested<2i32{goto again;}total=total+nested;};"
         "while total<10i32 {total=total+1i32;if total==5i32{continue;}if total==8i32{break;}};"
         "if total==8i32 {*p=*p+34i32;} else {trap;};"
         "return total;";
@@ -967,6 +1002,7 @@ int main(void)
     test_reentry();
     test_evaluation_depth();
     test_native_identity();
+    test_jumps();
     test_native_type_graph();
     test_callback_types();
     test_root();

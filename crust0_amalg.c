@@ -576,7 +576,9 @@ enum {
     TOK_SHL,
     TOK_SHR,
     TOK_AND,
-    TOK_OR
+    TOK_OR,
+    TOK_LABEL,
+    TOK_GOTO
 };
 
 typedef struct {
@@ -610,7 +612,9 @@ typedef struct {
 #define NEW(reader, type) crust_alloc((reader)->ctx, sizeof(type), CRUST_ALIGNOF(type))
 #define READ_DEPTH_LIMIT 256u
 
-static const Keyword keywords[] = {KEYWORD("record", TOK_RECORD),
+static const Keyword keywords[] = {KEYWORD("label", TOK_LABEL),
+                                   KEYWORD("goto", TOK_GOTO),
+                                   KEYWORD("record", TOK_RECORD),
                                    KEYWORD("fn", TOK_FN),
                                    KEYWORD("extern", TOK_EXTERN),
                                    KEYWORD("const", TOK_CONST),
@@ -1357,6 +1361,11 @@ static CrustStmt *read_simple_statement(Reader *reader)
         stmt->uninitialized = take(reader, TOK_UNINIT);
         if (!stmt->uninitialized)
             stmt->value = read_expr(reader);
+    } else if (reader->token.kind == TOK_LABEL || reader->token.kind == TOK_GOTO) {
+        stmt =
+            new_stmt(reader, reader->token.kind == TOK_LABEL ? CRUST_S_LABEL : CRUST_S_GOTO, loc);
+        next_token(reader);
+        stmt->name = read_name(reader);
     } else if (take(reader, TOK_BREAK)) {
         stmt = new_stmt(reader, CRUST_S_BREAK, loc);
     } else if (take(reader, TOK_CONTINUE)) {
@@ -1669,8 +1678,25 @@ typedef struct {
     BindWork **tail;
 } Binding;
 
+typedef struct CheckBlock CheckBlock;
+struct CheckBlock {
+    CrustStmt *statement;
+    CrustStmt *child;
+    CheckBlock *parent;
+};
+
+typedef struct CheckJump CheckJump;
+struct CheckJump {
+    CrustStmt *statement;
+    CheckJump *next;
+};
+
 typedef struct {
     CrustMap locals;
+    CrustMap labels;
+    CrustMap blocks;
+    CheckBlock *block;
+    CheckJump *jumps;
     CrustContext *ctx;
     CrustType *return_type;
     CrustSymbol *scope;
@@ -3214,14 +3240,20 @@ static bool check_block(Checker *checker, CrustStmt *stmt)
     CrustSymbol *saved;
     bool falls;
     bool branch;
+    CheckBlock block;
+    block.statement = stmt;
+    block.parent = checker->block;
+    checker->block = &block;
     saved = checker->scope;
     falls = true;
     for (child = stmt->body; child != NULL; child = child->next) {
+        block.child = child;
         branch = check_stmt(checker, child);
-        if (falls)
+        if (falls || child->kind == CRUST_S_LABEL)
             falls = branch;
     }
     pop_scope(checker, saved);
+    checker->block = block.parent;
     return falls;
 }
 
@@ -3274,6 +3306,65 @@ static bool check_if(Checker *checker, CrustStmt *stmt)
     return falls || branch;
 }
 
+static bool check_jump(Checker *checker, CrustStmt *stmt)
+{
+    CheckBlock *block = checker->block;
+    CheckJump *jump;
+    if (block == NULL || stmt->name == NULL)
+        crust_fail(checker->ctx, stmt->loc, "labels and jumps require a named target in a block");
+    stmt->target = block->statement;
+    if (stmt->kind == CRUST_S_LABEL) {
+        if (block->child != stmt)
+            crust_fail(checker->ctx, stmt->loc, "label must be a direct child of a block");
+        if (crust_map_get(&checker->labels, (uintptr_t)stmt->name) != NULL)
+            crust_fail(checker->ctx, stmt->loc, "duplicate label '%s'", stmt->name->text);
+        crust_map_set(checker->ctx, &checker->labels, (uintptr_t)stmt->name, stmt);
+        return true;
+    }
+    /* Only blocks on a jump's ancestor path need a persistent parent entry. */
+    while (block->parent != NULL) {
+        if (crust_map_get(&checker->blocks, (uintptr_t)block->statement) != NULL)
+            break;
+        crust_map_set(checker->ctx, &checker->blocks, (uintptr_t)block->statement,
+                      block->parent->statement);
+        block = block->parent;
+    }
+    jump = crust_alloc(checker->ctx, sizeof(*jump), CRUST_ALIGNOF(CheckJump));
+    jump->statement = stmt;
+    jump->next = checker->jumps;
+    checker->jumps = jump;
+    return false;
+}
+
+static void resolve_jumps(Checker *checker)
+{
+    CheckJump *jump;
+    for (jump = checker->jumps; jump != NULL; jump = jump->next) {
+        CrustStmt *stmt = jump->statement;
+        CrustStmt *label = crust_map_get(&checker->labels, (uintptr_t)stmt->name);
+        CrustStmt *block = stmt->target;
+        if (label == NULL)
+            crust_fail(checker->ctx, stmt->loc, "unknown label '%s'", stmt->name->text);
+        while (block != label->target) {
+            if (block == NULL)
+                crust_fail(checker->ctx, stmt->loc, "jump cannot enter a nested or sibling block");
+            block = crust_map_get(&checker->blocks, (uintptr_t)block);
+        }
+        stmt->target = label;
+    }
+}
+
+static bool check_while(Checker *checker, CrustStmt *stmt)
+{
+    CrustType *type = check_expr(checker, stmt->expr);
+    if (type->kind != CRUST_T_BOOL)
+        crust_fail(checker->ctx, stmt->expr->loc, "while condition must have type bool");
+    ++checker->loop_depth;
+    (void)check_scoped_stmt(checker, stmt->body);
+    --checker->loop_depth;
+    return true;
+}
+
 static bool check_stmt_impl(Checker *checker, CrustStmt *stmt)
 {
     CrustContext *ctx = checker->ctx;
@@ -3291,18 +3382,15 @@ static bool check_stmt_impl(Checker *checker, CrustStmt *stmt)
     case CRUST_S_IF:
         return check_if(checker, stmt);
     case CRUST_S_WHILE:
-        type = check_expr(checker, stmt->expr);
-        if (type->kind != CRUST_T_BOOL)
-            crust_fail(ctx, stmt->expr->loc, "while condition must have type bool");
-        ++checker->loop_depth;
-        (void)check_scoped_stmt(checker, stmt->body);
-        --checker->loop_depth;
-        return true;
+        return check_while(checker, stmt);
     case CRUST_S_BREAK:
     case CRUST_S_CONTINUE:
         if (checker->loop_depth == 0)
             crust_fail(ctx, stmt->loc, "loop exit used outside a loop");
         return false;
+    case CRUST_S_LABEL:
+    case CRUST_S_GOTO:
+        return check_jump(checker, stmt);
     case CRUST_S_RETURN:
         return check_return(checker, stmt);
     case CRUST_S_TRAP:
@@ -3352,6 +3440,7 @@ static void check_body_impl(CrustContext *ctx, CrustDecl *function)
     for (param = function->params; param != NULL; param = param->next)
         param->symbol = add_local(&checker, param->name, param->type, CRUST_SYM_PARAM, param->loc);
     falls = check_stmt(&checker, function->body);
+    resolve_jumps(&checker);
     if (falls && function->type->base->kind != CRUST_T_UNIT)
         crust_fail(ctx, function->loc, "non-unit function can reach the end of its body");
     function->checked = true;
@@ -3428,6 +3517,7 @@ bool crust_check_root(CrustContext *ctx, CrustRootScope *scope, CrustStmt *state
     checker.locals = scope->locals;
     checker.scope = scope->scope;
     (void)check_stmt(&checker, statement);
+    resolve_jumps(&checker);
     scope->locals = checker.locals;
     scope->scope = checker.scope;
     ctx->failure = frame.previous;

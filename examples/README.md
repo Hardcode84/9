@@ -23,7 +23,7 @@ separates application rules from container-author obligations.
 | 1 | [Hello World](hello/README.md) | A compilation program and target program in one file |
 | 2 | [C backend](../stages/c/README.md) | C text, explicit evaluation order, native symbols, and body callbacks |
 | 3 | [Function overloads](../stages/overload/README.md) | Exact type selection, symbol mangling, and separate objects |
-| 4 | [Ownership, RAII, and defer](../stages/resources/README.md) | Moves, loans, rejected programs, and emitted cleanup plans |
+| 4 | [Ownership, RAII, and defer](../stages/resources/README.md) | Moves, loans, rejected programs, and explicit cleanup calls |
 | 5 | [Syntax highlighting](../stages/highlight/README.md) | HTML, editor tokens, custom reader services, and a VS Code extension |
 | 6 | [Modules](../stages/modules/README.md) | Separate contexts, selected imports, native exports, and provider lifetimes |
 | 7 | [Native bootstrap](../stages/native/README.md) | Build stages from source and hand following compilation code to native execution |

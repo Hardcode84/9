@@ -25,7 +25,7 @@ fn cost_body(cli: *CCli, stage: *OsStage, resources: *RsStage, verify: bool, sta
     var lower_end: u64 = ownership_clock_ns();
     if verify && !os_verify(stage) { return false; }
     var check_end: u64 = ownership_clock_ns();
-    if !c_driver_names(&(*cli).driver) || !c_emit_with_body(&(*cli).stage, null(*CrustDecl), rs_c_body, resources as *u8) { return false; }
+    if !c_driver_names(&(*cli).driver) || !c_emit(&(*cli).stage, null(*CrustDecl)) { return false; }
     var end: u64 = ownership_clock_ns();
     cost_report(read_end-start, lower_end-read_end, check_end-lower_end, end-check_end);
     return true;

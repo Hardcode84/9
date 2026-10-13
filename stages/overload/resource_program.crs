@@ -22,7 +22,7 @@ fn overload_resource_program(request:*CrustBuild)->i32 {
     var result:i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
         result = ov_driver_build(&cli, &overloads, ov_resource_read, ov_resources_check,
-            rs_c_body, &resources as *u8);
+            null(fn(*CStage, *CrustDecl, *u8)->bool), null(*u8));
     }
     c_stage_destroy(&cli.stage);
     return result;

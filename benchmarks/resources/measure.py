@@ -234,7 +234,7 @@ def cleanup_sites(generated, response):
             dict.fromkeys(name for name in cleanup_calls if name.startswith("r_v"))
         ),
         "cleanup_call_sites": len(cleanup_calls),
-        "cleanup_labels": len(re.findall(r"^rs_exit_\d+:;", bodies[work], re.M)),
+        "cleanup_labels": len(re.findall(r"^r_label(?:_\d+)+:;", bodies[work], re.M)),
     }
 
 
@@ -637,7 +637,7 @@ def main():
             "observed_cleanup_calls_per_owner": [
                 item["emission"]["cleanup_call_sites"] / item["owners"] for item in stress
             ],
-            "observed_mechanism": "early returns target the function epilogue; natural block completion targets a distinct scope continuation, producing two shared linear cleanup chains",
+            "observed_mechanism": "ordinary seed labels and jumps share cleanup suffixes with equal continuations; normal scope completion and function return can have separate chains",
             "scope": "16/64/256 owners with the same number of early exits; static cleanup sharing and observed timing only",
         },
         "overall_language_speed_gate": "not established: SQLite reads unequal interfaces, complete C handoff has no matching C handoff baseline here, and the small generated inputs contain substantial process startup cost",

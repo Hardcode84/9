@@ -196,8 +196,9 @@ and branches, runs the output, and checks three callback failure paths. It also
 checks private function and constant linkage and rejects a private external
 declaration. It links
 the public interfaces against a copied ordinary backend library. The
-[resource stage](../stages/resources/README.md) uses the same interface for its
-shared cleanup blocks. No ownership operation occurs in this backend API.
+[resource stage](../stages/resources/README.md) supplies complete generated
+bodies through ordinary seed emission. No ownership
+operation occurs in this backend API.
 
 ## C execution rules
 

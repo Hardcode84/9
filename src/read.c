@@ -41,7 +41,9 @@ enum {
     TOK_SHL,
     TOK_SHR,
     TOK_AND,
-    TOK_OR
+    TOK_OR,
+    TOK_LABEL,
+    TOK_GOTO
 };
 
 typedef struct {
@@ -75,7 +77,9 @@ typedef struct {
 #define NEW(reader, type) crust_alloc((reader)->ctx, sizeof(type), CRUST_ALIGNOF(type))
 #define READ_DEPTH_LIMIT 256u
 
-static const Keyword keywords[] = {KEYWORD("record", TOK_RECORD),
+static const Keyword keywords[] = {KEYWORD("label", TOK_LABEL),
+                                   KEYWORD("goto", TOK_GOTO),
+                                   KEYWORD("record", TOK_RECORD),
                                    KEYWORD("fn", TOK_FN),
                                    KEYWORD("extern", TOK_EXTERN),
                                    KEYWORD("const", TOK_CONST),
@@ -822,6 +826,11 @@ static CrustStmt *read_simple_statement(Reader *reader)
         stmt->uninitialized = take(reader, TOK_UNINIT);
         if (!stmt->uninitialized)
             stmt->value = read_expr(reader);
+    } else if (reader->token.kind == TOK_LABEL || reader->token.kind == TOK_GOTO) {
+        stmt =
+            new_stmt(reader, reader->token.kind == TOK_LABEL ? CRUST_S_LABEL : CRUST_S_GOTO, loc);
+        next_token(reader);
+        stmt->name = read_name(reader);
     } else if (take(reader, TOK_BREAK)) {
         stmt = new_stmt(reader, CRUST_S_BREAK, loc);
     } else if (take(reader, TOK_CONTINUE)) {

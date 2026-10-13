@@ -234,9 +234,13 @@ check-reader: all test-tools
 $(BUILD)/kind_composition: $(BUILD)/crust-c tests/kind_wrapper.crs tests/kind_composition.crs Makefile test-tools
 	$< -o $@ $(RESOURCE_LIBRARY) tests/kind_wrapper.crs tests/kind_composition.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-check-resources: all test-tools $(BUILD)/kind_composition
+$(BUILD)/resource-backends: $(BUILD)/crust-c tests/resource_backends.crs tests/ownership_input.crs api/crust0_eval.crs api/crust0_x64.crs $(BUILD)/libcrust_asm.a test-tools
+	$< -o $@ $(OWNERSHIP_LIBRARY) api/crust0_x64.crs tests/ownership_input.crs tests/resource_backends.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust_asm.a --ldflag $(BUILD)/libcrust0_run.a --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a --ldflag=-ldl --ldflag=-lffi $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+
+check-resources: all test-tools $(BUILD)/kind_composition $(BUILD)/resource-backends
 	python3 tests/resources.py --build $(BUILD)
 	python3 tests/resource_returns.py --build $(BUILD)
+	python3 tests/resource_backends.py --build $(BUILD)
 	python3 tests/extension_kinds.py --build $(BUILD)
 
 $(BUILD)/composition-test: $(BUILD)/crust-c   examples/composition/build.crs tests/composition_driver.crs Makefile test-tools

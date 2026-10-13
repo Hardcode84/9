@@ -11,6 +11,5 @@ stage_export(stage, "rs_kind");
 stage_export(stage, "rs_read");
 stage_export(stage, "rs_prepare");
 stage_export(stage, "rs_prepare_delegated");
-stage_export(stage, "rs_c_body");
 stage_export(stage, "rs_source_import");
 stage_export(stage, "rs_return_from");

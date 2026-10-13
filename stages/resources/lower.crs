@@ -1,0 +1,98 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn rs_jump(function: *RsFunction, kind: u32, chain: *RsChain, location: *CrustLoc) -> *CrustStmt {
+    var statement: *CrustStmt = rs_stmt_node((*function).stage, kind, location);
+    if statement != null(*CrustStmt) { (*statement).name = (*chain).name; }
+    return statement;
+}
+
+fn rs_seed_if(function: *RsFunction, source: *CrustStmt, output: *RsStatements, depth: u32) -> unit {
+    var stage: *RsStage = (*function).stage;
+    var yes: *RsChain = rs_terminal(function);
+    var done: *RsChain = rs_terminal(function);
+    var branch: *CrustStmt = rs_stmt_node(stage, CRUST_S_IF, &(*source).loc);
+    if (*stage).failed { return; }
+    (*branch).expr = (*source).expr;
+    (*branch).body = rs_jump(function, CRUST_S_GOTO, yes, &(*source).loc);
+    rs_append(output, branch);
+    if (*source).otherwise != null(*CrustStmt) {
+        rs_seed_statement(function, (*source).otherwise, output, depth + 1u32);
+    }
+    rs_append(output, rs_jump(function, CRUST_S_GOTO, done, &(*source).loc));
+    rs_append(output, rs_jump(function, CRUST_S_LABEL, yes, &(*source).loc));
+    rs_seed_statement(function, (*source).body, output, depth + 1u32);
+    rs_append(output, rs_jump(function, CRUST_S_LABEL, done, &(*source).loc));
+}
+
+fn rs_seed_while(function: *RsFunction, source: *CrustStmt, output: *RsStatements, depth: u32) -> unit {
+    var stage: *RsStage = (*function).stage;
+    var loop: *RsLoop = crust_map_get(&(*function).loop_targets, source as usize) as *RsLoop;
+    var branch: *CrustStmt = rs_stmt_node(stage, CRUST_S_IF, &(*source).loc);
+    if (*stage).failed { return; }
+    rs_append(output, rs_jump(function, CRUST_S_LABEL, (*loop).continue_target, &(*source).loc));
+    (*branch).expr = rs_unary(stage, CRUST_OP_NOT, (*source).expr, &(*source).loc);
+    (*branch).body = rs_jump(function, CRUST_S_GOTO, (*loop).break_target, &(*source).loc);
+    rs_append(output, branch);
+    rs_seed_statement(function, (*source).body, output, depth + 1u32);
+    rs_append(output, rs_jump(function, CRUST_S_GOTO, (*loop).continue_target, &(*source).loc));
+    rs_append(output, rs_jump(function, CRUST_S_LABEL, (*loop).break_target, &(*source).loc));
+}
+
+fn rs_seed_block(function: *RsFunction, source: *CrustStmt, output: *RsStatements, depth: u32) -> unit {
+    var stage: *RsStage = (*function).stage;
+    var child: *CrustStmt = (*source).body;
+    while child != null(*CrustStmt) && !(*stage).failed {
+        var next: *CrustStmt = (*child).next;
+        rs_seed_statement(function, child, output, depth + 1u32);
+        child = next;
+    }
+    var exit: *RsExit = crust_map_get(&(*function).exits, source as usize) as *RsExit;
+    if exit != null(*RsExit) {
+        if (*exit).chain != (*exit).continuation {
+            rs_append(output, rs_jump(function, CRUST_S_GOTO, (*exit).chain, &(*source).loc));
+        }
+        rs_append(output, rs_jump(function, CRUST_S_LABEL, (*exit).continuation, &(*source).loc));
+    }
+}
+
+fn rs_seed_statement(function: *RsFunction, source: *CrustStmt, output: *RsStatements, depth: u32) -> unit {
+    var stage: *RsStage = (*function).stage;
+    if (*stage).failed { return; }
+    if depth >= 256u32 {
+        rs_error(stage, &(*source).loc, "semantic traversal depth limit of 256 exceeded"); return;
+    }
+    if crust_map_get(&(*function).seed_blocks, source as usize) != null(*u8) {
+        (*source).next = null(*CrustStmt); rs_append(output, source); return;
+    }
+    var kind: u32 = (*source).kind;
+    if kind == CRUST_S_BLOCK { rs_seed_block(function, source, output, depth); return; }
+    if kind == CRUST_S_IF { rs_seed_if(function, source, output, depth); return; }
+    if kind == CRUST_S_WHILE { rs_seed_while(function, source, output, depth); return; }
+    if kind == CRUST_S_RETURN || kind == CRUST_S_BREAK || kind == CRUST_S_CONTINUE {
+        var exit: *RsExit = crust_map_get(&(*function).exits, source as usize) as *RsExit;
+        rs_append(output, rs_jump(function, CRUST_S_GOTO, (*exit).chain, &(*source).loc)); return;
+    }
+    (*source).next = null(*CrustStmt);
+    rs_append(output, source);
+}
+
+// Produce a complete unchecked seed body, including shared cleanup and its return.
+fn rs_seed_body(function: *RsFunction) -> *CrustStmt {
+    var stage: *RsStage = (*function).stage;
+    var location: *CrustLoc = &(*(*(*function).global).source).loc;
+    var output: RsStatements = make RsStatements {
+        first: (*function).declarations, last: (*function).last_declaration
+    };
+    rs_seed_statement(function, (*function).body, &output, 0u32);
+    rs_append(&output, rs_jump(function, CRUST_S_GOTO, (*function).returned, location));
+    var chain: *RsChain = (*function).chains;
+    while chain != null(*RsChain) && !(*stage).failed {
+        rs_append(&output, rs_jump(function, CRUST_S_LABEL, chain, location));
+        rs_append(&output, rs_clone_cleanup(stage, (*(*chain).action).statement, 0u32));
+        rs_append(&output, rs_jump(function, CRUST_S_GOTO, (*chain).next, location));
+        chain = (*chain).all_next;
+    }
+    rs_append(&output, rs_jump(function, CRUST_S_LABEL, (*function).returned, location));
+    rs_append(&output, (*function).epilogue);
+    return rs_block(stage, &output, location);
+}

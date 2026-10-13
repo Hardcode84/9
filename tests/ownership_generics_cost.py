@@ -155,7 +155,7 @@ def normalized_bodies(source, names):
                 local[text] = "local_" + str(len(local))
             return local[text]
 
-        body = re.sub(r"\b(?:r_[lv]|rs_exit_)[0-9]+\b", rename, body)
+        body = re.sub(r"\b(?:r_[lv][0-9]+|r_label(?:_[0-9]+)+)\b", rename, body)
         result[names[match[2]]] = body
     if not result:
         raise RuntimeError("no generated function definitions found")

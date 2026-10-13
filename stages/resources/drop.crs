@@ -58,9 +58,7 @@ fn rs_drop_action(function: *RsFunction, place: *RsValue, location: *CrustLoc) -
     if rs_owns(stage, (*place).syntax) {
         action = rs_drop_tree(function, (*place).syntax, consumed);
         if action == null(*CrustStmt) { return action; }
-        consumed = (*(*(*action).expr).args[0usize]).left;
     } else { action = rs_stmt_node(stage, CRUST_S_BLOCK, location); }
-    if action != null(*CrustStmt) { rs_transfer_place(function, action, consumed); }
     return action;
 }
 

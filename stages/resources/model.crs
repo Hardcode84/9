@@ -41,7 +41,6 @@ record RsStage {
     lowered_types: CrustMap;
     ownership: CrustMap;
     affine_types: CrustMap;
-    functions: CrustMap;
     return_sources: CrustMap;
     return_loans: CrustMap;
     initialized_parameters: CrustMap;
@@ -96,16 +95,14 @@ record RsValue {
 
 record RsAction {
     owner: *RsLocal;
-    scope: *RsScope;
     statement: *CrustStmt;
     next: *RsAction;
-    validated: bool;
 }
 
 record RsChain {
     action: *RsAction;
     next: *RsChain;
-    identity: usize;
+    name: *CrustName;
     hash_next: *RsChain;
     all_next: *RsChain;
 }
@@ -113,11 +110,7 @@ record RsChain {
 record RsExit {
     chain: *RsChain;
     continuation: *RsChain;
-    scope: *RsScope;
-    stop: *RsScope;
 }
-
-record RsTransfer { place: *CrustExpr; next: *RsTransfer; }
 
 record RsChange {
     local: *RsLocal;
@@ -144,9 +137,6 @@ record RsFunction {
     loop_targets: CrustMap;
     seed_blocks: CrustMap;
     chain_map: CrustMap;
-    scopes: CrustMap;
-    captures: CrustMap;
-    transfers: CrustMap;
     stage: *RsStage;
     global: *RsGlobal;
     scope: *RsScope;
@@ -154,10 +144,7 @@ record RsFunction {
     changes: *RsChange;
     declarations: *CrustStmt;
     last_declaration: *CrustStmt;
-    validation: *CrustStmt;
-    last_validation: *CrustStmt;
     chains: *RsChain;
-    next_label: usize;
     result: *RsLocal;
     output: *CrustName;
     returned: *RsChain;

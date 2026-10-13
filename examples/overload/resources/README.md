@@ -38,8 +38,8 @@ loads `resource_api.crs` and the composed library, then calls
 1. Read the complete overload and resource syntax.
 2. Select calls and each declared drop using source types.
 3. Assign distinct internal names and stable native link names.
-4. Check moves and loans, then build cleanup plans.
-5. Emit C with the resource body callback.
+4. Check moves and loans, then insert cleanup calls into seed bodies.
+5. Emit C through the ordinary backend entry point.
 
 The order matters. `read Text` and `mut Text` lower to pointers, but grant
 different permissions. Resolving overloads after lowering would lose that

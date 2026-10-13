@@ -238,7 +238,7 @@ data your stage needs to change.
 | Add source name and type rules | A source pass with root-selected `CsHooks` query providers | [Stage composition](../examples/composition/README.md) |
 | Add ownership and cleanup rules | Source checker, separate lowered types, and retained exit plans | [Resource stage](../stages/resources/README.md) |
 | Change one assembly operation | `CrustX64Ops.expression`, `place`, or `statement` | [Custom assembly operation](../examples/custom-stage/README.md) |
-| Supply complete C function bodies | `c_emit_with_body` or `c_backend_build_with_body` | [Resource body emitter](../stages/resources/emit.crs) |
+| Supply complete C function bodies | `c_emit_with_body` or `c_backend_build_with_body` | [External body test](../tests/c_body.crs) |
 | Replace the backend | A library that consumes its chosen representation and produces output | [C backend](../stages/c/README.md) |
 | Classify source for display | User services append source spans; consumers render HTML or editor tokens | [Highlighting tutorial](../stages/highlight/README.md) |
 
@@ -271,9 +271,9 @@ reports an unlowered kind at its source location.
 
 Check a source rule before lowering discards the facts that express it.
 For example, overload selection must distinguish `read T` from `mut T`
-before both become pointers. The resource checker must retain cleanup plans
-through emission. Its checked operation trees alone omit cleanup that the
-body emitter obtains from those plans.
+before both become pointers. Resource lowering inserts cleanup calls into
+ordinary seed bodies before seed checking. The selected backend consumes those
+complete bodies after all source checks pass.
 
 ### Source-stage composition contract
 
@@ -293,8 +293,8 @@ The supplied semantic combinations are bounded to these entries:
 
 | Features | Adapter and required order | Validation |
 | --- | --- | --- |
-| Resources, moves, loans, and cleanup | [Resource stage](../stages/resources/README.md): read, prepare resource checks and cleanup, emit with the resource body callback | `make check-resources` |
-| Ownership with resources | [Ownership stage](ownership-model.md): read contracts, `os_lower`, `os_verify`, emit with the resource body callback | `make check-ownership` |
+| Resources, moves, loans, and cleanup | [Resource stage](../stages/resources/README.md): read, prepare resource checks and cleanup, emit complete seed bodies | `make check-resources` |
+| Ownership with resources | [Ownership stage](ownership-model.md): read contracts, `os_lower`, `os_verify`, emit complete seed bodies | `make check-ownership` |
 | Overloads with resources | [Overload resource adapter](../stages/overload/resource_program.crs): `ov_prepare` through resource query providers, `rs_prepare`, resource emission | `make check-overload` |
 | Overloads with ownership and resources | [Composition example](../examples/composition/README.md): `ov_prepare` through ownership and resource providers, `os_lower`, `os_verify`, resource emission | `make check-overload` |
 | Generics with ownership and resources | [Generic ownership adapter](../stages/generics/ownership/README.md): check abstract definitions, specialize syntax and contracts, lower concrete resources, validate arguments and ownership, resource emission | `make check-ownership-generics` |
@@ -320,8 +320,8 @@ An adapter must meet these requirements:
 4. Preserve the distinction between a checked definition, an imported checked
    interface, and explicit root trust. Transfer a generic definition receipt
    only after its argument contracts pass. New concrete seed checks still run.
-5. Stop on a diagnostic. Pass checked seed operations and every required plan
-   to the emitter. Resource output requires `rs_c_body` and its live stage.
+5. Stop on a diagnostic. Pass complete checked seed bodies to the selected
+   backend. Resource cleanup is explicit in those bodies.
 
 Reader hooks and query hooks cover parts of this contract. The generic
 ownership adapter also uses the generic stage's clone callbacks. Its

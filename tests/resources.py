@@ -668,6 +668,12 @@ def reject_cases():
     observe = "fn observe(value:read Token)->unit {}"
     condition = "fn condition(value:Token)->bool { return true; }"
     return [
+        ("raw-label", "fn f()->unit{label finish;}", "labels and jumps require raw Crust"),
+        (
+            "raw-goto",
+            "fn f()->unit{goto finish;label finish;}",
+            "labels and jumps require raw Crust",
+        ),
         (
             "end-borrow-with-child",
             program(

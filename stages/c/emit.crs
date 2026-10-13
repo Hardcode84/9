@@ -229,9 +229,37 @@ fn c_braced_statement(stage: *CStage, input: *CrustStmt) -> unit {
     if (*input).kind != CRUST_S_BLOCK { c_text(stage, "}\n"); }
 }
 
+fn c_named_jump(stage: *CStage, input: *CrustStmt) -> unit {
+    if (*input).kind == CRUST_S_GOTO { c_text(stage, "goto "); }
+    c_text(stage, "r_label");
+    var index: usize = 0usize;
+    while index < (*(*input).name).size {
+        c_text(stage, "_"); c_number(stage, (*(*input).name).text[index] as u64);
+        index = index + 1usize;
+    }
+    if (*input).kind == CRUST_S_LABEL { c_text(stage, ":"); }
+    c_text(stage, ";\n");
+}
+
+fn c_if_statement(stage: *CStage, input: *CrustStmt) -> unit {
+    var condition: usize = c_expression(stage, (*input).expr);
+    c_text(stage, "if("); c_value(stage, condition); c_text(stage, ")");
+    c_braced_statement(stage, (*input).body);
+    if (*input).otherwise != null(*CrustStmt) { c_text(stage, "else "); c_braced_statement(stage, (*input).otherwise); }
+}
+
+fn c_return_statement(stage: *CStage, input: *CrustStmt) -> unit {
+    var value: usize = 0usize;
+    if (*input).expr != null(*CrustExpr) { value = c_expression(stage, (*input).expr); }
+    c_text(stage, "return");
+    if value != 0usize { c_text(stage, " "); c_value(stage, value); }
+    c_text(stage, ";\n");
+}
+
 fn c_statement(stage: *CStage, input: *CrustStmt) -> unit {
     if (*stage).status.failed { return; }
     var kind: u32 = (*input).kind;
+    if kind == CRUST_S_LABEL || kind == CRUST_S_GOTO { c_named_jump(stage, input); return; }
     if kind == CRUST_S_BLOCK {
         c_block(stage, input); return;
     }
@@ -244,21 +272,8 @@ fn c_statement(stage: *CStage, input: *CrustStmt) -> unit {
         return;
     }
     if kind == CRUST_S_EXPR { c_expression(stage, (*input).expr); return; }
-    if kind == CRUST_S_RETURN {
-        var value: usize = 0usize;
-        if (*input).expr != null(*CrustExpr) { value = c_expression(stage, (*input).expr); }
-        c_text(stage, "return");
-        if value != 0usize { c_text(stage, " "); c_value(stage, value); }
-        c_text(stage, ";\n");
-        return;
-    }
-    if kind == CRUST_S_IF {
-        var condition: usize = c_expression(stage, (*input).expr);
-        c_text(stage, "if("); c_value(stage, condition); c_text(stage, ")");
-        c_braced_statement(stage, (*input).body);
-        if (*input).otherwise != null(*CrustStmt) { c_text(stage, "else "); c_braced_statement(stage, (*input).otherwise); }
-        return;
-    }
+    if kind == CRUST_S_RETURN { c_return_statement(stage, input); return; }
+    if kind == CRUST_S_IF { c_if_statement(stage, input); return; }
     if kind == CRUST_S_WHILE {
         c_text(stage, "while(1){\n");
         var condition: usize = c_expression(stage, (*input).expr);

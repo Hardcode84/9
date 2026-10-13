@@ -116,7 +116,8 @@ IfStatement = "if" Expr Block [ "else" ( Block | IfStatement ) ] ;
 
 `SimpleStatement` has the ordinary statement grammar, excluding blocks,
 `if`, and `while`. It already has a final semicolon. A root `return` requires
-an `i32` value. `break` and `continue` require an enclosing loop. Function and
+an `i32` value. `break` and `continue` require an enclosing loop. Labels and
+jumps can occur inside a single root block action; a jump cannot cross actions. Function and
 record declarations end at their final brace. For example:
 
 ```crust

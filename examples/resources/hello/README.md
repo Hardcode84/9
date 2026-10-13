@@ -31,7 +31,8 @@ return resource_build((*run).source, (*run).cursor, 2i32, &arguments[0usize]);
 ```
 
 The stage reads the remaining target declarations. It adds the resource
-syntax, checks owners and loans, and sends cleanup plans to the C backend.
+syntax, checks owners and loans, and inserts cleanup calls into ordinary seed
+bodies. The example then selects the C backend.
 The seed does not recognize the stage's name or implement its ownership rules.
 
 ## Follow the descriptor

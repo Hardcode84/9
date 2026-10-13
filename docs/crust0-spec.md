@@ -170,6 +170,7 @@ Statement   = Block
 IfStatement = "if" Expr Block [ "else" ( Block | IfStatement ) ] ;
 SimpleStatement = "var" Name ":" Type "=" ( "uninit" | Expr ) ";"
             | "break" ";" | "continue" ";"
+            | "label" Name ";" | "goto" Name ";"
             | "return" [ Expr ] ";" | "trap" ";"
             | Expr [ "=" Expr ] ";" ;
 
@@ -503,15 +504,26 @@ its expression and discards the result. A `unit` call has no stored result.
 An `if` or `while` condition must have type `bool`. `if` executes only the
 selected block. `while` tests before each iteration. `break` exits the nearest
 loop; `continue` begins its next condition test. Either statement outside a
-loop is an error. There are no labels, jumps, or implicit cleanup actions.
+loop is an error. The raw language has no implicit cleanup actions.
+
+`label name;` marks a position in a block. `goto name;` transfers control to
+that position. Labels have a separate namespace within each function or checked
+root block action. A name must have exactly one label definition. A jump can
+stay in its block or exit to an enclosing block. It cannot enter a nested or
+sibling block. A label must be a direct child of a block. Forward and backward
+jumps are permitted. A jump executes no intervening statements or cleanup.
+A skipped initializer leaves its storage uninitialized; the raw memory rules
+still require initialization before a read. A jump out of a block ends its
+local storage lifetimes. Labels cannot cross functions or root actions.
 
 `return value;` requires the function's non-unit result type. Evaluate the
 value before local storage dies. `return;` is valid only for a `unit` result.
 Falling out of a unit function returns normally.
 
 A non-unit function must not have a structural path to the end of its body.
-For this check, `return`, `trap`, `break`, and `continue` do not fall through
-to the next statement. A block falls through if its statement sequence can
+For this check, `return`, `trap`, `break`, `continue`, and `goto` do not fall through
+to the next statement. Each label starts a possible continuing path, including
+an unreferenced label. A block falls through if its statement sequence can
 reach the end. An `if` falls through if either branch does; a missing `else`
 falls through. Every `while` is treated as able
 to fall through, even with a literal true condition. This rule needs no loop
@@ -1080,9 +1092,10 @@ and native execution are libraries under `stages/`. Their tutorials specify
 prerequisites, selection calls, and build commands. Roots under `examples/`
 select those libraries through ordinary calls.
 
-Resource checking retains cleanup plans outside the lowered tree. Composed
-stages consume source contracts and those plans before emission. The ownership
-stage checks local storage and function interfaces. Root-selected trusted
+Resource checking produces complete seed trees with explicit cleanup calls.
+Composed stages consume retained source contracts before emission. The ownership
+stage checks local storage and function interfaces. Any backend that accepts
+checked seed bodies can compile the lowered program. Root-selected trusted
 providers supply opaque representation operations under explicit contracts.
 See the [ownership contract](ownership-model.md) for accepted operations.
 

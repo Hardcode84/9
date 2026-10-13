@@ -25,7 +25,8 @@ CrustEval *crust_eval_create(CrustContext *context, const CrustEvalOptions *opti
 void crust_eval_destroy(CrustEval *eval);
 
 /* Register checked declaration facts without native symbol lookup. Native names
-   must have compatible ABI types. A published callable cannot change identity. */
+   must have compatible ABI types. Empty names on definitions select private
+   identities; extern names must be nonempty. A published callable cannot change identity. */
 bool crust_eval_prepare(CrustEval *eval, CrustDecl *declaration);
 /* Write a native function pointer to exact function-typed result storage. */
 bool crust_eval_function(CrustEval *eval, CrustDecl *declaration, void *result);

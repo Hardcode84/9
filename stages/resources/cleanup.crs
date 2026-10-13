@@ -217,21 +217,36 @@ fn rs_drop_tree(function: *RsFunction, syntax: *CrustTypeSyntax, place: *CrustEx
     return rs_drop_call(stage, (*helper).name, place);
 }
 
-// Attach one action to the function's seed-check validation list once.
 fn rs_prepare_action(function: *RsFunction, action: *RsAction) -> unit {
     var stage: *RsStage = (*function).stage;
-    if (*stage).failed || (*action).validated { return; }
-    if (*action).statement == null(*CrustStmt) {
-        var owner: *RsLocal = (*action).owner;
-        if owner == null(*RsLocal) { trap; }
-        var location: *CrustLoc = &(*(*owner).syntax).loc;
-        var place: *CrustExpr = rs_place_local(function, owner, location);
-        if place == null(*CrustExpr) { return; }
-        (*action).statement = rs_drop_tree(function, (*owner).syntax, place);
+    if (*stage).failed || (*action).statement != null(*CrustStmt) { return; }
+    var owner: *RsLocal = (*action).owner;
+    var location: *CrustLoc = &(*(*owner).syntax).loc;
+    var place: *CrustExpr = rs_place_local(function, owner, location);
+    if place != null(*CrustExpr) { (*action).statement = rs_drop_tree(function, (*owner).syntax, place); }
+}
+
+// Copy unchecked cleanup syntax. Each occurrence receives its own checked facts.
+fn rs_clone_cleanup(stage: *RsStage, source: *CrustStmt, depth: u32) -> *CrustStmt {
+    if source == null(*CrustStmt) || (*stage).failed { return null(*CrustStmt); }
+    if depth >= 256u32 {
+        rs_error(stage, &(*source).loc, "semantic traversal depth limit of 256 exceeded");
+        return null(*CrustStmt);
     }
-    if (*stage).failed { return; }
-    if (*function).validation == null(*CrustStmt) { (*function).validation = (*action).statement; }
-    else { (*(*function).last_validation).next = (*action).statement; }
-    (*function).last_validation = (*action).statement;
-    (*action).validated = true;
+    var target: *CrustStmt = rs_stmt_node(stage, (*source).kind, &(*source).loc);
+    if target == null(*CrustStmt) { return target; }
+    (*target).name = (*source).name;
+    (*target).syntax_type = (*source).syntax_type;
+    (*target).uninitialized = (*source).uninitialized;
+    (*target).expr = rs_clone_expr(stage, (*source).expr);
+    (*target).value = rs_clone_expr(stage, (*source).value);
+    var children: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    var child: *CrustStmt = (*source).body;
+    while child != null(*CrustStmt) && !(*stage).failed {
+        rs_append(&children, rs_clone_cleanup(stage, child, depth + 1u32));
+        child = (*child).next;
+    }
+    (*target).body = children.first;
+    (*target).otherwise = rs_clone_cleanup(stage, (*source).otherwise, depth + 1u32);
+    return target;
 }

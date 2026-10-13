@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-const rr_keywords:[CrustReaderKeyword;33]=make [CrustReaderKeyword;33] {
+const rr_keywords:[CrustReaderKeyword;35]=make [CrustReaderKeyword;35] {
     make CrustReaderKeyword {text:"as",size:2usize,kind:275u32,type:11u32},
     make CrustReaderKeyword {text:"fn",size:2usize,kind:263u32,type:11u32},
     make CrustReaderKeyword {text:"i8",size:2usize,kind:261u32,type:0u32},
@@ -15,6 +15,7 @@ const rr_keywords:[CrustReaderKeyword;33]=make [CrustReaderKeyword;33] {
     make CrustReaderKeyword {text:"var",size:3usize,kind:266u32,type:11u32},
     make CrustReaderKeyword {text:"bool",size:4usize,kind:261u32,type:10u32},
     make CrustReaderKeyword {text:"else",size:4usize,kind:269u32,type:11u32},
+    make CrustReaderKeyword {text:"goto",size:4usize,kind:293u32,type:11u32},
     make CrustReaderKeyword {text:"make",size:4usize,kind:276u32,type:11u32},
     make CrustReaderKeyword {text:"null",size:4usize,kind:277u32,type:11u32},
     make CrustReaderKeyword {text:"trap",size:4usize,kind:274u32,type:11u32},
@@ -24,6 +25,7 @@ const rr_keywords:[CrustReaderKeyword;33]=make [CrustReaderKeyword;33] {
     make CrustReaderKeyword {text:"const",size:5usize,kind:265u32,type:11u32},
     make CrustReaderKeyword {text:"false",size:5usize,kind:282u32,type:11u32},
     make CrustReaderKeyword {text:"isize",size:5usize,kind:261u32,type:8u32},
+    make CrustReaderKeyword {text:"label",size:5usize,kind:292u32,type:11u32},
     make CrustReaderKeyword {text:"usize",size:5usize,kind:261u32,type:9u32},
     make CrustReaderKeyword {text:"while",size:5usize,kind:270u32,type:11u32},
     make CrustReaderKeyword {text:"extern",size:6usize,kind:264u32,type:11u32},
@@ -75,9 +77,9 @@ fn rr_hex(byte:u8)->i32 {
 
 // The keyword table is ordered by byte length, then by spelling.
 fn rr_keyword(text:*u8,size:usize)->*CrustReaderKeyword {
-    if size<rr_keywords[0usize].size || size>rr_keywords[32usize].size { return null(*CrustReaderKeyword); }
+    if size<rr_keywords[0usize].size || size>rr_keywords[34usize].size { return null(*CrustReaderKeyword); }
     var begin:usize=0usize;
-    var end:usize=33usize;
+    var end:usize=35usize;
     while begin<end {
         var middle:usize=begin+(end-begin)/2usize;
         var word:*CrustReaderKeyword=&rr_keywords[middle];

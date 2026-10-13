@@ -376,10 +376,21 @@ fn rr_expression(reader:*CrustReader)->*CrustExpr {
     return result;
 }
 
+fn rr_jump_statement(reader:*CrustReader,offset:usize)->*CrustStmt {
+    var kind:u32=CRUST_S_LABEL;
+    if (*reader).token.kind == RR_GOTO { kind=CRUST_S_GOTO; }
+    var result:*CrustStmt=rr_new_stmt(reader,kind,offset);
+    if result==null(*CrustStmt) || !rr_next(reader) { return null(*CrustStmt); }
+    (*result).name=rr_name(reader);
+    return result;
+}
+
 fn rr_simple_statement(reader:*CrustReader)->*CrustStmt {
     var offset:usize=(*reader).token.offset;
     var result:*CrustStmt=null(*CrustStmt);
-    if rr_take(reader,RR_VAR) {
+    if (*reader).token.kind == RR_LABEL || (*reader).token.kind == RR_GOTO {
+        result=rr_jump_statement(reader,offset);
+    } else if rr_take(reader,RR_VAR) {
         result=rr_variable(reader,offset);
     } else {
         if rr_take(reader,RR_BREAK) { result=rr_new_stmt(reader,CRUST_S_BREAK,offset); }

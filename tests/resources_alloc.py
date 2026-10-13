@@ -35,6 +35,7 @@ STAGE = [
             "outputs",
             "expr",
             "control",
+            "lower",
         )
     ],
     "tests/resources_alloc.crs",

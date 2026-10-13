@@ -88,3 +88,6 @@ record CrustReaderKeyword {
     kind:u32;
     type:u32;
 }
+
+const RR_LABEL:u32=292u32;
+const RR_GOTO:u32=293u32;

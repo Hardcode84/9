@@ -26,9 +26,9 @@ fn erasure_check(cli: *CCli, trusted: *CrustSource, count: usize) -> bool {
         entry = resource_driver_entry(cli, &resources);
         valid = entry != null(*CrustDecl) && c_driver_names(&(*cli).driver);
     }
-    if valid { valid = c_emit_with_body(&before, entry, rs_c_body, &resources as *u8); }
+    if valid { valid = c_emit(&before, entry); }
     if valid { valid = os_verify(&ownership); }
-    if valid { valid = c_emit_with_body(&after, entry, rs_c_body, &resources as *u8); }
+    if valid { valid = c_emit(&after, entry); }
     if valid {
         valid = erasure_equal(&before.header, &after.header) &&
                 erasure_equal(&before.body, &after.body) && erasure_equal(&before.renames, &after.renames);

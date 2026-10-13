@@ -9,6 +9,9 @@ import struct
 import subprocess
 from pathlib import Path
 
+from prepare import compile_package
+from vulkan.abi import check_abi
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -58,15 +61,13 @@ def main():
     ]
     if args.vulkan_include:
         flags += [f"-I{args.vulkan_include.resolve()}"]
-    run(
-        [
-            *shlex.split(args.cc),
-            *flags,
-            "tests/shader_vulkan.c",
-            "-Wl,-l:libvulkan.so.1",
-            "-o",
-            native,
-        ]
+    check_abi(run, build, work, shlex.split(args.cc), flags)
+    compile_package(
+        build,
+        ROOT / "tests/vulkan/package.crs",
+        native,
+        ["-O2", "-g"],
+        ["-Wl,-l:libvulkan.so.1"],
     )
     environment = os.environ.copy()
     run(
@@ -176,6 +177,34 @@ fn compute()->unit {
         expected = work / f"{name}.expected"
         expected.write_bytes(struct.pack("=4f4I", *values, *status))
         run([native, output, expected], env=environment)
+    fault_library = work / "faults.so"
+    compile_package(
+        build,
+        ROOT / "tests/vulkan/faults-package.crs",
+        fault_library,
+        ["-O2", "-fPIC"],
+        ["-shared", "-Wl,-l:libvulkan.so.1"],
+    )
+    fixture = work / "zero-shared.expected"
+    for fault, status, diagnostic in (
+        ("incomplete", 0, "injected VK_INCOMPLETE"),
+        ("empty", 1, "no Vulkan physical device"),
+        ("enumerate-error", 1, "vkEnumeratePhysicalDevices"),
+        ("pool", 1, "vkCreateDescriptorPool"),
+    ):
+        injected = environment | {
+            "LD_PRELOAD": str(fault_library),
+            "CRUST_VULKAN_TEST_FAULT": fault,
+        }
+        result = run([native, output, fixture], expected=status, env=injected)
+        assert diagnostic.encode() in result.stdout, fault
+    malformed = work / "malformed.bin"
+    for data, diagnostic in ((b"bad", "aligned input"), (bytes(20), "SPIR-V header")):
+        malformed.write_bytes(data)
+        result = run([native, malformed, fixture], expected=2, env=environment)
+        assert diagnostic.encode() in result.stdout
+    result = run([native, output, malformed], expected=2, env=environment)
+    assert b"expected data must contain" in result.stdout
     rejected = {
         "divergent barrier": (
             "fn compute()->unit{if shader_local_x()==0u32{shader_barrier();}}",
@@ -211,7 +240,8 @@ fn compute()->unit {
     assert output.read_bytes() == previous
     assert not list(work.glob(".crust-*")), "temporary output leaked"
     print(
-        f"Shader: {len(cases)} Vulkan dispatches, {len(rejected)} source rejections and failed-tool output preservation passed"
+        f"Shader: {len(cases)} Vulkan dispatches, 4 injected enumeration/setup cases, "
+        f"3 malformed inputs, {len(rejected)} source rejections and failed-tool output preservation passed"
     )
 
 

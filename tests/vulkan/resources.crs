@@ -1,0 +1,272 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn memory_allocate(
+    v: *Vulkan,
+    requirements: *VkMemoryRequirements,
+    flags: u32,
+    memory: **u8
+) -> bool {
+    var index: u32 = 0u32;
+    while index < v -> properties.memoryTypeCount {
+        if (requirements -> memoryTypeBits & (1u32 << index)) != 0u32 && (
+            v -> properties.memoryTypes[index as usize].propertyFlags & flags
+        ) == flags {
+            break;
+        }
+        index = index + 1u32;
+    }
+    if index == v -> properties.memoryTypeCount {
+        return error("no compatible Vulkan memory type");
+    }
+    var info: VkMemoryAllocateInfo = uninit;
+    zero(&info as *u8, sizeof(VkMemoryAllocateInfo));
+    info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    info.allocationSize = requirements -> size;
+    info.memoryTypeIndex = index;
+    return vk_ok(
+        vkAllocateMemory(v -> device, &info, null(*u8), memory),
+        "vkAllocateMemory"
+    );
+}
+
+fn buffer_create(v: *Vulkan) -> bool {
+    var info: VkBufferCreateInfo = uninit;
+    zero(&info as *u8, sizeof(VkBufferCreateInfo));
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size = 272u64;
+    info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+    if !vk_ok(
+        vkCreateBuffer(v -> device, &info, null(*u8), &v -> buffer),
+        "vkCreateBuffer"
+    ) {
+        return false;
+    }
+    var requirements: VkMemoryRequirements = uninit;
+    vkGetBufferMemoryRequirements(v -> device, v -> buffer, &requirements);
+    if !memory_allocate(
+        v,
+        &requirements,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        &v -> memory
+    ) {
+        return false;
+    }
+    if !vk_ok(
+        vkBindBufferMemory(v -> device, v -> buffer, v -> memory, 0u64),
+        "vkBindBufferMemory"
+    ) {
+        return false;
+    }
+    if !vk_ok(
+        vkMapMemory(v -> device, v -> memory, 0u64, requirements.size, 0u32, &v -> mapped),
+        "vkMapMemory"
+    ) {
+        return false;
+    }
+    memset(v -> mapped, 255i32, 272usize);
+    var data: *f32 = v -> mapped as *f32;
+    var index: usize = 0usize;
+    while index < 4usize {
+        data[index] = (index + 1usize) as f32;
+        index = index + 1usize;
+    }
+    return true;
+}
+
+fn color_range(output: *VkImageSubresourceRange) -> unit {
+    *output = make VkImageSubresourceRange {
+        aspectMask: VK_IMAGE_ASPECT_COLOR_BIT,
+        baseMipLevel: 0u32,
+        levelCount: 1u32,
+        baseArrayLayer: 0u32,
+        layerCount: 1u32
+    };
+}
+
+fn image_create(v: *Vulkan) -> bool {
+    var info: VkImageCreateInfo = uninit;
+    zero(&info as *u8, sizeof(VkImageCreateInfo));
+    info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    info.imageType = VK_IMAGE_TYPE_2D;
+    info.format = VK_FORMAT_R32_SFLOAT;
+    info.extent = make VkExtent3D {
+        width: 4u32,
+        height: 1u32,
+        depth: 1u32
+    };
+    info.mipLevels = 1u32;
+    info.arrayLayers = 1u32;
+    info.samples = VK_SAMPLE_COUNT_1_BIT;
+    info.tiling = VK_IMAGE_TILING_OPTIMAL;
+    info.usage = VK_IMAGE_USAGE_STORAGE_BIT;
+    if !vk_ok(
+        vkCreateImage(v -> device, &info, null(*u8), &v -> image),
+        "vkCreateImage"
+    ) {
+        return false;
+    }
+    var requirements: VkMemoryRequirements = uninit;
+    vkGetImageMemoryRequirements(v -> device, v -> image, &requirements);
+    if !memory_allocate(v, &requirements, 0u32, &v -> image_memory) {
+        return false;
+    }
+    if !vk_ok(
+        vkBindImageMemory(v -> device, v -> image, v -> image_memory, 0u64),
+        "vkBindImageMemory"
+    ) {
+        return false;
+    }
+    var view: VkImageViewCreateInfo = uninit;
+    zero(&view as *u8, sizeof(VkImageViewCreateInfo));
+    view.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    view.image = v -> image;
+    view.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view.format = VK_FORMAT_R32_SFLOAT;
+    color_range(&view.subresourceRange);
+    return vk_ok(
+        vkCreateImageView(v -> device, &view, null(*u8), &v -> image_view),
+        "vkCreateImageView"
+    );
+}
+
+fn layout_create(v: *Vulkan) -> bool {
+    var bindings: [VkDescriptorSetLayoutBinding; 3] = uninit;
+    zero(&bindings as *u8, sizeof([VkDescriptorSetLayoutBinding; 3]));
+    var index: usize = 0usize;
+    while index < 3usize {
+        bindings[index].binding = index as u32;
+        bindings[index].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bindings[index].descriptorCount = 1u32;
+        bindings[index].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+        index = index + 1usize;
+    }
+    bindings[2usize].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    var info: VkDescriptorSetLayoutCreateInfo = uninit;
+    zero(&info as *u8, sizeof(VkDescriptorSetLayoutCreateInfo));
+    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    info.bindingCount = 3u32;
+    info.pBindings = &bindings[0usize];
+    if !vk_ok(
+        vkCreateDescriptorSetLayout(v -> device, &info, null(*u8), &v -> layout),
+        "vkCreateDescriptorSetLayout"
+    ) {
+        return false;
+    }
+    var pipeline: VkPipelineLayoutCreateInfo = uninit;
+    zero(&pipeline as *u8, sizeof(VkPipelineLayoutCreateInfo));
+    pipeline.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline.setLayoutCount = 1u32;
+    pipeline.pSetLayouts = &v -> layout;
+    return vk_ok(
+        vkCreatePipelineLayout(v -> device, &pipeline, null(*u8), &v -> pipeline_layout),
+        "vkCreatePipelineLayout"
+    );
+}
+
+fn pipeline_create(v: *Vulkan, code: *Input) -> bool {
+    var module: VkShaderModuleCreateInfo = uninit;
+    zero(&module as *u8, sizeof(VkShaderModuleCreateInfo));
+    module.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    module.codeSize = code -> size;
+    module.pCode = code -> bytes as *u32;
+    if !vk_ok(
+        vkCreateShaderModule(v -> device, &module, null(*u8), &v -> module),
+        "vkCreateShaderModule"
+    ) {
+        return false;
+    }
+    var pipeline: VkComputePipelineCreateInfo = uninit;
+    zero(&pipeline as *u8, sizeof(VkComputePipelineCreateInfo));
+    pipeline.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+    pipeline.stage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pipeline.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+    pipeline.stage.module = v -> module;
+    pipeline.stage.pName = "main";
+    pipeline.layout = v -> pipeline_layout;
+    return vk_ok(
+        vkCreateComputePipelines(
+            v -> device,
+            null(*u8),
+            1u32,
+            &pipeline,
+            null(*u8),
+            &v -> pipeline
+        ),
+        "vkCreateComputePipelines"
+    );
+}
+
+fn descriptor_update(v: *Vulkan) -> unit {
+    var buffers: [VkDescriptorBufferInfo; 2] = make [VkDescriptorBufferInfo; 2] {
+        make VkDescriptorBufferInfo {
+            buffer: v -> buffer,
+            offset: 0u64,
+            range: 16u64
+        },
+        make VkDescriptorBufferInfo {
+            buffer: v -> buffer,
+            offset: 256u64,
+            range: 16u64
+        }
+    };
+    var image: VkDescriptorImageInfo = make VkDescriptorImageInfo {
+        sampler: null(*u8),
+        imageView: v -> image_view,
+        imageLayout: VK_IMAGE_LAYOUT_GENERAL
+    };
+    var writes: [VkWriteDescriptorSet; 3] = uninit;
+    zero(&writes as *u8, sizeof([VkWriteDescriptorSet; 3]));
+    var index: usize = 0usize;
+    while index < 3usize {
+        writes[index].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        writes[index].dstSet = v -> set;
+        writes[index].dstBinding = index as u32;
+        writes[index].descriptorCount = 1u32;
+        writes[index].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        index = index + 1usize;
+    }
+    writes[0usize].pBufferInfo = &buffers[0usize];
+    writes[1usize].pBufferInfo = &buffers[1usize];
+    writes[2usize].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    writes[2usize].pImageInfo = &image;
+    vkUpdateDescriptorSets(v -> device, 3u32, &writes[0usize], 0u32, null(*u8));
+}
+
+fn descriptors_create(v: *Vulkan) -> bool {
+    var sizes: [VkDescriptorPoolSize; 2] = make [VkDescriptorPoolSize; 2] {
+        make VkDescriptorPoolSize {
+            type: VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            descriptorCount: 2u32
+        },
+        make VkDescriptorPoolSize {
+            type: VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            descriptorCount: 1u32
+        }
+    };
+    var pool: VkDescriptorPoolCreateInfo = uninit;
+    zero(&pool as *u8, sizeof(VkDescriptorPoolCreateInfo));
+    pool.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool.maxSets = 1u32;
+    pool.poolSizeCount = 2u32;
+    pool.pPoolSizes = &sizes[0usize];
+    if !vk_ok(
+        vkCreateDescriptorPool(v -> device, &pool, null(*u8), &v -> pool),
+        "vkCreateDescriptorPool"
+    ) {
+        return false;
+    }
+    var info: VkDescriptorSetAllocateInfo = uninit;
+    zero(&info as *u8, sizeof(VkDescriptorSetAllocateInfo));
+    info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    info.descriptorPool = v -> pool;
+    info.descriptorSetCount = 1u32;
+    info.pSetLayouts = &v -> layout;
+    if !vk_ok(
+        vkAllocateDescriptorSets(v -> device, &info, &v -> set),
+        "vkAllocateDescriptorSets"
+    ) {
+        return false;
+    }
+    descriptor_update(v);
+    return true;
+}

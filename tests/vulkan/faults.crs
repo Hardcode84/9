@@ -1,0 +1,53 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn getenv(name: *u8) -> *u8 = "getenv";
+extern fn strcmp(left: *u8, right: *u8) -> i32 = "strcmp";
+extern fn puts(text: *u8) -> i32 = "puts";
+extern fn instance_address(instance: *u8, name: *u8) -> fn(*u8, *u32, **u8) -> i32 = "vkGetInstanceProcAddr";
+extern fn device_address(device: *u8, name: *u8) -> fn(
+    *u8,
+    *VkDescriptorPoolCreateInfo,
+    *u8,
+    **u8
+) -> i32 = "vkGetDeviceProcAddr";
+
+fn fault(name: *u8) -> bool {
+    var value: *u8 = getenv("CRUST_VULKAN_TEST_FAULT");
+    return value != null(*u8) && strcmp(value, name) == 0i32;
+}
+
+fn enumerate_probe(instance: *u8, count: *u32, physical: **u8) -> i32 {
+    if fault("empty") {
+        *count = 0u32;
+        return VK_SUCCESS;
+    }
+    if fault("enumerate-error") {
+        return -3i32;
+    }
+    var actual: fn(*u8, *u32, **u8) -> i32 = instance_address(
+        instance,
+        "vkEnumeratePhysicalDevices"
+    );
+    var result: i32 = actual(instance, count, physical);
+    if fault("incomplete") && result == VK_SUCCESS && *count != 0u32 {
+        puts("injected VK_INCOMPLETE");
+        return VK_INCOMPLETE;
+    }
+    return result;
+}
+
+fn pool_probe(
+    device: *u8,
+    info: *VkDescriptorPoolCreateInfo,
+    allocator: *u8,
+    pool: **u8
+) -> i32 {
+    if fault("pool") {
+        return -2i32;
+    }
+    var actual: fn(*u8, *VkDescriptorPoolCreateInfo, *u8, **u8) -> i32 = device_address(
+        device,
+        "vkCreateDescriptorPool"
+    );
+    return actual(device, info, allocator, pool);
+}

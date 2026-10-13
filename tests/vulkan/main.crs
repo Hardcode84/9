@@ -1,0 +1,72 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn check_result(v: *Vulkan, expected: *u8) -> bool {
+    var good: bool = memcmp(v -> mapped, expected, 16usize) == 0i32 && memcmp(
+        v -> mapped + 256isize,
+        expected + 16isize,
+        16usize
+    ) == 0i32;
+    if !good {
+        puts("Vulkan result mismatch (value bits / status per lane):");
+        var values: *u32 = v -> mapped as *u32;
+        var status: *u32 = (v -> mapped + 256isize) as *u32;
+        var index: usize = 0usize;
+        while index < 4usize {
+            print_number(values[index] as i64);
+            print_number(status[index] as i64);
+            index = index + 1usize;
+        }
+    }
+    return good;
+}
+
+fn execute(code: *Input, expected: *u8) -> bool {
+    var v: Vulkan = uninit;
+    zero(&v as *u8, sizeof(Vulkan));
+    var good: bool = device_open(&v) && buffer_create(&v) && image_create(&v) && layout_create(
+        &v
+    ) && pipeline_create(&v, code) && descriptors_create(&v) && dispatch(&v);
+    if good {
+        good = check_result(&v, expected);
+    }
+    device_close(&v);
+    return good;
+}
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 3i32 {
+        puts("expected SPIRV_FILE EXPECTED_FILE");
+        return 2i32;
+    }
+    var expected: Input = make Input {
+        bytes: null(*u8),
+        size: 0usize
+    };
+    var code: Input = make Input {
+        bytes: null(*u8),
+        size: 0usize
+    };
+    var good: bool = read_input(argv[2usize], &expected);
+    if good && expected.size != 32usize {
+        good = error("expected data must contain four f32 values and four u32 status codes");
+    }
+    if good {
+        good = read_input(argv[1usize], &code);
+    }
+    if good {
+        if code.size < 20usize || (code.bytes as *u32)[0usize] != 0x07230203u32 {
+            good = error("invalid SPIR-V header");
+        }
+    }
+    var status: i32 = 2i32;
+    if good {
+        status = 1i32;
+        if execute(&code, expected.bytes) {
+            status = 0i32;
+            puts("Vulkan result and status match");
+        }
+    }
+    free(code.bytes);
+    free(expected.bytes);
+    return status;
+}

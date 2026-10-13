@@ -1,0 +1,113 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record Vulkan {
+    properties: VkPhysicalDeviceMemoryProperties;
+    instance: *u8;
+    physical: *u8;
+    device: *u8;
+    queue: *u8;
+    buffer: *u8;
+    memory: *u8;
+    mapped: *u8;
+    image: *u8;
+    image_memory: *u8;
+    image_view: *u8;
+    layout: *u8;
+    pipeline_layout: *u8;
+    module: *u8;
+    pipeline: *u8;
+    pool: *u8;
+    set: *u8;
+    command_pool: *u8;
+    commands: *u8;
+    family: u32;
+}
+
+fn device_profile(v: *Vulkan) -> bool {
+    var controls: VkPhysicalDeviceFloatControlsProperties = uninit;
+    zero(&controls as *u8, sizeof(VkPhysicalDeviceFloatControlsProperties));
+    controls.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FLOAT_CONTROLS_PROPERTIES;
+    var props: VkPhysicalDeviceProperties2 = uninit;
+    zero(&props as *u8, sizeof(VkPhysicalDeviceProperties2));
+    props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    props.pNext = &controls as *u8;
+    var support: VkPhysicalDeviceVulkan12Features = uninit;
+    zero(&support as *u8, sizeof(VkPhysicalDeviceVulkan12Features));
+    support.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    var query: VkPhysicalDeviceFeatures2 = uninit;
+    zero(&query as *u8, sizeof(VkPhysicalDeviceFeatures2));
+    query.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+    query.pNext = &support as *u8;
+    vkGetPhysicalDeviceProperties2(v -> physical, &props);
+    vkGetPhysicalDeviceFeatures2(v -> physical, &query);
+    if props.properties.apiVersion < VK_API_VERSION_1_2 || support.shaderInt8 == 0u32 || controls.shaderRoundingModeRTEFloat32 == 0u32 || controls.shaderSignedZeroInfNanPreserveFloat32 == 0u32 || props.properties.limits.minStorageBufferOffsetAlignment > 256u64 {
+        return error("Vulkan device does not meet the shader profile");
+    }
+    return true;
+}
+
+fn device_create(v: *Vulkan) -> bool {
+    var priority: f32 = 1f32;
+    var qci: VkDeviceQueueCreateInfo = uninit;
+    zero(&qci as *u8, sizeof(VkDeviceQueueCreateInfo));
+    qci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    qci.queueFamilyIndex = v -> family;
+    qci.queueCount = 1u32;
+    qci.pQueuePriorities = &priority;
+    var features: VkPhysicalDeviceVulkan12Features = uninit;
+    zero(&features as *u8, sizeof(VkPhysicalDeviceVulkan12Features));
+    features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    features.shaderInt8 = VK_TRUE;
+    var dci: VkDeviceCreateInfo = uninit;
+    zero(&dci as *u8, sizeof(VkDeviceCreateInfo));
+    dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    dci.pNext = &features as *u8;
+    dci.queueCreateInfoCount = 1u32;
+    dci.pQueueCreateInfos = &qci;
+    if !vk_ok(
+        vkCreateDevice(v -> physical, &dci, null(*u8), &v -> device),
+        "vkCreateDevice"
+    ) {
+        return false;
+    }
+    vkGetDeviceQueue(v -> device, v -> family, 0u32, &v -> queue);
+    vkGetPhysicalDeviceMemoryProperties(v -> physical, &v -> properties);
+    return true;
+}
+
+fn device_open(v: *Vulkan) -> bool {
+    var app: VkApplicationInfo = uninit;
+    zero(&app as *u8, sizeof(VkApplicationInfo));
+    app.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+    app.apiVersion = VK_API_VERSION_1_2;
+    var ici: VkInstanceCreateInfo = uninit;
+    zero(&ici as *u8, sizeof(VkInstanceCreateInfo));
+    ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    ici.pApplicationInfo = &app;
+    if !vk_ok(vkCreateInstance(&ici, null(*u8), &v -> instance), "vkCreateInstance") {
+        return false;
+    }
+    var count: u32 = 1u32;
+    var result: i32 = vkEnumeratePhysicalDevices(v -> instance, &count, &v -> physical);
+    // Only the first device is required, including when enumeration is truncated.
+    if result != VK_SUCCESS && result != VK_INCOMPLETE {
+        return vk_ok(result, "vkEnumeratePhysicalDevices");
+    }
+    if count == 0u32 {
+        return error("no Vulkan physical device");
+    }
+    var families: [VkQueueFamilyProperties; 64] = uninit;
+    count = 64u32;
+    vkGetPhysicalDeviceQueueFamilyProperties(v -> physical, &count, &families[0usize]);
+    v -> family = 0u32;
+    while v -> family < count {
+        if (families[v -> family as usize].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0u32 {
+            break;
+        }
+        v -> family = v -> family + 1u32;
+    }
+    if v -> family == count {
+        return error("no compute queue in the first 64 queue families");
+    }
+    return device_profile(v) && device_create(v);
+}

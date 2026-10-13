@@ -190,10 +190,21 @@ make check-shader LLVM_DIRECTORY="$CRUST_LLVM" \
 ```
 
 Use `VULKAN_INCLUDE` if the Vulkan headers are outside the compiler's include
-path. Set `VK_ICD_FILENAMES` to select a software or hardware Vulkan driver.
+path. The [Vulkan runner](../../tests/vulkan/package.crs) is written in Crust.
+The shared package builder compiles it and links the Vulkan loader. Its
+[bindings](../../tests/vulkan/bindings.crs) use the Linux x86-64 Vulkan ABI.
+The test compares record sizes, alignments, field offsets, field sizes, and
+constants with the selected C headers before it executes the runner.
+
+Set `VK_ICD_FILENAMES` to select a software or hardware Vulkan driver.
 The test compiles shaders, validates SPIR-V, dispatches them, and checks both
 the values and the status buffer. It also checks rejected programs,
-allocation failure, and preservation of output after a tool failure.
+allocation failure, and preservation of output after a tool failure. A Crust
+interposition library tests truncated enumeration, an empty device list,
+an enumeration error, and a descriptor-pool allocation error.
+The runner releases each created resource on setup failure. If queue completion
+fails, it exits the process because submitted commands can still use those
+resources.
 
 ## How the stage works
 

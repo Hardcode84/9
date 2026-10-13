@@ -1,0 +1,154 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn commands_create(v: *Vulkan) -> bool {
+    var pool: VkCommandPoolCreateInfo = uninit;
+    zero(&pool as *u8, sizeof(VkCommandPoolCreateInfo));
+    pool.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool.queueFamilyIndex = v -> family;
+    if !vk_ok(
+        vkCreateCommandPool(v -> device, &pool, null(*u8), &v -> command_pool),
+        "vkCreateCommandPool"
+    ) {
+        return false;
+    }
+    var info: VkCommandBufferAllocateInfo = uninit;
+    zero(&info as *u8, sizeof(VkCommandBufferAllocateInfo));
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    info.commandPool = v -> command_pool;
+    info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    info.commandBufferCount = 1u32;
+    return vk_ok(
+        vkAllocateCommandBuffers(v -> device, &info, &v -> commands),
+        "vkAllocateCommandBuffers"
+    );
+}
+
+fn commands_record(v: *Vulkan) -> bool {
+    var begin: VkCommandBufferBeginInfo = uninit;
+    zero(&begin as *u8, sizeof(VkCommandBufferBeginInfo));
+    begin.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    if !vk_ok(vkBeginCommandBuffer(v -> commands, &begin), "vkBeginCommandBuffer") {
+        return false;
+    }
+    var image: VkImageMemoryBarrier = uninit;
+    zero(&image as *u8, sizeof(VkImageMemoryBarrier));
+    image.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    image.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    image.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+    image.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    image.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    image.image = v -> image;
+    color_range(&image.subresourceRange);
+    vkCmdPipelineBarrier(
+        v -> commands,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        0u32,
+        0u32,
+        null(*VkMemoryBarrier),
+        0u32,
+        null(*u8),
+        1u32,
+        &image
+    );
+    vkCmdBindPipeline(v -> commands, VK_PIPELINE_BIND_POINT_COMPUTE, v -> pipeline);
+    vkCmdBindDescriptorSets(
+        v -> commands,
+        VK_PIPELINE_BIND_POINT_COMPUTE,
+        v -> pipeline_layout,
+        0u32,
+        1u32,
+        &v -> set,
+        0u32,
+        null(*u32)
+    );
+    vkCmdDispatch(v -> commands, 1u32, 1u32, 1u32);
+    var barrier: VkMemoryBarrier = uninit;
+    zero(&barrier as *u8, sizeof(VkMemoryBarrier));
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    vkCmdPipelineBarrier(
+        v -> commands,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+        VK_PIPELINE_STAGE_HOST_BIT,
+        0u32,
+        1u32,
+        &barrier,
+        0u32,
+        null(*u8),
+        0u32,
+        null(*VkImageMemoryBarrier)
+    );
+    return vk_ok(vkEndCommandBuffer(v -> commands), "vkEndCommandBuffer");
+}
+
+fn dispatch(v: *Vulkan) -> bool {
+    if !commands_create(v) || !commands_record(v) {
+        return false;
+    }
+    var submit: VkSubmitInfo = uninit;
+    zero(&submit as *u8, sizeof(VkSubmitInfo));
+    submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit.commandBufferCount = 1u32;
+    submit.pCommandBuffers = &v -> commands;
+    if !vk_ok(vkQueueSubmit(v -> queue, 1u32, &submit, null(*u8)), "vkQueueSubmit") {
+        return false;
+    }
+    if !vk_ok(vkQueueWaitIdle(v -> queue), "vkQueueWaitIdle") {
+        // A failed wait can leave commands pending. Process exit releases the device.
+        exit(1i32);
+        return false;
+    }
+    return true;
+}
+
+fn pipelines_close(v: *Vulkan) -> unit {
+    if v -> command_pool != null(*u8) {
+        vkDestroyCommandPool(v -> device, v -> command_pool, null(*u8));
+    }
+    if v -> pool != null(*u8) {
+        vkDestroyDescriptorPool(v -> device, v -> pool, null(*u8));
+    }
+    if v -> pipeline != null(*u8) {
+        vkDestroyPipeline(v -> device, v -> pipeline, null(*u8));
+    }
+    if v -> module != null(*u8) {
+        vkDestroyShaderModule(v -> device, v -> module, null(*u8));
+    }
+    if v -> pipeline_layout != null(*u8) {
+        vkDestroyPipelineLayout(v -> device, v -> pipeline_layout, null(*u8));
+    }
+    if v -> layout != null(*u8) {
+        vkDestroyDescriptorSetLayout(v -> device, v -> layout, null(*u8));
+    }
+}
+
+fn device_close(v: *Vulkan) -> unit {
+    if v -> device != null(*u8) {
+        pipelines_close(v);
+        if v -> image_view != null(*u8) {
+            vkDestroyImageView(v -> device, v -> image_view, null(*u8));
+        }
+        if v -> image != null(*u8) {
+            vkDestroyImage(v -> device, v -> image, null(*u8));
+        }
+        if v -> image_memory != null(*u8) {
+            vkFreeMemory(v -> device, v -> image_memory, null(*u8));
+        }
+        if v -> mapped != null(*u8) {
+            vkUnmapMemory(v -> device, v -> memory);
+        }
+        if v -> buffer != null(*u8) {
+            vkDestroyBuffer(v -> device, v -> buffer, null(*u8));
+        }
+        if v -> memory != null(*u8) {
+            vkFreeMemory(v -> device, v -> memory, null(*u8));
+        }
+        vkDestroyDevice(v -> device, null(*u8));
+    }
+    if v -> instance != null(*u8) {
+        vkDestroyInstance(v -> instance, null(*u8));
+    }
+}

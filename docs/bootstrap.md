@@ -24,9 +24,55 @@ seed and sources and retains the resulting native library for later runs.
 Install a C99 compiler, GCC, GNU Make, GNU binutils, Python 3, and the libffi
 development headers and library. GCC and binutils compile, rename, and link
 the generated backend code. Python 3 also runs tests and measurements.
-The build downloads no dependencies. The standalone `build/crust0` executable
+`make all` downloads no dependencies. The standalone `build/crust0` executable
 does not link libffi. Its source bootstrap uses the seed and libffi to build
 the external assembly stage.
+
+### Fetch LLVM
+
+Use these explicit targets to fetch LLVM:
+
+```sh
+make fetch-llvm-release
+make fetch-llvm-main
+```
+
+The release target downloads and extracts the latest stable official Linux
+x86-64 binary archive. It checks the archive against the SHA-256 digest from
+the GitHub release API. Python must provide `tarfile.data_filter` for safe
+archive extraction; Python 3.12 includes it.
+
+The main target resolves upstream `main` to a full commit ID and downloads its
+source archive over HTTPS. It records the archive SHA-256 after download.
+This target supplies sources. It does not compile LLVM.
+
+Both targets print the extracted directory. They store snapshots and the
+`release.json` and `main.json` pins under `build/toolchains/llvm/`. Each pin
+contains the selected revision, archive URL, and SHA-256. A fetch updates the
+pin only after download and extraction succeed. Previous snapshots remain
+available. Treat each extracted snapshot as immutable.
+
+Each target resolves the latest upstream selection when called. To reuse a
+recorded selection, call the same script with `--locked`:
+
+```sh
+python3 tools/fetch_llvm.py release --locked
+python3 tools/fetch_llvm.py main --locked
+```
+
+A locked fetch uses the local snapshot without network access. If that snapshot
+is absent, it downloads the recorded archive and checks the recorded SHA-256.
+A missing or invalid pin is an error. Keep a copy of the pin to restore the same
+selection in another checkout. Pin files and downloads remain outside version
+control. `make clean` removes them with the build directory.
+
+Use `BUILD=build/other` with Make, or `--directory build/other/toolchains/llvm`
+with the script, to select another cache. These targets acquire dependencies
+only. `make all` continues to build the C99 seed. The LLVM backend is not yet
+implemented. Run `make check-llvm-fetch` to test acquisition without network
+access or a full LLVM download.
+
+### Compile the seed
 
 The build uses `CC` for C code and linking, and `AS` for generated assembly.
 The default assembly command is `as --64`. Clang builds also use GNU assembler.

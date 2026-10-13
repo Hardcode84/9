@@ -44,6 +44,16 @@ OVERLOAD_RESOURCE_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUIL
 .PHONY: amalgamate check-amalgamation FORCE
 all: $(BUILD)/crust
 
+.PHONY: fetch-llvm-release fetch-llvm-main check-llvm-fetch
+fetch-llvm-release:
+	python3 tools/fetch_llvm.py release --directory '$(BUILD)/toolchains/llvm'
+
+fetch-llvm-main:
+	python3 tools/fetch_llvm.py main --directory '$(BUILD)/toolchains/llvm'
+
+check-llvm-fetch:
+	python3 tests/llvm_fetch.py
+
 .PHONY: test-tools
 test-tools: $(BUILD)/crust $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a
 	python3 tests/prepare.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'

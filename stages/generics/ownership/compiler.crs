@@ -33,20 +33,22 @@ fn og_stage_inputs(program:*OgProgram,request:*StageCompile)->bool {
     return true;
 }
 
-// Compile captured inputs with explicit source trust and emit C plus symbols.
+// Compile captured inputs with explicit source trust and emit backend text plus symbols.
 // Diagnostics outlive the temporary checker and its arena.
-fn og_stage_compile(request:*StageCompile)->bool {
+fn og_stage_emit(request:*StageCompile,emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->bool {
     var program:OgProgram=uninit;
     og_init(&program,&request->context->arena.allocator,request->sources.count as u64+1u64);
     var success:bool=og_stage_inputs(&program,request) && og_check(&program) &&
         stage_names(request->exports,&program.generics.context);
     if success {
-        var options:CBackendOptions=make CBackendOptions{mode:2u32,output:request->output,symbols:request->symbols,
+        var options:BackendOptions=make BackendOptions{mode:2u32,output:request->output,symbols:request->symbols,
             cflags:null(**u8),cflag_count:0usize,ldflags:null(**u8),ldflag_count:0usize};
-        success=c_backend_build(&program.generics.context,null(*CrustDecl),&options)==0i32;
+        success=backend_output(&program.generics.context,null(*CrustDecl),&options,emit)==0i32;
     }
     og_driver_diagnostic(request->context,&program.generics.syntax);
     og_driver_diagnostic(request->context,&program.generics.context);
     og_destroy(&program);
     return success;
 }
+
+fn og_stage_compile(request:*StageCompile)->bool{return og_stage_emit(request,c_backend_build);}

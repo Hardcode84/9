@@ -196,7 +196,7 @@ def check_heap(build, directory, sanitize):
     )
     generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
     command(
-        [build / "crust-ownership-test", "--emit-c", "--symbols", symbols, "-o", generated, source]
+        [build / "crust-ownership-test", "--emit", "--symbols", symbols, "-o", generated, source]
     )
     command([build / "crust-ownership-erasure", source])
     execute(generated, symbols, directory, "loop-heap", sanitize, b"")
@@ -248,7 +248,7 @@ def check_domain(build, directory, sanitize):
             build / "crust-ownership-test",
             "trusted",
             provider,
-            "--emit-c",
+            "--emit",
             "--symbols",
             symbols,
             "-o",
@@ -277,7 +277,7 @@ def check_loops(build, directory, sanitize):
     source.write_text(LOOPS)
     generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
     command(
-        [build / "crust-ownership-test", "--emit-c", "--symbols", symbols, "-o", generated, source]
+        [build / "crust-ownership-test", "--emit", "--symbols", symbols, "-o", generated, source]
     )
     command([build / "crust-ownership-erasure", source])
     execute(generated, symbols, directory, "loops", sanitize, OUTPUT)

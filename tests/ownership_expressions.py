@@ -216,7 +216,7 @@ def check_expressions(build, directory, sanitize):
     source.write_text(HELPERS + main_body(BODY))
     generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
     compiler = build / "crust-ownership-test"
-    command([compiler, "--emit-c", "--symbols", symbols, "-o", generated, source])
+    command([compiler, "--emit", "--symbols", symbols, "-o", generated, source])
     command([build / "crust-ownership-erasure", source])
     execute(generated, symbols, directory, "expressions", sanitize, OUTPUT)
     source = directory / "native-expressions.crs"
@@ -226,7 +226,7 @@ def check_expressions(build, directory, sanitize):
         + main_body("var file:File=make File{fd:acquire(standard_output())};")
     )
     generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
-    command([compiler, "--emit-c", "--symbols", symbols, "-o", generated, source])
+    command([compiler, "--emit", "--symbols", symbols, "-o", generated, source])
     command([build / "crust-ownership-erasure", source])
     execute(generated, symbols, directory, "native-expressions", sanitize, b"")
     rejected(compiler, directory, bad_cases())

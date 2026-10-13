@@ -50,7 +50,7 @@ commands = {
     "fixed-reader-output": proof_command(HERE / "native-no-reader-change.crs"),
     "prepared-output": [
         str(BUILD / "crust-c"),
-        "--emit-c",
+        "--emit",
         "--symbols",
         "/dev/null",
         str(ROOT / "examples/intrusive/raw.crs"),

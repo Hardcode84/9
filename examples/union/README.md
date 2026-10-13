@@ -21,7 +21,7 @@ The program prints `union: OK`.
 [main.crs](main.crs) selects the union stage and builds [program.crs](program.crs).
 To use this setup, copy `main.crs`, adjust its relative paths, and select your
 source file in `arguments`. The stage accepts the C backend's build options,
-including `--check` and `--emit-c`.
+including `--check` and `--emit`.
 
 The setup loads three small interfaces and one compiled library:
 

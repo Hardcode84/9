@@ -11,7 +11,7 @@
 // Callback code and user storage must remain live through the synchronous call.
 // Null requires checked seed bodies and selects the default body emitter.
 // False or a new diagnostic stops the build. False without a diagnostic records one.
-extern fn c_backend_build_with_body(context: *CrustContext, entry: *CrustDecl, options: *CBackendOptions,
+extern fn c_backend_build_with_body(context: *CrustContext, entry: *CrustDecl, options: *BackendOptions,
                                    body: fn(*CStage,*CrustDecl,*u8)->bool, user: *u8) -> i32 = "c_backend_build_with_body";
 
 // Initialize at a stable address. Destroy after the last output-buffer use.

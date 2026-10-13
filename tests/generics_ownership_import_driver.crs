@@ -56,7 +56,7 @@ fn gli_emit(program: *OgProgram, output: *u8, symbols: *u8) -> bool {
     if name == null(*CrustName) { return false; }
     var global: *RsGlobal = rs_global(&(*program).resources, name);
     if global == null(*RsGlobal) { return native_error(context, "import test client requires main"); }
-    var options: CBackendOptions = make CBackendOptions {
+    var options: BackendOptions = make BackendOptions {
         mode: 2u32, output: output, symbols: symbols, cflags: null(**u8), cflag_count: 0usize,
         ldflags: null(**u8), ldflag_count: 0usize
     };

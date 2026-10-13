@@ -4,8 +4,11 @@ host_source(run, "../../../stages/build/load.crs");
 if !stage_setup(run, "../../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../../..", "../../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
+host_source(run,"../../backend.crs");
+var backend:ExampleBackend=uninit;
+if !example_backend(run,stages,&backend){return 1i32;};
 host_source(run, "../../../stages/resources/api.crs");
-if !stage_load(stages, "stages/resources/package.crs") { return 1i32; };
+if !example_load(stages,&backend,"stages/resources/package.crs") { return 1i32; };
 
 var target:*CrustSource = host_input(run, "program.crs", 1u64);
 var capacity:usize = ((*run).argc as usize) + 12usize;
@@ -34,4 +37,4 @@ if (*run).argc == 0i32 {
         index = index + 1usize;
     }
 };
-return resource_build(target, 0usize, count as i32, arguments);
+return resource_build(target, 0usize, count as i32, arguments, backend.emit);

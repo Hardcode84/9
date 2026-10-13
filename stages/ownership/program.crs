@@ -41,7 +41,7 @@ fn os_lower(stage: *OsStage) -> bool {
 
 fn os_verify(stage: *OsStage) -> bool { return os_check(stage); }
 
-fn os_driver_emit(cli: *CCli, resources: *RsStage) -> i32 {
+fn os_driver_emit(cli: *CCli, resources: *RsStage, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
     if !c_driver_exports(cli) { return 1i32; }
     if (*cli).mode == 3u32 { return 0i32; }
     if !c_driver_names(&(*cli).driver) { return 1i32; }
@@ -50,35 +50,31 @@ fn os_driver_emit(cli: *CCli, resources: *RsStage) -> i32 {
         entry = resource_driver_entry(cli, resources);
         if entry == null(*CrustDecl) { return 1i32; }
     }
-    if (*cli).mode == 4u32 {
-        if c_emit(&(*cli).stage, entry) { return 0i32; }
-        return 1i32;
-    }
-    return c_backend_build((*resources).context, entry, &(*cli).options);
+    return backend_output((*resources).context,entry,&(*cli).options,emit);
 }
 
-fn os_driver_build(cli: *CCli, trusted: *CrustSource, count: usize) -> i32 {
+fn os_driver_build(cli: *CCli, trusted: *CrustSource, count: usize, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
     var resources: RsStage = uninit;
     rs_init(&resources, (*cli).stage.status.context);
     var stage: OsStage = uninit;
     os_init(&stage, &resources);
     var result: i32 = 1i32;
     if os_trust_sources(&stage, trusted, count) && os_driver_read(cli, &stage) && os_lower(&stage) && os_verify(&stage) {
-        result = os_driver_emit(cli, &resources);
+        result = os_driver_emit(cli, &resources, emit);
     }
     return result;
 }
 
 // Check untrusted bodies against declared interfaces before producing output.
 // Keep source and arguments alive until return. Retain diagnostics in context.
-fn ownership_program(request: *CrustBuild, trusted: *CrustSource, count: usize) -> i32 {
+fn ownership_program(request: *CrustBuild, trusted: *CrustSource, count: usize, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
     var cli: CCli = uninit;
     var success: bool = c_driver_init(&cli, (*request).context, (*request).argc);
     cli.root = (*request).source;
     cli.target_begin = (*request).target_begin;
     var result: i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
-        result = os_driver_build(&cli, trusted, count);
+        result = os_driver_build(&cli, trusted, count, emit);
     }
     c_stage_destroy(&cli.stage);
     return result;

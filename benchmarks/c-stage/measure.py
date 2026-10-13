@@ -204,7 +204,7 @@ def frontend_commands(workload, binaries):
     }
     mode = ["--library"] if workload["library"] else []
     for variant, binary in binaries.items():
-        for phase, option in (("check", "--check"), ("prepare", "--prepare"), ("emit", "--emit-c")):
+        for phase, option in (("check", "--check"), ("prepare", "--prepare"), ("emit", "--emit")):
             extra = ["--symbols", "/dev/null"] if phase == "emit" else []
             commands[f"{variant}-{phase}"] = [
                 str(binary),
@@ -226,7 +226,7 @@ def preflight(workload, binaries, directory, build):
         command = [
             str(binary),
             *mode,
-            "--emit-c",
+            "--emit",
             "--symbols",
             str(response),
             str(workload["paths"]["crust"]),

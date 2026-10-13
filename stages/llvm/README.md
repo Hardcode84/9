@@ -41,6 +41,37 @@ symbol tools. Source, optimization, or tool changes select a different artifact.
 LLVM package compilation accepts no source options. Put checks and source
 transformations in a compiler callback before emission.
 
+## Frontend output interface
+
+`compiler-package.crs` also exports `llvm_backend_build`. Its signature is:
+
+```crs
+fn llvm_backend_build(context:*CrustContext, entry:*CrustDecl,
+                      options:*BackendOptions)->i32
+```
+
+Include `stages/c/api.crs` for `BackendOptions`. The frontend must supply
+complete checked raw bodies and assigned native names. Keep these inputs and
+all imported provider declarations live until emission returns. A null entry
+selects a library. Other entries have type `fn(i32,**u8)->i32`.
+
+Mode 0 builds an executable; mode 1 builds an object; mode 2 writes LLVM IR
+and an optional symbol response file; mode 3 prepares both texts in memory
+without file publication. `cflags` supplies extra Clang compilation arguments.
+`ldflags` supplies extra GCC link arguments. The default package uses its
+pinned release at `-O0`. The custom compiler configuration defines
+`LLVM_DIRECTORY` and `LLVM_OPTIMIZATION` (0 through 3).
+
+The driver reuses the C stage's output-file and process helpers. Clang consumes
+LLVM IR directly. GNU `objcopy` assigns native symbols; GCC links executable
+outputs. Failed tools retain the previous output and remove temporary files.
+The call returns zero, a failed tool's status, or one for another failure.
+It records failures in the caller's context.
+
+The [tutorial matrix](../../examples/README.md#test-the-backend-matrix) uses this
+interface after each frontend's lowering. It also uses `og_stage_emit` to
+compile the frontend libraries through LLVM with their source trust annotations.
+
 ## Select another LLVM installation
 
 A compiler package can include `compiler-sources.crs` and supply its own

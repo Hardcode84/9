@@ -359,7 +359,7 @@ if success {
     for variable, values in (("flags", flags), ("links", links)):
         text += f"var {variable}:[*u8;{len(values)}]=make [*u8;{len(values)}] {{"
         text += ",".join(json.dumps(value) for value in values) + "};\n"
-    text += "var options:CBackendOptions=make CBackendOptions {mode:0u32,output:"
+    text += "var options:BackendOptions=make BackendOptions {mode:0u32,output:"
     text += json.dumps(str(output))
     text += ",symbols:null(*u8),cflags:&flags[0usize],cflag_count:"
     text += f"{len(flags)}usize,ldflags:&links[0usize],ldflag_count:{len(links)}usize}};\n"

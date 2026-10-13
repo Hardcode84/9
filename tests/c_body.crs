@@ -61,6 +61,7 @@ fn body_test_emit(stage:*CStage, declaration:*CrustDecl, opaque:*u8)->bool {
 
 fn main(argc:i32, argv:**u8)->i32 {
     if argc != 4i32 { return 1i32; }
+    if !output_contract(){return 30i32;}
     var context:CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
     var text:*u8 = "fn helper(x:i32)->i32 { var result:i32=x+increment; return result; } fn entry(argc:i32,argv:**u8)->i32 { return helper(argc)-2i32; } const increment:i32=1i32; extern fn absent()->unit=\"body_absent\";";
@@ -85,7 +86,7 @@ fn main(argc:i32, argv:**u8)->i32 {
     if checked == 0i32 { checked = body_test_private(&context, entry, external, &state); }
     if checked != 0i32 { crust_context_destroy(&context); return checked; }
     var flags:[*u8;1] = make [*u8;1] {"-O0"};
-    var options:CBackendOptions = make CBackendOptions {
+    var options:BackendOptions = make BackendOptions {
         mode:0u32, output:argv[1usize], symbols:null(*u8),
         cflags:&flags[0usize], cflag_count:1usize, ldflags:null(**u8), ldflag_count:0usize
     };
@@ -131,7 +132,7 @@ fn body_statement_test(output:*u8)->i32 {
     }
     if !crust_collect(&context) || !crust_resolve(&context) || !crust_check(&context) { return 14i32; }
     var flags:[*u8;1] = make [*u8;1] {"-O0"};
-    var options:CBackendOptions = make CBackendOptions {
+    var options:BackendOptions = make BackendOptions {
         mode:0u32, output:output, symbols:null(*u8),
         cflags:&flags[0usize], cflag_count:1usize, ldflags:null(**u8), ldflag_count:0usize
     };
@@ -213,7 +214,7 @@ fn body_dag_test(output:*u8)->i32 {
     (*callback).link_name = "dag_shared";
     (*entry).link_name = "dag_entry";
     var state:BodyDag = make BodyDag {callback:callback, alias:alias};
-    var options:CBackendOptions = make CBackendOptions {
+    var options:BackendOptions = make BackendOptions {
         mode:0u32, output:output, symbols:null(*u8),
         cflags:null(**u8), cflag_count:0usize, ldflags:null(**u8), ldflag_count:0usize
     };
@@ -278,4 +279,27 @@ fn body_test_private(context:*CrustContext, entry:*CrustDecl, external:*CrustDec
     (*context).error_count = 0usize;
     (*context).error[0usize] = 0u8;
     return 0i32;
+}
+
+fn output_silent_failure(context:*CrustContext,entry:*CrustDecl,options:*BackendOptions)->i32 {
+    if context->units==null(*CrustUnit) || entry!=null(*CrustDecl) || options->mode!=3u32{trap;}
+    return 37i32;
+}
+fn output_diagnosed_success(context:*CrustContext,entry:*CrustDecl,options:*BackendOptions)->i32 {
+    crust_set_error(context,null(*CrustSource),0usize,"selected output diagnostic");return 0i32;
+}
+fn output_contract_case(emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32,status:i32,message:*u8)->bool {
+    var context:CrustContext=uninit;crust_context_init(&context,null(*CrustAllocator));
+    var text:*u8="fn value()->i32{return 42i32;}";
+    var source:CrustSource=make CrustSource{path:"output-contract",bytes:text,size:body_test_length(text),identity:1u64};
+    var args:[*u8;2]=make [*u8;2]{"--prepare","--library"};
+    var request:CrustBuild=make CrustBuild{context:&context,source:&source,target_begin:0usize,argc:2i32,argv:&args[0usize]};
+    var result:i32=c_program(&request,emit);
+    var success:bool=result==status && context.error_count!=0usize && body_test_equal(&context.error[0usize],message);
+    crust_context_destroy(&context);return success;
+}
+fn output_contract()->bool {
+    return output_contract_case(null(fn(*CrustContext,*CrustDecl,*BackendOptions)->i32),1i32,"output callback is required") &&
+        output_contract_case(output_silent_failure,37i32,"output callback failed without a diagnostic") &&
+        output_contract_case(output_diagnosed_success,1i32,"selected output diagnostic");
 }

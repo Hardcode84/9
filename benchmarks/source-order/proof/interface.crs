@@ -1,4 +1,4 @@
-extern fn set_backend(session: *ProofSession, backend: fn(*CrustContext, *CrustDecl, *CBackendOptions) -> i32) -> i32 = "set_backend";
+extern fn set_backend(session: *ProofSession, backend: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32) -> i32 = "set_backend";
 extern fn set_reader(session: *ProofSession, reader: fn(*ProofSession, *CrustContext, *ProofAction) -> i32) -> i32 = "set_reader";
 extern fn alternate(session: *ProofSession, context: *CrustContext, action: *ProofAction) -> i32 = "alternate";
 extern fn include_input(session: *ProofSession, path: *u8) -> i32 = "include_input";

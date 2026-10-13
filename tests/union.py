@@ -239,7 +239,7 @@ def check_inputs(compiler, work):
     output = work / "multiple-inputs"
     run([compiler, *inputs, "-o", output])
     run([output])
-    run([compiler, "--library", "--emit-c", "--export", "main", *inputs, "-o", work / "library.c"])
+    run([compiler, "--library", "--emit", "--export", "main", *inputs, "-o", work / "library.c"])
     missing = subprocess.run(
         [str(compiler), "--check", str(work / "absent.crs")],
         cwd=ROOT,
@@ -297,11 +297,14 @@ def main():
     root = work / "same-file.crs"
     root.write_text(
         'host_source(run,"../../api/crust0_stage.crs");\n'
+        'host_source(run,"../../stages/c/api.crs");\n'
+        'host_link(run,"../crust-c-library.so");\n'
         'host_source(run,"../../stages/union/api.crs");\n'
         'host_source(run,"../../stages/union/build.crs");\n'
         'host_link(run,"../crust-union-library.so");\n'
         'var arguments:[*u8;2]=make [*u8;2]{"-o",host_path(run,"same-file")};\n'
-        "return union_build(run->source,run->cursor,2i32,&arguments[0usize]);\n" + RUNTIME
+        "return union_build(run->source,run->cursor,2i32,&arguments[0usize], c_backend_build);\n"
+        + RUNTIME
     )
     run([build / "crust", root])
     run([work / "same-file"])

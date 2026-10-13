@@ -69,7 +69,7 @@ must preserve it before GCC starts optimization.
 Emit C and its symbol response file:
 
 ```sh
-build/crust stages/build/run.crs stages/c/tool.crs --emit-c -o build/tutorial-c/order.c \
+build/crust stages/build/run.crs stages/c/tool.crs --emit -o build/tutorial-c/order.c \
     --symbols build/tutorial-c/order.rsp build/tutorial-c/order.crs
 cat build/tutorial-c/order.c
 cat build/tutorial-c/order.rsp
@@ -241,7 +241,7 @@ build/crust stages/build/run.crs stages/c/tool.crs --prepare build/tutorial-c/or
 ```
 
 `--check` stops after semantic checks. `--prepare` also builds all C and
-symbol text in memory. `--emit-c` adds output file work. Building the
+symbol text in memory. `--emit` adds output file work. Building the
 compiler library is a separate cost. This small example demonstrates
 semantics; it does not establish the C-speed requirement.
 

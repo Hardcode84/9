@@ -42,7 +42,7 @@ fn resource_driver_read(cli:*CCli, resources:*RsStage)->bool {
     return true;
 }
 
-fn resource_driver_build(cli:*CCli)->i32 {
+fn resource_driver_build(cli:*CCli, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32 {
     var driver:*CDriver = &(*cli).driver;
     var context:*CrustContext = (*cli).stage.status.context;
     var resources:RsStage = uninit;
@@ -57,18 +57,14 @@ fn resource_driver_build(cli:*CCli)->i32 {
         entry = resource_driver_entry(cli, &resources);
         if entry == null(*CrustDecl) { return 1i32; }
     }
-    if (*cli).mode == 4u32 {
-        if c_emit(&(*cli).stage, entry) { return 0i32; }
-        return 1i32;
-    }
-    return c_backend_build(context, entry, (*driver).options);
+    return backend_output(context,entry,(*driver).options,emit);
 }
 
 // Require an initialized context with no application units and retained source storage.
 // Arguments are compiler options and extra source paths, without an executable name.
 // Complete the selected output before return. Keep diagnostics in the caller's context.
 // The retained context contains complete seed bodies after successful preparation.
-fn resource_program(request:*CrustBuild)->i32 {
+fn resource_program(request:*CrustBuild, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32 {
     var context:*CrustContext = (*request).context;
     var cli:CCli = uninit;
     var success:bool = c_driver_init(&cli, context, (*request).argc);
@@ -76,7 +72,7 @@ fn resource_program(request:*CrustBuild)->i32 {
     cli.target_begin = (*request).target_begin;
     var result:i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
-        result = resource_driver_build(&cli);
+        result = resource_driver_build(&cli, emit);
     }
     c_stage_destroy(&cli.stage);
     return result;

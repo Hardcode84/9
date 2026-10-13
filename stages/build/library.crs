@@ -66,10 +66,15 @@ fn stage_library(session: *StageSession, manifest: *u8) -> *u8 {
     var package: StagePackage = uninit;
     stage_init(&package, session->root, session->base);
     if !stage_include(&package, manifest) { return null(*u8); }
+    return stage_package_library(session,&package);
+}
+
+// Build a captured package. Keep its inputs and configuration live through return.
+fn stage_package_library(session:*StageSession,package:*StagePackage)->*u8 {
     var artifact: CacheArtifact = uninit;
     if session->depth == 64usize { native_error(session->root->context, "stage compiler dependency depth exceeds 64"); return null(*u8); }
     session->depth = session->depth + 1usize;
-    var success: bool = stage_artifact(session, &package, false, &artifact);
+    var success: bool = stage_artifact(session, package, false, &artifact);
     session->depth = session->depth - 1usize;
     if !success { return null(*u8); }
     return artifact.path;

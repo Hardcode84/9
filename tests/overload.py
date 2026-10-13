@@ -679,7 +679,7 @@ class Suite:
             for tool in ("crust-overload", "crust-overload-resource"):
                 for case, text in cases.items():
                     source = self.source(name + "-" + case, text)
-                    for endpoint in ("--prepare", "--emit-c"):
+                    for endpoint in ("--prepare", "--emit"):
                         result = self.command(
                             [self.build / tool, endpoint, "--entry", "start", source], expected=1
                         )
@@ -709,7 +709,7 @@ class Suite:
                     name + "-" + borrow,
                     f"fn start(argc:i32,argv:{borrow} *u8)->i32{{return 0i32;}}",
                 )
-                for endpoint in ("--prepare", "--emit-c"):
+                for endpoint in ("--prepare", "--emit"):
                     result = self.command(
                         [
                             self.build / "crust-overload-resource",
@@ -727,6 +727,7 @@ class Suite:
             package = self.work / name
             for directory in ("api", "stages", "examples/overload/" + example):
                 shutil.copytree(ROOT / directory, package / directory)
+            shutil.copyfile(ROOT / "examples/backend.crs", package / "examples/backend.crs")
             (package / "build").mkdir()
             source = package / "examples/overload" / example / "main.crs"
             result = self.command([self.build / "crust", source])

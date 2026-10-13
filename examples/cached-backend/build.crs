@@ -27,9 +27,9 @@ fn backend_build(context: *CrustContext, request: *CacheBuild, output: *u8) -> b
     if assembly == null(*u8) || object == null(*u8) { return false; }
     var target: CrustContext = uninit;
     crust_context_init(&target, null(*CrustAllocator));
-    var exports: [*u8; 4] = make [*u8; 4] { "native_start", "native_c_image", "native_asm_image", "c_program" };
+    var exports: [*u8; 5] = make [*u8; 5] { "native_start", "native_c_image", "native_asm_image", "c_program", "c_backend_build" };
     var count: usize = (*((*request).user as *BackendBuild)).source_count;
-    var success: bool = native_prepare_inputs(&target, (*request).inputs, count, &exports[0usize], 4usize);
+    var success: bool = native_prepare_inputs(&target, (*request).inputs, count, &exports[0usize], 5usize);
     if success {
         var file: *u8 = native_fopen(assembly, "wb");
         if file == null(*u8) { success = native_error(context, "cannot open backend assembly"); }

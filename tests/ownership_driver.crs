@@ -11,7 +11,7 @@ fn main(argc: i32, argv: **u8) -> i32 {
     var count: usize = 0usize;
     if trusted != null(*CrustSource) { count = 1usize; }
     var result: i32 = 1i32;
-    if context.error_count == 0usize { result = ownership_program(&request, trusted, count); }
+    if context.error_count == 0usize { result = ownership_program(&request, trusted, count, c_backend_build); }
     if context.error_count != 0usize { c_driver_diagnostic(&context, argv[0usize]); }
     crust_context_destroy(&context);
     return result;

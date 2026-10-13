@@ -158,7 +158,7 @@ def main():
     try:
         generated = work / "fixture.c"
         response = work / "fixture.rsp"
-        run([compiler, "--emit-c", "-o", generated, "--symbols", response, *STAGE])
+        run([compiler, "--emit", "-o", generated, "--symbols", response, *STAGE])
         flags = ["-std=c99", "-pedantic-errors", "-g", "-O1", "-fno-omit-frame-pointer"]
         if not args.no_sanitize:
             flags += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"]

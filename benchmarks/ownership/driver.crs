@@ -60,7 +60,7 @@ fn cost_publish(argc: i32, argv: **u8) -> i32 {
     var request: CrustBuild = make CrustBuild { context: &context, source: null(*CrustSource), target_begin: 0usize, argc: argc-4i32, argv: argv+4isize };
     var receipt: OwnershipLibrary = uninit;
     var result: i32 = 1i32;
-    if trusted != null(*CrustSource) { result = ownership_publish(&request, argv[2usize], &receipt, trusted, 1usize); }
+    if trusted != null(*CrustSource) { result = ownership_publish(&request, argv[2usize], &receipt, trusted, 1usize, c_backend_build); }
     if result == 0i32 {
         c_driver_stderr(receipt.artifact); c_driver_stderr("\n");
         c_driver_stderr(receipt.digest); c_driver_stderr("\n");

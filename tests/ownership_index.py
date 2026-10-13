@@ -217,7 +217,7 @@ def check_forwarding(build, directory, sanitize):
             build / "crust-ownership-test",
             "trusted",
             TUTORIAL / "provider.crs",
-            "--emit-c",
+            "--emit",
             "--symbols",
             symbols,
             "-o",
@@ -236,7 +236,7 @@ def run(build, directory, sanitize):
         [
             build / "crust",
             TUTORIAL / "main.crs",
-            "--emit-c",
+            "--emit",
             "--symbols",
             symbols,
             "-o",

@@ -160,7 +160,7 @@ def main():
                     renames = directory / "output.rsp"
                     emit = [
                         str(args.compiler),
-                        "--emit-c",
+                        "--emit",
                         "-o",
                         str(generated),
                         "--symbols",
@@ -186,7 +186,7 @@ def main():
                     renames = directory / "stage-output.rsp"
                     emit = [
                         str(args.stage_compiler),
-                        "--emit-c",
+                        "--emit",
                         "-o",
                         str(generated),
                         "--symbols",

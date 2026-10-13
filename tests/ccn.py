@@ -194,6 +194,7 @@ def check_tutorial(suite):
     copy = suite.work / "copied project"
     for path in ("api", "stages", "examples/ccn"):
         shutil.copytree(ROOT / path, copy / path, dirs_exist_ok=True)
+    shutil.copyfile(ROOT / "examples/backend.crs", copy / "examples/backend.crs")
     (copy / "build").mkdir(exist_ok=True)
     root = copy / "examples/ccn/main.crs"
     build = copy / "examples/ccn/build.crs"

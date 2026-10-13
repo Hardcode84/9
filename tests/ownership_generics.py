@@ -84,7 +84,7 @@ def emit_c(compiler, directory, name, sources, trusted=None):
     generated = directory / f"{name}.c"
     symbols = directory / f"{name}.rsp"
     selection = ["trusted", trusted] if trusted else []
-    command([compiler, *selection, "--emit-c", "--symbols", symbols, "-o", generated, *sources])
+    command([compiler, *selection, "--emit", "--symbols", symbols, "-o", generated, *sources])
     return generated, symbols
 
 

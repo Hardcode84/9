@@ -244,7 +244,7 @@ fn oh_emit(state:*OhState, stage:*OvStage, context:*CrustContext, parsed:*CrustU
     if valid {
         var entry:*CrustDecl = (*parsed).declarations;
         while (*entry).next != null(*CrustDecl) { entry = (*entry).next; }
-        var options:CBackendOptions = make CBackendOptions {
+        var options:BackendOptions = make BackendOptions {
             mode:0u32, output:output, symbols:null(*u8),
             cflags:null(**u8), cflag_count:0usize, ldflags:null(**u8), ldflag_count:0usize
         };

@@ -2,6 +2,7 @@
 
 stage_include(stage,"compiler-sources.crs");
 stage_source(stage,"default-toolchain.crs");
+stage_source(stage,"build.crs");
 
 var context:*CrustContext=stage->root->context;
 var script:*u8=stage_path(stage->root,stage->base,"../../tools/fetch_llvm.py");

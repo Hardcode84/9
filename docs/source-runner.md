@@ -47,7 +47,7 @@ host_source(run, "../../stages/c/build.crs");
 var arguments: [*u8; 2] = make [*u8; 2] {
     "-o", host_path(run, "../../build/hello")
 };
-return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize]);
+return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize], c_backend_build);
 
 // The target program starts here.
 extern fn puts(text: *u8) -> i32 = "puts";
@@ -68,7 +68,7 @@ The source selects an ordinary shared library. A copy with another filename
 works through the same interface. The [C backend](c-backend.md) is all Crust0.
 Its output does not depend on the root evaluator or compiler libraries.
 
-`c_build(source, begin, argc, argv)` is an ordinary Crust helper. It compiles the
+`c_build(source, begin, argc, argv, c_backend_build)` is an ordinary Crust helper. It compiles the
 range from `begin` through source EOF. The cursor already points past the root
 return's semicolon, so the target starts there. A separate target file uses
 `begin = 0`. The helper creates a target context, calls

@@ -2,7 +2,7 @@
 
 record CCli {
     stage: CStage;
-    options: CBackendOptions;
+    options: BackendOptions;
     driver: CDriver;
     sources: *CrustSource;
     source_count: usize;
@@ -16,7 +16,7 @@ record CCli {
 }
 
 fn c_driver_usage() -> bool {
-    var text: *u8 = "usage: crust-c [--check | --prepare | --emit-c | --object]\n             [--library | --entry NAME] [-o OUTPUT] [--symbols RESPONSEFILE]\n             [--cflag ARG] [--ldflag ARG] [--export NAME] SOURCE...\n";
+    var text: *u8 = "usage: crust-c [--check | --prepare | --emit | --object]\n             [--library | --entry NAME] [-o OUTPUT] [--symbols RESPONSEFILE]\n             [--cflag ARG] [--ldflag ARG] [--export NAME] SOURCE...\n";
     return crust0_host_write_stream(1u32, text, c_length(text)) == 0i32;
 }
 
@@ -74,7 +74,7 @@ fn c_driver_parse(cli: *CCli, argc: i32, argv: **u8, begin: i32) -> bool {
             if c_equal(arg, "--") { options = false; continue; }
             if c_equal(arg, "--check") { (*cli).mode = 3u32; continue; }
             if c_equal(arg, "--prepare") { (*cli).mode = 4u32; continue; }
-            if c_equal(arg, "--emit-c") { (*cli).mode = 2u32; continue; }
+            if c_equal(arg, "--emit") { (*cli).mode = 2u32; continue; }
             if c_equal(arg, "--object") { (*cli).mode = 1u32; continue; }
             if c_equal(arg, "--library") { (*cli).library = true; continue; }
             if c_cli_value_option(arg) {
@@ -162,7 +162,7 @@ fn c_driver_entry(cli: *CCli) -> *CrustDecl {
     return null(*CrustDecl);
 }
 
-fn c_driver_build(cli: *CCli) -> i32 {
+fn c_driver_build(cli: *CCli, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
     var driver: *CDriver = &(*cli).driver;
     var stage: *CStage = (*driver).stage;
     var context: *CrustContext = (*stage).status.context;
@@ -176,11 +176,7 @@ fn c_driver_build(cli: *CCli) -> i32 {
         entry = c_driver_entry(cli);
         if entry == null(*CrustDecl) { return 1i32; }
     }
-    if (*cli).mode == 4u32 {
-        if c_emit(stage, entry) { return 0i32; }
-        return 1i32;
-    }
-    return c_backend_build(context, entry, (*driver).options);
+    return backend_output(context,entry,(*driver).options,emit);
 }
 
 fn c_driver_option(argument: *u8, name: *u8) -> bool {
@@ -225,7 +221,7 @@ fn c_driver_exports(cli: *CCli) -> bool {
 
 fn c_driver_init(cli: *CCli, context: *CrustContext, argc: i32) -> bool {
     c_stage_init(&(*cli).stage, context);
-    (*cli).options = make CBackendOptions {
+    (*cli).options = make BackendOptions {
         mode: 0u32, output: null(*u8), symbols: null(*u8),
         cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
     };
@@ -256,7 +252,7 @@ fn c_driver_init(cli: *CCli, context: *CrustContext, argc: i32) -> bool {
 // Interpret request arguments as compiler options and extra source paths.
 // Keep the source live through context destruction. Extra inputs and names belong to the context.
 // Return a status and retain diagnostics in the context without printing them.
-fn c_program(request: *CrustBuild) -> i32 {
+fn c_program(request: *CrustBuild, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
     var context: *CrustContext = (*request).context;
     var cli: CCli = uninit;
     var success: bool = c_driver_init(&cli, context, (*request).argc);
@@ -264,7 +260,7 @@ fn c_program(request: *CrustBuild) -> i32 {
     cli.target_begin = (*request).target_begin;
     var result: i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
-        result = c_driver_build(&cli);
+        result = c_driver_build(&cli,emit);
     }
     c_stage_destroy(&cli.stage);
     return result;
@@ -331,11 +327,12 @@ fn c_cli_finish_options(cli: *CCli) -> bool {
     if (*cli).source_count == 0usize && (*cli).root == null(*CrustSource) { return c_driver_error(driver, "no source files"); }
     if (*cli).mode >= 3u32 {
         if (*(*driver).options).output != null(*u8) {
-            return c_driver_error(driver, "-o requires C, object, or executable output");
+            return c_driver_error(driver, "-o requires text, object, or executable output");
         }
         if (*(*driver).options).symbols != null(*u8) {
-            return c_driver_error(driver, "--symbols requires --emit-c");
+            return c_driver_error(driver, "--symbols requires --emit");
         }
+        if cli->mode==4u32{cli->options.mode=3u32;}
     } else { (*(*driver).options).mode = (*cli).mode; }
     return true;
 }

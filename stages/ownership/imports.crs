@@ -106,7 +106,7 @@ fn os_import_cleanup(context: *CrustContext, work: *OsLibraryWork, loaded: *OsLo
     return success;
 }
 
-fn os_import_build(cli: *CCli, imports: *OwnershipImports) -> i32 {
+fn os_import_build(cli: *CCli, imports: *OwnershipImports, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
     var context: *CrustContext = (*cli).stage.status.context;
     if (*cli).mode != 0u32 && (*cli).mode != 3u32 {
         os_library_error(context, "ownership imports require linked output or --check; C/object output loses imported dependencies");
@@ -121,7 +121,7 @@ fn os_import_build(cli: *CCli, imports: *OwnershipImports) -> i32 {
     var result: i32 = 1i32;
     if os_import_read(cli, &stage, imports, &work, &loaded) && os_driver_read(cli, &stage) &&
        os_lower(&stage) && os_verify(&stage) {
-        result = os_driver_emit(cli, &resources);
+        result = os_driver_emit(cli, &resources, emit);
     }
     if !os_import_cleanup(context, &work, loaded) { result = 1i32; }
     return result;
@@ -129,14 +129,14 @@ fn os_import_build(cli: *CCli, imports: *OwnershipImports) -> i32 {
 
 // Consume receipts from trusted publication and use captured interface/object
 // bytes. Replacing a published path cannot change the object passed to the linker.
-fn ownership_import_program(request: *CrustBuild, imports: *OwnershipImports) -> i32 {
+fn ownership_import_program(request: *CrustBuild, imports: *OwnershipImports, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
     var cli: CCli = uninit;
     var success: bool = c_driver_init(&cli, (*request).context, (*request).argc);
     cli.root = (*request).source;
     cli.target_begin = (*request).target_begin;
     var result: i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
-        result = os_import_build(&cli, imports);
+        result = os_import_build(&cli, imports, emit);
     }
     c_stage_destroy(&cli.stage);
     return result;

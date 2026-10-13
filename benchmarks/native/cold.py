@@ -167,7 +167,7 @@ def profile(frozen, workload, directory, perf):
     command = [
         str(binary),
         "--library",
-        "--emit-c",
+        "--emit",
         "-o",
         "/dev/null",
         str(workload["paths"]["crust"]),
@@ -327,7 +327,7 @@ def main():
                 str(Path(state["build"]) / "crust"),
                 str(root),
                 *(["--library"] if workload["library"] else []),
-                "--emit-c",
+                "--emit",
                 "-o",
                 str(output),
                 "--symbols",

@@ -240,7 +240,7 @@ def check_heap(build, directory, sanitize):
         source = directory / f"heap-{name}.crs"
         source.write_text(provider + main(body))
         generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
-        command([compiler, "--emit-c", "--symbols", symbols, "-o", generated, source])
+        command([compiler, "--emit", "--symbols", symbols, "-o", generated, source])
         command([build / "crust-ownership-erasure", source])
         execute(generated, symbols, directory, f"heap-{name}", sanitize, b"")
     cases = {**bad_cases(), **type_cases()}

@@ -72,7 +72,7 @@ var request:CrustBuild = make CrustBuild {{
     context:&target_context, source:target_source, target_begin:0usize,
     argc:(*run).argc, argv:(*run).argv
 }};
-var result:i32 = c_program(&request);
+var result:i32 = c_program(&request, c_backend_build);
 if result != 0i32 {{ crust_run_diagnostic(&target_context); }};
 crust_context_destroy(&target_context);
 """
@@ -704,10 +704,10 @@ def check_target(suite):
     target = ROOT / "examples/intrusive/raw.crs"
     response = suite.work / "intrusive.rsp"
     code = compilation_root(target, suite.backend, allocator_checks=True)
-    result = suite.root("intrusive-stage", code, ["--emit-c", "--symbols", response])
+    result = suite.root("intrusive-stage", code, ["--emit", "--symbols", response])
     c_path = suite.write("intrusive.c", result.stdout)
     reference = suite.work / "reference.rsp"
-    prepared = suite.command([suite.build / "crust-c", "--emit-c", "--symbols", reference, target])
+    prepared = suite.command([suite.build / "crust-c", "--emit", "--symbols", reference, target])
     assert result.stdout == prepared.stdout and response.read_bytes() == reference.read_bytes()
     prefix = (
         f'host_source(run,{string(ROOT / "api/crust0_stage.crs")});\n'
@@ -724,12 +724,12 @@ def check_target(suite):
     )
     reader = reader.replace(
         "return crust0_host_write_stream(1u32,&(*payload).byte,1usize) == 0i32;",
-        "return c_build((*state).target,0usize,(*state).argc,(*state).argv) == 0i32;",
+        "return c_build((*state).target,0usize,(*state).argc,(*state).argv, c_backend_build) == 0i32;",
     )
     transferred = suite.root(
         "reader-selected-intrusive",
         (prefix + reader).encode() + b"\0A",
-        ["--emit-c", "--symbols", response],
+        ["--emit", "--symbols", response],
     )
     assert transferred.stdout == prepared.stdout and response.read_bytes() == reference.read_bytes()
     raw = suite.work / "intrusive-raw.o"
@@ -775,7 +775,7 @@ def check_target(suite):
     suite.root(
         "target-forward",
         compilation_root(later, suite.backend),
-        ["--emit-c", "--symbols", "/dev/null"],
+        ["--emit", "--symbols", "/dev/null"],
     )
     bad = suite.write(
         "host-name-target.crs", "fn main(argc:i32,argv:**u8)->i32{return host_source();}\n"
@@ -783,7 +783,7 @@ def check_target(suite):
     result = suite.root(
         "target-separate-names",
         compilation_root(bad, suite.backend),
-        ["--emit-c", "--symbols", "/dev/null"],
+        ["--emit", "--symbols", "/dev/null"],
         expected=1,
         diagnostic=b"unknown name 'host_source'",
     )
@@ -807,17 +807,17 @@ fn helper(item: *Extra) -> i32 { return (*item).value; }
 extern fn compare_text(left:*u8,right:*u8)->i32 = "strcmp";
 extern fn text_size(text:*u8)->usize = "strlen";
 fn build(request:*CrustBuild)->i32 {
-    if sizeof(CBackendOptions)!=56usize || alignof(CBackendOptions)!=8usize ||
-       offsetof(CBackendOptions,mode)!=0usize || offsetof(CBackendOptions,output)!=8usize ||
-       offsetof(CBackendOptions,symbols)!=16usize || offsetof(CBackendOptions,cflags)!=24usize ||
-       offsetof(CBackendOptions,cflag_count)!=32usize || offsetof(CBackendOptions,ldflags)!=40usize ||
-       offsetof(CBackendOptions,ldflag_count)!=48usize { return 80i32; }
+    if sizeof(BackendOptions)!=56usize || alignof(BackendOptions)!=8usize ||
+       offsetof(BackendOptions,mode)!=48usize || offsetof(BackendOptions,output)!=0usize ||
+       offsetof(BackendOptions,symbols)!=8usize || offsetof(BackendOptions,cflags)!=16usize ||
+       offsetof(BackendOptions,cflag_count)!=24usize || offsetof(BackendOptions,ldflags)!=32usize ||
+       offsetof(BackendOptions,ldflag_count)!=40usize { return 80i32; }
     if (*request).argc!=2i32 || compare_text((*request).argv[0usize],"-o")!=0i32 { return 81i32; }
     var args:[*u8;2] = make [*u8;2] { "--prepare", @EXTRA@ };
     var prepare:CrustBuild = *request;
     prepare.argc = 2i32;
     prepare.argv = &args[0usize];
-    var status:i32 = c_program(&prepare);
+    var status:i32 = c_program(&prepare, c_backend_build);
     if status!=0i32 { return status; }
     var context:*CrustContext = (*request).context;
     var parsed:*CrustUnit = (*context).units;
@@ -835,7 +835,7 @@ fn build(request:*CrustBuild)->i32 {
     var before_type:CrustType = *(*entry).type;
     var before_body:CrustStmt = *(*entry).body;
     var before_source:CrustSource = *extra_source;
-    var options:CBackendOptions = make CBackendOptions {
+    var options:BackendOptions = make BackendOptions {
         mode:2u32,output:@GENERATED@,symbols:@SYMBOLS@,
         cflags:null(**u8),cflag_count:0usize,ldflags:null(**u8),ldflag_count:0usize
     };
@@ -873,7 +873,8 @@ fn build(request:*CrustBuild)->i32 {
         body + "\nvar target_context:CrustContext = uninit;",
     )
     program = program.replace(
-        "var result:i32 = c_program(&request);", "var result:i32 = build(&request);"
+        "var result:i32 = c_program(&request, c_backend_build);",
+        "var result:i32 = build(&request);",
     )
     output = suite.work / "retained-context"
     suite.root("retained-context", program, ["-o", output])

@@ -148,7 +148,7 @@ def main():
         root_command = [str(binaries["launcher"]), str(workload["paths"]["staged"]), *options]
         selected = {
             "check": [*root_command, "--check"],
-            "handoff": [*root_command, "--emit-c", "-o", str(output), "--symbols", str(response)],
+            "handoff": [*root_command, "--emit", "-o", str(output), "--symbols", str(response)],
             "gcc": commands["gcc-original-syntax"],
             "clang": ["clang-20", *commands["gcc-original-syntax"][1:]],
             "clang_ir": [

@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+const LLVM_OPTIMIZATION:u32=0u32;
+
 fn llvm_stage_toolchain(toolchain:*StageToolchain)->bool {
-    return llvm_toolchain(toolchain,LLVM_DIRECTORY,0u32);
+    return llvm_toolchain(toolchain,LLVM_DIRECTORY,LLVM_OPTIMIZATION);
 }

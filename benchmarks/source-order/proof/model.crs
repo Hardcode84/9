@@ -7,7 +7,7 @@ record ProofSession {
     source: *CrustSource;
     cursor: usize;
     reader: fn(*ProofSession, *CrustContext, *ProofAction) -> i32;
-    backend: fn(*CrustContext, *CrustDecl, *CBackendOptions) -> i32;
+    backend: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32;
     target: *CrustContext;
     argv: **u8;
     pending: fn(*ProofSession) -> i32;

@@ -170,7 +170,7 @@ def check_places(build, directory, sanitize):
         source = directory / f"{name}.crs"
         source.write_text(text)
         generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
-        command([compiler, "--emit-c", "--symbols", symbols, "-o", generated, source])
+        command([compiler, "--emit", "--symbols", symbols, "-o", generated, source])
         command([build / "crust-ownership-erasure", source])
         execute(generated, symbols, directory, name, sanitize, b"")
     rejected(compiler, directory, bad_cases())

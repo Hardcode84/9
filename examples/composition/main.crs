@@ -4,18 +4,21 @@ host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
+host_source(run,"../backend.crs");
+var backend:ExampleBackend=uninit;
+if !example_backend(run,stages,&backend){return 1i32;};
 host_source(run,"setup.crs");
-if !composition_stages(run, stages) { return 1i32; };
+if !composition_stages(run,stages,&backend) { return 1i32; };
 host_source(run,"build.crs");
 
 var context:CrustContext=uninit;
 crust_context_init(&context,null(*CrustAllocator));
 var source:*CrustSource=host_input(run,"program.crs",1u64);
-var options:CBackendOptions=make CBackendOptions {
+var options:BackendOptions=make BackendOptions {
     mode:0u32, output:host_path(run,"../../build/composition"), symbols:null(*u8),
     cflags:null(**u8), cflag_count:0usize, ldflags:null(**u8), ldflag_count:0usize
 };
-var success:bool=source!=null(*CrustSource) && composition_build(&context,source,&options);
+var success:bool=source!=null(*CrustSource) && composition_build(&context,source,&options,backend.emit);
 if !success && context.error_count!=0usize {
     crust_set_error((*run).context,context.error_loc.source,context.error_loc.offset,&context.error[0usize]);
 };

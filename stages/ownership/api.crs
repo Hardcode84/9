@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
+// Include stages/c/api.crs for BackendOptions.
 // Require an empty context. Retain source bytes and arguments until return.
 // Verify function interfaces, owners, and retained references before output.
-extern fn ownership_program(request: *CrustBuild, trusted: *CrustSource, count: usize) -> i32 = "ownership_program";
+extern fn ownership_program(request: *CrustBuild, trusted: *CrustSource, count: usize, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 = "ownership_program";

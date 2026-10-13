@@ -4,9 +4,12 @@ host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
+host_source(run,"../backend.crs");
+var backend:ExampleBackend=uninit;
+if !example_backend(run,stages,&backend){return 1i32;};
 host_source(run, "setup.crs");
-if !load_example_stages(run, stages) { return 1i32; };
+if !load_example_stages(run,stages,&backend) { return 1i32; };
 host_source(run, "build.crs");
 
 var inputs: [*u8; 3] = make [*u8; 3] { "types.crs", "pair.crs", "program.crs" };
-return generic_build(run, &inputs[0usize], 3usize);
+return generic_build(run, &inputs[0usize], 3usize,backend.emit);

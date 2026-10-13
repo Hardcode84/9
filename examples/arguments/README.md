@@ -25,7 +25,7 @@ Use another backend operation through the same root file:
 
 ```sh
 build/crust examples/arguments/main.crs --check
-build/crust examples/arguments/main.crs --emit-c -o build/arguments.c --symbols build/arguments.rsp
+build/crust examples/arguments/main.crs --emit -o build/arguments.c --symbols build/arguments.rsp
 ```
 
 `--check` creates no executable. C and symbol output are separate files. See

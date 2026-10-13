@@ -304,7 +304,7 @@ def check_native_cases(build, directory, sanitize):
         command(
             [
                 build / "crust-ownership-test",
-                "--emit-c",
+                "--emit",
                 "--symbols",
                 symbols,
                 "-o",
@@ -351,7 +351,7 @@ def run(build, directory, sanitize):
         [
             str(build / "crust"),
             str(source.with_name("main.crs")),
-            "--emit-c",
+            "--emit",
             "--symbols",
             str(symbols),
             "-o",

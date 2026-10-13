@@ -68,7 +68,7 @@ def root_source(work, build):
                 f'host_source(run, {json.dumps(str(ROOT / "api/crust0_stage.crs"))});',
                 f'host_source(run, {json.dumps(str(ROOT / "stages/resources/api.crs"))});',
                 f'host_link(run, {json.dumps(str(build / "crust-resource-library.so"))});',
-                "return resource_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv);",
+                "return resource_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv, c_backend_build);",
                 "",
             ]
         )
@@ -149,7 +149,7 @@ def prepare(work, build, root, name, sources, controls, baseline=None, expected=
     prefix = [str(build / "crust"), str(root), *exports, *map(str, sources)]
     commands = {
         "check": [*prefix, "--check"],
-        "handoff": [*prefix, "--emit-c", "-o", str(output), "--symbols", str(symbols)],
+        "handoff": [*prefix, "--emit", "-o", str(output), "--symbols", str(symbols)],
     }
     dependencies = {}
     for label, control in controls.items():
@@ -247,7 +247,7 @@ def columns(build, work, rounds):
             str(build / "crust-resource"),
             str(library),
             str(source),
-            "--emit-c",
+            "--emit",
             "-o",
             str(output),
             "--symbols",

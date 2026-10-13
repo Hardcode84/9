@@ -4,12 +4,15 @@ host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
+host_source(run,"../backend.crs");
+var backend:ExampleBackend=uninit;
+if !example_backend(run,stages,&backend){return 1i32;};
 host_source(run, "../../stages/modules/library.crs");
 host_source(run, "../../stages/ccn/count.crs");
 
 const CCN_LIMIT: usize = 4usize;
 
-fn checked_build(root: *CrustRun, target: *CrustModule) -> i32 {
+fn checked_build(root: *CrustRun, target: *CrustModule,emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
     var input: *u8 = host_path(root, "program.crs");
     var output: *u8 = host_path(root, "../../build/ccn-example");
     if input == null(*u8) || output == null(*u8) { return 1i32; }
@@ -20,17 +23,17 @@ fn checked_build(root: *CrustRun, target: *CrustModule) -> i32 {
     if !ccn_check_unit(&counter, (*target).context.units, CCN_LIMIT) { return 1i32; }
     if !module_check(target) || !module_export(target, "main", "ccn_example_main") { return 1i32; }
 
-    var options: CBackendOptions = make CBackendOptions {
+    var options: BackendOptions = make BackendOptions {
         mode: 0u32, output: output, symbols: null(*u8),
         cflags: null(**u8), cflag_count: 0usize,
         ldflags: null(**u8), ldflag_count: 0usize
     };
-    return c_backend_build(&(*target).context, module_find(target, "main"), &options);
+    return backend_output(&(*target).context, module_find(target, "main"), &options,emit);
 }
 
 var target: CrustModule = uninit;
 module_init(&target, null(*CrustAllocator));
-var status: i32 = checked_build(run, &target);
+var status: i32 = checked_build(run,&target,backend.emit);
 if target.context.error_count != 0usize { crust_run_diagnostic(&target.context); };
 module_destroy(&target);
 return status;

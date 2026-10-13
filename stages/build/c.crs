@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn stage_emit(build: *StageBuild, context: *CrustContext, source: *u8, symbols: *u8) -> bool {
-    var options: CBackendOptions = make CBackendOptions {
+    var options: BackendOptions = make BackendOptions {
         mode: 2u32, output: source, symbols: symbols,
         cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
     };
     var entry: *CrustDecl = null(*CrustDecl);
     if build->interpreter == null(*CrustRun) { return c_backend_build(context, entry, &options) == 0i32; }
-    var pointer: *CBackendOptions = &options;
+    var pointer: *BackendOptions = &options;
     var arguments: [*u8; 3] = make [*u8; 3] { &context as *u8, &entry as *u8, &pointer as *u8 };
     var status: i32 = 1i32;
     return crust_eval_call(build->interpreter->eval, build->emitter, &arguments[0usize], 3usize, &status as *u8) && status == 0i32;

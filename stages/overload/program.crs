@@ -51,7 +51,7 @@ fn ov_driver_entry(cli:*CCli, overloads:*OvStage)->*CrustDecl {
 
 fn ov_driver_build(cli:*CCli, overloads:*OvStage,
     reader:fn(*OvStage,*CrustSource,usize,usize)->bool,
-    prepare:fn(*OvStage)->bool, body:fn(*CStage,*CrustDecl,*u8)->bool, user:*u8)->i32 {
+    prepare:fn(*OvStage)->bool, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32 {
     var context:*CrustContext = (*overloads).context;
     if (*cli).root != null(*CrustSource) &&
        !reader(overloads, (*cli).root, (*cli).target_begin, (*(*cli).root).size) { return 1i32; }
@@ -79,11 +79,7 @@ fn ov_driver_build(cli:*CCli, overloads:*OvStage,
         entry = ov_driver_entry(cli, overloads);
         if entry == null(*CrustDecl) { return 1i32; }
     }
-    if (*cli).mode == 4u32 {
-        if c_emit_with_body(&(*cli).stage, entry, body, user) { return 0i32; }
-        return 1i32;
-    }
-    return c_backend_build_with_body(context, entry, &(*cli).options, body, user);
+    return backend_output(context,entry,&(*cli).options,emit);
 }
 
 fn ov_check(stage:*OvStage)->bool {
@@ -94,7 +90,7 @@ fn ov_check(stage:*OvStage)->bool {
 
 // Require an empty initialized context and source storage live through its destruction.
 // Complete the requested output. Retain diagnostics without printing them.
-fn overload_program(request:*CrustBuild)->i32 {
+fn overload_program(request:*CrustBuild, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32 {
     var cli:CCli = uninit;
     var context:*CrustContext = (*request).context;
     var success:bool = c_driver_init(&cli, context, (*request).argc);
@@ -105,20 +101,20 @@ fn overload_program(request:*CrustBuild)->i32 {
     var result:i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
         result = ov_driver_build(&cli, &overloads, ov_read, ov_check,
-            null(fn(*CStage,*CrustDecl,*u8)->bool), null(*u8));
+            emit);
     }
     c_stage_destroy(&cli.stage);
     return result;
 }
 
 // Compile the retained source from begin through EOF, print failures, and release its context.
-fn overload_build(source:*CrustSource, begin:usize, argc:i32, argv:**u8)->i32 {
+fn overload_build(source:*CrustSource, begin:usize, argc:i32, argv:**u8, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32 {
     var context:CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
     var request:CrustBuild = make CrustBuild {
         context:&context, source:source, target_begin:begin, argc:argc, argv:argv
     };
-    var result:i32 = overload_program(&request);
+    var result:i32 = overload_program(&request, emit);
     if context.error_count != 0usize { c_driver_diagnostic(&context, "overload_build"); }
     crust_context_destroy(&context);
     return result;

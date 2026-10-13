@@ -115,7 +115,7 @@ The [Hello World source](../examples/hello/main.crs) loads the C stage API
 and shared library, prepares an output argument array, and ends with:
 
 ```crust
-return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize]);
+return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize], c_backend_build);
 ```
 
 The cursor is already after this return statement's semicolon. `c_build`

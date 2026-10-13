@@ -40,5 +40,5 @@ fn su_checked_driver(driver:read SuDriver,arena:read SuArena)->i32 access(edit,C
     if !su_checked_passes(read arena) || !su_exports(read driver){return 1i32;}
     if su_driver_mode(read driver)==3u32{return 0i32;}
     if !su_names(read driver){return 1i32;}
-    return su_output(read driver,su_driver_mode(read driver)==4u32);
+    return su_output(read driver);
 }

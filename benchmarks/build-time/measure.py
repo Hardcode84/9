@@ -70,7 +70,7 @@ def main():
         "c-emit": [
             [
                 *c,
-                "--emit-c",
+                "--emit",
                 "-o",
                 str(output / "program.c"),
                 "--symbols",

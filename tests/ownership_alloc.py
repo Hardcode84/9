@@ -47,7 +47,7 @@ def main():
             [
                 args.build / "crust-c",
                 "--library",
-                "--emit-c",
+                "--emit",
                 "--export",
                 "ownership_alloc_verify",
                 "--symbols",

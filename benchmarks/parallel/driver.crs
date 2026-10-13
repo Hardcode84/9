@@ -28,7 +28,7 @@ fn compile_job(data:*u8)->unit {
        !module_read(module,(*job).source,(*job).identity) || !module_check(module) ||
        !module_export(module,(*job).name,(*job).name) {return;}
     if (*job).check {(*job).success=true;return;}
-    var options:CBackendOptions=make CBackendOptions {
+    var options:BackendOptions=make BackendOptions {
         mode:2u32, output:(*job).output, symbols:(*job).symbols,
         cflags:null(**u8),cflag_count:0usize,ldflags:null(**u8),ldflag_count:0usize
     };
@@ -41,7 +41,7 @@ fn compile_provider(provider:*CrustModule,source:*u8,output:*u8,symbols:*u8,chec
        !module_export(provider,"insert_after","bench_insert") ||
        !module_export(provider,"unlink","bench_unlink") {return false;}
     if check {return true;}
-    var options:CBackendOptions=make CBackendOptions {
+    var options:BackendOptions=make BackendOptions {
         mode:2u32, output:output, symbols:symbols,
         cflags:null(**u8),cflag_count:0usize,ldflags:null(**u8),ldflag_count:0usize
     };

@@ -119,13 +119,15 @@ def application(build, work, name, source, provider, pairs, rng):
         ]
     count = "provider,1usize" if provider else "null(*CrustSource),0usize"
     lines += [
-        "return ownership_build(null(*CrustSource),0usize,(*run).argc,(*run).argv," + count + ");"
+        "return ownership_build(null(*CrustSource),0usize,(*run).argc,(*run).argv,"
+        + count
+        + ", c_backend_build);"
     ]
     root.write_text("\n".join(lines) + "\n")
     prefix = [str(build / "crust"), str(root), str(source)]
     commands = {
         "check": [*prefix, "--check"],
-        "handoff": [*prefix, "--emit-c", "-o", str(target), "--symbols", str(symbols)],
+        "handoff": [*prefix, "--emit", "-o", str(target), "--symbols", str(symbols)],
     }
     samples = []
     memory = {}

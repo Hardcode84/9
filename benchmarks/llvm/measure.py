@@ -77,7 +77,7 @@ def main():
                 backend,
                 mode,
                 *options,
-                "--emit-c",
+                "--emit",
                 "-o",
                 output,
                 *inputs,

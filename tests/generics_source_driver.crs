@@ -65,7 +65,7 @@ fn source_read_all(program: *GsProgram, argc: i32, argv: **u8) -> bool {
 fn source_emit_c(program: *GsProgram, path: *u8, symbols: *u8) -> bool {
     var entry: *CrustDecl = gp_find(program, "main");
     if entry == null(*CrustDecl) { return false; }
-    var options: CBackendOptions = make CBackendOptions {
+    var options: BackendOptions = make BackendOptions {
         mode: 2u32, output: path, symbols: symbols,
         cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
     };

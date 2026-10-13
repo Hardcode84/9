@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Require complete checked raw bodies and assigned native names.
+// Retain all inputs through return. Publish output only after successful emission.
+fn llvm_backend_build(context:*CrustContext,entry:*CrustDecl,options:*BackendOptions)->i32 {
+    var stage:LlStage=uninit;ll_init(&stage,context);
+    var driver:CDriver=make CDriver{stage:&stage.memory,options:options,command:null(**u8),temporary:null(*CDriverTemp),process_status:0i32};
+    var success:bool=c_driver_validate(&driver) && ll_emit(&stage,entry);
+    if success{c_buffer_bytes(&stage.memory.header,stage.memory.body.data,stage.memory.body.size);success=ll_ok(&stage);}
+    var result:i32=c_driver_finish(&driver,success,llvm_driver_object);
+    ll_destroy(&stage);return result;
+}
+fn llvm_driver_object(driver:*CDriver,source:*u8,output:*u8,mode:u32)->bool {
+    var compiler:*u8=c_driver_join(&driver->stage->status,LLVM_DIRECTORY,"/bin/clang");
+    if compiler==null(*u8){return false;}
+    var arguments:**u8=driver->command;
+    arguments[0usize]=compiler;arguments[1usize]="--no-default-config";
+    arguments[2usize]="-target";arguments[3usize]="x86_64-unknown-linux-gnu";
+    arguments[4usize]=LLVM_LEVELS[LLVM_OPTIMIZATION as usize];
+    var index:usize=0usize;
+    while index<driver->options->cflag_count{arguments[5usize+index]=driver->options->cflags[index];index=index+1usize;}
+    var count:usize=5usize+index;
+    arguments[count]="-x";arguments[count+1usize]="ir";arguments[count+2usize]="-c";
+    arguments[count+3usize]=source;arguments[count+4usize]="-o";arguments[count+5usize]=output;
+    return c_driver_run(driver,count+6usize,mode);
+}

@@ -173,6 +173,8 @@ Code changes: `make all`, then applicable checks:
 | Verified ownership imports | `check-ownership-imports` |
 | Overloads/resource composition | `check-overload check-overload-alloc` |
 | Compilation examples | `check-examples` |
+| Tutorials across C/LLVM and LLVM-built stages | `check-tutorials` |
+| LLVM emission and package toolchains | `check-llvm` |
 | Modules/bindings/exports | `check-modules` |
 | Generic definitions/instances | `check-generics` |
 | External union syntax/layout | `check-union check-union-alloc` |

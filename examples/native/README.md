@@ -24,7 +24,7 @@ and callable identities survive the handoff, and that setup ran once.
 To emit target C without target compilation or linking:
 
 ```sh
-build/crust examples/native/main.crs --emit-c -o build/native-hello.c --symbols build/native-hello.rsp
+build/crust examples/native/main.crs --emit -o build/native-hello.c --symbols build/native-hello.rsp
 ```
 
 Trailing arguments go to the C target driver. Source and temporary paths use

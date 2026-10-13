@@ -135,7 +135,7 @@ def check_temporary_errors(command, compiler, backend, work, cc):
     output, victim = work / "entropy-output", work / "entropy-victim"
     occupied = work / (".crust-" + "00" * 16)
     victim.write_text("retained victim\n")
-    variants = [["--emit-c"], ["--object"]] if backend == "c" else [[]]
+    variants = [["--emit"], ["--object"]] if backend == "c" else [[]]
     for options in variants:
         for mode in ("fail", "collision"):
             environment["CRUST_TEST_ENTROPY"] = mode
@@ -162,7 +162,7 @@ def check_output_permissions(command, compiler, backend, work, tool_flags):
     modes = [("assembly", [], 0o666)]
     if backend == "c":
         modes = [
-            ("text", ["--emit-c"], 0o666),
+            ("text", ["--emit"], 0o666),
             ("object", ["--object"], 0o666),
             ("executable", [], 0o777),
         ]
@@ -204,7 +204,7 @@ def check_output_permissions(command, compiler, backend, work, tool_flags):
                 else:
                     path.write_text("retained temporary\n")
 
-        options = ["--emit-c"] if backend == "c" else []
+        options = ["--emit"] if backend == "c" else []
         command([compiler, *options, "-o", output, source], preexec_fn=occupy)
         assert output.read_text() != "retained destination\n"
         assert stat.S_IMODE(output.stat().st_mode) == 0o640
@@ -966,7 +966,7 @@ fn main(argc:i32,argv:**u8)->i32 {
     valid = work / "valid.crs"
     invalid = work / "invalid.crs"
     output = work / ("atomic.c" if args.backend == "c" else "atomic.s")
-    dump_options = ["--emit-c"] if args.backend == "c" else []
+    dump_options = ["--emit"] if args.backend == "c" else []
     valid.write_text(
         'extern fn native()->unit="validation_native"; fn main(argc:i32,argv:**u8)->i32{return 0i32;}'
     )
@@ -1019,20 +1019,20 @@ fn main(argc:i32,argv:**u8)->i32 {
     assert link.is_symlink() and link.readlink() == Path(target.name)
     assert target.read_bytes() == output.read_bytes()
     if args.backend == "c":
-        assert command([compiler, "--emit-c", valid]).stdout == output.read_bytes()
+        assert command([compiler, "--emit", valid]).stdout == output.read_bytes()
         assert command([compiler, "--prepare", valid]).stdout == b""
         symbols = work / "atomic.rsp"
-        command([compiler, "--emit-c", "-o", output, "--symbols", symbols, valid])
+        command([compiler, "--emit", "-o", output, "--symbols", symbols, valid])
         assert b"validation_native" in symbols.read_bytes()
         expected_c, expected_symbols = output.read_bytes(), symbols.read_bytes()
-        command([compiler, "--emit-c", "-o", output, "--symbols", symbols, invalid], expected=1)
+        command([compiler, "--emit", "-o", output, "--symbols", symbols, invalid], expected=1)
         assert output.read_bytes() == expected_c and symbols.read_bytes() == expected_symbols
-        command([compiler, "--emit-c", "-o", output, "--symbols", output, valid], expected=1)
+        command([compiler, "--emit", "-o", output, "--symbols", output, valid], expected=1)
         assert output.read_bytes() == expected_c
         command(
             [
                 compiler,
-                "--emit-c",
+                "--emit",
                 "-o",
                 output,
                 "--symbols",
@@ -1050,7 +1050,7 @@ fn main(argc:i32,argv:**u8)->i32 {
         command(
             [
                 compiler,
-                "--emit-c",
+                "--emit",
                 "-o",
                 unpublished,
                 "--symbols",
@@ -1060,7 +1060,7 @@ fn main(argc:i32,argv:**u8)->i32 {
             expected=1,
         )
         assert not unpublished.exists()
-        command([compiler, "--emit-c", "-o", target, "--symbols", link, valid], expected=1)
+        command([compiler, "--emit", "-o", target, "--symbols", link, valid], expected=1)
         assert link.is_symlink() and target.read_bytes() == expected_c
         hardlink = work / "hardlink-target"
         hardlink.unlink(missing_ok=True)
@@ -1068,16 +1068,16 @@ fn main(argc:i32,argv:**u8)->i32 {
         hardlink_alias = work / "hardlink-output"
         hardlink_alias.unlink(missing_ok=True)
         hardlink_alias.symlink_to(hardlink.name)
-        command([compiler, "--emit-c", "-o", link, "--symbols", hardlink_alias, valid], expected=1)
+        command([compiler, "--emit", "-o", link, "--symbols", hardlink_alias, valid], expected=1)
         assert target.read_bytes() == expected_c and hardlink.read_bytes() == expected_c
         assert link.is_symlink() and hardlink_alias.is_symlink()
         dangling = work / "dangling-artifact"
         dangling.unlink(missing_ok=True)
         dangling.symlink_to("absent-artifact-target")
-        command([compiler, "--emit-c", "-o", unpublished, "--symbols", dangling, valid], expected=1)
+        command([compiler, "--emit", "-o", unpublished, "--symbols", dangling, valid], expected=1)
         assert dangling.is_symlink() and not unpublished.exists() and not dangling.exists()
-        command([compiler, "--emit-c", "--symbols", "/dev/null", valid])
-        command([compiler, "--emit-c", "-o", output, "--symbols", "/dev/full", valid], expected=1)
+        command([compiler, "--emit", "--symbols", "/dev/null", valid])
+        command([compiler, "--emit", "-o", output, "--symbols", "/dev/full", valid], expected=1)
         assert output.read_bytes() == expected_c
 
         for arguments in (
@@ -1186,9 +1186,7 @@ fn main(argc:i32,argv:**u8)->i32 {
         generated = []
         for name, stage_compiler in generations:
             c_path, response = work / f"self-{name}.c", work / f"self-{name}.rsp"
-            command(
-                [stage_compiler, "--emit-c", "-o", c_path, "--symbols", response, *stage_sources]
-            )
+            command([stage_compiler, "--emit", "-o", c_path, "--symbols", response, *stage_sources])
             generated.append((c_path.read_bytes(), response.read_bytes()))
         assert (
             generated[0] == generated[1]
@@ -1224,9 +1222,7 @@ fn main(argc:i32,argv:**u8)->i32 {
             ]
         )
         next_c, next_response = work / "self-next.c", work / "self-next.rsp"
-        command(
-            [next_compiler, "--emit-c", "-o", next_c, "--symbols", next_response, *stage_sources]
-        )
+        command([next_compiler, "--emit", "-o", next_c, "--symbols", next_response, *stage_sources])
         assert generated[1] == (
             next_c.read_bytes(),
             next_response.read_bytes(),

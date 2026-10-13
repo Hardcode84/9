@@ -150,7 +150,7 @@ def main():
             commands[mode] = [
                 build / "crust",
                 root,
-                "--emit-c",
+                "--emit",
                 "-o",
                 case / (mode + ".c"),
                 "--symbols",
@@ -158,7 +158,7 @@ def main():
             ]
         commands["prepared_c"] = [
             build / "crust-c",
-            "--emit-c",
+            "--emit",
             "-o",
             case / "prepared_c.c",
             "--symbols",

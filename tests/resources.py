@@ -1361,7 +1361,7 @@ class Suite:
         generated = self.work / (name + ".c")
         symbols = self.work / (name + ".rsp")
         emitted = self.command(
-            [self.compiler, "--emit-c", "-o", generated, "--symbols", symbols, path]
+            [self.compiler, "--emit", "-o", generated, "--symbols", symbols, path]
         )
         if emitted.stdout or emitted.stderr or not generated.stat().st_size or not symbols.exists():
             raise Failure(
@@ -1406,7 +1406,7 @@ class Suite:
                     name + "-" + borrow,
                     f"fn start(argc:i32,argv:{borrow} *u8)->i32{{return 0i32;}}",
                 )
-                for endpoint in ("--prepare", "--emit-c"):
+                for endpoint in ("--prepare", "--emit"):
                     result = self.command(
                         [self.compiler, endpoint, "--entry", "start", path], expected=1
                     )
@@ -1415,7 +1415,7 @@ class Suite:
         elif name == "cli-empty-source":
             path = self.source(name, "")
             self.command([self.compiler, "--check", path])
-            result = self.command([self.compiler, "--emit-c", "--library", path])
+            result = self.command([self.compiler, "--emit", "--library", path])
             if not result.stdout or result.stderr:
                 raise Failure(f"empty library did not emit C: {result.stdout!r} {result.stderr!r}")
         elif name == "cli-shared-record-cleanup-growth":
@@ -1423,7 +1423,7 @@ class Suite:
             for depth in (8, 14):
                 source = self.source(f"{name}-{depth}", cleanup_tree_source(depth))
                 output = source.with_suffix(".c")
-                self.command([self.compiler, "--library", "--emit-c", "-o", output, source])
+                self.command([self.compiler, "--library", "--emit", "-o", output, source])
                 sizes.append(output.stat().st_size)
             if sizes[1] > 100_000 or sizes[1] > 3 * sizes[0]:
                 raise Failure(f"record cleanup expanded with value size: {sizes}")
@@ -1518,7 +1518,7 @@ class Suite:
                 raise Failure("multiple-source resource program did not destroy its owner once")
         elif name == "cli-failure-preserves-output":
             path = self.source(name, program("var value:Token=token(65i32); var copy:Token=value;"))
-            for mode, suffix in (([], ".exe"), (["--emit-c"], ".c")):
+            for mode, suffix in (([], ".exe"), (["--emit"], ".c")):
                 output = self.work / (name + suffix)
                 output.write_bytes(b"retained output\n")
                 self.command([self.compiler, *mode, "-o", output, path], expected=1)
@@ -1528,6 +1528,7 @@ class Suite:
             package = self.work / "ordinary resource package"
             for directory in ("api", "stages", "examples/resources/hello"):
                 shutil.copytree(ROOT / directory, package / directory)
+            shutil.copyfile(ROOT / "examples/backend.crs", package / "examples/backend.crs")
             output = package / "build/resource-hello"
             output.parent.mkdir()
             source = package / "examples/resources/hello/main.crs"

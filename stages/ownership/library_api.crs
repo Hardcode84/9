@@ -6,10 +6,10 @@
 // The checker host and its loaded images must remain unchanged during the call.
 // Receipt strings belong to request.context. Copy them before destroying it.
 extern fn ownership_publish(request: *CrustBuild, directory: *u8,
-                            result: *OwnershipLibrary, trusted: *CrustSource, count: usize) -> i32 = "ownership_publish";
+                            result: *OwnershipLibrary, trusted: *CrustSource, count: usize, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 = "ownership_publish";
 
 // Require an empty context and receipts from trusted publication. Capture and
 // validate each bundle, check client bodies, and link private object snapshots.
 // No provider source or provider body is read. Keep all arguments live to return.
 extern fn ownership_import_program(request: *CrustBuild,
-                                   imports: *OwnershipImports) -> i32 = "ownership_import_program";
+                                   imports: *OwnershipImports, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 = "ownership_import_program";

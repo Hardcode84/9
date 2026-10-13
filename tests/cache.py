@@ -297,7 +297,7 @@ def check_backend(suite):
     assert len(needed) == 1 and b"[libc.so.6]" in needed[0], dynamic
     suite.run(
         root,
-        arguments=["--emit-c", "-o", output / "paired.c", "--symbols", output / "paired.rsp"],
+        arguments=["--emit", "-o", output / "paired.c", "--symbols", output / "paired.rsp"],
         cwd="/",
     )
     assert (output / "paired.c").exists() and (output / "paired.rsp").exists()

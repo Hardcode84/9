@@ -38,7 +38,7 @@ class Suite:
             [
                 self.driver,
                 mode,
-                "--emit-c",
+                "--emit",
                 "-o",
                 ir,
                 "--symbols",
@@ -120,7 +120,7 @@ def raw(suite):
             "override", "fn main(argc:i32,argv:**u8)->i32{return 7i32+7i32;}", mode="override"
         )
     )
-    rejected = check([suite.driver, "bad-override", "--emit-c", suite.work / "override.crs"], 1)
+    rejected = check([suite.driver, "bad-override", "--emit", suite.work / "override.crs"], 1)
     assert b"callback returned no operand" in rejected.stderr
 
 
@@ -194,7 +194,7 @@ fn main(argc:i32,argv:**u8)->i32{
     )
     source = suite.work / "invalid-abi.crs"
     source.write_text('extern fn first(x:i32)->i32="same";extern fn second(x:i64)->i32="same";')
-    result = check([suite.driver, "raw", "--library", "--emit-c", source], 1)
+    result = check([suite.driver, "raw", "--library", "--emit", source], 1)
     assert b"conflicting native ABI" in result.stderr
 
 

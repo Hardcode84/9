@@ -137,7 +137,7 @@ def staged_source(target, output, native_library):
         (
             f"host_link(run, {crust_string(os.path.relpath(native_library, output.parent))});",
             f"var target: *CrustSource = host_input(run, {crust_string(os.path.relpath(target, output.parent))}, 1u64);",
-            "return c_build(target, 0usize, (*run).argc, (*run).argv);",
+            "return c_build(target, 0usize, (*run).argc, (*run).argv, c_backend_build);",
             "",
         )
     )
@@ -174,14 +174,14 @@ def output_command(workload, binaries, route, response):
             str(binaries["launcher"]),
             str(workload["paths"]["staged"]),
             *options,
-            "--emit-c",
+            "--emit",
             "--symbols",
             str(response),
         ]
     return [
         str(binaries["prepared"]),
         *options,
-        "--emit-c",
+        "--emit",
         "--symbols",
         str(response),
         str(workload["paths"]["crust"]),

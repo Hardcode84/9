@@ -283,7 +283,7 @@ def native_checks(experiment, dependency_paths, exports, corpus):
             ]
         )
         c_output, symbols = work / f"{name}-target.c", work / f"{name}-target.rsp"
-        experiment.run([compiler, "--emit-c", "-o", c_output, "--symbols", symbols, runtime])
+        experiment.run([compiler, "--emit", "-o", c_output, "--symbols", symbols, runtime])
         artifacts.append((c_output.read_bytes(), symbols.read_bytes()))
         obj = compile_object(experiment, name + "-target", flags)
         binary = work / f"{name}-target"

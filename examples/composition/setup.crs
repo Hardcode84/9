@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn composition_stages(root: *CrustRun, stages: *StageSession)->bool {
+fn composition_stages(root: *CrustRun, stages: *StageSession,backend:*ExampleBackend)->bool {
     return host_source(root,"../../stages/c/model.crs") &&
         host_source(root,"../../stages/c/extension.crs") &&
         host_source(root,"../../stages/reader/model.crs") &&
@@ -12,6 +12,6 @@ fn composition_stages(root: *CrustRun, stages: *StageSession)->bool {
         host_source(root,"../../stages/ownership/extension.crs") &&
         host_source(root,"../../stages/overload/model.crs") &&
         host_source(root,"../../stages/overload/extension.crs") &&
-        stage_load(stages, "stages/ownership/package.crs") &&
-        stage_load(stages, "stages/overload/package.crs");
+        example_load(stages,backend, "stages/ownership/package.crs") &&
+        example_load(stages,backend, "stages/overload/package.crs");
 }

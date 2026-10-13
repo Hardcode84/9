@@ -86,7 +86,7 @@ def check_handles(build, directory, sanitize):
     client.write_text(accepted)
     generated, symbols = client.with_suffix(".c"), client.with_suffix(".rsp")
     command(
-        [compiler, "trusted", provider, "--emit-c", "--symbols", symbols, "-o", generated, client]
+        [compiler, "trusted", provider, "--emit", "--symbols", symbols, "-o", generated, client]
     )
     command([build / "crust-ownership-erasure", "trusted", provider, client])
     execute(generated, symbols, directory, "handles", sanitize, b"")

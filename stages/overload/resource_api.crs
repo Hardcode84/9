@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Include api/crust0.crs and api/crust0_stage.crs before this interface.
+// Include api/crust0.crs, api/crust0_stage.crs, and stages/c/api.crs before this interface.
 // Keep request sources live through context destruction. Return the compiler status.
-extern fn overload_resource_program(request:*CrustBuild)->i32 = "overload_resource_program";
+extern fn overload_resource_program(request:*CrustBuild, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32 = "overload_resource_program";
 // Compile the retained source range with resource rules and print failures.
-extern fn overload_resource_build(source:*CrustSource, begin:usize, argc:i32, argv:**u8)->i32 = "overload_resource_build";
+extern fn overload_resource_build(source:*CrustSource, begin:usize, argc:i32, argv:**u8, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32 = "overload_resource_build";

@@ -24,7 +24,7 @@ fn oi_publish(request: *CrustBuild, directory: *u8) -> i32 {
     var count: usize = 0usize;
     if trusted != null(*CrustSource) { count = 1usize; }
     if (*(*request).context).error_count != 0usize { return 1i32; }
-    var result: i32 = ownership_publish(request, directory, &library, trusted, count);
+    var result: i32 = ownership_publish(request, directory, &library, trusted, count, c_backend_build);
     if result == 0i32 {
         if crust0_host_write_stream(1u32, library.artifact, c_length(library.artifact)) != 0i32 ||
            crust0_host_write_stream(1u32, "\n", 1usize) != 0i32 ||
@@ -48,7 +48,7 @@ fn oi_command(context: *CrustContext, argc: i32, argv: **u8) -> i32 {
     var imports: OwnershipImports = make OwnershipImports { directory: argv[2usize], libraries: &library, count: 1usize };
     request.argc = argc - 5i32;
     request.argv = argv + 5isize;
-    return ownership_import_program(&request, &imports);
+    return ownership_import_program(&request, &imports, c_backend_build);
 }
 
 fn oi_attempt(argc: i32, argv: **u8, state: *OiAllocation) -> i32 {

@@ -28,7 +28,7 @@ Open [main.crs](main.crs). Its first actions load the build request interface,
 the overload API, and `build/crust-overload-library.so`. The final root call is:
 
 ```crust
-return overload_build((*run).source, (*run).cursor, 2i32, &arguments[0usize]);
+return overload_build((*run).source, (*run).cursor, 2i32, &arguments[0usize], c_backend_build);
 ```
 
 The argument array selects `build/overload-hello` as the output. The cursor

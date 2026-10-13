@@ -4,11 +4,14 @@ host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
+host_source(run,"../backend.crs");
+var backend:ExampleBackend=uninit;
+if !example_backend(run,stages,&backend){return 1i32;};
 host_source(run, "../../stages/union/api.crs");
 host_source(run, "../../stages/union/build.crs");
-if !stage_load(stages, "stages/union/package.crs") { return 1i32; };
+if !example_load(stages,&backend,"stages/union/package.crs") { return 1i32; };
 
 var arguments: [*u8; 3] = make [*u8; 3] {
     "-o", host_path(run, "../../build/union"), host_path(run, "program.crs")
 };
-return union_build(null(*CrustSource), 0usize, 3i32, &arguments[0usize]);
+return union_build(null(*CrustSource), 0usize, 3i32, &arguments[0usize], backend.emit);

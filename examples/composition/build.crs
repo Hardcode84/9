@@ -27,7 +27,7 @@ fn composition_names(context:*CrustContext)->unit {
 
 // Compile a complete source through overload selection, ownership, and C emission.
 // Keep source bytes and output options live until return. Retain errors in context.
-fn composition_build(context:*CrustContext, source:*CrustSource, options:*CBackendOptions)->bool {
+fn composition_build(context:*CrustContext, source:*CrustSource, options:*BackendOptions,emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->bool {
     var resources:RsStage=uninit; rs_init(&resources,context);
     var ownership:OsStage=uninit; os_init(&ownership,&resources);
 
@@ -43,5 +43,5 @@ fn composition_build(context:*CrustContext, source:*CrustSource, options:*CBacke
     var entry:*CrustDecl=composition_entry(&overloads);
     if entry==null(*CrustDecl) { return false; }
     composition_names(context);
-    return c_backend_build(context,entry,options)==0i32;
+    return backend_output(context,entry,options,emit)==0i32;
 }

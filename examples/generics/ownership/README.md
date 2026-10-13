@@ -37,7 +37,7 @@ host_source(run, "../../../stages/generics/ownership/build.crs");
 if !stage_load(stages, "stages/generics/ownership/package.crs") { return 1i32; };
 
 return ownership_generics_build(null(*CrustSource), 0usize,
-    (*run).argc, (*run).argv, null(*CrustSource), 0usize);
+    (*run).argc, (*run).argv, null(*CrustSource), 0usize, c_backend_build);
 ```
 
 These paths assume this tutorial's directory. The arguments select source files
@@ -171,7 +171,7 @@ interfaces. Native tests and sanitizers exercise the trusted pointer operations.
 ## 5. Inspect the generated code
 
 ```sh
-build/crust examples/generics/ownership/main.crs --emit-c \
+build/crust examples/generics/ownership/main.crs --emit \
   -o build/generics-ownership.c \
   examples/generics/ownership/payloads.crs \
   examples/generics/ownership/checked.crs \

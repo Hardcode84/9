@@ -119,7 +119,7 @@ fn build_target(root: *CrustRun, user: *u8) -> i32 {
         argc: 2i32, argv: &arguments[0usize]
     };
     if (*root).argc != 0i32 { request.argc = (*root).argc; request.argv = (*root).argv; }
-    var status: i32 = c_program(&request);
+    var status: i32 = c_program(&request, c_backend_build);
     if context.error_count != 0usize {
         crust_set_error((*root).context, context.error_loc.source, context.error_loc.offset, &context.error[0usize]);
     }

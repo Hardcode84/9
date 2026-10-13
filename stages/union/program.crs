@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // The native entry owns both frames until the checked driver returns.
-record SuDriver{cli:*CCli;stage:*SuStage;} opaque scoped;
+record SuDriver{cli:*CCli;stage:*SuStage;emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32;} opaque scoped;
 fn su_input_root(driver:read SuDriver)->bool access(edit,CompilerArena){
     var cli:*CCli=driver.cli;
     if cli->root==null(*CrustSource){return true;}
@@ -24,20 +24,19 @@ fn su_input_read(driver:read SuDriver,index:usize)->bool access(edit,CompilerAre
 fn su_exports(driver:read SuDriver)->bool access(edit,CompilerArena){return c_driver_exports(driver.cli);}
 fn su_names(driver:read SuDriver)->bool access(edit,CompilerArena){return c_driver_names(&driver.cli->driver);}
 fn su_driver_mode(driver:read SuDriver)->u32 access(read,CompilerArena){return driver.cli->mode;}
-fn su_output(driver:read SuDriver,emit:bool)->i32 access(edit,CompilerArena){
+fn su_output(driver:read SuDriver)->i32 access(edit,CompilerArena){
     var entry:*CrustDecl=null(*CrustDecl);
     if !driver.cli->library{entry=c_driver_entry(driver.cli);if entry==null(*CrustDecl){return 1i32;}}
-    if emit{if c_emit(&driver.cli->stage,entry){return 0i32;}return 1i32;}
-    return c_backend_build(driver.stage->context,entry,&driver.cli->options);
+    return backend_output(driver.stage->context,entry,&driver.cli->options,driver.emit);
 }
 fn su_inputs(cli:*CCli,stage:*SuStage)->bool{
     domain CompilerArena{edit CompilerArena{
-        var driver:SuDriver=make SuDriver{cli:cli,stage:stage};return su_checked_inputs(read driver);
+        var driver:SuDriver=make SuDriver{cli:cli,stage:stage,emit:c_backend_build};return su_checked_inputs(read driver);
     }}
 }
-fn su_driver_build(cli:*CCli,stage:*SuStage)->i32{
+fn su_driver_build(cli:*CCli,stage:*SuStage,emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32{
     domain CompilerArena{edit CompilerArena{
-        var driver:SuDriver=make SuDriver{cli:cli,stage:stage};
+        var driver:SuDriver=make SuDriver{cli:cli,stage:stage,emit:emit};
         var arena:SuArena=make SuArena{stage:stage};
         return su_checked_driver(read driver,read arena);
     }}
@@ -45,12 +44,12 @@ fn su_driver_build(cli:*CCli,stage:*SuStage)->i32{
 
 // Require an empty initialized context. Keep request source bytes live until context destruction.
 // Accept C-driver options. Retain diagnostics and return the build status.
-fn union_program(request:*CrustBuild)->i32{
+fn union_program(request:*CrustBuild, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32{
     var cli:CCli=uninit;var stage:SuStage=uninit;var result:i32=1i32;
     var success:bool=c_driver_init(&cli,request->context,request->argc);
     cli.root=request->source;cli.target_begin=request->target_begin;
     if success && su_init(&stage,request->context) && c_driver_parse(&cli,request->argc,request->argv,0i32){
-        result=su_driver_build(&cli,&stage);
+        result=su_driver_build(&cli,&stage,emit);
     }
     c_stage_destroy(&cli.stage);return result;
 }

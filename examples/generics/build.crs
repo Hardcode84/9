@@ -19,12 +19,8 @@ fn generic_read(root: *CrustRun, program: *GsProgram, paths: **u8, count: usize)
     return gp_check(program);
 }
 
-fn generic_emit(context: *CrustContext, entry: *CrustDecl, options: *CBackendOptions) -> i32 {
-    return c_backend_build(context, entry, options);
-}
-
-fn generic_output(root: *CrustRun, program: *GsProgram) -> i32 {
-    var options: CBackendOptions = make CBackendOptions {
+fn generic_output(root: *CrustRun, program: *GsProgram,emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
+    var options: BackendOptions = make BackendOptions {
         mode: 0u32, output: host_path(root, "../../build/generics"), symbols: null(*u8),
         cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
     };
@@ -37,19 +33,19 @@ fn generic_output(root: *CrustRun, program: *GsProgram) -> i32 {
     if options.output == null(*u8) { return 1i32; }
     var entry: *CrustDecl = gp_find(program, "main");
     if entry == null(*CrustDecl) { return 1i32; }
-    return generic_emit(&(*program).context, entry, &options);
+    return backend_output(&(*program).context,entry,&options,emit);
 }
 
 // Read the selected inputs in one module and build its main function.
-fn generic_build(root: *CrustRun, paths: **u8, count: usize) -> i32 {
-    if (*root).argc > 1i32 || ((*root).argc == 1i32 && !generic_equal((*root).argv[0usize], "--emit-c")) {
-        crust_set_error((*root).context, (*root).source, (*root).cursor, "expected no arguments or --emit-c");
+fn generic_build(root: *CrustRun, paths: **u8, count: usize,emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
+    if (*root).argc > 1i32 || ((*root).argc == 1i32 && !generic_equal((*root).argv[0usize], "--emit")) {
+        crust_set_error((*root).context, (*root).source, (*root).cursor, "expected no arguments or --emit");
         return 1i32;
     }
     var program: GsProgram = uninit;
     gp_init(&program, null(*CrustAllocator), 100u64);
     var status: i32 = 1i32;
-    if generic_read(root, &program, paths, count) { status = generic_output(root, &program); }
+    if generic_read(root, &program, paths, count) { status = generic_output(root,&program,emit); }
     if program.syntax.error_count != 0usize { crust_run_diagnostic(&program.syntax); }
     if program.context.error_count != 0usize { crust_run_diagnostic(&program.context); }
     gp_destroy(&program);

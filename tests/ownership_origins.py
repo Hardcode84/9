@@ -132,7 +132,7 @@ def check_origins(build, directory, sanitize):
     compiler = build / "crust-ownership-test"
     source = ROOT / "examples/ownership-basics/origins.crs"
     generated, symbols = directory / "origins.c", directory / "origins.rsp"
-    command([compiler, "--emit-c", "--symbols", symbols, "-o", generated, source])
+    command([compiler, "--emit", "--symbols", symbols, "-o", generated, source])
     command([build / "crust-ownership-erasure", source])
     execute(generated, symbols, directory, "origins", sanitize, b"A\n")
     projected = directory / "origin-projections.crs"
@@ -147,7 +147,7 @@ def check_origins(build, directory, sanitize):
             "a.left=11i64;b.left=12i64;"
         )
     )
-    command([compiler, "--emit-c", "--symbols", symbols, "-o", generated, projected])
+    command([compiler, "--emit", "--symbols", symbols, "-o", generated, projected])
     execute(generated, symbols, directory, "origin-projections", sanitize, b"")
     rejected(compiler, directory, cases())
     check_selection_chains(build, directory, sanitize)
@@ -197,7 +197,7 @@ fn cells(a:read CellOwner,b:read CellOwner,first:bool)->read Cell from a.cell,b.
     source.write_text(provider + main(start + restored + "if b.cell!=null(*Cell){trap;}"))
     generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
     command(
-        [build / "crust-ownership-test", "--emit-c", "--symbols", symbols, "-o", generated, source]
+        [build / "crust-ownership-test", "--emit", "--symbols", symbols, "-o", generated, source]
     )
     command([build / "crust-ownership-erasure", source])
     execute(generated, symbols, directory, "origin-resources", sanitize, b"")
@@ -267,7 +267,7 @@ def check_selection_chains(build, directory, sanitize):
     source.write_text(PICK + main(body + "if x23!=1i64{trap;}a=3i64;b=4i64;"))
     generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
     command(
-        [build / "crust-ownership-test", "--emit-c", "--symbols", symbols, "-o", generated, source]
+        [build / "crust-ownership-test", "--emit", "--symbols", symbols, "-o", generated, source]
     )
     command([build / "crust-ownership-erasure", source])
     execute(generated, symbols, directory, "selection-chain", sanitize, b"")

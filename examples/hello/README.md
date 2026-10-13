@@ -64,7 +64,7 @@ The next lines select the target output and start compilation:
 var arguments: [*u8; 2] = make [*u8; 2] {
     "-o", host_path(run, "../../build/hello")
 };
-return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize]);
+return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize], c_backend_build);
 ```
 
 `[*u8; 2]` is an array of two string pointers. The helper receives an

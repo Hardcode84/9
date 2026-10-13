@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn os_publish_object(cli: *CCli, stage: *OsStage, work: *OsLibraryWork,
-                      interface_source: *CrustSource, object: *CrustSource) -> bool {
+                      interface_source: *CrustSource, object: *CrustSource, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> bool {
     var context: *CrustContext = (*(*stage).resources).context;
     var buffer: CBuffer = uninit;
     c_driver_buffer(&(*cli).stage.status, &buffer);
@@ -12,15 +12,15 @@ fn os_publish_object(cli: *CCli, stage: *OsStage, work: *OsLibraryWork,
     (*cli).options.mode = 1u32;
     (*cli).options.output = (*work).files.checksum;
     if !c_driver_names(&(*cli).driver) { return false; }
-    if c_backend_build(context, null(*CrustDecl), &(*cli).options) != 0i32 { return false; }
+    if backend_output(context,null(*CrustDecl),&(*cli).options,emit) != 0i32 { return false; }
     return cache_read(context, (*work).files.checksum, object);
 }
 
 fn os_publish_bundle(cli: *CCli, stage: *OsStage, directory: *u8,
-                      work: *OsLibraryWork, result: *OwnershipLibrary) -> bool {
+                      work: *OsLibraryWork, result: *OwnershipLibrary, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> bool {
     var interface_source: CrustSource = uninit;
     var object: CrustSource = uninit;
-    if !os_publish_object(cli, stage, work, &interface_source, &object) { return false; }
+    if !os_publish_object(cli, stage, work, &interface_source, &object, emit) { return false; }
     var buffer: CBuffer = uninit;
     c_driver_buffer(&(*cli).stage.status, &buffer);
     if !os_library_pack(&buffer, work, &interface_source, &object) { return false; }
@@ -30,7 +30,7 @@ fn os_publish_bundle(cli: *CCli, stage: *OsStage, directory: *u8,
     return os_library_publish_bytes((*(*stage).resources).context, directory, work, &source, result);
 }
 
-fn os_publish_build(cli: *CCli, directory: *u8, result: *OwnershipLibrary, trusted: *CrustSource, count: usize) -> bool {
+fn os_publish_build(cli: *CCli, directory: *u8, result: *OwnershipLibrary, trusted: *CrustSource, count: usize, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> bool {
     var context: *CrustContext = (*cli).stage.status.context;
     if !os_publish_options(cli) { return false; }
     var resources: RsStage = uninit;
@@ -40,7 +40,7 @@ fn os_publish_build(cli: *CCli, directory: *u8, result: *OwnershipLibrary, trust
     var work: OsLibraryWork = uninit;
     var success: bool = os_library_begin(context, directory, &work) &&
         os_trust_sources(&stage, trusted, count) && os_driver_read(cli, &stage) && os_lower(&stage) && os_verify(&stage);
-    if success { success = os_publish_bundle(cli, &stage, directory, &work, result); }
+    if success { success = os_publish_bundle(cli, &stage, directory, &work, result, emit); }
     if !cache_cleanup(context, &work.files) { success = false; }
     return success;
 }
@@ -57,14 +57,14 @@ fn os_publish_options(cli: *CCli) -> bool {
 
 // Check untrusted provider bodies and record selected trust. Retain the receipt in trusted
 // build state and keep the cache directory free of untrusted writers.
-fn ownership_publish(request: *CrustBuild, directory: *u8, result: *OwnershipLibrary, trusted: *CrustSource, count: usize) -> i32 {
+fn ownership_publish(request: *CrustBuild, directory: *u8, result: *OwnershipLibrary, trusted: *CrustSource, count: usize, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
     *result = make OwnershipLibrary { artifact: null(*u8), digest: null(*u8), trusted: false };
     var cli: CCli = uninit;
     var success: bool = c_driver_init(&cli, (*request).context, (*request).argc);
     cli.root = (*request).source;
     cli.target_begin = (*request).target_begin;
     if success { success = c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32); }
-    if success { success = os_publish_build(&cli, directory, result, trusted, count); }
+    if success { success = os_publish_build(&cli, directory, result, trusted, count, emit); }
     c_stage_destroy(&cli.stage);
     if success { return 0i32; }
     return 1i32;

@@ -27,7 +27,7 @@ Open [main.crs](main.crs). The root loads the resource API and its ordinary
 compiled Crust library. Its final call is:
 
 ```crust
-return resource_build((*run).source, (*run).cursor, 2i32, &arguments[0usize]);
+return resource_build((*run).source, (*run).cursor, 2i32, &arguments[0usize], c_backend_build);
 ```
 
 The stage reads the remaining target declarations. It adds the resource

@@ -82,7 +82,7 @@ def check_liveness(build, directory, sanitize):
         source = directory / f"last-use-{name}.crs"
         source.write_text(program(body))
         generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
-        command([compiler, "--emit-c", "-o", generated, "--symbols", symbols, source])
+        command([compiler, "--emit", "-o", generated, "--symbols", symbols, source])
         execute(generated, symbols, directory, "last-use-" + name, sanitize, output)
         command([build / "crust-ownership-erasure", source])
     tutorial = ROOT / "examples/ownership-basics/last-use.crs"
@@ -91,7 +91,7 @@ def check_liveness(build, directory, sanitize):
         [
             build / "crust",
             tutorial.with_name("main.crs"),
-            "--emit-c",
+            "--emit",
             "-o",
             generated,
             "--symbols",

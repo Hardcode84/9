@@ -40,7 +40,7 @@ host_source(run, "../../stages/c/build.crs");
 var arguments: [*u8; 2] = make [*u8; 2] {
     "-o", host_path(run, "hello")
 };
-return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize]);
+return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize], c_backend_build);
 
 extern fn puts(text: *u8) -> i32 = "puts";
 
@@ -60,7 +60,7 @@ build/learn/hello
 The first command runs the compilation program and creates the executable.
 The second command runs that executable and prints `Hello, world!`.
 
-The part through `return c_build(...)` sets up compilation. The declarations
+The part through `return c_build(..., c_backend_build)` sets up compilation. The declarations
 after it form the target program. `c_build` receives the remaining source,
 compiles it, and returns a status. The C backend produces C code and calls GCC
 and the native linker to make the executable.
@@ -90,7 +90,7 @@ Try changing the greeting and running the two commands again.
 
 ## Values, functions, and control flow
 
-Keep the compilation setup. Replace everything after its `return c_build(...)`
+Keep the compilation setup. Replace everything after its `return c_build(..., c_backend_build)`
 statement with this target program:
 
 ```crust
@@ -305,7 +305,7 @@ The setup uses these helpers:
 | `stage_load(stages, package)` | Prepare and load a selected source package |
 | `host_link(run, path)` | Load a shared library containing native functions |
 | `host_path(run, path)` | Resolve a path relative to the root source file |
-| `c_build(source, begin, argc, argv)` | Compile the selected target source with the C backend |
+| `c_build(source, begin, argc, argv, c_backend_build)` | Compile the selected target source with the C backend |
 
 The shared preparation code supplies the build request and C backend interface.
 The root loads `c_build` separately. The validated library supplies native backend code.
@@ -313,7 +313,7 @@ The launcher already supplies the core compiler and host interfaces.
 
 `(*run).source` points to the root's captured source bytes. `(*run).cursor`
 is the byte offset just after the current action. By the time the final
-`return c_build(...)` executes, the cursor is past its semicolon. That is where
+`return c_build(..., c_backend_build)` executes, the cursor is past its semicolon. That is where
 the helper starts reading the target declarations. Keep this cursor access
 in the action that hands the remaining source to the target compiler.
 
@@ -349,7 +349,7 @@ The launcher places arguments after the root path in `(*run).argc` and
 options, replace the argument array and build call with:
 
 ```crust
-return c_build((*run).source, (*run).cursor, (*run).argc, (*run).argv);
+return c_build((*run).source, (*run).cursor, (*run).argc, (*run).argv, c_backend_build);
 ```
 
 Then use:
@@ -358,11 +358,11 @@ Then use:
 build/crust build/learn/main.crs -o build/learn/totals
 build/learn/totals
 build/crust build/learn/main.crs --check
-build/crust build/learn/main.crs --emit-c -o build/learn/totals.c \
+build/crust build/learn/main.crs --emit -o build/learn/totals.c \
     --symbols build/learn/totals.rsp
 ```
 
-`--check` stops after the frontend checks. `--emit-c` writes C and a symbol
+`--check` stops after the frontend checks. `--emit` writes C and a symbol
 mapping for inspection or later compilation. The root decides which arguments
 to forward. The [C backend tutorial](../stages/c/README.md) explains the
 remaining options and the symbol mapping.
@@ -378,7 +378,7 @@ if target == null(*CrustSource) { return 1i32; };
 var arguments: [*u8; 2] = make [*u8; 2] {
     "-o", host_path(run, "totals")
 };
-return c_build(target, 0usize, 2i32, &arguments[0usize]);
+return c_build(target, 0usize, 2i32, &arguments[0usize], c_backend_build);
 ```
 
 Run `build/crust build/learn/main.crs`, then `build/learn/totals`.
@@ -429,7 +429,7 @@ fn build_checked(root: *CrustRun, target: *CrustModule) -> i32 {
         return 1i32;
     }
 
-    var options: CBackendOptions = make CBackendOptions {
+    var options: BackendOptions = make BackendOptions {
         mode: 0u32, output: output, symbols: null(*u8),
         cflags: null(**u8), cflag_count: 0usize,
         ldflags: null(**u8), ldflag_count: 0usize

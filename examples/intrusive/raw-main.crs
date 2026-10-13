@@ -4,15 +4,18 @@ host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
+host_source(run,"../backend.crs");
+var backend:ExampleBackend=uninit;
+if !example_backend(run,stages,&backend){return 1i32;};
 host_source(run, "../../stages/c/build.crs");
 
 var target: *CrustSource = host_input(run, "raw.crs", 1u64);
 if (*run).argc != 0i32 {
-    return c_build(target, 0usize, (*run).argc, (*run).argv);
+    return c_build(target, 0usize, (*run).argc, (*run).argv, backend.emit);
 };
 var arguments: [*u8; 4] = uninit;
 arguments[0usize] = "-o";
 arguments[1usize] = host_path(run, "../../build/intrusive-raw");
 arguments[2usize] = "--ldflag";
 arguments[3usize] = host_path(run, "../../build/libcrust0_host.a");
-return c_build(target, 0usize, 4i32, &arguments[0usize]);
+return c_build(target, 0usize, 4i32, &arguments[0usize], backend.emit);

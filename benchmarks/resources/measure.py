@@ -348,7 +348,7 @@ def main():
                 f'host_link(run,"{relative(dso)}");',
                 f'var target:*CrustSource=host_input(run,"{crust_path.name}",1u64);',
                 'var arguments:[*u8;1]=make [*u8;1]{"--prepare"};',
-                "return resource_build(target,0usize,1i32,&arguments[0usize]);",
+                "return resource_build(target,0usize,1i32,&arguments[0usize], c_backend_build);",
                 "",
             ]
         )
@@ -357,7 +357,7 @@ def main():
         response = args.work / f"owners-{count}.rsp"
         emit_command = [
             str(compiler),
-            "--emit-c",
+            "--emit",
             "--export",
             "token_drop",
             "--export",

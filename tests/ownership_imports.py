@@ -248,7 +248,7 @@ def run(build):
         wrong_trust = [args[0], "import", *args[2:]]
         reject_import(wrong_trust, environment, "trust contract differs")
         rejected += 1
-        for mode in ("--object", "--emit-c", "--prepare"):
+        for mode in ("--object", "--emit", "--prepare"):
             options = [*args[:5], str(client), mode]
             reject_import(options, environment, "loses imported dependencies")
             rejected += 1

@@ -392,9 +392,9 @@ Raw pointer merges are rejected.
 
 ## Independent libraries
 
-`ownership_publish(request, directory, receipt, trusted, count)` checks the
+`ownership_publish(request, directory, receipt, trusted, count, c_backend_build)` checks the
 provider's untrusted bodies and publishes its interface and native object.
-`ownership_import_program(request, imports)` checks clients against those
+`ownership_import_program(request, imports, c_backend_build)` checks clients against those
 interfaces and links captured objects. No provider body is read at import.
 
 `OwnershipLibrary` retains the artifact path, digest, and explicit `trusted`

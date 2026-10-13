@@ -34,7 +34,7 @@ meta {
     link "../build/rmd-c-library.so";
 
     fn build(request: *RmdBuild) -> i32 {
-        return c_program(request);
+        return c_program(request, c_backend_build);
     }
 }
 

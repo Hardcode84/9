@@ -56,7 +56,7 @@ fn og_driver_diagnostic(context: *CrustContext, source: *CrustContext) -> unit {
 }
 
 // The root selects trusted input once. Concrete instances inherit that selection.
-fn ownership_generics_program(request: *CrustBuild, trusted: *CrustSource, count: usize) -> i32 {
+fn ownership_generics_program(request: *CrustBuild, trusted: *CrustSource, count: usize, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
     var program: OgProgram = uninit;
     og_init(&program, &(*(*request).context).arena.allocator, 0u64);
     var cli: CCli = uninit;
@@ -66,7 +66,7 @@ fn ownership_generics_program(request: *CrustBuild, trusted: *CrustSource, count
     var result: i32 = 1i32;
     if ready && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) &&
        og_driver_sources(&cli, &program, trusted, count) && og_driver_namespace(&program) && og_check(&program) {
-        result = os_driver_emit(&cli, &program.resources);
+        result = os_driver_emit(&cli, &program.resources, emit);
     }
     og_driver_diagnostic((*request).context, &program.generics.syntax);
     og_driver_diagnostic((*request).context, &program.generics.context);

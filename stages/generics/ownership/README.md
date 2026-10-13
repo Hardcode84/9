@@ -79,7 +79,7 @@ separate maps. A failed body check cannot grant trust.
 ## Interfaces
 
 `ownership_generics_program` uses the ordinary `CrustBuild` request and a list
-of root-selected trusted sources. It supports a target suffix in the root
+of root-selected trusted sources, plus the selected output callback. It supports a target suffix in the root
 source and extra input paths. The compilation program selects input files;
 generic declarations register themselves during reading.
 
@@ -90,9 +90,9 @@ resource, ownership, and generic model declarations, then this stage's
 1. Call `og_init` with an allocator and a fresh declaration namespace.
 2. Call `og_read` or `og_read_range` for each source. The stage captures the
    source bytes. Select trust with that read operation.
-3. Call `og_check`. The checked seed program is in `generics.context` and its
-   cleanup plan is in `resources`.
-4. Emit with the resource stage's body emitter. Call `og_destroy` after all
+3. Call `og_check`. The checked raw program, including cleanup calls and jumps,
+   is in `generics.context`.
+4. Pass these bodies to the selected backend. Call `og_destroy` after all
    consumers have finished.
 
 `og_prove` checks generic definitions and records their receipts. It permits
@@ -148,3 +148,9 @@ Target GCC compilation and linking run outside the frontend measurements.
 The comparison checks record layouts and emitted operations. Before-and-after
 verification output must have identical C and symbol buffers. Captured inputs,
 hashes, commands, and raw measurements remain in the selected build directory.
+
+`og_stage_emit(request, emit)` implements the package compiler interface with
+an explicit output callback. It writes backend text and native symbols after
+checking the captured sources. `og_stage_compile` selects `c_backend_build`.
+A compiler package can call `og_stage_emit` with `llvm_backend_build` and select
+the LLVM toolchain to build the same checked stage sources with LLVM.

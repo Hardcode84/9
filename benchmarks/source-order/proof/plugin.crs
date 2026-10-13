@@ -11,8 +11,8 @@ fn proof_error(session: *ProofSession, offset: usize, message: *u8) -> i32 {
     return 1i32;
 }
 
-fn set_backend(session: *ProofSession, backend: fn(*CrustContext, *CrustDecl, *CBackendOptions) -> i32) -> i32 {
-    if backend == null(fn(*CrustContext, *CrustDecl, *CBackendOptions) -> i32) {
+fn set_backend(session: *ProofSession, backend: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32) -> i32 {
+    if backend == null(fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32) {
         return proof_error(session, (*session).cursor, "null backend");
     }
     (*session).backend = backend;
@@ -203,7 +203,7 @@ fn proof_emit(session: *ProofSession) -> i32 {
     if !(*session).root_done || (*session).reader_active {
         return proof_error(session, (*session).cursor, "target ran before root-reader return");
     }
-    if (*session).backend == null(fn(*CrustContext, *CrustDecl, *CBackendOptions) -> i32) {
+    if (*session).backend == null(fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32) {
         return proof_error(session, (*session).cursor, "backend was not selected");
     }
     var context: *CrustContext = (*session).target;
@@ -213,7 +213,7 @@ fn proof_emit(session: *ProofSession) -> i32 {
     var entry: *CrustDecl = proof_entry(context, private);
     if entry == null(*CrustDecl) { return proof_error(session, (*session).cursor, "target main was not found"); }
     if (*session).argc != 1i32 { return proof_error(session, (*session).cursor, "proof root requires one symbol-output argument"); }
-    var options: CBackendOptions = make CBackendOptions {
+    var options: BackendOptions = make BackendOptions {
         mode: 2u32, output: null(*u8), symbols: (*session).argv[0usize],
         cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
     };

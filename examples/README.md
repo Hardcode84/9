@@ -12,6 +12,70 @@ The [LLVM tutorial](llvm/README.md) shows how to select a pinned LLVM toolchain
 and compile an application through the generic package interface. Run
 `make check-llvm` for this tutorial and the LLVM semantic tests.
 
+## Select a backend
+
+The application roots accept a backend selection before their compiler arguments.
+They use C by default. To compile the same source through LLVM:
+
+```sh
+make fetch-llvm-release
+build/crust examples/hello/main.crs \
+  --backend stages/llvm/compiler-package.crs llvm_backend_build
+build/hello
+build/crust examples/intrusive/main.crs \
+  --backend stages/llvm/compiler-package.crs llvm_backend_build
+build/intrusive-checked
+```
+
+[backend.crs](backend.crs) implements this option in ordinary compilation code.
+It loads a package, gets its output callback, and passes the callback to the
+frontend. The callback receives checked raw bodies, the entry declaration, and
+`BackendOptions`. Root source controls this selection. Package paths are
+relative to the repository directory selected by each root.
+
+`--stage-compiler PACKAGE ENTRY TOOLCHAIN` also selects how `example_load`
+builds the frontend libraries. Its compiler must accept the packages' source
+annotations: `raw`, `trusted`, or empty for checked ownership code. The helper
+preserves these annotations. It marks ordinary raw packages as `raw`. This
+keeps the union stage's checked implementation under ownership checking when
+its backend changes. The initial C bootstrap prepares the selected compiler.
+
+To define a root with a fixed backend, pass its output function directly.
+For example, `c_build(source, begin, argc, argv, c_backend_build)` selects C.
+The selector is a convenience shared by these tutorials.
+
+## Test the backend matrix
+
+Prepare the pinned SQLite input as described in the
+[SQLite tutorial](resources/sqlite/README.md), then run:
+
+```sh
+make fetch-llvm-release
+make check-tutorials
+```
+
+The matrix runs application tutorials through C, LLVM `-O0`, and LLVM `-O2`.
+The LLVM profiles also compile their loaded frontend libraries with LLVM.
+One set of source files and expected results covers separate modules, overload
+objects, ownership, cleanup, intrusive containers, generics, tagged unions,
+and SQLite success and failure. Native highlighter and CCN stages must produce
+the same output as their interpreted tutorial roots. Rejections must retain
+the same diagnostic across profiles. The test also checks text emission,
+preparation without publication, and preservation of output after tool failure.
+It records results and hashes under `build/tutorial-matrix/`.
+
+The C-emitter, LLVM-package, ASM bootstrap, custom assembly, cache, and reader
+replacement tutorials teach explicit execution policies. Their checks preserve
+those policies. Run `make check-c check-llvm check-examples check-native
+check-cache check-stage` for those paths. The matrix covers their shared target
+language and frontend services through the application tutorials.
+
+For a selected local LLVM build, use an explicit installation path:
+
+```sh
+python3 tests/tutorials.py --llvm build/toolchains/llvm/main-build
+```
+
 ## Tutorials
 
 The [getting started guide](../docs/tutorial.md) teaches the core language and
@@ -107,9 +171,8 @@ Run `make check-modules` for module bindings, exports, and allocation failures.
 Run `make check-generics` for specialization, bindings, type identity, and allocation failures.
 Run `make check-ownership-generics` for generic ownership contracts, cleanup,
 native container behavior, and independent imports.
-Run `make check-native` for native bootstrap, handoff, and cleanup. This example
-uses the assembly library from `make all` and builds its executor on each
-invocation. Run `make check-cache` for source-only startup, artifact reuse,
+Run `make check-native` for native bootstrap, handoff, and cleanup. The root
+prepares the assembly library and its executor through shared package code. Run `make check-cache` for source-only startup, artifact reuse,
 invalidation, corruption, concurrency, and cleanup.
 Run `make check-ccn` for function counts, the Lizard comparison, and the CCN build
 example. This check needs `lizard==1.21.6` in the Python environment.

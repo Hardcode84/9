@@ -138,7 +138,7 @@ def check_boundaries(build, directory, sanitize):
         source = directory / f"boundary-{name}.crs"
         source.write_text(PROVIDER + main(body))
         generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
-        command([compiler, "--emit-c", "--symbols", symbols, "-o", generated, source])
+        command([compiler, "--emit", "--symbols", symbols, "-o", generated, source])
         command([build / "crust-ownership-erasure", source])
         execute(generated, symbols, directory, f"boundary-{name}", sanitize, b"")
     rejected(

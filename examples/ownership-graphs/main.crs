@@ -4,15 +4,18 @@ host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
+host_source(run,"../backend.crs");
+var backend:ExampleBackend=uninit;
+if !example_backend(run,stages,&backend){return 1i32;};
 host_source(run, "../../stages/ownership/api.crs");
 host_source(run, "../../stages/ownership/build.crs");
-if !stage_load(stages, "stages/ownership/package.crs") { return 1i32; };
+if !example_load(stages,&backend,"stages/ownership/package.crs") { return 1i32; };
 var provider: *CrustSource = host_input(run, "provider.crs", 100u64);
 if provider == null(*CrustSource) { return 1i32; };
 if (*run).argc != 0i32 {
-    return ownership_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv, provider, 1usize);
+    return ownership_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv, provider, 1usize, backend.emit);
 };
 var arguments: [*u8; 3] = make [*u8; 3] {
     "-o", host_path(run, "../../build/ownership-graphs"), host_path(run, "program.crs")
 };
-return ownership_build((*run).source, (*run).cursor, 3i32, &arguments[0usize], provider, 1usize);
+return ownership_build((*run).source, (*run).cursor, 3i32, &arguments[0usize], provider, 1usize, backend.emit);

@@ -253,3 +253,13 @@ the source API above.
 Measure source bootstrap and cache validation separately from application
 compilation with an installed backend. Exclude target GCC compilation and
 linking from frontend measurements.
+
+## Configure a captured package
+
+`stage_library(session, manifest)` captures a package and returns its cached
+native library. `stage_package_library(session, package)` accepts a package
+that the root has already captured with `stage_init` and `stage_include`.
+The root can configure its compiler and toolchain before this call. Keep the
+captured sources and configuration live through return. Both entry points
+capture dependencies and use the same cache and compiler-depth rules.
+Loading the returned library remains an explicit `crust_run_link` operation.

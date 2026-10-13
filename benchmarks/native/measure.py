@@ -36,7 +36,7 @@ BOOTSTRAP = """
     var status:i32=1i32;
     var image:*NativeImage=native_image((*run).context,&session);
     if image!=null(*NativeImage) &&
-       native_prepare(run,&context,&sources[0usize],17usize,&exports[0usize],3usize) &&
+       native_prepare(run,&context,&sources[0usize],17usize,&exports[0usize],4usize) &&
        native_asm_image(&context,&session,image) && crust_run_link(run,(*image).library) {
         if bench_clock(1i32,&ready)!=0i32 {return 90i32;}
         status=native_start(run,&session);
@@ -73,11 +73,11 @@ def roots(workload, directory, build, backend="prepared", source_root=ROOT):
             '"../../api/crust0_x64.crs",', ", ".join(quote(path) for path in paths) + ","
         )
         source = source.replace("[*u8; 17]", "[*u8; 21]").replace("17usize", "21usize")
-        source = source.replace("[*u8; 3]", "[*u8; 4]").replace(
-            '"native_start", "native_c_image", "c_program"',
-            '"native_start", "native_c_image", "c_program", "native_asm_image"',
+        source = source.replace("[*u8; 4]", "[*u8; 5]").replace(
+            '"native_start", "native_c_image", "c_program", "c_backend_build"',
+            '"native_start", "native_c_image", "c_program", "c_backend_build", "native_asm_image"',
         )
-        source = source.replace("&exports[0usize], 3usize", "&exports[0usize], 4usize")
+        source = source.replace("&exports[0usize], 4usize", "&exports[0usize], 5usize")
         source = source.replace(
             'var libraries: [*u8; 1] = make [*u8; 1] { host_path(run, "../../build/crust-asm-library.so") };',
             'extern fn bench_native_asm(context:*CrustContext, session:*NativeSession, image:*NativeImage)->bool="native_asm_image";',
@@ -92,10 +92,10 @@ def roots(workload, directory, build, backend="prepared", source_root=ROOT):
         str(source_root / "build/crust-asm-library.so"), str(build / "crust-asm-library.so")
     )
     source = source.replace("record BuildState", CLOCK + "record BuildState")
-    count, exports = (21, 4) if backend == "source" else (17, 3)
+    count, exports = (21, 5) if backend == "source" else (17, 4)
     old = f"var status: i32 = native_bootstrap(run, &session, &sources[0usize], {count}usize, &exports[0usize], {exports}usize);"
     assert source.count(old) == 1
-    bootstrap = BOOTSTRAP.replace("17usize", f"{count}usize").replace("3usize", f"{exports}usize")
+    bootstrap = BOOTSTRAP.replace("17usize", f"{count}usize").replace("4usize", f"{exports}usize")
     if backend == "source":
         bootstrap = bootstrap.replace(
             "status=native_start(run,&session);",
@@ -103,12 +103,12 @@ def roots(workload, directory, build, backend="prepared", source_root=ROOT):
         )
     source = source.replace(old, bootstrap)
     source = source.replace(
-        "var status: i32 = c_program(&request);",
+        "var status: i32 = c_program(&request, c_backend_build);",
         """
     var start:BenchTime=uninit;
     var done:BenchTime=uninit;
     if bench_clock(1i32,&start)!=0i32 {return 90i32;}
-    var status:i32=c_program(&request);
+    var status:i32=c_program(&request, c_backend_build);
     if bench_clock(1i32,&done)!=0i32 {return 90i32;}
     var duration:i64=(done.seconds-start.seconds)*1000000000i64+done.nanoseconds-start.nanoseconds;
     if crust0_host_write_stream(2u32,&duration as *u8,sizeof(i64))!=0i32 {return 91i32;}
@@ -127,7 +127,7 @@ def roots(workload, directory, build, backend="prepared", source_root=ROOT):
         f"host_source(run,{quote(combined)});\n"
         f'host_source(run,{quote(ROOT / "stages/c/build.crs")});\n'
         f"var target:*CrustSource=host_input(run,{quote(workload['paths']['crust'])},1u64);\n"
-        "return c_build(target,0usize,(*run).argc,(*run).argv);\n"
+        "return c_build(target,0usize,(*run).argc,(*run).argv, c_backend_build);\n"
     )
     return {"native": native, "installed": installed, "interpreted": interpreted}
 
@@ -231,7 +231,7 @@ def main():
             route: list(
                 map(
                     str,
-                    [build / "crust", path, *flags, "--emit-c", "-o", output, "--symbols", symbols],
+                    [build / "crust", path, *flags, "--emit", "-o", output, "--symbols", symbols],
                 )
             )
             for route, path in paths.items()

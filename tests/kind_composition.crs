@@ -26,7 +26,7 @@ fn kc_build(context: *CrustContext, source: *CrustSource, output: *u8, reverse: 
         if (*entry).next == null(*CrustDecl) { break; }
         entry = (*entry).next;
     }
-    var options: CBackendOptions = make CBackendOptions {
+    var options: BackendOptions = make BackendOptions {
         mode: 0u32, output: output, symbols: null(*u8),
         cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
     };

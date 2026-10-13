@@ -42,7 +42,7 @@ def main():
         run(
             [
                 args.build / "crust-c",
-                "--emit-c",
+                "--emit",
                 "--symbols",
                 symbols,
                 "-o",

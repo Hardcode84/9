@@ -204,6 +204,7 @@ def tutorial_package(suite):
     package = suite.work / "copied package with spaces"
     for directory in ("api", "stages", "examples/generics"):
         shutil.copytree(ROOT / directory, package / directory, dirs_exist_ok=True)
+    shutil.copyfile(ROOT / "examples/backend.crs", package / "examples/backend.crs")
     (package / "build").mkdir(exist_ok=True)
     return package
 
@@ -241,9 +242,9 @@ def check_tutorial_assembly(suite, package):
     )
     helper = root.with_name("build.crs")
     source = helper.read_text()
-    call = "return c_backend_build(context, entry, options);"
+    call = "return backend_output(&(*program).context,entry,&options,emit);"
     assert source.count(call) == 1
-    source = source.replace(call, "return test_asm(context, entry, (*options).output);")
+    source = source.replace(call, "return test_asm(&(*program).context, entry, options.output);")
     source = source.replace("generics.c", "generics.s")
     declarations = """
 extern fn test_open(path:*u8, mode:*u8)->*u8="fopen";
@@ -258,7 +259,7 @@ fn test_asm(context:*CrustContext,entry:*CrustDecl,path:*u8)->i32 {
 }
 """
     helper.write_text(source + declarations)
-    suite.command([suite.runner, root, "--emit-c"], cwd=suite.work)
+    suite.command([suite.runner, root, "--emit"], cwd=suite.work)
     output = package / "build"
     obj = output / "generics-asm.o"
     suite.command(["as", "--64", output / "generics.s", "-o", obj])
@@ -274,7 +275,7 @@ def check_tutorial(suite):
     output = package / "build"
     suite.command([suite.runner, root], cwd=suite.work)
     assert suite.command([output / "generics"]).stdout == b"generics: OK\n"
-    suite.command([suite.runner, root, "--emit-c"], cwd=suite.work)
+    suite.command([suite.runner, root, "--emit"], cwd=suite.work)
     for optimization in ("O0", "O2"):
         objects = tutorial_objects(suite, output, optimization)
         executable = output / f"generics-{optimization}"

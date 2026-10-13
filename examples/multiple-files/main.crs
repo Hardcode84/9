@@ -4,6 +4,9 @@ host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
+host_source(run,"../backend.crs");
+var backend:ExampleBackend=uninit;
+if !example_backend(run,stages,&backend){return 1i32;};
 host_source(run, "../../stages/c/build.crs");
 
 var target: *CrustSource = host_input(run, "program.crs", 1u64);
@@ -11,4 +14,4 @@ var arguments: [*u8; 3] = make [*u8; 3] {
     "-o", host_path(run, "../../build/multiple-files"),
     host_path(run, "greeting.crs")
 };
-return c_build(target, 0usize, 3i32, &arguments[0usize]);
+return c_build(target, 0usize, 3i32, &arguments[0usize], backend.emit);

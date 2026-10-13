@@ -197,7 +197,7 @@ def rejects(provider):
 def native(build, directory, source, output, sanitize, environment):
     generated, symbols = source.with_suffix(".c"), source.with_suffix(".rsp")
     import_command(
-        [build / "crust-ownership-test", "--emit-c", "--symbols", symbols, "-o", generated, source],
+        [build / "crust-ownership-test", "--emit", "--symbols", symbols, "-o", generated, source],
         env=environment,
     )
     import_command([build / "crust-ownership-erasure", source], env=environment)

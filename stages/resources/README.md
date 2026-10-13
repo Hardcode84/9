@@ -242,7 +242,7 @@ the owner to die before the deferred call.
 Emit the trace program as C:
 
 ```sh
-build/crust-resource --emit-c -o build/tutorial-resources/trace.c \
+build/crust-resource --emit -o build/tutorial-resources/trace.c \
     --symbols build/tutorial-resources/trace.rsp \
     build/tutorial-resources/trace.crs
 cat build/tutorial-resources/trace.c

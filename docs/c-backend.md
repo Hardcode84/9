@@ -52,8 +52,8 @@ Tests and generated seed API declarations are separate.
 |---|---|
 | `--check` | Read and check source files |
 | `--prepare` | Also make complete C and symbol text in memory |
-| `--emit-c` | Write the generated C text |
-| `--symbols PATH` | With `--emit-c`, write the symbol response file |
+| `--emit` | Write the generated C text |
+| `--symbols PATH` | With `--emit`, write the symbol response file |
 | `--object -o PATH` | Compile and write a native object |
 | `-o PATH` | Compile, link, and write an executable |
 | `--library` | Omit the hosted entry wrapper |
@@ -122,14 +122,31 @@ An external consumer includes `api/crust0.crs`, `api/crust0_stage.crs`, and
 input. Do not also include `stages/c/api.crs` when compiling the implementation;
 the implementation supplies those declarations itself.
 
-`c_program` receives an empty initialized context and a captured source range.
-It copies extra input descriptors, bytes, and native names into the context's
+`c_program(request, emit)` receives an empty initialized context, a captured
+source range, and an output callback. Pass `c_backend_build` to select C.
+Ownership, overload, union, and generic frontends use the same callback type:
+
+```crs
+fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+```
+
+The frontend completes its checks and lowers extensions to raw bodies before
+it calls `backend_output`. That dispatcher requires a callback. It reports a
+nonzero result without a diagnostic, and treats a diagnostic as failure even
+when the callback returns zero. Keep the callback library and input storage
+live through the synchronous call. `--check` stops before emission;
+`--prepare` emits complete text in memory; `--emit` writes the selected format.
+The [LLVM stage](../stages/llvm/README.md#frontend-output-interface) implements
+this same output contract.
+
+`c_program` copies extra input descriptors, bytes, and native names into the context's
 arena. They remain valid after the call. It leaves diagnostics in the context
 for its owner to report. The root source remains borrowed through context
 destruction.
 
 `c_backend_build` receives checked input with caller-owned native names.
-It accepts mode 0 for an executable, 1 for an object, or 2 for C text. Its
+It accepts mode 0 for an executable, 1 for an object, 2 for C text, or 3
+for complete text preparation without publication. Its
 options record holds output and symbol paths and explicit compiler and linker
 argument arrays. It releases its temporary arena before returning. The caller
 can retain the context and call the backend again. The call returns zero,
@@ -299,7 +316,7 @@ before optimization.
 Use both artifacts when compiling dumped C by hand:
 
 ```sh
-build/crust stages/build/run.crs stages/c/tool.crs --emit-c -o build/list.c --symbols build/list.rsp examples/intrusive/raw.crs
+build/crust stages/build/run.crs stages/c/tool.crs --emit -o build/list.c --symbols build/list.rsp examples/intrusive/raw.crs
 gcc -std=c99 -pedantic-errors -O2 -fstack-clash-protection -Wno-overlength-strings -c build/list.c -o build/list.raw.o
 objcopy @build/list.rsp build/list.raw.o build/list.o
 make build/libcrust0_host.a

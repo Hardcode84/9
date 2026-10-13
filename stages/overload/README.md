@@ -252,8 +252,9 @@ Both borrow modes lower to pointers. Select overloads before that lowering:
 2. Pass that chain to `ov_init`.
 3. Combine `rs_reader_hooks` and `ov_reader_hooks`; read inputs with `rr_read`.
 4. Call `ov_prepare` to select calls and drops and assign names.
-5. Call `rs_prepare` to check moves and loans and construct cleanup plans.
-6. Emit with the resource stage's body callback.
+5. Call `rs_prepare` to check moves and loans and lower cleanup to raw calls
+   and jumps.
+6. Emit the checked raw bodies with the selected backend.
 
 The provider marks bodyless declarations as source ABI imports before resource
 preparation. It supplies its source rules through the shared

@@ -33,32 +33,41 @@ fn ll_binding_compatible(stage:*LlStage,binding:*LlBinding,declaration:*CrustDec
     }
     if !equal{ll_error(stage,"conflicting native ABI for symbol");return false;}return ll_ok(stage);
 }
-fn ll_bind(stage:*LlStage,declaration:*CrustDecl)->unit {
-    if !ll_name_valid(stage,declaration){return;}
+fn ll_new_binding(stage:*LlStage,declaration:*CrustDecl)->*LlBinding {
+    if !ll_name_valid(stage,declaration){return null(*LlBinding);}
     var name:*CrustName=null(*CrustName);var binding:*LlBinding=null(*LlBinding);
     if declaration->link_name[0usize]!=0u8 {
         name=crust_try_intern(ll_context(stage),declaration->link_name,c_length(declaration->link_name));
-        if name==null(*CrustName){return;}
+        if name==null(*CrustName){return null(*LlBinding);}
         binding=crust_map_get(&stage->native_names,name as usize) as *LlBinding;
     }
-    if binding!=null(*LlBinding){if !ll_binding_compatible(stage,binding,declaration){return;}}
-    else {
-        binding=c_alloc(&stage->memory.status,sizeof(LlBinding),alignof(LlBinding)) as *LlBinding;
-        if binding==null(*LlBinding){return;}
-        *binding=make LlBinding{declaration:declaration,definition:null(*CrustDecl),name:ll_id(stage,"@g"),next:null(*LlBinding)};
-        if stage->last==null(*LlBinding){stage->first=binding;}else{stage->last->next=binding;}
-        stage->last=binding;
-        if name!=null(*CrustName){crust_try_map_set(ll_context(stage),&stage->native_names,name as usize,binding as *u8);}
+    if binding!=null(*LlBinding){
+        if !ll_binding_compatible(stage,binding,declaration){return null(*LlBinding);}
+        return binding;
     }
-    if declaration->kind!=CRUST_D_EXTERN {
-        if binding->definition!=null(*CrustDecl){ll_error(stage,"duplicate native definition for symbol");return;}
+    binding=c_alloc(&stage->memory.status,sizeof(LlBinding),alignof(LlBinding)) as *LlBinding;
+    if binding==null(*LlBinding){return binding;}
+    *binding=make LlBinding{declaration:declaration,definition:null(*CrustDecl),name:ll_id(stage,"@g"),next:null(*LlBinding)};
+    if stage->last==null(*LlBinding){stage->first=binding;}else{stage->last->next=binding;}
+    stage->last=binding;
+    if name!=null(*CrustName){crust_try_map_set(ll_context(stage),&stage->native_names,name as usize,binding as *u8);}
+    return binding;
+}
+fn ll_bind(stage:*LlStage,declaration:*CrustDecl,owned:bool)->*LlBinding {
+    var binding:*LlBinding=crust_map_get(&stage->bindings,declaration as usize) as *LlBinding;
+    if binding==null(*LlBinding){
+        binding=ll_new_binding(stage,declaration);if binding==null(*LlBinding){return binding;}
+        crust_try_map_set(ll_context(stage),&stage->bindings,declaration as usize,binding as *u8);
+    }
+    if owned && declaration->kind!=CRUST_D_EXTERN {
+        if binding->definition!=null(*CrustDecl){ll_error(stage,"duplicate native definition for symbol");return null(*LlBinding);}
         binding->definition=declaration;
     }
-    crust_try_map_set(ll_context(stage),&stage->bindings,declaration as usize,binding as *u8);
+    return binding;
 }
 fn ll_global(stage:*LlStage,declaration:*CrustDecl)->*u8 {
-    var binding:*LlBinding=crust_map_get(&stage->bindings,declaration as usize) as *LlBinding;
-    if binding==null(*LlBinding){ll_error(stage,"LLVM reference has no module declaration");return "";}return binding->name;
+    var binding:*LlBinding=ll_bind(stage,declaration,false);
+    if binding==null(*LlBinding){return "";}return binding->name;
 }
 fn ll_quoted(out:*CBuffer,bytes:*u8,count:usize)->unit {
     c_buffer_text(out,"c\"");var index:usize=0usize;var digits:*u8="0123456789ABCDEF";
@@ -132,15 +141,21 @@ fn ll_signature(stage:*LlStage,binding:*LlBinding,out:*CBuffer)->unit {
     // Raw function names do not grant C library semantics, including inside a runtime.
     if definition{c_buffer_text(out," \"no-builtins\"");}
 }
+fn ll_emit_constant(stage:*LlStage,binding:*LlBinding)->unit {
+    var declaration:*CrustDecl=binding->declaration;var out:*CBuffer=&stage->memory.body;
+    c_buffer_text(out,binding->name);c_buffer_text(out," = ");
+    if binding->definition==null(*CrustDecl){c_buffer_text(out,"external ");}
+    else{declaration=binding->definition;if declaration->link_name[0usize]==0u8{c_buffer_text(out,"internal ");}}
+    c_buffer_text(out,"constant ");c_buffer_text(out,ll_type(stage,declaration->type));
+    if binding->definition!=null(*CrustDecl){c_buffer_text(out," ");ll_constant(stage,declaration->init,out);}
+    c_buffer_text(out,", align ");c_buffer_number(out,declaration->type->align as u64);c_buffer_text(out,"\n");
+}
 fn ll_emit_binding(stage:*LlStage,binding:*LlBinding)->unit {
-    ll_rename(stage,binding);
-    if binding->declaration->kind==CRUST_D_CONST {
-        var declaration:*CrustDecl=binding->definition;var out:*CBuffer=&stage->memory.body;
-        c_buffer_text(out,binding->name);c_buffer_text(out," = ");
-        if declaration->link_name[0usize]==0u8{c_buffer_text(out,"internal ");}
-        c_buffer_text(out,"constant ");c_buffer_text(out,ll_type(stage,declaration->type));c_buffer_text(out," ");
-        ll_constant(stage,declaration->init,out);c_buffer_text(out,", align ");c_buffer_number(out,declaration->type->align as u64);c_buffer_text(out,"\n");return;
+    if binding->definition==null(*CrustDecl) && binding->declaration->link_name[0usize]==0u8{
+        ll_error(stage,"private LLVM linkage requires a definition in this output");return;
     }
+    ll_rename(stage,binding);
+    if binding->declaration->kind==CRUST_D_CONST{ll_emit_constant(stage,binding);return;}
     if binding->definition==null(*CrustDecl){ll_signature(stage,binding,&stage->memory.body);c_buffer_text(&stage->memory.body,"\n");return;}
     ll_function(stage,binding);
 }
@@ -151,7 +166,7 @@ fn ll_emit(stage:*LlStage,entry:*CrustDecl)->bool {
     while unit_value!=null(*CrustUnit) && ll_ok(stage){
         var declaration:*CrustDecl=unit_value->declarations;
         while declaration!=null(*CrustDecl) && ll_ok(stage){
-            if declaration->kind!=CRUST_D_RECORD{ll_bind(stage,declaration);}declaration=declaration->next;
+            if declaration->kind!=CRUST_D_RECORD{ll_bind(stage,declaration,true);}declaration=declaration->next;
         }unit_value=unit_value->next;
     }
     var out:*CBuffer=&stage->memory.header;

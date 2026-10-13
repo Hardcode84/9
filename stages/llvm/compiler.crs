@@ -15,6 +15,7 @@ fn llvm_stage_compile(request:*StageCompile)->bool {
     ll_destroy(&stage);return success;
 }
 record LlTools { compiler:*u8; optimization:*u8; }
+const LLVM_LEVELS:[*u8;4]=make [*u8;4]{"-O0","-O1","-O2","-O3"};
 // Select an explicit LLVM installation and optimization level 0..3.
 // The installation and its libraries must remain fixed through compilation.
 fn llvm_toolchain(toolchain:*StageToolchain,directory:*u8,optimization:u32)->bool {
@@ -23,7 +24,7 @@ fn llvm_toolchain(toolchain:*StageToolchain,directory:*u8,optimization:u32)->boo
     var tools:*LlTools=crust_try_alloc(context,sizeof(LlTools),alignof(LlTools)) as *LlTools;
     if tools==null(*LlTools){return false;}
     tools->compiler=native_join(context,directory,"/bin/clang");
-    var levels:[*u8;4]=make [*u8;4]{"-O0","-O1","-O2","-O3"};tools->optimization=levels[optimization as usize];
+    tools->optimization=LLVM_LEVELS[optimization as usize];
     toolchain->user=tools as *u8;toolchain->object=llvm_stage_object;
     var recipe:*CrustSource=crust_try_alloc(context,sizeof(CrustSource),alignof(CrustSource)) as *CrustSource;
     if recipe==null(*CrustSource) || tools->compiler==null(*u8){return false;}

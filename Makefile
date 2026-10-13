@@ -322,3 +322,7 @@ $(BUILD)/llvm-test-driver: $(BUILD)/crust-c tests/llvm_driver.crs tests/llvm_all
 check-llvm: all test-tools $(BUILD)/llvm-test-driver $(BUILD)/resource-backends
 	python3 tests/llvm.py --build $(BUILD)
 	python3 tests/llvm_packages.py --build $(BUILD)
+
+.PHONY: check-tutorials
+check-tutorials: all test-tools
+	python3 tests/tutorials.py --build $(BUILD)

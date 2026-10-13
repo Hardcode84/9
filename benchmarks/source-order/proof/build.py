@@ -109,7 +109,7 @@ def main():
         [
             build / "crust-c",
             "--library",
-            "--emit-c",
+            "--emit",
             "--symbols",
             work / "plugin.rsp",
             *exports,
@@ -137,7 +137,7 @@ def main():
         [
             build / "crust-c",
             "--library",
-            "--emit-c",
+            "--emit",
             "--symbols",
             work / "backend.rsp",
             "--export",
@@ -242,7 +242,7 @@ def main():
     run(
         [
             build / "crust-c",
-            "--emit-c",
+            "--emit",
             "--symbols",
             work / "reference.rsp",
             "examples/intrusive/raw.crs",

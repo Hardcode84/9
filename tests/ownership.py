@@ -249,7 +249,7 @@ def run(build, directory, sanitize):
             [
                 compiler,
                 *sources[:2],
-                "--emit-c",
+                "--emit",
                 "--symbols",
                 symbols,
                 "-o",
@@ -267,7 +267,7 @@ def run(build, directory, sanitize):
             compiler,
             "trusted",
             ROOT / "examples/ownership-graphs/provider.crs",
-            "--emit-c",
+            "--emit",
             "--symbols",
             symbols,
             "-o",
@@ -299,7 +299,7 @@ def run(build, directory, sanitize):
         path = directory / f"{name}.crs"
         path.write_text(text)
         generated, symbols = path.with_suffix(".c"), path.with_suffix(".rsp")
-        command([compiler, "--emit-c", "--symbols", symbols, "-o", generated, path])
+        command([compiler, "--emit", "--symbols", symbols, "-o", generated, path])
         command([build / "crust-ownership-erasure", path])
         execute(
             generated, symbols, directory, name, sanitize, b"OK" if name == "defer-order" else b""

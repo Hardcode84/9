@@ -37,7 +37,7 @@ def check_runtime(
         [
             build / "crust-ownership-test",
             *(["trusted", source] if trusted else [source]),
-            "--emit-c",
+            "--emit",
             "--symbols",
             symbols,
             "-o",

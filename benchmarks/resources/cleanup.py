@@ -62,7 +62,7 @@ def main():
         commands, samples, sizes, hashes = {}, [], {}, {}
         for name, compiler in compilers.items():
             output = work / f"{name}-{count}.c"
-            commands[name] = list(map(str, [compiler, "--emit-c", "-o", output, source]))
+            commands[name] = list(map(str, [compiler, "--emit", "-o", output, source]))
             run(commands[name])
             sizes[name] = output.stat().st_size
             hashes[name] = digest(output)

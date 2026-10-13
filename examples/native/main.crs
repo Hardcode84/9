@@ -43,10 +43,10 @@ var sources: [*u8; 17] = make [*u8; 17] {
     "../../stages/native/model.crs", "../../stages/native/linux.crs", "../../stages/native/asm.crs",
     "../../stages/native/execute.crs", "../../stages/native/c.crs"
 };
-var exports: [*u8; 3] = make [*u8; 3] { "native_start", "native_c_image", "c_program" };
+var exports: [*u8; 4] = make [*u8; 4] { "native_start", "native_c_image", "c_program", "c_backend_build" };
 {
     if increment(&counter) != 1usize { return 80i32; }
-    var status: i32 = native_bootstrap(run, &session, &sources[0usize], 17usize, &exports[0usize], 3usize);
+    var status: i32 = native_bootstrap(run, &session, &sources[0usize], 17usize, &exports[0usize], 4usize);
     if status == 0i32 && (counter != 3usize || state.counter != &counter || state.callback != increment) {
         return 81i32;
     }
@@ -75,7 +75,7 @@ fn build_target(root: *CrustRun, user: *u8) -> i32 {
         argc: 2i32, argv: &arguments[0usize]
     };
     if (*root).argc != 0i32 { request.argc = (*root).argc; request.argv = (*root).argv; }
-    var status: i32 = c_program(&request);
+    var status: i32 = c_program(&request, c_backend_build);
     if context.error_count != 0usize {
         crust_set_error((*root).context, context.error_loc.source, context.error_loc.offset, &context.error[0usize]);
     }

@@ -4,10 +4,13 @@ host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
+host_source(run,"../backend.crs");
+var backend:ExampleBackend=uninit;
+if !example_backend(run,stages,&backend){return 1i32;};
 host_source(run, "../../stages/c/build.crs");
 
 // Pass the root arguments to the C backend, for example: -o build/arguments.
-return c_build((*run).source, (*run).cursor, (*run).argc, (*run).argv);
+return c_build((*run).source, (*run).cursor, (*run).argc, (*run).argv, backend.emit);
 
 extern fn puts(text: *u8) -> i32 = "puts";
 

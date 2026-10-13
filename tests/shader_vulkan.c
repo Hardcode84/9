@@ -155,7 +155,15 @@ int main(int argc, char **argv)
         return 2;
     ici.pApplicationInfo = &app;
     VK(vkCreateInstance(&ici, NULL, &instance));
-    VK(vkEnumeratePhysicalDevices(instance, &count, &physical));
+    {
+        VkResult result = vkEnumeratePhysicalDevices(instance, &count, &physical);
+        /* The test requests one device. More available devices are permitted. */
+        if ((result != VK_SUCCESS && result != VK_INCOMPLETE) || count == 0) {
+            fprintf(stderr, "vkEnumeratePhysicalDevices: %d, count %u\n", (int)result,
+                    (unsigned)count);
+            return 1;
+        }
+    }
     count = 64;
     vkGetPhysicalDeviceQueueFamilyProperties(physical, &count, families);
     for (family = 0; family < count; ++family)

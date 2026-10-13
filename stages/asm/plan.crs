@@ -295,6 +295,9 @@ fn x64_prepare_alias(program: *CrustX64Program, declaration: *CrustDecl, definit
     if alias != null(*CrustX64Alias) && (!definition || (*alias).definition) {
         return true;
     }
+    if !x64_numeric_signature(program, declaration -> type, &declaration -> loc) {
+        return false;
+    }
     var name: *CrustName = null(*CrustName);
     if !x64_link_name(program, declaration, definition, &name) {
         return false;
@@ -508,6 +511,13 @@ fn x64_prepare_expression(
 ) -> bool {
     if expression == null(*CrustExpr) {
         return true;
+    }
+    if (*(*expression).type).kind == CRUST_T_F32 {
+        return x64_error(
+            (*program).context,
+            &(*expression).loc,
+            "ASM backend requires C or LLVM backend for f32 values"
+        );
     }
     if (*expression).kind == CRUST_E_STRING && !x64_prepare_string(program, expression) {
         return false;
@@ -745,5 +755,25 @@ fn crust_x64_prepare(ctx: *CrustContext, result: **CrustX64Program, entry: *Crus
         return false;
     }
     * result = program;
+    return true;
+}
+
+fn x64_numeric_signature(program: *CrustX64Program, type: *CrustType, location: *CrustLoc) -> bool {
+    if type -> kind != CRUST_T_FUNCTION {
+        return true;
+    }
+    var floating: bool = type -> base -> kind == CRUST_T_F32;
+    var index: usize = 0usize;
+    while index < type -> param_count {
+        floating = floating || type -> params[index] -> kind == CRUST_T_F32;
+        index = index + 1usize;
+    }
+    if floating {
+        return x64_error(
+            program -> context,
+            location,
+            "ASM backend requires C or LLVM backend for f32 values"
+        );
+    }
     return true;
 }

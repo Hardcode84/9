@@ -103,7 +103,7 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
 
 void crust_context_init(CrustContext *ctx, const CrustAllocator *allocator)
 {
-    static const unsigned sizes[] = {1, 1, 2, 2, 4, 4, 8, 8, 8, 8, 1, 0};
+    static const unsigned sizes[] = {1, 1, 2, 2, 4, 4, 8, 8, 8, 8, 4, 1, 0};
     size_t index;
     memset(ctx, 0, sizeof(*ctx));
     crust_arena_init(&ctx->arena, allocator);

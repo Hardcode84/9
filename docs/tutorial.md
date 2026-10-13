@@ -140,7 +140,7 @@ belongs to the variable. The suffix on `0usize` gives the literal its type.
 Function parameters, results, and record fields also have explicit types.
 
 Use `i8`, `i16`, `i32`, and `i64` for signed integers, and their `u` forms for
-unsigned integers. `usize` and `isize` have the target pointer width.
+unsigned integers. `f32` stores a binary32 floating-point value. `usize` and `isize` have the target pointer width.
 `bool` holds `true` or `false`. `unit` is the result type of a function that
 returns through `return;` or reaches the end of its body, such as `add`.
 
@@ -160,6 +160,20 @@ Integer addition, subtraction, and multiplication wrap at the type's width.
 Division by zero, signed division overflow, and invalid shift counts trap.
 Comparisons produce `bool`, the type required by `if` and `while`.
 
+Use the C or LLVM backend for floating-point programs:
+
+```crust
+var distance: f32 = 1.5f32;
+var steps: u32 = 4u32;
+var total: f32 = distance * (steps as f32);
+var whole: i32 = total as i32;
+```
+
+Here `total` is `6f32`, and `whole` is `6i32`. Float-to-integer casts truncate
+and clamp to the destination range; NaN becomes zero. Floating division can
+produce infinity or NaN. The assembly backend serves the integer bootstrap
+profile and reports an error for floating-point operations.
+
 ### Functions use ordinary values
 
 `twice` takes a copy of one integer and returns an integer. `add` takes a
@@ -170,7 +184,7 @@ value. Calling `transform(...)` uses its declared signature. You can pass
 function values as arguments in the same way. Pass any associated state as a
 separate parameter.
 
-The core accepts scalar parameters and results: integers, booleans, pointers,
+The core accepts scalar parameters and results: integers, `f32`, booleans, pointers,
 and function values. Pass a record or array through a pointer. Each function
 name in a core declaration unit must be unique; the
 [overload stage](../stages/overload/README.md) supplies overload selection.

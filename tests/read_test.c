@@ -50,6 +50,17 @@ static void syntax_case(const char *name, const char *text, size_t size, bool ex
 
 static void test_lexical_boundaries(void)
 {
+    SYNTAX("size suffix before minus", "fn f()->usize{return 20usize-1usize;}", true);
+    SYNTAX("size suffix before plus", "fn f()->isize{return 20isize+1isize;}", true);
+    SYNTAX("integer field syntax", "fn f()->unit{1u32.field;}", true);
+    SYNTAX("float field syntax", "fn f()->unit{1f32.field;}", true);
+    SYNTAX("f32 literals", "const a:f32=1.25f32;const b:f32=-1e-3f32;", true);
+    SYNTAX("f32 suffix boundary", "const a:f32=1f32x;", false);
+    SYNTAX("f32 fraction digits", "const a:f32=1.f32;", false);
+    SYNTAX("f32 exponent digits", "const a:f32=1e-f32;", false);
+    SYNTAX("f32 overflow", "const a:f32=1e100f32;", false);
+    SYNTAX("f32 rounded zero", "const a:f32=1e-100f32;", true);
+    SYNTAX("f32 smallest subnormal", "const a:f32=1e-45f32;", true);
     SYNTAX("empty input", "", true);
     SYNTAX("maximal u64", "const n: u64 = 18446744073709551615u64;", true);
     SYNTAX("maximal hexadecimal u64", "const n: u64 = 0xffffffffffffffffu64;", true);

@@ -23,7 +23,12 @@ def main():
     header = re.sub(r"/\*.*?\*/", "", header, flags=re.S)
     public = set(re.findall(r"\b(crust_\w+)\s*\(", header))
     # These helpers connect the core to separately compiled platform adapters.
-    bridges = {"crust_profile_allocate", "crust_type_compare_reset", "crust_type_compare_seen"}
+    bridges = {
+        "crust_profile_allocate",
+        "crust_profile_f32",
+        "crust_type_compare_reset",
+        "crust_type_compare_seen",
+    }
     builds = {"split": SOURCES, "amalgamated": ("crust0_amalg.c",)}
     with tempfile.TemporaryDirectory(prefix="crust-amalgamation-") as work:
         for mode, sources in builds.items():

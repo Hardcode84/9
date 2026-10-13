@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 record Padded {
-    flag: u8;
     value: u64;
+    flag: u8;
 }
 record Pair {
     first: u64;

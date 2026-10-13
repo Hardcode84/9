@@ -777,7 +777,7 @@ fn rs_scalar_expression(function: *RsFunction, source: *CrustExpr, output: *RsSt
     var stage: *RsStage = (*function).stage;
     var location: *CrustLoc = &(*source).loc;
     var kind: u32 = (*source).kind;
-    if kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL || kind == CRUST_E_STRING {
+    if kind == CRUST_E_INTEGER || kind == CRUST_E_FLOAT || kind == CRUST_E_BOOL || kind == CRUST_E_STRING {
         return rs_literal_expression(function, source);
     }
     if kind == CRUST_E_NULL {

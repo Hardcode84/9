@@ -1,0 +1,117 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn ll_float_literal(stage: *LlStage, bits: u64) -> *u8 {
+    return ll_join(
+        stage,
+        ll_join(stage, "bitcast (i32 ", ll_number(stage, bits)),
+        " to float)"
+    );
+}
+const LL_FLOAT: [*u8; 16] = make [*u8; 16] {
+    "fadd",
+    "fsub",
+    "fmul",
+    "fdiv",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "",
+    "fcmp oeq",
+    "fcmp une",
+    "fcmp olt",
+    "fcmp ole",
+    "fcmp ogt",
+    "fcmp oge"
+};
+fn ll_float_binary(function: *LlFunction, operation: u32, left: *u8, right: *u8) -> *u8 {
+    var value: *u8 = ll_instruction(
+        function,
+        LL_FLOAT[operation as usize],
+        "float",
+        left,
+        right
+    );
+    if operation >= CRUST_OP_EQ {
+        return ll_convert(function, "zext", "i1", value, "i8");
+    }
+    return value;
+}
+fn ll_select(function: *LlFunction, type: *u8, condition: *u8, yes: *u8, no: *u8) -> *u8 {
+    var result: *u8 = ll_register(function);
+    ll_line(function, result, "select i1 ");
+    ll_text(function, condition);
+    ll_text(function, ", ");
+    ll_text(function, type);
+    ll_text(function, " ");
+    ll_text(function, yes);
+    ll_text(function, ", ");
+    ll_text(function, type);
+    ll_text(function, " ");
+    ll_text(function, no);
+    ll_text(function, "\n");
+    return result;
+}
+fn ll_float_integer(function: *LlFunction, type: *CrustType, value: *u8) -> *u8 {
+    var stage: *LlStage = function -> stage;
+    var width: u64 = type -> size * 8u64;
+    var maximum: u64 = ~0u64 >> (64u64 - width);
+    var minimum: u64 = 0u64;
+    var operation: *u8 = "fptoui";
+    if ll_signed(type) {
+        width = width - 1u64;
+        maximum = maximum >> 1u64;
+        minimum = 1u64 << width;
+        operation = "fptosi";
+    }
+    var bound: u64 = (127u64 + width) << 23u64;
+    var below: *u8 = "0.0";
+    if ll_signed(type) {
+        below = ll_float_literal(stage, bound | 2147483648u64);
+    }
+    var high: *u8 = ll_instruction(
+        function,
+        "fcmp oge",
+        "float",
+        value,
+        ll_float_literal(stage, bound)
+    );
+    var low: *u8 = ll_instruction(function, "fcmp ole", "float", value, below);
+    var nan: *u8 = ll_instruction(function, "fcmp uno", "float", value, value);
+    var bad: *u8 = ll_instruction(function, "or", "i1", high, low);
+    bad = ll_instruction(function, "or", "i1", bad, nan);
+    var safe: *u8 = ll_select(function, "float", bad, "0.0", value);
+    var name: *u8 = ll_type(stage, type);
+    var result: *u8 = ll_convert(function, operation, "float", safe, name);
+    result = ll_select(function, name, high, ll_number(stage, maximum), result);
+    return ll_select(function, name, low, ll_number(stage, minimum), result);
+}
+fn ll_float_cast(
+    function: *LlFunction,
+    before: *CrustType,
+    after: *CrustType,
+    value: *u8
+) -> *u8 {
+    if before == after {
+        return value;
+    }
+    if after -> kind == CRUST_T_F32 {
+        var operation: *u8 = "uitofp";
+        if ll_signed(before) {
+            operation = "sitofp";
+        }
+        return ll_convert(
+            function,
+            operation,
+            ll_type(function -> stage, before),
+            value,
+            "float"
+        );
+    }
+    if after -> kind == CRUST_T_BOOL {
+        var bit: *u8 = ll_instruction(function, "fcmp une", "float", value, "0.0");
+        return ll_convert(function, "zext", "i1", bit, "i8");
+    }
+    return ll_float_integer(function, after, value);
+}

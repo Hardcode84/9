@@ -90,7 +90,7 @@ fn ll_signed(type: *CrustType) -> bool {
 fn ll_pointer(type: *CrustType) -> bool {
     return type -> kind == CRUST_T_POINTER || type -> kind == CRUST_T_FUNCTION;
 }
-const LL_SCALARS: [*u8; 12] = make [*u8; 12] {
+const LL_SCALARS: [*u8; 13] = make [*u8; 13] {
     "i8",
     "i8",
     "i16",
@@ -101,6 +101,7 @@ const LL_SCALARS: [*u8; 12] = make [*u8; 12] {
     "i64",
     "i64",
     "i64",
+    "float",
     "i8",
     "void"
 };

@@ -44,6 +44,7 @@ class Suite:
     def layouts(self):
         cases = (
             (b"", b""),
+            (b"const v:f32=1.25e-3f32;", b"const v: f32 = 1.25e-3f32;\n"),
             (b" \r\n\t", b""),
             (b"fn f()->unit{}", b"fn f() -> unit {}\n"),
             (

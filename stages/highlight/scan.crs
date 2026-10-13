@@ -53,6 +53,9 @@ fn hl_string(lexer: *HlLexer) -> unit {
 }
 
 fn hl_number_valid(bytes: *u8, begin: usize, end: usize) -> bool {
+    if rr_float_suffix(bytes, begin, end) {
+        return rr_float_spelling(bytes, begin, end - 3usize);
+    }
     var base: u64 = 10u64;
     if end - begin >= 2usize && bytes[begin] == 48u8 && bytes[begin + 1usize] == 120u8 {
         base = 16u64;
@@ -148,11 +151,11 @@ fn hl_token(lexer: *HlLexer) -> unit {
         return;
     }
     if byte >= 48u8 && byte <= 57u8 {
-        while (*lexer).cursor < (*lexer).end && rr_name_continue(
-            (*lexer).bytes[(*lexer).cursor]
-        ) {
-            (*lexer).cursor = (*lexer).cursor + 1usize;
-        }
+        (*lexer).cursor = rr_number_end(
+            (*lexer).bytes,
+            (*lexer).span.begin,
+            (*lexer).end
+        );
         if hl_number_valid(
             (*lexer).bytes,
             (*lexer).span.begin,

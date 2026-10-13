@@ -184,7 +184,7 @@ static void test_allocation_failure(void)
     CrustContext ctx;
     for (index = 0; index < 200; ++index) {
         int length = snprintf(text + used, sizeof(text) - used,
-                              "fn f%zu(p:u64)->u64{return p+%zuu64;}\n", index, index);
+                              "fn function%zu(p:u64)->u64{return p+%zuu64;}\n", index, index);
         if (length < 0 || (size_t)length >= sizeof(text) - used)
             abort();
         used += (size_t)length;

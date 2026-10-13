@@ -130,6 +130,9 @@ fn ll_unary(function: *LlFunction, input: *CrustExpr) -> *u8 {
     if input -> op == CRUST_OP_DEREF {
         return ll_load(function, input -> type, value);
     }
+    if input -> op == CRUST_OP_NEG && input -> type -> kind == CRUST_T_F32 {
+        return ll_instruction(function, "fneg", type, value, null(*u8));
+    }
     if input -> op == CRUST_OP_NEG {
         return ll_instruction(function, "sub", type, "0", value);
     }
@@ -144,6 +147,9 @@ fn ll_cast(function: *LlFunction, input: *CrustExpr) -> *u8 {
     var after: *CrustType = input -> type;
     var from: *u8 = ll_type(function -> stage, before);
     var to: *u8 = ll_type(function -> stage, after);
+    if before -> kind == CRUST_T_F32 || after -> kind == CRUST_T_F32 {
+        return ll_float_cast(function, before, after, value);
+    }
     if after -> kind == CRUST_T_BOOL {
         var bit: *u8 = ll_instruction(function, "icmp ne", from, value, "0");
         return ll_convert(function, "zext", "i1", bit, "i8");
@@ -222,6 +228,9 @@ fn ll_binary(function: *LlFunction, input: *CrustExpr) -> *u8 {
             "i64",
             right
         );
+    }
+    if type -> kind == CRUST_T_F32 {
+        return ll_float_binary(function, op, left, right);
     }
     ll_arithmetic_guard(function, op, type, left, right);
     var operation: *u8 = LL_BINARY[op as usize];
@@ -371,6 +380,9 @@ fn ll_aggregate(function: *LlFunction, input: *CrustExpr) -> *u8 {
 }
 
 fn ll_scalar(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    if input -> kind == CRUST_E_FLOAT {
+        return ll_float_literal(function -> stage, input -> integer);
+    }
     var kind: u32 = input -> kind;
     if kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL || kind == CRUST_E_SIZEOF || kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF {
         return ll_number(function -> stage, input -> integer);

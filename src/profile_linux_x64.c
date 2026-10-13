@@ -1,11 +1,14 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#define _DEFAULT_SOURCE
+#define _GNU_SOURCE
 #include "core_internal.h"
 
 #include <errno.h>
+#include <float.h>
 #include <limits.h>
+#include <locale.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 
 #if !defined(__linux__) || !defined(__x86_64__)
@@ -13,7 +16,8 @@
 #endif
 
 typedef char
-    CrustHostProfile[(CHAR_BIT == 8 && sizeof(void *) == 8 && sizeof(size_t) == 8 &&
+    CrustHostProfile[(CHAR_BIT == 8 && sizeof(float) == 4 && FLT_RADIX == 2 && FLT_MANT_DIG == 24 &&
+                      FLT_MAX_EXP == 128 && sizeof(void *) == 8 && sizeof(size_t) == 8 &&
                       sizeof(CrustTypeKind) == 4 && sizeof(short) == 2 && sizeof(int) == 4 &&
                       sizeof(long) == 8 && sizeof(bool) == 1 && sizeof(void (*)(void)) == 8)
                          ? 1
@@ -33,4 +37,16 @@ void *crust_profile_allocate(size_t size)
         return NULL;
     }
     return allocation;
+}
+
+bool crust_profile_f32(const char *text, uint32_t *bits)
+{
+    locale_t locale = newlocale(LC_NUMERIC_MASK, "C", (locale_t)0);
+    float value;
+    if (locale == (locale_t)0)
+        return false;
+    value = strtof_l(text, NULL, locale);
+    freelocale(locale);
+    memcpy(bits, &value, sizeof(value));
+    return true;
 }

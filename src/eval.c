@@ -772,6 +772,92 @@ static uint64_t binary_bits(CrustEval *eval, CrustExpr *expression, uint64_t a, 
     return value & type_mask(expression->type);
 }
 
+static float float_value(uint64_t bits)
+{
+    uint32_t raw = (uint32_t)bits;
+    float value;
+    memcpy(&value, &raw, sizeof(value));
+    return value;
+}
+
+static uint64_t float_bits(float value)
+{
+    uint32_t raw;
+    memcpy(&raw, &value, sizeof(raw));
+    return raw;
+}
+
+static uint64_t float_binary(CrustOp op, uint64_t left, uint64_t right)
+{
+    float a = float_value(left), b = float_value(right);
+    switch (op) {
+    case CRUST_OP_ADD:
+        return float_bits(a + b);
+    case CRUST_OP_SUB:
+        return float_bits(a - b);
+    case CRUST_OP_MUL:
+        return float_bits(a * b);
+    case CRUST_OP_DIV:
+        return float_bits(a / b);
+    case CRUST_OP_EQ:
+        return a == b;
+    case CRUST_OP_NE:
+        return a != b;
+    case CRUST_OP_LT:
+        return a < b;
+    case CRUST_OP_LE:
+        return a <= b;
+    case CRUST_OP_GT:
+        return a > b;
+    case CRUST_OP_GE:
+        return a >= b;
+    default:
+        abort();
+    }
+}
+
+static uint64_t float_to_integer(float value, CrustType *type)
+{
+    unsigned width = (unsigned)(type->size * 8);
+    bool is_signed = crust_type_signed(type);
+    uint64_t mask = type_mask(type);
+    uint64_t high = is_signed ? mask >> 1 : mask;
+    float bound = float_value((uint64_t)(127 + width - (is_signed ? 1 : 0)) << 23);
+    if (value != value)
+        return 0;
+    if (value >= bound)
+        return high;
+    if (is_signed) {
+        int64_t converted;
+        uint64_t bits;
+        if (value <= -bound)
+            return UINT64_C(1) << (width - 1);
+        converted = (int64_t)value;
+        memcpy(&bits, &converted, sizeof(bits));
+        return bits & mask;
+    }
+    if (value <= 0.0f)
+        return 0;
+    return (uint64_t)value;
+}
+
+static uint64_t float_cast(CrustType *before, CrustType *after, uint64_t value)
+{
+    int64_t signed_value;
+    if (before->kind == CRUST_T_F32) {
+        if (after->kind == CRUST_T_F32)
+            return value;
+        if (after->kind == CRUST_T_BOOL)
+            return float_value(value) != 0.0f;
+        return float_to_integer(float_value(value), after);
+    }
+    if (!crust_type_signed(before))
+        return float_bits((float)value);
+    value = extended_bits(value, before);
+    memcpy(&signed_value, &value, sizeof(value));
+    return float_bits((float)signed_value);
+}
+
 static bool binary_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expression,
                               EvalValue *result)
 {
@@ -800,7 +886,8 @@ static bool binary_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expr
         result->bits = expression->op == CRUST_OP_ADD ? a + b : a - b;
         return true;
     }
-    result->bits = binary_bits(eval, expression, a, b);
+    result->bits = type->kind == CRUST_T_F32 ? float_binary(expression->op, a, b)
+                                             : binary_bits(eval, expression, a, b);
     return true;
 }
 
@@ -888,7 +975,8 @@ static bool unary_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expre
     if (!eval_expression(eval, frame, expression->left, &value))
         return false;
     if (expression->op == CRUST_OP_NEG)
-        result->bits = UINT64_C(0) - value.bits;
+        result->bits = expression->type->kind == CRUST_T_F32 ? value.bits ^ UINT64_C(0x80000000)
+                                                             : UINT64_C(0) - value.bits;
     else if (expression->op == CRUST_OP_NOT)
         result->bits = value.bits == 0;
     else
@@ -903,7 +991,9 @@ static bool cast_expression(CrustEval *eval, EvalFrame *frame, CrustExpr *expres
     EvalValue value;
     if (!eval_expression(eval, frame, expression->left, &value))
         return false;
-    if (expression->type->kind == CRUST_T_BOOL)
+    if (expression->type->kind == CRUST_T_F32 || expression->left->type->kind == CRUST_T_F32)
+        result->bits = float_cast(expression->left->type, expression->type, value.bits);
+    else if (expression->type->kind == CRUST_T_BOOL)
         result->bits = value.bits != 0;
     else
         result->bits =
@@ -944,6 +1034,7 @@ static uint64_t literal_bits(CrustExpr *expression)
 {
     switch (expression->kind) {
     case CRUST_E_INTEGER:
+    case CRUST_E_FLOAT:
     case CRUST_E_BOOL:
     case CRUST_E_SIZEOF:
     case CRUST_E_ALIGNOF:

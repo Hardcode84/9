@@ -191,3 +191,10 @@ record or element type. Record padding and array stride come from that type.
 use an address-space-qualified pointer and a 32-bit index. `ll_offset` remains
 available for explicit byte access. Neither helper adds `inbounds` promises.
 The default emitter still uses the Linux x86-64 layout and scalar ABI.
+
+The emitter supports binary32 literals, arithmetic, comparisons, scalar calls,
+and integer conversions. Floating instructions carry no fast-math flags.
+Float-to-integer conversion first selects a valid operand, then clamps the
+result and maps NaN to zero. It cannot produce LLVM poison from an invalid
+conversion. [The numeric rules](../../docs/crust0-spec.md#floating-point-operations)
+apply to both native and device numeric lowering.

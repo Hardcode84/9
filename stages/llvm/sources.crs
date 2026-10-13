@@ -8,4 +8,5 @@ stage_source(stage, "model.crs");
 stage_source(stage, "base.crs");
 stage_source(stage, "program.crs");
 stage_source(stage, "expression.crs");
+stage_source(stage, "float.crs");
 stage_source(stage, "statement.crs");

@@ -98,7 +98,8 @@ def main():
         + b"".join(f"\\x{byte:02x}".encode() for byte in range(256))
         + b'";',
     }
-    keywords = re.findall(r'text:"([a-z0-9]+)"', (READER[1]).read_text())
+    keywords = re.findall(r'text:\s*"([a-z0-9]+)"', (READER[1]).read_text())
+    assert "f32" in keywords and "bool" in keywords, "keyword corpus extraction failed"
     for word in keywords:
         for name in (word, word[:-1], word + "x", "x" + word):
             extra["keyword-" + name] = f"fn {name}()->unit{{}}".encode()

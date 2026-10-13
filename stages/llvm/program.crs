@@ -217,6 +217,14 @@ fn ll_constant_value(stage: *LlStage, input: *CrustExpr, out: *CBuffer) -> unit 
         ll_constant(stage, input -> left, out);
         return;
     }
+    if input -> type -> kind == CRUST_T_F32 {
+        var bits: u64 = input -> integer;
+        if kind == CRUST_E_UNARY {
+            bits = input -> left -> integer ^ 2147483648u64;
+        }
+        c_buffer_text(out, ll_float_literal(stage, bits));
+        return;
+    }
     if kind == CRUST_E_UNARY {
         c_buffer_number(out, 0u64 - input -> left -> integer);
         return;

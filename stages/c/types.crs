@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Scalar type names follow the public CrustTypeKind order through POINTER.
-const C_NATIVE_TYPES: [*u8; 13] = make [*u8; 13] {
+const C_NATIVE_TYPES: [*u8; 14] = make [*u8; 14] {
     "int8_t",
     "uint8_t",
     "int16_t",
@@ -12,6 +12,7 @@ const C_NATIVE_TYPES: [*u8; 13] = make [*u8; 13] {
     "uint64_t",
     "intptr_t",
     "uintptr_t",
+    "float",
     "bool",
     "void",
     "void *"

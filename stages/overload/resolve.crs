@@ -202,14 +202,8 @@ fn ov_standard_expression(
     if kind == CRUST_E_NAME {
         return ov_name_expression(walk, expression, expected);
     }
-    if kind == CRUST_E_INTEGER {
+    if kind == CRUST_E_INTEGER || kind == CRUST_E_FLOAT {
         return ov_type(stage, (*expression).literal_type, location);
-    }
-    if kind == CRUST_E_BOOL {
-        return ov_type(stage, CRUST_T_BOOL, location);
-    }
-    if kind == CRUST_E_STRING {
-        return ov_string_expression(walk, expression);
     }
     if kind == CRUST_E_GROUP {
         return ov_expression(walk, (*expression).left, expected);
@@ -231,6 +225,19 @@ fn ov_standard_expression(
     }
     if kind == CRUST_E_BINARY {
         return ov_binary_expression(walk, expression);
+    }
+    return ov_terminal_expression(walk, expression);
+}
+
+fn ov_terminal_expression(walk: *OvWalk, expression: *CrustExpr) -> *CrustTypeSyntax {
+    var stage: *OvStage = walk -> stage;
+    var kind: u32 = expression -> kind;
+    var location: *CrustLoc = &expression -> loc;
+    if kind == CRUST_E_BOOL {
+        return ov_type(stage, CRUST_T_BOOL, location);
+    }
+    if kind == CRUST_E_STRING {
+        return ov_string_expression(walk, expression);
     }
     return ov_aggregate_expression(walk, expression);
 }

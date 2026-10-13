@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#include "crust0.h"
+#include "core_internal.h"
 
 #include <limits.h>
 #include <string.h>
@@ -43,7 +43,8 @@ enum {
     TOK_AND,
     TOK_OR,
     TOK_LABEL,
-    TOK_GOTO
+    TOK_GOTO,
+    TOK_FLOAT
 };
 
 typedef struct {
@@ -110,6 +111,7 @@ static const Keyword keywords[] = {KEYWORD("label", TOK_LABEL),
                                    TYPEWORD("u64", CRUST_T_U64),
                                    TYPEWORD("isize", CRUST_T_ISIZE),
                                    TYPEWORD("usize", CRUST_T_USIZE),
+                                   TYPEWORD("f32", CRUST_T_F32),
                                    TYPEWORD("bool", CRUST_T_BOOL),
                                    TYPEWORD("unit", CRUST_T_UNIT)};
 
@@ -229,17 +231,125 @@ static void read_integer_suffix(Reader *reader, size_t start, size_t end)
     reader->token.integer_type = suffix->type;
 }
 
+static size_t float_digits(const unsigned char *text, size_t at, size_t end)
+{
+    while (at < end && text[at] >= '0' && text[at] <= '9')
+        ++at;
+    return at;
+}
+
+static bool float_syntax(const unsigned char *text, size_t size)
+{
+    size_t at = float_digits(text, 0, size);
+    size_t start;
+    if (at == 0)
+        return false;
+    if (at < size && text[at] == '.') {
+        start = ++at;
+        at = float_digits(text, at, size);
+        if (at == start)
+            return false;
+    }
+    if (at < size && (text[at] == 'e' || text[at] == 'E')) {
+        ++at;
+        if (at < size && (text[at] == '+' || text[at] == '-'))
+            ++at;
+        start = at;
+        at = float_digits(text, at, size);
+        if (at == start)
+            return false;
+    }
+    return at == size;
+}
+
+bool crust_try_f32_literal(CrustContext *ctx, CrustSource *source, size_t begin, size_t end,
+                           uint32_t *bits)
+{
+    size_t size;
+    char *text;
+    uint32_t value;
+    if (begin > end || end > source->size || end - begin < 4 ||
+        memcmp(source->bytes + end - 3, "f32", 3) != 0) {
+        crust_set_error(ctx, source, begin, "expected a decimal literal with f32 suffix");
+        return false;
+    }
+    size = end - begin - 3;
+    if (!float_syntax(source->bytes + begin, size)) {
+        crust_set_error(ctx, source, begin, "invalid decimal floating literal");
+        return false;
+    }
+    text = crust_try_alloc(ctx, size + 1, 1);
+    if (text == NULL)
+        return false;
+    memcpy(text, source->bytes + begin, size);
+    text[size] = '\0';
+    if (!crust_profile_f32(text, &value)) {
+        crust_set_error(ctx, source, begin, "cannot create floating conversion locale");
+        return false;
+    }
+    if ((value & UINT32_C(0x7f800000)) == UINT32_C(0x7f800000)) {
+        crust_set_error(ctx, source, begin, "floating literal exceeds the finite f32 range");
+        return false;
+    }
+    *bits = value;
+    return true;
+}
+
+static size_t decimal_exponent(const unsigned char *text, size_t at, size_t end)
+{
+    if (at == end || (text[at] != 'e' && text[at] != 'E'))
+        return at;
+    ++at;
+    if (at < end && (text[at] == '+' || text[at] == '-'))
+        ++at;
+    return float_digits(text, at, end);
+}
+
+static size_t number_end(Reader *reader)
+{
+    const unsigned char *text = reader->source->bytes;
+    size_t at = reader->offset;
+    size_t end = reader->end;
+    bool hex = end - at >= 2 && text[at] == '0' && text[at + 1] == 'x';
+    if (!hex) {
+        at = float_digits(text, at, end);
+        if (at + 1 < end && text[at] == '.' && text[at + 1] >= '0' && text[at + 1] <= '9')
+            at = float_digits(text, at + 1, end);
+        at = decimal_exponent(text, at, end);
+    }
+    while (at < end && name_continue(text[at]))
+        ++at;
+    return at;
+}
+
+static bool read_float(Reader *reader, size_t start, size_t end)
+{
+    const unsigned char *source = reader->source->bytes;
+    if (end - start >= 4 && memcmp(source + end - 3, "f32", 3) == 0 &&
+        !(source[start] == '0' && source[start + 1] == 'x')) {
+        uint32_t bits;
+        if (!crust_try_f32_literal(reader->ctx, reader->source, start, end, &bits))
+            longjmp(reader->ctx->failure->jump, 1);
+        reader->token.kind = TOK_FLOAT;
+        reader->token.integer_type = CRUST_T_F32;
+        reader->token.integer = bits;
+        reader->offset = end;
+        return true;
+    }
+    return false;
+}
+
 static void read_number(Reader *reader)
 {
     const unsigned char *source = reader->source->bytes;
-    size_t size = reader->end;
     size_t start = reader->offset;
     size_t end = start;
     size_t digits;
     unsigned base = 10;
     uint64_t value = 0;
-    while (end < size && name_continue(source[end]))
-        ++end;
+    end = number_end(reader);
+    if (read_float(reader, start, end))
+        return;
     if (end - start >= 2 && source[start] == '0' && source[start + 1] == 'x') {
         base = 16;
         start += 2;
@@ -542,6 +652,16 @@ static CrustExpr *read_constructor(Reader *reader, CrustLoc loc)
     return expr;
 }
 
+static CrustExpr *read_numeric_expr(Reader *reader, Token token)
+{
+    CrustExpr *expr =
+        new_expr(reader, token.kind == TOK_FLOAT ? CRUST_E_FLOAT : CRUST_E_INTEGER, token.loc);
+    expr->integer = token.integer;
+    expr->literal_type = token.integer_type;
+    next_token(reader);
+    return expr;
+}
+
 static CrustExpr *read_primary(Reader *reader)
 {
     Token token = reader->token;
@@ -553,11 +673,8 @@ static CrustExpr *read_primary(Reader *reader)
         next_token(reader);
         return expr;
     case TOK_INTEGER:
-        expr = new_expr(reader, CRUST_E_INTEGER, token.loc);
-        expr->integer = token.integer;
-        expr->literal_type = token.integer_type;
-        next_token(reader);
-        return expr;
+    case TOK_FLOAT:
+        return read_numeric_expr(reader, token);
     case TOK_TRUE:
     case TOK_FALSE:
         expr = new_expr(reader, CRUST_E_BOOL, token.loc);

@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+float native_float(float (*callback)(float), int32_t tag, float a, float b, float c, float d,
+                   float e, float f, float g, float h, float i);
 int8_t native_i8(int8_t value);
 uint8_t native_u8(uint8_t value);
 int16_t native_i16(int16_t value);
@@ -49,3 +51,9 @@ int32_t native_callback(int32_t (*function)(int8_t, uint8_t, int16_t, uint16_t, 
 static int32_t native_increment(int32_t value) { return value + 1; }
 
 int32_t (*native_function(void))(int32_t) { return native_increment; }
+
+float native_float(float (*callback)(float), int32_t tag, float a, float b, float c, float d,
+                   float e, float f, float g, float h, float i)
+{
+    return callback(a + b + c + d + e + f + g + h + i) + (float)tag;
+}

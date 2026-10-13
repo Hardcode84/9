@@ -376,6 +376,11 @@ def main():
     native = work / "native.o"
     command([*cc, *STRICT, "-O2", "-c", "tests/native.c", "-o", native])
     command([executable("runtime", inputs=["tests/runtime.crs"], libraries=[native])])
+    if args.backend == "c":
+        command([executable("float", inputs=["tests/float.crs"], libraries=[native])])
+    else:
+        rejected = command([compiler, "--prepare", "tests/float.crs"], expected=1)
+        assert b"f32" in rejected.stderr and b"LLVM" in rejected.stderr, rejected.stderr
     intrusive = executable("intrusive", inputs=["examples/intrusive/raw.crs"])
     assert command([intrusive]).stdout == b"intrusive: ok\n"
     command(

@@ -52,6 +52,18 @@ static void source_case(const char *name, const char *text, const char *error)
     crust_context_destroy(&ctx);
 }
 
+static void test_float_rules(void)
+{
+    source_case("float arithmetic", "fn f(x:f32)->f32{return -x+1.5f32;}", NULL);
+    source_case("mixed numeric operands", "fn f(x:f32)->f32{return x+1u32;}", "type mismatch");
+    source_case("float remainder", "fn f(x:f32)->f32{return x%1f32;}", "numeric types");
+    source_case("float shift", "fn f(x:f32)->f32{return x<<1f32;}", "numeric types");
+    source_case("float bit operation", "fn f(x:f32)->f32{return x&1f32;}", "numeric types");
+    source_case("float bit complement", "fn f(x:f32)->f32{return ~x;}", "requires an integer");
+    source_case("pointer to float cast", "fn f(x:*u8)->f32{return x as f32;}", "cast");
+    source_case("boolean to float cast", "fn f(x:bool)->f32{return x as f32;}", "cast");
+}
+
 static void test_witness_rules(void)
 {
     source_case("direct signed minimum", "fn f() -> i8 { return -128i8; }", NULL);
@@ -246,7 +258,7 @@ static void test_complete_forms(void)
     source_case("unit pointer rejected", "record R { p: *unit; }", "pointer target");
     source_case("zero array rejected", "record R { data: [u8; 0]; }", "must be positive");
     source_case("pointer comparison ordering rejected",
-                "fn f(a: *u8, b: *u8) -> bool { return a < b; }", "integer operation");
+                "fn f(a: *u8, b: *u8) -> bool { return a < b; }", "numeric types");
     source_case("function cast rejected", "fn f() -> unit {} fn g() -> *u8 { return f as *u8; }",
                 "invalid cast");
     source_case("unit return value rejected", "fn f() -> unit {} fn g() -> unit { return f(); }",
@@ -979,6 +991,7 @@ static void test_extension_rejection(void)
 int main(void)
 {
     test_witness_rules();
+    test_float_rules();
     test_generated_scopes();
     test_shared_bindings();
     test_complete_forms();

@@ -86,6 +86,7 @@ typedef enum {
     CRUST_T_U64,
     CRUST_T_ISIZE,
     CRUST_T_USIZE,
+    CRUST_T_F32,
     CRUST_T_BOOL,
     CRUST_T_UNIT,
     CRUST_T_POINTER,
@@ -161,6 +162,7 @@ typedef enum {
     CRUST_E_SIZEOF,
     CRUST_E_ALIGNOF,
     CRUST_E_OFFSETOF,
+    CRUST_E_FLOAT,
     CRUST_E_END /* Exclusive end of seed expression kinds; not a seed node kind. */
 } CrustExprKind;
 
@@ -369,6 +371,10 @@ void crust_map_set(CrustContext *ctx, CrustMap *map, uintptr_t key, void *value)
 
 /* Input bytes and source descriptors remain live until the context is destroyed. */
 bool crust_read(CrustContext *ctx, CrustSource *source, CrustUnit **result);
+/* Parse one unsigned decimal f32 token in [begin, end). Return its IEEE bits.
+   Failure retains a diagnostic and leaves bits unchanged. */
+bool crust_try_f32_literal(CrustContext *ctx, CrustSource *source, size_t begin, size_t end,
+                           uint32_t *bits);
 /* Read [begin, end) with absolute source locations. Empty ranges are valid.
    Invalid ranges or syntax return false, retain a diagnostic, and set result to null.
    Input bytes and source descriptors remain live until the context is destroyed. */

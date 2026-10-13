@@ -79,6 +79,7 @@ def main():
         )
     cases = {
         "empty": b"",
+        "floats": b"f32 1f32 1.25e-3f32 1.2ef32 1ef32",
         "comments": b"// fn fake() & <script>\r\nfn /* no block comments */ real()->unit{}\n",
         "strings": 'const text:*u8="a\\n<&>😀é";\r\n'.encode(),
         "names": b"var read:u32=0u32; fn move()->unit{} record R{x:u32;} // defer\n",
@@ -121,6 +122,14 @@ def main():
         assert results[name][0][1] == "invalid"
         assert (b"after", "function", 1) in results[name]
     assert [kind for _, kind, _ in results["numbers"]] == ["number"] * 4 + ["invalid"] * 3
+
+    assert [kind for _, kind, _ in results["floats"]] == [
+        "type",
+        "number",
+        "number",
+        "invalid",
+        "invalid",
+    ]
 
     actual = ROOT / "examples/hello/main.crs"
     native = run(tool, "--tokens", actual)

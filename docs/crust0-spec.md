@@ -42,7 +42,7 @@ The seed has these facilities only:
 
 | Facility | Reason it is present |
 |---|---|
-| Fixed-width integers and booleans | Tokens, offsets, tags, arithmetic, and decisions |
+| Fixed-width integers, binary32 values, and booleans | Tokens, offsets, tags, arithmetic, and decisions |
 | Records and fixed arrays | Compiler data, tables, buffers, and explicit layout |
 | Raw pointers and field addresses | Graphs, caller-selected storage, and native library access |
 | Typed function values | Direct calls, callbacks, and selected compiler stages |
@@ -56,7 +56,7 @@ copy operation. All state other than constant data is local or reached through
 explicit pointers.
 
 There are no generics, overloads, implicit conversions, methods, inheritance,
-closures, exceptions, tagged unions, floating-point types, variable arguments,
+closures, exceptions, tagged unions, variable arguments,
 implicit compile-time function execution, or built-in module management.
 There are no module, import, pub, owner, borrow, defer, unsafe, macro,
 quotation, or general stage-definition keywords. The `crust` launcher executes
@@ -78,6 +78,7 @@ This is a bounded bootstrap target, not a claim of kernel or full C support.
 |---|---:|---|
 | `i8`, `u8`, `bool` | 1 | Signed 8-bit, unsigned 8-bit, or boolean |
 | `i16`, `u16` | 2 | Signed or unsigned 16-bit |
+| `f32` | 4 | IEEE 754 binary32 |
 | `i32`, `u32` | 4 | Signed or unsigned 32-bit |
 | `i64`, `u64`, `isize`, `usize` | 8 | Signed or unsigned 64-bit |
 | Data pointer or function value | 8 | Native pointer representation |
@@ -120,6 +121,13 @@ digits, then one integer type suffix. Examples are `12u32`, `0xffu8`, and
 An array count is an unsuffixed decimal token in the array type grammar.
 Malformed numeric text is an error, not a valid numeric prefix plus a name.
 
+A floating token has decimal digits, an optional fractional part, an optional
+exponent, and the `f32` suffix. A decimal point requires digits after it.
+An exponent starts with `e` or `E`, permits one sign, and requires digits.
+Examples are `1f32`, `1.25f32`, and `1e-3f32`. Convert the decimal value to
+binary32. Reject overflow to infinity. Underflow can produce a subnormal value
+or zero. The source decimal point is `.` in every host locale.
+
 A string starts and ends with `"`. It contains bytes other than `"`, `\\`,
 zero, line feed, or carriage return, or one of these escapes:
 `\\`, `\"`, `\n`, `\r`, `\t`, `\0`, `\xHH`.
@@ -155,7 +163,7 @@ Field       = Name ":" Type ";" ;
 Params      = "(" [ Param { "," Param } [ "," ] ] ")" ;
 Param       = Name ":" Type ;
 Types       = Type { "," Type } [ "," ] ;
-Type        = IntegerType | "bool" | "unit" | Name
+Type        = IntegerType | "f32" | "bool" | "unit" | Name
             | "*" Type | ArrayType
             | "fn" "(" [ Types ] ")" "->" Type ;
 ArrayType   = "[" Type ";" Count "]" ;
@@ -191,7 +199,7 @@ Postfix     = Primary {
                 "(" [ Arguments ] ")" | "[" Expr "]" | ( "." | "->" ) Name
               } ;
 Arguments   = Expr { "," Expr } [ "," ] ;
-Primary     = Name | Integer | String | "true" | "false"
+Primary     = Name | Integer | Float | String | "true" | "false"
             | "(" Expr ")"
             | "make" Name "{" [ Fields ] "}"
             | "make" ArrayType "{" [ Arguments ] "}"
@@ -263,7 +271,7 @@ before it supplies a binding table. Visibility is not an additional seed check.
 
 ## 6 Types and data layout
 
-Storage types are integers, `bool`, pointers, function types, records, and
+Storage types are integers, `f32`, `bool`, pointers, function types, records, and
 fixed arrays. `unit` is permitted only as a function result. It has no stored
 value, address, size, or alignment. Thus `*unit`, unit fields, and unit variables
 are errors. Use `*u8` for an erased data address.
@@ -291,7 +299,7 @@ There is no generated aggregate equality. There are no implicit array-to-pointer
 or record-to-pointer conversions.
 
 Function parameters and results are scalar in this version. A scalar is an
-integer, boolean, data pointer, or function value. A result can also be `unit`.
+integer, `f32`, boolean, data pointer, or function value. A result can also be `unit`.
 Pass aggregates through explicit pointers. This restriction applies to all
 functions and function types. It avoids both a C aggregate ABI classifier and
 a second seed calling convention. Richer frontends can define aggregate calls
@@ -327,6 +335,28 @@ facts for a storage type. `offsetof(R, f)` returns the byte offset of a declared
 record field as `usize`. These operations have no operand evaluation or runtime
 reflection.
 
+### Floating-point operations
+
+`f32` supports `+`, `-`, `*`, `/`, unary minus, and comparisons. Binary operands
+must both have type `f32`. Each arithmetic result has binary32 precision.
+Unary minus changes the sign, including the sign of zero. Division uses
+floating-point rules: a zero divisor can produce infinity or NaN.
+NaN compares unequal to every value, including itself. Ordered comparisons
+with NaN return false. Positive and negative zero compare equal.
+
+Integer-to-`f32` casts round to binary32. A cast from `f32` to an integer
+truncates toward zero, clamps out-of-range values to the integer bounds, and
+maps NaN to zero. A cast to `bool` returns false for either zero and true for
+all other values. Pointer and boolean inputs cannot be cast to `f32`.
+Bit operations, shifts, and remainder require integer operands.
+
+The host numeric profile requires round-to-nearest, ties-to-even, untrapped
+floating exceptions, and enabled subnormals. Foreign code must restore this
+environment before it returns to Crust code.
+The evaluator and the C and LLVM backends implement this profile. The assembly
+bootstrap backend rejects floating-point operations and floating-point call
+signatures. Select the C or LLVM backend for these programs.
+
 ### Integer and boolean operations
 
 Except for pointer offsets below, binary arithmetic, bitwise operations, shifts,
@@ -357,6 +387,7 @@ with null equal only to null. There is no ordered pointer comparison.
 
 - Integer to integer: reduce the mathematical source value modulo 2 raised
   to the target bit width, then interpret the target signedness.
+- Integer to `f32`, or `f32` to integer or `bool`: use the floating-point rules above.
 - `bool` to integer: produce 0 or 1. Integer to `bool`: compare with zero.
 - Data pointer to data pointer: preserve the address and allocation origin.
   This conversion itself does not read memory or establish alignment.
@@ -376,7 +407,7 @@ memory contract. Pointer-pointer subtraction is not an operation.
 ### Constants
 
 A `const` declares immutable static storage of its stated type. The initializer
-is restricted to typed integer literals, direct negative integer literals,
+is restricted to typed integer and floating literals, their direct negatives,
 booleans, strings, null, layout queries, function names, and record or array
 construction from these forms. Parentheses can group these forms.
 Every initializer must have the exact declared type.
@@ -458,7 +489,8 @@ temporary tag bits before conversion back. It does not permit a file-supplied
 integer to authorize memory access or restore a freed allocation after reuse.
 Foreign interfaces can explicitly establish additional pointer origins.
 
-All bit patterns represent integer values. Boolean values require 0 or 1.
+All bit patterns represent integer values. Binary32 bit patterns represent
+finite values, infinities, and NaNs. Boolean values require 0 or 1.
 Pointers and function values require a representation established by the
 operations or foreign contracts in this specification. Native function calls
 require a non-null function value with the exact signature and ABI.
@@ -550,6 +582,7 @@ The initial profile uses these C boundary types:
 | `i8`, `u8` | `signed char`, `unsigned char` |
 | `i16`, `u16` | `short`, `unsigned short` |
 | `i32`, `u32` | `int`, `unsigned int` |
+| `f32` | `float` |
 | `i64`, `u64` | `long`, `unsigned long` in the selected LP64 profile |
 | `isize`, `usize` | Pointer-sized signed or unsigned integer |
 | `*T` | Native data pointer |
@@ -566,7 +599,7 @@ An `extern fn` has no body. Its string names an exact native symbol. The decoded
 name must be nonempty ASCII with no embedded zero. It has the declared scalar
 signature. The foreign implementation must obey the same ABI and the declared
 memory contract. A declaration cannot make a mismatched native function safe.
-Variable arguments and aggregate or floating-point calls need an ordinary
+Variable arguments and aggregate calls need an ordinary
 native bridge or another frontend's ABI adapter.
 
 The driver assigns a native link identity to each defined function and static

@@ -37,6 +37,7 @@ const RR_SHL: u32 = 288u32;
 const RR_SHR: u32 = 289u32;
 const RR_AND: u32 = 290u32;
 const RR_OR: u32 = 291u32;
+const RR_FLOAT: u32 = 294u32;
 
 // text borrows the original bytes. bytes contains a zero-terminated decoded
 // string when kind is RR_STRING; byte_count includes that final zero.

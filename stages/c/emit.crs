@@ -81,6 +81,10 @@ fn c_wrap_begin(stage: *CStage, input: *CrustType) -> unit {
 }
 
 fn c_literal(stage: *CStage, input: *CrustType, number: u64) -> unit {
+    if (*input).kind == CRUST_T_F32 {
+        c_float_literal(stage, number);
+        return;
+    }
     if (*input).kind == CRUST_T_BOOL {
         if number == 0u64 {
             c_text(stage, "false");
@@ -256,7 +260,7 @@ fn c_binary(stage: *CStage, input: *CrustExpr) -> usize {
             return result;
         }
     }
-    var wrap: bool = c_wraps(operation);
+    var wrap: bool = c_wraps(operation) && (*input_type).kind != CRUST_T_F32;
     if wrap {
         c_wrap_begin(stage, (*input).type);
         c_text(stage, "(uint64_t)");
@@ -434,7 +438,11 @@ fn c_constant(stage: *CStage, input: *CrustExpr) -> unit {
         return;
     }
     if kind == CRUST_E_UNARY {
-        c_literal(stage, (*input).type, 0u64 - (*(*input).left).integer);
+        var bits: u64 = 0u64 - (*(*input).left).integer;
+        if (*(*input).type).kind == CRUST_T_F32 {
+            bits = (*(*input).left).integer ^ 2147483648u64;
+        }
+        c_literal(stage, (*input).type, bits);
         return;
     }
     if c_literal_kind(kind) {
@@ -640,6 +648,9 @@ fn c_binary_checks(
     left: usize,
     right: usize
 ) -> unit {
+    if (*input_type).kind == CRUST_T_F32 {
+        return;
+    }
     if operation == CRUST_OP_DIV || operation == CRUST_OP_REM {
         c_text(stage, "if(");
         c_value(stage, right);
@@ -764,6 +775,11 @@ fn c_unary(stage: *CStage, input: *CrustExpr, operand: usize) -> unit {
         c_value(stage, operand);
         return;
     }
+    if (*(*input).type).kind == CRUST_T_F32 {
+        c_text(stage, "-");
+        c_value(stage, operand);
+        return;
+    }
     c_wrap_begin(stage, (*input).type);
     if (*input).op == CRUST_OP_NEG {
         c_text(stage, "UINT64_C(0)-(uint64_t)");
@@ -778,6 +794,15 @@ fn c_unary(stage: *CStage, input: *CrustExpr, operand: usize) -> unit {
 
 fn c_cast(stage: *CStage, input: *CrustExpr, operand: usize) -> unit {
     var target: *CrustType = (*input).type;
+    if (*target).kind == CRUST_T_F32 {
+        c_text(stage, "(float)");
+        c_value(stage, operand);
+        return;
+    }
+    if (*(*(*input).left).type).kind == CRUST_T_F32 && c_integer(target) {
+        c_float_cast(stage, target, operand);
+        return;
+    }
     if (*target).kind == CRUST_T_POINTER {
         c_text(stage, "r_addr((uintptr_t)");
         c_value(stage, operand);
@@ -820,7 +845,7 @@ fn c_variable(stage: *CStage, input: *CrustStmt) -> unit {
 }
 
 fn c_literal_kind(kind: u32) -> bool {
-    return kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL || kind == CRUST_E_SIZEOF || kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF;
+    return kind == CRUST_E_INTEGER || kind == CRUST_E_FLOAT || kind == CRUST_E_BOOL || kind == CRUST_E_SIZEOF || kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF;
 }
 
 fn c_function_body(
@@ -888,4 +913,68 @@ fn c_block(stage: *CStage, input: *CrustStmt) -> unit {
         child = (*child).next;
     }
     c_text(stage, "}\n");
+}
+
+fn c_float_bound(stage: *CStage, power: u64) -> unit {
+    c_text(stage, "0x1p");
+    c_number(stage, power);
+    c_text(stage, "f");
+}
+fn c_float_literal(stage: *CStage, bits: u64) -> unit {
+    var exponent: i32 = ((bits >> 23u64) & 255u64) as i32;
+    var fraction: u64 = bits & 8388607u64;
+    if exponent == 0i32 {
+        exponent = 1i32;
+    } else {
+        fraction = fraction | 8388608u64;
+    }
+    exponent = exponent - 150i32;
+    if (bits & 2147483648u64) != 0u64 {
+        c_text(stage, "-");
+    }
+    c_text(stage, "((float)");
+    c_number(stage, fraction);
+    c_text(stage, "u*0x1p");
+    if exponent < 0i32 {
+        c_text(stage, "-");
+        exponent = -exponent;
+    }
+    c_number(stage, exponent as u64);
+    c_text(stage, "f)");
+}
+fn c_float_cast(stage: *CStage, target: *CrustType, operand: usize) -> unit {
+    var width: u64 = target -> size * 8u64;
+    var high: u64 = ~0u64 >> (64u64 - width);
+    var low: u64 = 0u64;
+    if c_signed(target) {
+        width = width - 1u64;
+        high = high >> 1u64;
+        low = 1u64 << width;
+    }
+    c_text(stage, "(");
+    c_value(stage, operand);
+    c_text(stage, "!=");
+    c_value(stage, operand);
+    c_text(stage, "?0:");
+    c_value(stage, operand);
+    c_text(stage, ">=");
+    c_float_bound(stage, width);
+    c_text(stage, "?");
+    c_literal(stage, target, high);
+    c_text(stage, ":");
+    c_value(stage, operand);
+    c_text(stage, "<=");
+    if c_signed(target) {
+        c_text(stage, "-");
+        c_float_bound(stage, width);
+    } else {
+        c_text(stage, "0");
+    }
+    c_text(stage, "?");
+    c_literal(stage, target, low);
+    c_text(stage, ":(");
+    c_type_name(stage, target);
+    c_text(stage, ")");
+    c_value(stage, operand);
+    c_text(stage, ")");
 }

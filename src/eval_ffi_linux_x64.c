@@ -72,34 +72,15 @@ bool crust_eval_native_type_equal(CrustContext *context, CrustType *left, CrustT
 
 static ffi_type *ffi_value_type(CrustType *type)
 {
-    switch (type->kind) {
-    case CRUST_T_I8:
-        return &ffi_type_sint8;
-    case CRUST_T_U8:
-    case CRUST_T_BOOL:
-        return &ffi_type_uint8;
-    case CRUST_T_I16:
-        return &ffi_type_sint16;
-    case CRUST_T_U16:
-        return &ffi_type_uint16;
-    case CRUST_T_I32:
-        return &ffi_type_sint32;
-    case CRUST_T_U32:
-        return &ffi_type_uint32;
-    case CRUST_T_I64:
-    case CRUST_T_ISIZE:
-        return &ffi_type_sint64;
-    case CRUST_T_U64:
-    case CRUST_T_USIZE:
-        return &ffi_type_uint64;
-    case CRUST_T_UNIT:
-        return &ffi_type_void;
-    case CRUST_T_POINTER:
-    case CRUST_T_FUNCTION:
+    static ffi_type *const scalars[] = {
+        &ffi_type_sint8,  &ffi_type_uint8,  &ffi_type_sint16, &ffi_type_uint16, &ffi_type_sint32,
+        &ffi_type_uint32, &ffi_type_sint64, &ffi_type_uint64, &ffi_type_sint64, &ffi_type_uint64,
+        &ffi_type_float,  &ffi_type_uint8,  &ffi_type_void};
+    if (type->kind <= CRUST_T_UNIT)
+        return scalars[type->kind];
+    if (type->kind == CRUST_T_POINTER || type->kind == CRUST_T_FUNCTION)
         return &ffi_type_pointer;
-    default:
-        abort();
-    }
+    abort();
 }
 
 CrustEvalAbi *crust_eval_native_abi(CrustContext *context, CrustType *type, CrustLoc location)
@@ -156,6 +137,11 @@ static void native_callback(ffi_cif *cif, void *returned, void **arguments, void
     (void)cif;
     if (type->kind == CRUST_T_UNIT)
         return;
+    if (type->kind == CRUST_T_F32) {
+        uint32_t floating = (uint32_t)value;
+        memcpy(returned, &floating, sizeof(floating));
+        return;
+    }
     width = (unsigned)(type->size * 8);
     mask = UINT64_MAX >> (64 - width);
     value &= mask;

@@ -110,7 +110,7 @@ void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment)
 
 void crust_context_init(CrustContext *ctx, const CrustAllocator *allocator)
 {
-    static const unsigned sizes[] = {1, 1, 2, 2, 4, 4, 8, 8, 8, 8, 1, 0};
+    static const unsigned sizes[] = {1, 1, 2, 2, 4, 4, 8, 8, 8, 8, 4, 1, 0};
     size_t index;
     memset(ctx, 0, sizeof(*ctx));
     crust_arena_init(&ctx->arena, allocator);
@@ -535,7 +535,7 @@ bool crust_type_compare_seen(CrustContext *ctx, const CrustType *left, const Cru
 #line 1 "src/read.c"
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#include "crust0.h"
+#include "core_internal.h"
 
 #include <limits.h>
 #include <string.h>
@@ -578,7 +578,8 @@ enum {
     TOK_AND,
     TOK_OR,
     TOK_LABEL,
-    TOK_GOTO
+    TOK_GOTO,
+    TOK_FLOAT
 };
 
 typedef struct {
@@ -645,6 +646,7 @@ static const Keyword keywords[] = {KEYWORD("label", TOK_LABEL),
                                    TYPEWORD("u64", CRUST_T_U64),
                                    TYPEWORD("isize", CRUST_T_ISIZE),
                                    TYPEWORD("usize", CRUST_T_USIZE),
+                                   TYPEWORD("f32", CRUST_T_F32),
                                    TYPEWORD("bool", CRUST_T_BOOL),
                                    TYPEWORD("unit", CRUST_T_UNIT)};
 
@@ -764,17 +766,125 @@ static void read_integer_suffix(Reader *reader, size_t start, size_t end)
     reader->token.integer_type = suffix->type;
 }
 
+static size_t float_digits(const unsigned char *text, size_t at, size_t end)
+{
+    while (at < end && text[at] >= '0' && text[at] <= '9')
+        ++at;
+    return at;
+}
+
+static bool float_syntax(const unsigned char *text, size_t size)
+{
+    size_t at = float_digits(text, 0, size);
+    size_t start;
+    if (at == 0)
+        return false;
+    if (at < size && text[at] == '.') {
+        start = ++at;
+        at = float_digits(text, at, size);
+        if (at == start)
+            return false;
+    }
+    if (at < size && (text[at] == 'e' || text[at] == 'E')) {
+        ++at;
+        if (at < size && (text[at] == '+' || text[at] == '-'))
+            ++at;
+        start = at;
+        at = float_digits(text, at, size);
+        if (at == start)
+            return false;
+    }
+    return at == size;
+}
+
+bool crust_try_f32_literal(CrustContext *ctx, CrustSource *source, size_t begin, size_t end,
+                           uint32_t *bits)
+{
+    size_t size;
+    char *text;
+    uint32_t value;
+    if (begin > end || end > source->size || end - begin < 4 ||
+        memcmp(source->bytes + end - 3, "f32", 3) != 0) {
+        crust_set_error(ctx, source, begin, "expected a decimal literal with f32 suffix");
+        return false;
+    }
+    size = end - begin - 3;
+    if (!float_syntax(source->bytes + begin, size)) {
+        crust_set_error(ctx, source, begin, "invalid decimal floating literal");
+        return false;
+    }
+    text = crust_try_alloc(ctx, size + 1, 1);
+    if (text == NULL)
+        return false;
+    memcpy(text, source->bytes + begin, size);
+    text[size] = '\0';
+    if (!crust_profile_f32(text, &value)) {
+        crust_set_error(ctx, source, begin, "cannot create floating conversion locale");
+        return false;
+    }
+    if ((value & UINT32_C(0x7f800000)) == UINT32_C(0x7f800000)) {
+        crust_set_error(ctx, source, begin, "floating literal exceeds the finite f32 range");
+        return false;
+    }
+    *bits = value;
+    return true;
+}
+
+static size_t decimal_exponent(const unsigned char *text, size_t at, size_t end)
+{
+    if (at == end || (text[at] != 'e' && text[at] != 'E'))
+        return at;
+    ++at;
+    if (at < end && (text[at] == '+' || text[at] == '-'))
+        ++at;
+    return float_digits(text, at, end);
+}
+
+static size_t number_end(Reader *reader)
+{
+    const unsigned char *text = reader->source->bytes;
+    size_t at = reader->offset;
+    size_t end = reader->end;
+    bool hex = end - at >= 2 && text[at] == '0' && text[at + 1] == 'x';
+    if (!hex) {
+        at = float_digits(text, at, end);
+        if (at + 1 < end && text[at] == '.' && text[at + 1] >= '0' && text[at + 1] <= '9')
+            at = float_digits(text, at + 1, end);
+        at = decimal_exponent(text, at, end);
+    }
+    while (at < end && name_continue(text[at]))
+        ++at;
+    return at;
+}
+
+static bool read_float(Reader *reader, size_t start, size_t end)
+{
+    const unsigned char *source = reader->source->bytes;
+    if (end - start >= 4 && memcmp(source + end - 3, "f32", 3) == 0 &&
+        !(source[start] == '0' && source[start + 1] == 'x')) {
+        uint32_t bits;
+        if (!crust_try_f32_literal(reader->ctx, reader->source, start, end, &bits))
+            longjmp(reader->ctx->failure->jump, 1);
+        reader->token.kind = TOK_FLOAT;
+        reader->token.integer_type = CRUST_T_F32;
+        reader->token.integer = bits;
+        reader->offset = end;
+        return true;
+    }
+    return false;
+}
+
 static void read_number(Reader *reader)
 {
     const unsigned char *source = reader->source->bytes;
-    size_t size = reader->end;
     size_t start = reader->offset;
     size_t end = start;
     size_t digits;
     unsigned base = 10;
     uint64_t value = 0;
-    while (end < size && name_continue(source[end]))
-        ++end;
+    end = number_end(reader);
+    if (read_float(reader, start, end))
+        return;
     if (end - start >= 2 && source[start] == '0' && source[start + 1] == 'x') {
         base = 16;
         start += 2;
@@ -1077,6 +1187,16 @@ static CrustExpr *read_constructor(Reader *reader, CrustLoc loc)
     return expr;
 }
 
+static CrustExpr *read_numeric_expr(Reader *reader, Token token)
+{
+    CrustExpr *expr =
+        new_expr(reader, token.kind == TOK_FLOAT ? CRUST_E_FLOAT : CRUST_E_INTEGER, token.loc);
+    expr->integer = token.integer;
+    expr->literal_type = token.integer_type;
+    next_token(reader);
+    return expr;
+}
+
 static CrustExpr *read_primary(Reader *reader)
 {
     Token token = reader->token;
@@ -1088,11 +1208,8 @@ static CrustExpr *read_primary(Reader *reader)
         next_token(reader);
         return expr;
     case TOK_INTEGER:
-        expr = new_expr(reader, CRUST_E_INTEGER, token.loc);
-        expr->integer = token.integer;
-        expr->literal_type = token.integer_type;
-        next_token(reader);
-        return expr;
+    case TOK_FLOAT:
+        return read_numeric_expr(reader, token);
     case TOK_TRUE:
     case TOK_FALSE:
         expr = new_expr(reader, CRUST_E_BOOL, token.loc);
@@ -1759,35 +1876,14 @@ bool crust_type_signed(const CrustType *type)
 
 bool crust_type_scalar(const CrustType *type)
 {
-    return type != NULL && (crust_type_integer(type) || type->kind == CRUST_T_BOOL ||
-                            type->kind == CRUST_T_POINTER || type->kind == CRUST_T_FUNCTION);
+    return type != NULL &&
+           (crust_type_integer(type) || type->kind == CRUST_T_F32 || type->kind == CRUST_T_BOOL ||
+            type->kind == CRUST_T_POINTER || type->kind == CRUST_T_FUNCTION);
 }
 
 unsigned crust_type_bits(const CrustType *type)
 {
-    if (type == NULL)
-        return 0;
-    switch (type->kind) {
-    case CRUST_T_I8:
-    case CRUST_T_U8:
-    case CRUST_T_BOOL:
-        return 8;
-    case CRUST_T_I16:
-    case CRUST_T_U16:
-        return 16;
-    case CRUST_T_I32:
-    case CRUST_T_U32:
-        return 32;
-    case CRUST_T_I64:
-    case CRUST_T_U64:
-    case CRUST_T_ISIZE:
-    case CRUST_T_USIZE:
-    case CRUST_T_POINTER:
-    case CRUST_T_FUNCTION:
-        return 64;
-    default:
-        return 0;
-    }
+    return crust_type_scalar(type) ? (unsigned)(type->size * 8) : 0;
 }
 
 static bool record_types_equal(const CrustType *a, const CrustType *b)
@@ -1905,6 +2001,7 @@ static bool constant_bits(CrustExpr *expr, uint64_t *bits)
     unsigned width;
     switch (expr->kind) {
     case CRUST_E_INTEGER:
+    case CRUST_E_FLOAT:
     case CRUST_E_BOOL:
     case CRUST_E_SIZEOF:
     case CRUST_E_ALIGNOF:
@@ -1912,6 +2009,10 @@ static bool constant_bits(CrustExpr *expr, uint64_t *bits)
         *bits = expr->integer;
         return true;
     case CRUST_E_UNARY:
+        if (expr->op == CRUST_OP_NEG && expr->left->kind == CRUST_E_FLOAT) {
+            *bits = expr->left->integer ^ UINT64_C(0x80000000);
+            return true;
+        }
         if (expr->op != CRUST_OP_NEG || expr->left->kind != CRUST_E_INTEGER)
             return false;
         width = crust_type_bits(expr->type);
@@ -2404,6 +2505,7 @@ static void check_bound_constant_leaf(CrustContext *ctx, CrustExpr *expr)
             crust_fail(ctx, expr->loc, "invalid bound constant operation");
         break;
     case CRUST_E_INTEGER:
+    case CRUST_E_FLOAT:
     case CRUST_E_BOOL:
     case CRUST_E_STRING:
     case CRUST_E_NULL:
@@ -2910,11 +3012,12 @@ static CrustType *check_integer(Checker *checker, CrustExpr *expr, bool negated)
     return type;
 }
 
-static void check_constant_operation(CrustContext *ctx, CrustExpr *expr)
+static bool constant_kind(CrustExpr *expr)
 {
     switch (expr->kind) {
     case CRUST_E_NAME:
     case CRUST_E_INTEGER:
+    case CRUST_E_FLOAT:
     case CRUST_E_BOOL:
     case CRUST_E_STRING:
     case CRUST_E_GROUP:
@@ -2924,14 +3027,19 @@ static void check_constant_operation(CrustContext *ctx, CrustExpr *expr)
     case CRUST_E_SIZEOF:
     case CRUST_E_ALIGNOF:
     case CRUST_E_OFFSETOF:
-        break;
-    case CRUST_E_UNARY:
-        if (expr->op == CRUST_OP_NEG && expr->left->kind == CRUST_E_INTEGER)
-            break;
-        /* Fall through. */
+        return true;
     default:
-        crust_fail(ctx, expr->loc, "operation is not permitted in a constant initializer");
+        return false;
     }
+}
+static void check_constant_operation(CrustContext *ctx, CrustExpr *expr)
+{
+    if (constant_kind(expr))
+        return;
+    if (expr->kind == CRUST_E_UNARY && expr->op == CRUST_OP_NEG &&
+        (expr->left->kind == CRUST_E_INTEGER || expr->left->kind == CRUST_E_FLOAT))
+        return;
+    crust_fail(ctx, expr->loc, "operation is not permitted in a constant initializer");
 }
 
 static CrustType *check_name(Checker *checker, CrustExpr *expr)
@@ -2983,6 +3091,11 @@ static CrustType *check_unary(Checker *checker, CrustExpr *expr)
         type = left;
         break;
     case CRUST_OP_NEG:
+        if (left->kind == CRUST_T_F32) {
+            type = left;
+            break;
+        }
+        /* Fall through. */
     case CRUST_OP_BIT_NOT:
         if (!crust_type_integer(left))
             crust_fail(ctx, expr->loc, "integer unary operation requires an integer");
@@ -2993,6 +3106,14 @@ static CrustType *check_unary(Checker *checker, CrustExpr *expr)
         break;
     }
     return type;
+}
+
+static bool numeric_operation(CrustType *type, CrustOp op)
+{
+    if (crust_type_integer(type))
+        return true;
+    return type->kind == CRUST_T_F32 &&
+           (op <= CRUST_OP_DIV || (op >= CRUST_OP_LT && op <= CRUST_OP_GE));
 }
 
 static CrustType *check_binary(Checker *checker, CrustExpr *expr)
@@ -3020,8 +3141,8 @@ static CrustType *check_binary(Checker *checker, CrustExpr *expr)
             crust_fail(ctx, expr->loc, "equality requires matching scalar types");
         type = &ctx->builtins[CRUST_T_BOOL];
     } else {
-        if (!crust_type_integer(left))
-            crust_fail(ctx, expr->loc, "integer operation requires matching integer types");
+        if (!numeric_operation(left, expr->op))
+            crust_fail(ctx, expr->loc, "operation requires matching numeric types");
         type = expr->op >= CRUST_OP_LT && expr->op <= CRUST_OP_GE ? &ctx->builtins[CRUST_T_BOOL]
                                                                   : left;
     }
@@ -3105,6 +3226,10 @@ static CrustType *check_array(Checker *checker, CrustExpr *expr)
 
 static bool valid_cast(CrustContext *ctx, CrustType *left, CrustType *type)
 {
+    if (left->kind == CRUST_T_F32)
+        return crust_type_integer(type) || type->kind == CRUST_T_F32 || type->kind == CRUST_T_BOOL;
+    if (type->kind == CRUST_T_F32)
+        return crust_type_integer(left);
     if (crust_type_integer(left) || left->kind == CRUST_T_BOOL)
         return crust_type_integer(type) || type->kind == CRUST_T_BOOL ||
                (left->kind == CRUST_T_USIZE && type->kind == CRUST_T_POINTER);
@@ -3170,6 +3295,12 @@ static CrustType *check_expr(Checker *checker, CrustExpr *expr)
         break;
     case CRUST_E_INTEGER:
         type = check_integer(checker, expr, false);
+        break;
+    case CRUST_E_FLOAT:
+        if (expr->integer > UINT32_MAX ||
+            (expr->integer & UINT32_C(0x7f800000)) == UINT32_C(0x7f800000))
+            crust_fail(ctx, expr->loc, "floating literal must be finite binary32");
+        type = &ctx->builtins[CRUST_T_F32];
         break;
     case CRUST_E_BOOL:
         type = &ctx->builtins[CRUST_T_BOOL];

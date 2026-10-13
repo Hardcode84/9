@@ -53,7 +53,7 @@ fn os_literal(check: *OsCheck, expression: *CrustExpr) -> *OsValue {
         return os_value(check, (*expression).syntax_type, null(*OsObject), true);
     }
     var syntax: *CrustTypeSyntax = null(*CrustTypeSyntax);
-    if kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL {
+    if kind == CRUST_E_INTEGER || kind == CRUST_E_FLOAT || kind == CRUST_E_BOOL {
         var type_kind: u32 = (*expression).literal_type;
         if kind == CRUST_E_BOOL {
             type_kind = CRUST_T_BOOL;

@@ -405,3 +405,12 @@ these boundaries.
 The [source-order measurement guide](../benchmarks/source-order/README.md)
 describes library inlining and text-append controls. Preserve capacity, overlap,
 raw-access, and aggregate-copy contracts when testing emitter changes.
+
+### Floating-point values
+
+`f32` maps to C `float` and the native binary32 scalar ABI. Literal emission
+preserves the parsed binary32 bits. Arithmetic uses `float` operands and
+results. Integer conversions clamp before the C cast, so NaN and out-of-range
+values cannot cause an undefined C conversion. The shared numeric tests cover
+register and stack arguments, callbacks, signed zero, subnormals, NaNs, and
+conversion boundaries.

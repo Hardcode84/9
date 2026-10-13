@@ -91,10 +91,10 @@ def main():
     for count in (1000, 8000):
         inputs[str(count)] = (
             "\n".join(
-                f"fn f{i}(x:u64)->u64{{var y:u64=x+{i}u64; if y>9u64 {{y=y*3u64;}} return y;}}"
+                f"fn function{i}(x:u64)->u64{{var y:u64=x+{i}u64; if y>9u64 {{y=y*3u64;}} return y;}}"
                 for i in range(count)
             )
-            + "\nfn main(argc:i32,argv:**u8)->i32{return f0(0u64) as i32;}\n"
+            + "\nfn main(argc:i32,argv:**u8)->i32{return function0(0u64) as i32;}\n"
         )
 
     def run(command, cache=False):

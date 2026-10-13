@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
-const rr_keywords: [CrustReaderKeyword; 35] = make [CrustReaderKeyword; 35] {
+const rr_keywords: [CrustReaderKeyword; 36] = make [CrustReaderKeyword; 36] {
     make CrustReaderKeyword {
         text: "as",
         size: 2usize,
         kind: 275u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "fn",
         size: 2usize,
         kind: 263u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "i8",
@@ -23,13 +23,19 @@ const rr_keywords: [CrustReaderKeyword; 35] = make [CrustReaderKeyword; 35] {
         text: "if",
         size: 2usize,
         kind: 268u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "u8",
         size: 2usize,
         kind: 261u32,
         type: 1u32
+    },
+    make CrustReaderKeyword {
+        text: "f32",
+        size: 3usize,
+        kind: 261u32,
+        type: 10u32
     },
     make CrustReaderKeyword {
         text: "i16",
@@ -71,73 +77,73 @@ const rr_keywords: [CrustReaderKeyword; 35] = make [CrustReaderKeyword; 35] {
         text: "var",
         size: 3usize,
         kind: 266u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "bool",
         size: 4usize,
         kind: 261u32,
-        type: 10u32
+        type: 11u32
     },
     make CrustReaderKeyword {
         text: "else",
         size: 4usize,
         kind: 269u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "goto",
         size: 4usize,
         kind: 293u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "make",
         size: 4usize,
         kind: 276u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "null",
         size: 4usize,
         kind: 277u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "trap",
         size: 4usize,
         kind: 274u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "true",
         size: 4usize,
         kind: 281u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "unit",
         size: 4usize,
         kind: 261u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "break",
         size: 5usize,
         kind: 271u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "const",
         size: 5usize,
         kind: 265u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "false",
         size: 5usize,
         kind: 282u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "isize",
@@ -149,7 +155,7 @@ const rr_keywords: [CrustReaderKeyword; 35] = make [CrustReaderKeyword; 35] {
         text: "label",
         size: 5usize,
         kind: 292u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "usize",
@@ -161,55 +167,55 @@ const rr_keywords: [CrustReaderKeyword; 35] = make [CrustReaderKeyword; 35] {
         text: "while",
         size: 5usize,
         kind: 270u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "extern",
         size: 6usize,
         kind: 264u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "record",
         size: 6usize,
         kind: 262u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "return",
         size: 6usize,
         kind: 273u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "sizeof",
         size: 6usize,
         kind: 278u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "uninit",
         size: 6usize,
         kind: 267u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "alignof",
         size: 7usize,
         kind: 279u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "continue",
         size: 8usize,
         kind: 272u32,
-        type: 11u32
+        type: 12u32
     },
     make CrustReaderKeyword {
         text: "offsetof",
         size: 8usize,
         kind: 280u32,
-        type: 11u32
+        type: 12u32
     }
 };
 
@@ -265,11 +271,11 @@ fn rr_hex(byte: u8) -> i32 {
 
 // The keyword table is ordered by byte length, then by spelling.
 fn rr_keyword(text: *u8, size: usize) -> *CrustReaderKeyword {
-    if size < rr_keywords[0usize].size || size > rr_keywords[34usize].size {
+    if size < rr_keywords[0usize].size || size > rr_keywords[35usize].size {
         return null(*CrustReaderKeyword);
     }
     var begin: usize = 0usize;
-    var end: usize = 35usize;
+    var end: usize = 36usize;
     while begin < end {
         var middle: usize = begin + (end - begin) / 2usize;
         var word: *CrustReaderKeyword = &rr_keywords[middle];
@@ -370,9 +376,24 @@ fn rr_string(reader: *CrustReader) -> bool {
 fn rr_number(reader: *CrustReader) -> bool {
     var source: *u8 = (*(*reader).source).bytes;
     var start: usize = (*reader).offset;
-    var finish: usize = start;
-    while finish < (*reader).end && rr_name_continue(source[finish]) {
-        finish = finish + 1usize;
+    var finish: usize = rr_number_end(source, start, (*reader).end);
+    if rr_float_suffix(source, start, finish) {
+        var bits: u32 = 0u32;
+        if !crust_try_f32_literal(
+            (*reader).context,
+            (*reader).source,
+            start,
+            finish,
+            &bits
+        ) {
+            (*reader).failed = true;
+            return false;
+        }
+        (*reader).token.kind = RR_FLOAT;
+        (*reader).token.integer_type = CRUST_T_F32;
+        (*reader).token.integer = bits as u64;
+        (*reader).offset = finish;
+        return true;
     }
     var base: u64 = 10u64;
     if finish - start >= 2usize && source[start] == 48u8 && source[start + 1usize] == 120u8 {
@@ -449,7 +470,7 @@ fn rr_lex(reader: *CrustReader) -> bool {
         text: source + start as isize,
         name: null(*CrustName),
         integer: 0u64,
-        integer_type: 0u32,
+        integer_type: CRUST_T_I8,
         bytes: null(*u8),
         byte_count: 0usize
     };
@@ -541,7 +562,7 @@ fn rr_init(
             text: null(*u8),
             name: null(*CrustName),
             integer: 0u64,
-            integer_type: 0u32,
+            integer_type: CRUST_T_I8,
             bytes: null(*u8),
             byte_count: 0usize
         }
@@ -703,4 +724,73 @@ fn rr_pair(byte: u8, second: u8) -> u32 {
         return RR_ARROW;
     }
     return byte as u32;
+}
+
+fn rr_float_suffix(bytes: *u8, begin: usize, end: usize) -> bool {
+    if end - begin < 4usize {
+        return false;
+    }
+    if bytes[begin] == 48u8 && bytes[begin + 1usize] == 120u8 {
+        return false;
+    }
+    return bytes[end - 3usize] == 102u8 && bytes[end - 2usize] == 51u8 && bytes[end - 1usize] == 50u8;
+}
+fn rr_number_end(bytes: *u8, begin: usize, end: usize) -> usize {
+    var at: usize = begin;
+    var hex: bool = end - begin >= 2usize && bytes[begin] == 48u8 && bytes[begin + 1usize] == 120u8;
+    if !hex {
+        at = rr_decimal_digits(bytes, at, end);
+        if at + 1usize < end && bytes[at] == 46u8 && bytes[at + 1usize] >= 48u8 && bytes[
+            at + 1usize
+        ] <= 57u8 {
+            at = rr_decimal_digits(bytes, at + 1usize, end);
+        }
+        at = rr_decimal_exponent(bytes, at, end);
+    }
+    while at < end && rr_name_continue(bytes[at]) {
+        at = at + 1usize;
+    }
+    return at;
+}
+fn rr_decimal_exponent(bytes: *u8, at: usize, end: usize) -> usize {
+    if at == end || (bytes[at] != 101u8 && bytes[at] != 69u8) {
+        return at;
+    }
+    at = at + 1usize;
+    if at < end && (bytes[at] == 43u8 || bytes[at] == 45u8) {
+        at = at + 1usize;
+    }
+    return rr_decimal_digits(bytes, at, end);
+}
+
+fn rr_decimal_digits(bytes: *u8, begin: usize, end: usize) -> usize {
+    while begin < end && bytes[begin] >= 48u8 && bytes[begin] <= 57u8 {
+        begin = begin + 1usize;
+    }
+    return begin;
+}
+fn rr_float_spelling(bytes: *u8, begin: usize, end: usize) -> bool {
+    var at: usize = rr_decimal_digits(bytes, begin, end);
+    if at == begin {
+        return false;
+    }
+    if at < end && bytes[at] == 46u8 {
+        var start: usize = at + 1usize;
+        at = rr_decimal_digits(bytes, start, end);
+        if at == start {
+            return false;
+        }
+    }
+    if at < end && (bytes[at] == 101u8 || bytes[at] == 69u8) {
+        at = at + 1usize;
+        if at < end && (bytes[at] == 43u8 || bytes[at] == 45u8) {
+            at = at + 1usize;
+        }
+        var start: usize = at;
+        at = rr_decimal_digits(bytes, start, end);
+        if at == start {
+            return false;
+        }
+    }
+    return at == end;
 }

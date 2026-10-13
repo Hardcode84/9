@@ -15,6 +15,7 @@ CRUST_STATIC void crust_map_reserve(CrustContext *ctx, CrustMap *map, size_t cou
 
 /* These helpers cross the allocator or native ABI translation-unit boundary. */
 void *crust_profile_allocate(size_t size);
+bool crust_profile_f32(const char *text, uint32_t *bits);
 void crust_type_compare_reset(CrustContext *ctx);
 bool crust_type_compare_seen(CrustContext *ctx, const CrustType *left, const CrustType *right);
 

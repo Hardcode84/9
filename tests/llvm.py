@@ -84,6 +84,7 @@ def raw(suite):
     native = suite.work / "native.o"
     check(["gcc", "-std=c99", "-pedantic-errors", "-O2", "-c", "tests/native.c", "-o", native])
     suite.execute(suite.emit("runtime", paths=["tests/runtime.crs"]), libraries=[native])
+    suite.execute(suite.emit("float", paths=["tests/float.crs"]), libraries=[native])
     suite.execute(
         suite.emit("intrusive", paths=["examples/intrusive/raw.crs"]), output=b"intrusive: ok\n"
     )
@@ -210,6 +211,15 @@ def cleanup(suite):
         suite.execute(
             ir, -signal.SIGILL if expected is None else 0, b"" if expected is None else expected
         )
+    source = suite.work / "checked-float.crs"
+    source.write_text(
+        "fn scale(value:f32)->f32{return value*1.5f32;}"
+        "fn main(argc:i32,argv:**u8)->i32{"
+        "if scale(4f32)!=6f32{return 1i32;}return 0i32;}"
+    )
+    ir = source.with_suffix(".ll")
+    check([driver, "llvm", "ownership", "-o", ir, source])
+    suite.execute(ir)
     ir = suite.work / "checked-intrusive.ll"
     check(
         [

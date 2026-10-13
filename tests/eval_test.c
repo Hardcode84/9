@@ -162,10 +162,10 @@ static unsigned char *read_file(const char *path, size_t *size)
     return bytes;
 }
 
-static void test_runtime(void)
+static void test_program(const char *path)
 {
     CrustContext context;
-    CrustSource source = {"tests/runtime.crs", NULL, 0, 1};
+    CrustSource source = {path, NULL, 0, 1};
     CrustUnit *unit;
     CrustEval *eval = NULL;
     Resolver resolver;
@@ -831,7 +831,7 @@ static void test_registration_failures(void)
     size_t failure;
     for (index = 0; index < 200; ++index) {
         int length = snprintf(text + used, sizeof(text) - used,
-                              "fn f%zu(n:i32)->i32{return n+1i32;}\n", index);
+                              "fn function%zu(n:i32)->i32{return n+1i32;}\n", index);
         if (length < 0 || (size_t)length >= sizeof(text) - used)
             abort();
         used += (size_t)length;
@@ -998,7 +998,8 @@ static void test_failures(void)
 
 int main(void)
 {
-    test_runtime();
+    test_program("tests/runtime.crs");
+    test_program("tests/float.crs");
     test_reentry();
     test_evaluation_depth();
     test_native_identity();

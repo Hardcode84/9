@@ -334,10 +334,13 @@ fn rr_primary(reader: *CrustReader) -> *CrustExpr {
         (*result).name = token.name;
         rr_next(reader);
     } else {
-        if token.kind == RR_INTEGER {
+        if token.kind == RR_INTEGER || token.kind == RR_FLOAT {
             result = rr_new_expr(reader, CRUST_E_INTEGER, token.offset);
             if result == null(*CrustExpr) {
                 return result;
+            }
+            if token.kind == RR_FLOAT {
+                (*result).kind = CRUST_E_FLOAT;
             }
             (*result).integer = token.integer;
             (*result).literal_type = token.integer_type;

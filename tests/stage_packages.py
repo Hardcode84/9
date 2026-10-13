@@ -8,6 +8,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import package_toolchains
 import stage_compilers
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,6 +92,7 @@ var artifact:*u8=result.path;""",
     root.write_text(captured)
     assert run([seed, root], expected=9, cwd="/").stdout == changed
     stage_compilers.check(work, seed, run)
+    package_toolchains.check(work, seed, run)
     # A damaged hit is an error, never an implicit use of an old stage.
     Path(os.fsdecode(changed)).write_bytes(b"damaged")
     provider.write_text("fn answer()->i32{return 9i32;}\n")

@@ -10,6 +10,7 @@ fn stage_init(package: *StagePackage, root: *CrustRun, base: *u8) -> unit {
     package->depth = 0usize;
     package->compiler = null(*u8);
     package->entry = null(*u8);
+    package->toolchain = null(*u8);
 }
 
 fn stage_capture(package: *StagePackage, path: *u8, inputs: *CacheInputs) -> bool {

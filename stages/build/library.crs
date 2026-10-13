@@ -1,50 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn stage_tool_inputs(context: *CrustContext, inputs: *CacheInputs, directory: *u8) -> bool {
-    var work: CacheWork = make CacheWork { directory: null(*u8), manifest: null(*u8), digest: null(*u8), artifact: null(*u8), checksum: null(*u8) };
-    if !cache_work(context, directory, &work) {
-        cache_cleanup(context, &work);
-        return false;
-    }
-    var query: [*u8; 3] = make [*u8; 3] { "/usr/bin/gcc", "-print-prog-name=cc1", null(*u8) };
-    var success: bool = cache_tool(context, &query[0usize], work.digest);
-    var compiler: CrustSource = uninit;
-    if success { success = cache_read(context, work.digest, &compiler); }
-    if success {
-        if compiler.size == 0usize || compiler.bytes[0usize] != 47u8 { success = native_error(context, "GCC must report an absolute cc1 path"); }
-        else {
-            compiler.bytes[compiler.size - 1usize] = 0u8;
-            var paths: [*u8; 5] = make [*u8; 5] { "/usr/bin/gcc", compiler.bytes, "/usr/bin/as", "/usr/bin/objcopy", "/usr/bin/ld" };
-            success = cache_tools(context, inputs, &paths[0usize], 5usize, directory);
-        }
-    }
-    var headers: *u8 = "#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#include <limits.h>\n";
-    if success { success = cache_save(context, work.manifest, headers, native_strlen(headers)); }
-    if success { success = stage_gcc(context, work.manifest, work.digest, true); }
-    if success {
-        var captured: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
-        success = captured != null(*CrustSource) && cache_read(context, work.digest, captured);
-        if success { captured->path = "stage-system-headers"; success = cache_add(context, inputs, captured); }
-    }
-    if success { success = stage_gcc_specs(context, inputs, work.digest); }
-    if !cache_cleanup(context, &work) { success = false; }
-    return success;
-}
-
 fn stage_artifact(session: *StageSession, package: *StagePackage, interpreted: bool, result: *CacheArtifact) -> bool {
     var context: *CrustContext = session->root->context;
     var inputs: CacheInputs = make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize };
-    var counts: [usize; 5] = make [usize; 5] {
-        package->inputs.count, package->sources.count, session->inputs.count, interpreted as usize, package->options.count
+    var build: StageBuild = make StageBuild { package: package, toolchain: &session->toolchain, interpreter: null(*CrustRun), emitter: null(*CrustDecl), compile: null(fn(*StageCompile)->bool), interpreted: interpreted };
+    var selected: StageToolchain = make StageToolchain {
+        inputs: inputs, context: context, directory: session->directory,
+        object: null(fn(*StageObject)->bool), user: null(*u8)
+    };
+    if !stage_compiler_load(session, package, &inputs, &build, &selected) { return false; }
+    var counts: [usize; 6] = make [usize; 6] {
+        package->inputs.count, package->sources.count, session->inputs.count, interpreted as usize, package->options.count, build.toolchain->inputs.count
     };
     var recipe: CrustSource = make CrustSource {
-        path: "crust-stage-build-v2", bytes: &counts[0usize] as *u8,
-        size: sizeof([usize; 5]), identity: 0u64
+        path: "crust-stage-build-v3", bytes: &counts[0usize] as *u8,
+        size: sizeof([usize; 6]), identity: 0u64
     };
     if !cache_add(context, &inputs, &recipe) { return false; }
-    var groups: [*CacheInputs; 4] = make [*CacheInputs; 4] { &package->inputs, &package->sources, &session->inputs, &package->options };
+    var groups: [*CacheInputs; 5] = make [*CacheInputs; 5] { &package->inputs, &package->sources, &session->inputs, &package->options, &build.toolchain->inputs };
     var group: usize = 0usize;
-    while group < 4usize {
+    while group < 5usize {
         var index: usize = 0usize;
         while index < groups[group]->count {
             if !cache_add(context, &inputs, groups[group]->items[index]) { return false; }
@@ -54,8 +29,6 @@ fn stage_artifact(session: *StageSession, package: *StagePackage, interpreted: b
     }
     if !stage_export_inputs(context, package, &inputs) { return false; }
     if !interpreted && !cache_input(context, &inputs, session->backend) { return false; }
-    var build: StageBuild = make StageBuild { package: package, interpreter: null(*CrustRun), emitter: null(*CrustDecl), compile: null(fn(*StageCompile)->bool), interpreted: interpreted };
-    if !stage_compiler_load(session, package, &inputs, &build) { return false; }
     var request: CacheBuild = make CacheBuild { inputs: inputs.items, count: inputs.count, build: stage_build, user: &build as *u8 };
     return cache_artifact(context, session->directory, &request, result);
 }
@@ -73,7 +46,12 @@ fn stage_open(root: *CrustRun, base: *u8, directory: *u8) -> *StageSession {
     session->inputs = make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize };
     if session->directory == null(*u8) || !cache_directory(context, session->directory) ||
        !cache_loaded_sources(root, &session->inputs) || !cache_loaded_inputs(context, &session->inputs) ||
-       !stage_tool_inputs(context, &session->inputs, session->directory) { return null(*StageSession); }
+       !stage_link_inputs(context, &session->inputs, session->directory) { return null(*StageSession); }
+    session->toolchain = make StageToolchain {
+        inputs: make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize },
+        context: context, directory: session->directory, object: null(fn(*StageObject)->bool), user: null(*u8)
+    };
+    if !stage_c_toolchain(&session->toolchain) { return null(*StageSession); }
     var package: StagePackage = uninit;
     stage_init(&package, root, base);
     if !stage_include(&package, "stages/c/package.crs") { return null(*StageSession); }
@@ -114,16 +92,7 @@ fn stage_export_inputs(context: *CrustContext, package: *StagePackage, inputs: *
     return true;
 }
 
-fn stage_gcc_specs(context: *CrustContext, inputs: *CacheInputs, scratch: *u8) -> bool {
-    var arguments: [*u8; 3] = make [*u8; 3] { "/usr/bin/gcc", "-dumpspecs", null(*u8) };
-    if !cache_tool(context, &arguments[0usize], scratch) { return false; }
-    var captured: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
-    if captured == null(*CrustSource) || !cache_read(context, scratch, captured) { return false; }
-    captured->path = "stage-gcc-specs";
-    return cache_add(context, inputs, captured);
-}
-
-fn stage_compiler_load(session:*StageSession,package:*StagePackage,inputs:*CacheInputs,build:*StageBuild)->bool {
+fn stage_compiler_load(session:*StageSession,package:*StagePackage,inputs:*CacheInputs,build:*StageBuild,toolchain:*StageToolchain)->bool {
     if package->compiler==null(*u8){
         if package->options.count!=0usize{return native_error(session->root->context,"source options require a selected compiler");}
         return true;
@@ -132,11 +101,28 @@ fn stage_compiler_load(session:*StageSession,package:*StagePackage,inputs:*Cache
     var root:*CrustRun=session->root;
     var context:*CrustContext=root->context;
     if path==null(*u8) || !cache_input(context,inputs,path) || !crust_run_link(root,path){return false;}
-    var selection:*CrustSource=crust_try_alloc(context,sizeof(CrustSource),alignof(CrustSource)) as *CrustSource;
-    if selection==null(*CrustSource){return false;}
-    *selection=make CrustSource{path:"stage-compiler-entry",bytes:package->entry,size:native_strlen(package->entry),identity:0u64};
-    if !cache_add(context,inputs,selection){return false;}
-    var name:*CrustName=crust_try_intern(context,"stage_compiler_abi",18usize);
+    if !stage_selection_input(context,inputs,"stage-compiler-entry",package->entry){return false;}
+    if !stage_native_callback(root,"stage_compiler_abi",package->entry,&build->compile as *u8){return false;}
+    return stage_toolchain_load(root,package,inputs,build,toolchain);
+}
+
+fn stage_toolchain_load(root:*CrustRun,package:*StagePackage,inputs:*CacheInputs,build:*StageBuild,toolchain:*StageToolchain)->bool {
+    if package->toolchain==null(*u8){return true;}
+    var context:*CrustContext=root->context;
+    if !stage_selection_input(context,inputs,"stage-toolchain-entry",package->toolchain){return false;}
+    var prepare:fn(*StageToolchain)->bool=null(fn(*StageToolchain)->bool);
+    if !stage_native_callback(root,"stage_toolchain_abi",package->toolchain,&prepare as *u8){return false;}
+    var success:bool=prepare(toolchain);
+    if !success && context->error_count==0usize{return native_error(context,"selected toolchain failed without a diagnostic");}
+    if !success || context->error_count!=0usize{return false;}
+    if toolchain->object==null(fn(*StageObject)->bool){return native_error(context,"selected toolchain has no object compiler");}
+    build->toolchain=toolchain;
+    return true;
+}
+
+fn stage_native_callback(root:*CrustRun,prototype_name:*u8,entry:*u8,output:*u8)->bool {
+    var context:*CrustContext=root->context;
+    var name:*CrustName=crust_try_intern(context,prototype_name,native_strlen(prototype_name));
     if name==null(*CrustName){return false;}
     var prototype:*CrustSymbol=crust_map_get(&context->globals,name as usize) as *CrustSymbol;
     var declaration:*CrustDecl=crust_try_alloc(context,sizeof(CrustDecl),alignof(CrustDecl)) as *CrustDecl;
@@ -145,6 +131,18 @@ fn stage_compiler_load(session:*StageSession,package:*StagePackage,inputs:*Cache
     declaration->next=null(*CrustDecl);
     declaration->identity=0u64;
     declaration->unit_identity=0u64;
-    declaration->link_name=package->entry;
-    return crust_eval_function(root->eval,declaration,&build->compile as *u8);
+    declaration->link_name=entry;
+    return crust_eval_function(root->eval,declaration,output);
+}
+
+fn stage_link_inputs(context:*CrustContext,inputs:*CacheInputs,directory:*u8)->bool {
+    var paths:[*u8;2]=make [*u8;2]{"/usr/bin/objcopy","/usr/bin/ld"};
+    return cache_tools(context,inputs,&paths[0usize],2usize,directory);
+}
+
+fn stage_selection_input(context:*CrustContext,inputs:*CacheInputs,key:*u8,value:*u8)->bool {
+    var selection:*CrustSource=crust_try_alloc(context,sizeof(CrustSource),alignof(CrustSource)) as *CrustSource;
+    if selection==null(*CrustSource){return false;}
+    *selection=make CrustSource{path:key,bytes:value,size:native_strlen(value),identity:0u64};
+    return cache_add(context,inputs,selection);
 }

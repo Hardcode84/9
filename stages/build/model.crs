@@ -9,10 +9,12 @@ record StagePackage {
     base: *u8;
     compiler: *u8;
     entry: *u8;
+    toolchain: *u8;
     depth: usize;
 }
 record StageBuild {
     package: *StagePackage;
+    toolchain: *StageToolchain;
     interpreter: *CrustRun;
     emitter: *CrustDecl;
     compile: fn(*StageCompile)->bool;
@@ -21,6 +23,7 @@ record StageBuild {
 extern fn stage_realpath(path: *u8, result: *u8) -> *u8 = "realpath";
 
 record StageSession {
+    toolchain: StageToolchain;
     inputs: CacheInputs;
     root: *CrustRun;
     base: *u8;

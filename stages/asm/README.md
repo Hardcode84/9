@@ -63,3 +63,21 @@ and output failures. `make check-asm` verifies that the seed and core archive
 have no backend symbols. It then builds three assembly stage generations,
 compares their emitted assembly, and runs the intrusive-list program from the
 last generation. These generation checks use no artifact cache.
+
+## Compile a cached package with ASM
+
+A package can select this backend for native library builds:
+
+```crust
+stage_compiler(stage, "../asm/compiler-package.crs", "asm_stage_compile");
+stage_toolchain(stage, "asm_stage_toolchain");
+```
+
+Adjust the compiler path relative to the package file. Add the package's sources
+and exports with the usual `stage_source` and `stage_export` calls. This compiler
+accepts raw Crust sources and rejects source options. It emits complete assembly
+with the selected native names. Its symbol map is empty. GNU assembler produces
+the object; the shared package builder links and caches the library.
+
+The [package guide](../build/README.md#select-an-object-toolchain) defines the
+factory, captured tool inputs, object callback, and output lifetimes.

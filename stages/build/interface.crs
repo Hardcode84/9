@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 record StageName { text: *u8; link: *u8; next: *StageName; }
+// Emit backend input and an objcopy response file; use an empty map when names match.
 record StageCompile {
     sources: CacheInputs;
     options: CacheInputs;
@@ -8,4 +9,22 @@ record StageCompile {
     context: *CrustContext;
     output: *u8;
     symbols: *u8;
+}
+
+// Compile one emitted source file to a position-independent native object.
+record StageObject {
+    context: *CrustContext;
+    source: *u8;
+    output: *u8;
+    user: *u8;
+}
+
+// Capture toolchain inputs before cache lookup. Storage belongs to context.
+// The selected compiler library and callbacks stay live through object emission.
+record StageToolchain {
+    inputs: CacheInputs;
+    context: *CrustContext;
+    directory: *u8;
+    object: fn(*StageObject)->bool;
+    user: *u8;
 }

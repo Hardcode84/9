@@ -3,16 +3,17 @@
 host_source(run,"load.crs");
 if !stage_setup(run,"../..") {return 1i32;};
 if run->argc!=3i32 {
-    crust_set_error(run->context,run->source,run->cursor,"expected PACKAGE C-OUTPUT SYMBOLS-OUTPUT");return 1i32;
+    crust_set_error(run->context,run->source,run->cursor,"expected PACKAGE SOURCE-OUTPUT SYMBOLS-OUTPUT");return 1i32;
 };
 var stages:*StageSession=stage_open(run,"../..","../../build/stage-cache");
 if stages==null(*StageSession){return 1i32;};
 var package:StagePackage=uninit;
 stage_init(&package,run,"../..");
 if !stage_include(&package,run->argv[0usize]){return 1i32;};
-var build:StageBuild=make StageBuild{package:&package,interpreter:null(*CrustRun),emitter:null(*CrustDecl),compile:null(fn(*StageCompile)->bool),interpreted:false};
+var build:StageBuild=make StageBuild{package:&package,toolchain:&stages->toolchain,interpreter:null(*CrustRun),emitter:null(*CrustDecl),compile:null(fn(*StageCompile)->bool),interpreted:false};
 var inputs:CacheInputs=make CacheInputs{items:null(**CrustSource),count:0usize,capacity:0usize};
-if !stage_compiler_load(stages,&package,&inputs,&build){return 1i32;};
+var selected:StageToolchain=make StageToolchain{inputs:inputs,context:run->context,directory:stages->directory,object:null(fn(*StageObject)->bool),user:null(*u8)};
+if !stage_compiler_load(stages,&package,&inputs,&build,&selected){return 1i32;};
 var output:*u8=host_path(run,run->argv[1usize]);
 var symbols:*u8=host_path(run,run->argv[2usize]);
 if output==null(*u8) || symbols==null(*u8){return 1i32;};

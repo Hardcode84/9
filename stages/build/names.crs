@@ -55,3 +55,14 @@ fn stage_diagnostic(context:*CrustContext,source:*CrustContext)->unit {
     }
     crust_set_error(context,copy,source->error_loc.offset,&source->error[0usize]);
 }
+
+// Read and check captured raw source units in their selected order.
+fn stage_read_sources(context:*CrustContext,sources:*CacheInputs)->bool {
+    var index:usize=0usize;
+    while index<sources->count {
+        var parsed:*CrustUnit=null(*CrustUnit);
+        if !crust_read(context,sources->items[index],&parsed){return false;}
+        index=index+1usize;
+    }
+    return crust_collect(context) && crust_resolve(context) && crust_check(context);
+}

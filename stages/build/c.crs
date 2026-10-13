@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn stage_emit(build: *StageBuild, context: *CrustContext, source: *u8, symbols: *u8) -> bool {
+    var options: CBackendOptions = make CBackendOptions {
+        mode: 2u32, output: source, symbols: symbols,
+        cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
+    };
+    var entry: *CrustDecl = null(*CrustDecl);
+    if build->interpreter == null(*CrustRun) { return c_backend_build(context, entry, &options) == 0i32; }
+    var pointer: *CBackendOptions = &options;
+    var arguments: [*u8; 3] = make [*u8; 3] { &context as *u8, &entry as *u8, &pointer as *u8 };
+    var status: i32 = 1i32;
+    return crust_eval_call(build->interpreter->eval, build->emitter, &arguments[0usize], 3usize, &status as *u8) && status == 0i32;
+}
+
+fn stage_build_emit(build: *StageBuild, target: *CrustContext, source: *u8, symbols: *u8) -> bool {
+    if !build->interpreted { return stage_emit(build, target, source, symbols); }
+    var compiler: CrustContext = uninit;
+    crust_context_init(&compiler, null(*CrustAllocator));
+    var interpreter: CrustRun = uninit;
+    var initialized: bool = false;
+    var success: bool = stage_read_sources(&compiler, &build->package->sources);
+    if success {
+        initialized = true;
+        success = crust_run_init(&interpreter, &compiler, build->package->sources.items[0usize], 0i32, null(**u8));
+        var name: *CrustName = crust_try_intern(&compiler, "c_backend_build", 15usize);
+        if success && name != null(*CrustName) {
+            var symbol: *CrustSymbol = crust_map_get(&compiler.globals, name as usize) as *CrustSymbol;
+            if symbol == null(*CrustSymbol) { success = native_error(target, "bootstrap package lacks c_backend_build"); }
+            else { build->interpreter = &interpreter; build->emitter = symbol->decl; success = stage_emit(build, target, source, symbols); }
+        } else { success = false; }
+    }
+    if initialized && !crust_run_destroy(&interpreter) { success = false; }
+    stage_diagnostic(target, &compiler);
+    crust_context_destroy(&compiler);
+    return success;
+}
+
+fn stage_gcc(context: *CrustContext, source: *u8, output: *u8, preprocess: bool) -> bool {
+    var arguments: [*u8; 17] = make [*u8; 17] {
+        "/usr/bin/gcc", "-std=c99", "-pedantic-errors", "-O2", "-fPIC",
+        "-fno-semantic-interposition", "-fstack-clash-protection", "-Wno-overlength-strings",
+        "-x", "c", source, "-o", output, "-c", null(*u8), null(*u8), null(*u8)
+    };
+    if preprocess {
+        arguments[13usize] = "-E";
+        arguments[14usize] = "-P";
+        arguments[15usize] = "-dD";
+    }
+    return cache_tool(context, &arguments[0usize], null(*u8));
+}
+
+fn stage_c_toolchain(toolchain: *StageToolchain) -> bool {
+    var context: *CrustContext = toolchain->context;
+    var inputs: *CacheInputs = &toolchain->inputs;
+    var directory: *u8 = toolchain->directory;
+    toolchain->object = stage_c_object;
+    var work: CacheWork = make CacheWork { directory: null(*u8), manifest: null(*u8), digest: null(*u8), artifact: null(*u8), checksum: null(*u8) };
+    if !cache_work(context, directory, &work) {
+        cache_cleanup(context, &work);
+        return false;
+    }
+    var query: [*u8; 3] = make [*u8; 3] { "/usr/bin/gcc", "-print-prog-name=cc1", null(*u8) };
+    var success: bool = cache_tool(context, &query[0usize], work.digest);
+    var compiler: CrustSource = uninit;
+    if success { success = cache_read(context, work.digest, &compiler); }
+    if success {
+        if compiler.size == 0usize || compiler.bytes[0usize] != 47u8 { success = native_error(context, "GCC must report an absolute cc1 path"); }
+        else {
+            compiler.bytes[compiler.size - 1usize] = 0u8;
+            var paths: [*u8; 3] = make [*u8; 3] { "/usr/bin/gcc", compiler.bytes, "/usr/bin/as" };
+            success = cache_tools(context, inputs, &paths[0usize], 3usize, directory);
+        }
+    }
+    var headers: *u8 = "#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#include <limits.h>\n";
+    if success { success = cache_save(context, work.manifest, headers, native_strlen(headers)); }
+    if success { success = stage_gcc(context, work.manifest, work.digest, true); }
+    if success {
+        var captured: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+        success = captured != null(*CrustSource) && cache_read(context, work.digest, captured);
+        if success { captured->path = "stage-system-headers"; success = cache_add(context, inputs, captured); }
+    }
+    if success { success = stage_gcc_specs(context, inputs, work.digest); }
+    if !cache_cleanup(context, &work) { success = false; }
+    return success;
+}
+
+fn stage_gcc_specs(context: *CrustContext, inputs: *CacheInputs, scratch: *u8) -> bool {
+    var arguments: [*u8; 3] = make [*u8; 3] { "/usr/bin/gcc", "-dumpspecs", null(*u8) };
+    if !cache_tool(context, &arguments[0usize], scratch) { return false; }
+    var captured: *CrustSource = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+    if captured == null(*CrustSource) || !cache_read(context, scratch, captured) { return false; }
+    captured->path = "stage-gcc-specs";
+    return cache_add(context, inputs, captured);
+}
+
+fn stage_c_object(request: *StageObject) -> bool {
+    return stage_gcc(request->context, request->source, request->output, false);
+}

@@ -3,7 +3,9 @@
 // The selected package exports this ABI under the requested native name.
 extern fn stage_compiler_abi(request:*StageCompile)->bool="crust_stage_compiler_abi";
 
-// Select a source-built compiler. Its callback writes C and a symbol map.
+extern fn stage_toolchain_abi(toolchain:*StageToolchain)->bool="crust_stage_toolchain_abi";
+
+// Select a source-built compiler. Its callback writes backend input and a symbol map.
 fn stage_compiler(stage:*StagePackage,manifest:*u8,entry:*u8)->bool {
     if stage->compiler!=null(*u8){return native_error(stage->root->context,"package compiler already selected");}
     if entry[0usize]==0u8{return native_error(stage->root->context,"package compiler entry is empty");}
@@ -29,4 +31,13 @@ fn stage_source_option(stage:*StagePackage,source:*CrustSource,option:*u8)->bool
     captured->bytes=crust_try_copy_string(stage->root->context,option,captured->size);
     if captured->bytes==null(*u8){return false;}
     return cache_add(stage->root->context,&stage->options,captured);
+}
+
+// Select a toolchain factory exported by the selected compiler package.
+fn stage_toolchain(stage:*StagePackage,entry:*u8)->bool {
+    if stage->compiler==null(*u8){return native_error(stage->root->context,"select a compiler before its toolchain");}
+    if stage->toolchain!=null(*u8){return native_error(stage->root->context,"package toolchain already selected");}
+    if entry[0usize]==0u8{return native_error(stage->root->context,"package toolchain entry is empty");}
+    stage->toolchain=crust_try_copy_string(stage->root->context,entry,native_strlen(entry));
+    return stage->toolchain!=null(*u8);
 }

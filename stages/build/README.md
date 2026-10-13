@@ -95,11 +95,12 @@ stage_source(stage, "program.crs");
 The compiler package is built through the same loader. Its exported function
 has type `fn(*StageCompile) -> bool`. The request in
 [interface.crs](interface.crs) contains captured sources, source options,
-exports, a diagnostic context, and paths for C text and a symbol map. The
+exports, a diagnostic context, and paths for backend input and a symbol map. The
 callback must write both outputs on success. It must retain a diagnostic on
 failure. It owns its parser and checker storage through emission and must copy
 any diagnostic into the request context before it releases that storage.
-The shared builder runs GCC and the linker and publishes the cached artifact.
+The selected object toolchain compiles that input. The shared builder applies
+the symbol map, links the object, and publishes the cached artifact.
 
 The compiler receives captured bytes. It must include each selected export
 and the native API digest constants that its output requires. The shared
@@ -133,24 +134,71 @@ algorithms and select its pointer provider. It bootstraps its checker from
 source on a cache miss. Compiler dependency nesting has a limit of 64; a cycle
 produces a diagnostic.
 
+## Select an object toolchain
+
+A session supplies the C emitter and GCC toolchain by default. A selected
+compiler can emit another format and export its toolchain factory. For example,
+a package can select the [ASM compiler](../asm/compiler-package.crs):
+
+```crust
+stage_source(stage, "program.crs");
+stage_export(stage, "answer");
+stage_compiler(stage, "../asm/compiler-package.crs", "asm_stage_compile");
+stage_toolchain(stage, "asm_stage_toolchain");
+```
+
+The compiler path is relative to this package file. Adjust it to the location
+of the ASM package. `asm_stage_compile` reads ordinary Crust and emits assembly.
+`asm_stage_toolchain` selects GNU assembler. Both functions come from the same
+source-built compiler package. The C backend prepares that compiler package.
+The selected assembler compiles the application package.
+
+`stage_toolchain` selects an exported `fn(*StageToolchain) -> bool`. It requires
+a selected compiler and can be called once per package. The factory runs before
+cache lookup. Its request contains a context, the cache directory, and an empty
+input list. It must set `object` to `fn(*StageObject) -> bool`. It can set `user`
+to context-owned configuration storage. Keep these values live through the build.
+
+The factory adds all tools, loaded tool libraries, target settings, pass options,
+and other configuration values to `inputs`. Use `cache_tools` to capture native
+tools and their library dependencies. Use `cache_read` and `cache_add` for other
+inputs. Compile from those captured values. Keep installed tool files fixed
+while the build runs. The [ASM factory](../asm/compiler.crs) shows this contract.
+
+The object callback receives the emitted input path, an object output path,
+a diagnostic context, and the factory's `user` value. It must write a complete
+position-independent object for the Linux x86-64 host profile. The input path
+has no format-specific suffix; select the format in the tool arguments. The
+shared builder owns these paths and removes partial output on failure. A callback
+must remove any additional temporary files that it creates.
+
+Emission still produces an `objcopy` response file. Write an empty file when
+native names already match. Symbol renaming, shared-library linking, cache
+validation, cleanup, and atomic publication use the same code for all toolchains.
+A false callback result or a recorded diagnostic stops the build. A false result
+without a diagnostic gets a diagnostic from the shared builder.
+
 To emit a package for a test or a measurement, use the shared emission root:
 
 ```sh
-build/crust stages/build/emit.crs PACKAGE C-OUTPUT SYMBOLS-OUTPUT
+build/crust stages/build/emit.crs PACKAGE SOURCE-OUTPUT SYMBOLS-OUTPUT
 ```
 
-This selects the package compiler and stops after C emission. Paths are
+This prepares the selected compiler and toolchain, then stops after emission.
+It writes C for a C compiler or assembly for the ASM compiler. Paths are
 relative to `stages/build`; absolute paths also work. The caller can compile
 and link this output with its selected test flags.
 
 ## Cache inputs and failures
 
 A session captures the seed executable, loaded native libraries, preparation
-sources, tools, and system header output. A library key includes these inputs,
+sources, and shared link tools. Its default C toolchain also captures GCC,
+its assembler, specifications, and system header output. A library key includes these inputs,
 all included package files, captured declaration units, selected exports, and
 the compiled backend used to emit it. A selected compiler adds its native
-image and entry name to the key. Source options are also key inputs. Changes to transitive sources invalidate
-the library even when file modification times stay the same.
+image and entry name to the key. A selected toolchain adds its factory name and
+captured inputs. Source options are also key inputs. Changes to transitive
+sources invalidate the library even when file modification times stay the same.
 
 The build callback reads the captured declaration bytes. A source file change
 after capture affects the next selection. It cannot replace bytes in a build
@@ -166,8 +214,8 @@ A failed check stops preparation. The loader checks artifact contents on a hit.
 A damaged artifact produces a diagnostic. The cache publishes a completed
 artifact atomically. It checks a concurrent publisher's result before reuse.
 
-The provider uses GCC, GNU assembler, `objcopy`, and the system linker on Linux
-x86-64. This policy is Crust code in this stage. The seed has no package names,
+The default C toolchain uses GCC and GNU assembler. Shared linking uses
+`objcopy` and the system linker on Linux x86-64. These policies are Crust code. The seed has no package names,
 cache paths, or backend-selection rules.
 
 ## Run a command tool

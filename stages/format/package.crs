@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage, "sources.crs");
+stage_export(stage, "fm_init");
+stage_export(stage, "fm_region");
+stage_export(stage, "fm_finish");
+stage_export(stage, "fm_bytes");
+stage_export(stage, "fm_copy");
+stage_export(stage, "fm_error");
+stage_export(stage, "fm_crust");
+stage_export(stage, "fm_program");

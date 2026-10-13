@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn fm_kind(layout: *FmLayout, index: usize) -> u32 {
+    var span: *HlSpan = &layout -> result -> lexical.spans[index];
+    if span -> kind != HL_OPERATOR {
+        return RR_NAME;
+    }
+    var text: *u8 = layout -> result -> lexical.source -> bytes + span -> begin as isize;
+    if span -> end - span -> begin == 2usize {
+        return rr_pair(text[0usize], text[1usize]);
+    }
+    return text[0usize] as u32;
+}
+fn fm_word(layout: *FmLayout, index: usize, word: *u8) -> bool {
+    var span: *HlSpan = &layout -> result -> lexical.spans[index];
+    var length: usize = hl_length(word);
+    if span -> end - span -> begin != length {
+        return false;
+    }
+    var bytes: *u8 = layout -> result -> lexical.source -> bytes + span -> begin as isize;
+    var offset: usize = 0usize;
+    while offset < length {
+        if bytes[offset] != word[offset] {
+            return false;
+        }
+        offset = offset + 1usize;
+    }
+    return true;
+}
+fn fm_open(kind: u32) -> bool {
+    return kind == 40u32 || kind == 91u32 || kind == 123u32;
+}
+fn fm_close(kind: u32) -> bool {
+    return kind == 41u32 || kind == 93u32 || kind == 125u32;
+}
+fn fm_pair(open: u32, close: u32) -> bool {
+    return (open == 40u32 && close == 41u32) || (open == 91u32 && close == 93u32) || (
+        open == 123u32 && close == 125u32
+    );
+}
+fn fm_match(layout: *FmLayout, index: usize) -> bool {
+    var kind: u32 = fm_kind(layout, index);
+    if fm_open(kind) {
+        if layout -> depth == 512usize {
+            return fm_error(
+                layout -> result,
+                layout -> result -> lexical.spans[index].begin,
+                "formatter delimiter depth exceeds 512"
+            );
+        }
+        layout -> frames[layout -> depth].token = index;
+        layout -> depth = layout -> depth + 1usize;
+    } else if fm_close(kind) {
+        if layout -> depth == 0usize {
+            return fm_error(
+                layout -> result,
+                layout -> result -> lexical.spans[index].begin,
+                "unmatched closing delimiter"
+            );
+        }
+        layout -> depth = layout -> depth - 1usize;
+        var open: usize = layout -> frames[layout -> depth].token;
+        if !fm_pair(fm_kind(layout, open), kind) {
+            return fm_error(
+                layout -> result,
+                layout -> result -> lexical.spans[index].begin,
+                "mismatched delimiter"
+            );
+        }
+        layout -> tokens[open - layout -> first].mate = index;
+        layout -> tokens[index - layout -> first].mate = open;
+    }
+    return true;
+}
+fn fm_plan(layout: *FmLayout) -> bool {
+    var lexical: *HlResult = &layout -> result -> lexical;
+    var count: usize = layout -> end - layout -> first;
+    if count == 0usize {
+        return true;
+    }
+    if count > (~0usize) / sizeof(FmToken) {
+        return fm_error(layout -> result, 0usize, "too many formatter tokens");
+    }
+    layout -> tokens = hl_alloc(lexical, count * sizeof(FmToken), alignof(FmToken)) as *FmToken;
+    layout -> frames = hl_alloc(lexical, 512usize * sizeof(FmFrame), alignof(FmFrame)) as *FmFrame;
+    if lexical -> failed {
+        return false;
+    }
+    var index: usize = layout -> first;
+    var width: usize = 0usize;
+    var hard: usize = 0usize;
+    while index < layout -> end {
+        var span: *HlSpan = &lexical -> spans[index];
+        if span -> kind == HL_INVALID {
+            return fm_error(layout -> result, span -> begin, "invalid token in formatter input");
+        }
+        var size: usize = span -> end - span -> begin;
+        if size >= (~0usize) - width {
+            return fm_error(layout -> result, span -> begin, "formatter input is too large");
+        }
+        width = width + size + 1usize;
+        if span -> kind == HL_COMMENT || fm_kind(layout, index) == 123u32 {
+            hard = hard + 1usize;
+        }
+        layout -> tokens[index - layout -> first] = make FmToken {
+            mate: index,
+            width: width,
+            hard: hard
+        };
+        if !fm_match(layout, index) {
+            return false;
+        }
+        index = index + 1usize;
+    }
+    if layout -> depth != 0usize {
+        return fm_error(layout -> result, lexical -> source -> size, "unclosed delimiter");
+    }
+    return true;
+}

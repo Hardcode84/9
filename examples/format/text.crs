@@ -1,0 +1,19 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// This document grammar starts opaque text at the first line with '> '.
+fn format_document(result: *FmResult, begin: usize, end: usize, user: *u8) -> bool {
+    var bytes: *u8 = result -> lexical.source -> bytes;
+    var split: usize = begin;
+    while split < end {
+        if end - split >= 2usize && bytes[split] == 62u8 && bytes[split + 1usize] == 32u8 {
+            return fm_crust(result, begin, split, user) && fm_copy(result, split, end, user);
+        }
+        while split < end && bytes[split] != 10u8 {
+            split = split + 1usize;
+        }
+        if split < end {
+            split = split + 1usize;
+        }
+    }
+    return fm_error(result, begin, "expected a text section starting with '> '");
+}

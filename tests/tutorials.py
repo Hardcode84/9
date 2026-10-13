@@ -59,7 +59,7 @@ def configuration(work, llvm, level):
 
 
 class Matrix:
-    def __init__(self, build, llvm):
+    def __init__(self, build, llvm, formatter=None):
         self.build = build
         self.work = build / "tutorial-matrix"
         self.work.mkdir(exist_ok=True)
@@ -67,6 +67,8 @@ class Matrix:
         self.package.mkdir(exist_ok=True)
         for directory in ("examples", "api", "stages", "tools"):
             shutil.copytree(ROOT / directory, self.package / directory, dirs_exist_ok=True)
+        if formatter:
+            self.format_sources(formatter)
         self.output = self.package / "build"
         self.output.mkdir(exist_ok=True)
         shutil.copyfile(build / "libcrust0_host.a", self.output / "libcrust0_host.a")
@@ -79,6 +81,17 @@ class Matrix:
         ]
         self.results = []
         self.diagnostics = {}
+
+    def format_sources(self, formatter):
+        text_root = self.package / "examples/reader-switch/main.crs"
+        for source in sorted(self.package.rglob("*.crs")):
+            if source == text_root:
+                output = command(
+                    [self.build / "crust", ROOT / "examples/format/reader-switch.crs", source]
+                ).stdout
+            else:
+                output = command([formatter, source]).stdout
+            source.write_bytes(output)
 
     def root(self, path, selection, arguments=(), expected=0):
         return command(
@@ -219,6 +232,8 @@ class Matrix:
             'extern fn entry(argc:i32,argv:**u8)->i32="crust_tool_main";return entry(run->argc,run->argv);\n'
         )
         cases = (
+            ("format", [ROOT / "examples/hello/main.crs"], 0),
+            ("format", [ROOT / "examples/ownership-basics/program.crs"], 0),
             ("highlight", ["--tokens", ROOT / "examples/hello/main.crs"], 0),
             ("highlight", ["--html", ROOT / "examples/hello/main.crs"], 0),
             ("ccn", ["--CCN", "15", ROOT / "examples/ccn/program.crs"], 0),
@@ -260,6 +275,9 @@ def main():
         "--llvm", type=Path, help="explicit LLVM installation; default is the pinned release"
     )
     parser.add_argument("--profile", choices=["c", "llvm-O0", "llvm-O2"], action="append")
+    parser.add_argument(
+        "--formatter", type=Path, help="format copied tutorial and stage sources before compilation"
+    )
     args = parser.parse_args()
     llvm = (
         args.llvm.resolve()
@@ -270,7 +288,9 @@ def main():
             ).strip()
         )
     )
-    matrix = Matrix(args.build.resolve(), llvm)
+    matrix = Matrix(
+        args.build.resolve(), llvm, args.formatter.resolve() if args.formatter else None
+    )
     try:
         for profile, selection in matrix.profiles:
             if args.profile and profile not in args.profile:

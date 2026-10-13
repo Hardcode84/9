@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "../../stages/build/load.crs");
+host_source(run, "../../stages/format/load.crs");
+if !format_setup(run, "../..") {
+    return 1i32;
+};
+host_source(run, "text.crs");
+return fm_program(run -> argc, run -> argv, format_document, null(*u8));

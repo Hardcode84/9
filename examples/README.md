@@ -103,6 +103,7 @@ separates application rules from container-author obligations.
 | 13 | [Generics with ownership](generics/ownership/README.md) | Check generic payload contracts and use an intrusive container with plain and resource payloads |
 | 14 | [Stage composition](composition/README.md) | Select ownership and overload providers through ordered reader and source query chains |
 | 15 | [Tagged unions](union/README.md) | Define variants and select an arm with an exhaustive match in an external stage |
+| 16 | [Formatting](format/README.md) | Apply a fixed layout with a source-selected service and check or update files |
 
 The overload and ownership tutorials include deliberate compiler errors.
 They state the required diagnostic and then show the correction. The stage
@@ -129,6 +130,7 @@ Each example has its own directory and README.
 | [reader-switch](reader-switch/README.md) | Replace the reader and executor from the root | Two lines read with a new grammar |
 | [custom-stage](custom-stage/README.md) | Compile a decimal number with a custom reader and assembly operation | Target exit status 42 |
 | [highlight](highlight/README.md) | Classify source with ordinary Crust stages | Highlighted HTML or JSON tokens |
+| [format](format/README.md) | Format source through an ordinary Crust stage | Formatted text, check results, or updated files |
 | [ccn](ccn/README.md) | Measure function complexity and select a compilation limit | CCN report or checked executable |
 | [resources/hello](resources/hello/README.md) | Select ownership, RAII, and defer in the same source file | `Hello, resources!` |
 | [resources/returned](resources/returned/README.md) | Return a field view tied to a source loan | `42` |
@@ -165,6 +167,8 @@ for compiler allocation failures.
 The SQLite verifier checks the native application against its frozen C baseline.
 Run `make check-overload` for the overload examples, native symbols, separate
 objects, and resource composition tests.
+Run `make check-format` for layout, source preservation, custom services, file
+publication, and allocation failures under sanitizers.
 Run `make check-highlight` for the highlighter roots and native service.
 Run `make check-vscode` with Bun for the editor adapter tests.
 Run `make check-modules` for module bindings, exports, and allocation failures.

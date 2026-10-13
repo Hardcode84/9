@@ -180,6 +180,7 @@ Code changes: `make all`, then applicable checks:
 | External union syntax/layout | `check-union check-union-alloc` |
 | Generic ownership/contracts/imports | `check-ownership-generics` |
 | Native jobs | `check-parallel` |
+| Formatter layout, services, allocation, file writes | `check-format` |
 | Highlight/editor | `check-highlight check-vscode` |
 | Crust CCN | `check-ccn` |
 

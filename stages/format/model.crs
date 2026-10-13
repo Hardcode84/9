@@ -1,0 +1,106 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record FmResult {
+    lexical: HlResult;
+    output: HlText;
+    cursor: usize;
+}
+record FmToken {
+    mate: usize;
+    width: usize;
+    hard: usize;
+}
+record FmFrame {
+    token: usize;
+    multiline: bool;
+}
+record FmLayout {
+    result: *FmResult;
+    tokens: *FmToken;
+    frames: *FmFrame;
+    first: usize;
+    end: usize;
+    depth: usize;
+    indent: usize;
+    column: usize;
+    previous: usize;
+    prefix: bool;
+}
+
+// Borrow source through the last result use. All result storage belongs to context.
+fn fm_init(result: *FmResult, context: *CrustContext, source: *CrustSource) -> unit {
+    hl_init(&result -> lexical, context, source);
+    result -> output = make HlText {
+        bytes: null(*u8),
+        size: 0usize,
+        capacity: 0usize
+    };
+    result -> cursor = 0usize;
+}
+fn fm_error(result: *FmResult, offset: usize, message: *u8) -> bool {
+    if !result -> lexical.failed {
+        result -> lexical.failed = true;
+        crust_set_error(
+            result -> lexical.context,
+            result -> lexical.source,
+            offset,
+            message
+        );
+    }
+    return false;
+}
+// Append output bytes. Caller-owned bytes need only remain live through this call.
+fn fm_bytes(result: *FmResult, bytes: *u8, count: usize) -> unit {
+    hl_bytes(&result -> lexical, &result -> output, bytes, count);
+}
+// Copy a valid source region unchanged. Caller supplies bounds inside the source.
+fn fm_copy(result: *FmResult, begin: usize, end: usize, user: *u8) -> bool {
+    if begin != end {
+        fm_bytes(result, result -> lexical.source -> bytes + begin as isize, end - begin);
+    }
+    return !result -> lexical.failed;
+}
+// Format consecutive regions with explicit services; null preserves the region.
+// Services append output through fm_bytes and report errors through fm_error.
+fn fm_region(
+    result: *FmResult,
+    begin: usize,
+    end: usize,
+    service: fn(*FmResult, usize, usize, *u8) -> bool,
+    user: *u8
+) -> bool {
+    if result -> lexical.failed {
+        return false;
+    }
+    if begin != result -> cursor || begin > end || end > result -> lexical.source -> size {
+        return fm_error(
+            result,
+            result -> cursor,
+            "formatter regions must cover source in order"
+        );
+    }
+    var success: bool = true;
+    if service == null(fn(*FmResult, usize, usize, *u8) -> bool) {
+        success = fm_copy(result, begin, end, user);
+    } else {
+        success = service(result, begin, end, user);
+    }
+    if result -> lexical.context -> error_count != 0usize {
+        result -> lexical.failed = true;
+    }
+    if !success {
+        return fm_error(result, begin, "format service failed without a diagnostic");
+    }
+    if result -> lexical.failed {
+        return false;
+    }
+    result -> cursor = end;
+    return true;
+}
+// Require complete source coverage before publishing output.
+fn fm_finish(result: *FmResult) -> bool {
+    if result -> cursor != result -> lexical.source -> size {
+        return fm_error(result, result -> cursor, "format service left source unhandled");
+    }
+    return !result -> lexical.failed && result -> lexical.context -> error_count == 0usize;
+}

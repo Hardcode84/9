@@ -1,0 +1,224 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record FmAllocation {
+    calls: usize;
+    fail_at: usize;
+    live: usize;
+}
+
+fn test_allocate(user: *u8, size: usize) -> *u8 {
+    var counts: *FmAllocation = user as *FmAllocation;
+    counts -> calls = counts -> calls + 1usize;
+    if counts -> calls == counts -> fail_at {
+        return null(*u8);
+    }
+    var bytes: *u8 = crust0_host_alloc(size, 16usize);
+    if bytes == null(*u8) {
+        trap;
+    }
+    counts -> live = counts -> live + 1usize;
+    return bytes;
+}
+fn test_release(user: *u8, bytes: *u8) -> unit {
+    var counts: *FmAllocation = user as *FmAllocation;
+    if bytes == null(*u8) || counts -> live == 0usize {
+        trap;
+    }
+    counts -> live = counts -> live - 1usize;
+    crust0_host_free(bytes);
+}
+fn test_equal(left: *u8, right: *u8, size: usize) -> unit {
+    var index: usize = 0usize;
+    while index < size {
+        if left[index] != right[index] {
+            trap;
+        }
+        index = index + 1usize;
+    }
+}
+fn test_span_size(lexical: *HlResult, index: usize) -> usize {
+    var span: *HlSpan = &lexical -> spans[index];
+    var size: usize = span -> end - span -> begin;
+    if span -> kind == HL_COMMENT && lexical -> source -> bytes[span -> end - 1usize] == 13u8 {
+        size = size - 1usize;
+    }
+    return size;
+}
+fn test_preserved(before: *HlResult, after: *HlResult) -> unit {
+    if before -> count != after -> count {
+        trap;
+    }
+    var index: usize = 0usize;
+    while index < before -> count {
+        var size: usize = test_span_size(before, index);
+        if size != test_span_size(after, index) || before -> spans[index].kind != after -> spans[
+            index
+        ].kind {
+            trap;
+        }
+        test_equal(
+            before -> source -> bytes + before -> spans[index].begin as isize,
+            after -> source -> bytes + after -> spans[index].begin as isize,
+            size
+        );
+        index = index + 1usize;
+    }
+}
+fn test_stable(context: *CrustContext, before: *FmResult) -> bool {
+    var source: CrustSource = make CrustSource {
+        path: "formatted",
+        bytes: before -> output.bytes,
+        size: before -> output.size,
+        identity: 2u64
+    };
+    var after: FmResult = uninit;
+    fm_init(&after, context, &source);
+    if !fm_region(&after, 0usize, source.size, fm_crust, null(*u8)) || !fm_finish(&after) {
+        return false;
+    }
+    if after.output.size != before -> output.size {
+        trap;
+    }
+    test_equal(before -> output.bytes, after.output.bytes, after.output.size);
+    test_preserved(&before -> lexical, &after.lexical);
+    return true;
+}
+fn test_sweep(source: *CrustSource) -> unit {
+    var fail_at: usize = 1usize;
+    while true {
+        var counts: FmAllocation = make FmAllocation {
+            calls: 0usize,
+            fail_at: fail_at,
+            live: 0usize
+        };
+        var allocator: CrustAllocator = make CrustAllocator {
+            user: &counts as *u8,
+            allocate: test_allocate,
+            release: test_release
+        };
+        var context: CrustContext = uninit;
+        crust_context_init(&context, &allocator);
+        var result: FmResult = uninit;
+        fm_init(&result, &context, source);
+        var success: bool = fm_region(
+            &result,
+            0usize,
+            source -> size,
+            fm_crust,
+            null(*u8)
+        ) && fm_finish(&result);
+        if success {
+            success = test_stable(&context, &result);
+        }
+        if success {
+            fm_temporary(&result);
+            success = !result.lexical.failed;
+        }
+        var diagnosed: bool = context.error_count != 0usize;
+        crust_context_destroy(&context);
+        if counts.live != 0usize || success == diagnosed {
+            trap;
+        }
+        if success {
+            if counts.calls >= fail_at {
+                trap;
+            }
+            return;
+        }
+        if counts.calls != fail_at {
+            trap;
+        }
+        fail_at = fail_at + 1usize;
+    }
+}
+fn test_silent(result: *FmResult, begin: usize, end: usize, user: *u8) -> bool {
+    return false;
+}
+fn test_contracts(source: *CrustSource) -> unit {
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var result: FmResult = uninit;
+    fm_init(&result, &context, source);
+    if !fm_region(
+        &result,
+        0usize,
+        1usize,
+        null(fn(*FmResult, usize, usize, *u8) -> bool),
+        null(*u8)
+    ) {
+        trap;
+    }
+    if fm_finish(&result) || context.error_count == 0usize {
+        trap;
+    }
+    crust_context_destroy(&context);
+    crust_context_init(&context, null(*CrustAllocator));
+    fm_init(&result, &context, source);
+    if fm_region(&result, 1usize, source -> size, fm_crust, null(*u8)) || context.error_count == 0usize {
+        trap;
+    }
+    crust_context_destroy(&context);
+    crust_context_init(&context, null(*CrustAllocator));
+    fm_init(&result, &context, source);
+    if fm_region(&result, 0usize, source -> size, test_silent, null(*u8)) || context.error_count == 0usize {
+        trap;
+    }
+    crust_context_destroy(&context);
+}
+fn test_publication(source: *CrustSource) -> unit {
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var result: FmResult = uninit;
+    fm_init(&result, &context, source);
+    var before: FmStat = uninit;
+    if !fm_inspect(&result, &before) || !fm_region(
+        &result,
+        0usize,
+        source -> size,
+        fm_crust,
+        null(*u8)
+    ) {
+        trap;
+    }
+    before.inode = ~before.inode;
+    if fm_publish(&result, &before) || context.error_count == 0usize {
+        trap;
+    }
+    crust_context_destroy(&context);
+}
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc < 3i32 {
+        return 1i32;
+    }
+    var index: usize = 2usize;
+    while index < argc as usize {
+        var source: CrustSource = make CrustSource {
+            path: argv[index],
+            bytes: null(*u8),
+            size: 0usize,
+            identity: 1u64
+        };
+        if crust0_host_read_file(source.path, &source.bytes, &source.size) != 0i32 {
+            return 1i32;
+        }
+        if hl_equal(argv[1usize], "sweep") {
+            test_sweep(&source);
+            test_contracts(&source);
+            test_publication(&source);
+        } else {
+            var context: CrustContext = uninit;
+            crust_context_init(&context, null(*CrustAllocator));
+            var result: FmResult = uninit;
+            fm_init(&result, &context, &source);
+            if !fm_region(&result, 0usize, source.size, fm_crust, null(*u8)) || !fm_finish(
+                &result
+            ) || !test_stable(&context, &result) {
+                trap;
+            }
+            crust_context_destroy(&context);
+        }
+        crust0_host_free(source.bytes);
+        index = index + 1usize;
+    }
+    return 0i32;
+}

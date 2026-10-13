@@ -1,0 +1,234 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn fm_lines(layout: *FmLayout, count: usize) -> unit {
+    var output: *HlText = &layout -> result -> output;
+    if output -> size == 0usize {
+        return;
+    }
+    var existing: usize = 0usize;
+    while existing < output -> size && output -> bytes[output -> size - existing - 1usize] == 10u8 {
+        existing = existing + 1usize;
+    }
+    while existing < count {
+        fm_bytes(layout -> result, "\n", 1usize);
+        existing = existing + 1usize;
+    }
+    layout -> column = 0usize;
+}
+fn fm_gap(layout: *FmLayout, index: usize) -> usize {
+    if index == layout -> first {
+        return 0usize;
+    }
+    var cursor: usize = layout -> result -> lexical.spans[index - 1usize].end;
+    var end: usize = layout -> result -> lexical.spans[index].begin;
+    var count: usize = 0usize;
+    var source: *u8 = layout -> result -> lexical.source -> bytes;
+    while cursor < end && count < 2usize {
+        if source[cursor] == 10u8 {
+            count = count + 1usize;
+        }
+        cursor = cursor + 1usize;
+    }
+    return count;
+}
+fn fm_value_end(layout: *FmLayout, index: usize) -> bool {
+    var kind: u32 = fm_kind(layout, index);
+    if fm_close(kind) {
+        return true;
+    }
+    var span: *HlSpan = &layout -> result -> lexical.spans[index];
+    if span -> kind == HL_OPERATOR || span -> kind == HL_KEYWORD {
+        return false;
+    }
+    return span -> kind != HL_COMMENT;
+}
+fn fm_prefix(layout: *FmLayout, index: usize) -> bool {
+    var kind: u32 = fm_kind(layout, index);
+    if kind == 33u32 || kind == 126u32 {
+        return true;
+    }
+    if kind != 42u32 && kind != 38u32 && kind != 45u32 && kind != 43u32 {
+        return false;
+    }
+    return layout -> previous == layout -> end || !fm_value_end(layout, layout -> previous);
+}
+fn fm_join_hazard(layout: *FmLayout, index: usize) -> bool {
+    var spans: *HlSpan = layout -> result -> lexical.spans;
+    var bytes: *u8 = layout -> result -> lexical.source -> bytes;
+    var left: u8 = bytes[spans[index - 1usize].end - 1usize];
+    var right: u8 = bytes[spans[index].begin];
+    return rr_pair(left, right) != left as u32 || (left == 47u8 && right == 47u8);
+}
+fn fm_paren_space(layout: *FmLayout, previous: usize) -> bool {
+    var kind: u32 = fm_kind(layout, previous);
+    if kind != RR_NAME {
+        return !fm_close(kind);
+    }
+    return fm_word(layout, previous, "if") || fm_word(layout, previous, "while") || fm_word(
+        layout,
+        previous,
+        "return"
+    );
+}
+fn fm_tight(current: u32, previous: u32) -> bool {
+    return current == 44u32 || current == 59u32 || current == 58u32 || fm_close(current) || current == 46u32 || previous == 46u32;
+}
+fn fm_space(layout: *FmLayout, index: usize) -> bool {
+    if fm_join_hazard(layout, index) {
+        return true;
+    }
+    var current: u32 = fm_kind(layout, index);
+    var previous: u32 = fm_kind(layout, index - 1usize);
+    if fm_tight(current, previous) {
+        return false;
+    }
+    if current == 123u32 {
+        return true;
+    }
+    if fm_open(previous) || layout -> prefix {
+        return false;
+    }
+    if current == 40u32 {
+        return fm_paren_space(layout, index - 1usize);
+    }
+    if current == 91u32 {
+        return !fm_value_end(layout, index - 1usize);
+    }
+    if current == 33u32 && index + 1usize < layout -> end && fm_kind(layout, index + 1usize) == 40u32 {
+        return false;
+    }
+    return true;
+}
+fn fm_brace_continuation(layout: *FmLayout, index: usize) -> bool {
+    var kind: u32 = fm_kind(layout, index);
+    return kind == 59u32 || kind == 44u32 || kind == 46u32 || kind == 41u32 || kind == 93u32 || fm_word(
+        layout,
+        index,
+        "else"
+    );
+}
+fn fm_break(layout: *FmLayout, index: usize, closing: bool) -> bool {
+    var previous: u32 = fm_kind(layout, index - 1usize);
+    if closing {
+        return true;
+    }
+    if fm_close(fm_kind(layout, index)) {
+        return false;
+    }
+    if layout -> depth != 0usize {
+        var frame: *FmFrame = &layout -> frames[layout -> depth - 1usize];
+        if (fm_open(previous) || previous == 44u32) && frame -> multiline {
+            return true;
+        }
+        if previous == 59u32 {
+            return fm_kind(layout, frame -> token) == 123u32;
+        }
+    } else if previous == 59u32 {
+        return true;
+    }
+    return previous == 125u32 && !fm_brace_continuation(layout, index);
+}
+fn fm_before(layout: *FmLayout, index: usize, closing: bool) -> unit {
+    if index == layout -> first {
+        return;
+    }
+    var spans: *HlSpan = layout -> result -> lexical.spans;
+    var gap: usize = fm_gap(layout, index);
+    var newline: bool = fm_break(layout, index, closing);
+    if spans[index].kind == HL_COMMENT {
+        newline = gap != 0usize;
+    }
+    if spans[index - 1usize].kind == HL_COMMENT {
+        newline = true;
+    }
+    if newline {
+        if gap == 0usize {
+            gap = 1usize;
+        }
+        fm_lines(layout, gap);
+    } else if fm_space(layout, index) {
+        fm_bytes(layout -> result, " ", 1usize);
+        layout -> column = layout -> column + 1usize;
+    }
+}
+fn fm_push(layout: *FmLayout, index: usize) -> unit {
+    var info: *FmToken = &layout -> tokens[index - layout -> first];
+    var last: *FmToken = &layout -> tokens[info -> mate - layout -> first];
+    var multiline: bool = false;
+    if info -> mate != index + 1usize {
+        multiline = fm_kind(layout, index) == 123u32 || last -> hard != info -> hard || layout -> column >= 100usize || last -> width - info -> width > 100usize - layout -> column;
+    }
+    layout -> frames[layout -> depth] = make FmFrame {
+        token: index,
+        multiline: multiline
+    };
+    layout -> depth = layout -> depth + 1usize;
+    if multiline {
+        layout -> indent = layout -> indent + 1usize;
+    }
+}
+fn fm_token(layout: *FmLayout, index: usize) -> unit {
+    var span: *HlSpan = &layout -> result -> lexical.spans[index];
+    var kind: u32 = fm_kind(layout, index);
+    var closing: bool = false;
+    if fm_close(kind) {
+        layout -> depth = layout -> depth - 1usize;
+        closing = layout -> frames[layout -> depth].multiline;
+        if closing {
+            layout -> indent = layout -> indent - 1usize;
+        }
+    }
+    fm_before(layout, index, closing);
+    if layout -> column == 0usize {
+        var level: usize = 0usize;
+        while level < layout -> indent {
+            fm_bytes(layout -> result, "    ", 4usize);
+            level = level + 1usize;
+        }
+        layout -> column = layout -> indent * 4usize;
+    }
+    var size: usize = span -> end - span -> begin;
+    var bytes: *u8 = layout -> result -> lexical.source -> bytes + span -> begin as isize;
+    if span -> kind == HL_COMMENT && bytes[size - 1usize] == 13u8 {
+        size = size - 1usize;
+    }
+    fm_bytes(layout -> result, bytes, size);
+    layout -> column = layout -> column + size;
+    if fm_open(kind) {
+        fm_push(layout, index);
+    }
+    if span -> kind != HL_COMMENT {
+        layout -> prefix = fm_prefix(layout, index);
+        layout -> previous = index;
+    }
+}
+// Format balanced Crust tokens with a fixed layout. Preserve token spelling and comments.
+// This service accepts the range validated by fm_region; it performs no source execution.
+fn fm_crust(result: *FmResult, begin: usize, end: usize, user: *u8) -> bool {
+    var first: usize = result -> lexical.count;
+    if !hl_region(&result -> lexical, begin, end, hl_seed, null(*u8)) {
+        return false;
+    }
+    var layout: FmLayout = make FmLayout {
+        result: result,
+        tokens: null(*FmToken),
+        frames: null(*FmFrame),
+        first: first,
+        end: result -> lexical.count,
+        depth: 0usize,
+        indent: 0usize,
+        column: 0usize,
+        previous: result -> lexical.count,
+        prefix: false
+    };
+    if !fm_plan(&layout) {
+        return false;
+    }
+    var index: usize = first;
+    while index < layout.end && !result -> lexical.failed {
+        fm_token(&layout, index);
+        index = index + 1usize;
+    }
+    fm_lines(&layout, 1usize);
+    return !result -> lexical.failed;
+}

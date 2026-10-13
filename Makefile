@@ -152,6 +152,10 @@ check-union: all test-tools $(BUILD)/crust-union-test
 check-union-alloc: all test-tools $(BUILD)/crust-union-test
 	python3 tests/union.py --build $(BUILD) --sanitize-stage
 
+.PHONY: check-format
+check-format: all test-tools
+	python3 tests/format.py --build $(BUILD)
+
 check-highlight: all test-tools
 	python3 stages/highlight/test.py --build $(BUILD)
 

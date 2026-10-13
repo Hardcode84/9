@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage, "../stages/format/sources.crs");
+stage_source(stage, "format_contract.crs");
+stage_export(stage, "main");

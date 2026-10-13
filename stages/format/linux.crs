@@ -1,0 +1,122 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Linux x86-64 LP64 foreign ABI; field order matches struct stat.
+record FmStat {
+    device: u64;
+    inode: u64;
+    links: u64;
+    mode: u32;
+    uid: u32;
+    gid: u32;
+    padding: i32;
+    special_device: u64;
+    size: i64;
+    block_size: i64;
+    blocks: i64;
+    access_seconds: i64;
+    access_nanoseconds: u64;
+    modify_seconds: i64;
+    modify_nanoseconds: u64;
+    change_seconds: i64;
+    change_nanoseconds: u64;
+    reserved: [i64; 3];
+}
+extern fn fm_lstat(path: *u8, info: *FmStat) -> i32 = "lstat";
+extern fn fm_mkstemp(path: *u8) -> i32 = "mkstemp";
+extern fn fm_write(fd: i32, bytes: *u8, size: usize) -> isize = "write";
+extern fn fm_fchmod(fd: i32, mode: u32) -> i32 = "fchmod";
+extern fn fm_close_file(fd: i32) -> i32 = "close";
+extern fn fm_unlink(path: *u8) -> i32 = "unlink";
+extern fn fm_rename(source: *u8, destination: *u8) -> i32 = "rename";
+extern fn fm_errno() -> *i32 = "__errno_location";
+
+fn fm_inspect(result: *FmResult, info: *FmStat) -> bool {
+    if fm_lstat(result -> lexical.source -> path, info) != 0i32 {
+        return fm_error(result, 0usize, "cannot inspect format input");
+    }
+    if (info -> mode & 61440u32) != 32768u32 || info -> links != 1u64 {
+        return fm_error(result, 0usize, "write requires a regular file with one link");
+    }
+    return true;
+}
+fn fm_write_all(result: *FmResult, fd: i32) -> bool {
+    var offset: usize = 0usize;
+    while offset < result -> output.size {
+        var written: isize = fm_write(
+            fd,
+            result -> output.bytes + offset as isize,
+            result -> output.size - offset
+        );
+        if written < 0isize && *fm_errno() == 4i32 {
+            continue;
+        }
+        if written <= 0isize {
+            return fm_error(result, 0usize, "cannot write format temporary");
+        }
+        offset = offset + written as usize;
+    }
+    return true;
+}
+fn fm_unchanged(result: *FmResult, before: *FmStat) -> bool {
+    var after: FmStat = uninit;
+    if !fm_inspect(result, &after) {
+        return false;
+    }
+    if before -> device != after.device || before -> inode != after.inode || before -> size != after.size || before -> modify_seconds != after.modify_seconds || before -> modify_nanoseconds != after.modify_nanoseconds || before -> change_seconds != after.change_seconds || before -> change_nanoseconds != after.change_nanoseconds {
+        return fm_error(result, 0usize, "format input changed during formatting");
+    }
+    return true;
+}
+fn fm_temporary(result: *FmResult) -> *u8 {
+    var name: HlText = make HlText {
+        bytes: null(*u8),
+        size: 0usize,
+        capacity: 0usize
+    };
+    var path: *u8 = result -> lexical.source -> path;
+    var index: usize = 0usize;
+    var directory: usize = 0usize;
+    while path[index] != 0u8 {
+        if path[index] == 47u8 {
+            directory = index + 1usize;
+        }
+        index = index + 1usize;
+    }
+    hl_bytes(&result -> lexical, &name, path, directory);
+    hl_bytes(&result -> lexical, &name, ".crust-format-XXXXXX", 20usize);
+    return name.bytes;
+}
+// Replace a single-link regular file after successful formatting. Preserve permission bits.
+// The caller supplies metadata from before reading. The containing directory must be trusted.
+fn fm_publish(result: *FmResult, before: *FmStat) -> bool {
+    var temporary: *u8 = fm_temporary(result);
+    if result -> lexical.failed {
+        return false;
+    }
+    var fd: i32 = fm_mkstemp(temporary);
+    if fd < 0i32 {
+        return fm_error(result, 0usize, "cannot create format temporary");
+    }
+    var success: bool = fm_write_all(result, fd);
+    if success && fm_fchmod(fd, before -> mode & 511u32) != 0i32 {
+        success = fm_error(result, 0usize, "cannot set format output permissions");
+    }
+    if fm_close_file(fd) != 0i32 {
+        success = fm_error(result, 0usize, "cannot close format temporary");
+    }
+    if success {
+        success = fm_unchanged(result, before);
+    }
+    if success && fm_rename(temporary, result -> lexical.source -> path) != 0i32 {
+        success = fm_error(result, 0usize, "cannot replace format input");
+    }
+    if !success && fm_unlink(temporary) != 0i32 {
+        crust_set_error(
+            result -> lexical.context,
+            result -> lexical.source,
+            0usize,
+            "cannot remove format temporary after failure"
+        );
+    }
+    return success;
+}

@@ -154,11 +154,20 @@ def main():
     parser.add_argument(
         "--locked", action="store_true", help="reuse the recorded pin without resolving upstream"
     )
+    parser.add_argument(
+        "--crust", action="store_true", help="print a Crust LLVM_DIRECTORY constant"
+    )
     args = parser.parse_args()
     if args.channel == "release" and (platform.system(), platform.machine()) != ("Linux", "x86_64"):
         parser.error("release tools currently require Linux x86-64")
     try:
-        print(fetch(args.channel, args.directory.resolve(), args.locked))
+        directory = fetch(args.channel, args.directory.resolve(), args.locked)
+        if args.crust:
+            quoted = "".join(f"\\x{byte:02x}" for byte in str(directory).encode())
+            print("// SPDX-License-Identifier: Apache-2.0\n")
+            print(f'const LLVM_DIRECTORY:*u8="{quoted}";')
+        else:
+            print(directory)
     except (
         OSError,
         ValueError,

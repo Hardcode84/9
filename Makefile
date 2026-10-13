@@ -244,8 +244,8 @@ check-reader: all test-tools
 $(BUILD)/kind_composition: $(BUILD)/crust-c tests/kind_wrapper.crs tests/kind_composition.crs Makefile test-tools
 	$< -o $@ $(RESOURCE_LIBRARY) tests/kind_wrapper.crs tests/kind_composition.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-$(BUILD)/resource-backends: $(BUILD)/crust-c tests/resource_backends.crs tests/ownership_input.crs api/crust0_eval.crs api/crust0_x64.crs $(BUILD)/libcrust_asm.a test-tools
-	$< -o $@ $(OWNERSHIP_LIBRARY) api/crust0_x64.crs tests/ownership_input.crs tests/resource_backends.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust_asm.a --ldflag $(BUILD)/libcrust0_run.a --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a --ldflag=-ldl --ldflag=-lffi $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/resource-backends: $(BUILD)/crust-c tests/resource_backends.crs tests/resource_backends_package.crs tests/ownership_input.crs api/crust0_eval.crs test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/resource_backends_package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0_run.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a -ldl -lffi $(LDFLAGS)'
 
 check-resources: all test-tools $(BUILD)/kind_composition $(BUILD)/resource-backends
 	python3 tests/resources.py --build $(BUILD)
@@ -310,3 +310,15 @@ ownership-benchmark-config:
 check-stage: all test-tools
 	python3 tests/source_order.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 	python3 tests/abi.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)' --amalgamation $(AMALGAMATION)
+
+.PHONY: check-llvm
+
+$(BUILD)/llvm-alloc-wrap.o: tests/c_stage_alloc.c | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -c $< -o $@
+
+$(BUILD)/llvm-test-driver: $(BUILD)/crust-c tests/llvm_driver.crs tests/llvm_alloc.crs tests/llvm_driver_package.crs $(BUILD)/llvm-alloc-wrap.o test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/llvm_driver_package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/llvm-alloc-wrap.o -Wl,--wrap=crust0_host_alloc -Wl,--wrap=crust0_host_free $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(LDFLAGS)'
+
+check-llvm: all test-tools $(BUILD)/llvm-test-driver $(BUILD)/resource-backends
+	python3 tests/llvm.py --build $(BUILD)
+	python3 tests/llvm_packages.py --build $(BUILD)

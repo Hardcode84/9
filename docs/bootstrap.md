@@ -68,9 +68,13 @@ control. `make clean` removes them with the build directory.
 
 Use `BUILD=build/other` with Make, or `--directory build/other/toolchains/llvm`
 with the script, to select another cache. These targets acquire dependencies
-only. `make all` continues to build the C99 seed. The LLVM backend is not yet
-implemented. Run `make check-llvm-fetch` to test acquisition without network
-access or a full LLVM download.
+only. `make all` continues to build the C99 seed. The
+[LLVM stage](../stages/llvm/README.md) uses the default release pin through
+`--locked --crust`. This option emits a Crust constant with the selected
+installation path. A custom toolchain factory can select another installation
+or fetch directory. Run `make check-llvm-fetch` to test acquisition without
+network access or a full LLVM download. Run `make check-llvm` to test emission
+and package compilation with the pinned release.
 
 ### Compile the seed
 

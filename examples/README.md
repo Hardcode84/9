@@ -8,6 +8,10 @@ Run the commands below from the repository root. Build the tools once:
 make all
 ```
 
+The [LLVM tutorial](llvm/README.md) shows how to select a pinned LLVM toolchain
+and compile an application through the generic package interface. Run
+`make check-llvm` for this tutorial and the LLVM semantic tests.
+
 ## Tutorials
 
 The [getting started guide](../docs/tutorial.md) teaches the core language and

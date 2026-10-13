@@ -89,6 +89,10 @@ flowchart TD
     Frontend --> Checked[Checked operations and any retained stage plans]
     Checked -->|seed operations| ASM[Crust x86-64 stage]
     Checked -->|default or custom body emitter| C[Crust C backend]
+    Checked --> LLVM[Crust LLVM stage]
+    LLVM --> IR[LLVM IR and symbol arguments]
+    IR --> Clang[Pinned Clang compiles IR]
+    Clang --> Rename
     ASM --> Assembly[Text assembly]
     Assembly --> Assembler[GNU assembler]
     C --> CText[C text and symbol arguments]
@@ -347,10 +351,10 @@ IR. Seed types do not have to represent every target type. Reusing a seed
 consumer still requires its input contract; using another consumer requires
 that consumer's contract.
 
-## External assembly and C backends
+## External backends
 
-Both backends are ordinary Crust libraries. The root selects their sources
-or native artifacts, then calls their public operations. The C99 seed has
+The assembly, C, and LLVM backends are ordinary Crust libraries. The root
+selects their sources or native artifacts, then calls their public operations. The C99 seed has
 no instruction emitter.
 
 | Property | Crust assembly backend | Crust C backend |
@@ -363,13 +367,19 @@ no instruction emitter.
 | Customization | Public preparation data and expression, place, and statement operations | Public buffers, types, emission helpers, and complete body callback |
 | Command wrapper | `build/crust0` | `build/crust-c` |
 
-Both current backends select Linux x86-64 and the System V scalar ABI for
+The [LLVM stage](../stages/llvm/README.md) emits LLVM IR and a native-symbol
+response file. Its generic package compiler and toolchain callbacks select
+a pinned local Clang. Public lowering helpers and an expression callback let
+a caller replace operations. LLVM optimization levels are explicit toolchain
+inputs. The [tutorial](../examples/llvm/README.md) shows package selection.
+
+The current backends select Linux x86-64 and the System V scalar ABI for
 seed functions. The C output uses GCC-specific operations to preserve seed
 arithmetic, evaluation order, and raw address behavior. It is not a portable
 C target for arbitrary machines. A different target needs explicit layout
 and ABI rules; the host's `sizeof` is not a target description.
 
-The `crust` executable and `libcrust0.a` contain neither emitter. `crust0`
+The `crust` executable and `libcrust0.a` contain no emitter. `crust0`
 is a standalone consumer linked to the external assembly stage. The C stage
 uses the same frontend services and ordinary native host calls.
 

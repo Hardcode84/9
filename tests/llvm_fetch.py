@@ -151,6 +151,17 @@ class FetchTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             FETCH.fetch("main", self.directory, locked=True)
 
+    def test_crust_configuration(self):
+        selected = self.directory / 'quote" space \u00e9'
+        with (
+            patch.object(FETCH, "fetch", return_value=selected),
+            patch.object(sys, "argv", ["fetch_llvm.py", "release", "--locked", "--crust"]),
+            patch("sys.stdout", new_callable=io.StringIO) as output,
+        ):
+            self.assertEqual(FETCH.main(), 0)
+        encoded = "".join(f"\\x{byte:02x}" for byte in str(selected).encode())
+        self.assertIn(f'const LLVM_DIRECTORY:*u8="{encoded}";', output.getvalue())
+
     def test_cli_reports_failure(self):
         arguments = ["fetch_llvm.py", "main", "--locked", "--directory", str(self.directory)]
         with (

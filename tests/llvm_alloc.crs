@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn llvm_test_reset(fail_at:usize)->unit="crust_test_allocation_reset";
+extern fn llvm_test_calls()->usize="crust_test_allocation_calls";
+extern fn llvm_test_live()->usize="crust_test_allocation_live";
+fn llvm_test_allocate(user:*u8,size:usize)->*u8{return crust0_host_alloc(size,16usize);}
+fn llvm_test_release(user:*u8,allocation:*u8)->unit{crust0_host_free(allocation);}
+fn llvm_test_input(context:*CrustContext,source:*CrustSource)->bool {
+    var parsed:*CrustUnit=null(*CrustUnit);
+    if !crust_read(context,source,&parsed) || !crust_collect(context) || !crust_resolve(context) || !crust_check(context){return false;}
+    var declaration:*CrustDecl=parsed->declarations;
+    while declaration!=null(*CrustDecl){
+        if declaration->kind!=CRUST_D_EXTERN && declaration->kind!=CRUST_D_RECORD{declaration->link_name=declaration->name->text;}
+        declaration=declaration->next;
+    }return true;
+}
+fn llvm_test_sweep(source:*CrustSource)->i32 {
+    var limit:usize=1usize;
+    while true {
+        llvm_test_reset(0usize);
+        var allocator:CrustAllocator=make CrustAllocator{user:null(*u8),allocate:llvm_test_allocate,release:llvm_test_release};
+        var context:CrustContext=uninit;crust_context_init(&context,&allocator);
+        if !llvm_test_input(&context,source){c_driver_diagnostic(&context,"LLVM allocation test");crust_context_destroy(&context);return 2i32;}
+        llvm_test_reset(limit);
+        var stage:LlStage=uninit;ll_init(&stage,&context);
+        var success:bool=ll_emit(&stage,null(*CrustDecl));
+        var calls:usize=llvm_test_calls();
+        var valid:bool=success==(calls<limit) && (success || context.error_count!=0usize);
+        ll_destroy(&stage);crust_context_destroy(&context);
+        if !valid || llvm_test_live()!=0usize{return 3i32;}
+        if success{return 0i32;}
+        limit=limit+1usize;
+    }
+    trap;
+}
+fn llvm_test_allocation(argc:i32,argv:**u8)->i32 {
+    if argc!=3i32{return 2i32;}
+    var source:CrustSource=make CrustSource{path:argv[2usize],bytes:null(*u8),size:0usize,identity:1u64};
+    if crust0_host_read_file(source.path,&source.bytes,&source.size)!=0i32{return 2i32;}
+    var result:i32=llvm_test_sweep(&source);crust0_host_free(source.bytes);return result;
+}

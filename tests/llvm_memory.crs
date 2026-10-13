@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record Pair { first:u64; second:u64; }
+record Outer { prefix:u64; pair:Pair; }
+fn enclosing(field:*u64)->*Outer {
+    return ((field as usize)-offsetof(Outer,pair)-offsetof(Pair,second)) as *Outer;
+}
+fn change(wide:*u64,narrow:*u32)->u64 {*wide=0u64;*narrow=19u32;return *wide;}
+fn first()->i32{return 1i32;}
+fn second()->i32{return 2i32;}
+fn main(argc:i32,argv:**u8)->i32 {
+    var value:Outer=make Outer{prefix:3u64,pair:make Pair{first:7u64,second:11u64}};
+    var field:*u64=&value.pair.second;
+    var tagged:usize=(field as usize)|1usize;
+    var whole:*Outer=enclosing((tagged & ~1usize) as *u64);
+    if whole!=&value{return 1i32;}
+    if change(&whole->pair.first,&value.pair.first as *u32)!=19u64{return 2i32;}
+    var data:[u64;3]=make [u64;3]{3u64,5u64,7u64};
+    var before:*Pair=&data[0usize] as *Pair;
+    var after:*Pair=&data[1usize] as *Pair;
+    *after=*before;
+    if data[0usize]!=3u64 || data[1usize]!=3u64 || data[2usize]!=5u64{return 3i32;}
+    if first==second || first()!=1i32 || second()!=2i32{return 4i32;}
+    var count:i32=0i32;
+    goto start;
+    count=99i32;
+    label start;
+    count=count+1i32;
+    if count<40i32{goto start;}
+    while true{{count=count+first();goto done;}}
+    label done;
+    if count!=41i32{return 5i32;}
+    goto initialize;
+    var skipped:i32=99i32;
+    label initialize;
+    skipped=42i32;
+    if skipped!=42i32{return 6i32;}
+    return 0i32;
+}

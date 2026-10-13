@@ -842,9 +842,13 @@ implementation small.
 
 The [ASM stage](../stages/asm/README.md) emits x86-64 assembly. The
 [C stage](c-backend.md) emits C and native-symbol arguments for GCC and
-`objcopy`. Both are Crust libraries selected by the compilation program.
+`objcopy`. The [LLVM stage](../stages/llvm/README.md) emits LLVM IR and native
+symbol arguments for a pinned local Clang. All three are Crust libraries
+selected by the compilation program.
 Their APIs expose storage preparation, target lowering, output buffers, and
 failure reporting. The C backend also accepts a function-body emitter callback.
+The LLVM backend accepts an expression emitter callback and exposes its
+lowering helpers.
 A custom adapter must construct the complete input required by its chosen
 backend and preserve the source language's ABI and execution rules.
 

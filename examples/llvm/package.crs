@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_source(stage,"../../api/crust0.crs");
+stage_source(stage,"program.crs");
+stage_export(stage,"hello");
+stage_compiler(stage,"../../stages/llvm/compiler-package.crs","llvm_stage_compile");
+stage_toolchain(stage,"llvm_stage_toolchain");

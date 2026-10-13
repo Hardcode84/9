@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn ll_label(function:*LlFunction,statement:*CrustStmt)->*u8 {
+    var destination:*u8=crust_map_get(&function->labels,statement as usize);
+    if destination==null(*u8){destination=ll_id(function->stage,"b");crust_try_map_set(ll_context(function->stage),&function->labels,statement as usize,destination);}
+    return destination;
+}
+fn ll_statement(function:*LlFunction,input:*CrustStmt)->unit {
+    if !ll_ok(function->stage){return;}
+    if function->depth>=512usize{ll_error(function->stage,"LLVM statement traversal depth exceeded");return;}
+    function->depth=function->depth+1usize;
+    if function->terminated && input->kind!=CRUST_S_LABEL{ll_block(function,ll_id(function->stage,"b"));}
+    ll_statement_body(function,input);function->depth=function->depth-1usize;
+}
+fn ll_statement_body(function:*LlFunction,input:*CrustStmt)->unit {
+    var kind:u32=input->kind;
+    if kind==CRUST_S_BLOCK {
+        var child:*CrustStmt=input->body;while child!=null(*CrustStmt) && ll_ok(function->stage){ll_statement(function,child);child=child->next;}return;
+    }
+    if kind==CRUST_S_VAR {
+        var address:*u8=ll_symbol(function,input->symbol);
+        if !input->uninitialized{var value:*u8=ll_value(function,input->value);ll_store(function,input->symbol->type,address,value);}return;
+    }
+    if kind==CRUST_S_ASSIGN{var address:*u8=ll_place(function,input->expr);var value:*u8=ll_value(function,input->value);ll_store(function,input->expr->type,address,value);return;}
+    if kind==CRUST_S_EXPR{ll_value(function,input->expr);return;}
+    if kind==CRUST_S_RETURN{ll_return(function,input);return;}
+    if kind==CRUST_S_IF{ll_if(function,input);return;}
+    if kind==CRUST_S_WHILE{ll_while(function,input);return;}
+    ll_jump_statement(function,input);
+}
+fn ll_jump_statement(function:*LlFunction,input:*CrustStmt)->unit {
+    var kind:u32=input->kind;
+    if kind==CRUST_S_LABEL{ll_block(function,ll_label(function,input));return;}
+    if kind==CRUST_S_GOTO{ll_jump(function,ll_label(function,input->target));return;}
+    if kind==CRUST_S_BREAK{ll_jump(function,function->loop->end);return;}
+    if kind==CRUST_S_CONTINUE{ll_jump(function,function->loop->test);return;}
+    if kind==CRUST_S_TRAP{ll_text(function,"  call void @llvm.trap()\n  unreachable\n");function->terminated=true;return;}
+    ll_error(function->stage,"unsupported LLVM statement kind");
+}
+fn ll_return(function:*LlFunction,input:*CrustStmt)->unit {
+    if input->expr==null(*CrustExpr){ll_text(function,"  ret void\n");}
+    else {
+        var value:*u8=ll_value(function,input->expr);var type:*u8=ll_type(function->stage,input->expr->type);
+        if input->expr->type->kind==CRUST_T_BOOL{value=ll_condition(function,value);type="i1";}
+        ll_text(function,"  ret ");ll_text(function,type);ll_text(function," ");ll_text(function,value);ll_text(function,"\n");
+    }function->terminated=true;
+}
+fn ll_if(function:*LlFunction,input:*CrustStmt)->unit {
+    var yes:*u8=ll_id(function->stage,"b");var no:*u8=ll_id(function->stage,"b");var end:*u8=ll_id(function->stage,"b");
+    var condition:*u8=ll_condition(function,ll_value(function,input->expr));ll_branch(function,condition,yes,no);
+    ll_block(function,yes);ll_statement(function,input->body);if !function->terminated{ll_jump(function,end);}
+    ll_block(function,no);if input->otherwise!=null(*CrustStmt){ll_statement(function,input->otherwise);}
+    ll_block(function,end);
+}
+fn ll_while(function:*LlFunction,input:*CrustStmt)->unit {
+    var loop:LlLoop=make LlLoop{test:ll_id(function->stage,"b"),end:ll_id(function->stage,"b"),previous:function->loop};
+    var body:*u8=ll_id(function->stage,"b");ll_block(function,loop.test);
+    var condition:*u8=ll_condition(function,ll_value(function,input->expr));ll_branch(function,condition,body,loop.end);
+    ll_block(function,body);function->loop=&loop;ll_statement(function,input->body);
+    if !function->terminated{ll_jump(function,loop.test);}function->loop=loop.previous;ll_block(function,loop.end);
+}
+fn ll_parameters(function:*LlFunction,declaration:*CrustDecl)->unit {
+    var parameter:*CrustParam=declaration->params;var index:u64=0u64;
+    while parameter!=null(*CrustParam){
+        var value:*u8=ll_join(function->stage,"%p",ll_number(function->stage,index));
+        if parameter->type->kind==CRUST_T_BOOL{value=ll_convert(function,"zext","i1",value,"i8");}
+        ll_store(function,parameter->type,ll_symbol(function,parameter->symbol),value);
+        parameter=parameter->next;index=index+1u64;
+    }
+}
+fn ll_function(stage:*LlStage,binding:*LlBinding)->unit {
+    var function:LlFunction=uninit;ll_buffer(stage,&function.slots);ll_buffer(stage,&function.body);
+    function.symbols=make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize};function.labels=function.symbols;
+    function.stage=stage;function.loop=null(*LlLoop);function.identity=1u64;function.depth=0usize;function.terminated=false;
+    ll_parameters(&function,binding->definition);ll_statement(&function,binding->definition->body);
+    if !function.terminated {
+        if binding->definition->type->base->kind==CRUST_T_UNIT{ll_text(&function,"  ret void\n");}
+        else{ll_text(&function,"  unreachable\n");}
+    }
+    var out:*CBuffer=&stage->memory.body;ll_signature(stage,binding,out);c_buffer_text(out," {\nentry:\n");
+    c_buffer_bytes(out,function.slots.data,function.slots.size);c_buffer_bytes(out,function.body.data,function.body.size);c_buffer_text(out,"}\n");
+}

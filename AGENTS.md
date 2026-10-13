@@ -162,6 +162,7 @@ Code changes: `make all`, then applicable checks:
 |---|---|
 | Core/reader/checker/evaluator/x86 | `check` |
 | C backend | `check-c` |
+| LLVM backend/tool acquisition | `check-llvm check-llvm-fetch` |
 | ASM self-compilation | `check-asm` |
 | Cache/source bootstrap | `check-cache` |
 | Root/reader extensions | `check-stage check-reader` |

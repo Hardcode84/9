@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn llvm_stage_toolchain(toolchain:*StageToolchain)->bool {
+    return llvm_toolchain(toolchain,LLVM_DIRECTORY,0u32);
+}

@@ -1,0 +1,210 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn sp_text(stage: *SpStage, text: *u8) -> unit {
+    c_buffer_text(&stage -> llvm.memory.header, text);
+}
+fn sp_number(stage: *SpStage, number: u32) -> unit {
+    c_buffer_number(&stage -> llvm.memory.header, number as u64);
+}
+fn sp_name(stage: *SpStage, name: *u8) -> *u8 {
+    var context: *CrustContext = ll_context(&stage -> llvm);
+    var key: *CrustName = crust_try_intern(context, name, c_length(name));
+    if key == null(*CrustName) {
+        return "";
+    }
+    var symbol: *CrustSymbol = crust_map_get(&context -> globals, key as usize) as *CrustSymbol;
+    return ll_global(&stage -> llvm, symbol -> decl);
+}
+fn sp_resource_type(resource: *ShaderResource) -> *u8 {
+    if resource -> kind == SHADER_BUFFER_U32 {
+        return "i32";
+    }
+    return "float";
+}
+fn sp_handle_type(resource: *ShaderResource) -> *u8 {
+    if resource -> kind == SHADER_IMAGE_R32F {
+        return "target(\"spirv.Image\", float, 1, 0, 0, 0, 2, 3)";
+    }
+    if resource -> kind == SHADER_BUFFER_U32 {
+        return "target(\"spirv.VulkanBuffer\", [0 x i32], 12, 1)";
+    }
+    return "target(\"spirv.VulkanBuffer\", [0 x float], 12, 1)";
+}
+fn sp_suffix(resource: *ShaderResource) -> *u8 {
+    if resource -> kind == SHADER_IMAGE_R32F {
+        return "tspirv.Image_f32_1_0_0_0_2_3t";
+    }
+    if resource -> kind == SHADER_BUFFER_U32 {
+        return "tspirv.VulkanBuffer_a0i32_12_1t";
+    }
+    return "tspirv.VulkanBuffer_a0f32_12_1t";
+}
+fn sp_pointer_type(resource: *ShaderResource) -> *u8 {
+    if resource -> kind == SHADER_WORKGROUP_F32 {
+        return "ptr addrspace(3)";
+    }
+    return "ptr addrspace(11)";
+}
+fn sp_resource_pointer(stage: *SpStage, resource: *ShaderResource, index: *u8) -> unit {
+    if resource -> kind == SHADER_WORKGROUP_F32 {
+        sp_text(stage, "  %p = getelementptr [");
+        sp_number(stage, resource -> length);
+        sp_text(stage, " x float], ptr addrspace(3) @shared_");
+        sp_text(stage, resource -> name);
+        sp_text(stage, ", i32 0, i32 ");
+        sp_text(stage, index);
+        sp_text(stage, "\n");
+        return;
+    }
+    sp_text(stage, "  %h = call ");
+    sp_text(stage, sp_handle_type(resource));
+    sp_text(stage, " @llvm.spv.resource.handlefrombinding.");
+    sp_text(stage, sp_suffix(resource));
+    sp_text(stage, "(i32 ");
+    sp_number(stage, resource -> set);
+    sp_text(stage, ", i32 ");
+    sp_number(stage, resource -> binding);
+    sp_text(stage, ", i32 1, i32 0, ptr ");
+    if resource -> name[0usize] == 0u8 {
+        sp_text(stage, "@sp_status_name");
+    } else {
+        sp_text(stage, "@sp_name_");
+        sp_text(stage, resource -> name);
+    }
+    sp_text(stage, ")\n  %p = call ptr addrspace(11) @llvm.spv.resource.getpointer.p11.");
+    sp_text(stage, sp_suffix(resource));
+    var coord: *u8 = ".i32";
+    if resource -> kind == SHADER_IMAGE_R32F {
+        coord = ".v2i32";
+    }
+    sp_text(stage, coord);
+    sp_text(stage, "(");
+    sp_text(stage, sp_handle_type(resource));
+    sp_text(stage, " %h, ");
+    if resource -> kind == SHADER_IMAGE_R32F {
+        sp_text(stage, "<2 x i32> %coord");
+    } else {
+        sp_text(stage, "i32 ");
+        sp_text(stage, index);
+    }
+    sp_text(stage, ")\n");
+}
+fn sp_resource_bounds(stage: *SpStage, resource: *ShaderResource) -> unit {
+    sp_text(stage, "  %x_bad = icmp uge i32 %index, ");
+    sp_number(stage, resource -> length);
+    sp_text(stage, "\n");
+    if resource -> kind == SHADER_IMAGE_R32F {
+        sp_text(stage, "  %y_bad = icmp uge i32 %y, ");
+        sp_number(stage, resource -> height);
+        sp_text(
+            stage,
+            "\n  %bad = or i1 %x_bad, %y_bad\n  %xy = insertelement <2 x i32> zeroinitializer, i32 %index, i32 0\n  %coord = insertelement <2 x i32> %xy, i32 %y, i32 1\n"
+        );
+    } else {
+        sp_text(stage, "  %bad = or i1 %x_bad, false\n");
+    }
+    sp_text(
+        stage,
+        "  %old = load i1, ptr addrspace(10) @sp_failed\n  %failed = or i1 %bad, %old\n  store i1 %failed, ptr addrspace(10) @sp_failed\n"
+    );
+}
+fn sp_resource_access(stage: *SpStage, resource: *ShaderResource, write: bool) -> unit {
+    var type: *u8 = sp_resource_type(resource);
+    var suffix: *u8 = "_load";
+    var result: *u8 = type;
+    if write {
+        suffix = "_store";
+        result = "void";
+    }
+    sp_text(stage, "define internal ");
+    sp_text(stage, result);
+    sp_text(stage, " ");
+    sp_text(stage, sp_name(stage, ll_join(&stage -> llvm, resource -> name, suffix)));
+    sp_text(stage, "(i32 %index");
+    if resource -> kind == SHADER_IMAGE_R32F {
+        sp_text(stage, ", i32 %y");
+    }
+    if write {
+        sp_text(stage, ", ");
+        sp_text(stage, type);
+        sp_text(stage, " %value");
+    }
+    sp_text(stage, ") {\nentry:\n");
+    sp_resource_bounds(stage, resource);
+    var bad: *u8 = "%failed";
+    if write && resource -> kind == SHADER_WORKGROUP_F32 {
+        bad = "%bad";
+    }
+    sp_text(stage, "  br i1 ");
+    sp_text(stage, bad);
+    sp_text(stage, ", label %invalid, label %valid\nvalid:\n");
+    sp_resource_pointer(stage, resource, "%index");
+    sp_resource_operation(stage, resource, write);
+    sp_text(stage, "invalid:\n  ret ");
+    sp_text(stage, result);
+    if !write {
+        sp_text(stage, " zeroinitializer");
+    }
+    sp_text(stage, "\n}\n");
+}
+fn sp_resource_operation(stage: *SpStage, resource: *ShaderResource, write: bool) -> unit {
+    var type: *u8 = sp_resource_type(resource);
+    if write {
+        var value: *u8 = "%value";
+        if resource -> kind == SHADER_WORKGROUP_F32 {
+            sp_text(stage, "  %safe = select i1 %failed, float 0.0, float %value\n");
+            value = "%safe";
+        }
+        sp_text(stage, "  store ");
+        sp_text(stage, type);
+        sp_text(stage, " ");
+        sp_text(stage, value);
+        sp_text(stage, ", ");
+        sp_text(stage, sp_pointer_type(resource));
+        sp_text(stage, " %p, align 4\n  ret void\n");
+    } else {
+        sp_text(stage, "  %value = load ");
+        sp_text(stage, type);
+        sp_text(stage, ", ");
+        sp_text(stage, sp_pointer_type(resource));
+        sp_text(stage, " %p, align 4\n  ret ");
+        sp_text(stage, type);
+        sp_text(stage, " %value\n");
+    }
+}
+fn sp_shared_init(stage: *SpStage, resource: *ShaderResource) -> unit {
+    sp_text(stage, "@shared_");
+    sp_text(stage, resource -> name);
+    sp_text(stage, " = internal addrspace(3) global [");
+    sp_number(stage, resource -> length);
+    sp_text(stage, " x float] undef, align 4\n");
+    sp_text(stage, "define internal void @init_");
+    sp_text(stage, resource -> name);
+    sp_text(
+        stage,
+        "(i32 %local) {\nentry:\n  br label %test\ntest:\n  %index = phi i32 [ %local, %entry ], [ %next, %body ]\n  %done = icmp uge i32 %index, "
+    );
+    sp_number(stage, resource -> length);
+    sp_text(stage, "\n  br i1 %done, label %end, label %body\nbody:\n");
+    sp_resource_pointer(stage, resource, "%index");
+    sp_text(stage, "  store float 0.0, ptr addrspace(3) %p, align 4\n  %next = add i32 %index, ");
+    sp_number(stage, stage -> config -> local_size);
+    sp_text(stage, "\n  br label %test\nend:\n  ret void\n}\n");
+}
+
+fn sp_resource_name(stage: *SpStage, resource: *ShaderResource) -> unit {
+    sp_text(stage, "@sp_name_");
+    sp_text(stage, resource -> name);
+    sp_text(stage, " = private unnamed_addr constant [");
+    c_buffer_number(
+        &stage -> llvm.memory.header,
+        c_length(resource -> name) as u64 + 1u64
+    );
+    sp_text(stage, " x i8] ");
+    ll_quoted(
+        &stage -> llvm.memory.header,
+        resource -> name,
+        c_length(resource -> name) + 1usize
+    );
+    sp_text(stage, "\n");
+}

@@ -198,3 +198,14 @@ Float-to-integer conversion first selects a valid operand, then clamps the
 result and maps NaN to zero. It cannot produce LLVM poison from an invalid
 conversion. [The numeric rules](../../docs/crust0-spec.md#floating-point-operations)
 apply to both native and device numeric lowering.
+
+## Device scalar lowering
+
+`LlStage.boolean_type` selects `i8` host storage or `i1` device storage.
+`ll_boolean` converts an LLVM predicate to this representation. The expression
+callback applies inside expressions and statements. Typed element addressing
+accepts an explicit LLVM pointer type and index type.
+
+The [Vulkan stage](../../examples/shader/README.md) supplies its module interface,
+resource operations, and failure policy. It reuses scalar, function, and
+structured statement lowering. `ll_emit` remains the Linux host module adapter.

@@ -34,7 +34,7 @@ fn ll_float_binary(function: *LlFunction, operation: u32, left: *u8, right: *u8)
         right
     );
     if operation >= CRUST_OP_EQ {
-        return ll_convert(function, "zext", "i1", value, "i8");
+        return ll_boolean(function, value);
     }
     return value;
 }
@@ -78,7 +78,7 @@ fn ll_float_integer(function: *LlFunction, type: *CrustType, value: *u8) -> *u8 
         ll_float_literal(stage, bound)
     );
     var low: *u8 = ll_instruction(function, "fcmp ole", "float", value, below);
-    var nan: *u8 = ll_instruction(function, "fcmp uno", "float", value, value);
+    var nan: *u8 = ll_instruction(function, "fcmp une", "float", value, value);
     var bad: *u8 = ll_instruction(function, "or", "i1", high, low);
     bad = ll_instruction(function, "or", "i1", bad, nan);
     var safe: *u8 = ll_select(function, "float", bad, "0.0", value);
@@ -111,7 +111,7 @@ fn ll_float_cast(
     }
     if after -> kind == CRUST_T_BOOL {
         var bit: *u8 = ll_instruction(function, "fcmp une", "float", value, "0.0");
-        return ll_convert(function, "zext", "i1", bit, "i8");
+        return ll_boolean(function, bit);
     }
     return ll_float_integer(function, after, value);
 }

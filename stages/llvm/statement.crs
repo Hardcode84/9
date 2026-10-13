@@ -159,7 +159,7 @@ fn ll_parameters(function: *LlFunction, declaration: *CrustDecl) -> unit {
             ll_number(function -> stage, index)
         );
         if parameter -> type -> kind == CRUST_T_BOOL {
-            value = ll_convert(function, "zext", "i1", value, "i8");
+            value = ll_boolean(function, value);
         }
         ll_store(
             function,

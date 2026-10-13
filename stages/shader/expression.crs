@@ -1,0 +1,76 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn sp_failed(function: *LlFunction) -> *u8 {
+    var value: *u8 = ll_register(function);
+    ll_line(function, value, "load i1, ptr addrspace(10) @sp_failed\n");
+    return value;
+}
+fn sp_fail(function: *LlFunction, bad: *u8) -> unit {
+    var value: *u8 = ll_instruction(function, "or", "i1", sp_failed(function), bad);
+    ll_text(function, "  store i1 ");
+    ll_text(function, value);
+    ll_text(function, ", ptr addrspace(10) @sp_failed\n");
+}
+fn sp_arithmetic(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    var left: *u8 = ll_value(function, input -> left);
+    var right: *u8 = ll_value(function, input -> right);
+    var op: u32 = input -> op;
+    var type: *CrustType = input -> type;
+    var bad: *u8 = "";
+    var safe: *u8 = "1";
+    if op == CRUST_OP_SHL || op == CRUST_OP_SHR {
+        bad = ll_instruction(function, "icmp uge", "i32", right, "32");
+        safe = "0";
+    } else {
+        bad = ll_instruction(function, "icmp eq", "i32", right, "0");
+        if ll_signed(type) {
+            var a: *u8 = ll_instruction(function, "icmp eq", "i32", left, "2147483648");
+            var b: *u8 = ll_instruction(function, "icmp eq", "i32", right, "-1");
+            bad = ll_instruction(
+                function,
+                "or",
+                "i1",
+                bad,
+                ll_instruction(function, "and", "i1", a, b)
+            );
+        }
+    }
+    sp_fail(function, bad);
+    right = ll_select(function, "i32", bad, safe, right);
+    var operation: *u8 = LL_BINARY[op as usize];
+    if ll_signed(type) {
+        operation = LL_SIGNED[op as usize];
+    }
+    var result: *u8 = ll_instruction(function, operation, "i32", left, right);
+    return ll_select(function, "i32", bad, "0", result);
+}
+fn sp_expression_value(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    if input -> kind == CRUST_E_NAME && input -> symbol -> kind == CRUST_SYM_CONST {
+        var out: CBuffer = uninit;
+        ll_buffer(function -> stage, &out);
+        ll_constant(function -> stage, input -> symbol -> decl -> init, &out);
+        return c_buffer_end(&out);
+    }
+    if input -> kind == CRUST_E_BINARY && input -> type -> kind != CRUST_T_F32 {
+        var op: u32 = input -> op;
+        if op == CRUST_OP_DIV || op == CRUST_OP_REM || op == CRUST_OP_SHL || op == CRUST_OP_SHR {
+            return sp_arithmetic(function, input);
+        }
+    }
+    return ll_expression(function, input);
+}
+fn sp_expression(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    var value: *u8 = sp_expression_value(function, input);
+    var stage: *SpStage = function -> stage -> user as *SpStage;
+    if crust_map_get(&stage -> loop_conditions, input as usize) != null(*u8) {
+        var active: *u8 = ll_instruction(
+            function,
+            "xor",
+            "i1",
+            sp_failed(function),
+            "true"
+        );
+        return ll_instruction(function, "and", "i1", value, active);
+    }
+    return value;
+}

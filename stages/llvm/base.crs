@@ -16,6 +16,7 @@ fn ll_init(stage: *LlStage, context: *CrustContext) -> unit {
     stage -> entry = null(*CrustDecl);
     stage -> expression = ll_expression;
     stage -> user = null(*u8);
+    stage -> boolean_type = "i8";
     stage -> identity = 1u64;
     stage -> depth = 0usize;
 }
@@ -108,6 +109,9 @@ const LL_SCALARS: [*u8; 13] = make [*u8; 13] {
 fn ll_type(stage: *LlStage, type: *CrustType) -> *u8 {
     if !ll_ok(stage) {
         return "i8";
+    }
+    if type -> kind == CRUST_T_BOOL {
+        return stage -> boolean_type;
     }
     if ll_pointer(type) {
         return "ptr";
@@ -225,7 +229,7 @@ fn ll_convert(function: *LlFunction, operation: *u8, from: *u8, value: *u8, to: 
     return result;
 }
 fn ll_condition(function: *LlFunction, value: *u8) -> *u8 {
-    return ll_instruction(function, "icmp ne", "i8", value, "0");
+    return ll_instruction(function, "icmp ne", function -> stage -> boolean_type, value, "0");
 }
 fn ll_jump(function: *LlFunction, destination: *u8) -> unit {
     ll_text(function, "  br label %");
@@ -342,4 +346,12 @@ fn ll_member(function: *LlFunction, type: *CrustType, base: *u8, field: *CrustFi
         "i32",
         ll_join(function -> stage, "0, i32 ", ll_number(function -> stage, index))
     );
+}
+
+// Convert an LLVM predicate to the selected boolean storage type.
+fn ll_boolean(function: *LlFunction, value: *u8) -> *u8 {
+    if c_equal(function -> stage -> boolean_type, "i1") {
+        return value;
+    }
+    return ll_convert(function, "zext", "i1", value, function -> stage -> boolean_type);
 }

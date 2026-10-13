@@ -1,0 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record SpStage {
+    llvm: LlStage;
+    functions: CrustMap;
+    loop_conditions: CrustMap;
+    config: *ShaderConfig;
+    builtins: *CrustUnit;
+    entry: *CrustDecl;
+    barrier: *CrustDecl;
+    current: *CrustDecl;
+    depth: usize;
+}

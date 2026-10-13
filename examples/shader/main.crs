@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: Apache-2.0
+
+host_source(run, "../../stages/build/load.crs");
+if !stage_setup(run, "../..") {
+    return 1i32;
+};
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) || !stage_load(stages, "stages/shader/package.crs") {
+    return 1i32;
+};
+host_source(run, "../../stages/shader/model.crs");
+host_source(run, "../../stages/shader/api.crs");
+extern fn puts(text: *u8) -> i32 = "puts";
+if run -> argc != 3i32 && run -> argc != 4i32 {
+    puts("usage: crust examples/shader/main.crs LLVM_DIRECTORY SPIRV_VAL OUTPUT [SOURCE]");
+    return 1i32;
+};
+var resources: [ShaderResource; 3] = make [ShaderResource; 3] {
+    make ShaderResource {
+        name: "values",
+        kind: SHADER_BUFFER_F32,
+        set: 0u32,
+        binding: 0u32,
+        length: 4u32,
+        height: 0u32
+    },
+    make ShaderResource {
+        name: "scratch",
+        kind: SHADER_WORKGROUP_F32,
+        set: 0u32,
+        binding: 0u32,
+        length: 4u32,
+        height: 0u32
+    },
+    make ShaderResource {
+        name: "pixels",
+        kind: SHADER_IMAGE_R32F,
+        set: 0u32,
+        binding: 2u32,
+        length: 4u32,
+        height: 1u32
+    }
+};
+var config: ShaderConfig = make ShaderConfig {
+    resources: &resources[0usize],
+    entry: "compute",
+    llvm_directory: run -> argv[0usize],
+    validator: run -> argv[1usize],
+    resource_count: 3usize,
+    invocations: 4u32,
+    local_size: 4u32,
+    status_set: 0u32,
+    status_binding: 1u32,
+    preserve_denorms: false
+};
+var context: CrustContext = uninit;
+crust_context_init(&context, null(*CrustAllocator));
+var source: CrustSource = uninit;
+var source_path: *u8 = host_path(run, "program.crs");
+if run -> argc == 4i32 {
+    source_path = run -> argv[3usize];
+};
+var ok: bool = cache_read(&context, source_path, &source) && shader_build(
+    &context,
+    &source,
+    &config,
+    run -> argv[2usize]
+);
+if !ok {
+    puts(&context.error[0usize]);
+};
+crust_context_destroy(&context);
+return (!ok) as i32;

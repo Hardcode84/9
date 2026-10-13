@@ -55,3 +55,6 @@ extern fn ll_element(
     index_type: *u8,
     index: *u8
 ) -> *u8 = "ll_element";
+
+// Select boolean storage before emission: i8 for host ABI, i1 for Shader IR.
+extern fn ll_boolean(function: *LlFunction, value: *u8) -> *u8 = "ll_boolean";

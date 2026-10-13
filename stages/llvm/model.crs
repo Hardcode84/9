@@ -17,6 +17,7 @@ record LlStage {
     entry: *CrustDecl;
     expression: fn(*LlFunction, *CrustExpr) -> *u8;
     user: *u8;
+    boolean_type: *u8;
     identity: u64;
     depth: usize;
 }

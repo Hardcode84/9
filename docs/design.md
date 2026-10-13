@@ -480,3 +480,12 @@ The ownership stage adds local checks and explicit trusted container policy.
 - [Runner contract](source-runner.md): action boundaries, native calls, errors, and teardown.
 - [Bootstrap guide](bootstrap.md): build commands, assembly interfaces, and validation.
 - [C backend reference](c-backend.md): emission, symbol mapping, and custom bodies.
+
+### Vulkan compute output
+
+The [shader stage](../examples/shader/README.md) uses the shared LLVM scalar
+emitter with a device profile. The root declares resource extents and bindings,
+selects LLVM and SPIR-V validation tools, and supplies the device source.
+Device booleans use `i1`; resource accesses select their memory spaces and
+use 32-bit indices. The shader stage checks barrier placement and supplies
+invocation failure state. LLVM and Vulkan validation run before publication.

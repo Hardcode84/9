@@ -185,6 +185,8 @@ Code changes: `make all`, then applicable checks:
 | Formatter layout, services, allocation, file writes | `check-format` |
 | Highlight/editor | `check-highlight check-vscode` |
 | Crust CCN | `check-ccn` |
+| LLVM host emission | `check-llvm` |
+| Vulkan shader stage | `check-shader` (explicit LLVM, SPIRV-Tools, Vulkan driver) |
 
 - Core/shared API changes: full table. Allocation/native-call/lifetime changes:
   relevant sanitizers. Repeat passed checks only after changes, failures, or

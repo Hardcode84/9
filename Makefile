@@ -330,3 +330,8 @@ check-llvm: all test-tools $(BUILD)/llvm-test-driver $(BUILD)/resource-backends
 .PHONY: check-tutorials
 check-tutorials: all test-tools
 	python3 tests/tutorials.py --build $(BUILD)
+
+.PHONY: check-shader
+check-shader: all test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/shader_alloc_package.crs --output $(BUILD)/shader-alloc --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(LDFLAGS)'
+	python3 tests/shader.py --build $(BUILD) --cc '$(CC)' --llvm '$(LLVM_DIRECTORY)' --spirv-tools '$(SPIRV_TOOLS)' $(if $(VULKAN_INCLUDE),--vulkan-include '$(VULKAN_INCLUDE)')

@@ -12,6 +12,10 @@ The [LLVM tutorial](llvm/README.md) shows how to select a pinned LLVM toolchain
 and compile an application through the generic package interface. Run
 `make check-llvm` for this tutorial and the LLVM semantic tests.
 
+The [Vulkan compute tutorial](shader/README.md) compiles device functions to
+validated Shader SPIR-V. It covers bindings, images, workgroup memory, and
+invocation failure.
+
 ## Select a backend
 
 The application roots accept a backend selection before their compiler arguments.

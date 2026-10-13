@@ -1,0 +1,247 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn sp_scalar(stage: *SpStage, type: *CrustType) -> bool {
+    var k: u32 = type -> kind;
+    if k == CRUST_T_I32 || k == CRUST_T_U32 || k == CRUST_T_F32 || k == CRUST_T_BOOL || k == CRUST_T_UNIT {
+        return true;
+    }
+    return sp_error(
+        stage,
+        "shader values require i32, u32, f32, bool or unit; resources use generated accessors"
+    );
+}
+fn sp_builtin(stage: *SpStage, declaration: *CrustDecl) -> bool {
+    return declaration -> loc.source == stage -> builtins -> source;
+}
+fn sp_call_check(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> bool {
+    var callee: *CrustExpr = input -> left;
+    while callee -> kind == CRUST_E_GROUP {
+        callee = callee -> left;
+    }
+    if callee -> kind != CRUST_E_NAME || callee -> symbol -> kind != CRUST_SYM_FUNCTION {
+        return sp_error(stage, "shader calls require a direct function name");
+    }
+    var declaration: *CrustDecl = callee -> symbol -> decl;
+    if declaration == stage -> entry {
+        return sp_error(stage, "shader entry cannot be called by shader code");
+    }
+    if sp_builtin(stage, declaration) {
+        if declaration == stage -> barrier && !barrier_allowed {
+            return sp_error(
+                stage,
+                "shader barrier must be a direct top-level statement in the entry"
+            );
+        }
+    } else {
+        if !sp_function_check(stage, declaration) {
+            return false;
+        }
+    }
+    var index: usize = 0usize;
+    while index < input -> arg_count {
+        if !sp_expression_check(stage, input -> args[index], false) {
+            return false;
+        }
+        index = index + 1usize;
+    }
+    return true;
+}
+fn sp_expression_check(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> bool {
+    if input == null(*CrustExpr) {
+        return true;
+    }
+    if stage -> depth >= 512usize {
+        return sp_error(stage, "shader expression depth exceeded");
+    }
+    stage -> depth = stage -> depth + 1usize;
+    var success: bool = sp_expression_body(stage, input, barrier_allowed);
+    stage -> depth = stage -> depth - 1usize;
+    return success;
+}
+fn sp_expression_body(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> bool {
+    if !sp_scalar(stage, input -> type) {
+        return false;
+    }
+    var kind: u32 = input -> kind;
+    if kind == CRUST_E_CALL {
+        return sp_call_check(stage, input, barrier_allowed);
+    }
+    if kind == CRUST_E_INTEGER || kind == CRUST_E_FLOAT || kind == CRUST_E_BOOL || kind == CRUST_E_NAME {
+        return true;
+    }
+    if kind == CRUST_E_GROUP || kind == CRUST_E_UNARY || kind == CRUST_E_CAST || kind == CRUST_E_BINARY {
+        return sp_expression_check(stage, input -> left, false) && sp_expression_check(
+            stage,
+            input -> right,
+            false
+        );
+    }
+    return sp_error(
+        stage,
+        "shader expression requires scalar values and explicit resource accessors"
+    );
+}
+fn sp_statement_check(stage: *SpStage, input: *CrustStmt, top: bool) -> bool {
+    if input == null(*CrustStmt) {
+        return true;
+    }
+    if stage -> depth >= 512usize {
+        return sp_error(stage, "shader statement depth exceeded");
+    }
+    stage -> depth = stage -> depth + 1usize;
+    var success: bool = sp_statement_body(stage, input, top);
+    stage -> depth = stage -> depth - 1usize;
+    return success;
+}
+fn sp_statement_contract(stage: *SpStage, input: *CrustStmt, top: bool) -> bool {
+    var kind: u32 = input -> kind;
+    if kind == CRUST_S_TRAP {
+        return sp_error(
+            stage,
+            "shader trap cannot preserve barrier participation; use shader_require"
+        );
+    }
+    if kind == CRUST_S_LABEL || kind == CRUST_S_GOTO {
+        return sp_error(stage, "shader control flow requires structured if and while statements");
+    }
+    if kind == CRUST_S_RETURN && stage -> current == stage -> entry && (
+        !top || input -> next != null(*CrustStmt)
+    ) {
+        return sp_error(stage, "shader entry return must be its final top-level statement");
+    }
+    if input -> uninitialized {
+        return sp_error(stage, "shader locals require an initializer");
+    }
+    if kind == CRUST_S_VAR && !sp_scalar(stage, input -> symbol -> type) {
+        return false;
+    }
+    return true;
+}
+fn sp_statement_body(stage: *SpStage, input: *CrustStmt, top: bool) -> bool {
+    var kind: u32 = input -> kind;
+    if kind == CRUST_S_BLOCK {
+        var child: *CrustStmt = input -> body;
+        while child != null(*CrustStmt) {
+            if !sp_statement_check(stage, child, false) {
+                return false;
+            }
+            child = child -> next;
+        }
+        return true;
+    }
+    if !sp_statement_contract(stage, input, top) {
+        return false;
+    }
+    if kind == CRUST_S_WHILE {
+        if !crust_try_map_set(
+            ll_context(&stage -> llvm),
+            &stage -> loop_conditions,
+            input -> expr as usize,
+            input as *u8
+        ) {
+            return false;
+        }
+    }
+    return sp_expression_check(stage, input -> expr, top && kind == CRUST_S_EXPR) && sp_expression_check(
+        stage,
+        input -> value,
+        false
+    ) && sp_statement_check(stage, input -> body, false) && sp_statement_check(
+        stage,
+        input -> otherwise,
+        false
+    );
+}
+fn sp_function_check(stage: *SpStage, declaration: *CrustDecl) -> bool {
+    var context: *CrustContext = ll_context(&stage -> llvm);
+    var state: *u8 = crust_map_get(&stage -> functions, declaration as usize);
+    if state == 2usize as *u8 {
+        return true;
+    }
+    if state == 1usize as *u8 {
+        return sp_error(stage, "shader functions cannot recurse");
+    }
+    if declaration -> kind != CRUST_D_FUNCTION {
+        return sp_error(stage, "shader foreign functions require a stage-provided interface");
+    }
+    if !sp_scalar(stage, declaration -> type -> base) {
+        return false;
+    }
+    var parameter: *CrustParam = declaration -> params;
+    while parameter != null(*CrustParam) {
+        if !sp_scalar(stage, parameter -> type) {
+            return false;
+        }
+        parameter = parameter -> next;
+    }
+    if !crust_try_map_set(context, &stage -> functions, declaration as usize, 1usize as *u8) {
+        return false;
+    }
+    var previous: *CrustDecl = stage -> current;
+    stage -> current = declaration;
+    var child: *CrustStmt = declaration -> body -> body;
+    while child != null(*CrustStmt) {
+        if !sp_statement_check(stage, child, declaration == stage -> entry) {
+            return false;
+        }
+        child = child -> next;
+    }
+    stage -> current = previous;
+    return crust_try_map_set(
+        context,
+        &stage -> functions,
+        declaration as usize,
+        2usize as *u8
+    );
+}
+fn sp_find_entry(stage: *SpStage) -> unit {
+    var context: *CrustContext = ll_context(&stage -> llvm);
+    var unit_value: *CrustUnit = context -> units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = unit_value -> declarations;
+        while declaration != null(*CrustDecl) {
+            declaration -> link_name = "";
+            if sp_builtin(stage, declaration) {
+                declaration -> link_name = declaration -> name -> text;
+                if c_equal(declaration -> name -> text, "shader_barrier") {
+                    stage -> barrier = declaration;
+                }
+            } else {
+                if c_equal(declaration -> name -> text, stage -> config -> entry) {
+                    stage -> entry = declaration;
+                }
+            }
+            declaration = declaration -> next;
+        }
+        unit_value = unit_value -> next;
+    }
+}
+fn sp_check(stage: *SpStage) -> bool {
+    sp_find_entry(stage);
+    if stage -> entry == null(*CrustDecl) || stage -> entry -> kind != CRUST_D_FUNCTION {
+        return sp_error(stage, "shader entry function was not found");
+    }
+    if stage -> entry -> type -> base -> kind != CRUST_T_UNIT || stage -> entry -> param_count != 0usize {
+        return sp_error(stage, "shader entry requires fn()->unit");
+    }
+    var unit_value: *CrustUnit = ll_context(&stage -> llvm) -> units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = unit_value -> declarations;
+        while declaration != null(*CrustDecl) {
+            if !sp_builtin(stage, declaration) {
+                if declaration -> kind == CRUST_D_CONST {
+                    if !sp_scalar(stage, declaration -> type) {
+                        return false;
+                    }
+                } else {
+                    if !sp_function_check(stage, declaration) {
+                        return false;
+                    }
+                }
+            }
+            declaration = declaration -> next;
+        }
+        unit_value = unit_value -> next;
+    }
+    return true;
+}

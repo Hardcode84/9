@@ -552,3 +552,12 @@ python3 benchmarks/bootstrap/storage.py --before build/before --after build/afte
   --work build/arena-inputs --prefix build/thp-off --cpu 0 \
   --output build/arena-disabled-repeat.json
 ```
+
+### Test Vulkan compute
+
+`make check-shader LLVM_DIRECTORY=... SPIRV_TOOLS=...` selects the LLVM
+installation and the directory with `spirv-val` and `spirv-dis`. The test also
+requires Vulkan headers, the Vulkan loader, and a compute driver. Use
+`VULKAN_INCLUDE` for a separate header directory. See the
+[shader tutorial](../examples/shader/README.md) for device requirements and
+commands. The target builds test fixtures; the Crust root prepares the stage.

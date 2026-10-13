@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: Apache-2.0
+
+const SHADER_BUFFER_F32: u32 = 0u32;
+const SHADER_BUFFER_U32: u32 = 1u32;
+const SHADER_IMAGE_R32F: u32 = 2u32;
+const SHADER_WORKGROUP_F32: u32 = 3u32;
+
+// Buffers use length elements at stride four. Images use length by height texels.
+// Workgroup arrays use length elements; set and binding must be zero.
+record ShaderResource {
+    name: *u8;
+    kind: u32;
+    set: u32;
+    binding: u32;
+    length: u32;
+    height: u32;
+}
+// Dispatch exactly invocations/local_size groups along X, and one along Y/Z.
+// Status is a separate storage buffer of invocations u32 elements.
+record ShaderConfig {
+    resources: *ShaderResource;
+    entry: *u8;
+    llvm_directory: *u8;
+    validator: *u8;
+    resource_count: usize;
+    invocations: u32;
+    local_size: u32;
+    status_set: u32;
+    status_binding: u32;
+    preserve_denorms: bool;
+}

@@ -137,7 +137,7 @@ fn ll_unary(function: *LlFunction, input: *CrustExpr) -> *u8 {
         return ll_instruction(function, "sub", type, "0", value);
     }
     if input -> op == CRUST_OP_NOT {
-        return ll_instruction(function, "xor", "i8", value, "1");
+        return ll_instruction(function, "xor", function -> stage -> boolean_type, value, "1");
     }
     return ll_instruction(function, "xor", type, value, "-1");
 }
@@ -152,7 +152,7 @@ fn ll_cast(function: *LlFunction, input: *CrustExpr) -> *u8 {
     }
     if after -> kind == CRUST_T_BOOL {
         var bit: *u8 = ll_instruction(function, "icmp ne", from, value, "0");
-        return ll_convert(function, "zext", "i1", bit, "i8");
+        return ll_boolean(function, bit);
     }
     if ll_pointer(before) && !ll_pointer(after) {
         return ll_convert(function, "ptrtoint", from, value, to);
@@ -245,7 +245,7 @@ fn ll_binary(function: *LlFunction, input: *CrustExpr) -> *u8 {
         right
     );
     if op >= CRUST_OP_EQ {
-        return ll_convert(function, "zext", "i1", result, "i8");
+        return ll_boolean(function, result);
     }
     return result;
 }
@@ -342,7 +342,7 @@ fn ll_call(function: *LlFunction, input: *CrustExpr) -> *u8 {
     }
     ll_text(function, ")\n");
     if input -> type -> kind == CRUST_T_BOOL {
-        return ll_convert(function, "zext", "i1", result, "i8");
+        return ll_boolean(function, result);
     }
     return result;
 }

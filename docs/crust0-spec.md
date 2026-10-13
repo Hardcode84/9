@@ -1142,3 +1142,11 @@ calls. Ownership adds no runtime validity checks, identity metadata, pointer
 tags, reference counts, or hidden cleanup flags. Null checks before release
 and debug-only bounds checks are permitted;
 debug-only checks provide no release-build bounds guarantee.
+
+## Device profiles
+
+The external [Vulkan shader stage](../examples/shader/README.md) selects a
+restricted scalar language and explicit resource interfaces. Its device profile
+defines floating-point controls, resource bounds checks, synchronization, and
+invocation failure. The host ABI and host trap rules in this specification
+apply to host compilation. A root selects device semantics by loading that stage.

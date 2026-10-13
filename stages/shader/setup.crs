@@ -1,0 +1,167 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn sp_error(stage: *SpStage, message: *u8) -> bool {
+    ll_error(&stage -> llvm, message);
+    return false;
+}
+fn sp_identifier(name: *u8) -> bool {
+    if name == null(*u8) || name[0usize] == 0u8 {
+        return false;
+    }
+    var i: usize = 0usize;
+    while name[i] != 0u8 {
+        var c: u8 = name[i];
+        var letter: bool = (c >= 65u8 && c <= 90u8) || (c >= 97u8 && c <= 122u8) || c == 95u8;
+        if !letter &&!(i != 0usize && c >= 48u8 && c <= 57u8) {
+            return false;
+        }
+        i = i + 1usize;
+    }
+    return true;
+}
+fn sp_resource_config(stage: *SpStage, index: usize) -> bool {
+    var config: *ShaderConfig = stage -> config;
+    var resource: *ShaderResource = &config -> resources[index];
+    if !sp_identifier(resource -> name) || resource -> length == 0u32 || resource -> kind > SHADER_WORKGROUP_F32 {
+        return sp_error(
+            stage,
+            "shader resource requires an identifier, supported kind and positive length"
+        );
+    }
+    if (resource -> kind == SHADER_IMAGE_R32F) != (resource -> height != 0u32) {
+        return sp_error(stage, "only a shader image has a nonzero height");
+    }
+    if resource -> kind == SHADER_WORKGROUP_F32 {
+        if resource -> set != 0u32 || resource -> binding != 0u32 || resource -> length > 4096u32 {
+            return sp_error(
+                stage,
+                "workgroup array requires zero set/binding and at most 4096 elements"
+            );
+        }
+    } else {
+        if resource -> set == config -> status_set && resource -> binding == config -> status_binding {
+            return sp_error(stage, "resource binding conflicts with shader status buffer");
+        }
+    }
+    return sp_unique_resource(stage, index);
+}
+fn sp_unique_resource(stage: *SpStage, index: usize) -> bool {
+    var config: *ShaderConfig = stage -> config;
+    var resource: *ShaderResource = &config -> resources[index];
+    var previous: usize = 0usize;
+    while previous < index {
+        var other: *ShaderResource = &config -> resources[previous];
+        if c_equal(other -> name, resource -> name) {
+            return sp_error(stage, "duplicate shader resource name");
+        }
+        if other -> kind != SHADER_WORKGROUP_F32 && resource -> kind != SHADER_WORKGROUP_F32 && other -> set == resource -> set && other -> binding == resource -> binding {
+            return sp_error(stage, "duplicate shader descriptor binding");
+        }
+        previous = previous + 1usize;
+    }
+    return true;
+}
+fn sp_config(stage: *SpStage) -> bool {
+    var config: *ShaderConfig = stage -> config;
+    if !sp_identifier(config -> entry) || config -> local_size == 0u32 || config -> local_size > 128u32 || config -> invocations == 0u32 {
+        return sp_error(
+            stage,
+            "shader requires an entry, positive invocation count and local size 1..128"
+        );
+    }
+    if config -> invocations % config -> local_size != 0u32 || config -> invocations / config -> local_size > 65535u32 {
+        return sp_error(
+            stage,
+            "shader invocation count must be a local-size multiple with at most 65535 groups"
+        );
+    }
+    if config -> resource_count != 0usize && config -> resources == null(*ShaderResource) {
+        return sp_error(stage, "shader resources are missing");
+    }
+    if config -> llvm_directory == null(*u8) || config -> validator == null(*u8) {
+        return sp_error(stage, "shader requires an explicit LLVM directory and SPIR-V validator");
+    }
+    var index: usize = 0usize;
+    var shared: u64 = 0u64;
+    while index < config -> resource_count {
+        if !sp_resource_config(stage, index) {
+            return false;
+        }
+        if config -> resources[index].kind == SHADER_WORKGROUP_F32 {
+            shared = shared + config -> resources[index].length as u64;
+        }
+        index = index + 1usize;
+    }
+    if shared > 4096u64 {
+        return sp_error(stage, "shader workgroup storage exceeds 16 KiB");
+    }
+    return true;
+}
+fn sp_accessor(out: *CBuffer, resource: *ShaderResource, write: bool) -> unit {
+    c_buffer_text(out, "extern fn ");
+    c_buffer_text(out, resource -> name);
+    var suffix: *u8 = "_load";
+    if write {
+        suffix = "_store";
+    }
+    c_buffer_text(out, suffix);
+    c_buffer_text(out, "(index:u32");
+    if resource -> kind == SHADER_IMAGE_R32F {
+        c_buffer_text(out, ",y:u32");
+    }
+    var type: *u8 = "f32";
+    if resource -> kind == SHADER_BUFFER_U32 {
+        type = "u32";
+    }
+    if write {
+        c_buffer_text(out, ",value:");
+        c_buffer_text(out, type);
+    }
+    c_buffer_text(out, ")->");
+    if write {
+        c_buffer_text(out, "unit");
+    } else {
+        c_buffer_text(out, type);
+    }
+    c_buffer_text(out, "=\"");
+    c_buffer_text(out, resource -> name);
+    c_buffer_text(out, suffix);
+    c_buffer_text(out, "\";\n");
+}
+fn sp_prelude(stage: *SpStage, identity: u64) -> bool {
+    var out: CBuffer = uninit;
+    ll_buffer(&stage -> llvm, &out);
+    c_buffer_text(
+        &out,
+        "extern fn shader_global_x()->u32=\"shader_global_x\";\nextern fn shader_local_x()->u32=\"shader_local_x\";\nextern fn shader_barrier()->unit=\"shader_barrier\";\nextern fn shader_require(ok:bool)->unit=\"shader_require\";\nextern fn shader_failed()->bool=\"shader_failed\";\n"
+    );
+    var index: usize = 0usize;
+    while index < stage -> config -> resource_count {
+        sp_accessor(&out, &stage -> config -> resources[index], false);
+        sp_accessor(&out, &stage -> config -> resources[index], true);
+        index = index + 1usize;
+    }
+    var source: *CrustSource = crust_try_alloc(
+        ll_context(&stage -> llvm),
+        sizeof(CrustSource),
+        alignof(CrustSource)
+    ) as *CrustSource;
+    if source == null(*CrustSource) || !ll_ok(&stage -> llvm) {
+        return false;
+    }
+    var bytes: *u8 = crust_try_copy_string(
+        ll_context(&stage -> llvm),
+        out.data,
+        out.size
+    );
+    if bytes == null(*u8) {
+        return false;
+    }
+    * source = make CrustSource {
+        path: "shader-interface",
+        bytes: bytes,
+        size: out.size,
+        identity: identity
+    };
+    return crust_read(ll_context(&stage -> llvm), source, &stage -> builtins);
+}

@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Read and check one device source in an empty context. Keep source/config live
+// through return. Publish validated SPIR-V atomically; preserve output on error.
+// Failure records a diagnostic in context. The context owns all compiler storage.
+extern fn shader_build(
+    context: *CrustContext,
+    source: *CrustSource,
+    config: *ShaderConfig,
+    output: *u8
+) -> bool = "shader_build";

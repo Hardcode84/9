@@ -1,42 +1,70 @@
 // SPDX-License-Identifier: Apache-2.0
 
 host_source(run, "../../stages/build/load.crs");
-if !stage_setup(run, "../..") { return 1i32; };
+if !stage_setup(run, "../..") {
+    return 1i32;
+};
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
-if stages == null(*StageSession) { return 1i32; };
-host_source(run,"../backend.crs");
-var backend:ExampleBackend=uninit;
-if !example_backend(run,stages,&backend){return 1i32;};
+if stages == null(*StageSession) {
+    return 1i32;
+};
+host_source(run, "../backend.crs");
+var backend: ExampleBackend = uninit;
+if !example_backend(run, stages, &backend) {
+    return 1i32;
+};
 host_source(run, "../../stages/modules/library.crs");
 
 fn prepare_modules(provider: *CrustModule, consumer: *CrustModule, root: *CrustRun) -> bool {
     var provider_path: *u8 = host_path(root, "provider.crs");
     var consumer_path: *u8 = host_path(root, "consumer.crs");
-    if provider_path == null(*u8) || consumer_path == null(*u8) { return false; }
-    return module_read(provider, provider_path, 1u64) &&
-           module_check(provider) &&
-           module_export(provider, "Value", "") &&
-           module_export(provider, "answer", "tutorial_answer") &&
-           module_export(provider, "increment", "tutorial_increment") &&
-           module_import(consumer, provider, "Value", "Number") &&
-           module_import(consumer, provider, "answer", "calculate") &&
-           module_import(consumer, provider, "increment", "step") &&
-           module_read(consumer, consumer_path, 2u64) &&
-           module_check(consumer) &&
-           module_export(consumer, "main", "tutorial_main");
+    if provider_path == null(*u8) || consumer_path == null(*u8) {
+        return false;
+    }
+    return module_read(provider, provider_path, 1u64) && module_check(provider) && module_export(
+        provider,
+        "Value",
+        ""
+    ) && module_export(provider, "answer", "tutorial_answer") && module_export(
+        provider,
+        "increment",
+        "tutorial_increment"
+    ) && module_import(consumer, provider, "Value", "Number") && module_import(
+        consumer,
+        provider,
+        "answer",
+        "calculate"
+    ) && module_import(consumer, provider, "increment", "step") && module_read(
+        consumer,
+        consumer_path,
+        2u64
+    ) && module_check(consumer) && module_export(consumer, "main", "tutorial_main");
 }
 
-fn emit_modules(provider: *CrustModule, consumer: *CrustModule, root: *CrustRun,emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
+fn emit_modules(
+    provider: *CrustModule,
+    consumer: *CrustModule,
+    root: *CrustRun,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
     var object_path: *u8 = host_path(root, "../../build/modules-provider.o");
     var output_path: *u8 = host_path(root, "../../build/modules");
-    if object_path == null(*u8) || output_path == null(*u8) { return 1i32; }
+    if object_path == null(*u8) || output_path == null(*u8) {
+        return 1i32;
+    }
     var options: BackendOptions = make BackendOptions {
-        mode: 1u32, output: object_path, symbols: null(*u8),
-        cflags: null(**u8), cflag_count: 0usize,
-        ldflags: null(**u8), ldflag_count: 0usize
+        mode: 1u32,
+        output: object_path,
+        symbols: null(*u8),
+        cflags: null(**u8),
+        cflag_count: 0usize,
+        ldflags: null(**u8),
+        ldflag_count: 0usize
     };
     var status: i32 = emit(&(*provider).context, null(*CrustDecl), &options);
-    if status != 0i32 { return status; }
+    if status != 0i32 {
+        return status;
+    }
     options.mode = 0u32;
     options.output = output_path;
     options.ldflags = &object_path;
@@ -44,20 +72,27 @@ fn emit_modules(provider: *CrustModule, consumer: *CrustModule, root: *CrustRun,
     return emit(&(*consumer).context, module_find(consumer, "main"), &options);
 }
 
-fn build_modules(root: *CrustRun,emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
+fn build_modules(
+    root: *CrustRun,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
     var provider: CrustModule = uninit;
     var consumer: CrustModule = uninit;
     module_init(&provider, null(*CrustAllocator));
     module_init(&consumer, null(*CrustAllocator));
     var status: i32 = 1i32;
     if prepare_modules(&provider, &consumer, root) {
-        status = emit_modules(&provider,&consumer,root,emit);
+        status = emit_modules(&provider, &consumer, root, emit);
     }
-    if provider.context.error_count != 0usize { crust_run_diagnostic(&provider.context); }
-    if consumer.context.error_count != 0usize { crust_run_diagnostic(&consumer.context); }
+    if provider.context.error_count != 0usize {
+        crust_run_diagnostic(&provider.context);
+    }
+    if consumer.context.error_count != 0usize {
+        crust_run_diagnostic(&consumer.context);
+    }
     module_destroy(&consumer);
     module_destroy(&provider);
     return status;
 }
 
-return build_modules(run,backend.emit);
+return build_modules(run, backend.emit);

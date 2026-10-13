@@ -6,34 +6,69 @@ fn og_clone_program(clone: *GsClone) -> *OgProgram {
 }
 
 fn og_clone_reference(clone: *GsClone, name: *CrustName, kind: u32) -> *CrustName {
-    if name == null(*CrustName) { return name; }
+    if name == null(*CrustName) {
+        return name;
+    }
     var program: *OgProgram = og_clone_program(clone);
     var reference: *OgReference = crust_map_get(&(*program).references, name as usize) as *OgReference;
     if reference != null(*OgReference) {
-        var declaration: *CrustDecl = gp_application(clone, (*reference).application, 0u32, (*reference).kind);
-        if declaration == null(*CrustDecl) { return null(*CrustName); }
+        var declaration: *CrustDecl = gp_application(
+            clone,
+            (*reference).application,
+            0u32,
+            (*reference).kind
+        );
+        if declaration == null(*CrustDecl) {
+            return null(*CrustName);
+        }
         return (*declaration).name;
     }
-    if kind == CRUST_D_CONST { return gs_name((*clone).context, name); }
+    if kind == CRUST_D_CONST {
+        return gs_name((*clone).context, name);
+    }
     var environment: *GpEnvironment = (*clone).user as *GpEnvironment;
     var location: CrustLoc = (*(*(*environment).definition).source).loc;
     if kind == CRUST_D_RECORD {
-        var syntax: *CrustTypeSyntax = crust_try_alloc((*clone).context, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
-        if syntax == null(*CrustTypeSyntax) { return null(*CrustName); }
-        (*syntax).kind = CRUST_T_NAME; (*syntax).name = name; (*syntax).loc = location;
+        var syntax: *CrustTypeSyntax = crust_try_alloc(
+            (*clone).context,
+            sizeof(CrustTypeSyntax),
+            alignof(CrustTypeSyntax)
+        ) as *CrustTypeSyntax;
+        if syntax == null(*CrustTypeSyntax) {
+            return null(*CrustName);
+        }
+        (*syntax).kind = CRUST_T_NAME;
+        (*syntax).name = name;
+        (*syntax).loc = location;
         syntax = gs_clone_type(clone, syntax, 0u32);
-        if syntax == null(*CrustTypeSyntax) { return null(*CrustName); }
+        if syntax == null(*CrustTypeSyntax) {
+            return null(*CrustName);
+        }
         if (*syntax).kind != CRUST_T_NAME {
-            gs_error((*clone).context, &location, "ownership schema contract requires a named record type");
+            gs_error(
+                (*clone).context,
+                &location,
+                "ownership schema contract requires a named record type"
+            );
             return null(*CrustName);
         }
         return (*syntax).name;
     }
-    var expression: *CrustExpr = crust_try_alloc((*clone).context, sizeof(CrustExpr), alignof(CrustExpr)) as *CrustExpr;
-    if expression == null(*CrustExpr) { return null(*CrustName); }
-    (*expression).kind = CRUST_E_NAME; (*expression).name = name; (*expression).loc = location;
+    var expression: *CrustExpr = crust_try_alloc(
+        (*clone).context,
+        sizeof(CrustExpr),
+        alignof(CrustExpr)
+    ) as *CrustExpr;
+    if expression == null(*CrustExpr) {
+        return null(*CrustName);
+    }
+    (*expression).kind = CRUST_E_NAME;
+    (*expression).name = name;
+    (*expression).loc = location;
     expression = gs_clone_expression(clone, expression, 0u32);
-    if expression == null(*CrustExpr) { return null(*CrustName); }
+    if expression == null(*CrustExpr) {
+        return null(*CrustName);
+    }
     return (*expression).name;
 }
 
@@ -41,13 +76,24 @@ fn og_clone_fields(clone: *GsClone, source: *OsField) -> *OsField {
     var first: *OsField = null(*OsField);
     var tail: **OsField = &first;
     while source != null(*OsField) && (*(*clone).context).error_count == 0usize {
-        var field: *OsField = crust_try_alloc((*clone).context, sizeof(OsField), alignof(OsField)) as *OsField;
-        if field == null(*OsField) { return null(*OsField); }
+        var field: *OsField = crust_try_alloc(
+            (*clone).context,
+            sizeof(OsField),
+            alignof(OsField)
+        ) as *OsField;
+        if field == null(*OsField) {
+            return null(*OsField);
+        }
         (*field).name = gs_name((*clone).context, (*source).name);
-        (*field).record_name = og_clone_reference(clone, (*source).record_name, CRUST_D_RECORD);
+        (*field).record_name = og_clone_reference(
+            clone,
+            (*source).record_name,
+            CRUST_D_RECORD
+        );
         (*field).invalid = gs_clone_expression(clone, (*source).invalid, 0u32);
         (*field).storage = (*source).storage;
-        *tail = field; tail = &(*field).next;
+        *tail = field;
+        tail = &(*field).next;
         source = (*source).next;
     }
     return first;
@@ -57,37 +103,67 @@ fn og_clone_native(clone: *GsClone, source: *OsNative) -> *OsNative {
     var first: *OsNative = null(*OsNative);
     var tail: **OsNative = &first;
     while source != null(*OsNative) && (*(*clone).context).error_count == 0usize {
-        var effect: *OsNative = crust_try_alloc((*clone).context, sizeof(OsNative), alignof(OsNative)) as *OsNative;
-        if effect == null(*OsNative) { return null(*OsNative); }
+        var effect: *OsNative = crust_try_alloc(
+            (*clone).context,
+            sizeof(OsNative),
+            alignof(OsNative)
+        ) as *OsNative;
+        if effect == null(*OsNative) {
+            return null(*OsNative);
+        }
         (*effect).parameter = gs_name((*clone).context, (*source).parameter);
         (*effect).schema = og_clone_reference(clone, (*source).schema, CRUST_D_RECORD);
         (*effect).field = gs_name((*clone).context, (*source).field);
         (*effect).mode = (*source).mode;
-        if (*source).mode != OS_ACQUIRE { (*effect).mode = og_clone_kind(clone, (*source).mode); }
-        *tail = effect; tail = &(*effect).next;
+        if (*source).mode != OS_ACQUIRE {
+            (*effect).mode = og_clone_kind(clone, (*source).mode);
+        }
+        * tail = effect;
+        tail = &(*effect).next;
         source = (*source).next;
     }
     return first;
 }
 
 fn og_clone_record(clone: *GsClone, source: *OsRecord, target: *CrustDecl) -> unit {
-    if source == null(*OsRecord) { return; }
+    if source == null(*OsRecord) {
+        return;
+    }
     var program: *OgProgram = og_clone_program(clone);
-    var contract: *OsRecord = rs_alloc(&(*program).resources, sizeof(OsRecord), alignof(OsRecord)) as *OsRecord;
-    if contract == null(*OsRecord) { return; }
+    var contract: *OsRecord = rs_alloc(
+        &(*program).resources,
+        sizeof(OsRecord),
+        alignof(OsRecord)
+    ) as *OsRecord;
+    if contract == null(*OsRecord) {
+        return;
+    }
     (*contract).declaration = target;
     (*contract).owns = og_clone_fields(clone, (*source).owns);
     (*contract).opaque = (*source).opaque;
     (*contract).stable = (*source).stable;
     (*contract).scoped = (*source).scoped;
-    rs_put(&(*program).resources, &(*program).ownership.records, target as usize, contract as *u8);
+    rs_put(
+        &(*program).resources,
+        &(*program).ownership.records,
+        target as usize,
+        contract as *u8
+    );
 }
 
 fn og_clone_function(clone: *GsClone, source: *OsFunction, target: *CrustDecl) -> unit {
-    if source == null(*OsFunction) { return; }
+    if source == null(*OsFunction) {
+        return;
+    }
     var program: *OgProgram = og_clone_program(clone);
-    var function: *OsFunction = rs_alloc(&(*program).resources, sizeof(OsFunction), alignof(OsFunction)) as *OsFunction;
-    if function == null(*OsFunction) { return; }
+    var function: *OsFunction = rs_alloc(
+        &(*program).resources,
+        sizeof(OsFunction),
+        alignof(OsFunction)
+    ) as *OsFunction;
+    if function == null(*OsFunction) {
+        return;
+    }
     (*function).declaration = target;
     (*function).domain = og_clone_reference(clone, (*source).domain, CRUST_D_CONST);
     (*function).origins = og_clone_origins(clone, (*source).origins);
@@ -97,32 +173,67 @@ fn og_clone_function(clone: *GsClone, source: *OsFunction, target: *CrustDecl) -
     (*function).effect = (*source).effect;
     (*function).foreign = (*source).foreign;
     (*function).has_modifies = (*source).has_modifies;
-    rs_put(&(*program).resources, &(*program).ownership.functions, target as usize, function as *u8);
+    rs_put(
+        &(*program).resources,
+        &(*program).ownership.functions,
+        target as usize,
+        function as *u8
+    );
 }
 
 fn og_clone_domain(clone: *GsClone, source: *OsDomain, target: *CrustDecl) -> unit {
-    if source == null(*OsDomain) { return; }
+    if source == null(*OsDomain) {
+        return;
+    }
     var program: *OgProgram = og_clone_program(clone);
-    var domain: *OsDomain = rs_alloc(&(*program).resources, sizeof(OsDomain), alignof(OsDomain)) as *OsDomain;
-    if domain == null(*OsDomain) { return; }
+    var domain: *OsDomain = rs_alloc(
+        &(*program).resources,
+        sizeof(OsDomain),
+        alignof(OsDomain)
+    ) as *OsDomain;
+    if domain == null(*OsDomain) {
+        return;
+    }
     (*domain).declaration = target;
     (*domain).records = og_clone_fields(clone, (*source).records);
-    rs_put(&(*program).resources, &(*program).ownership.domains, (*target).name as usize, domain as *u8);
+    rs_put(
+        &(*program).resources,
+        &(*program).ownership.domains,
+        (*target).name as usize,
+        domain as *u8
+    );
 }
 
 fn og_clone_resource(clone: *GsClone, source: *RsResource, target: *CrustDecl) -> unit {
-    if source == null(*RsResource) { return; }
+    if source == null(*RsResource) {
+        return;
+    }
     var program: *OgProgram = og_clone_program(clone);
-    var resource: *RsResource = rs_alloc(&(*program).resources, sizeof(RsResource), alignof(RsResource)) as *RsResource;
-    if resource == null(*RsResource) { return; }
+    var resource: *RsResource = rs_alloc(
+        &(*program).resources,
+        sizeof(RsResource),
+        alignof(RsResource)
+    ) as *RsResource;
+    if resource == null(*RsResource) {
+        return;
+    }
     (*resource).declaration = target;
-    (*resource).drop_name = og_clone_reference(clone, (*source).drop_name, CRUST_D_FUNCTION);
+    (*resource).drop_name = og_clone_reference(
+        clone,
+        (*source).drop_name,
+        CRUST_D_FUNCTION
+    );
     (*resource).next = (*program).resources.resources;
     (*program).resources.resources = resource;
 }
 
-fn og_clone_marker(stage: *RsStage, source: *CrustMap, target: *CrustMap,
-                    from: *CrustDecl, to: *CrustDecl) -> unit {
+fn og_clone_marker(
+    stage: *RsStage,
+    source: *CrustMap,
+    target: *CrustMap,
+    from: *CrustDecl,
+    to: *CrustDecl
+) -> unit {
     if crust_map_get(source, from as usize) != null(*u8) {
         rs_put(stage, target, to as usize, to as *u8);
     }
@@ -132,50 +243,122 @@ fn og_clone_imports(clone: *GsClone, source: *CrustDecl, target: *CrustDecl) -> 
     var program: *OgProgram = og_clone_program(clone);
     var environment: *GpEnvironment = (*clone).user as *GpEnvironment;
     if (*(*environment).definition).parameters != null(*GpParameters) {
-        if crust_map_get(&(*program).parsed.imports, source as usize) != null(*u8) ||
-           crust_map_get(&(*program).parsed_resources.source_imports, source as usize) != null(*u8) {
-            gs_error((*clone).context, &(*source).loc, "generic imports require a definition receipt");
+        if crust_map_get(&(*program).parsed.imports, source as usize) != null(*u8) || crust_map_get(
+            &(*program).parsed_resources.source_imports,
+            source as usize
+        ) != null(*u8) {
+            gs_error(
+                (*clone).context,
+                &(*source).loc,
+                "generic imports require a definition receipt"
+            );
         }
         return;
     }
-    og_clone_marker(&(*program).resources, &(*program).parsed_resources.source_imports,
-                    &(*program).resources.source_imports, source, target);
-    og_clone_marker(&(*program).resources, &(*program).parsed.imports, &(*program).ownership.imports, source, target);
-    og_clone_marker(&(*program).resources, &(*program).verified, &(*program).ownership.verified_bodies, source, target);
+    og_clone_marker(
+        &(*program).resources,
+        &(*program).parsed_resources.source_imports,
+        &(*program).resources.source_imports,
+        source,
+        target
+    );
+    og_clone_marker(
+        &(*program).resources,
+        &(*program).parsed.imports,
+        &(*program).ownership.imports,
+        source,
+        target
+    );
+    og_clone_marker(
+        &(*program).resources,
+        &(*program).verified,
+        &(*program).ownership.verified_bodies,
+        source,
+        target
+    );
 }
 
 fn og_clone_declaration(clone: *GsClone, source: *CrustDecl, target: *CrustDecl) -> unit {
     var program: *OgProgram = og_clone_program(clone);
-    og_clone_record(clone, crust_map_get(&(*program).parsed.records, source as usize) as *OsRecord, target);
-    og_clone_function(clone, crust_map_get(&(*program).parsed.functions, source as usize) as *OsFunction, target);
-    og_clone_domain(clone, crust_map_get(&(*program).parsed.domains, (*source).name as usize) as *OsDomain, target);
-    og_clone_resource(clone, crust_map_get(&(*program).resource_index, source as usize) as *RsResource, target);
-    og_clone_marker(&(*program).resources, &(*program).parsed.trusted, &(*program).ownership.trusted, source, target);
-    og_clone_marker(&(*program).resources, &(*program).parsed_resources.unsafe_functions,
-                    &(*program).resources.unsafe_functions, source, target);
+    og_clone_record(
+        clone,
+        crust_map_get(&(*program).parsed.records, source as usize) as *OsRecord,
+        target
+    );
+    og_clone_function(
+        clone,
+        crust_map_get(&(*program).parsed.functions, source as usize) as *OsFunction,
+        target
+    );
+    og_clone_domain(
+        clone,
+        crust_map_get(&(*program).parsed.domains, (*source).name as usize) as *OsDomain,
+        target
+    );
+    og_clone_resource(
+        clone,
+        crust_map_get(&(*program).resource_index, source as usize) as *RsResource,
+        target
+    );
+    og_clone_marker(
+        &(*program).resources,
+        &(*program).parsed.trusted,
+        &(*program).ownership.trusted,
+        source,
+        target
+    );
+    og_clone_marker(
+        &(*program).resources,
+        &(*program).parsed_resources.unsafe_functions,
+        &(*program).resources.unsafe_functions,
+        source,
+        target
+    );
     og_clone_imports(clone, source, target);
-    var from: *CrustName = crust_map_get(&(*program).parsed_resources.return_sources, source as usize) as *CrustName;
+    var from: *CrustName = crust_map_get(
+        &(*program).parsed_resources.return_sources,
+        source as usize
+    ) as *CrustName;
     if from != null(*CrustName) {
-        rs_return_from(&(*program).resources, target, gs_name((*clone).context, from));
+        rs_return_from(
+            &(*program).resources,
+            target,
+            gs_name((*clone).context, from)
+        );
     }
 }
 
 fn og_clone_statement(clone: *GsClone, source: *CrustStmt, target: *CrustStmt) -> unit {
     var program: *OgProgram = og_clone_program(clone);
     var access: *OsAccess = crust_map_get(&(*program).parsed.blocks, source as usize) as *OsAccess;
-    if access == null(*OsAccess) { return; }
-    var copy: *OsAccess = rs_alloc(&(*program).resources, sizeof(OsAccess), alignof(OsAccess)) as *OsAccess;
-    if copy == null(*OsAccess) { return; }
+    if access == null(*OsAccess) {
+        return;
+    }
+    var copy: *OsAccess = rs_alloc(
+        &(*program).resources,
+        sizeof(OsAccess),
+        alignof(OsAccess)
+    ) as *OsAccess;
+    if copy == null(*OsAccess) {
+        return;
+    }
     (*copy).domain = og_clone_reference(clone, (*access).domain, CRUST_D_CONST);
     (*copy).effect = (*access).effect;
     (*copy).fresh = (*access).fresh;
-    rs_put(&(*program).resources, &(*program).ownership.blocks, target as usize, copy as *u8);
+    rs_put(
+        &(*program).resources,
+        &(*program).ownership.blocks,
+        target as usize,
+        copy as *u8
+    );
 }
 
 fn og_clone_kind(clone: *GsClone, kind: u32) -> u32 {
     var program: *OgProgram = og_clone_program(clone);
     var first: u32 = (*program).parsed_resources.kind_base;
-    if kind < first || kind - first >= RS_END { return 0u32; }
+    if kind < first || kind - first >= RS_END {
+        return 0u32;
+    }
     return (*program).resources.kind_base + kind - first;
 }
 
@@ -183,11 +366,19 @@ fn og_clone_origins(clone: *GsClone, source: *OsOrigin) -> *OsOrigin {
     var first: *OsOrigin = null(*OsOrigin);
     var tail: **OsOrigin = &first;
     while source != null(*OsOrigin) && (*(*clone).context).error_count == 0usize {
-        var origin: *OsOrigin = crust_try_alloc((*clone).context, sizeof(OsOrigin), alignof(OsOrigin)) as *OsOrigin;
-        if origin == null(*OsOrigin) { return null(*OsOrigin); }
+        var origin: *OsOrigin = crust_try_alloc(
+            (*clone).context,
+            sizeof(OsOrigin),
+            alignof(OsOrigin)
+        ) as *OsOrigin;
+        if origin == null(*OsOrigin) {
+            return null(*OsOrigin);
+        }
         (*origin).parameter = gs_name((*clone).context, (*source).parameter);
         (*origin).path = og_clone_fields(clone, (*source).path);
-        *tail = origin; tail = &(*origin).next; source = (*source).next;
+        *tail = origin;
+        tail = &(*origin).next;
+        source = (*source).next;
     }
     return first;
 }

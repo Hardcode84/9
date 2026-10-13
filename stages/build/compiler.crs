@@ -1,43 +1,80 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // The selected package exports this ABI under the requested native name.
-extern fn stage_compiler_abi(request:*StageCompile)->bool="crust_stage_compiler_abi";
+extern fn stage_compiler_abi(request: *StageCompile) -> bool = "crust_stage_compiler_abi";
 
-extern fn stage_toolchain_abi(toolchain:*StageToolchain)->bool="crust_stage_toolchain_abi";
+extern fn stage_toolchain_abi(toolchain: *StageToolchain) -> bool = "crust_stage_toolchain_abi";
 
 // Select a source-built compiler. Its callback writes backend input and a symbol map.
-fn stage_compiler(stage:*StagePackage,manifest:*u8,entry:*u8)->bool {
-    if stage->compiler!=null(*u8){return native_error(stage->root->context,"package compiler already selected");}
-    if entry[0usize]==0u8{return native_error(stage->root->context,"package compiler entry is empty");}
-    stage->compiler=stage_path(stage->root,stage->base,manifest);
-    stage->entry=crust_try_copy_string(stage->root->context,entry,native_strlen(entry));
-    return stage->compiler!=null(*u8) && stage->entry!=null(*u8);
+fn stage_compiler(stage: *StagePackage, manifest: *u8, entry: *u8) -> bool {
+    if stage -> compiler != null(*u8) {
+        return native_error(stage -> root -> context, "package compiler already selected");
+    }
+    if entry[0usize] == 0u8 {
+        return native_error(stage -> root -> context, "package compiler entry is empty");
+    }
+    stage -> compiler = stage_path(stage -> root, stage -> base, manifest);
+    stage -> entry = crust_try_copy_string(
+        stage -> root -> context,
+        entry,
+        native_strlen(entry)
+    );
+    return stage -> compiler != null(*u8) && stage -> entry != null(*u8);
 }
 
 // Attach compiler-defined options to a captured source. Conflicting options fail.
-fn stage_source_option(stage:*StagePackage,source:*CrustSource,option:*u8)->bool {
-    var index:usize=0usize;
-    while index<stage->options.count {
-        var previous:*CrustSource=stage->options.items[index];
-        if cache_strcmp(previous->path,source->path)==0i32 {
-            if cache_strcmp(previous->bytes,option)==0i32{return true;}
-            return native_error(stage->root->context,"conflicting stage source options");
+fn stage_source_option(stage: *StagePackage, source: *CrustSource, option: *u8) -> bool {
+    var index: usize = 0usize;
+    while index < stage -> options.count {
+        var previous: *CrustSource = stage -> options.items[index];
+        if cache_strcmp(previous -> path, source -> path) == 0i32 {
+            if cache_strcmp(previous -> bytes, option) == 0i32 {
+                return true;
+            }
+            return native_error(stage -> root -> context, "conflicting stage source options");
         }
-        index=index+1usize;
+        index = index + 1usize;
     }
-    var captured:*CrustSource=crust_try_alloc(stage->root->context,sizeof(CrustSource),alignof(CrustSource)) as *CrustSource;
-    if captured==null(*CrustSource){return false;}
-    *captured=make CrustSource{path:source->path,bytes:null(*u8),size:native_strlen(option),identity:0u64};
-    captured->bytes=crust_try_copy_string(stage->root->context,option,captured->size);
-    if captured->bytes==null(*u8){return false;}
-    return cache_add(stage->root->context,&stage->options,captured);
+    var captured: *CrustSource = crust_try_alloc(
+        stage -> root -> context,
+        sizeof(CrustSource),
+        alignof(CrustSource)
+    ) as *CrustSource;
+    if captured == null(*CrustSource) {
+        return false;
+    }
+    * captured = make CrustSource {
+        path: source -> path,
+        bytes: null(*u8),
+        size: native_strlen(option),
+        identity: 0u64
+    };
+    captured -> bytes = crust_try_copy_string(
+        stage -> root -> context,
+        option,
+        captured -> size
+    );
+    if captured -> bytes == null(*u8) {
+        return false;
+    }
+    return cache_add(stage -> root -> context, &stage -> options, captured);
 }
 
 // Select a toolchain factory exported by the selected compiler package.
-fn stage_toolchain(stage:*StagePackage,entry:*u8)->bool {
-    if stage->compiler==null(*u8){return native_error(stage->root->context,"select a compiler before its toolchain");}
-    if stage->toolchain!=null(*u8){return native_error(stage->root->context,"package toolchain already selected");}
-    if entry[0usize]==0u8{return native_error(stage->root->context,"package toolchain entry is empty");}
-    stage->toolchain=crust_try_copy_string(stage->root->context,entry,native_strlen(entry));
-    return stage->toolchain!=null(*u8);
+fn stage_toolchain(stage: *StagePackage, entry: *u8) -> bool {
+    if stage -> compiler == null(*u8) {
+        return native_error(stage -> root -> context, "select a compiler before its toolchain");
+    }
+    if stage -> toolchain != null(*u8) {
+        return native_error(stage -> root -> context, "package toolchain already selected");
+    }
+    if entry[0usize] == 0u8 {
+        return native_error(stage -> root -> context, "package toolchain entry is empty");
+    }
+    stage -> toolchain = crust_try_copy_string(
+        stage -> root -> context,
+        entry,
+        native_strlen(entry)
+    );
+    return stage -> toolchain != null(*u8);
 }

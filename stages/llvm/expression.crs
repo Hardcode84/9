@@ -1,148 +1,367 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Invoke the selected expression lowering. It must return an operand or report a diagnostic.
-fn ll_value(function:*LlFunction,input:*CrustExpr)->*u8 {
-    if !ll_ok(function->stage){return "";}
-    if function->depth>=512usize{ll_error(function->stage,"LLVM expression traversal depth exceeded");return "";}
-    function->depth=function->depth+1usize;
-    var result:*u8=function->stage->expression(function,input);function->depth=function->depth-1usize;
-    if result==null(*u8){ll_error(function->stage,"LLVM expression callback returned no operand");return "";}return result;
-}
-fn ll_symbol(function:*LlFunction,symbol:*CrustSymbol)->*u8 {
-    var slot:*u8=crust_map_get(&function->symbols,symbol as usize);
-    if slot==null(*u8){
-        slot=ll_alloca(function,symbol->type);crust_try_map_set(ll_context(function->stage),&function->symbols,symbol as usize,slot);
-    }return slot;
-}
-fn ll_place(function:*LlFunction,input:*CrustExpr)->*u8 {
-    if !ll_ok(function->stage){return "";}
-    if function->depth>=512usize{ll_error(function->stage,"LLVM place traversal depth exceeded");return "";}
-    function->depth=function->depth+1usize;var result:*u8=ll_place_value(function,input);
-    function->depth=function->depth-1usize;return result;
-}
-fn ll_place_value(function:*LlFunction,input:*CrustExpr)->*u8 {
-    if input->kind==CRUST_E_GROUP{return ll_place(function,input->left);}
-    if input->kind==CRUST_E_UNARY{return ll_value(function,input->left);}
-    if input->kind==CRUST_E_NAME {
-        if input->symbol->kind==CRUST_SYM_CONST{return ll_global(function->stage,input->symbol->decl);}
-        return ll_symbol(function,input->symbol);
+fn ll_value(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    if !ll_ok(function -> stage) {
+        return "";
     }
-    var left:*CrustExpr=input->left;var base:*u8="";
-    if left->type->kind==CRUST_T_POINTER || !left->place{base=ll_value(function,left);}else{base=ll_place(function,left);}
-    if input->kind==CRUST_E_FIELD{return ll_offset(function,base,ll_number(function->stage,input->field->offset));}
-    var index:*u8=ll_value(function,input->right);
-    var offset:*u8=ll_instruction(function,"mul","i64",index,ll_number(function->stage,input->type->size));
-    return ll_offset(function,base,offset);
-}
-fn ll_expression(function:*LlFunction,input:*CrustExpr)->*u8 {
-    var kind:u32=input->kind;
-    if kind==CRUST_E_GROUP{return ll_value(function,input->left);}
-    if kind==CRUST_E_BINARY{return ll_binary(function,input);}
-    if kind==CRUST_E_CALL{return ll_call(function,input);}
-    if kind==CRUST_E_UNARY{return ll_unary(function,input);}
-    if kind==CRUST_E_CAST{return ll_cast(function,input);}
-    if kind==CRUST_E_RECORD || kind==CRUST_E_ARRAY{return ll_aggregate(function,input);}
-    if kind==CRUST_E_NAME {
-        if input->symbol->kind==CRUST_SYM_FUNCTION{return ll_global(function->stage,input->symbol->decl);}
-        return ll_load(function,input->type,ll_place(function,input));
+    if function -> depth >= 512usize {
+        ll_error(function -> stage, "LLVM expression traversal depth exceeded");
+        return "";
     }
-    if kind==CRUST_E_FIELD || kind==CRUST_E_INDEX{return ll_load(function,input->type,ll_place(function,input));}
-    if kind==CRUST_E_STRING{return ll_string(function->stage,input);}
-    if kind==CRUST_E_NULL{return "null";}
-    return ll_scalar(function,input);
-}
-fn ll_unary(function:*LlFunction,input:*CrustExpr)->*u8 {
-    if input->op==CRUST_OP_ADDRESS{return ll_place(function,input->left);}
-    var value:*u8=ll_value(function,input->left);var type:*u8=ll_type(function->stage,input->type);
-    if input->op==CRUST_OP_DEREF{return ll_load(function,input->type,value);}
-    if input->op==CRUST_OP_NEG{return ll_instruction(function,"sub",type,"0",value);}
-    if input->op==CRUST_OP_NOT{return ll_instruction(function,"xor","i8",value,"1");}
-    return ll_instruction(function,"xor",type,value,"-1");
-}
-fn ll_cast(function:*LlFunction,input:*CrustExpr)->*u8 {
-    var value:*u8=ll_value(function,input->left);var before:*CrustType=input->left->type;var after:*CrustType=input->type;
-    var from:*u8=ll_type(function->stage,before);var to:*u8=ll_type(function->stage,after);
-    if after->kind==CRUST_T_BOOL {
-        var bit:*u8=ll_instruction(function,"icmp ne",from,value,"0");return ll_convert(function,"zext","i1",bit,"i8");
+    function -> depth = function -> depth + 1usize;
+    var result: *u8 = function -> stage -> expression(function, input);
+    function -> depth = function -> depth - 1usize;
+    if result == null(*u8) {
+        ll_error(function -> stage, "LLVM expression callback returned no operand");
+        return "";
     }
-    if ll_pointer(before) && !ll_pointer(after){return ll_convert(function,"ptrtoint",from,value,to);}
-    if !ll_pointer(before) && ll_pointer(after){return ll_convert(function,"inttoptr",from,value,to);}
-    if before->size==after->size{return value;}
-    var op:*u8="trunc";if before->size<after->size{op="zext";if ll_signed(before){op="sext";}}
-    return ll_convert(function,op,from,value,to);
+    return result;
 }
-const LL_BINARY:[*u8;16]=make [*u8;16]{"add","sub","mul","udiv","urem","shl","lshr","and","or","xor","icmp eq","icmp ne","icmp ult","icmp ule","icmp ugt","icmp uge"};
-const LL_SIGNED:[*u8;16]=make [*u8;16]{"add","sub","mul","sdiv","srem","shl","ashr","and","or","xor","icmp eq","icmp ne","icmp slt","icmp sle","icmp sgt","icmp sge"};
-fn ll_binary(function:*LlFunction,input:*CrustExpr)->*u8 {
-    var left:*u8=ll_value(function,input->left);var op:u32=input->op;
-    if op==CRUST_OP_AND || op==CRUST_OP_OR{return ll_short_circuit(function,input,left);}
-    var right:*u8=ll_value(function,input->right);var type:*CrustType=input->left->type;
-    if type->kind==CRUST_T_POINTER && (op==CRUST_OP_ADD || op==CRUST_OP_SUB){
-        var offset:*u8=ll_instruction(function,"mul","i64",right,ll_number(function->stage,type->base->size));
-        if op==CRUST_OP_SUB{offset=ll_instruction(function,"sub","i64","0",offset);}return ll_offset(function,left,offset);
+fn ll_symbol(function: *LlFunction, symbol: *CrustSymbol) -> *u8 {
+    var slot: *u8 = crust_map_get(&function -> symbols, symbol as usize);
+    if slot == null(*u8) {
+        slot = ll_alloca(function, symbol -> type);
+        crust_try_map_set(
+            ll_context(function -> stage),
+            &function -> symbols,
+            symbol as usize,
+            slot
+        );
     }
-    ll_arithmetic_guard(function,op,type,left,right);
-    var operation:*u8=LL_BINARY[op as usize];if ll_signed(type){operation=LL_SIGNED[op as usize];}
-    var result:*u8=ll_instruction(function,operation,ll_type(function->stage,type),left,right);
-    if op>=CRUST_OP_EQ{return ll_convert(function,"zext","i1",result,"i8");}return result;
+    return slot;
 }
-fn ll_arithmetic_guard(function:*LlFunction,op:u32,type:*CrustType,left:*u8,right:*u8)->unit {
-    var name:*u8=ll_type(function->stage,type);
-    if op==CRUST_OP_SHL || op==CRUST_OP_SHR {
-        ll_guard(function,ll_instruction(function,"icmp uge",name,right,ll_number(function->stage,type->size*8u64)));return;
+fn ll_place(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    if !ll_ok(function -> stage) {
+        return "";
     }
-    if op!=CRUST_OP_DIV && op!=CRUST_OP_REM{return;}
-    var bad:*u8=ll_instruction(function,"icmp eq",name,right,"0");
-    if ll_signed(type){
-        var minimum:*u8=ll_number(function->stage,1u64<<(type->size*8u64-1u64));
-        var a:*u8=ll_instruction(function,"icmp eq",name,left,minimum);
-        var b:*u8=ll_instruction(function,"icmp eq",name,right,"-1");
-        var overflow:*u8=ll_instruction(function,"and","i1",a,b);
-        bad=ll_instruction(function,"or","i1",bad,overflow);
-    }ll_guard(function,bad);
-}
-fn ll_short_circuit(function:*LlFunction,input:*CrustExpr,left:*u8)->*u8 {
-    var slot:*u8=ll_alloca(function,input->type);ll_store(function,input->type,slot,left);
-    var evaluate:*u8=ll_id(function->stage,"b");var end:*u8=ll_id(function->stage,"b");
-    var condition:*u8=ll_condition(function,left);
-    if input->op==CRUST_OP_AND{ll_branch(function,condition,evaluate,end);}else{ll_branch(function,condition,end,evaluate);}
-    ll_block(function,evaluate);var right:*u8=ll_value(function,input->right);ll_store(function,input->type,slot,right);
-    ll_block(function,end);return ll_load(function,input->type,slot);
-}
-fn ll_call(function:*LlFunction,input:*CrustExpr)->*u8 {
-    var callee:*u8=ll_value(function,input->left);var type:*CrustType=input->left->type;
-    var arguments:**u8=c_alloc(&function->stage->memory.status,(input->arg_count+1usize)*sizeof(*u8),alignof(*u8)) as **u8;
-    if arguments==null(**u8){return "";}var index:usize=0usize;
-    while index<input->arg_count {
-        arguments[index]=ll_value(function,input->args[index]);
-        if type->params[index]->kind==CRUST_T_BOOL{arguments[index]=ll_condition(function,arguments[index]);}
-        index=index+1usize;
+    if function -> depth >= 512usize {
+        ll_error(function -> stage, "LLVM place traversal depth exceeded");
+        return "";
     }
-    var result:*u8="";
-    if input->type->kind!=CRUST_T_UNIT{result=ll_register(function);ll_line(function,result,"call ");}
-    else{ll_text(function,"  call ");}
-    ll_text(function,ll_abi_type(function->stage,input->type,true));ll_text(function," ");ll_text(function,callee);ll_text(function,"(");
-    index=0usize;while index<input->arg_count {
-        if index!=0usize{ll_text(function,", ");}ll_text(function,ll_abi_type(function->stage,type->params[index],false));
-        ll_text(function," ");ll_text(function,arguments[index]);index=index+1usize;
-    }ll_text(function,")\n");
-    if input->type->kind==CRUST_T_BOOL{return ll_convert(function,"zext","i1",result,"i8");}return result;
+    function -> depth = function -> depth + 1usize;
+    var result: *u8 = ll_place_value(function, input);
+    function -> depth = function -> depth - 1usize;
+    return result;
 }
-fn ll_aggregate(function:*LlFunction,input:*CrustExpr)->*u8 {
-    var slot:*u8=ll_alloca(function,input->type);var init:*CrustInit=input->inits;var index:usize=0usize;
-    while init!=null(*CrustInit) || index<input->arg_count {
-        var item:*CrustExpr=null(*CrustExpr);var offset:u64=0u64;
-        if input->kind==CRUST_E_RECORD{item=init->value;offset=init->field->offset;init=init->next;}
-        else{item=input->args[index];offset=index as u64*input->type->base->size;index=index+1usize;}
-        var value:*u8=ll_value(function,item);var address:*u8=ll_offset(function,slot,ll_number(function->stage,offset));
-        ll_store(function,item->type,address,value);
-    }return slot;
+fn ll_place_value(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    if input -> kind == CRUST_E_GROUP {
+        return ll_place(function, input -> left);
+    }
+    if input -> kind == CRUST_E_UNARY {
+        return ll_value(function, input -> left);
+    }
+    if input -> kind == CRUST_E_NAME {
+        if input -> symbol -> kind == CRUST_SYM_CONST {
+            return ll_global(function -> stage, input -> symbol -> decl);
+        }
+        return ll_symbol(function, input -> symbol);
+    }
+    var left: *CrustExpr = input -> left;
+    var base: *u8 = "";
+    if left -> type -> kind == CRUST_T_POINTER || !left -> place {
+        base = ll_value(function, left);
+    } else {
+        base = ll_place(function, left);
+    }
+    if input -> kind == CRUST_E_FIELD {
+        return ll_offset(
+            function,
+            base,
+            ll_number(function -> stage, input -> field -> offset)
+        );
+    }
+    var index: *u8 = ll_value(function, input -> right);
+    var offset: *u8 = ll_instruction(
+        function,
+        "mul",
+        "i64",
+        index,
+        ll_number(function -> stage, input -> type -> size)
+    );
+    return ll_offset(function, base, offset);
+}
+fn ll_expression(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    var kind: u32 = input -> kind;
+    if kind == CRUST_E_GROUP {
+        return ll_value(function, input -> left);
+    }
+    if kind == CRUST_E_BINARY {
+        return ll_binary(function, input);
+    }
+    if kind == CRUST_E_CALL {
+        return ll_call(function, input);
+    }
+    if kind == CRUST_E_UNARY {
+        return ll_unary(function, input);
+    }
+    if kind == CRUST_E_CAST {
+        return ll_cast(function, input);
+    }
+    if kind == CRUST_E_RECORD || kind == CRUST_E_ARRAY {
+        return ll_aggregate(function, input);
+    }
+    if kind == CRUST_E_NAME {
+        if input -> symbol -> kind == CRUST_SYM_FUNCTION {
+            return ll_global(function -> stage, input -> symbol -> decl);
+        }
+        return ll_load(function, input -> type, ll_place(function, input));
+    }
+    if kind == CRUST_E_FIELD || kind == CRUST_E_INDEX {
+        return ll_load(function, input -> type, ll_place(function, input));
+    }
+    if kind == CRUST_E_STRING {
+        return ll_string(function -> stage, input);
+    }
+    if kind == CRUST_E_NULL {
+        return "null";
+    }
+    return ll_scalar(function, input);
+}
+fn ll_unary(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    if input -> op == CRUST_OP_ADDRESS {
+        return ll_place(function, input -> left);
+    }
+    var value: *u8 = ll_value(function, input -> left);
+    var type: *u8 = ll_type(function -> stage, input -> type);
+    if input -> op == CRUST_OP_DEREF {
+        return ll_load(function, input -> type, value);
+    }
+    if input -> op == CRUST_OP_NEG {
+        return ll_instruction(function, "sub", type, "0", value);
+    }
+    if input -> op == CRUST_OP_NOT {
+        return ll_instruction(function, "xor", "i8", value, "1");
+    }
+    return ll_instruction(function, "xor", type, value, "-1");
+}
+fn ll_cast(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    var value: *u8 = ll_value(function, input -> left);
+    var before: *CrustType = input -> left -> type;
+    var after: *CrustType = input -> type;
+    var from: *u8 = ll_type(function -> stage, before);
+    var to: *u8 = ll_type(function -> stage, after);
+    if after -> kind == CRUST_T_BOOL {
+        var bit: *u8 = ll_instruction(function, "icmp ne", from, value, "0");
+        return ll_convert(function, "zext", "i1", bit, "i8");
+    }
+    if ll_pointer(before) && !ll_pointer(after) {
+        return ll_convert(function, "ptrtoint", from, value, to);
+    }
+    if !ll_pointer(before) && ll_pointer(after) {
+        return ll_convert(function, "inttoptr", from, value, to);
+    }
+    if before -> size == after -> size {
+        return value;
+    }
+    var op: *u8 = "trunc";
+    if before -> size < after -> size {
+        op = "zext";
+        if ll_signed(before) {
+            op = "sext";
+        }
+    }
+    return ll_convert(function, op, from, value, to);
+}
+const LL_BINARY: [*u8; 16] = make [*u8; 16] {
+    "add",
+    "sub",
+    "mul",
+    "udiv",
+    "urem",
+    "shl",
+    "lshr",
+    "and",
+    "or",
+    "xor",
+    "icmp eq",
+    "icmp ne",
+    "icmp ult",
+    "icmp ule",
+    "icmp ugt",
+    "icmp uge"
+};
+const LL_SIGNED: [*u8; 16] = make [*u8; 16] {
+    "add",
+    "sub",
+    "mul",
+    "sdiv",
+    "srem",
+    "shl",
+    "ashr",
+    "and",
+    "or",
+    "xor",
+    "icmp eq",
+    "icmp ne",
+    "icmp slt",
+    "icmp sle",
+    "icmp sgt",
+    "icmp sge"
+};
+fn ll_binary(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    var left: *u8 = ll_value(function, input -> left);
+    var op: u32 = input -> op;
+    if op == CRUST_OP_AND || op == CRUST_OP_OR {
+        return ll_short_circuit(function, input, left);
+    }
+    var right: *u8 = ll_value(function, input -> right);
+    var type: *CrustType = input -> left -> type;
+    if type -> kind == CRUST_T_POINTER && (op == CRUST_OP_ADD || op == CRUST_OP_SUB) {
+        var offset: *u8 = ll_instruction(
+            function,
+            "mul",
+            "i64",
+            right,
+            ll_number(function -> stage, type -> base -> size)
+        );
+        if op == CRUST_OP_SUB {
+            offset = ll_instruction(function, "sub", "i64", "0", offset);
+        }
+        return ll_offset(function, left, offset);
+    }
+    ll_arithmetic_guard(function, op, type, left, right);
+    var operation: *u8 = LL_BINARY[op as usize];
+    if ll_signed(type) {
+        operation = LL_SIGNED[op as usize];
+    }
+    var result: *u8 = ll_instruction(
+        function,
+        operation,
+        ll_type(function -> stage, type),
+        left,
+        right
+    );
+    if op >= CRUST_OP_EQ {
+        return ll_convert(function, "zext", "i1", result, "i8");
+    }
+    return result;
+}
+fn ll_arithmetic_guard(
+    function: *LlFunction,
+    op: u32,
+    type: *CrustType,
+    left: *u8,
+    right: *u8
+) -> unit {
+    var name: *u8 = ll_type(function -> stage, type);
+    if op == CRUST_OP_SHL || op == CRUST_OP_SHR {
+        ll_guard(
+            function,
+            ll_instruction(
+                function,
+                "icmp uge",
+                name,
+                right,
+                ll_number(function -> stage, type -> size * 8u64)
+            )
+        );
+        return;
+    }
+    if op != CRUST_OP_DIV && op != CRUST_OP_REM {
+        return;
+    }
+    var bad: *u8 = ll_instruction(function, "icmp eq", name, right, "0");
+    if ll_signed(type) {
+        var minimum: *u8 = ll_number(function -> stage, 1u64 << (type -> size * 8u64 - 1u64));
+        var a: *u8 = ll_instruction(function, "icmp eq", name, left, minimum);
+        var b: *u8 = ll_instruction(function, "icmp eq", name, right, "-1");
+        var overflow: *u8 = ll_instruction(function, "and", "i1", a, b);
+        bad = ll_instruction(function, "or", "i1", bad, overflow);
+    }
+    ll_guard(function, bad);
+}
+fn ll_short_circuit(function: *LlFunction, input: *CrustExpr, left: *u8) -> *u8 {
+    var slot: *u8 = ll_alloca(function, input -> type);
+    ll_store(function, input -> type, slot, left);
+    var evaluate: *u8 = ll_id(function -> stage, "b");
+    var end: *u8 = ll_id(function -> stage, "b");
+    var condition: *u8 = ll_condition(function, left);
+    if input -> op == CRUST_OP_AND {
+        ll_branch(function, condition, evaluate, end);
+    } else {
+        ll_branch(function, condition, end, evaluate);
+    }
+    ll_block(function, evaluate);
+    var right: *u8 = ll_value(function, input -> right);
+    ll_store(function, input -> type, slot, right);
+    ll_block(function, end);
+    return ll_load(function, input -> type, slot);
+}
+fn ll_call(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    var callee: *u8 = ll_value(function, input -> left);
+    var type: *CrustType = input -> left -> type;
+    var arguments: **u8 = c_alloc(
+        &function -> stage -> memory.status,
+        (input -> arg_count + 1usize) * sizeof(*u8),
+        alignof(*u8)
+    ) as **u8;
+    if arguments == null(**u8) {
+        return "";
+    }
+    var index: usize = 0usize;
+    while index < input -> arg_count {
+        arguments[index] = ll_value(function, input -> args[index]);
+        if type -> params[index] -> kind == CRUST_T_BOOL {
+            arguments[index] = ll_condition(function, arguments[index]);
+        }
+        index = index + 1usize;
+    }
+    var result: *u8 = "";
+    if input -> type -> kind != CRUST_T_UNIT {
+        result = ll_register(function);
+        ll_line(function, result, "call ");
+    } else {
+        ll_text(function, "  call ");
+    }
+    ll_text(function, ll_abi_type(function -> stage, input -> type, true));
+    ll_text(function, " ");
+    ll_text(function, callee);
+    ll_text(function, "(");
+    index = 0usize;
+    while index < input -> arg_count {
+        if index != 0usize {
+            ll_text(function, ", ");
+        }
+        ll_text(function, ll_abi_type(function -> stage, type -> params[index], false));
+        ll_text(function, " ");
+        ll_text(function, arguments[index]);
+        index = index + 1usize;
+    }
+    ll_text(function, ")\n");
+    if input -> type -> kind == CRUST_T_BOOL {
+        return ll_convert(function, "zext", "i1", result, "i8");
+    }
+    return result;
+}
+fn ll_aggregate(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    var slot: *u8 = ll_alloca(function, input -> type);
+    var init: *CrustInit = input -> inits;
+    var index: usize = 0usize;
+    while init != null(*CrustInit) || index < input -> arg_count {
+        var item: *CrustExpr = null(*CrustExpr);
+        var offset: u64 = 0u64;
+        if input -> kind == CRUST_E_RECORD {
+            item = init -> value;
+            offset = init -> field -> offset;
+            init = init -> next;
+        } else {
+            item = input -> args[index];
+            offset = index as u64 * input -> type -> base -> size;
+            index = index + 1usize;
+        }
+        var value: *u8 = ll_value(function, item);
+        var address: *u8 = ll_offset(function, slot, ll_number(function -> stage, offset));
+        ll_store(function, item -> type, address, value);
+    }
+    return slot;
 }
 
-fn ll_scalar(function:*LlFunction,input:*CrustExpr)->*u8 {
-    var kind:u32=input->kind;
-    if kind==CRUST_E_INTEGER || kind==CRUST_E_BOOL || kind==CRUST_E_SIZEOF || kind==CRUST_E_ALIGNOF || kind==CRUST_E_OFFSETOF {
-        return ll_number(function->stage,input->integer);
+fn ll_scalar(function: *LlFunction, input: *CrustExpr) -> *u8 {
+    var kind: u32 = input -> kind;
+    if kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL || kind == CRUST_E_SIZEOF || kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF {
+        return ll_number(function -> stage, input -> integer);
     }
-    ll_error(function->stage,"unsupported LLVM expression kind");return "";
+    ll_error(function -> stage, "unsupported LLVM expression kind");
+    return "";
 }

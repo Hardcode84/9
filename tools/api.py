@@ -43,6 +43,20 @@ def publish(path, output, check):
     path.write_text(output)
 
 
+def external(name, params, result):
+    """Render an external declaration with the formatter's fixed group width."""
+    prefix = f"extern fn {name}("
+    arguments = [f"{param}: {kind}" for param, kind in params]
+    # These tokens come from generated declarations, never from input Crust files.
+    tokens = re.findall(r"\w+|->|[^\s]", ", ".join(arguments) + ")")
+    width = sum(len(token) + 1 for token in tokens)
+    if arguments and len(prefix) + width > 100:
+        rendered = "\n    " + ",\n    ".join(arguments) + "\n"
+    else:
+        rendered = ", ".join(arguments)
+    return f'{prefix}{rendered}) -> {result} = "{name}";'
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
@@ -168,8 +182,7 @@ def main():
             params = (
                 [declaration(arg) for arg in arguments.split(",")] if arguments != "void" else []
             )
-            rendered = ", ".join(f"{param}: {kind}" for param, kind in params)
-            lines.append(f'extern fn {name}({rendered}) -> {ctype(result)} = "{name}";')
+            lines.append(external(name, params, ctype(result)))
         output = "\n".join(lines).rstrip() + "\n"
         path = ROOT / "api" / f"{stem}.crs"
         publish(path, output, args.check)

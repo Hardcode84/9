@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record Pair!(Element) { first: Element; second: Element; }
+record Pair!(Element) {
+    first: Element;
+    second: Element;
+}
 
 fn pair_init!(Element)(pair: *Pair!(Element), first: *Element, second: *Element) -> unit {
     (*pair).first = *first;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-stage_include(stage,"configured-sources.crs");
-stage_export(stage,"llvm_stage_compile");
-stage_export(stage,"llvm_stage_toolchain");
+stage_include(stage, "configured-sources.crs");
+stage_export(stage, "llvm_stage_compile");
+stage_export(stage, "llvm_stage_toolchain");
 
-stage_export(stage,"llvm_backend_build");
+stage_export(stage, "llvm_backend_build");

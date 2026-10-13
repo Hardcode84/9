@@ -2,39 +2,62 @@
 
 // All paths are root-relative. Sources contain declarations only. Exports use
 // source names. Require an empty context. Retain a diagnostic on failure.
-fn native_prepare(root: *CrustRun, context: *CrustContext, sources: **u8, count: usize,
-                  exports: **u8, export_count: usize) -> bool {
+fn native_prepare(
+    root: *CrustRun,
+    context: *CrustContext,
+    sources: **u8,
+    count: usize,
+    exports: **u8,
+    export_count: usize
+) -> bool {
     var index: usize = 0usize;
     while index < count {
         var source: *CrustSource = host_input(root, sources[index], index as u64 + 1u64);
-        if source == null(*CrustSource) { return false; }
+        if source == null(*CrustSource) {
+            return false;
+        }
         var parsed: *CrustUnit = null(*CrustUnit);
-        if !crust_read(context, source, &parsed) { return false; }
+        if !crust_read(context, source, &parsed) {
+            return false;
+        }
         index = index + 1usize;
     }
     return native_exports(context, exports, export_count);
 }
 
 // Inputs are captured declaration units. Their identities must be distinct.
-fn native_prepare_inputs(context: *CrustContext, sources: **CrustSource, count: usize,
-                         exports: **u8, export_count: usize) -> bool {
+fn native_prepare_inputs(
+    context: *CrustContext,
+    sources: **CrustSource,
+    count: usize,
+    exports: **u8,
+    export_count: usize
+) -> bool {
     var index: usize = 0usize;
     while index < count {
         var parsed: *CrustUnit = null(*CrustUnit);
-        if !crust_read(context, sources[index], &parsed) { return false; }
+        if !crust_read(context, sources[index], &parsed) {
+            return false;
+        }
         index = index + 1usize;
     }
     return native_exports(context, exports, export_count);
 }
 
 fn native_exports(context: *CrustContext, exports: **u8, export_count: usize) -> bool {
-    if !crust_collect(context) || !crust_resolve(context) || !crust_check(context) { return false; }
+    if !crust_collect(context) || !crust_resolve(context) || !crust_check(context) {
+        return false;
+    }
     var unit_value: *CrustUnit = (*context).units;
     while unit_value != null(*CrustUnit) {
         var declaration: *CrustDecl = (*unit_value).declarations;
         while declaration != null(*CrustDecl) {
-            if (*declaration).kind != CRUST_D_EXTERN { (*declaration).link_name = ""; }
-            if (*declaration).kind == CRUST_D_CONST && native_abi_name((*(*declaration).name).text) {
+            if (*declaration).kind != CRUST_D_EXTERN {
+                (*declaration).link_name = "";
+            }
+            if (*declaration).kind == CRUST_D_CONST && native_abi_name(
+                (*(*declaration).name).text
+            ) {
                 (*declaration).link_name = (*(*declaration).name).text;
             }
             declaration = (*declaration).next;
@@ -43,8 +66,14 @@ fn native_exports(context: *CrustContext, exports: **u8, export_count: usize) ->
     }
     var index: usize = 0usize;
     while index < export_count {
-        var name: *CrustName = crust_try_intern(context, exports[index], native_strlen(exports[index]));
-        if name == null(*CrustName) { return false; }
+        var name: *CrustName = crust_try_intern(
+            context,
+            exports[index],
+            native_strlen(exports[index])
+        );
+        if name == null(*CrustName) {
+            return false;
+        }
         var symbol: *CrustSymbol = crust_map_get(&(*context).globals, name as usize) as *CrustSymbol;
         if symbol == null(*CrustSymbol) || (*(*symbol).decl).kind != CRUST_D_FUNCTION {
             return native_error(context, "native export must name a defined function");
@@ -57,8 +86,14 @@ fn native_exports(context: *CrustContext, exports: **u8, export_count: usize) ->
 
 // Prepare the selected library with the seed, run its native continuation, then
 // remove all temporary images on success or failure. Session storage stays live.
-fn native_bootstrap(root: *CrustRun, session: *NativeSession, sources: **u8, count: usize,
-                    exports: **u8, export_count: usize) -> i32 {
+fn native_bootstrap(
+    root: *CrustRun,
+    session: *NativeSession,
+    sources: **u8,
+    count: usize,
+    exports: **u8,
+    export_count: usize
+) -> i32 {
     if (*session).compile == null(fn(*CrustContext, *NativeSession, *NativeImage) -> bool) {
         native_error((*root).context, "native compiler must be callable");
         return 1i32;
@@ -67,14 +102,30 @@ fn native_bootstrap(root: *CrustRun, session: *NativeSession, sources: **u8, cou
     crust_context_init(&context, null(*CrustAllocator));
     var status: i32 = 1i32;
     var image: *NativeImage = native_image((*root).context, session);
-    if image != null(*NativeImage) && native_prepare(root, &context, sources, count, exports, export_count) &&
-       (*session).compile(&context, session, image) && crust_run_link(root, (*image).library) {
+    if image != null(*NativeImage) && native_prepare(
+        root,
+        &context,
+        sources,
+        count,
+        exports,
+        export_count
+    ) && (*session).compile(&context, session, image) && crust_run_link(
+        root,
+        (*image).library
+    ) {
         status = native_start(root, session);
     }
     if context.error_count != 0usize {
-        crust_set_error((*root).context, context.error_loc.source, context.error_loc.offset, &context.error[0usize]);
+        crust_set_error(
+            (*root).context,
+            context.error_loc.source,
+            context.error_loc.offset,
+            &context.error[0usize]
+        );
     }
     crust_context_destroy(&context);
-    if !native_cleanup((*root).context, session) { return 1i32; }
+    if !native_cleanup((*root).context, session) {
+        return 1i32;
+    }
     return status;
 }

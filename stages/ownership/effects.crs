@@ -1,22 +1,35 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn os_call_frame(check: *OsCheck, contract: *OsFunction, location: *CrustLoc) -> bool {
-    if (*contract).effect < OS_EDIT || !(*(*check).function).has_modifies { return true; }
-    if !(*contract).has_modifies {
-        os_error(check, location, "callee has unrestricted writes outside the caller modifies contract"); return false;
+    if (*contract).effect < OS_EDIT ||!(*(*check).function).has_modifies {
+        return true;
+    }
+    if!(*contract).has_modifies {
+        os_error(
+            check,
+            location,
+            "callee has unrestricted writes outside the caller modifies contract"
+        );
+        return false;
     }
     var field: *OsField = (*contract).modifies;
     while field != null(*OsField) {
         if !os_writes((*check).function, (*field).field) {
-            os_error(check, location, "callee writes outside the caller modifies contract"); return false;
+            os_error(check, location, "callee writes outside the caller modifies contract");
+            return false;
         }
         field = (*field).next;
     }
     return true;
 }
 
-fn os_call_construction(check: *OsCheck, state: *OsState, contract: *OsFunction,
-                         arguments: **OsValue, location: *CrustLoc) -> unit {
+fn os_call_construction(
+    check: *OsCheck,
+    state: *OsState,
+    contract: *OsFunction,
+    arguments: **OsValue,
+    location: *CrustLoc
+) -> unit {
     var parameter: *CrustParam = (*(*contract).declaration).params;
     var index: usize = 0usize;
     while parameter != null(*CrustParam) && !os_failed(check) {
@@ -24,16 +37,25 @@ fn os_call_construction(check: *OsCheck, state: *OsState, contract: *OsFunction,
             var object: *OsObject = (*arguments[index]).object;
             os_constructed_fields(check, state, object, location);
             os_mark(check, state, object, os_flags(state, object) | OS_READY);
-            if (*(*object).contract).stable { os_pin(check, state, object); }
+            if (*(*object).contract).stable {
+                os_pin(check, state, object);
+            }
         }
         parameter = (*parameter).next;
         index = index + 1usize;
     }
 }
 
-fn os_apply_contract(check: *OsCheck, state: *OsState, contract: *OsFunction,
-                      arguments: **OsValue, location: *CrustLoc) -> unit {
-    if !os_call_frame(check, contract, location) { return; }
+fn os_apply_contract(
+    check: *OsCheck,
+    state: *OsState,
+    contract: *OsFunction,
+    arguments: **OsValue,
+    location: *CrustLoc
+) -> unit {
+    if !os_call_frame(check, contract, location) {
+        return;
+    }
     os_call_construction(check, state, contract, arguments, location);
 }
 
@@ -42,21 +64,37 @@ fn os_contract_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> uni
     while item != null(*OsField) && !os_failed(check) {
         var value: *OsValue = os_parameter_value(check, state, (*item).name);
         if value == null(*OsValue) || (*value).object == null(*OsObject) {
-            os_error(check, location, "initializes must name live output storage"); return;
+            os_error(check, location, "initializes must name live output storage");
+            return;
         }
         os_publish_value(check, state, (*value).object, location);
         item = (*item).next;
     }
 }
 
-fn os_constructed_fields(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
-    if !os_enter(check, location) { return; }
+fn os_constructed_fields(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> unit {
+    if !os_enter(check, location) {
+        return;
+    }
     var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
         if (*(*slot).syntax).kind == CRUST_T_NAME && value != null(*OsValue) {
             os_constructed_fields(check, state, (*value).object, location);
-        } else { os_set(check, state, slot as *u8, os_field_value(check, state, slot), OS_READY); }
+        } else {
+            os_set(
+                check,
+                state,
+                slot as *u8,
+                os_field_value(check, state, slot),
+                OS_READY
+            );
+        }
         slot = (*slot).next;
     }
     os_mark(check, state, object, os_flags(state, object) | OS_READY);

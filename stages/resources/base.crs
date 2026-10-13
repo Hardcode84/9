@@ -1,22 +1,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn rs_error(stage: *RsStage, location: *CrustLoc, message: *u8) -> unit {
-    if (*stage).failed { return; }
+    if (*stage).failed {
+        return;
+    }
     (*stage).failed = true;
-    crust_set_error((*stage).context, (*location).source, (*location).offset, message);
+    crust_set_error(
+        (*stage).context,
+        (*location).source,
+        (*location).offset,
+        message
+    );
 }
 
 fn rs_alloc(stage: *RsStage, size: usize, alignment: usize) -> *u8 {
-    if (*stage).failed { return null(*u8); }
-    if size == 0usize { return null(*u8); }
+    if (*stage).failed {
+        return null(*u8);
+    }
+    if size == 0usize {
+        return null(*u8);
+    }
     var result: *u8 = crust_try_alloc((*stage).context, size, alignment);
-    if result == null(*u8) { (*stage).failed = true; }
+    if result == null(*u8) {
+        (*stage).failed = true;
+    }
     return result;
 }
 
 fn rs_put(stage: *RsStage, table: *CrustMap, key: usize, value: *u8) -> unit {
-    if (*stage).failed { return; }
-    if !crust_try_map_set((*stage).context, table, key, value) { (*stage).failed = true; }
+    if (*stage).failed {
+        return;
+    }
+    if !crust_try_map_set((*stage).context, table, key, value) {
+        (*stage).failed = true;
+    }
 }
 
 // Mark an external declaration with this stage's complete source ABI contract.
@@ -24,26 +41,38 @@ fn rs_put(stage: *RsStage, table: *CrustMap, key: usize, value: *u8) -> unit {
 // The caller must provide a native name and the provider's same source interface.
 fn rs_source_import(stage: *RsStage, declaration: *CrustDecl) -> bool {
     rs_put(stage, &(*stage).source_imports, declaration as usize, declaration as *u8);
-    return !(*stage).failed;
+    return!(*stage).failed;
 }
 
 // Name the sole borrow parameter that keeps the returned view live.
 // Register once before preparation, including for a source ABI import.
 fn rs_return_from(stage: *RsStage, declaration: *CrustDecl, parameter: *CrustName) -> bool {
     if (*declaration).kind != CRUST_D_FUNCTION && (*declaration).kind != CRUST_D_EXTERN {
-        rs_error(stage, &(*declaration).loc, "returned loan contract requires a function declaration");
+        rs_error(
+            stage,
+            &(*declaration).loc,
+            "returned loan contract requires a function declaration"
+        );
         return false;
     }
     if crust_map_get(&(*stage).return_sources, declaration as usize) != null(*u8) {
-        rs_error(stage, &(*declaration).loc, "returned loan already has a source parameter");
+        rs_error(
+            stage,
+            &(*declaration).loc,
+            "returned loan already has a source parameter"
+        );
         return false;
     }
     if parameter == null(*CrustName) {
-        rs_error(stage, &(*declaration).loc, "returned loan requires a named source parameter");
+        rs_error(
+            stage,
+            &(*declaration).loc,
+            "returned loan requires a named source parameter"
+        );
         return false;
     }
     rs_put(stage, &(*stage).return_sources, declaration as usize, parameter as *u8);
-    return !(*stage).failed;
+    return!(*stage).failed;
 }
 
 fn rs_name(stage: *RsStage) -> *CrustName {
@@ -55,61 +84,98 @@ fn rs_name(stage: *RsStage) -> *CrustName {
         end = end - 1usize;
         bytes[end] = (value % 10usize) as u8 + 48u8;
         value = value / 10usize;
-        if value == 0usize { break; }
+        if value == 0usize {
+            break;
+        }
     }
-    end = end - 1usize; bytes[end] = 36u8;
-    var name: *CrustName = crust_try_intern((*stage).context, &bytes[end], 32usize - end);
-    if name == null(*CrustName) { (*stage).failed = true; }
+    end = end - 1usize;
+    bytes[end] = 36u8;
+    var name: *CrustName = crust_try_intern(
+        (*stage).context,
+        &bytes[end],
+        32usize - end
+    );
+    if name == null(*CrustName) {
+        (*stage).failed = true;
+    }
     return name;
 }
 
 fn rs_type_node(stage: *RsStage, kind: u32, location: *CrustLoc) -> *CrustTypeSyntax {
-    var node: *CrustTypeSyntax = rs_alloc(stage, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
-    if node != null(*CrustTypeSyntax) { (*node).kind = kind; (*node).loc = *location; }
+    var node: *CrustTypeSyntax = rs_alloc(
+        stage,
+        sizeof(CrustTypeSyntax),
+        alignof(CrustTypeSyntax)
+    ) as *CrustTypeSyntax;
+    if node != null(*CrustTypeSyntax) {
+        (*node).kind = kind;
+        (*node).loc = *location;
+    }
     return node;
 }
 
 fn rs_expr_node(stage: *RsStage, kind: u32, location: *CrustLoc) -> *CrustExpr {
     var node: *CrustExpr = rs_alloc(stage, sizeof(CrustExpr), alignof(CrustExpr)) as *CrustExpr;
-    if node != null(*CrustExpr) { (*node).kind = kind; (*node).loc = *location; }
+    if node != null(*CrustExpr) {
+        (*node).kind = kind;
+        (*node).loc = *location;
+    }
     return node;
 }
 
 fn rs_stmt_node(stage: *RsStage, kind: u32, location: *CrustLoc) -> *CrustStmt {
     var node: *CrustStmt = rs_alloc(stage, sizeof(CrustStmt), alignof(CrustStmt)) as *CrustStmt;
-    if node != null(*CrustStmt) { (*node).kind = kind; (*node).loc = *location; }
+    if node != null(*CrustStmt) {
+        (*node).kind = kind;
+        (*node).loc = *location;
+    }
     return node;
 }
 
 fn rs_named(stage: *RsStage, name: *CrustName, location: *CrustLoc) -> *CrustExpr {
     var node: *CrustExpr = rs_expr_node(stage, CRUST_E_NAME, location);
-    if node != null(*CrustExpr) { (*node).name = name; }
+    if node != null(*CrustExpr) {
+        (*node).name = name;
+    }
     return node;
 }
 
 fn rs_unary(stage: *RsStage, op: u32, operand: *CrustExpr, location: *CrustLoc) -> *CrustExpr {
     var node: *CrustExpr = rs_expr_node(stage, CRUST_E_UNARY, location);
-    if node != null(*CrustExpr) { (*node).op = op; (*node).left = operand; }
+    if node != null(*CrustExpr) {
+        (*node).op = op;
+        (*node).left = operand;
+    }
     return node;
 }
 
 fn rs_append(list: *RsStatements, statement: *CrustStmt) -> unit {
-    if statement == null(*CrustStmt) { return; }
-    if (*list).first == null(*CrustStmt) { (*list).first = statement; }
-    else { (*(*list).last).next = statement; }
+    if statement == null(*CrustStmt) {
+        return;
+    }
+    if (*list).first == null(*CrustStmt) {
+        (*list).first = statement;
+    } else {
+        (*(*list).last).next = statement;
+    }
     (*list).last = statement;
 }
 
 fn rs_block(stage: *RsStage, list: *RsStatements, location: *CrustLoc) -> *CrustStmt {
     var node: *CrustStmt = rs_stmt_node(stage, CRUST_S_BLOCK, location);
-    if node != null(*CrustStmt) { (*node).body = (*list).first; }
+    if node != null(*CrustStmt) {
+        (*node).body = (*list).first;
+    }
     return node;
 }
 
 fn rs_init(stage: *RsStage, context: *CrustContext) -> unit {
     var bytes: *u8 = stage as *u8;
     var index: usize = 0usize;
-    while index < sizeof(RsStage) { bytes[index] = 0u8; index = index + 1usize; }
+    while index < sizeof(RsStage) {
+        bytes[index] = 0u8;
+        index = index + 1usize;
+    }
     (*stage).context = context;
     (*stage).next_name = 1usize;
     (*stage).kind_base = crust_allocate_kinds(context, RS_END);

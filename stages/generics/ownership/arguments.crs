@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record OgArguments { check: OsCheck; visited: CrustMap; }
+record OgArguments {
+    check: OsCheck;
+    visited: CrustMap;
+}
 
 fn og_diagnostic_part(context: *CrustContext, text: *u8) -> unit {
     var offset: usize = gs_length(&(*context).error[0usize]);
@@ -18,7 +21,10 @@ fn og_argument_diagnostic(program: *OgProgram, instance: *GpInstance, index: usi
     var definition: *GpDefinition = (*instance).definition;
     var location: *CrustLoc = &(*(*instance).arguments[index]).loc;
     og_diagnostic_part(context, " [parameter ");
-    og_diagnostic_part(context, (*(*(*definition).parameters).names[index]).text);
+    og_diagnostic_part(
+        context,
+        (*(*(*definition).parameters).names[index]).text
+    );
     og_diagnostic_part(context, " of ");
     og_diagnostic_part(context, (*(*(*definition).source).name).text);
     if (*location).source != null(*CrustSource) {
@@ -37,16 +43,30 @@ fn og_payload_field(arguments: *OgArguments, schema: *OsRecord, field: *CrustFie
     var syntax: *CrustTypeSyntax = (*field).syntax_type;
     var owner: *OsField = os_field((*schema).owns, (*field).name);
     if owner != null(*OsField) {
-        if !(*owner).storage { return true; }
+        if!(*owner).storage {
+            return true;
+        }
         if (*syntax).kind != CRUST_T_POINTER {
-            os_error(&(*arguments).check, &(*field).loc, "storage ownership requires a pointer field"); return false;
+            os_error(
+                &(*arguments).check,
+                &(*field).loc,
+                "storage ownership requires a pointer field"
+            );
+            return false;
         }
         return og_payload(arguments, (*syntax).base);
     }
-    if (*syntax).kind == CRUST_T_NAME { return og_payload(arguments, syntax); }
-    if (*syntax).kind < CRUST_T_UNIT { return true; }
-    os_error(&(*arguments).check, &(*field).loc,
-        "generic payload must have closed ownership; stored loans and raw pointers are not payloads");
+    if (*syntax).kind == CRUST_T_NAME {
+        return og_payload(arguments, syntax);
+    }
+    if (*syntax).kind < CRUST_T_UNIT {
+        return true;
+    }
+    os_error(
+        &(*arguments).check,
+        &(*field).loc,
+        "generic payload must have closed ownership; stored loans and raw pointers are not payloads"
+    );
     return false;
 }
 
@@ -55,23 +75,50 @@ fn og_payload_record(arguments: *OgArguments, syntax: *CrustTypeSyntax) -> bool 
     var stage: *OsStage = (*check).stage;
     var schema: *OsRecord = os_record(stage, syntax);
     if schema == null(*OsRecord) {
-        os_error(check, &(*syntax).loc, "generic ownership argument requires a declared record"); return false;
+        os_error(
+            check,
+            &(*syntax).loc,
+            "generic ownership argument requires a declared record"
+        );
+        return false;
     }
-    if (*schema).opaque || (*schema).stable || (*schema).scoped || (*schema).view_mode >= rs_kind((*stage).resources, RS_READ) ||
-       (*schema).domain != null(*CrustName) {
-        os_error(check, &(*syntax).loc, "generic payload requires a movable closed record with domain-free cleanup"); return false;
+    if (*schema).opaque || (*schema).stable || (*schema).scoped || (*schema).view_mode >= rs_kind(
+        (*stage).resources,
+        RS_READ
+    ) || (*schema).domain != null(*CrustName) {
+        os_error(
+            check,
+            &(*syntax).loc,
+            "generic payload requires a movable closed record with domain-free cleanup"
+        );
+        return false;
     }
     var global: *RsGlobal = rs_global((*stage).resources, (*syntax).name);
     if (*global).resource != null(*RsResource) {
-        var destructor: *OsFunction = os_function(stage, (*(*global).resource).drop_name);
+        var destructor: *OsFunction = os_function(
+            stage,
+            (*(*global).resource).drop_name
+        );
         if destructor == null(*OsFunction) || (*destructor).domain != null(*CrustName) {
-            os_error(check, &(*syntax).loc, "generic payload cleanup must require no domain access"); return false;
+            os_error(
+                check,
+                &(*syntax).loc,
+                "generic payload cleanup must require no domain access"
+            );
+            return false;
         }
     }
-    rs_put((*stage).resources, &(*arguments).visited, (*syntax).name as usize, schema as *u8);
+    rs_put(
+        (*stage).resources,
+        &(*arguments).visited,
+        (*syntax).name as usize,
+        schema as *u8
+    );
     var field: *CrustField = (*(*schema).declaration).fields;
     while field != null(*CrustField) && !os_failed(check) {
-        if !og_payload_field(arguments, schema, field) { return false; }
+        if !og_payload_field(arguments, schema, field) {
+            return false;
+        }
         field = (*field).next;
     }
     return !os_failed(check);
@@ -80,18 +127,36 @@ fn og_payload_record(arguments: *OgArguments, syntax: *CrustTypeSyntax) -> bool 
 fn og_payload(arguments: *OgArguments, syntax: *CrustTypeSyntax) -> bool {
     var check: *OsCheck = &(*arguments).check;
     if os_parameter_type((*check).stage, syntax) {
-        var parameter: *OsParameter = crust_map_get(&(*(*check).stage).parameters, (*syntax).name as usize) as *OsParameter;
-        if !(*parameter).closed {
-            os_error(check, &(*syntax).loc, "indirect type parameter cannot satisfy a closed ownership contract");
+        var parameter: *OsParameter = crust_map_get(
+            &(*(*check).stage).parameters,
+            (*syntax).name as usize
+        ) as *OsParameter;
+        if!(*parameter).closed {
+            os_error(
+                check,
+                &(*syntax).loc,
+                "indirect type parameter cannot satisfy a closed ownership contract"
+            );
         }
         return (*parameter).closed;
     }
-    if (*syntax).kind < CRUST_T_UNIT { return true; }
-    if (*syntax).kind != CRUST_T_NAME {
-        os_error(check, &(*syntax).loc, "generic value argument requires a scalar or closed movable record"); return false;
+    if (*syntax).kind < CRUST_T_UNIT {
+        return true;
     }
-    if crust_map_get(&(*arguments).visited, (*syntax).name as usize) != null(*u8) { return true; }
-    if !os_enter(check, &(*syntax).loc) { return false; }
+    if (*syntax).kind != CRUST_T_NAME {
+        os_error(
+            check,
+            &(*syntax).loc,
+            "generic value argument requires a scalar or closed movable record"
+        );
+        return false;
+    }
+    if crust_map_get(&(*arguments).visited, (*syntax).name as usize) != null(*u8) {
+        return true;
+    }
+    if !os_enter(check, &(*syntax).loc) {
+        return false;
+    }
     var result: bool = og_payload_record(arguments, syntax);
     (*check).depth = (*check).depth - 1usize;
     return result;
@@ -99,7 +164,11 @@ fn og_payload(arguments: *OgArguments, syntax: *CrustTypeSyntax) -> bool {
 
 fn og_arguments(program: *OgProgram) -> bool {
     var arguments: OgArguments = uninit;
-    arguments.visited = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    arguments.visited = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
     os_check_init(&arguments.check, &(*program).ownership, null(*OsFunction));
     os_resolve_domains(&arguments.check);
     var instance: *GpInstance = (*program).generics.instances;
@@ -107,7 +176,8 @@ fn og_arguments(program: *OgProgram) -> bool {
         var index: usize = 0usize;
         while index < (*instance).count {
             if !og_parameter_argument(program, &arguments, instance, index) {
-                og_argument_diagnostic(program, instance, index); return false;
+                og_argument_diagnostic(program, instance, index);
+                return false;
             }
             index = index + 1usize;
         }

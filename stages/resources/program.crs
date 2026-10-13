@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn resource_driver_entry(cli:*CCli, resources:*RsStage)->*CrustDecl {
-    var name:*CrustName = crust_try_intern((*resources).context, (*cli).entry_name, c_length((*cli).entry_name));
-    if name == null(*CrustName) { return null(*CrustDecl); }
-    var global:*RsGlobal = rs_global(resources, name);
+fn resource_driver_entry(cli: *CCli, resources: *RsStage) -> *CrustDecl {
+    var name: *CrustName = crust_try_intern(
+        (*resources).context,
+        (*cli).entry_name,
+        c_length((*cli).entry_name)
+    );
+    if name == null(*CrustName) {
+        return null(*CrustDecl);
+    }
+    var global: *RsGlobal = rs_global(resources, name);
     if global == null(*RsGlobal) {
         c_driver_error(&(*cli).driver, "entry function was not found");
         return null(*CrustDecl);
@@ -15,62 +21,94 @@ fn resource_driver_entry(cli:*CCli, resources:*RsStage)->*CrustDecl {
     return (*global).lowered;
 }
 
-fn resource_driver_read(cli:*CCli, resources:*RsStage)->bool {
-    var driver:*CDriver = &(*cli).driver;
-    var context:*CrustContext = (*cli).stage.status.context;
+fn resource_driver_read(cli: *CCli, resources: *RsStage) -> bool {
+    var driver: *CDriver = &(*cli).driver;
+    var context: *CrustContext = (*cli).stage.status.context;
     if (*cli).root != null(*CrustSource) {
-        if !rs_read(resources, (*cli).root, (*cli).target_begin, (*(*cli).root).size) {
+        if !rs_read(
+            resources,
+            (*cli).root,
+            (*cli).target_begin,
+            (*(*cli).root).size
+        ) {
             return false;
         }
     }
-    var index:usize = 0usize;
+    var index: usize = 0usize;
     while index < (*cli).source_count {
-        var source:*CrustSource = &(*cli).sources[index];
-        var bytes:*u8 = null(*u8);
-        var size:usize = 0usize;
+        var source: *CrustSource = &(*cli).sources[index];
+        var bytes: *u8 = null(*u8);
+        var size: usize = 0usize;
         if crust0_host_read_file((*source).path, &bytes, &size) != 0i32 {
-            c_driver_io_error(driver, "cannot read input", (*source).path, *c_driver_errno());
+            c_driver_io_error(
+                driver,
+                "cannot read input",
+                (*source).path,
+                *c_driver_errno()
+            );
             return false;
         }
         (*source).bytes = crust_try_copy_string(context, bytes, size);
         (*source).size = size;
         crust0_host_free(bytes);
-        if (*source).bytes == null(*u8) { return false; }
-        if !rs_read(resources, source, 0usize, size) { return false; }
+        if (*source).bytes == null(*u8) {
+            return false;
+        }
+        if !rs_read(resources, source, 0usize, size) {
+            return false;
+        }
         index = index + 1usize;
     }
     return true;
 }
 
-fn resource_driver_build(cli:*CCli, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32 {
-    var driver:*CDriver = &(*cli).driver;
-    var context:*CrustContext = (*cli).stage.status.context;
-    var resources:RsStage = uninit;
+fn resource_driver_build(
+    cli: *CCli,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
+    var driver: *CDriver = &(*cli).driver;
+    var context: *CrustContext = (*cli).stage.status.context;
+    var resources: RsStage = uninit;
     rs_init(&resources, context);
-    if !resource_driver_read(cli, &resources) { return 1i32; }
-    if !rs_prepare(&resources) { return 1i32; }
-    if !c_driver_exports(cli) { return 1i32; }
-    if (*cli).mode == 3u32 { return 0i32; }
-    if !c_driver_names(driver) { return 1i32; }
-    var entry:*CrustDecl = null(*CrustDecl);
-    if !(*cli).library {
-        entry = resource_driver_entry(cli, &resources);
-        if entry == null(*CrustDecl) { return 1i32; }
+    if !resource_driver_read(cli, &resources) {
+        return 1i32;
     }
-    return backend_output(context,entry,(*driver).options,emit);
+    if !rs_prepare(&resources) {
+        return 1i32;
+    }
+    if !c_driver_exports(cli) {
+        return 1i32;
+    }
+    if (*cli).mode == 3u32 {
+        return 0i32;
+    }
+    if !c_driver_names(driver) {
+        return 1i32;
+    }
+    var entry: *CrustDecl = null(*CrustDecl);
+    if!(*cli).library {
+        entry = resource_driver_entry(cli, &resources);
+        if entry == null(*CrustDecl) {
+            return 1i32;
+        }
+    }
+    return backend_output(context, entry, (*driver).options, emit);
 }
 
 // Require an initialized context with no application units and retained source storage.
 // Arguments are compiler options and extra source paths, without an executable name.
 // Complete the selected output before return. Keep diagnostics in the caller's context.
 // The retained context contains complete seed bodies after successful preparation.
-fn resource_program(request:*CrustBuild, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32 {
-    var context:*CrustContext = (*request).context;
-    var cli:CCli = uninit;
-    var success:bool = c_driver_init(&cli, context, (*request).argc);
+fn resource_program(
+    request: *CrustBuild,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
+    var context: *CrustContext = (*request).context;
+    var cli: CCli = uninit;
+    var success: bool = c_driver_init(&cli, context, (*request).argc);
     cli.root = (*request).source;
     cli.target_begin = (*request).target_begin;
-    var result:i32 = 1i32;
+    var result: i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
         result = resource_driver_build(&cli, emit);
     }

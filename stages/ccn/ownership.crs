@@ -1,34 +1,67 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Use the ownership and generics reader productions. Root actions remain data.
-fn ccn_ownership_action(context:*CrustContext,source:*CrustSource,begin:usize,end:usize,action:*CrustAction,user:*u8)->bool {
-    var program:*OgProgram=user as *OgProgram;
-    var hooks:CrustReaderHooks=make CrustReaderHooks{next:null(*CrustReaderHooks),function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
-        user:user,declaration:og_read_declaration,statement:og_read_statement,prefix:og_read_prefix,type_syntax:og_read_type};
-    var reader:CrustReader=uninit;
-    if !rr_init(&reader,context,source,begin,end,&hooks){return false;}
-    *action=make CrustAction{declaration:null(*CrustDecl),statement:null(*CrustStmt),end:end};
-    if reader.token.kind==RR_EOF{return true;}
-    action->declaration=og_read_declaration(&reader,user);
-    if action->declaration==null(*CrustDecl) && !reader.failed {
-        if reader.token.kind==RR_CONST{action->declaration=rr_standard_declaration(&reader);}
-        else {
-            action->statement=rr_statement(&reader);
-            if action->statement!=null(*CrustStmt) && !reader.failed {
-                var kind:u32=action->statement->kind;
-                if kind==CRUST_S_BLOCK || kind==CRUST_S_IF || kind==CRUST_S_WHILE{rr_expect(&reader,59u32,"expected ';' after root action");}
+fn ccn_ownership_action(
+    context: *CrustContext,
+    source: *CrustSource,
+    begin: usize,
+    end: usize,
+    action: *CrustAction,
+    user: *u8
+) -> bool {
+    var program: *OgProgram = user as *OgProgram;
+    var hooks: CrustReaderHooks = make CrustReaderHooks {
+        next: null(*CrustReaderHooks),
+        function_end: null(fn(*CrustReader, *CrustDecl, *u8) -> bool),
+        user: user,
+        declaration: og_read_declaration,
+        statement: og_read_statement,
+        prefix: og_read_prefix,
+        type_syntax: og_read_type
+    };
+    var reader: CrustReader = uninit;
+    if !rr_init(&reader, context, source, begin, end, &hooks) {
+        return false;
+    }
+    * action = make CrustAction {
+        declaration: null(*CrustDecl),
+        statement: null(*CrustStmt),
+        end: end
+    };
+    if reader.token.kind == RR_EOF {
+        return true;
+    }
+    action -> declaration = og_read_declaration(&reader, user);
+    if action -> declaration == null(*CrustDecl) && !reader.failed {
+        if reader.token.kind == RR_CONST {
+            action -> declaration = rr_standard_declaration(&reader);
+        } else {
+            action -> statement = rr_statement(&reader);
+            if action -> statement != null(*CrustStmt) && !reader.failed {
+                var kind: u32 = action -> statement -> kind;
+                if kind == CRUST_S_BLOCK || kind == CRUST_S_IF || kind == CRUST_S_WHILE {
+                    rr_expect(&reader, 59u32, "expected ';' after root action");
+                }
             }
         }
     }
-    action->end=reader.token.offset;
-    return !reader.failed && !program->parsed_resources.failed;
+    action -> end = reader.token.offset;
+    return !reader.failed && !program -> parsed_resources.failed;
 }
 
-fn ccn_ownership_file(path:*u8,options:*CcnOptions)->i32 {
-    var program:OgProgram=uninit;og_init(&program,null(*CrustAllocator),2u64);
-    var status:i32=ccn_file_using(&program.generics.syntax,path,options,ccn_ownership_action,&program as *u8);
-    og_destroy(&program);return status;
+fn ccn_ownership_file(path: *u8, options: *CcnOptions) -> i32 {
+    var program: OgProgram = uninit;
+    og_init(&program, null(*CrustAllocator), 2u64);
+    var status: i32 = ccn_file_using(
+        &program.generics.syntax,
+        path,
+        options,
+        ccn_ownership_action,
+        &program as *u8
+    );
+    og_destroy(&program);
+    return status;
 }
-fn ccn_ownership_main(argc:i32,argv:**u8)->i32 {
-    return ccn_program_using(argc-1i32,argv+1isize,ccn_ownership_file);
+fn ccn_ownership_main(argc: i32, argv: **u8) -> i32 {
+    return ccn_program_using(argc - 1i32, argv + 1isize, ccn_ownership_file);
 }

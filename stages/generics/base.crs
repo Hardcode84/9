@@ -2,17 +2,23 @@
 
 fn gs_length(text: *u8) -> usize {
     var size: usize = 0usize;
-    while text[size] != 0u8 { size = size + 1usize; }
+    while text[size] != 0u8 {
+        size = size + 1usize;
+    }
     return size;
 }
 
 fn gs_error(context: *CrustContext, loc: *CrustLoc, message: *u8) -> unit {
-    if (*context).error_count != 0usize { return; }
+    if (*context).error_count != 0usize {
+        return;
+    }
     crust_set_error(context, (*loc).source, (*loc).offset, message);
 }
 
 fn gs_name(context: *CrustContext, name: *CrustName) -> *CrustName {
-    if name == null(*CrustName) || (*context).error_count != 0usize { return null(*CrustName); }
+    if name == null(*CrustName) || (*context).error_count != 0usize {
+        return null(*CrustName);
+    }
     return crust_try_intern(context, (*name).text, (*name).size);
 }
 
@@ -23,21 +29,33 @@ fn gs_digits(buffer: *u8, value: u64) -> usize {
         index = index - 1usize;
         digits[index] = (value % 10u64) as u8 + 48u8;
         value = value / 10u64;
-        if value == 0u64 { break; }
+        if value == 0u64 {
+            break;
+        }
     }
     var count: usize = 20usize - index;
     var out: usize = 0usize;
-    while out < count { buffer[out] = digits[index + out]; out = out + 1usize; }
+    while out < count {
+        buffer[out] = digits[index + out];
+        out = out + 1usize;
+    }
     return count;
 }
 
 fn gs_number_name(context: *CrustContext, prefix: *u8, first: u64, second: u64) -> *u8 {
-    if (*context).error_count != 0usize { return null(*u8); }
+    if (*context).error_count != 0usize {
+        return null(*u8);
+    }
     var length: usize = gs_length(prefix);
     var output: *u8 = crust_try_alloc(context, length + 42usize, 1usize);
-    if output == null(*u8) { return output; }
+    if output == null(*u8) {
+        return output;
+    }
     var index: usize = 0usize;
-    while index < length { output[index] = prefix[index]; index = index + 1usize; }
+    while index < length {
+        output[index] = prefix[index];
+        index = index + 1usize;
+    }
     index = index + gs_digits(output + index as isize, first);
     output[index] = 95u8;
     index = index + 1usize;
@@ -70,8 +88,14 @@ fn gs_destroy(stage: *GsStage) -> unit {
 
 fn gs_instance_error(instance: *GsInstance) -> bool {
     var context: *CrustContext = &(*instance).context;
-    if (*context).error_count == 0usize { return false; }
+    if (*context).error_count == 0usize {
+        return false;
+    }
     var stage: *GsStage = (*(*instance).definition).stage;
-    gs_error(&(*stage).context, &(*context).error_loc, &(*context).error[0usize]);
+    gs_error(
+        &(*stage).context,
+        &(*context).error_loc,
+        &(*context).error[0usize]
+    );
     return true;
 }

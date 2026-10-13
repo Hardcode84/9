@@ -6,7 +6,10 @@ record CacheBuild {
     build: fn(*CrustContext, *CacheBuild, *u8) -> bool;
     user: *u8;
 }
-record CacheArtifact { path: *u8; hit: bool; }
+record CacheArtifact {
+    path: *u8;
+    hit: bool;
+}
 
 record CacheWork {
     directory: *u8;
@@ -16,4 +19,8 @@ record CacheWork {
     checksum: *u8;
 }
 
-record CacheInputs { items: **CrustSource; count: usize; capacity: usize; }
+record CacheInputs {
+    items: **CrustSource;
+    count: usize;
+    capacity: usize;
+}

@@ -9,18 +9,24 @@ fn main(argc: i32, argv: **u8) -> i32 access(reclaim, Forest) {
         var parent: TreeCursor = tree_parent(read leaf);
         var parent_value: read i64 = tree_value(read parent);
         var child_value: read i64 = tree_value(read leaf);
-        if parent_value != 65i64 || child_value != 66i64 { trap; }
+        if parent_value != 65i64 || child_value != 66i64 {
+            trap;
+        }
     }
     var detached: Tree = tree_take_left(mut root);
     drop root;
     read Forest {
         var leaf: TreeCursor = tree_left(read detached);
         var value: read i64 = tree_value(read leaf);
-        if value != 66i64 { trap; }
+        if value != 66i64 {
+            trap;
+        }
     }
     var replacement: Tree = tree_new(67i64);
     tree_attach_left(mut detached, move replacement);
     // Cleanup destroys the parent-owned subtree without a second ownership chain.
-    emit(79i32); emit(75i32); emit(10i32);
+    emit(79i32);
+    emit(75i32);
+    emit(10i32);
     return 0i32;
 }

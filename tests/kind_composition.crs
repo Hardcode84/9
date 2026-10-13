@@ -3,47 +3,81 @@
 fn kc_build(context: *CrustContext, source: *CrustSource, output: *u8, reverse: bool) -> bool {
     var resources: RsStage = uninit;
     var wrapper: KwStage = uninit;
-    if reverse { kw_init(&wrapper, context); rs_init(&resources, context); }
-    else { rs_init(&resources, context); kw_init(&wrapper, context); }
-    if (*context).error_count != 0usize { return false; }
-    var wrapper_hooks:CrustReaderHooks=make CrustReaderHooks {
-        next:null(*CrustReaderHooks), user:&wrapper as *u8,
-        function_end:null(fn(*CrustReader,*CrustDecl,*u8)->bool),
-        declaration:null(fn(*CrustReader,*u8)->*CrustDecl),
-        statement:null(fn(*CrustReader,*u8)->*CrustStmt),
-        prefix:null(fn(*CrustReader,*u8)->*CrustExpr), type_syntax:kw_read_type
+    if reverse {
+        kw_init(&wrapper, context);
+        rs_init(&resources, context);
+    } else {
+        rs_init(&resources, context);
+        kw_init(&wrapper, context);
+    }
+    if (*context).error_count != 0usize {
+        return false;
+    }
+    var wrapper_hooks: CrustReaderHooks = make CrustReaderHooks {
+        next: null(*CrustReaderHooks),
+        user: &wrapper as *u8,
+        function_end: null(fn(*CrustReader, *CrustDecl, *u8) -> bool),
+        declaration: null(fn(*CrustReader, *u8) -> *CrustDecl),
+        statement: null(fn(*CrustReader, *u8) -> *CrustStmt),
+        prefix: null(fn(*CrustReader, *u8) -> *CrustExpr),
+        type_syntax: kw_read_type
     };
-    var hooks:CrustReaderHooks=uninit;
-    rs_reader_hooks(&resources,&hooks,&wrapper_hooks);
-    if rr_read(context, source, 0usize, (*source).size, &hooks) == null(*CrustUnit) { return false; }
+    var hooks: CrustReaderHooks = uninit;
+    rs_reader_hooks(&resources, &hooks, &wrapper_hooks);
+    if rr_read(context, source, 0usize, (*source).size, &hooks) == null(*CrustUnit) {
+        return false;
+    }
     kw_lower(&wrapper);
-    if !rs_prepare(&resources) { return false; }
+    if !rs_prepare(&resources) {
+        return false;
+    }
     var entry: *CrustDecl = (*(*context).units).declarations;
     while true {
         if (*entry).kind == CRUST_D_FUNCTION && (*entry).link_name == null(*u8) {
             (*entry).link_name = "";
         }
-        if (*entry).next == null(*CrustDecl) { break; }
+        if (*entry).next == null(*CrustDecl) {
+            break;
+        }
         entry = (*entry).next;
     }
     var options: BackendOptions = make BackendOptions {
-        mode: 0u32, output: output, symbols: null(*u8),
-        cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
+        mode: 0u32,
+        output: output,
+        symbols: null(*u8),
+        cflags: null(**u8),
+        cflag_count: 0usize,
+        ldflags: null(**u8),
+        ldflag_count: 0usize
     };
     return c_backend_build(context, entry, &options) == 0i32;
 }
 
 fn main(argc: i32, argv: **u8) -> i32 {
-    if argc != 3i32 { return 2i32; }
+    if argc != 3i32 {
+        return 2i32;
+    }
     var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
     var text: *u8 = "extern fn putchar(code:i32)->i32=\"putchar\"; fn emit(code:i32)->unit{unsafe{putchar(code);}} resource Token{id:wrapped i32;} drop dispose; fn dispose(token:mut wrapped Token)->unit{unsafe{putchar(token.id);}} fn value(token:wrapped read wrapped Token)->i32{unsafe{return token.id;}} fn main(argc:i32,argv:**u8)->i32{unsafe{var token:wrapped wrapped Token=make Token{id:65i32};var result:i32=value(read token);defer emit(66i32);if result!=65i32{return 1i32;}}return 0i32;}";
     var source: CrustSource = make CrustSource {
-        path: "kind-composition", bytes: text, size: c_length(text), identity: 1u64
+        path: "kind-composition",
+        bytes: text,
+        size: c_length(text),
+        identity: 1u64
     };
-    var success: bool = kc_build(&context, &source, argv[1usize], c_equal(argv[2usize], "reverse"));
-    if !success { c_driver_diagnostic(&context, "kind composition"); }
+    var success: bool = kc_build(
+        &context,
+        &source,
+        argv[1usize],
+        c_equal(argv[2usize], "reverse")
+    );
+    if !success {
+        c_driver_diagnostic(&context, "kind composition");
+    }
     crust_context_destroy(&context);
-    if success { return 0i32; }
+    if success {
+        return 0i32;
+    }
     return 1i32;
 }

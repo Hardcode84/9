@@ -120,7 +120,10 @@ record RsChange {
     exclusive: bool;
 }
 
-record RsLoopExit { changes: *RsChange; next: *RsLoopExit; }
+record RsLoopExit {
+    changes: *RsChange;
+    next: *RsLoopExit;
+}
 
 record RsLoop {
     parent: *RsLoop;
@@ -155,4 +158,7 @@ record RsFunction {
     expression_depth: u32;
 }
 
-record RsStatements { first: *CrustStmt; last: *CrustStmt; }
+record RsStatements {
+    first: *CrustStmt;
+    last: *CrustStmt;
+}

@@ -2,20 +2,38 @@
 
 // Scalar type names follow the public CrustTypeKind order through POINTER.
 const C_NATIVE_TYPES: [*u8; 13] = make [*u8; 13] {
-    "int8_t", "uint8_t", "int16_t", "uint16_t", "int32_t", "uint32_t",
-    "int64_t", "uint64_t", "intptr_t", "uintptr_t", "bool", "void", "void *"
+    "int8_t",
+    "uint8_t",
+    "int16_t",
+    "uint16_t",
+    "int32_t",
+    "uint32_t",
+    "int64_t",
+    "uint64_t",
+    "intptr_t",
+    "uintptr_t",
+    "bool",
+    "void",
+    "void *"
 };
 
 fn c_native_kind(input: *CrustType) -> u32 {
-    if (*input).kind == CRUST_T_ISIZE { return CRUST_T_I64; }
-    if (*input).kind == CRUST_T_USIZE { return CRUST_T_U64; }
+    if (*input).kind == CRUST_T_ISIZE {
+        return CRUST_T_I64;
+    }
+    if (*input).kind == CRUST_T_USIZE {
+        return CRUST_T_U64;
+    }
     return (*input).kind;
 }
 
 fn c_type_mix(hash: usize, value: usize) -> usize {
-    var result: usize = hash ^ (value + 11400714819323198485usize +
-                               (hash << 6usize) + (hash >> 2usize));
-    if result == 0usize { return 1usize; }
+    var result: usize = hash ^ (
+        value + 11400714819323198485usize + (hash << 6usize) + (hash >> 2usize)
+    );
+    if result == 0usize {
+        return 1usize;
+    }
     return result;
 }
 
@@ -24,7 +42,9 @@ fn c_pair_slot(work: *CComparison, left: *CrustType, right: *CrustType) -> usize
     var slot: usize = c_map_hash(c_type_mix(left as usize, right as usize)) & mask;
     while (*work).slots[slot] != 0usize {
         var pair: *CTypePair = &(*work).pairs[(*work).slots[slot] - 1usize];
-        if (*pair).left == left && (*pair).right == right { return slot; }
+        if (*pair).left == left && (*pair).right == right {
+            return slot;
+        }
         slot = (slot + 1usize) & mask;
     }
     return slot;
@@ -33,17 +53,41 @@ fn c_pair_slot(work: *CComparison, left: *CrustType, right: *CrustType) -> usize
 fn c_pair_grow(stage: *CStage) -> bool {
     var work: *CComparison = &(*stage).comparison;
     if (*work).capacity > 9223372036854775807usize / sizeof(CTypePair) / 2usize {
-        c_error(&(*stage).status, null(*CrustSource), 0usize, "C type comparison size overflow");
+        c_error(
+            &(*stage).status,
+            null(*CrustSource),
+            0usize,
+            "C type comparison size overflow"
+        );
         return false;
     }
     var capacity: usize = (*work).capacity * 2usize;
-    if capacity == 0usize { capacity = 16usize; }
-    var pairs: *CTypePair = c_alloc(&(*stage).status, capacity * sizeof(CTypePair), alignof(CTypePair)) as *CTypePair;
-    var slots: *usize = c_alloc(&(*stage).status, capacity * 2usize * sizeof(usize), alignof(usize)) as *usize;
-    if pairs == null(*CTypePair) || slots == null(*usize) { return false; }
-    crust0_host_move_bytes(pairs as *u8, (*work).pairs as *u8, (*work).count * sizeof(CTypePair));
+    if capacity == 0usize {
+        capacity = 16usize;
+    }
+    var pairs: *CTypePair = c_alloc(
+        &(*stage).status,
+        capacity * sizeof(CTypePair),
+        alignof(CTypePair)
+    ) as *CTypePair;
+    var slots: *usize = c_alloc(
+        &(*stage).status,
+        capacity * 2usize * sizeof(usize),
+        alignof(usize)
+    ) as *usize;
+    if pairs == null(*CTypePair) || slots == null(*usize) {
+        return false;
+    }
+    crust0_host_move_bytes(
+        pairs as *u8,
+        (*work).pairs as *u8,
+        (*work).count * sizeof(CTypePair)
+    );
     var index: usize = 0usize;
-    while index < capacity * 2usize { slots[index] = 0usize; index = index + 1usize; }
+    while index < capacity * 2usize {
+        slots[index] = 0usize;
+        index = index + 1usize;
+    }
     (*work).pairs = pairs;
     (*work).slots = slots;
     (*work).capacity = capacity;
@@ -58,22 +102,34 @@ fn c_pair_grow(stage: *CStage) -> bool {
 }
 
 fn c_exact_pair(stage: *CStage, left: *CrustType, right: *CrustType) -> bool {
-    if (*stage).status.failed { return false; }
+    if (*stage).status.failed {
+        return false;
+    }
     while left != right {
         var kind: u32 = (*left).kind;
-        if kind != (*right).kind { return false; }
+        if kind != (*right).kind {
+            return false;
+        }
         if kind == CRUST_T_RECORD {
             var a: *CrustDecl = (*left).record_decl;
             var b: *CrustDecl = (*right).record_decl;
             return (*a).unit_identity == (*b).unit_identity && (*a).identity == (*b).identity;
         }
-        if kind == CRUST_T_FUNCTION { break; }
-        if kind != CRUST_T_ARRAY && kind != CRUST_T_POINTER { return true; }
-        if kind == CRUST_T_ARRAY && (*left).count != (*right).count { return false; }
+        if kind == CRUST_T_FUNCTION {
+            break;
+        }
+        if kind != CRUST_T_ARRAY && kind != CRUST_T_POINTER {
+            return true;
+        }
+        if kind == CRUST_T_ARRAY && (*left).count != (*right).count {
+            return false;
+        }
         left = (*left).base;
         right = (*right).base;
     }
-    if left == right { return true; }
+    if left == right {
+        return true;
+    }
     return c_queue_pair(stage, left, right);
 }
 
@@ -84,10 +140,18 @@ fn c_exact_type_equal(stage: *CStage, left: *CrustType, right: *CrustType) -> bo
     while equal && index < (*work).count {
         var a: *CrustType = (*work).pairs[index].left;
         var b: *CrustType = (*work).pairs[index].right;
-        equal = (*a).param_count == (*b).param_count && c_exact_pair(stage, (*a).base, (*b).base);
+        equal = (*a).param_count == (*b).param_count && c_exact_pair(
+            stage,
+            (*a).base,
+            (*b).base
+        );
         var parameter: usize = 0usize;
         while equal && parameter < (*a).param_count {
-            equal = c_exact_pair(stage, (*a).params[parameter], (*b).params[parameter]);
+            equal = c_exact_pair(
+                stage,
+                (*a).params[parameter],
+                (*b).params[parameter]
+            );
             parameter = parameter + 1usize;
         }
         index = index + 1usize;
@@ -102,12 +166,13 @@ fn c_exact_type_equal(stage: *CStage, left: *CrustType, right: *CrustType) -> bo
 }
 
 fn c_type_composite(input: *CrustType) -> bool {
-    return (*input).kind == CRUST_T_ARRAY || (*input).kind == CRUST_T_FUNCTION ||
-           (*input).kind == CRUST_T_RECORD;
+    return (*input).kind == CRUST_T_ARRAY || (*input).kind == CRUST_T_FUNCTION || (*input).kind == CRUST_T_RECORD;
 }
 
 fn c_type_key(stage: *CStage, input: *CrustType) -> usize {
-    if c_type_composite(input) { return c_type(stage, input) + 32usize; }
+    if c_type_composite(input) {
+        return c_type(stage, input) + 32usize;
+    }
     return c_native_kind(input) as usize + 1usize;
 }
 
@@ -116,21 +181,35 @@ fn c_type_child_equal(stage: *CStage, left: *CrustType, right: *CrustType) -> bo
 }
 
 fn c_type_shape_equal(stage: *CStage, left: *CrustType, right: *CrustType) -> bool {
-    if (*left).kind != (*right).kind { return false; }
+    if (*left).kind != (*right).kind {
+        return false;
+    }
     if (*left).kind == CRUST_T_RECORD {
         var a: *CrustDecl = (*left).record_decl;
         var b: *CrustDecl = (*right).record_decl;
         return (*a).unit_identity == (*b).unit_identity && (*a).identity == (*b).identity;
     }
     if (*left).kind == CRUST_T_ARRAY {
-        return (*left).count == (*right).count &&
-               c_type_child_equal(stage, (*left).base, (*right).base);
+        return (*left).count == (*right).count && c_type_child_equal(
+            stage,
+            (*left).base,
+            (*right).base
+        );
     }
-    if (*left).param_count != (*right).param_count ||
-       !c_type_child_equal(stage, (*left).base, (*right).base) { return false; }
+    if (*left).param_count != (*right).param_count || !c_type_child_equal(
+        stage,
+        (*left).base,
+        (*right).base
+    ) {
+        return false;
+    }
     var index: usize = 0usize;
     while index < (*left).param_count {
-        if !c_type_child_equal(stage, (*left).params[index], (*right).params[index]) {
+        if !c_type_child_equal(
+            stage,
+            (*left).params[index],
+            (*right).params[index]
+        ) {
             return false;
         }
         index = index + 1usize;
@@ -139,22 +218,35 @@ fn c_type_shape_equal(stage: *CStage, left: *CrustType, right: *CrustType) -> bo
 }
 
 fn c_type(stage: *CStage, input: *CrustType) -> usize {
-    if (*stage).status.failed || !c_type_composite(input) { return 0usize; }
+    if (*stage).status.failed || !c_type_composite(input) {
+        return 0usize;
+    }
     var info: *CTypeInfo = c_map_get(&(*stage).types, input as usize) as *CTypeInfo;
-    if info != null(*CTypeInfo) { return (*info).identity; }
+    if info != null(*CTypeInfo) {
+        return (*info).identity;
+    }
     var hash: usize = c_type_hash(stage, input);
-    if (*stage).status.failed { return 0usize; }
+    if (*stage).status.failed {
+        return 0usize;
+    }
     var head: *CTypeInfo = c_map_get(&(*stage).type_shapes, hash) as *CTypeInfo;
     info = head;
     while info != null(*CTypeInfo) {
         if c_type_shape_equal(stage, (*info).source, input) {
-            c_map_set(&(*stage).status, &(*stage).types, input as usize, info as usize);
+            c_map_set(
+                &(*stage).status,
+                &(*stage).types,
+                input as usize,
+                info as usize
+            );
             return (*info).identity;
         }
         info = (*info).hash_next;
     }
     info = c_alloc(&(*stage).status, sizeof(CTypeInfo), alignof(CTypeInfo)) as *CTypeInfo;
-    if info == null(*CTypeInfo) { return 0usize; }
+    if info == null(*CTypeInfo) {
+        return 0usize;
+    }
     if (*stage).next_type > 18446744073709551583usize || (*stage).next_type == 0usize {
         c_error(&(*stage).status, null(*CrustSource), 0usize, "too many C types");
         return 0usize;
@@ -165,8 +257,11 @@ fn c_type(stage: *CStage, input: *CrustType) -> usize {
     (*info).state = 0u32;
     (*info).next = null(*CTypeInfo);
     (*info).hash_next = head;
-    if (*stage).last_type == null(*CTypeInfo) { (*stage).first_type = info; }
-    else { (*(*stage).last_type).next = info; }
+    if (*stage).last_type == null(*CTypeInfo) {
+        (*stage).first_type = info;
+    } else {
+        (*(*stage).last_type).next = info;
+    }
     (*stage).last_type = info;
     c_map_set(&(*stage).status, &(*stage).types, input as usize, info as usize);
     c_map_set(&(*stage).status, &(*stage).type_shapes, hash, info as usize);
@@ -181,20 +276,32 @@ fn c_type(stage: *CStage, input: *CrustType) -> usize {
 }
 
 fn c_type_name(stage: *CStage, input: *CrustType) -> unit {
-    if (*stage).status.failed { return; }
+    if (*stage).status.failed {
+        return;
+    }
     var kind: u32 = (*input).kind;
-    if kind <= CRUST_T_POINTER { c_text(stage, C_NATIVE_TYPES[kind as usize]); return; }
-    if !c_type_composite(input) { trap; }
+    if kind <= CRUST_T_POINTER {
+        c_text(stage, C_NATIVE_TYPES[kind as usize]);
+        return;
+    }
+    if !c_type_composite(input) {
+        trap;
+    }
     var identity: usize = c_type(stage, input);
     c_text(stage, "r_t");
     c_number(stage, identity as u64);
 }
 
 fn c_type_arguments(stage: *CStage, input: *CrustType) -> unit {
-    if (*input).param_count == 0usize { c_text(stage, "void"); return; }
+    if (*input).param_count == 0usize {
+        c_text(stage, "void");
+        return;
+    }
     var index: usize = 0usize;
     while index < (*input).param_count {
-        if index != 0usize { c_text(stage, ","); }
+        if index != 0usize {
+            c_text(stage, ",");
+        }
         c_type_name(stage, (*input).params[index]);
         index = index + 1usize;
     }
@@ -203,25 +310,38 @@ fn c_type_arguments(stage: *CStage, input: *CrustType) -> unit {
 fn c_emit_type_layout(stage: *CStage, info: *CTypeInfo) -> unit {
     var identity: u64 = (*info).identity as u64;
     var input: *CrustType = (*info).source;
-    c_text(stage, "typedef char r_size_"); c_number(stage, identity);
-    c_text(stage, "[(sizeof(r_t"); c_number(stage, identity);
-    c_text(stage, ")=="); c_number(stage, (*input).size);
+    c_text(stage, "typedef char r_size_");
+    c_number(stage, identity);
+    c_text(stage, "[(sizeof(r_t");
+    c_number(stage, identity);
+    c_text(stage, ")==");
+    c_number(stage, (*input).size);
     c_text(stage, "ULL)?1:-1];\n");
-    c_text(stage, "struct r_align_type_"); c_number(stage, identity);
-    c_text(stage, "{char r_byte;r_t"); c_number(stage, identity);
+    c_text(stage, "struct r_align_type_");
+    c_number(stage, identity);
+    c_text(stage, "{char r_byte;r_t");
+    c_number(stage, identity);
     c_text(stage, " r_value;};\n");
-    c_text(stage, "typedef char r_align_"); c_number(stage, identity);
-    c_text(stage, "[(offsetof(struct r_align_type_"); c_number(stage, identity);
-    c_text(stage, ",r_value)=="); c_number(stage, (*input).align as u64);
+    c_text(stage, "typedef char r_align_");
+    c_number(stage, identity);
+    c_text(stage, "[(offsetof(struct r_align_type_");
+    c_number(stage, identity);
+    c_text(stage, ",r_value)==");
+    c_number(stage, (*input).align as u64);
     c_text(stage, "ULL)?1:-1];\n");
     if (*input).kind == CRUST_T_RECORD {
         var field: *CrustField = (*(*input).record_decl).fields;
         while field != null(*CrustField) {
-            c_text(stage, "typedef char r_offset_"); c_number(stage, identity);
-            c_text(stage, "_"); c_number(stage, (*field).index as u64);
-            c_text(stage, "[(offsetof(r_t"); c_number(stage, identity);
-            c_text(stage, ",r_f"); c_number(stage, (*field).index as u64);
-            c_text(stage, ")=="); c_number(stage, (*field).offset);
+            c_text(stage, "typedef char r_offset_");
+            c_number(stage, identity);
+            c_text(stage, "_");
+            c_number(stage, (*field).index as u64);
+            c_text(stage, "[(offsetof(r_t");
+            c_number(stage, identity);
+            c_text(stage, ",r_f");
+            c_number(stage, (*field).index as u64);
+            c_text(stage, ")==");
+            c_number(stage, (*field).offset);
             c_text(stage, "ULL)?1:-1];\n");
             field = (*field).next;
         }
@@ -229,14 +349,20 @@ fn c_emit_type_layout(stage: *CStage, info: *CTypeInfo) -> unit {
 }
 
 fn c_emit_type_dependency(stage: *CStage, input: *CrustType) -> unit {
-    if !c_type_composite(input) || (*stage).status.failed { return; }
+    if !c_type_composite(input) || (*stage).status.failed {
+        return;
+    }
     var info: *CTypeInfo = c_map_get(&(*stage).types, input as usize) as *CTypeInfo;
     c_emit_type(stage, info);
 }
 
 fn c_emit_type(stage: *CStage, info: *CTypeInfo) -> unit {
-    if (*stage).status.failed || (*info).state == 2u32 { return; }
-    if (*info).state != 0u32 { trap; }
+    if (*stage).status.failed || (*info).state == 2u32 {
+        return;
+    }
+    if (*info).state != 0u32 {
+        trap;
+    }
     (*info).state = 1u32;
     var input: *CrustType = (*info).source;
     var identity: u64 = (*info).identity as u64;
@@ -246,29 +372,41 @@ fn c_emit_type(stage: *CStage, info: *CTypeInfo) -> unit {
             c_emit_type_dependency(stage, (*field).type);
             field = (*field).next;
         }
-        c_text(stage, "struct r_tag"); c_number(stage, identity); c_text(stage, "{\n");
+        c_text(stage, "struct r_tag");
+        c_number(stage, identity);
+        c_text(stage, "{\n");
         field = (*(*input).record_decl).fields;
         while field != null(*CrustField) {
-            c_type_name(stage, (*field).type); c_text(stage, " r_f");
-            c_number(stage, (*field).index as u64); c_text(stage, ";\n");
+            c_type_name(stage, (*field).type);
+            c_text(stage, " r_f");
+            c_number(stage, (*field).index as u64);
+            c_text(stage, ";\n");
             field = (*field).next;
         }
         c_text(stage, "};\n");
     } else {
         c_emit_type_dependency(stage, (*input).base);
         if (*input).kind == CRUST_T_ARRAY {
-            c_text(stage, "struct r_tag"); c_number(stage, identity); c_text(stage, "{");
-            c_type_name(stage, (*input).base); c_text(stage, " r_elements[");
-            c_number(stage, (*input).count); c_text(stage, "];};\n");
+            c_text(stage, "struct r_tag");
+            c_number(stage, identity);
+            c_text(stage, "{");
+            c_type_name(stage, (*input).base);
+            c_text(stage, " r_elements[");
+            c_number(stage, (*input).count);
+            c_text(stage, "];};\n");
         } else {
             var index: usize = 0usize;
             while index < (*input).param_count {
                 c_emit_type_dependency(stage, (*input).params[index]);
                 index = index + 1usize;
             }
-            c_text(stage, "typedef "); c_type_name(stage, (*input).base);
-            c_text(stage, " (*r_t"); c_number(stage, identity); c_text(stage, ")(");
-            c_type_arguments(stage, input); c_text(stage, ");\n");
+            c_text(stage, "typedef ");
+            c_type_name(stage, (*input).base);
+            c_text(stage, " (*r_t");
+            c_number(stage, identity);
+            c_text(stage, ")(");
+            c_type_arguments(stage, input);
+            c_text(stage, ");\n");
         }
     }
     c_emit_type_layout(stage, info);
@@ -280,8 +418,10 @@ fn c_emit_types(stage: *CStage) -> unit {
     while info != null(*CTypeInfo) {
         (*info).state = 0u32;
         if (*(*info).source).kind != CRUST_T_FUNCTION {
-            c_text(stage, "typedef struct r_tag"); c_number(stage, (*info).identity as u64);
-            c_text(stage, " r_t"); c_number(stage, (*info).identity as u64);
+            c_text(stage, "typedef struct r_tag");
+            c_number(stage, (*info).identity as u64);
+            c_text(stage, " r_t");
+            c_number(stage, (*info).identity as u64);
             c_text(stage, ";\n");
         }
         info = (*info).next;
@@ -298,10 +438,14 @@ fn c_function_decl(declaration: *CrustDecl) -> bool {
 }
 
 fn c_bind(stage: *CStage, declaration: *CrustDecl, owned: bool) -> *CBinding {
-    if (*stage).status.failed { return null(*CBinding); }
+    if (*stage).status.failed {
+        return null(*CBinding);
+    }
     var binding: *CBinding = c_map_get(&(*stage).declarations, declaration as usize) as *CBinding;
     if binding == null(*CBinding) {
-        if !c_link_name_valid(stage, declaration) { return null(*CBinding); }
+        if !c_link_name_valid(stage, declaration) {
+            return null(*CBinding);
+        }
         var name: *u8 = (*declaration).link_name;
         var private: bool = *name == 0u8;
         var hash: usize = 0usize;
@@ -312,20 +456,35 @@ fn c_bind(stage: *CStage, declaration: *CrustDecl, owned: bool) -> *CBinding {
         }
         binding = head;
         while binding != null(*CBinding) {
-            if c_equal((*(*binding).source).link_name, name) { break; }
+            if c_equal((*(*binding).source).link_name, name) {
+                break;
+            }
             binding = (*binding).hash_next;
         }
         if binding != null(*CBinding) {
-            if !c_binding_compatible(stage, binding, declaration) { return null(*CBinding); }
+            if !c_binding_compatible(stage, binding, declaration) {
+                return null(*CBinding);
+            }
         } else {
             binding = c_new_binding(stage, declaration, head, hash, private);
-            if binding == null(*CBinding) { return binding; }
+            if binding == null(*CBinding) {
+                return binding;
+            }
         }
         c_type(stage, (*declaration).type);
-        c_map_set(&(*stage).status, &(*stage).declarations, declaration as usize, binding as usize);
+        c_map_set(
+            &(*stage).status,
+            &(*stage).declarations,
+            declaration as usize,
+            binding as usize
+        );
     }
-    if owned && !c_define_binding(stage, binding, declaration) { return null(*CBinding); }
-    if (*stage).status.failed { return null(*CBinding); }
+    if owned && !c_define_binding(stage, binding, declaration) {
+        return null(*CBinding);
+    }
+    if (*stage).status.failed {
+        return null(*CBinding);
+    }
     return binding;
 }
 
@@ -335,8 +494,11 @@ fn c_binding(stage: *CStage, declaration: *CrustDecl) -> *CBinding {
 
 fn c_global(stage: *CStage, declaration: *CrustDecl) -> unit {
     var binding: *CBinding = c_binding(stage, declaration);
-    if binding == null(*CBinding) { return; }
-    c_text(stage, "r_g"); c_number(stage, (*binding).identity as u64);
+    if binding == null(*CBinding) {
+        return;
+    }
+    c_text(stage, "r_g");
+    c_number(stage, (*binding).identity as u64);
 }
 
 fn c_private(binding: *CBinding) -> bool {
@@ -349,19 +511,35 @@ fn c_emit_prototypes(stage: *CStage) -> unit {
         var declaration: *CrustDecl = (*binding).definition;
         if c_private(binding) && declaration == null(*CrustDecl) {
             var source: *CrustDecl = (*binding).source;
-            c_error(&(*stage).status, (*source).loc.source, (*source).loc.offset,
-                    "private C linkage requires a definition in this output");
+            c_error(
+                &(*stage).status,
+                (*source).loc.source,
+                (*source).loc.offset,
+                "private C linkage requires a definition in this output"
+            );
             return;
         }
-        if declaration == null(*CrustDecl) { declaration = (*binding).source; }
+        if declaration == null(*CrustDecl) {
+            declaration = (*binding).source;
+        }
         var input: *CrustType = (*declaration).type;
-        if c_private(binding) { c_text(stage, "static "); }
-        else { c_text(stage, "extern "); }
-        if c_function_decl(declaration) { c_type_name(stage, (*input).base); }
-        else { c_type_name(stage, input); c_text(stage, " const"); }
-        c_text(stage, " r_g"); c_number(stage, (*binding).identity as u64);
+        if c_private(binding) {
+            c_text(stage, "static ");
+        } else {
+            c_text(stage, "extern ");
+        }
         if c_function_decl(declaration) {
-            c_text(stage, "("); c_type_arguments(stage, input); c_text(stage, ")");
+            c_type_name(stage, (*input).base);
+        } else {
+            c_type_name(stage, input);
+            c_text(stage, " const");
+        }
+        c_text(stage, " r_g");
+        c_number(stage, (*binding).identity as u64);
+        if c_function_decl(declaration) {
+            c_text(stage, "(");
+            c_type_arguments(stage, input);
+            c_text(stage, ")");
         }
         c_text(stage, ";\n");
         binding = (*binding).next;
@@ -372,14 +550,19 @@ fn c_emit_renames(stage: *CStage) -> unit {
     var buffer: *CBuffer = &(*stage).renames;
     var binding: *CBinding = (*stage).first_binding;
     while binding != null(*CBinding) {
-        if c_private(binding) { binding = (*binding).next; continue; }
+        if c_private(binding) {
+            binding = (*binding).next;
+            continue;
+        }
         c_buffer_text(buffer, "\"--redefine-sym\"\n\"r_g");
         c_buffer_number(buffer, (*binding).identity as u64);
         c_buffer_text(buffer, "=");
         var name: *u8 = (*(*binding).source).link_name;
         var index: usize = 0usize;
         while name[index] != 0u8 {
-            if name[index] == 34u8 || name[index] == 92u8 { c_buffer_text(buffer, "\\"); }
+            if name[index] == 34u8 || name[index] == 92u8 {
+                c_buffer_text(buffer, "\\");
+            }
             c_buffer_bytes(buffer, &name[index], 1usize);
             index = index + 1usize;
         }
@@ -390,10 +573,18 @@ fn c_emit_renames(stage: *CStage) -> unit {
 
 fn c_queue_pair(stage: *CStage, left: *CrustType, right: *CrustType) -> bool {
     var work: *CComparison = &(*stage).comparison;
-    if (*work).capacity != 0usize && (*work).slots[c_pair_slot(work, left, right)] != 0usize { return true; }
-    if (*work).count == (*work).capacity && !c_pair_grow(stage) { return false; }
+    if (*work).capacity != 0usize && (*work).slots[c_pair_slot(work, left, right)] != 0usize {
+        return true;
+    }
+    if (*work).count == (*work).capacity && !c_pair_grow(stage) {
+        return false;
+    }
     var slot: usize = c_pair_slot(work, left, right);
-    (*work).pairs[(*work).count] = make CTypePair { left: left, right: right, slot: slot };
+    (*work).pairs[(*work).count] = make CTypePair {
+        left: left,
+        right: right,
+        slot: slot
+    };
     (*work).count = (*work).count + 1usize;
     (*work).slots[slot] = (*work).count;
     return true;
@@ -423,27 +614,43 @@ fn c_type_hash(stage: *CStage, input: *CrustType) -> usize {
 fn c_link_name_valid(stage: *CStage, declaration: *CrustDecl) -> bool {
     var name: *u8 = (*declaration).link_name;
     if name == null(*u8) {
-        c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
-                "C backend declaration has no native link name");
+        c_error(
+            &(*stage).status,
+            (*declaration).loc.source,
+            (*declaration).loc.offset,
+            "C backend declaration has no native link name"
+        );
         return false;
     }
     if *name == 0u8 && (*declaration).kind == CRUST_D_EXTERN {
-        c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
-                "private C linkage requires a definition in this output");
+        c_error(
+            &(*stage).status,
+            (*declaration).loc.source,
+            (*declaration).loc.offset,
+            "private C linkage requires a definition in this output"
+        );
         return false;
     }
     var index: usize = 0usize;
     while name[index] != 0u8 {
         if name[index] > 127u8 {
-            c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
-                    "native link name is not ASCII");
+            c_error(
+                &(*stage).status,
+                (*declaration).loc.source,
+                (*declaration).loc.offset,
+                "native link name is not ASCII"
+            );
             return false;
         }
         index = index + 1usize;
     }
     if (*stage).entry != null(*CrustDecl) && c_equal(name, "main") {
-        c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
-                "native symbol main conflicts with the hosted entry adapter");
+        c_error(
+            &(*stage).status,
+            (*declaration).loc.source,
+            (*declaration).loc.offset,
+            "native symbol main conflicts with the hosted entry adapter"
+        );
         return false;
     }
     return true;
@@ -460,23 +667,46 @@ fn c_binding_compatible(stage: *CStage, binding: *CBinding, declaration: *CrustD
             equal = c_exact_type_equal(stage, (*previous).type, (*declaration).type);
         }
     }
-    if (*stage).status.failed { return false; }
+    if (*stage).status.failed {
+        return false;
+    }
     if !equal {
-        c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
-                "conflicting native ABI for symbol");
+        c_error(
+            &(*stage).status,
+            (*declaration).loc.source,
+            (*declaration).loc.offset,
+            "conflicting native ABI for symbol"
+        );
         return false;
     }
     return true;
 }
 
-fn c_new_binding(stage: *CStage, declaration: *CrustDecl, head: *CBinding,
-                 hash: usize, private: bool) -> *CBinding {
-    if !c_function_decl(declaration) && (*declaration).kind != CRUST_D_CONST { trap; }
-    var binding: *CBinding = c_alloc(&(*stage).status, sizeof(CBinding), alignof(CBinding)) as *CBinding;
-    if binding == null(*CBinding) { return null(*CBinding); }
+fn c_new_binding(
+    stage: *CStage,
+    declaration: *CrustDecl,
+    head: *CBinding,
+    hash: usize,
+    private: bool
+) -> *CBinding {
+    if !c_function_decl(declaration) && (*declaration).kind != CRUST_D_CONST {
+        trap;
+    }
+    var binding: *CBinding = c_alloc(
+        &(*stage).status,
+        sizeof(CBinding),
+        alignof(CBinding)
+    ) as *CBinding;
+    if binding == null(*CBinding) {
+        return null(*CBinding);
+    }
     if (*stage).next_binding == 0usize {
-        c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
-                "too many C native symbols");
+        c_error(
+            &(*stage).status,
+            (*declaration).loc.source,
+            (*declaration).loc.offset,
+            "too many C native symbols"
+        );
         return null(*CBinding);
     }
     (*binding).source = declaration;
@@ -485,18 +715,29 @@ fn c_new_binding(stage: *CStage, declaration: *CrustDecl, head: *CBinding,
     (*stage).next_binding = (*stage).next_binding + 1usize;
     (*binding).next = null(*CBinding);
     (*binding).hash_next = head;
-    if (*stage).last_binding == null(*CBinding) { (*stage).first_binding = binding; }
-    else { (*(*stage).last_binding).next = binding; }
+    if (*stage).last_binding == null(*CBinding) {
+        (*stage).first_binding = binding;
+    } else {
+        (*(*stage).last_binding).next = binding;
+    }
     (*stage).last_binding = binding;
-    if !private { c_map_set(&(*stage).status, &(*stage).native_names, hash, binding as usize); }
+    if !private {
+        c_map_set(&(*stage).status, &(*stage).native_names, hash, binding as usize);
+    }
     return binding;
 }
 
 fn c_define_binding(stage: *CStage, binding: *CBinding, declaration: *CrustDecl) -> bool {
-    if (*declaration).kind != CRUST_D_FUNCTION && (*declaration).kind != CRUST_D_CONST { trap; }
+    if (*declaration).kind != CRUST_D_FUNCTION && (*declaration).kind != CRUST_D_CONST {
+        trap;
+    }
     if (*binding).definition != null(*CrustDecl) && (*binding).definition != declaration {
-        c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset,
-                "duplicate native definition for symbol");
+        c_error(
+            &(*stage).status,
+            (*declaration).loc.source,
+            (*declaration).loc.offset,
+            "duplicate native definition for symbol"
+        );
         return false;
     }
     (*binding).definition = declaration;

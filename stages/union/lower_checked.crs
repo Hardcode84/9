@@ -1,103 +1,173 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn su_checked_construct(builder:read SuBuilder,type_name:read SuName,syntax:read SuSyntax,destination:read SuExpression,payload:read SuExpression,tag:u32,is_unit:bool)->SuStatement access(edit,CompilerArena){
-    if is_unit==su_has_expression(read payload){
-        su_build_error(read builder,true);
+fn su_checked_construct(
+    builder: read SuBuilder,
+    type_name: read SuName,
+    syntax: read SuSyntax,
+    destination: read SuExpression,
+    payload: read SuExpression,
+    tag: u32,
+    is_unit: bool
+) -> SuStatement access(edit, CompilerArena) {
+    if is_unit == su_has_expression(read payload) {
+        su_build_error(read builder, true);
         return su_no_statements();
     }
-    var name:SuName=su_fresh(read builder);
-    var named:SuSyntax=su_named(read builder,read type_name);
-    var pointer:SuSyntax=su_pointer(read builder,read named);
-    var address:SuExpression=su_unary(read builder,CRUST_OP_ADDRESS,read destination);
-    var target:SuStatement=su_variable(read builder,read name,read pointer,read address);
-    var reference:SuExpression=su_name(read builder,read name);
-    var base:SuExpression=su_unary(read builder,CRUST_OP_DEREF,read reference);
-    var field:SuExpression=su_tag(read builder,read base);
-    var number:SuExpression=su_number(read builder,tag);
-    var finish:SuStatement=su_assign(read builder,read field,read number);
-    if !is_unit{
-        var storage:SuExpression=su_payload(read builder,read base,read syntax);
-        var write:SuStatement=su_assign(read builder,read storage,read payload);
-        var tail:SuStatement=su_sequence(read write,read finish);
-        return su_sequence(read target,read tail);
+    var name: SuName = su_fresh(read builder);
+    var named: SuSyntax = su_named(read builder, read type_name);
+    var pointer: SuSyntax = su_pointer(read builder, read named);
+    var address: SuExpression = su_unary(read builder, CRUST_OP_ADDRESS, read destination);
+    var target: SuStatement = su_variable(read builder, read name, read pointer, read address);
+    var reference: SuExpression = su_name(read builder, read name);
+    var base: SuExpression = su_unary(read builder, CRUST_OP_DEREF, read reference);
+    var field: SuExpression = su_tag(read builder, read base);
+    var number: SuExpression = su_number(read builder, tag);
+    var finish: SuStatement = su_assign(read builder, read field, read number);
+    if !is_unit {
+        var storage: SuExpression = su_payload(read builder, read base, read syntax);
+        var write: SuStatement = su_assign(read builder, read storage, read payload);
+        var tail: SuStatement = su_sequence(read write, read finish);
+        return su_sequence(read target, read tail);
     }
-    return su_sequence(read target,read finish);
+    return su_sequence(read target, read finish);
 }
 
-fn su_checked_arm(builder:read SuBuilder,snapshot:read SuName,binding:read SuName,body:read SuStatement,syntax:read SuSyntax,is_unit:bool)->SuStatement access(edit,CompilerArena){
-    if su_has_name(read binding){
-        if is_unit{su_build_error(read builder,false);return su_no_statements();}
-        var reference:SuExpression=su_name(read builder,read snapshot);
-        var value:SuExpression=su_payload(read builder,read reference,read syntax);
-        var local:SuStatement=su_variable(read builder,read binding,read syntax,read value);
-        var sequence:SuStatement=su_sequence(read local,read body);
-        return su_block(read builder,read sequence);
-    }
-    return su_block(read builder,read body);
-}
-
-fn su_checked_test(builder:read SuBuilder,snapshot:read SuName,tag:u32)->SuExpression access(edit,CompilerArena){
-    var reference:SuExpression=su_name(read builder,read snapshot);
-    var field:SuExpression=su_tag(read builder,read reference);
-    var number:SuExpression=su_number(read builder,tag);
-    return su_equal(read builder,read field,read number);
-}
-
-const SU_MATCH_UNKNOWN:u32=0u32;
-const SU_MATCH_DUPLICATE:u32=1u32;
-const SU_MATCH_INCOMPLETE:u32=2u32;
-
-fn su_checked_coverage(builder:read SuBuilder,cursor:mut SuMatchNames,expected:usize)->bool access(edit,CompilerArena){
-    var count:usize=0usize;
-    while true{
-        var name:SuName=su_match_name_next(mut cursor);
-        if !su_has_name(read name){break;}
-        if !su_match_name_known(read cursor,read name){
-            su_match_error(read builder,read cursor,SU_MATCH_UNKNOWN);return false;
+fn su_checked_arm(
+    builder: read SuBuilder,
+    snapshot: read SuName,
+    binding: read SuName,
+    body: read SuStatement,
+    syntax: read SuSyntax,
+    is_unit: bool
+) -> SuStatement access(edit, CompilerArena) {
+    if su_has_name(read binding) {
+        if is_unit {
+            su_build_error(read builder, false);
+            return su_no_statements();
         }
-        if !su_match_name_insert(read builder,mut cursor,read name){
-            su_match_error(read builder,read cursor,SU_MATCH_DUPLICATE);return false;
-        }
-        count=count+1usize;
+        var reference: SuExpression = su_name(read builder, read snapshot);
+        var value: SuExpression = su_payload(read builder, read reference, read syntax);
+        var local: SuStatement = su_variable(
+            read builder,
+            read binding,
+            read syntax,
+            read value
+        );
+        var sequence: SuStatement = su_sequence(read local, read body);
+        return su_block(read builder, read sequence);
     }
-    if count!=expected{su_match_error(read builder,read cursor,SU_MATCH_INCOMPLETE);return false;}
+    return su_block(read builder, read body);
+}
+
+fn su_checked_test(builder: read SuBuilder, snapshot: read SuName, tag: u32) -> SuExpression access(
+    edit,
+    CompilerArena
+) {
+    var reference: SuExpression = su_name(read builder, read snapshot);
+    var field: SuExpression = su_tag(read builder, read reference);
+    var number: SuExpression = su_number(read builder, tag);
+    return su_equal(read builder, read field, read number);
+}
+
+const SU_MATCH_UNKNOWN: u32 = 0u32;
+const SU_MATCH_DUPLICATE: u32 = 1u32;
+const SU_MATCH_INCOMPLETE: u32 = 2u32;
+
+fn su_checked_coverage(builder: read SuBuilder, cursor: mut SuMatchNames, expected: usize) -> bool access(
+    edit,
+    CompilerArena
+) {
+    var count: usize = 0usize;
+    while true {
+        var name: SuName = su_match_name_next(mut cursor);
+        if !su_has_name(read name) {
+            break;
+        }
+        if !su_match_name_known(read cursor, read name) {
+            su_match_error(read builder, read cursor, SU_MATCH_UNKNOWN);
+            return false;
+        }
+        if !su_match_name_insert(read builder, mut cursor, read name) {
+            su_match_error(read builder, read cursor, SU_MATCH_DUPLICATE);
+            return false;
+        }
+        count = count + 1usize;
+    }
+    if count != expected {
+        su_match_error(read builder, read cursor, SU_MATCH_INCOMPLETE);
+        return false;
+    }
     return true;
 }
 
-fn su_checked_lower(arena:read SuArena,cursor:mut SuStatement,depth:usize)->unit access(edit,CompilerArena){
-    if !su_has_statement(read cursor) || su_handle_failed(read arena){return;}
-    if depth>=256usize{su_lower_depth_error(read arena,read cursor);return;}
-    while su_has_statement(read cursor) && !su_handle_failed(read arena){
-        su_checked_operation(read arena,read cursor);
-        var body:SuStatement=su_statement_child(read cursor,false);
-        su_checked_lower(read arena,mut body,depth+1usize);
-        var otherwise:SuStatement=su_statement_child(read cursor,true);
-        su_checked_lower(read arena,mut otherwise,depth+1usize);
+fn su_checked_lower(arena: read SuArena, cursor: mut SuStatement, depth: usize) -> unit access(
+    edit,
+    CompilerArena
+) {
+    if !su_has_statement(read cursor) || su_handle_failed(read arena) {
+        return;
+    }
+    if depth >= 256usize {
+        su_lower_depth_error(read arena, read cursor);
+        return;
+    }
+    while su_has_statement(read cursor) && !su_handle_failed(read arena) {
+        su_checked_operation(read arena, read cursor);
+        var body: SuStatement = su_statement_child(read cursor, false);
+        su_checked_lower(read arena, mut body, depth + 1usize);
+        var otherwise: SuStatement = su_statement_child(read cursor, true);
+        su_checked_lower(read arena, mut otherwise, depth + 1usize);
         su_statement_advance(mut cursor);
     }
 }
 
-fn su_checked_operation(arena:read SuArena,cursor:read SuStatement)->unit access(edit,CompilerArena){
-    var kind:u32=su_operation_kind(read arena,read cursor);
-    if kind==0u32{return;}
-    var sum:SuSum=su_operation_type(read arena,read cursor);
-    if !su_has_sum(read sum){su_operation_type_error(read arena,read cursor);return;}
-    if kind==1u32{su_construct_operation(read arena,read cursor,read sum);}
-    else{su_match_operation(read arena,read cursor,read sum);}
+fn su_checked_operation(arena: read SuArena, cursor: read SuStatement) -> unit access(
+    edit,
+    CompilerArena
+) {
+    var kind: u32 = su_operation_kind(read arena, read cursor);
+    if kind == 0u32 {
+        return;
+    }
+    var sum: SuSum = su_operation_type(read arena, read cursor);
+    if !su_has_sum(read sum) {
+        su_operation_type_error(read arena, read cursor);
+        return;
+    }
+    if kind == 1u32 {
+        su_construct_operation(read arena, read cursor, read sum);
+    } else {
+        su_match_operation(read arena, read cursor, read sum);
+    }
 }
 
-fn su_checked_match(builder:read SuBuilder,coverage:mut SuMatchNames,arms:mut SuArms,type_name:read SuName,value:read SuExpression,count:usize)->SuStatement access(edit,CompilerArena){
-    var name:SuName=su_fresh(read builder);
-    var syntax:SuSyntax=su_named(read builder,read type_name);
-    var snapshot:SuStatement=su_variable(read builder,read name,read syntax,read value);
-    if !su_checked_coverage(read builder,mut coverage,count){return su_no_statements();}
-    var chain:SuBranches=su_branches();
-    while su_arms_more(read arms){
-        var test:SuExpression=su_arm_test(read arms,read name);
-        var body:SuStatement=su_arm_binding(read arms,read name);
-        su_arms_advance(mut arms);
-        su_branch_append(read builder,mut chain,read test,read body,!su_arms_more(read arms));
+fn su_checked_match(
+    builder: read SuBuilder,
+    coverage: mut SuMatchNames,
+    arms: mut SuArms,
+    type_name: read SuName,
+    value: read SuExpression,
+    count: usize
+) -> SuStatement access(edit, CompilerArena) {
+    var name: SuName = su_fresh(read builder);
+    var syntax: SuSyntax = su_named(read builder, read type_name);
+    var snapshot: SuStatement = su_variable(read builder, read name, read syntax, read value);
+    if !su_checked_coverage(read builder, mut coverage, count) {
+        return su_no_statements();
     }
-    var branches:SuStatement=su_branch_result(read chain);
-    return su_sequence(read snapshot,read branches);
+    var chain: SuBranches = su_branches();
+    while su_arms_more(read arms) {
+        var test: SuExpression = su_arm_test(read arms, read name);
+        var body: SuStatement = su_arm_binding(read arms, read name);
+        su_arms_advance(mut arms);
+        su_branch_append(
+            read builder,
+            mut chain,
+            read test,
+            read body,
+            !su_arms_more(read arms)
+        );
+    }
+    var branches: SuStatement = su_branch_result(read chain);
+    return su_sequence(read snapshot, read branches);
 }

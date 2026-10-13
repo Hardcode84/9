@@ -11,8 +11,13 @@ record CcnRow {
 // The selected reader advances each action and returns a finite syntax tree.
 // Keep its nodes and source storage live through reporting. On failure, result
 // is null and context retains a diagnostic.
-fn ccn_read_using(context:*CrustContext,source:*CrustSource,result:**CcnRow,
-                   reader_action:fn(*CrustContext,*CrustSource,usize,usize,*CrustAction,*u8)->bool,user:*u8)->bool {
+fn ccn_read_using(
+    context: *CrustContext,
+    source: *CrustSource,
+    result: **CcnRow,
+    reader_action: fn(*CrustContext, *CrustSource, usize, usize, *CrustAction, *u8) -> bool,
+    user: *u8
+) -> bool {
     *result = null(*CcnRow);
     var first: *CcnRow = null(*CcnRow);
     var tail: **CcnRow = &first;
@@ -24,16 +29,26 @@ fn ccn_read_using(context:*CrustContext,source:*CrustSource,result:**CcnRow,
     var column: usize = 1usize;
     while cursor < (*source).size {
         var action: CrustAction = uninit;
-        if !reader_action(context, source, cursor, (*source).size, &action, user) { return false; }
+        if !reader_action(context, source, cursor, (*source).size, &action, user) {
+            return false;
+        }
         cursor = action.end;
         var declaration: *CrustDecl = action.declaration;
         if declaration != null(*CrustDecl) && (*declaration).kind == CRUST_D_FUNCTION {
             var row: *CcnRow = crust_try_alloc(context, sizeof(CcnRow), alignof(CcnRow)) as *CcnRow;
-            if row == null(*CcnRow) { return false; }
-            if !ccn_function(&counter, declaration, &(*row).complexity) { return false; }
+            if row == null(*CcnRow) {
+                return false;
+            }
+            if !ccn_function(&counter, declaration, &(*row).complexity) {
+                return false;
+            }
             while position < (*declaration).loc.offset {
-                if (*source).bytes[position] == 10u8 { line = line + 1usize; column = 1usize; }
-                else { column = column + 1usize; }
+                if (*source).bytes[position] == 10u8 {
+                    line = line + 1usize;
+                    column = 1usize;
+                } else {
+                    column = column + 1usize;
+                }
                 position = position + 1usize;
             }
             (*row).declaration = declaration;
@@ -43,13 +58,20 @@ fn ccn_read_using(context:*CrustContext,source:*CrustSource,result:**CcnRow,
             tail = &(*row).next;
         }
     }
-    *result = first;
+    * result = first;
     return true;
 }
 
-fn ccn_seed_action(context:*CrustContext,source:*CrustSource,begin:usize,end:usize,action:*CrustAction,user:*u8)->bool {
-    return crust_read_one(context,source,begin,end,action);
+fn ccn_seed_action(
+    context: *CrustContext,
+    source: *CrustSource,
+    begin: usize,
+    end: usize,
+    action: *CrustAction,
+    user: *u8
+) -> bool {
+    return crust_read_one(context, source, begin, end, action);
 }
-fn ccn_read(context:*CrustContext,source:*CrustSource,result:**CcnRow)->bool {
-    return ccn_read_using(context,source,result,ccn_seed_action,null(*u8));
+fn ccn_read(context: *CrustContext, source: *CrustSource, result: **CcnRow) -> bool {
+    return ccn_read_using(context, source, result, ccn_seed_action, null(*u8));
 }

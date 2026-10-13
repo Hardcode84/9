@@ -3,7 +3,14 @@
 fn os_driver_read(cli: *CCli, stage: *OsStage) -> bool {
     var context: *CrustContext = (*(*stage).resources).context;
     if (*cli).root != null(*CrustSource) {
-        if !os_read(stage, (*cli).root, (*cli).target_begin, (*(*cli).root).size) { return false; }
+        if !os_read(
+            stage,
+            (*cli).root,
+            (*cli).target_begin,
+            (*(*cli).root).size
+        ) {
+            return false;
+        }
     }
     var index: usize = 0usize;
     while index < (*cli).source_count {
@@ -11,13 +18,20 @@ fn os_driver_read(cli: *CCli, stage: *OsStage) -> bool {
         var bytes: *u8 = null(*u8);
         var size: usize = 0usize;
         if crust0_host_read_file((*source).path, &bytes, &size) != 0i32 {
-            c_driver_io_error(&(*cli).driver, "cannot read input", (*source).path, *c_driver_errno());
+            c_driver_io_error(
+                &(*cli).driver,
+                "cannot read input",
+                (*source).path,
+                *c_driver_errno()
+            );
             return false;
         }
         (*source).bytes = crust_try_copy_string(context, bytes, size);
         (*source).size = size;
         crust0_host_free(bytes);
-        if (*source).bytes == null(*u8) || !os_read(stage, source, 0usize, size) { return false; }
+        if (*source).bytes == null(*u8) || !os_read(stage, source, 0usize, size) {
+            return false;
+        }
         index = index + 1usize;
     }
     return true;
@@ -27,39 +41,68 @@ fn os_lower(stage: *OsStage) -> bool {
     var resources: *RsStage = (*stage).resources;
     (*resources).delegate_memory = true;
     (*resources).delegate_return_loans = true;
-    if !rs_collect(resources) || !os_prepare_outputs(stage) || !rs_publish(resources) { return false; }
+    if !rs_collect(resources) || !os_prepare_outputs(stage) || !rs_publish(resources) {
+        return false;
+    }
     var global: *RsGlobal = (*resources).first_global;
-    while global != null(*RsGlobal) && !(*resources).failed {
-        if (*(*global).source).kind == CRUST_D_FUNCTION && !rs_function(resources, global) { return false; }
+    while global != null(*RsGlobal) &&!(*resources).failed {
+        if (*(*global).source).kind == CRUST_D_FUNCTION && !rs_function(resources, global) {
+            return false;
+        }
         global = (*global).next;
     }
-    if (*resources).failed || !crust_check((*resources).context) { return false; }
-    if !rs_check_constants(resources) { return false; }
+    if (*resources).failed || !crust_check((*resources).context) {
+        return false;
+    }
+    if !rs_check_constants(resources) {
+        return false;
+    }
     os_erase_domains(stage);
     return true;
 }
 
-fn os_verify(stage: *OsStage) -> bool { return os_check(stage); }
-
-fn os_driver_emit(cli: *CCli, resources: *RsStage, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
-    if !c_driver_exports(cli) { return 1i32; }
-    if (*cli).mode == 3u32 { return 0i32; }
-    if !c_driver_names(&(*cli).driver) { return 1i32; }
-    var entry: *CrustDecl = null(*CrustDecl);
-    if !(*cli).library {
-        entry = resource_driver_entry(cli, resources);
-        if entry == null(*CrustDecl) { return 1i32; }
-    }
-    return backend_output((*resources).context,entry,&(*cli).options,emit);
+fn os_verify(stage: *OsStage) -> bool {
+    return os_check(stage);
 }
 
-fn os_driver_build(cli: *CCli, trusted: *CrustSource, count: usize, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
+fn os_driver_emit(
+    cli: *CCli,
+    resources: *RsStage,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
+    if !c_driver_exports(cli) {
+        return 1i32;
+    }
+    if (*cli).mode == 3u32 {
+        return 0i32;
+    }
+    if !c_driver_names(&(*cli).driver) {
+        return 1i32;
+    }
+    var entry: *CrustDecl = null(*CrustDecl);
+    if!(*cli).library {
+        entry = resource_driver_entry(cli, resources);
+        if entry == null(*CrustDecl) {
+            return 1i32;
+        }
+    }
+    return backend_output((*resources).context, entry, &(*cli).options, emit);
+}
+
+fn os_driver_build(
+    cli: *CCli,
+    trusted: *CrustSource,
+    count: usize,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
     var resources: RsStage = uninit;
     rs_init(&resources, (*cli).stage.status.context);
     var stage: OsStage = uninit;
     os_init(&stage, &resources);
     var result: i32 = 1i32;
-    if os_trust_sources(&stage, trusted, count) && os_driver_read(cli, &stage) && os_lower(&stage) && os_verify(&stage) {
+    if os_trust_sources(&stage, trusted, count) && os_driver_read(cli, &stage) && os_lower(
+        &stage
+    ) && os_verify(&stage) {
         result = os_driver_emit(cli, &resources, emit);
     }
     return result;
@@ -67,7 +110,12 @@ fn os_driver_build(cli: *CCli, trusted: *CrustSource, count: usize, emit:fn(*Cru
 
 // Check untrusted bodies against declared interfaces before producing output.
 // Keep source and arguments alive until return. Retain diagnostics in context.
-fn ownership_program(request: *CrustBuild, trusted: *CrustSource, count: usize, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
+fn ownership_program(
+    request: *CrustBuild,
+    trusted: *CrustSource,
+    count: usize,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
     var cli: CCli = uninit;
     var success: bool = c_driver_init(&cli, (*request).context, (*request).argc);
     cli.root = (*request).source;
@@ -89,7 +137,9 @@ fn os_erase_domains(stage: *OsStage) -> unit {
             var declaration: *CrustDecl = *position;
             if crust_map_get(&(*stage).domains, (*declaration).name as usize) != null(*u8) {
                 *position = (*declaration).next;
-            } else { position = &(*declaration).next; }
+            } else {
+                position = &(*declaration).next;
+            }
         }
         unit_value = (*unit_value).next;
     }

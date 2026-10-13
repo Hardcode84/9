@@ -1,45 +1,50 @@
 // SPDX-License-Identifier: Apache-2.0
 
 record OvGlobal {
-    name:*CrustName;
-    declaration:*CrustDecl;
-    first:*OvFunction;
-    count:usize;
-    signatures:CrustMap;
-    fields:CrustMap;
-    next:*OvGlobal;
+    name: *CrustName;
+    declaration: *CrustDecl;
+    first: *OvFunction;
+    count: usize;
+    signatures: CrustMap;
+    fields: CrustMap;
+    next: *OvGlobal;
 }
 
 record OvFunction {
-    declaration:*CrustDecl;
-    group:*OvGlobal;
-    syntax:*CrustTypeSyntax;
-    contract:*CrustName;
-    internal_name:*CrustName;
-    native_name:*u8;
-    has_interface:bool;
-    next:*OvFunction;
-    all_next:*OvFunction;
+    declaration: *CrustDecl;
+    group: *OvGlobal;
+    syntax: *CrustTypeSyntax;
+    contract: *CrustName;
+    internal_name: *CrustName;
+    native_name: *u8;
+    has_interface: bool;
+    next: *OvFunction;
+    all_next: *OvFunction;
 }
 
 record OvStage {
-    globals:CrustMap;
-    declarations:CrustMap;
-    type_keys:CrustMap;
-    scratch:CsText;
-    context:*CrustContext;
-    abi:*u8;
-    hooks:*CsHooks;
-    first_global:*OvGlobal;
-    first_function:*OvFunction;
-    failed:bool;
+    globals: CrustMap;
+    declarations: CrustMap;
+    type_keys: CrustMap;
+    scratch: CsText;
+    context: *CrustContext;
+    abi: *u8;
+    hooks: *CsHooks;
+    first_global: *OvGlobal;
+    first_function: *OvFunction;
+    failed: bool;
 }
 
-record OvLocal { syntax:*CrustTypeSyntax; }
-record OvScope { parent:*OvScope; bindings:CrustMap; }
+record OvLocal {
+    syntax: *CrustTypeSyntax;
+}
+record OvScope {
+    parent: *OvScope;
+    bindings: CrustMap;
+}
 record OvWalk {
-    stage:*OvStage;
-    scope:*OvScope;
-    result:*CrustTypeSyntax;
-    depth:usize;
+    stage: *OvStage;
+    scope: *OvScope;
+    result: *CrustTypeSyntax;
+    depth: usize;
 }

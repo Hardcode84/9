@@ -1,68 +1,106 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn su_checked_union(reader:read SuReader)->SuSum access(edit,CompilerArena){
-    var sum:SuSum=su_reader_union(read reader);
-    if !su_reader_expect(read reader,123u32){return move sum;}
-    var count:usize=0usize;
-    while su_reader_more(read reader){
-        if count==4294967295usize{su_reader_error(read reader,true);return move sum;}
-        var name:SuName=su_reader_name(read reader);
-        if !su_reader_expect(read reader,58u32){return move sum;}
-        var syntax:SuSyntax=su_reader_type(read reader);
-        if !su_reader_expect(read reader,59u32){return move sum;}
-        su_reader_variant(read reader,mut sum,read name,read syntax,count as u32);
-        count=count+1usize;
+fn su_checked_union(reader: read SuReader) -> SuSum access(edit, CompilerArena) {
+    var sum: SuSum = su_reader_union(read reader);
+    if !su_reader_expect(read reader, 123u32) {
+        return move sum;
     }
-    if count==0usize{su_reader_error(read reader,false);return move sum;}
-    if su_reader_expect(read reader,125u32){su_reader_publish(read reader,read sum,count);}
+    var count: usize = 0usize;
+    while su_reader_more(read reader) {
+        if count == 4294967295usize {
+            su_reader_error(read reader, true);
+            return move sum;
+        }
+        var name: SuName = su_reader_name(read reader);
+        if !su_reader_expect(read reader, 58u32) {
+            return move sum;
+        }
+        var syntax: SuSyntax = su_reader_type(read reader);
+        if !su_reader_expect(read reader, 59u32) {
+            return move sum;
+        }
+        su_reader_variant(read reader, mut sum, read name, read syntax, count as u32);
+        count = count + 1usize;
+    }
+    if count == 0usize {
+        su_reader_error(read reader, false);
+        return move sum;
+    }
+    if su_reader_expect(read reader, 125u32) {
+        su_reader_publish(read reader, read sum, count);
+    }
     return move sum;
 }
 
-fn su_checked_read_arm(reader:read SuReader)->SuArmHandle access(edit,CompilerArena){
-    var arm:SuArmHandle=su_reader_arm(read reader);
-    var name:SuName=su_reader_name(read reader);
-    su_arm_name(read arm,read name,false);
-    if su_reader_take(read reader,40u32){
-        var binding:SuName=su_reader_name(read reader);
-        su_arm_name(read arm,read binding,true);
-        if !su_reader_expect(read reader,41u32){return move arm;}
+fn su_checked_read_arm(reader: read SuReader) -> SuArmHandle access(edit, CompilerArena) {
+    var arm: SuArmHandle = su_reader_arm(read reader);
+    var name: SuName = su_reader_name(read reader);
+    su_arm_name(read arm, read name, false);
+    if su_reader_take(read reader, 40u32) {
+        var binding: SuName = su_reader_name(read reader);
+        su_arm_name(read arm, read binding, true);
+        if !su_reader_expect(read reader, 41u32) {
+            return move arm;
+        }
     }
-    var body:SuStatement=su_reader_block(read reader);
-    su_arm_body(read arm,read body);
+    var body: SuStatement = su_reader_block(read reader);
+    su_arm_body(read arm, read body);
     return move arm;
 }
 
-fn su_checked_read_match(reader:read SuReader,operation:mut SuParsedOperation)->bool access(edit,CompilerArena){
-    if !su_reader_expect(read reader,40u32){return false;}
-    var value:SuExpression=su_reader_expression(read reader);
-    su_operation_value(read operation,read value,false);
-    if !su_reader_expect(read reader,41u32) || !su_reader_expect(read reader,123u32){return false;}
-    while su_reader_more(read reader){
-        var arm:SuArmHandle=su_checked_read_arm(read reader);
-        su_operation_arm(mut operation,read arm);
+fn su_checked_read_match(reader: read SuReader, operation: mut SuParsedOperation) -> bool access(
+    edit,
+    CompilerArena
+) {
+    if !su_reader_expect(read reader, 40u32) {
+        return false;
     }
-    return su_reader_expect(read reader,125u32);
+    var value: SuExpression = su_reader_expression(read reader);
+    su_operation_value(read operation, read value, false);
+    if !su_reader_expect(read reader, 41u32) || !su_reader_expect(read reader, 123u32) {
+        return false;
+    }
+    while su_reader_more(read reader) {
+        var arm: SuArmHandle = su_checked_read_arm(read reader);
+        su_operation_arm(mut operation, read arm);
+    }
+    return su_reader_expect(read reader, 125u32);
 }
 
-fn su_checked_read_construct(reader:read SuReader,operation:read SuParsedOperation)->bool access(edit,CompilerArena){
-    if !su_reader_expect(read reader,46u32){return false;}
-    var name:SuName=su_reader_name(read reader);
-    su_operation_variant(read operation,read name);
-    if !su_reader_expect(read reader,40u32){return false;}
-    var value:SuExpression=su_reader_expression(read reader);
-    su_operation_value(read operation,read value,false);
-    if su_reader_take(read reader,44u32){
-        var payload:SuExpression=su_reader_expression(read reader);
-        su_operation_value(read operation,read payload,true);
+fn su_checked_read_construct(reader: read SuReader, operation: read SuParsedOperation) -> bool access(
+    edit,
+    CompilerArena
+) {
+    if !su_reader_expect(read reader, 46u32) {
+        return false;
     }
-    return su_reader_expect(read reader,41u32) && su_reader_expect(read reader,59u32);
+    var name: SuName = su_reader_name(read reader);
+    su_operation_variant(read operation, read name);
+    if !su_reader_expect(read reader, 40u32) {
+        return false;
+    }
+    var value: SuExpression = su_reader_expression(read reader);
+    su_operation_value(read operation, read value, false);
+    if su_reader_take(read reader, 44u32) {
+        var payload: SuExpression = su_reader_expression(read reader);
+        su_operation_value(read operation, read payload, true);
+    }
+    return su_reader_expect(read reader, 41u32) && su_reader_expect(read reader, 59u32);
 }
 
-fn su_checked_read_statement(reader:read SuReader,is_match:bool)->SuParsedOperation access(edit,CompilerArena){
-    var operation:SuParsedOperation=su_reader_operation(read reader,is_match);
-    var success:bool=false;
-    if is_match{success=su_checked_read_match(read reader,mut operation);}
-    else{success=su_checked_read_construct(read reader,read operation);}
-    if success{su_operation_publish(read reader,read operation);}
+fn su_checked_read_statement(reader: read SuReader, is_match: bool) -> SuParsedOperation access(
+    edit,
+    CompilerArena
+) {
+    var operation: SuParsedOperation = su_reader_operation(read reader, is_match);
+    var success: bool = false;
+    if is_match {
+        success = su_checked_read_match(read reader, mut operation);
+    } else {
+        success = su_checked_read_construct(read reader, read operation);
+    }
+    if success {
+        su_operation_publish(read reader, read operation);
+    }
     return move operation;
 }

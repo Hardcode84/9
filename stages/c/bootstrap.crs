@@ -10,5 +10,7 @@ host_source(run, "program.crs");
 host_source(run, "build.crs");
 
 var input: *CrustSource = host_input(run, "../../api/crust0.crs", 1u64);
-if input == null(*CrustSource) { return 1i32; };
+if input == null(*CrustSource) {
+    return 1i32;
+};
 return c_build(input, 0usize, (*run).argc, (*run).argv, c_backend_build);

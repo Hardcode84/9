@@ -1,68 +1,88 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn ov_is_function(declaration:*CrustDecl)->bool {
+fn ov_is_function(declaration: *CrustDecl) -> bool {
     return (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_EXTERN;
 }
 
-fn ov_reserved(name:*u8)->bool {
-    var prefix:*u8 = "crust_ov1_";
-    var index:usize = 0usize;
+fn ov_reserved(name: *u8) -> bool {
+    var prefix: *u8 = "crust_ov1_";
+    var index: usize = 0usize;
     while prefix[index] != 0u8 {
-        if name[index] != prefix[index] { return false; }
+        if name[index] != prefix[index] {
+            return false;
+        }
         index = index + 1usize;
     }
     return true;
 }
 
-fn ov_names(stage:*OvStage, function:*OvFunction)->unit {
-    var result_key:*CrustName = ov_type_key(stage, (*(*function).syntax).base);
-    if (*stage).failed { return; }
-    var buffer:*CsText = &(*stage).scratch;
-    var begin:usize = (*buffer).size;
+fn ov_names(stage: *OvStage, function: *OvFunction) -> unit {
+    var result_key: *CrustName = ov_type_key(stage, (*(*function).syntax).base);
+    if (*stage).failed {
+        return;
+    }
+    var buffer: *CsText = &(*stage).scratch;
+    var begin: usize = (*buffer).size;
     ov_text(stage, buffer, "crust_ov1_d");
     ov_part(stage, buffer, (*stage).abi, c_length((*stage).abi));
     ov_text(stage, buffer, "n");
-    var name:*CrustName = (*(*function).group).name;
+    var name: *CrustName = (*(*function).group).name;
     ov_part(stage, buffer, (*name).text, (*name).size);
-    var signature:*CrustTypeSyntax = (*function).syntax;
+    var signature: *CrustTypeSyntax = (*function).syntax;
     ov_text(stage, buffer, "a");
     ov_number(stage, buffer, (*signature).param_count as u64);
-    var index:usize = 0usize;
+    var index: usize = 0usize;
     while index < (*signature).param_count {
-        var key:*CrustName = ov_type_key(stage, (*signature).params[index]);
-        if key == null(*CrustName) { return; }
+        var key: *CrustName = ov_type_key(stage, (*signature).params[index]);
+        if key == null(*CrustName) {
+            return;
+        }
         ov_bytes(stage, buffer, (*key).text, (*key).size);
         index = index + 1usize;
     }
     ov_text(stage, buffer, "r");
     ov_bytes(stage, buffer, (*result_key).text, (*result_key).size);
     ov_text(stage, buffer, "c");
-    var contract:*CrustName = (*function).contract;
+    var contract: *CrustName = (*function).contract;
     ov_part(stage, buffer, (*contract).text, (*contract).size);
-    var native:*CrustName = ov_finish_key(stage, begin);
-    if native == null(*CrustName) { return; }
+    var native: *CrustName = ov_finish_key(stage, begin);
+    if native == null(*CrustName) {
+        return;
+    }
     (*function).native_name = (*native).text;
     ov_text(stage, buffer, "$");
     ov_bytes(stage, buffer, (*native).text, (*native).size);
     (*function).internal_name = ov_finish_key(stage, begin);
 }
 
-fn ov_add_function(stage:*OvStage, group:*OvGlobal, declaration:*CrustDecl)->unit {
-    var syntax:*CrustTypeSyntax = ov_function_syntax(stage, declaration);
-    if (*stage).failed { return; }
-    var parameters:*CrustName = ov_parameters(stage, syntax);
-    var contract:*CrustName = ov_source_contract(stage, declaration);
-    if (*stage).failed { return; }
-    if contract == null(*CrustName) {
-        ov_error(stage, &(*declaration).loc, "overload contract callback returned no contract");
+fn ov_add_function(stage: *OvStage, group: *OvGlobal, declaration: *CrustDecl) -> unit {
+    var syntax: *CrustTypeSyntax = ov_function_syntax(stage, declaration);
+    if (*stage).failed {
         return;
     }
-    var function:*OvFunction = crust_map_get(&(*group).signatures, parameters as usize) as *OvFunction;
+    var parameters: *CrustName = ov_parameters(stage, syntax);
+    var contract: *CrustName = ov_source_contract(stage, declaration);
+    if (*stage).failed {
+        return;
+    }
+    if contract == null(*CrustName) {
+        ov_error(
+            stage,
+            &(*declaration).loc,
+            "overload contract callback returned no contract"
+        );
+        return;
+    }
+    var function: *OvFunction = crust_map_get(&(*group).signatures, parameters as usize) as *OvFunction;
     if function != null(*OvFunction) {
-        if !ov_merge_function(stage, function, declaration, syntax, contract) { return; }
+        if !ov_merge_function(stage, function, declaration, syntax, contract) {
+            return;
+        }
     } else {
         function = ov_alloc(stage, sizeof(OvFunction), alignof(OvFunction)) as *OvFunction;
-        if function == null(*OvFunction) { return; }
+        if function == null(*OvFunction) {
+            return;
+        }
         (*function).declaration = declaration;
         (*function).group = group;
         (*function).syntax = syntax;
@@ -83,15 +103,17 @@ fn ov_add_function(stage:*OvStage, group:*OvGlobal, declaration:*CrustDecl)->uni
 
 // Require parsed source units and an initialized stage. Call once before resolution.
 // Retain original source names and publish complete function signatures.
-fn ov_collect(stage:*OvStage)->bool {
-    var unit_value:*CrustUnit = (*(*stage).context).units;
-    while unit_value != null(*CrustUnit) && !(*stage).failed {
-        var declaration:*CrustDecl = (*unit_value).declarations;
-        while declaration != null(*CrustDecl) && !(*stage).failed {
-            var group:*OvGlobal = ov_global(stage, (*declaration).name);
+fn ov_collect(stage: *OvStage) -> bool {
+    var unit_value: *CrustUnit = (*(*stage).context).units;
+    while unit_value != null(*CrustUnit) &&!(*stage).failed {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) &&!(*stage).failed {
+            var group: *OvGlobal = ov_global(stage, (*declaration).name);
             if group == null(*OvGlobal) {
                 group = ov_add_global(stage, declaration);
-                if group == null(*OvGlobal) { return false; }
+                if group == null(*OvGlobal) {
+                    return false;
+                }
             } else {
                 if !ov_is_function(declaration) || !ov_is_function((*group).declaration) {
                     ov_error(stage, &(*declaration).loc, "duplicate source declaration");
@@ -99,8 +121,14 @@ fn ov_collect(stage:*OvStage)->bool {
                 }
             }
             if ov_is_function(declaration) {
-                if (*declaration).kind == CRUST_D_EXTERN && ov_reserved((*declaration).link_name) {
-                    ov_error(stage, &(*declaration).loc, "native extern uses the reserved overload symbol prefix; use a source import");
+                if (*declaration).kind == CRUST_D_EXTERN && ov_reserved(
+                    (*declaration).link_name
+                ) {
+                    ov_error(
+                        stage,
+                        &(*declaration).loc,
+                        "native extern uses the reserved overload symbol prefix; use a source import"
+                    );
                     return false;
                 }
                 ov_add_function(stage, group, declaration);
@@ -114,15 +142,20 @@ fn ov_collect(stage:*OvStage)->bool {
 
 // Require successful collection and resolution. Publish unique seed names once.
 // Preserve explicit native symbols. Source imports use generated source ABI symbols.
-fn ov_mangle(stage:*OvStage)->bool {
-    if (*stage).failed { return false; }
-    var unit_value:*CrustUnit = (*(*stage).context).units;
+fn ov_mangle(stage: *OvStage) -> bool {
+    if (*stage).failed {
+        return false;
+    }
+    var unit_value: *CrustUnit = (*(*stage).context).units;
     while unit_value != null(*CrustUnit) {
-        var cursor:**CrustDecl = &(*unit_value).declarations;
+        var cursor: **CrustDecl = &(*unit_value).declarations;
         while *cursor != null(*CrustDecl) {
-            var declaration:*CrustDecl = *cursor;
+            var declaration: *CrustDecl = *cursor;
             if ov_is_function(declaration) {
-                var function:*OvFunction = crust_map_get(&(*stage).declarations, declaration as usize) as *OvFunction;
+                var function: *OvFunction = crust_map_get(
+                    &(*stage).declarations,
+                    declaration as usize
+                ) as *OvFunction;
                 if (*function).declaration != declaration {
                     *cursor = (*declaration).next;
                     continue;
@@ -130,11 +163,21 @@ fn ov_mangle(stage:*OvStage)->bool {
                 (*declaration).name = (*function).internal_name;
                 if (*declaration).kind == CRUST_D_FUNCTION {
                     (*declaration).link_name = "";
-                    if (*function).has_interface { (*declaration).link_name = (*function).native_name; }
-                    if (*declaration).body == null(*CrustStmt) { (*declaration).kind = CRUST_D_EXTERN; }
+                    if (*function).has_interface {
+                        (*declaration).link_name = (*function).native_name;
+                    }
+                    if (*declaration).body == null(*CrustStmt) {
+                        (*declaration).kind = CRUST_D_EXTERN;
+                    }
                 }
-                ov_source_published(stage, declaration, (*function).has_interface && (*declaration).kind == CRUST_D_EXTERN);
-                if ov_hook_failed(stage) { return false; }
+                ov_source_published(
+                    stage,
+                    declaration,
+                    (*function).has_interface && (*declaration).kind == CRUST_D_EXTERN
+                );
+                if ov_hook_failed(stage) {
+                    return false;
+                }
             }
             cursor = &(*declaration).next;
         }
@@ -143,27 +186,51 @@ fn ov_mangle(stage:*OvStage)->bool {
     return true;
 }
 
-fn ov_prepare(stage:*OvStage)->bool {
+fn ov_prepare(stage: *OvStage) -> bool {
     return ov_collect(stage) && ov_resolve(stage) && ov_mangle(stage);
 }
 
-fn ov_merge_function(stage:*OvStage,function:*OvFunction,declaration:*CrustDecl,
-                     syntax:*CrustTypeSyntax,contract:*CrustName)->bool {
-    var previous:*CrustDecl = (*function).declaration;
+fn ov_merge_function(
+    stage: *OvStage,
+    function: *OvFunction,
+    declaration: *CrustDecl,
+    syntax: *CrustTypeSyntax,
+    contract: *CrustName
+) -> bool {
+    var previous: *CrustDecl = (*function).declaration;
     if !ov_same(stage, (*(*function).syntax).base, (*syntax).base) {
-        ov_error(stage, &(*declaration).loc, "overloads cannot differ only by result type");
+        ov_error(
+            stage,
+            &(*declaration).loc,
+            "overloads cannot differ only by result type"
+        );
         return false;
     }
     if (*function).contract != contract {
-        ov_error(stage, &(*declaration).loc, "matching overload declarations have different contracts");
+        ov_error(
+            stage,
+            &(*declaration).loc,
+            "matching overload declarations have different contracts"
+        );
         return false;
     }
     if ((*previous).kind == CRUST_D_EXTERN) != ((*declaration).kind == CRUST_D_EXTERN) {
-        ov_error(stage, &(*declaration).loc, "matching overload declarations use different source and native ABIs");
+        ov_error(
+            stage,
+            &(*declaration).loc,
+            "matching overload declarations use different source and native ABIs"
+        );
         return false;
     }
-    if (*declaration).kind == CRUST_D_EXTERN && !c_equal((*previous).link_name, (*declaration).link_name) {
-        ov_error(stage, &(*declaration).loc, "matching native overload declarations have different symbols");
+    if (*declaration).kind == CRUST_D_EXTERN && !c_equal(
+        (*previous).link_name,
+        (*declaration).link_name
+    ) {
+        ov_error(
+            stage,
+            &(*declaration).loc,
+            "matching native overload declarations have different symbols"
+        );
         return false;
     }
     if (*previous).body != null(*CrustStmt) && (*declaration).body != null(*CrustStmt) {
@@ -177,16 +244,18 @@ fn ov_merge_function(stage:*OvStage,function:*OvFunction,declaration:*CrustDecl,
     return true;
 }
 
-fn ov_add_global(stage:*OvStage,declaration:*CrustDecl)->*OvGlobal {
-    var group:*OvGlobal = ov_alloc(stage, sizeof(OvGlobal), alignof(OvGlobal)) as *OvGlobal;
-    if group == null(*OvGlobal) { return null(*OvGlobal); }
+fn ov_add_global(stage: *OvStage, declaration: *CrustDecl) -> *OvGlobal {
+    var group: *OvGlobal = ov_alloc(stage, sizeof(OvGlobal), alignof(OvGlobal)) as *OvGlobal;
+    if group == null(*OvGlobal) {
+        return null(*OvGlobal);
+    }
     (*group).name = (*declaration).name;
     (*group).declaration = declaration;
     (*group).next = (*stage).first_global;
     (*stage).first_global = group;
     ov_put(stage, &(*stage).globals, (*group).name as usize, group as *u8);
-    var field:*CrustField = (*declaration).fields;
-    while field != null(*CrustField) && !(*stage).failed {
+    var field: *CrustField = (*declaration).fields;
+    while field != null(*CrustField) &&!(*stage).failed {
         if crust_map_get(&(*group).fields, (*field).name as usize) != null(*u8) {
             ov_error(stage, &(*field).loc, "duplicate record field");
             return null(*OvGlobal);
@@ -197,12 +266,18 @@ fn ov_add_global(stage:*OvStage,declaration:*CrustDecl)->*OvGlobal {
     return group;
 }
 
-fn ov_parameter_names(stage:*OvStage,declaration:*CrustDecl)->bool {
-    var names:CrustMap = make CrustMap { entries:null(*CrustMapEntry), count:0usize, capacity:0usize };
-    var parameter:*CrustParam = (*declaration).params;
-    while parameter != null(*CrustParam) && !(*stage).failed {
-        if ov_global(stage, (*parameter).name) != null(*OvGlobal) ||
-           crust_map_get(&names, (*parameter).name as usize) != null(*u8) {
+fn ov_parameter_names(stage: *OvStage, declaration: *CrustDecl) -> bool {
+    var names: CrustMap = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
+    var parameter: *CrustParam = (*declaration).params;
+    while parameter != null(*CrustParam) &&!(*stage).failed {
+        if ov_global(stage, (*parameter).name) != null(*OvGlobal) || crust_map_get(
+            &names,
+            (*parameter).name as usize
+        ) != null(*u8) {
             ov_error(stage, &(*parameter).loc, "parameter shadows a visible source name");
             return false;
         }
@@ -212,15 +287,17 @@ fn ov_parameter_names(stage:*OvStage,declaration:*CrustDecl)->bool {
     return true;
 }
 
-fn ov_check_parameter_names(stage:*OvStage)->bool {
-    var unit_value:*CrustUnit = (*(*stage).context).units;
-    while unit_value != null(*CrustUnit) && !(*stage).failed {
-        var declaration:*CrustDecl = (*unit_value).declarations;
-        while declaration != null(*CrustDecl) && !(*stage).failed {
-            if !ov_parameter_names(stage, declaration) { return false; }
+fn ov_check_parameter_names(stage: *OvStage) -> bool {
+    var unit_value: *CrustUnit = (*(*stage).context).units;
+    while unit_value != null(*CrustUnit) &&!(*stage).failed {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) &&!(*stage).failed {
+            if !ov_parameter_names(stage, declaration) {
+                return false;
+            }
             declaration = (*declaration).next;
         }
         unit_value = (*unit_value).next;
     }
-    return !(*stage).failed;
+    return!(*stage).failed;
 }

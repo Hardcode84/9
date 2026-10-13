@@ -365,13 +365,13 @@ def main():
         (
             "reader-private-state",
             checked_source.replace(
-                "var sum:SuSum=su_reader_union", "reader.reader;var sum:SuSum=su_reader_union"
+                "var sum: SuSum = su_reader_union", "reader.reader;var sum: SuSum = su_reader_union"
             ),
             "opaque fields",
         ),
         (
             "reader-shared-builder",
-            checked_source.replace("mut sum,read name", "read sum,read name"),
+            checked_source.replace("mut sum, read name", "read sum, read name"),
             "borrow mode",
         ),
         (
@@ -381,18 +381,20 @@ def main():
         ),
         (
             "driver-private-state",
-            checked_source.replace("var index:usize=0usize;", "driver.cli;var index:usize=0usize;"),
+            checked_source.replace(
+                "var index: usize = 0usize;", "driver.cli;var index: usize = 0usize;"
+            ),
             "opaque fields",
         ),
         (
             "shared-branch-chain",
-            checked_source.replace("mut chain,read test", "read chain,read test"),
+            checked_source.replace("mut chain,", "read chain,"),
             "borrow mode",
         ),
         (
             "coverage-private-representation",
             checked_source.replace(
-                "var count:usize=0usize;", "cursor.seen;var count:usize=0usize;", 1
+                "var count: usize = 0usize;", "cursor.seen;var count: usize = 0usize;", 1
             ),
             "opaque fields",
         ),
@@ -412,36 +414,39 @@ def main():
         ),
         (
             "builder-private-representation",
-            checked_source.replace("var name:SuName=", "destination.pointer;var name:SuName=", 1),
+            checked_source.replace(
+                "var name: SuName =", "destination.pointer;var name: SuName =", 1
+            ),
             "opaque fields",
         ),
         (
             "builder-borrowed-drop",
-            checked_source.replace("var name:SuName=", "drop destination;var name:SuName=", 1),
+            checked_source.replace("var name: SuName =", "drop destination;var name: SuName =", 1),
             "borrowed value",
         ),
         (
             "private-representation",
             checked_source.replace(
-                "var data:SuLayoutData=su_handle_load(read layout);",
-                "layout.pointer;var data:SuLayoutData=su_handle_load(read layout);",
+                "var data: SuLayoutData = su_handle_load(read layout);",
+                "layout.pointer;var data: SuLayoutData = su_handle_load(read layout);",
             ),
             "opaque fields",
         ),
         (
             "borrowed-drop",
             checked_source.replace(
-                "var data:SuLayoutData=su_handle_load(read layout);",
-                "drop layout;var data:SuLayoutData=su_handle_load(read layout);",
+                "var data: SuLayoutData = su_handle_load(read layout);",
+                "drop layout;var data: SuLayoutData = su_handle_load(read layout);",
             ),
             "borrowed value",
         ),
         (
             "read-authority",
-            checked_source.replace("access(edit,CompilerArena)", "access(read,CompilerArena)"),
+            checked_source.replace("access(edit, CompilerArena)", "access(read, CompilerArena)"),
             "stronger domain authority",
         ),
     ):
+        assert source != checked_source, name
         path = f"arena-reject-{name}.crs"
         experiment.write(path, source)
         result = probe(experiment, driver, "arena", client=path, expected=1)

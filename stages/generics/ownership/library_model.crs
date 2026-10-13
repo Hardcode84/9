@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record OgLibraryBinding { name: *CrustName; previous: *OgLibraryBinding; }
+record OgLibraryBinding {
+    name: *CrustName;
+    previous: *OgLibraryBinding;
+}
 
 record OgLibraryScope {
     globals: CrustMap;

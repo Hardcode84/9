@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn main(argc:i32, argv:**u8)->i32 {
-    var context:CrustContext = uninit;
+fn main(argc: i32, argv: **u8) -> i32 {
+    var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
-    var request:CrustBuild = make CrustBuild {
-        context:&context, source:null(*CrustSource), target_begin:0usize,
-        argc:argc - 1i32, argv:argv + 1isize
+    var request: CrustBuild = make CrustBuild {
+        context: &context,
+        source: null(*CrustSource),
+        target_begin: 0usize,
+        argc: argc - 1i32,
+        argv: argv + 1isize
     };
-    var result:i32 = overload_program(&request, c_backend_build);
-    if context.error_count != 0usize { c_driver_diagnostic(&context, argv[0usize]); }
+    var result: i32 = overload_program(&request, c_backend_build);
+    if context.error_count != 0usize {
+        c_driver_diagnostic(&context, argv[0usize]);
+    }
     crust_context_destroy(&context);
     return result;
 }

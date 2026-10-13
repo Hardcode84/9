@@ -39,6 +39,8 @@ class NativeSuite:
         return result
 
     def run(self, name, source=None, expected=0, diagnostic=None, arguments=(), **options):
+        if source is not None and expected != 0:
+            assert source != self.source, f"{name}: source mutation did not apply"
         root = self.work / (name + ".crs")
         root.write_text(self.source if source is None else source)
         result = self.command([self.build / "crust", root, *arguments], expected, **options)
@@ -203,8 +205,8 @@ record BuildState {
     declarations.write_text(source[start:end])
     source = source[:start] + f"host_source(run,{string(declarations)});\n" + source[end:]
     source = source.replace(
-        "counter: &counter, callback:",
-        "reader:read_tail, executor:execute_tail, counter: &counter, callback:",
+        "counter: &counter,",
+        "reader:read_tail, executor:execute_tail, counter: &counter,",
     )
     suite.run("reader-change", source)
 
@@ -218,7 +220,7 @@ def check_failures(suite):
     )
     suite.run(
         "missing-export",
-        suite.source.replace('"native_start", "native_c_image"', '"absent", "native_c_image"'),
+        suite.source.replace('"native_start"', '"absent"'),
         expected=1,
         diagnostic=b"export must name a defined function",
     )

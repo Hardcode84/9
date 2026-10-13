@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record OgReference { application: *CrustTypeSyntax; kind: u32; }
-record OgSourceRange { begin: usize; end: usize; }
+record OgReference {
+    application: *CrustTypeSyntax;
+    kind: u32;
+}
+record OgSourceRange {
+    begin: usize;
+    end: usize;
+}
 
 record OgProgram {
     generics: GsProgram;

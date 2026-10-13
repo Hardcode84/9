@@ -1,34 +1,38 @@
 // SPDX-License-Identifier: Apache-2.0
 
 record LlBinding {
-    declaration:*CrustDecl;
-    definition:*CrustDecl;
-    name:*u8;
-    next:*LlBinding;
+    declaration: *CrustDecl;
+    definition: *CrustDecl;
+    name: *u8;
+    next: *LlBinding;
 }
 record LlStage {
-    memory:CStage;
-    bindings:CrustMap;
-    native_names:CrustMap;
-    types:CrustMap;
-    strings:CrustMap;
-    first:*LlBinding;
-    last:*LlBinding;
-    entry:*CrustDecl;
-    expression:fn(*LlFunction,*CrustExpr)->*u8;
-    user:*u8;
-    identity:u64;
-    depth:usize;
+    memory: CStage;
+    bindings: CrustMap;
+    native_names: CrustMap;
+    types: CrustMap;
+    strings: CrustMap;
+    first: *LlBinding;
+    last: *LlBinding;
+    entry: *CrustDecl;
+    expression: fn(*LlFunction, *CrustExpr) -> *u8;
+    user: *u8;
+    identity: u64;
+    depth: usize;
 }
-record LlLoop { test:*u8; end:*u8; previous:*LlLoop; }
+record LlLoop {
+    test: *u8;
+    end: *u8;
+    previous: *LlLoop;
+}
 record LlFunction {
-    slots:CBuffer;
-    body:CBuffer;
-    symbols:CrustMap;
-    labels:CrustMap;
-    stage:*LlStage;
-    loop:*LlLoop;
-    identity:u64;
-    depth:usize;
-    terminated:bool;
+    slots: CBuffer;
+    body: CBuffer;
+    symbols: CrustMap;
+    labels: CrustMap;
+    stage: *LlStage;
+    loop: *LlLoop;
+    identity: u64;
+    depth: usize;
+    terminated: bool;
 }

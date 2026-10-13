@@ -11,8 +11,13 @@
 // Callback code and user storage must remain live through the synchronous call.
 // Null requires checked seed bodies and selects the default body emitter.
 // False or a new diagnostic stops the build. False without a diagnostic records one.
-extern fn c_backend_build_with_body(context: *CrustContext, entry: *CrustDecl, options: *BackendOptions,
-                                   body: fn(*CStage,*CrustDecl,*u8)->bool, user: *u8) -> i32 = "c_backend_build_with_body";
+extern fn c_backend_build_with_body(
+    context: *CrustContext,
+    entry: *CrustDecl,
+    options: *BackendOptions,
+    body: fn(*CStage, *CrustDecl, *u8) -> bool,
+    user: *u8
+) -> i32 = "c_backend_build_with_body";
 
 // Initialize at a stable address. Destroy after the last output-buffer use.
 extern fn c_stage_init(stage: *CStage, context: *CrustContext) -> unit = "c_stage_init";
@@ -22,8 +27,12 @@ extern fn c_stage_destroy(stage: *CStage) -> unit = "c_stage_destroy";
 // Retain input and callback storage through return.
 // Output buffers remain live until stage destruction. Failure sets stage.status.
 extern fn c_emit(stage: *CStage, entry: *CrustDecl) -> bool = "c_emit";
-extern fn c_emit_with_body(stage: *CStage, entry: *CrustDecl,
-                         body: fn(*CStage,*CrustDecl,*u8)->bool, user: *u8) -> bool = "c_emit_with_body";
+extern fn c_emit_with_body(
+    stage: *CStage,
+    entry: *CrustDecl,
+    body: fn(*CStage, *CrustDecl, *u8) -> bool,
+    user: *u8
+) -> bool = "c_emit_with_body";
 
 // Record only the first failure. Message must be a terminated string.
 extern fn c_error(status: *CStatus, source: *CrustSource, offset: usize, message: *u8) -> unit = "c_error";

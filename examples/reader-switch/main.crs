@@ -17,8 +17,9 @@ fn read_line(current: *CrustRun, user: *u8, action: **u8) -> bool {
         *action = null(*u8);
         return true;
     }
-    if (*input).size - position < 2usize || (*input).bytes[position] != 62u8 ||
-       (*input).bytes[position + 1usize] != 32u8 {
+    if (*input).size - position < 2usize || (*input).bytes[position] != 62u8 || (*input).bytes[
+        position + 1usize
+    ] != 32u8 {
         crust_set_error((*current).context, input, position, "expected '> ' before text");
         return false;
     }
@@ -27,7 +28,9 @@ fn read_line(current: *CrustRun, user: *u8, action: **u8) -> bool {
     while position < (*input).size && (*input).bytes[position] != 10u8 {
         position = position + 1usize;
     }
-    if position < (*input).size { position = position + 1usize; }
+    if position < (*input).size {
+        position = position + 1usize;
+    }
     var line: *Line = user as *Line;
     (*line).bytes = (*input).bytes + begin as isize;
     (*line).size = position - begin;
@@ -40,7 +43,12 @@ fn read_line(current: *CrustRun, user: *u8, action: **u8) -> bool {
 fn write_line(current: *CrustRun, user: *u8, action: *u8) -> bool {
     var line: *Line = action as *Line;
     if crust0_host_write_stream(1u32, (*line).bytes, (*line).size) != 0i32 {
-        crust_set_error((*current).context, (*current).source, (*current).cursor, "cannot write text");
+        crust_set_error(
+            (*current).context,
+            (*current).source,
+            (*current).cursor,
+            "cannot write text"
+        );
         return false;
     }
     return true;

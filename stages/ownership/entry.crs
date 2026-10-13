@@ -16,36 +16,84 @@ fn os_check_init(check: *OsCheck, stage: *OsStage, contract: *OsFunction) -> uni
 
 fn os_state_init(state: *OsState, contract: *OsFunction) -> unit {
     var index: usize = 0usize;
-    while index < 64usize { (*state).facts[index] = null(*OsFact); index = index + 1usize; }
+    while index < 64usize {
+        (*state).facts[index] = null(*OsFact);
+        index = index + 1usize;
+    }
     (*state).brand = null(*OsScope);
     (*state).scope = null(*OsScope);
     (*state).domain = null(*CrustName);
     (*state).effect = 0u32;
-    if contract != null(*OsFunction) { (*state).domain = (*contract).domain; (*state).effect = (*contract).effect; }
+    if contract != null(*OsFunction) {
+        (*state).domain = (*contract).domain;
+        (*state).effect = (*contract).effect;
+    }
     (*state).flow = OS_NORMAL;
 }
 
-fn os_pointer_parameter(check: *OsCheck, state: *OsState, parameter: *CrustParam, output: bool) -> *OsObject {
+fn os_pointer_parameter(
+    check: *OsCheck,
+    state: *OsState,
+    parameter: *CrustParam,
+    output: bool
+) -> *OsObject {
     var syntax: *CrustTypeSyntax = (*(*parameter).syntax_type).base;
     var schema: *OsRecord = os_record((*check).stage, syntax);
     if schema == null(*OsRecord) || (*schema).domain != (*state).domain || (*state).effect == 0u32 {
-        os_error(check, &(*parameter).loc, "schema pointer requires access to its declared domain"); return null(*OsObject);
+        os_error(
+            check,
+            &(*parameter).loc,
+            "schema pointer requires access to its declared domain"
+        );
+        return null(*OsObject);
     }
-    var object: *OsObject = os_object_header(check, state, syntax, null(*OsObject), (*state).scope, !output);
-    if object == null(*OsObject) { return object; }
-    if output && !os_trusted((*check).stage, (*(*check).function).declaration) && !(*schema).opaque {
-        os_error(check, &(*parameter).loc, "in-place output requires an opaque constructor"); return null(*OsObject);
+    var object: *OsObject = os_object_header(
+        check,
+        state,
+        syntax,
+        null(*OsObject),
+        (*state).scope,
+        !output
+    );
+    if object == null(*OsObject) {
+        return object;
     }
-    if !output { os_mark(check, state, object, os_flags(state, object) & ~OS_NONNULL); }
+    if output && !os_trusted((*check).stage, (*(*check).function).declaration) &&!(*schema).opaque {
+        os_error(
+            check,
+            &(*parameter).loc,
+            "in-place output requires an opaque constructor"
+        );
+        return null(*OsObject);
+    }
+    if !output {
+        os_mark(check, state, object, os_flags(state, object) & ~OS_NONNULL);
+    }
     (*object).aliased = !output;
     os_object_fields(check, state, object, !output);
     return object;
 }
 
-fn os_parameter_bind(check: *OsCheck, state: *OsState, parameter: *CrustParam, value: *OsValue, borrowed: bool) -> unit {
-    if !os_abstract_local(check, state, (*parameter).name, &(*parameter).loc) { return; }
-    var slot: *OsSlot = os_slot(check, (*parameter).syntax_type, (*parameter).name, null(*OsObject), (*state).scope);
-    if slot == null(*OsSlot) { return; }
+fn os_parameter_bind(
+    check: *OsCheck,
+    state: *OsState,
+    parameter: *CrustParam,
+    value: *OsValue,
+    borrowed: bool
+) -> unit {
+    if !os_abstract_local(check, state, (*parameter).name, &(*parameter).loc) {
+        return;
+    }
+    var slot: *OsSlot = os_slot(
+        check,
+        (*parameter).syntax_type,
+        (*parameter).name,
+        null(*OsObject),
+        (*state).scope
+    );
+    if slot == null(*OsSlot) {
+        return;
+    }
     (*slot).argument = true;
     (*slot).authority = (*check).drop && borrowed;
     (*slot).next = (*(*state).scope).locals;
@@ -53,15 +101,26 @@ fn os_parameter_bind(check: *OsCheck, state: *OsState, parameter: *CrustParam, v
     os_set(check, state, slot as *u8, value, OS_READY);
     os_loan_parameter(check, state, slot, value);
     var syntax: *CrustTypeSyntax = (*parameter).syntax_type;
-    if os_borrowed(check, syntax) { syntax = (*syntax).base; }
-    (*check).parameters = os_binding(check, (*parameter).name, value, (*check).parameters);
-    if (*check).parameters != null(*OsBinding) { (*(*check).parameters).value = value; }
+    if os_borrowed(check, syntax) {
+        syntax = (*syntax).base;
+    }
+    (*check).parameters = os_binding(
+        check,
+        (*parameter).name,
+        value,
+        (*check).parameters
+    );
+    if (*check).parameters != null(*OsBinding) {
+        (*(*check).parameters).value = value;
+    }
 }
 
 fn os_parameter_value(check: *OsCheck, state: *OsState, name: *CrustName) -> *OsValue {
     var binding: *OsBinding = (*check).parameters;
     while binding != null(*OsBinding) {
-        if (*binding).name == name { return (*binding).value; }
+        if (*binding).name == name {
+            return (*binding).value;
+        }
         binding = (*binding).next;
     }
     return null(*OsValue);
@@ -70,43 +129,90 @@ fn os_parameter_value(check: *OsCheck, state: *OsState, name: *CrustName) -> *Os
 fn os_resolve_functions(check: *OsCheck) -> unit {
     var global: *RsGlobal = (*(*(*check).stage).resources).first_global;
     while global != null(*RsGlobal) && !os_failed(check) {
-        var contract: *OsFunction = crust_map_get(&(*(*check).stage).functions, (*global).source as usize) as *OsFunction;
-        if contract != null(*OsFunction) { os_resolve_interface(check, contract); }
+        var contract: *OsFunction = crust_map_get(
+            &(*(*check).stage).functions,
+            (*global).source as usize
+        ) as *OsFunction;
+        if contract != null(*OsFunction) {
+            os_resolve_interface(check, contract);
+        }
         global = (*global).next;
     }
 }
 
-fn os_output_argument(check: *OsCheck, state: *OsState, contract: *OsFunction,
-                       parameter: *CrustParam, value: *OsValue, location: *CrustLoc) -> unit {
-    var schema: *OsRecord = os_record((*check).stage, (*(*parameter).syntax_type).base);
+fn os_output_argument(
+    check: *OsCheck,
+    state: *OsState,
+    contract: *OsFunction,
+    parameter: *CrustParam,
+    value: *OsValue,
+    location: *CrustLoc
+) -> unit {
+    var schema: *OsRecord = os_record(
+        (*check).stage,
+        (*(*parameter).syntax_type).base
+    );
     if schema == null(*OsRecord) || (*schema).domain != (*contract).domain || (*contract).effect == 0u32 {
-        os_error(check, location, "pointer argument requires a declared domain interface"); return;
+        os_error(check, location, "pointer argument requires a declared domain interface");
+        return;
     }
     var output: bool = os_field((*contract).initializes, (*parameter).name) != null(*OsField);
-    if !output { os_error(check, location, "raw pointer arguments require a trusted implementation; use opaque scoped values"); return; }
+    if !output {
+        os_error(
+            check,
+            location,
+            "raw pointer arguments require a trusted implementation; use opaque scoped values"
+        );
+        return;
+    }
     var object: *OsObject = (*value).object;
-    if object == null(*OsObject) { if output { os_error(check, location, "initializes requires checked storage"); } return; }
+    if object == null(*OsObject) {
+        if output {
+            os_error(check, location, "initializes requires checked storage");
+        }
+        return;
+    }
     if output {
         if (os_flags(state, object) & OS_READY) != 0u32 {
-            os_error(check, location, "initializes cannot replace published storage"); return;
+            os_error(check, location, "initializes cannot replace published storage");
+            return;
         }
         if os_access_through(check, state, object, (*value).loan, true, location) {
-            (*value).loan = os_loan_create(check, state, value, object, rs_kind((*(*check).stage).resources, RS_MUT));
+            (*value).loan = os_loan_create(
+                check,
+                state,
+                value,
+                object,
+                rs_kind((*(*check).stage).resources, RS_MUT)
+            );
         }
-    } else { os_publish_value(check, state, object, location); }
+    } else {
+        os_publish_value(check, state, object, location);
+    }
 }
 
 fn os_resolve_interface(check: *OsCheck, contract: *OsFunction) -> unit {
     var declaration: *CrustDecl = (*contract).declaration;
-    if (*contract).domain != null(*CrustName) &&
-       crust_map_get(&(*(*check).stage).domains, (*contract).domain as usize) == null(*u8) {
-        os_error(check, &(*declaration).loc, "function access requires a declared domain"); return;
+    if (*contract).domain != null(*CrustName) && crust_map_get(
+        &(*(*check).stage).domains,
+        (*contract).domain as usize
+    ) == null(*u8) {
+        os_error(check, &(*declaration).loc, "function access requires a declared domain");
+        return;
     }
-    if (*contract).foreign != 0u32 && ((*contract).effect != 0u32 ||
-       (*contract).initializes != null(*OsField) || (*contract).has_modifies) {
-        os_error(check, &(*declaration).loc, "foreign effects do not accept checked body contracts"); return;
+    if (*contract).foreign != 0u32 && (
+        (*contract).effect != 0u32 || (*contract).initializes != null(*OsField) || (*contract).has_modifies
+    ) {
+        os_error(
+            check,
+            &(*declaration).loc,
+            "foreign effects do not accept checked body contracts"
+        );
+        return;
     }
-    if (*contract).foreign != 0u32 { os_validate_foreign(check, contract); }
+    if (*contract).foreign != 0u32 {
+        os_validate_foreign(check, contract);
+    }
     os_resolve_modifies(check, contract);
     os_resolve_view_result(check, contract);
     var item: *OsField = (*contract).initializes;
@@ -119,12 +225,26 @@ fn os_resolve_interface(check: *OsCheck, contract: *OsFunction) -> unit {
 fn os_resolve_output(check: *OsCheck, contract: *OsFunction, name: *CrustName) -> unit {
     var declaration: *CrustDecl = (*contract).declaration;
     var parameter: *CrustParam = (*declaration).params;
-    while parameter != null(*CrustParam) && (*parameter).name != name { parameter = (*parameter).next; }
-    if parameter == null(*CrustParam) || (*(*parameter).syntax_type).kind != CRUST_T_POINTER {
-        os_error(check, &(*declaration).loc, "initializes requires a declared record pointer parameter"); return;
+    while parameter != null(*CrustParam) && (*parameter).name != name {
+        parameter = (*parameter).next;
     }
-    var schema: *OsRecord = os_record((*check).stage, (*(*parameter).syntax_type).base);
+    if parameter == null(*CrustParam) || (*(*parameter).syntax_type).kind != CRUST_T_POINTER {
+        os_error(
+            check,
+            &(*declaration).loc,
+            "initializes requires a declared record pointer parameter"
+        );
+        return;
+    }
+    var schema: *OsRecord = os_record(
+        (*check).stage,
+        (*(*parameter).syntax_type).base
+    );
     if schema == null(*OsRecord) || (*schema).domain != (*contract).domain || (*contract).effect < OS_EDIT {
-        os_error(check, &(*parameter).loc, "initializes requires edit access to the output domain");
+        os_error(
+            check,
+            &(*parameter).loc,
+            "initializes requires edit access to the output domain"
+        );
     }
 }

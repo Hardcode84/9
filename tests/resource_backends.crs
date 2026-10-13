@@ -5,30 +5,47 @@ extern fn rb_close(file: *u8) -> i32 = "fclose";
 
 fn rb_prepare(cli: *CCli, checked: bool, trusted: *CrustSource) -> *CrustDecl {
     var resources: RsStage = uninit;
-    rs_init(&resources, cli->stage.status.context);
+    rs_init(&resources, cli -> stage.status.context);
     if checked {
         var ownership: OsStage = uninit;
         os_init(&ownership, &resources);
         var count: usize = 0usize;
-        if trusted != null(*CrustSource) { count = 1usize; }
-        if !os_trust_sources(&ownership, trusted, count) || !os_driver_read(cli, &ownership) ||
-           !os_lower(&ownership) || !os_verify(&ownership) { return null(*CrustDecl); }
+        if trusted != null(*CrustSource) {
+            count = 1usize;
+        }
+        if !os_trust_sources(&ownership, trusted, count) || !os_driver_read(cli, &ownership) || !os_lower(
+            &ownership
+        ) || !os_verify(&ownership) {
+            return null(*CrustDecl);
+        }
     } else {
-        if !resource_driver_read(cli, &resources) || !rs_prepare(&resources) { return null(*CrustDecl); }
+        if !resource_driver_read(cli, &resources) || !rs_prepare(&resources) {
+            return null(*CrustDecl);
+        }
     }
     return resource_driver_entry(cli, &resources);
 }
 
 fn rb_assembly(cli: *CCli, entry: *CrustDecl) -> bool {
-    var context: *CrustContext = cli->stage.status.context;
-    var file: *u8 = rb_open(cli->options.output, "wb");
+    var context: *CrustContext = cli -> stage.status.context;
+    var file: *u8 = rb_open(cli -> options.output, "wb");
     if file == null(*u8) {
-        c_driver_io_error(&cli->driver, "cannot open output", cli->options.output, *c_driver_errno());
+        c_driver_io_error(
+            &cli -> driver,
+            "cannot open output",
+            cli -> options.output,
+            *c_driver_errno()
+        );
         return false;
     }
     var success: bool = crust_x64_emit(context, file, entry);
     if rb_close(file) != 0i32 {
-        c_driver_io_error(&cli->driver, "cannot close output", cli->options.output, *c_driver_errno());
+        c_driver_io_error(
+            &cli -> driver,
+            "cannot close output",
+            cli -> options.output,
+            *c_driver_errno()
+        );
         return false;
     }
     return success;
@@ -36,58 +53,119 @@ fn rb_assembly(cli: *CCli, entry: *CrustDecl) -> bool {
 
 fn rb_evaluate(context: *CrustContext, entry: *CrustDecl) -> bool {
     var evaluator: *u8 = crust_eval_create(context, null(*CrustEvalOptions));
-    if evaluator == null(*u8) { return false; }
+    if evaluator == null(*u8) {
+        return false;
+    }
     var argc: i32 = 0i32;
     var argv: **u8 = null(**u8);
-    var arguments: [*u8; 2] = make [*u8; 2] { &argc as *u8, &argv as *u8 };
+    var arguments: [*u8; 2] = make [*u8; 2] {
+        &argc as *u8,
+        &argv as *u8
+    };
     var result: i32 = 1i32;
-    var success: bool = crust_eval_call(evaluator, entry, &arguments[0usize], 2usize, &result as *u8);
+    var success: bool = crust_eval_call(
+        evaluator,
+        entry,
+        &arguments[0usize],
+        2usize,
+        &result as *u8
+    );
     crust_eval_destroy(evaluator);
     return success && result == 0i32;
 }
 
 fn rb_build(cli: *CCli, backend: *u8, checked: bool, trusted: *CrustSource) -> bool {
     var entry: *CrustDecl = rb_prepare(cli, checked, trusted);
-    if entry == null(*CrustDecl) || !c_driver_names(&cli->driver) { return false; }
-    // The resource and ownership stage objects have left scope before this handoff.
-    if c_equal(backend, "asm") { return rb_assembly(cli, entry); }
-    if c_equal(backend, "llvm") { return rb_llvm(cli, entry); }
-    if c_equal(backend, "eval") { return rb_evaluate(cli->stage.status.context, entry); }
-    if c_equal(backend, "c") {
-        return c_backend_build(cli->stage.status.context, entry, &cli->options) == 0i32;
+    if entry == null(*CrustDecl) || !c_driver_names(&cli -> driver) {
+        return false;
     }
-    crust_set_error(cli->stage.status.context, null(*CrustSource), 0usize, "unknown test backend");
+    // The resource and ownership stage objects have left scope before this handoff.
+    if c_equal(backend, "asm") {
+        return rb_assembly(cli, entry);
+    }
+    if c_equal(backend, "llvm") {
+        return rb_llvm(cli, entry);
+    }
+    if c_equal(backend, "eval") {
+        return rb_evaluate(cli -> stage.status.context, entry);
+    }
+    if c_equal(backend, "c") {
+        return c_backend_build(cli -> stage.status.context, entry, &cli -> options) == 0i32;
+    }
+    crust_set_error(
+        cli -> stage.status.context,
+        null(*CrustSource),
+        0usize,
+        "unknown test backend"
+    );
     return false;
 }
 
 fn main(argc: i32, argv: **u8) -> i32 {
-    if argc < 4i32 { return 2i32; }
+    if argc < 4i32 {
+        return 2i32;
+    }
     var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
     var request: CrustBuild = make CrustBuild {
-        context: &context, source: null(*CrustSource), target_begin: 0usize,
-        argc: argc - 3i32, argv: argv + 3isize
+        context: &context,
+        source: null(*CrustSource),
+        target_begin: 0usize,
+        argc: argc - 3i32,
+        argv: argv + 3isize
     };
     var trusted: *CrustSource = ownership_test_trust(&request);
     var cli: CCli = uninit;
     var valid: bool = c_driver_init(&cli, &context, request.argc) && context.error_count == 0usize;
-    if valid { valid = c_driver_parse(&cli, request.argc, request.argv, 0i32); }
-    if valid { valid = rb_build(&cli, argv[1usize], c_equal(argv[2usize], "ownership"), trusted); }
-    if context.error_count != 0usize { c_driver_diagnostic(&context, argv[0usize]); }
+    if valid {
+        valid = c_driver_parse(&cli, request.argc, request.argv, 0i32);
+    }
+    if valid {
+        valid = rb_build(
+            &cli,
+            argv[1usize],
+            c_equal(argv[2usize], "ownership"),
+            trusted
+        );
+    }
+    if context.error_count != 0usize {
+        c_driver_diagnostic(&context, argv[0usize]);
+    }
     c_stage_destroy(&cli.stage);
     crust_context_destroy(&context);
-    if valid { return 0i32; }
+    if valid {
+        return 0i32;
+    }
     return 1i32;
 }
 
-fn rb_llvm(cli:*CCli,entry:*CrustDecl)->bool {
-    var stage:LlStage=uninit;ll_init(&stage,cli->stage.status.context);
-    var success:bool=ll_emit(&stage,entry);
+fn rb_llvm(cli: *CCli, entry: *CrustDecl) -> bool {
+    var stage: LlStage = uninit;
+    ll_init(&stage, cli -> stage.status.context);
+    var success: bool = ll_emit(&stage, entry);
     if success {
-        c_buffer_bytes(&stage.memory.header,stage.memory.body.data,stage.memory.body.size);
-        var symbols:*u8=native_join(cli->stage.status.context,cli->options.output,".symbols");
-        success=symbols!=null(*u8) && cache_save(cli->stage.status.context,cli->options.output,stage.memory.header.data,stage.memory.header.size) &&
-            cache_save(cli->stage.status.context,symbols,stage.memory.renames.data,stage.memory.renames.size);
+        c_buffer_bytes(
+            &stage.memory.header,
+            stage.memory.body.data,
+            stage.memory.body.size
+        );
+        var symbols: *u8 = native_join(
+            cli -> stage.status.context,
+            cli -> options.output,
+            ".symbols"
+        );
+        success = symbols != null(*u8) && cache_save(
+            cli -> stage.status.context,
+            cli -> options.output,
+            stage.memory.header.data,
+            stage.memory.header.size
+        ) && cache_save(
+            cli -> stage.status.context,
+            symbols,
+            stage.memory.renames.data,
+            stage.memory.renames.size
+        );
     }
-    ll_destroy(&stage);return success;
+    ll_destroy(&stage);
+    return success;
 }

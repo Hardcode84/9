@@ -19,11 +19,27 @@ record CBuffer {
     capacity: usize;
 }
 
-record CEntry { key: usize; value: usize; }
-record CMap { entries: *CEntry; count: usize; capacity: usize; }
+record CEntry {
+    key: usize;
+    value: usize;
+}
+record CMap {
+    entries: *CEntry;
+    count: usize;
+    capacity: usize;
+}
 
-record CTypePair { left: *CrustType; right: *CrustType; slot: usize; }
-record CComparison { pairs: *CTypePair; slots: *usize; count: usize; capacity: usize; }
+record CTypePair {
+    left: *CrustType;
+    right: *CrustType;
+    slot: usize;
+}
+record CComparison {
+    pairs: *CTypePair;
+    slots: *usize;
+    count: usize;
+    capacity: usize;
+}
 
 record CTypeInfo {
     source: *CrustType;

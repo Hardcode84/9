@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-extern fn puts(text:*u8)->i32="puts";
-fn hello()->i32 {puts("Hello from LLVM!");return 0i32;}
+extern fn puts(text: *u8) -> i32 = "puts";
+fn hello() -> i32 {
+    puts("Hello from LLVM!");
+    return 0i32;
+}

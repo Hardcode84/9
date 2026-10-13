@@ -3,51 +3,56 @@
 fn crust_x64_try_emit_expression(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool {
     (*emitter).failed = false;
     x64_default_expression(emitter, expression);
-    return !(*emitter).failed;
+    return!(*emitter).failed;
 }
 fn crust_x64_try_emit_place(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool {
     (*emitter).failed = false;
     x64_default_place(emitter, expression);
-    return !(*emitter).failed;
+    return!(*emitter).failed;
 }
 fn crust_x64_try_emit_statement(emitter: *CrustX64Emitter, statement: *CrustStmt) -> bool {
     (*emitter).failed = false;
     x64_default_statement(emitter, statement);
-    return !(*emitter).failed;
+    return!(*emitter).failed;
 }
 fn crust_x64_try_emit_constant(emitter: *CrustX64Emitter, declaration: *CrustDecl) -> bool {
     (*emitter).failed = false;
     x64_default_constant(emitter, declaration);
-    return !(*emitter).failed;
+    return!(*emitter).failed;
 }
 fn crust_x64_try_emit_constant_value(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool {
     (*emitter).failed = false;
     x64_default_constant_value(emitter, expression);
-    return !(*emitter).failed;
+    return!(*emitter).failed;
 }
 fn crust_x64_try_emit_function(emitter: *CrustX64Emitter, function: *CrustX64Function) -> bool {
     (*emitter).failed = false;
     x64_default_function(emitter, function);
-    return !(*emitter).failed;
+    return!(*emitter).failed;
 }
 
 const crust_x64_default_ops: CrustX64Ops = make CrustX64Ops {
-    expression: crust_x64_try_emit_expression, place: crust_x64_try_emit_place,
+    expression: crust_x64_try_emit_expression,
+    place: crust_x64_try_emit_place,
     statement: crust_x64_try_emit_statement
 };
 
 fn x64_emit_string(emitter: *CrustX64Emitter, expression: *CrustExpr) -> unit {
     var index: usize = 0usize;
-    while index < (*expression).byte_count && !(*emitter).failed {
+    while index < (*expression).byte_count &&!(*emitter).failed {
         var byte: u8 = (*expression).bytes[index];
-        if index % 128usize == 0usize { x64_output_text(emitter, "\t.ascii \""); }
+        if index % 128usize == 0usize {
+            x64_output_text(emitter, "\t.ascii \"");
+        }
         if byte >= 32u8 && byte <= 126u8 && byte != 34u8 && byte != 92u8 {
             x64_output_byte(emitter, byte);
         } else {
             x64_output_byte(emitter, 92u8);
             x64_output_number(emitter, byte as u64, 8u64, 3usize);
         }
-        if index % 128usize == 127usize || index + 1usize == (*expression).byte_count { x64_output_text(emitter, "\"\n"); }
+        if index % 128usize == 127usize || index + 1usize == (*expression).byte_count {
+            x64_output_text(emitter, "\"\n");
+        }
         index = index + 1usize;
     }
 }
@@ -55,7 +60,7 @@ fn x64_emit_string(emitter: *CrustX64Emitter, expression: *CrustExpr) -> unit {
 fn x64_emit_aliases(emitter: *CrustX64Emitter) -> unit {
     var program: *CrustX64Program = (*emitter).program;
     var alias: *CrustX64Alias = (*program).aliases;
-    while alias != null(*CrustX64Alias) && !(*emitter).failed {
+    while alias != null(*CrustX64Alias) &&!(*emitter).failed {
         var name: *u8 = (*(*alias).declaration).link_name;
         if name[0usize] != 0u8 {
             x64_output_text(emitter, "\t.globl ");
@@ -74,20 +79,32 @@ fn x64_emit_aliases(emitter: *CrustX64Emitter) -> unit {
 
 fn x64_emit_constants(emitter: *CrustX64Emitter) -> unit {
     var unit_value: *CrustUnit = (*x64_context(emitter)).units;
-    while unit_value != null(*CrustUnit) && !(*emitter).failed {
+    while unit_value != null(*CrustUnit) &&!(*emitter).failed {
         var declaration: *CrustDecl = (*unit_value).declarations;
-        while declaration != null(*CrustDecl) && !(*emitter).failed {
-            if (*declaration).kind == CRUST_D_CONST { x64_default_constant(emitter, declaration); }
+        while declaration != null(*CrustDecl) &&!(*emitter).failed {
+            if (*declaration).kind == CRUST_D_CONST {
+                x64_default_constant(emitter, declaration);
+            }
             declaration = (*declaration).next;
         }
         unit_value = (*unit_value).next;
     }
 }
 
-fn crust_x64_emit_program_with_ops(program: *CrustX64Program, output: *u8, operations: *CrustX64Ops) -> bool {
+fn crust_x64_emit_program_with_ops(
+    program: *CrustX64Program,
+    output: *u8,
+    operations: *CrustX64Ops
+) -> bool {
     var emitter: CrustX64Emitter = make CrustX64Emitter {
-        program: program, function: null(*CrustX64Function), output: output, operations: operations,
-        loop: null(*CrustX64Loop), next_label: 1u64, return_label: 0u64, failed: false
+        program: program,
+        function: null(*CrustX64Function),
+        output: output,
+        operations: operations,
+        loop: null(*CrustX64Loop),
+        next_label: 1u64,
+        return_label: 0u64,
+        failed: false
     };
     x64_emit_aliases(&emitter);
     x64_emit_constants(&emitter);
@@ -112,7 +129,9 @@ fn crust_x64_emit_program_with_ops(program: *CrustX64Program, output: *u8, opera
         x64_output_text(&emitter, "\tjmp *%rax\n\t.size main, .-main\n");
     }
     x64_output_text(&emitter, "\t.section .note.GNU-stack,\"\",@progbits\n");
-    if emitter.failed { return false; }
+    if emitter.failed {
+        return false;
+    }
     if x64_fflush(output) != 0i32 {
         x64_io_error((*program).context, "assembly output flush failed: ");
         return false;
@@ -126,6 +145,8 @@ fn crust_x64_emit_program(program: *CrustX64Program, output: *u8) -> bool {
 
 fn crust_x64_emit(ctx: *CrustContext, output: *u8, entry: *CrustDecl) -> bool {
     var program: *CrustX64Program = null(*CrustX64Program);
-    if !crust_x64_prepare(ctx, &program, entry) { return false; }
+    if !crust_x64_prepare(ctx, &program, entry) {
+        return false;
+    }
     return crust_x64_emit_program(program, output);
 }

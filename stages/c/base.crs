@@ -4,35 +4,59 @@
 // Keep the stage at one address from initialization through destruction.
 fn c_stage_init(stage: *CStage, ctx: *CrustContext) -> unit {
     (*stage).status = make CStatus {
-        context: ctx, blocks: null(*CBlock), failed: false
+        context: ctx,
+        blocks: null(*CBlock),
+        failed: false
     };
     (*stage).header = make CBuffer {
-        status: &(*stage).status, data: null(*u8), size: 0usize, capacity: 0usize
+        status: &(*stage).status,
+        data: null(*u8),
+        size: 0usize,
+        capacity: 0usize
     };
     (*stage).body = make CBuffer {
-        status: &(*stage).status, data: null(*u8), size: 0usize, capacity: 0usize
+        status: &(*stage).status,
+        data: null(*u8),
+        size: 0usize,
+        capacity: 0usize
     };
     (*stage).renames = make CBuffer {
-        status: &(*stage).status, data: null(*u8), size: 0usize, capacity: 0usize
+        status: &(*stage).status,
+        data: null(*u8),
+        size: 0usize,
+        capacity: 0usize
     };
     (*stage).sink = &(*stage).body;
     (*stage).types = make CMap {
-        entries: null(*CEntry), count: 0usize, capacity: 0usize
+        entries: null(*CEntry),
+        count: 0usize,
+        capacity: 0usize
     };
     (*stage).type_shapes = make CMap {
-        entries: null(*CEntry), count: 0usize, capacity: 0usize
+        entries: null(*CEntry),
+        count: 0usize,
+        capacity: 0usize
     };
     (*stage).declarations = make CMap {
-        entries: null(*CEntry), count: 0usize, capacity: 0usize
+        entries: null(*CEntry),
+        count: 0usize,
+        capacity: 0usize
     };
     (*stage).native_names = make CMap {
-        entries: null(*CEntry), count: 0usize, capacity: 0usize
+        entries: null(*CEntry),
+        count: 0usize,
+        capacity: 0usize
     };
     (*stage).symbols = make CMap {
-        entries: null(*CEntry), count: 0usize, capacity: 0usize
+        entries: null(*CEntry),
+        count: 0usize,
+        capacity: 0usize
     };
     (*stage).comparison = make CComparison {
-        pairs: null(*CTypePair), slots: null(*usize), count: 0usize, capacity: 0usize
+        pairs: null(*CTypePair),
+        slots: null(*usize),
+        count: 0usize,
+        capacity: 0usize
     };
     (*stage).first_type = null(*CTypeInfo);
     (*stage).last_type = null(*CTypeInfo);
@@ -61,7 +85,9 @@ fn c_stage_destroy(stage: *CStage) -> unit {
 
 // Record only the first stage failure. Message must be a terminated string.
 fn c_error(status: *CStatus, source: *CrustSource, offset: usize, message: *u8) -> unit {
-    if (*status).failed { return; }
+    if (*status).failed {
+        return;
+    }
     (*status).failed = true;
     var ctx: *CrustContext = (*status).context;
     var count: usize = 0usize;
@@ -78,17 +104,28 @@ fn c_error(status: *CStatus, source: *CrustSource, offset: usize, message: *u8) 
 // Return uninitialized storage. Alignment must be 1, 2, 4, or 8.
 // Zero size returns null. Other failures set status and return null.
 fn c_alloc(status: *CStatus, size: usize, alignment: usize) -> *u8 {
-    if (*status).failed { return null(*u8); }
-    if alignment == 0usize || alignment > 8usize ||
-       (alignment & (alignment - 1usize)) != 0usize {
-        c_error(status, null(*CrustSource), 0usize,
-                "C stage allocation alignment must be 1, 2, 4, or 8");
+    if (*status).failed {
         return null(*u8);
     }
-    if size == 0usize { return null(*u8); }
+    if alignment == 0usize || alignment > 8usize || (alignment & (alignment - 1usize)) != 0usize {
+        c_error(
+            status,
+            null(*CrustSource),
+            0usize,
+            "C stage allocation alignment must be 1, 2, 4, or 8"
+        );
+        return null(*u8);
+    }
+    if size == 0usize {
+        return null(*u8);
+    }
     if size > 9223372036854775807usize - sizeof(CBlock) {
-        c_error(status, null(*CrustSource), 0usize,
-                "C stage allocation size exceeds target limit");
+        c_error(
+            status,
+            null(*CrustSource),
+            0usize,
+            "C stage allocation size exceeds target limit"
+        );
         return null(*u8);
     }
     var block: *CBlock = (*status).blocks;
@@ -100,7 +137,9 @@ fn c_alloc(status: *CStatus, size: usize, alignment: usize) -> *u8 {
         }
     }
     var capacity: usize = 65536usize;
-    if size > capacity { capacity = size; }
+    if size > capacity {
+        capacity = size;
+    }
     block = crust0_host_alloc(sizeof(CBlock) + capacity, 8usize) as *CBlock;
     if block == null(*CBlock) {
         c_error(status, null(*CrustSource), 0usize, "C stage allocation failed");
@@ -116,10 +155,14 @@ fn c_alloc(status: *CStatus, size: usize, alignment: usize) -> *u8 {
 extern fn c_length(text: *u8) -> usize = "strlen";
 
 fn c_equal(a: *u8, b: *u8) -> bool {
-    if a == b { return true; }
+    if a == b {
+        return true;
+    }
     var index: usize = 0usize;
     while a[index] == b[index] {
-        if a[index] == 0u8 { return true; }
+        if a[index] == 0u8 {
+            return true;
+        }
         index = index + 1usize;
     }
     return false;
@@ -133,14 +176,20 @@ fn c_hash(text: *u8) -> usize {
         value = (value ^ text[index] as usize) * 1099511628211usize;
         index = index + 1usize;
     }
-    if value == 0usize { return 1usize; }
+    if value == 0usize {
+        return 1usize;
+    }
     return value;
 }
 
 fn c_buffer_reserve(buffer: *CBuffer, size: usize) -> unit {
-    if (*(*buffer).status).failed || size <= (*buffer).capacity { return; }
+    if (*(*buffer).status).failed || size <= (*buffer).capacity {
+        return;
+    }
     var capacity: usize = (*buffer).capacity;
-    if capacity == 0usize { capacity = 256usize; }
+    if capacity == 0usize {
+        capacity = 256usize;
+    }
     while capacity < size {
         if capacity > 9223372036854775807usize / 2usize {
             capacity = size;
@@ -149,7 +198,9 @@ fn c_buffer_reserve(buffer: *CBuffer, size: usize) -> unit {
         }
     }
     var data: *u8 = c_alloc((*buffer).status, capacity, 1usize);
-    if data == null(*u8) { return; }
+    if data == null(*u8) {
+        return;
+    }
     crust0_host_move_bytes(data, (*buffer).data, (*buffer).size);
     (*buffer).data = data;
     (*buffer).capacity = capacity;
@@ -157,24 +208,37 @@ fn c_buffer_reserve(buffer: *CBuffer, size: usize) -> unit {
 
 // Bytes can overlap this buffer. Existing bytes remain valid until destruction.
 fn c_buffer_bytes(buffer: *CBuffer, bytes: *u8, count: usize) -> unit {
-    if (*(*buffer).status).failed || count == 0usize { return; }
+    if (*(*buffer).status).failed || count == 0usize {
+        return;
+    }
     if count > 9223372036854775807usize - (*buffer).size {
-        c_error((*buffer).status, null(*CrustSource), 0usize, "C output size overflow");
+        c_error(
+            (*buffer).status,
+            null(*CrustSource),
+            0usize,
+            "C output size overflow"
+        );
         return;
     }
     var size: usize = (*buffer).size + count;
     if size > (*buffer).capacity {
         c_buffer_reserve(buffer, size);
-        if (*(*buffer).status).failed { return; }
+        if (*(*buffer).status).failed {
+            return;
+        }
     }
     crust0_host_move_bytes((*buffer).data + (*buffer).size as isize, bytes, count);
     (*buffer).size = size;
 }
 
 fn c_buffer_text(buffer: *CBuffer, text: *u8) -> unit {
-    if (*(*buffer).status).failed { return; }
+    if (*(*buffer).status).failed {
+        return;
+    }
     var count: usize = c_length(text);
-    if count == 0usize { return; }
+    if count == 0usize {
+        return;
+    }
     if count > (*buffer).capacity - (*buffer).size {
         c_buffer_bytes(buffer, text, count);
         return;
@@ -188,7 +252,9 @@ fn c_buffer_text(buffer: *CBuffer, text: *u8) -> unit {
 }
 
 fn c_buffer_number(buffer: *CBuffer, value: u64) -> unit {
-    if (*(*buffer).status).failed { return; }
+    if (*(*buffer).status).failed {
+        return;
+    }
     var digits: [u8; 20] = uninit;
     var index: usize = 20usize;
     while value >= 10u64 {
@@ -203,19 +269,33 @@ fn c_buffer_number(buffer: *CBuffer, value: u64) -> unit {
 
 // Emit one C string literal for exactly count bytes, including embedded zeros.
 fn c_buffer_quote(buffer: *CBuffer, text: *u8, count: usize) -> unit {
-    if (*(*buffer).status).failed { return; }
+    if (*(*buffer).status).failed {
+        return;
+    }
     if count > (9223372036854775807usize - 2usize) / 4usize {
-        c_error((*buffer).status, null(*CrustSource), 0usize, "C quoted string size overflow");
+        c_error(
+            (*buffer).status,
+            null(*CrustSource),
+            0usize,
+            "C quoted string size overflow"
+        );
         return;
     }
     var bound: usize = count * 4usize + 2usize;
     if bound > 9223372036854775807usize - (*buffer).size {
-        c_error((*buffer).status, null(*CrustSource), 0usize, "C output size overflow");
+        c_error(
+            (*buffer).status,
+            null(*CrustSource),
+            0usize,
+            "C output size overflow"
+        );
         return;
     }
     if (*buffer).size + bound > (*buffer).capacity {
         c_buffer_reserve(buffer, (*buffer).size + bound);
-        if (*(*buffer).status).failed { return; }
+        if (*(*buffer).status).failed {
+            return;
+        }
     }
     var out: usize = (*buffer).size;
     (*buffer).data[out] = 34u8;
@@ -241,14 +321,23 @@ fn c_buffer_quote(buffer: *CBuffer, text: *u8, count: usize) -> unit {
 
 // Add a terminator without changing the logical size. Failure returns null.
 fn c_buffer_end(buffer: *CBuffer) -> *u8 {
-    if (*(*buffer).status).failed { return null(*u8); }
+    if (*(*buffer).status).failed {
+        return null(*u8);
+    }
     if (*buffer).size == 9223372036854775807usize {
-        c_error((*buffer).status, null(*CrustSource), 0usize, "C output size overflow");
+        c_error(
+            (*buffer).status,
+            null(*CrustSource),
+            0usize,
+            "C output size overflow"
+        );
         return null(*u8);
     }
     if (*buffer).size == (*buffer).capacity {
         c_buffer_reserve(buffer, (*buffer).size + 1usize);
-        if (*(*buffer).status).failed { return null(*u8); }
+        if (*(*buffer).status).failed {
+            return null(*u8);
+        }
     }
     (*buffer).data[(*buffer).size] = 0u8;
     return (*buffer).data;
@@ -263,10 +352,14 @@ fn c_map_hash(key: usize) -> usize {
 }
 
 fn c_map_get(map: *CMap, key: usize) -> usize {
-    if key == 0usize || (*map).capacity == 0usize { return 0usize; }
+    if key == 0usize || (*map).capacity == 0usize {
+        return 0usize;
+    }
     var slot: usize = c_map_hash(key) & ((*map).capacity - 1usize);
     while (*map).entries[slot].key != 0usize {
-        if (*map).entries[slot].key == key { return (*map).entries[slot].value; }
+        if (*map).entries[slot].key == key {
+            return (*map).entries[slot].value;
+        }
         slot = (slot + 1usize) & ((*map).capacity - 1usize);
     }
     return 0usize;
@@ -274,7 +367,9 @@ fn c_map_get(map: *CMap, key: usize) -> usize {
 
 // Keys must be nonzero. Zero values are permitted and also mean absent on get.
 fn c_map_set(status: *CStatus, map: *CMap, key: usize, value: usize) -> unit {
-    if (*status).failed { return; }
+    if (*status).failed {
+        return;
+    }
     if key == 0usize {
         c_error(status, null(*CrustSource), 0usize, "zero is not a C map key");
         return;
@@ -293,13 +388,20 @@ fn c_map_set(status: *CStatus, map: *CMap, key: usize, value: usize) -> unit {
         var capacity: usize = 64usize;
         if (*map).capacity != 0usize {
             if (*map).capacity > 9223372036854775807usize / sizeof(CEntry) / 2usize {
-                c_error(status, null(*CrustSource), 0usize, "C map allocation size overflow");
+                c_error(
+                    status,
+                    null(*CrustSource),
+                    0usize,
+                    "C map allocation size overflow"
+                );
                 return;
             }
             capacity = (*map).capacity * 2usize;
         }
         var entries: *CEntry = c_alloc(status, capacity * sizeof(CEntry), alignof(CEntry)) as *CEntry;
-        if entries == null(*CEntry) { return; }
+        if entries == null(*CEntry) {
+            return;
+        }
         var index: usize = 0usize;
         while index < capacity {
             entries[index].key = 0usize;

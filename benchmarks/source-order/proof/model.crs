@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record ProofAction { call: *CrustExpr; next_offset: usize; }
+record ProofAction {
+    call: *CrustExpr;
+    next_offset: usize;
+}
 
 record ProofSession {
     owner: *CrustContext;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-stage_include(stage,"../stages/c/sources.crs");
-stage_include(stage,"../stages/llvm/sources.crs");
-stage_source(stage,"llvm_driver.crs");
-stage_source(stage,"llvm_alloc.crs");
-stage_export(stage,"main");
+stage_include(stage, "../stages/c/sources.crs");
+stage_include(stage, "../stages/llvm/sources.crs");
+stage_source(stage, "llvm_driver.crs");
+stage_source(stage, "llvm_alloc.crs");
+stage_export(stage, "main");

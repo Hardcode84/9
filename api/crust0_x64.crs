@@ -78,16 +78,38 @@ record CrustX64Emitter {
     failed: bool;
 }
 
-extern fn crust_x64_prepare(context: *CrustContext, result: **CrustX64Program, entry: *CrustDecl) -> bool = "crust_x64_prepare";
+extern fn crust_x64_prepare(
+    context: *CrustContext,
+    result: **CrustX64Program,
+    entry: *CrustDecl
+) -> bool = "crust_x64_prepare";
 extern fn crust_x64_emit_program(program: *CrustX64Program, output: *u8) -> bool = "crust_x64_emit_program";
-extern fn crust_x64_emit_program_with_ops(program: *CrustX64Program, output: *u8, operations: *CrustX64Ops) -> bool = "crust_x64_emit_program_with_ops";
+extern fn crust_x64_emit_program_with_ops(
+    program: *CrustX64Program,
+    output: *u8,
+    operations: *CrustX64Ops
+) -> bool = "crust_x64_emit_program_with_ops";
 extern fn crust_x64_emit(context: *CrustContext, output: *u8, entry: *CrustDecl) -> bool = "crust_x64_emit";
-extern fn crust_x64_try_reserve(context: *CrustContext, function: *CrustX64Function, size: u64, alignment: u32, source: *CrustSource, offset: usize, result: *CrustX64Slot) -> bool = "crust_x64_try_reserve";
-extern fn crust_x64_try_prepare_function(program: *CrustX64Program, function: *CrustX64Function) -> bool = "crust_x64_try_prepare_function";
+extern fn crust_x64_try_reserve(
+    context: *CrustContext,
+    function: *CrustX64Function,
+    size: u64,
+    alignment: u32,
+    source: *CrustSource,
+    offset: usize,
+    result: *CrustX64Slot
+) -> bool = "crust_x64_try_reserve";
+extern fn crust_x64_try_prepare_function(
+    program: *CrustX64Program,
+    function: *CrustX64Function
+) -> bool = "crust_x64_try_prepare_function";
 extern fn crust_x64_write(emitter: *CrustX64Emitter, text: *u8) -> bool = "crust_x64_write";
 extern fn crust_x64_try_emit_expression(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool = "crust_x64_try_emit_expression";
 extern fn crust_x64_try_emit_place(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool = "crust_x64_try_emit_place";
 extern fn crust_x64_try_emit_statement(emitter: *CrustX64Emitter, statement: *CrustStmt) -> bool = "crust_x64_try_emit_statement";
 extern fn crust_x64_try_emit_constant(emitter: *CrustX64Emitter, declaration: *CrustDecl) -> bool = "crust_x64_try_emit_constant";
-extern fn crust_x64_try_emit_constant_value(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool = "crust_x64_try_emit_constant_value";
+extern fn crust_x64_try_emit_constant_value(
+    emitter: *CrustX64Emitter,
+    expression: *CrustExpr
+) -> bool = "crust_x64_try_emit_constant_value";
 extern fn crust_x64_try_emit_function(emitter: *CrustX64Emitter, function: *CrustX64Function) -> bool = "crust_x64_try_emit_function";

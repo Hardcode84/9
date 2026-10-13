@@ -1,33 +1,68 @@
 // SPDX-License-Identifier: Apache-2.0
 
 host_source(run, "../../../stages/build/load.crs");
-if !stage_setup(run, "../../..") { return 1i32; };
+if !stage_setup(run, "../../..") {
+    return 1i32;
+};
 var stages: *StageSession = stage_open(run, "../../..", "../../../build/stage-cache");
-if stages == null(*StageSession) { return 1i32; };
-host_source(run,"../../backend.crs");
-var backend:ExampleBackend=uninit;
-if !example_backend(run,stages,&backend){return 1i32;};
+if stages == null(*StageSession) {
+    return 1i32;
+};
+host_source(run, "../../backend.crs");
+var backend: ExampleBackend = uninit;
+if !example_backend(run, stages, &backend) {
+    return 1i32;
+};
 host_source(run, "../../../stages/overload/api.crs");
-if !example_load(stages,&backend,"stages/overload/package.crs") { return 1i32; };
-
-var provider:*CrustSource = host_input(run, "provider.crs", 1u64);
-var object:*u8 = host_path(run, "../../../build/overload-format.o");
-var interface:*u8 = host_path(run, "interface.crs");
-var provider_arguments:[*u8;5] = make [*u8;5] {
-    "--library", "--object", "-o", object, interface
+if !example_load(stages, &backend, "stages/overload/package.crs") {
+    return 1i32;
 };
-var status:i32 = overload_build(provider, 0usize, 5i32, &provider_arguments[0usize], backend.emit);
-if status != 0i32 { return status; };
 
-var arguments:[*u8;5] = make [*u8;5] {
-    "-o", host_path(run, "../../../build/overload-separate"),
-    interface, "--ldflag", object
+var provider: *CrustSource = host_input(run, "provider.crs", 1u64);
+var object: *u8 = host_path(run, "../../../build/overload-format.o");
+var interface: *u8 = host_path(run, "interface.crs");
+var provider_arguments: [*u8; 5] = make [*u8; 5] {
+    "--library",
+    "--object",
+    "-o",
+    object,
+    interface
 };
-return overload_build((*run).source, (*run).cursor, 5i32, &arguments[0usize], backend.emit);
+var status: i32 = overload_build(
+    provider,
+    0usize,
+    5i32,
+    &provider_arguments[0usize],
+    backend.emit
+);
+if status != 0i32 {
+    return status;
+};
 
-fn main(argc:i32, argv:**u8)->i32 {
-    var output:Output = make Output { descriptor:1i32 };
-    if format(&output, "types: ") != 0i32 { return 1i32; }
-    if format(&output, 42u64) != 0i32 { return 1i32; }
+var arguments: [*u8; 5] = make [*u8; 5] {
+    "-o",
+    host_path(run, "../../../build/overload-separate"),
+    interface,
+    "--ldflag",
+    object
+};
+return overload_build(
+    (*run).source,
+    (*run).cursor,
+    5i32,
+    &arguments[0usize],
+    backend.emit
+);
+
+fn main(argc: i32, argv: **u8) -> i32 {
+    var output: Output = make Output {
+        descriptor: 1i32
+    };
+    if format(&output, "types: ") != 0i32 {
+        return 1i32;
+    }
+    if format(&output, 42u64) != 0i32 {
+        return 1i32;
+    }
     return format(&output, "\n");
 }

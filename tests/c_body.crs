@@ -8,154 +8,257 @@ record BodyTest {
     mode: u32;
 }
 
-fn body_test_length(text:*u8)->usize {
-    var size:usize = 0usize;
-    while text[size] != 0u8 { size = size + 1usize; }
+fn body_test_length(text: *u8) -> usize {
+    var size: usize = 0usize;
+    while text[size] != 0u8 {
+        size = size + 1usize;
+    }
     return size;
 }
 
-fn body_test_equal(left:*u8, right:*u8)->bool {
-    var index:usize = 0usize;
+fn body_test_equal(left: *u8, right: *u8) -> bool {
+    var index: usize = 0usize;
     while left[index] == right[index] {
-        if left[index] == 0u8 { return true; }
+        if left[index] == 0u8 {
+            return true;
+        }
         index = index + 1usize;
     }
     return false;
 }
 
-fn body_test_emit(stage:*CStage, declaration:*CrustDecl, opaque:*u8)->bool {
-    var state:*BodyTest = opaque as *BodyTest;
+fn body_test_emit(stage: *CStage, declaration: *CrustDecl, opaque: *u8) -> bool {
+    var state: *BodyTest = opaque as *BodyTest;
     (*state).calls = (*state).calls + 1usize;
-    if (*declaration).body != null(*CrustStmt) { return false; }
-    if (*state).mode == 1u32 { return false; }
+    if (*declaration).body != null(*CrustStmt) {
+        return false;
+    }
+    if (*state).mode == 1u32 {
+        return false;
+    }
     if (*state).mode == 2u32 {
-        c_error(&(*stage).status, (*declaration).loc.source, (*declaration).loc.offset, "selected body failure");
+        c_error(
+            &(*stage).status,
+            (*declaration).loc.source,
+            (*declaration).loc.offset,
+            "selected body failure"
+        );
         return false;
     }
     if (*state).mode == 3u32 {
-        crust_set_error((*stage).status.context, (*declaration).loc.source,
-                      (*declaration).loc.offset, "selected context failure");
+        crust_set_error(
+            (*stage).status.context,
+            (*declaration).loc.source,
+            (*declaration).loc.offset,
+            "selected context failure"
+        );
         return true;
     }
-    var body:*CrustStmt = (*state).entry_body;
-    if declaration == (*state).helper { body = (*state).helper_body; }
+    var body: *CrustStmt = (*state).entry_body;
+    if declaration == (*state).helper {
+        body = (*state).helper_body;
+    }
     c_text(stage, "{\n");
-    var statement:*CrustStmt = (*body).body;
+    var statement: *CrustStmt = (*body).body;
     while statement != null(*CrustStmt) {
         if (*statement).kind == CRUST_S_RETURN {
-            var value:usize = c_expression(stage, (*statement).expr);
+            var value: usize = c_expression(stage, (*statement).expr);
             c_text(stage, "goto extension_exit;\nextension_exit:\nreturn ");
-            if declaration == (*state).helper { c_value(stage, value); }
-            else {
+            if declaration == (*state).helper {
+                c_value(stage, value);
+            } else {
                 c_text(stage, "r_i32((uint32_t)((uint64_t)");
                 c_value(stage, value);
                 c_text(stage, "+UINT64_C(42)))");
             }
             c_text(stage, ";\n");
-        } else { c_statement(stage, statement); }
+        } else {
+            c_statement(stage, statement);
+        }
         statement = (*statement).next;
     }
     c_text(stage, "}\n");
-    return !(*stage).status.failed;
+    return!(*stage).status.failed;
 }
 
-fn main(argc:i32, argv:**u8)->i32 {
-    if argc != 4i32 { return 1i32; }
-    if !output_contract(){return 30i32;}
-    var context:CrustContext = uninit;
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 4i32 {
+        return 1i32;
+    }
+    if !output_contract() {
+        return 30i32;
+    }
+    var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
-    var text:*u8 = "fn helper(x:i32)->i32 { var result:i32=x+increment; return result; } fn entry(argc:i32,argv:**u8)->i32 { return helper(argc)-2i32; } const increment:i32=1i32; extern fn absent()->unit=\"body_absent\";";
-    var source:CrustSource = make CrustSource {identity:1u64, path:"body-input", bytes:text, size:body_test_length(text)};
-    var parsed:*CrustUnit = null(*CrustUnit);
-    if !crust_read(&context, &source, &parsed) || !crust_collect(&context) ||
-       !crust_resolve(&context) || !crust_check(&context) { return 2i32; }
-    var helper:*CrustDecl = (*parsed).declarations;
-    var entry:*CrustDecl = (*helper).next;
-    var constant:*CrustDecl = (*entry).next;
-    var external:*CrustDecl = (*constant).next;
+    var text: *u8 = "fn helper(x:i32)->i32 { var result:i32=x+increment; return result; } fn entry(argc:i32,argv:**u8)->i32 { return helper(argc)-2i32; } const increment:i32=1i32; extern fn absent()->unit=\"body_absent\";";
+    var source: CrustSource = make CrustSource {
+        identity: 1u64,
+        path: "body-input",
+        bytes: text,
+        size: body_test_length(text)
+    };
+    var parsed: *CrustUnit = null(*CrustUnit);
+    if !crust_read(&context, &source, &parsed) || !crust_collect(&context) || !crust_resolve(
+        &context
+    ) || !crust_check(&context) {
+        return 2i32;
+    }
+    var helper: *CrustDecl = (*parsed).declarations;
+    var entry: *CrustDecl = (*helper).next;
+    var constant: *CrustDecl = (*entry).next;
+    var external: *CrustDecl = (*constant).next;
     (*helper).link_name = "";
     (*constant).link_name = "";
     (*entry).link_name = "body_entry";
-    var state:BodyTest = make BodyTest {
-        helper:helper, helper_body:(*helper).body, entry_body:(*entry).body,
-        calls:0usize, mode:0u32
+    var state: BodyTest = make BodyTest {
+        helper: helper,
+        helper_body: (*helper).body,
+        entry_body: (*entry).body,
+        calls: 0usize,
+        mode: 0u32
     };
     (*helper).body = null(*CrustStmt);
     (*entry).body = null(*CrustStmt);
-    var checked:i32 = body_test_failures(&context, &source, entry, &state);
-    if checked == 0i32 { checked = body_test_private(&context, entry, external, &state); }
-    if checked != 0i32 { crust_context_destroy(&context); return checked; }
-    var flags:[*u8;1] = make [*u8;1] {"-O0"};
-    var options:BackendOptions = make BackendOptions {
-        mode:0u32, output:argv[1usize], symbols:null(*u8),
-        cflags:&flags[0usize], cflag_count:1usize, ldflags:null(**u8), ldflag_count:0usize
+    var checked: i32 = body_test_failures(&context, &source, entry, &state);
+    if checked == 0i32 {
+        checked = body_test_private(&context, entry, external, &state);
+    }
+    if checked != 0i32 {
+        crust_context_destroy(&context);
+        return checked;
+    }
+    var flags: [*u8; 1] = make [*u8; 1] {
+        "-O0"
     };
-    var result:i32 = c_backend_build_with_body(&context, entry, &options, body_test_emit, &state as *u8);
-    if result == 0i32 && (state.calls != 2usize || (*helper).body != null(*CrustStmt) ||
-                         (*entry).body != null(*CrustStmt)) { result = 6i32; }
+    var options: BackendOptions = make BackendOptions {
+        mode: 0u32,
+        output: argv[1usize],
+        symbols: null(*u8),
+        cflags: &flags[0usize],
+        cflag_count: 1usize,
+        ldflags: null(**u8),
+        ldflag_count: 0usize
+    };
+    var result: i32 = c_backend_build_with_body(
+        &context,
+        entry,
+        &options,
+        body_test_emit,
+        &state as *u8
+    );
+    if result == 0i32 && (
+        state.calls != 2usize || (*helper).body != null(*CrustStmt) || (*entry).body != null(
+            *CrustStmt
+        )
+    ) {
+        result = 6i32;
+    }
     crust_context_destroy(&context);
-    if result == 0i32 { result = body_dag_test(argv[2usize]); }
-    if result == 0i32 { result = body_statement_test(argv[3usize]); }
+    if result == 0i32 {
+        result = body_dag_test(argv[2usize]);
+    }
+    if result == 0i32 {
+        result = body_statement_test(argv[3usize]);
+    }
     return result;
 }
 
-fn body_unwrap(statement:*CrustStmt)->*CrustStmt {
-    while (*statement).kind == CRUST_S_BLOCK && (*statement).body != null(*CrustStmt) &&
-          (*(*statement).body).next == null(*CrustStmt) {
-        var child:*CrustStmt = (*statement).body;
+fn body_unwrap(statement: *CrustStmt) -> *CrustStmt {
+    while (*statement).kind == CRUST_S_BLOCK && (*statement).body != null(*CrustStmt) && (
+        *(*statement).body
+    ).next == null(*CrustStmt) {
+        var child: *CrustStmt = (*statement).body;
         (*child).next = (*statement).next;
         statement = child;
     }
-    var cursor:*CrustStmt = statement;
+    var cursor: *CrustStmt = statement;
     while cursor != null(*CrustStmt) {
-        if (*cursor).body != null(*CrustStmt) { (*cursor).body = body_unwrap((*cursor).body); }
-        if (*cursor).otherwise != null(*CrustStmt) { (*cursor).otherwise = body_unwrap((*cursor).otherwise); }
+        if (*cursor).body != null(*CrustStmt) {
+            (*cursor).body = body_unwrap((*cursor).body);
+        }
+        if (*cursor).otherwise != null(*CrustStmt) {
+            (*cursor).otherwise = body_unwrap((*cursor).otherwise);
+        }
         cursor = (*cursor).next;
     }
     return statement;
 }
 
-fn body_statement_test(output:*u8)->i32 {
-    var context:CrustContext = uninit;
+fn body_statement_test(output: *u8) -> i32 {
+    var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
-    var text:*u8 = "fn value()->i32{return 9i32;} fn choose(n:i32)->i32{var x:i32=0i32;if n>5i32{x=1i32;}else{if n>0i32{x=2i32;}else{x=3i32;}}return x;} fn branch(n:i32)->i32{if n>0i32{return choose(n);}else{return value();}} fn entry(argc:i32,argv:**u8)->i32{if value()!=9i32 || choose(6i32)!=1i32 || choose(1i32)!=2i32 || choose(0i32)!=3i32 || branch(0i32)!=9i32 || branch(1i32)!=2i32 {return 1i32;}return 0i32;}";
-    var source:CrustSource = make CrustSource {identity:1u64, path:"body-statements", bytes:text, size:body_test_length(text)};
-    var parsed:*CrustUnit = null(*CrustUnit);
-    if !crust_read(&context, &source, &parsed) { return 13i32; }
-    var declaration:*CrustDecl = (*parsed).declarations;
-    var entry:*CrustDecl = null(*CrustDecl);
+    var text: *u8 = "fn value()->i32{return 9i32;} fn choose(n:i32)->i32{var x:i32=0i32;if n>5i32{x=1i32;}else{if n>0i32{x=2i32;}else{x=3i32;}}return x;} fn branch(n:i32)->i32{if n>0i32{return choose(n);}else{return value();}} fn entry(argc:i32,argv:**u8)->i32{if value()!=9i32 || choose(6i32)!=1i32 || choose(1i32)!=2i32 || choose(0i32)!=3i32 || branch(0i32)!=9i32 || branch(1i32)!=2i32 {return 1i32;}return 0i32;}";
+    var source: CrustSource = make CrustSource {
+        identity: 1u64,
+        path: "body-statements",
+        bytes: text,
+        size: body_test_length(text)
+    };
+    var parsed: *CrustUnit = null(*CrustUnit);
+    if !crust_read(&context, &source, &parsed) {
+        return 13i32;
+    }
+    var declaration: *CrustDecl = (*parsed).declarations;
+    var entry: *CrustDecl = null(*CrustDecl);
     while declaration != null(*CrustDecl) {
         (*declaration).body = body_unwrap((*declaration).body);
         (*declaration).link_name = "";
         entry = declaration;
         declaration = (*declaration).next;
     }
-    if !crust_collect(&context) || !crust_resolve(&context) || !crust_check(&context) { return 14i32; }
-    var flags:[*u8;1] = make [*u8;1] {"-O0"};
-    var options:BackendOptions = make BackendOptions {
-        mode:0u32, output:output, symbols:null(*u8),
-        cflags:&flags[0usize], cflag_count:1usize, ldflags:null(**u8), ldflag_count:0usize
+    if !crust_collect(&context) || !crust_resolve(&context) || !crust_check(&context) {
+        return 14i32;
+    }
+    var flags: [*u8; 1] = make [*u8; 1] {
+        "-O0"
     };
-    var result:i32 = c_backend_build(&context, entry, &options);
+    var options: BackendOptions = make BackendOptions {
+        mode: 0u32,
+        output: output,
+        symbols: null(*u8),
+        cflags: &flags[0usize],
+        cflag_count: 1usize,
+        ldflags: null(**u8),
+        ldflag_count: 0usize
+    };
+    var result: i32 = c_backend_build(&context, entry, &options);
     crust_context_destroy(&context);
     return result;
 }
 
-record BodyDag { callback:*CrustDecl; alias:*CrustDecl; }
+record BodyDag {
+    callback: *CrustDecl;
+    alias: *CrustDecl;
+}
 
-fn body_dag_type(context:*CrustContext, leaf:*CrustType)->*CrustType {
-    var result:*CrustType = leaf;
-    var depth:usize = 0usize;
+fn body_dag_type(context: *CrustContext, leaf: *CrustType) -> *CrustType {
+    var result: *CrustType = leaf;
+    var depth: usize = 0usize;
     while depth < 40usize {
-        var node:*CrustType = crust_try_alloc(context, sizeof(CrustType), alignof(CrustType)) as *CrustType;
-        var params:**CrustType = crust_try_alloc(context, 2usize * sizeof(*CrustType), alignof(*CrustType)) as **CrustType;
-        if node == null(*CrustType) || params == null(**CrustType) { return null(*CrustType); }
+        var node: *CrustType = crust_try_alloc(
+            context,
+            sizeof(CrustType),
+            alignof(CrustType)
+        ) as *CrustType;
+        var params: **CrustType = crust_try_alloc(
+            context,
+            2usize * sizeof(*CrustType),
+            alignof(*CrustType)
+        ) as **CrustType;
+        if node == null(*CrustType) || params == null(**CrustType) {
+            return null(*CrustType);
+        }
         params[0usize] = result;
         params[1usize] = result;
         *node = make CrustType {
-            kind:CRUST_T_FUNCTION, size:8u64, align:8u32,
-            base:&(*context).builtins[CRUST_T_UNIT as usize], count:0u64, params:params,
-            param_count:2usize, record_decl:null(*CrustDecl)
+            kind: CRUST_T_FUNCTION,
+            size: 8u64,
+            align: 8u32,
+            base: &(*context).builtins[CRUST_T_UNIT as usize],
+            count: 0u64,
+            params: params,
+            param_count: 2usize,
+            record_decl: null(*CrustDecl)
         };
         result = node;
         depth = depth + 1usize;
@@ -163,11 +266,11 @@ fn body_dag_type(context:*CrustContext, leaf:*CrustType)->*CrustType {
     return result;
 }
 
-fn body_dag_signature(declaration:*CrustDecl, signature:*CrustType)->unit {
+fn body_dag_signature(declaration: *CrustDecl, signature: *CrustType) -> unit {
     (*declaration).type = signature;
     (*(*declaration).symbol).type = signature;
-    var parameter:*CrustParam = (*declaration).params;
-    var index:usize = 0usize;
+    var parameter: *CrustParam = (*declaration).params;
+    var index: usize = 0usize;
     while parameter != null(*CrustParam) {
         (*parameter).type = (*signature).params[index];
         if (*parameter).symbol != null(*CrustSymbol) {
@@ -178,10 +281,11 @@ fn body_dag_signature(declaration:*CrustDecl, signature:*CrustType)->unit {
     }
 }
 
-fn body_dag_emit(stage:*CStage, declaration:*CrustDecl, user:*u8)->bool {
-    var state:*BodyDag = user as *BodyDag;
-    if declaration == (*state).callback { c_text(stage, "{}\n"); }
-    else {
+fn body_dag_emit(stage: *CStage, declaration: *CrustDecl, user: *u8) -> bool {
+    var state: *BodyDag = user as *BodyDag;
+    if declaration == (*state).callback {
+        c_text(stage, "{}\n");
+    } else {
         c_text(stage, "{\n");
         c_global(stage, (*state).alias);
         c_text(stage, "(0,0);\nreturn ");
@@ -190,44 +294,77 @@ fn body_dag_emit(stage:*CStage, declaration:*CrustDecl, user:*u8)->bool {
         c_global(stage, (*state).alias);
         c_text(stage, "?0:1;\n}\n");
     }
-    return !(*stage).status.failed;
+    return!(*stage).status.failed;
 }
 
-fn body_dag_test(output:*u8)->i32 {
-    var context:CrustContext = uninit;
+fn body_dag_test(output: *u8) -> i32 {
+    var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
-    var text:*u8 = "fn callback(a:fn()->unit,b:fn()->unit)->unit{} extern fn alias(a:fn()->unit,b:fn()->unit)->unit=\"dag_shared\"; fn entry(argc:i32,argv:**u8)->i32{return 0i32;}";
-    var source:CrustSource = make CrustSource {identity:1u64, path:"body-type-dag", bytes:text, size:body_test_length(text)};
-    var parsed:*CrustUnit = null(*CrustUnit);
-    if !crust_read(&context, &source, &parsed) || !crust_collect(&context) ||
-       !crust_resolve(&context) || !crust_check(&context) { return 10i32; }
-    var callback:*CrustDecl = (*parsed).declarations;
-    var alias:*CrustDecl = (*callback).next;
-    var entry:*CrustDecl = (*alias).next;
-    var left:*CrustType = body_dag_type(&context, &context.builtins[CRUST_T_ISIZE as usize]);
-    var right:*CrustType = body_dag_type(&context, &context.builtins[CRUST_T_I64 as usize]);
-    if left == null(*CrustType) || right == null(*CrustType) { return 11i32; }
+    var text: *u8 = "fn callback(a:fn()->unit,b:fn()->unit)->unit{} extern fn alias(a:fn()->unit,b:fn()->unit)->unit=\"dag_shared\"; fn entry(argc:i32,argv:**u8)->i32{return 0i32;}";
+    var source: CrustSource = make CrustSource {
+        identity: 1u64,
+        path: "body-type-dag",
+        bytes: text,
+        size: body_test_length(text)
+    };
+    var parsed: *CrustUnit = null(*CrustUnit);
+    if !crust_read(&context, &source, &parsed) || !crust_collect(&context) || !crust_resolve(
+        &context
+    ) || !crust_check(&context) {
+        return 10i32;
+    }
+    var callback: *CrustDecl = (*parsed).declarations;
+    var alias: *CrustDecl = (*callback).next;
+    var entry: *CrustDecl = (*alias).next;
+    var left: *CrustType = body_dag_type(
+        &context,
+        &context.builtins[CRUST_T_ISIZE as usize]
+    );
+    var right: *CrustType = body_dag_type(
+        &context,
+        &context.builtins[CRUST_T_I64 as usize]
+    );
+    if left == null(*CrustType) || right == null(*CrustType) {
+        return 11i32;
+    }
     body_dag_signature(callback, left);
     body_dag_signature(alias, right);
     (*callback).body = null(*CrustStmt);
     (*entry).body = null(*CrustStmt);
     (*callback).link_name = "dag_shared";
     (*entry).link_name = "dag_entry";
-    var state:BodyDag = make BodyDag {callback:callback, alias:alias};
-    var options:BackendOptions = make BackendOptions {
-        mode:0u32, output:output, symbols:null(*u8),
-        cflags:null(**u8), cflag_count:0usize, ldflags:null(**u8), ldflag_count:0usize
+    var state: BodyDag = make BodyDag {
+        callback: callback,
+        alias: alias
     };
-    var result:i32 = c_backend_build_with_body(&context, entry, &options, body_dag_emit, &state as *u8);
+    var options: BackendOptions = make BackendOptions {
+        mode: 0u32,
+        output: output,
+        symbols: null(*u8),
+        cflags: null(**u8),
+        cflag_count: 0usize,
+        ldflags: null(**u8),
+        ldflag_count: 0usize
+    };
+    var result: i32 = c_backend_build_with_body(
+        &context,
+        entry,
+        &options,
+        body_dag_emit,
+        &state as *u8
+    );
     if result == 0i32 {
-        var leaf:*CrustType = right;
-        while (*(*leaf).params[0usize]).kind == CRUST_T_FUNCTION { leaf = (*leaf).params[0usize]; }
+        var leaf: *CrustType = right;
+        while (*(*leaf).params[0usize]).kind == CRUST_T_FUNCTION {
+            leaf = (*leaf).params[0usize];
+        }
         (*leaf).params[0usize] = &context.builtins[CRUST_T_U64 as usize];
-        var stage:CStage = uninit;
+        var stage: CStage = uninit;
         c_stage_init(&stage, &context);
-        if c_emit_with_body(&stage, entry, body_dag_emit, &state as *u8) ||
-           !stage.status.failed || context.error_count != 1usize ||
-           !body_test_equal(&context.error[0usize], "conflicting native ABI for symbol") {
+        if c_emit_with_body(&stage, entry, body_dag_emit, &state as *u8) || !stage.status.failed || context.error_count != 1usize || !body_test_equal(
+            &context.error[0usize],
+            "conflicting native ABI for symbol"
+        ) {
             result = 12i32;
         }
         c_stage_destroy(&stage);
@@ -236,42 +373,62 @@ fn body_dag_test(output:*u8)->i32 {
     return result;
 }
 
-fn body_test_failures(context:*CrustContext, source:*CrustSource, entry:*CrustDecl, state:*BodyTest)->i32 {
-    var stage:CStage = uninit;
+fn body_test_failures(
+    context: *CrustContext,
+    source: *CrustSource,
+    entry: *CrustDecl,
+    state: *BodyTest
+) -> i32 {
+    var stage: CStage = uninit;
     (*state).mode = 1u32;
     while (*state).mode <= 3u32 {
         (*context).error_count = 0usize;
         (*context).error[0usize] = 0u8;
         (*state).calls = 0usize;
         c_stage_init(&stage, context);
-        if c_emit_with_body(&stage, entry, body_test_emit, state as *u8) ||
-           !stage.status.failed || (*state).calls != 1usize || (*context).error_count != 1usize {
+        if c_emit_with_body(&stage, entry, body_test_emit, state as *u8) || !stage.status.failed || (
+            *state
+        ).calls != 1usize || (*context).error_count != 1usize {
             return 3i32;
         }
-        var expected:*u8 = "C function body callback failed";
-        if (*state).mode == 2u32 { expected = "selected body failure"; }
-        if (*state).mode == 3u32 { expected = "selected context failure"; }
+        var expected: *u8 = "C function body callback failed";
+        if (*state).mode == 2u32 {
+            expected = "selected body failure";
+        }
+        if (*state).mode == 3u32 {
+            expected = "selected context failure";
+        }
         if !body_test_equal(&(*context).error[0usize], expected) || (*context).error_loc.source != source {
             return 4i32;
         }
         c_stage_destroy(&stage);
-        if stage.status.blocks != null(*CBlock) { return 5i32; }
+        if stage.status.blocks != null(*CBlock) {
+            return 5i32;
+        }
         (*state).mode = (*state).mode + 1u32;
     }
     return 0i32;
 }
 
-fn body_test_private(context:*CrustContext, entry:*CrustDecl, external:*CrustDecl, state:*BodyTest)->i32 {
-    var stage:CStage = uninit;
+fn body_test_private(
+    context: *CrustContext,
+    entry: *CrustDecl,
+    external: *CrustDecl,
+    state: *BodyTest
+) -> i32 {
+    var stage: CStage = uninit;
     (*context).error_count = 0usize;
     (*context).error[0usize] = 0u8;
     (*state).mode = 0u32;
     (*state).calls = 0usize;
     (*external).link_name = "";
     c_stage_init(&stage, context);
-    if c_emit_with_body(&stage, entry, body_test_emit, state as *u8) ||
-       !stage.status.failed || (*state).calls != 0usize || (*context).error_count != 1usize ||
-       !body_test_equal(&(*context).error[0usize], "private C linkage requires a definition in this output") {
+    if c_emit_with_body(&stage, entry, body_test_emit, state as *u8) || !stage.status.failed || (
+        *state
+    ).calls != 0usize || (*context).error_count != 1usize || !body_test_equal(
+        &(*context).error[0usize],
+        "private C linkage requires a definition in this output"
+    ) {
         return 7i32;
     }
     c_stage_destroy(&stage);
@@ -281,25 +438,65 @@ fn body_test_private(context:*CrustContext, entry:*CrustDecl, external:*CrustDec
     return 0i32;
 }
 
-fn output_silent_failure(context:*CrustContext,entry:*CrustDecl,options:*BackendOptions)->i32 {
-    if context->units==null(*CrustUnit) || entry!=null(*CrustDecl) || options->mode!=3u32{trap;}
+fn output_silent_failure(
+    context: *CrustContext,
+    entry: *CrustDecl,
+    options: *BackendOptions
+) -> i32 {
+    if context -> units == null(*CrustUnit) || entry != null(*CrustDecl) || options -> mode != 3u32 {
+        trap;
+    }
     return 37i32;
 }
-fn output_diagnosed_success(context:*CrustContext,entry:*CrustDecl,options:*BackendOptions)->i32 {
-    crust_set_error(context,null(*CrustSource),0usize,"selected output diagnostic");return 0i32;
+fn output_diagnosed_success(
+    context: *CrustContext,
+    entry: *CrustDecl,
+    options: *BackendOptions
+) -> i32 {
+    crust_set_error(context, null(*CrustSource), 0usize, "selected output diagnostic");
+    return 0i32;
 }
-fn output_contract_case(emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32,status:i32,message:*u8)->bool {
-    var context:CrustContext=uninit;crust_context_init(&context,null(*CrustAllocator));
-    var text:*u8="fn value()->i32{return 42i32;}";
-    var source:CrustSource=make CrustSource{path:"output-contract",bytes:text,size:body_test_length(text),identity:1u64};
-    var args:[*u8;2]=make [*u8;2]{"--prepare","--library"};
-    var request:CrustBuild=make CrustBuild{context:&context,source:&source,target_begin:0usize,argc:2i32,argv:&args[0usize]};
-    var result:i32=c_program(&request,emit);
-    var success:bool=result==status && context.error_count!=0usize && body_test_equal(&context.error[0usize],message);
-    crust_context_destroy(&context);return success;
+fn output_contract_case(
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32,
+    status: i32,
+    message: *u8
+) -> bool {
+    var context: CrustContext = uninit;
+    crust_context_init(&context, null(*CrustAllocator));
+    var text: *u8 = "fn value()->i32{return 42i32;}";
+    var source: CrustSource = make CrustSource {
+        path: "output-contract",
+        bytes: text,
+        size: body_test_length(text),
+        identity: 1u64
+    };
+    var args: [*u8; 2] = make [*u8; 2] {
+        "--prepare",
+        "--library"
+    };
+    var request: CrustBuild = make CrustBuild {
+        context: &context,
+        source: &source,
+        target_begin: 0usize,
+        argc: 2i32,
+        argv: &args[0usize]
+    };
+    var result: i32 = c_program(&request, emit);
+    var success: bool = result == status && context.error_count != 0usize && body_test_equal(
+        &context.error[0usize],
+        message
+    );
+    crust_context_destroy(&context);
+    return success;
 }
-fn output_contract()->bool {
-    return output_contract_case(null(fn(*CrustContext,*CrustDecl,*BackendOptions)->i32),1i32,"output callback is required") &&
-        output_contract_case(output_silent_failure,37i32,"output callback failed without a diagnostic") &&
-        output_contract_case(output_diagnosed_success,1i32,"selected output diagnostic");
+fn output_contract() -> bool {
+    return output_contract_case(
+        null(fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32),
+        1i32,
+        "output callback is required"
+    ) && output_contract_case(
+        output_silent_failure,
+        37i32,
+        "output callback failed without a diagnostic"
+    ) && output_contract_case(output_diagnosed_success, 1i32, "selected output diagnostic");
 }

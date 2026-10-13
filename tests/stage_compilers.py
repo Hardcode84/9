@@ -4,6 +4,11 @@
 import os
 
 
+def replace_source(source, before, after, count=-1):
+    assert before in source, before
+    return source.replace(before, after, count)
+
+
 def check(work, seed, run):
     package = work / "custom compiler"
     package.mkdir()
@@ -87,12 +92,16 @@ stage_source_option(stage,stage->sources.items[0usize],"b");
         ("drop layout;", b"borrowed value"),
     ):
         checked.write_text(
-            original.replace("var data:SuLayoutData=", edit + "var data:SuLayoutData=", 1)
+            replace_source(
+                original, "var data: SuLayoutData =", edit + "var data: SuLayoutData =", 1
+            )
         )
         rejected = run([seed, union_root], expected=1, cwd="/")
         assert diagnostic in rejected.stderr, rejected.stderr
         assert b"layout_checked.crs:" in rejected.stderr, rejected.stderr
-    checked.write_text(original.replace("access(edit,CompilerArena)", "access(read,CompilerArena)"))
+    checked.write_text(
+        replace_source(original, "access(edit, CompilerArena)", "access(read, CompilerArena)")
+    )
     assert b"stronger domain authority" in run([seed, union_root], expected=1, cwd="/").stderr
     checked.write_text(original)
     checked = work / "stages/union/lower_checked.crs"
@@ -101,46 +110,61 @@ stage_source_option(stage,stage->sources.items[0usize],"b");
         ("destination.pointer;", b"opaque fields"),
         ("drop destination;", b"borrowed value"),
     ):
-        checked.write_text(original.replace("var name:SuName=", edit + "var name:SuName=", 1))
+        checked.write_text(
+            replace_source(original, "var name: SuName =", edit + "var name: SuName =", 1)
+        )
         rejected = run([seed, union_root], expected=1, cwd="/")
         assert diagnostic in rejected.stderr, rejected.stderr
         assert b"lower_checked.crs:" in rejected.stderr, rejected.stderr
     checked.write_text(
-        original.replace("var count:usize=0usize;", "cursor.seen;var count:usize=0usize;")
+        replace_source(
+            original, "var count: usize = 0usize;", "cursor.seen;var count: usize = 0usize;"
+        )
     )
     assert b"opaque fields" in run([seed, union_root], expected=1, cwd="/").stderr
     checked.write_text(
-        original.replace("su_match_name_next(mut cursor)", "su_match_name_next(read cursor)")
+        replace_source(
+            original, "su_match_name_next(mut cursor)", "su_match_name_next(read cursor)"
+        )
     )
     assert b"borrow mode" in run([seed, union_root], expected=1, cwd="/").stderr
     checked.write_text(
-        original.replace("su_statement_advance(mut cursor)", "su_statement_advance(read cursor)")
+        replace_source(
+            original, "su_statement_advance(mut cursor)", "su_statement_advance(read cursor)"
+        )
     )
     assert b"borrow mode" in run([seed, union_root], expected=1, cwd="/").stderr
-    checked.write_text(original.replace("access(edit,CompilerArena)", "access(read,CompilerArena)"))
+    checked.write_text(
+        replace_source(original, "access(edit, CompilerArena)", "access(read, CompilerArena)")
+    )
     assert b"stronger domain authority" in run([seed, union_root], expected=1, cwd="/").stderr
     checked.write_text(original)
     for filename, before, after, diagnostic in (
         (
             "read_checked.crs",
-            "var count:usize=",
-            "reader.reader;var count:usize=",
+            "var count: usize =",
+            "reader.reader;var count: usize =",
             b"opaque fields",
         ),
-        ("read_checked.crs", "mut sum,read name", "read sum,read name", b"borrow mode"),
+        ("read_checked.crs", "mut sum, read name", "read sum, read name", b"borrow mode"),
         (
             "passes_checked.crs",
             "su_sums_advance(mut sums)",
             "su_sums_advance(read sums)",
             b"borrow mode",
         ),
-        ("passes_checked.crs", "var index:usize=", "driver.cli;var index:usize=", b"opaque fields"),
-        ("lower_checked.crs", "mut chain,read test", "read chain,read test", b"borrow mode"),
+        (
+            "passes_checked.crs",
+            "var index: usize =",
+            "driver.cli;var index: usize =",
+            b"opaque fields",
+        ),
+        ("lower_checked.crs", "mut chain,", "read chain,", b"borrow mode"),
     ):
         checked = work / "stages/union" / filename
         original = checked.read_text()
         assert before in original
-        checked.write_text(original.replace(before, after, 1))
+        checked.write_text(replace_source(original, before, after, 1))
         rejected = run([seed, union_root], expected=1, cwd="/")
         assert diagnostic in rejected.stderr, rejected.stderr
         assert filename.encode() + b":" in rejected.stderr, rejected.stderr

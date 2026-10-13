@@ -23,7 +23,9 @@ fn read_answer(ctx: *CrustContext, source: *CrustSource) -> *CrustDecl {
     var index: usize = 0usize;
     while index < (*source).size {
         var byte: u8 = (*source).bytes[index];
-        if byte == 10u8 && index + 1usize == (*source).size { break; }
+        if byte == 10u8 && index + 1usize == (*source).size {
+            break;
+        }
         if byte < 48u8 || byte > 57u8 {
             crust_set_error(ctx, source, index, "expected a decimal digit");
             return null(*CrustDecl);
@@ -40,12 +42,17 @@ fn read_answer(ctx: *CrustContext, source: *CrustSource) -> *CrustDecl {
         return null(*CrustDecl);
     }
     var tree: *AnswerTree = crust_try_alloc(ctx, sizeof(AnswerTree), alignof(AnswerTree)) as *AnswerTree;
-    if tree == null(*AnswerTree) { return null(*CrustDecl); }
+    if tree == null(*AnswerTree) {
+        return null(*CrustDecl);
+    }
     var name: *CrustName = crust_try_intern(ctx, "answer", 6usize);
     if name == null(*CrustName) {
         return null(*CrustDecl);
     }
-    var location: CrustLoc = make CrustLoc { source: source, offset: 0usize };
+    var location: CrustLoc = make CrustLoc {
+        source: source,
+        offset: 0usize
+    };
     (*tree).result_type.kind = CRUST_T_I32;
     (*tree).result_type.loc = location;
     (*tree).declaration.kind = CRUST_D_FUNCTION;
@@ -77,10 +84,14 @@ fn read_answer(ctx: *CrustContext, source: *CrustSource) -> *CrustDecl {
 }
 
 fn lower_expression(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool {
-    if (*expression).kind == CRUST_E_BINARY && (*expression).op == CRUST_OP_ADD &&
-       (*(*expression).type).kind == CRUST_T_I32 &&
-       (*(*expression).right).kind == CRUST_E_INTEGER && (*(*expression).right).integer == 0u64 {
-        if !crust_x64_try_emit_expression(emitter, (*expression).left) { return false; }
+    if (*expression).kind == CRUST_E_BINARY && (*expression).op == CRUST_OP_ADD && (
+        *(*expression).type
+    ).kind == CRUST_T_I32 && (*(*expression).right).kind == CRUST_E_INTEGER && (
+        *(*expression).right
+    ).integer == 0u64 {
+        if !crust_x64_try_emit_expression(emitter, (*expression).left) {
+            return false;
+        }
         return crust_x64_write(emitter, "\t# stage: add zero\n");
     }
     return crust_x64_try_emit_expression(emitter, expression);
@@ -88,10 +99,16 @@ fn lower_expression(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool {
 
 fn compile_answer(ctx: *CrustContext, source: *CrustSource, output: *u8) -> bool {
     var entry: *CrustDecl = read_answer(ctx, source);
-    if entry == null(*CrustDecl) { return false; }
-    if !crust_collect(ctx) || !crust_resolve(ctx) || !crust_check(ctx) { return false; }
+    if entry == null(*CrustDecl) {
+        return false;
+    }
+    if !crust_collect(ctx) || !crust_resolve(ctx) || !crust_check(ctx) {
+        return false;
+    }
     var program: *CrustX64Program = null(*CrustX64Program);
-    if !crust_x64_prepare(ctx, &program, null(*CrustDecl)) { return false; }
+    if !crust_x64_prepare(ctx, &program, null(*CrustDecl)) {
+        return false;
+    }
     var file: *u8 = file_open(output, "wb");
     if file == null(*u8) {
         crust_set_error(ctx, source, 0usize, "cannot open assembly output");
@@ -99,8 +116,8 @@ fn compile_answer(ctx: *CrustContext, source: *CrustSource, output: *u8) -> bool
     }
     var operations: CrustX64Ops = make CrustX64Ops {
         expression: lower_expression,
-        place: null(fn(*CrustX64Emitter,*CrustExpr)->bool),
-        statement: null(fn(*CrustX64Emitter,*CrustStmt)->bool)
+        place: null(fn(*CrustX64Emitter, *CrustExpr) -> bool),
+        statement: null(fn(*CrustX64Emitter, *CrustStmt) -> bool)
     };
     var success: bool = crust_x64_emit_program_with_ops(program, file, &operations);
     if file_close(file) != 0i32 {
@@ -121,7 +138,12 @@ fn main(argc: i32, argv: **u8) -> i32 {
         crust0_host_write_stream(2u32, "cannot read input\n", 18usize);
         return 1i32;
     }
-    var source: CrustSource = make CrustSource { path: argv[1usize], bytes: bytes, size: size, identity: 1u64 };
+    var source: CrustSource = make CrustSource {
+        path: argv[1usize],
+        bytes: bytes,
+        size: size,
+        identity: 1u64
+    };
     var ctx: CrustContext = uninit;
     crust_context_init(&ctx, null(*CrustAllocator));
     var success: bool = compile_answer(&ctx, &source, argv[2usize]);
@@ -132,6 +154,8 @@ fn main(argc: i32, argv: **u8) -> i32 {
     }
     crust_context_destroy(&ctx);
     crust0_host_free(bytes);
-    if !success { return 1i32; }
+    if !success {
+        return 1i32;
+    }
     return 0i32;
 }

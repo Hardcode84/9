@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record KwNode { syntax: *CrustTypeSyntax; next: *KwNode; }
-record KwStage { nodes: *KwNode; kind: u32; }
+record KwNode {
+    syntax: *CrustTypeSyntax;
+    next: *KwNode;
+}
+record KwStage {
+    nodes: *KwNode;
+    kind: u32;
+}
 
 fn kw_init(stage: *KwStage, context: *CrustContext) -> unit {
     (*stage).nodes = null(*KwNode);
@@ -9,15 +15,28 @@ fn kw_init(stage: *KwStage, context: *CrustContext) -> unit {
 }
 
 fn kw_read_type(reader: *CrustReader, user: *u8) -> *CrustTypeSyntax {
-    if !rr_is_name(reader, "wrapped") { return null(*CrustTypeSyntax); }
+    if !rr_is_name(reader, "wrapped") {
+        return null(*CrustTypeSyntax);
+    }
     var stage: *KwStage = user as *KwStage;
-    var syntax: *CrustTypeSyntax = rr_new_type(reader, (*stage).kind, (*reader).token.offset);
+    var syntax: *CrustTypeSyntax = rr_new_type(
+        reader,
+        (*stage).kind,
+        (*reader).token.offset
+    );
     var node: *KwNode = rr_alloc(reader, sizeof(KwNode), alignof(KwNode)) as *KwNode;
-    if (*reader).failed { return null(*CrustTypeSyntax); }
-    *node = make KwNode { syntax: syntax, next: (*stage).nodes };
+    if (*reader).failed {
+        return null(*CrustTypeSyntax);
+    }
+    * node = make KwNode {
+        syntax: syntax,
+        next: (*stage).nodes
+    };
     (*stage).nodes = node;
     rr_next(reader);
-    if !(*reader).failed { (*syntax).base = rr_type(reader); }
+    if!(*reader).failed {
+        (*syntax).base = rr_type(reader);
+    }
     return syntax;
 }
 

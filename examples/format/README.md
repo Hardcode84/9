@@ -39,6 +39,27 @@ The shared stage loader builds and caches this package. `make all` builds the
 seed. The formatter reads the specified files as data. Only its selected root
 and services execute.
 
+## Repository formatting
+
+Pre-commit formats each changed `.crs` file. The wrapper builds the seed and
+loads the native formatter through the shared stage cache. It selects the text
+service for the reader-switch source. Restage files changed by the hook.
+
+To format every tracked Crust source:
+
+```sh
+pre-commit run crust-format --all-files
+```
+
+To check specific files without changing them:
+
+```sh
+python3 tools/format_crust.py --check examples/hello/main.crs
+```
+
+The API generator emits declarations in this layout too. Run `make api` after
+changes to C interface headers. The generated API check verifies those outputs.
+
 ## The style
 
 Input:

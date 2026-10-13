@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn os_expr(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
-    if !os_enter(check, &(*expression).loc) { return null(*OsValue); }
+    if !os_enter(check, &(*expression).loc) {
+        return null(*OsValue);
+    }
     var value: *OsValue = os_expr_inner(check, state, expression);
     (*check).depth = (*check).depth - 1usize;
     return value;
@@ -9,66 +11,147 @@ fn os_expr(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
 
 fn os_expr_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
     var kind: u32 = (*expression).kind;
-    if kind == CRUST_E_GROUP { return os_expr(check, state, (*expression).left); }
-    if kind == CRUST_E_NAME || kind == CRUST_E_FIELD { return os_load(check, state, expression); }
-    if kind == CRUST_E_CALL { return os_call(check, state, expression); }
-    if kind == rs_kind((*(*check).stage).resources, RS_MOVE) { return os_move(check, state, expression); }
-    if kind == CRUST_E_RECORD { return os_make(check, state, expression); }
-    if kind == CRUST_E_CAST { return os_cast(check, state, expression); }
-    if kind == CRUST_E_BINARY { return os_binary(check, state, expression); }
-    if kind == CRUST_E_UNARY { return os_unary(check, state, expression); }
-    if kind == rs_kind((*(*check).stage).resources, RS_READ) || kind == rs_kind((*(*check).stage).resources, RS_MUT) { return os_borrow(check, state, expression); }
+    if kind == CRUST_E_GROUP {
+        return os_expr(check, state, (*expression).left);
+    }
+    if kind == CRUST_E_NAME || kind == CRUST_E_FIELD {
+        return os_load(check, state, expression);
+    }
+    if kind == CRUST_E_CALL {
+        return os_call(check, state, expression);
+    }
+    if kind == rs_kind((*(*check).stage).resources, RS_MOVE) {
+        return os_move(check, state, expression);
+    }
+    if kind == CRUST_E_RECORD {
+        return os_make(check, state, expression);
+    }
+    if kind == CRUST_E_CAST {
+        return os_cast(check, state, expression);
+    }
+    if kind == CRUST_E_BINARY {
+        return os_binary(check, state, expression);
+    }
+    if kind == CRUST_E_UNARY {
+        return os_unary(check, state, expression);
+    }
+    if kind == rs_kind((*(*check).stage).resources, RS_READ) || kind == rs_kind(
+        (*(*check).stage).resources,
+        RS_MUT
+    ) {
+        return os_borrow(check, state, expression);
+    }
     return os_literal(check, expression);
 }
 
 fn os_literal(check: *OsCheck, expression: *CrustExpr) -> *OsValue {
     var kind: u32 = (*expression).kind;
-    if !os_abstract_literal(check, expression) { return null(*OsValue); }
-    if kind == CRUST_E_NULL { return os_value(check, (*expression).syntax_type, null(*OsObject), true); }
+    if !os_abstract_literal(check, expression) {
+        return null(*OsValue);
+    }
+    if kind == CRUST_E_NULL {
+        return os_value(check, (*expression).syntax_type, null(*OsObject), true);
+    }
     var syntax: *CrustTypeSyntax = null(*CrustTypeSyntax);
     if kind == CRUST_E_INTEGER || kind == CRUST_E_BOOL {
         var type_kind: u32 = (*expression).literal_type;
-        if kind == CRUST_E_BOOL { type_kind = CRUST_T_BOOL; }
+        if kind == CRUST_E_BOOL {
+            type_kind = CRUST_T_BOOL;
+        }
         syntax = os_syntax(check, type_kind, &(*expression).loc);
-    } else { if kind == CRUST_E_SIZEOF || kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF {
-        syntax = os_syntax(check, CRUST_T_USIZE, &(*expression).loc);
-    } else { os_error(check, &(*expression).loc, "expression has no ownership contract"); } }
+    } else {
+        if kind == CRUST_E_SIZEOF || kind == CRUST_E_ALIGNOF || kind == CRUST_E_OFFSETOF {
+            syntax = os_syntax(check, CRUST_T_USIZE, &(*expression).loc);
+        } else {
+            os_error(check, &(*expression).loc, "expression has no ownership contract");
+        }
+    }
     var result: *OsValue = os_value(check, syntax, null(*OsObject), false);
     return result;
 }
 
 fn os_unary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
     var operation: u32 = (*expression).op;
-    if operation == CRUST_OP_ADDRESS { return os_address(check, state, expression); }
-    var value: *OsValue = os_expr(check, state, (*expression).left);
-    if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
-    if !os_plain(check, value, &(*expression).loc) { return null(*OsValue); }
-    if operation == CRUST_OP_DEREF { return os_dereference(check, state, expression, value); }
-    if (*value).pointer || (*value).object != null(*OsObject) {
-        os_error(check, &(*expression).loc, "unary operation cannot erase ownership provenance");
+    if operation == CRUST_OP_ADDRESS {
+        return os_address(check, state, expression);
     }
-    if !os_abstract_unary(check, expression, value) { return null(*OsValue); }
+    var value: *OsValue = os_expr(check, state, (*expression).left);
+    if value == null(*OsValue) || os_failed(check) {
+        return null(*OsValue);
+    }
+    if !os_plain(check, value, &(*expression).loc) {
+        return null(*OsValue);
+    }
+    if operation == CRUST_OP_DEREF {
+        return os_dereference(check, state, expression, value);
+    }
+    if (*value).pointer || (*value).object != null(*OsObject) {
+        os_error(
+            check,
+            &(*expression).loc,
+            "unary operation cannot erase ownership provenance"
+        );
+    }
+    if !os_abstract_unary(check, expression, value) {
+        return null(*OsValue);
+    }
     var result: *OsValue = os_copy(check, value);
     return result;
 }
 
-fn os_dereference(check: *OsCheck, state: *OsState, expression: *CrustExpr, value: *OsValue) -> *OsValue {
-    if (*value).object != null(*OsObject) && !os_loan_access(check, state, (*value).object, (*value).loan, false, &(*expression).loc) {
+fn os_dereference(
+    check: *OsCheck,
+    state: *OsState,
+    expression: *CrustExpr,
+    value: *OsValue
+) -> *OsValue {
+    if (*value).object != null(*OsObject) && !os_loan_access(
+        check,
+        state,
+        (*value).object,
+        (*value).loan,
+        false,
+        &(*expression).loc
+    ) {
         return null(*OsValue);
     }
     return os_dereference_value(check, state, expression, value);
 }
 
-fn os_dereference_value(check: *OsCheck, state: *OsState, expression: *CrustExpr, value: *OsValue) -> *OsValue {
-    if !(*value).pointer && !os_borrowed(check, (*value).syntax) {
-        os_error(check, &(*expression).loc, "dereference requires a pointer or loan"); return null(*OsValue);
-    }
-    if (*value).object != null(*OsObject) && !os_storage_access(check, state, (*value).object, (*value).loan, false, &(*expression).loc) {
+fn os_dereference_value(
+    check: *OsCheck,
+    state: *OsState,
+    expression: *CrustExpr,
+    value: *OsValue
+) -> *OsValue {
+    if!(*value).pointer && !os_borrowed(check, (*value).syntax) {
+        os_error(check, &(*expression).loc, "dereference requires a pointer or loan");
         return null(*OsValue);
     }
-    if (*value).object == null(*OsObject) { return os_loan_scalar(check, state, value, &(*expression).loc); }
-    if !rs_same((*(*check).stage).resources, (*(*value).syntax).base, (*(*value).object).syntax) {
-        os_error(check, &(*expression).loc, "dereference cannot reinterpret checked storage"); return null(*OsValue);
+    if (*value).object != null(*OsObject) && !os_storage_access(
+        check,
+        state,
+        (*value).object,
+        (*value).loan,
+        false,
+        &(*expression).loc
+    ) {
+        return null(*OsValue);
+    }
+    if (*value).object == null(*OsObject) {
+        return os_loan_scalar(check, state, value, &(*expression).loc);
+    }
+    if !rs_same(
+        (*(*check).stage).resources,
+        (*(*value).syntax).base,
+        (*(*value).object).syntax
+    ) {
+        os_error(
+            check,
+            &(*expression).loc,
+            "dereference cannot reinterpret checked storage"
+        );
+        return null(*OsValue);
     }
     var result: *OsValue = os_copy(check, value);
     if result != null(*OsValue) {
@@ -76,33 +159,67 @@ fn os_dereference_value(check: *OsCheck, state: *OsState, expression: *CrustExpr
         (*result).pointer = false;
         (*result).fresh = false;
         (*result).place = null(*OsSlot);
-        if os_borrowed(check, (*value).syntax) && (*value).loan != null(*OsLoan) { (*result).place = (*(*value).loan).place; }
-        if (*(*result).syntax).kind != CRUST_T_NAME { (*result).object = null(*OsObject); }
+        if os_borrowed(check, (*value).syntax) && (*value).loan != null(*OsLoan) {
+            (*result).place = (*(*value).loan).place;
+        }
+        if (*(*result).syntax).kind != CRUST_T_NAME {
+            (*result).object = null(*OsObject);
+        }
     }
     return result;
 }
 
 fn os_borrow(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
     var value: *OsValue = os_expr(check, state, (*expression).left);
-    if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
-    if !os_plain(check, value, &(*expression).loc) { return null(*OsValue); }
-    if (*value).owner {
-        os_error(check, &(*expression).loc, "borrow cannot consume a temporary owner"); return null(*OsValue);
+    if value == null(*OsValue) || os_failed(check) {
+        return null(*OsValue);
     }
-    if (*value).pointer || ((*value).object == null(*OsObject) && (*value).place == null(*OsSlot)) {
+    if !os_plain(check, value, &(*expression).loc) {
+        return null(*OsValue);
+    }
+    if (*value).owner {
+        os_error(check, &(*expression).loc, "borrow cannot consume a temporary owner");
+        return null(*OsValue);
+    }
+    if (*value).pointer || (
+        (*value).object == null(*OsObject) && (*value).place == null(*OsSlot)
+    ) {
         os_error(check, &(*expression).loc, "borrow requires a checked value place");
         return null(*OsValue);
     }
-    if (*expression).kind == rs_kind((*(*check).stage).resources, RS_MUT) && (*value).object != null(*OsObject) &&
-       (*os_root((*value).object)).aliased && rs_owns((*(*check).stage).resources, (*value).syntax) {
-        os_error(check, &(*expression).loc, "mutable resource loan requires an ownership origin"); return null(*OsValue);
+    if (*expression).kind == rs_kind((*(*check).stage).resources, RS_MUT) && (*value).object != null(
+        *OsObject
+    ) && (*os_root((*value).object)).aliased && rs_owns(
+        (*(*check).stage).resources,
+        (*value).syntax
+    ) {
+        os_error(
+            check,
+            &(*expression).loc,
+            "mutable resource loan requires an ownership origin"
+        );
+        return null(*OsValue);
     }
-    var loan: *OsLoan = os_loan_new(check, state, value, (*expression).kind, &(*expression).loc);
-    if loan == null(*OsLoan) { return null(*OsValue); }
-    var syntax: *CrustTypeSyntax = os_syntax(check, (*expression).kind, &(*expression).loc);
+    var loan: *OsLoan = os_loan_new(
+        check,
+        state,
+        value,
+        (*expression).kind,
+        &(*expression).loc
+    );
+    if loan == null(*OsLoan) {
+        return null(*OsValue);
+    }
+    var syntax: *CrustTypeSyntax = os_syntax(
+        check,
+        (*expression).kind,
+        &(*expression).loc
+    );
     if syntax != null(*CrustTypeSyntax) {
         (*syntax).base = (*value).syntax;
-        if os_borrowed(check, (*value).syntax) { (*syntax).base = (*(*value).syntax).base; }
+        if os_borrowed(check, (*value).syntax) {
+            (*syntax).base = (*(*value).syntax).base;
+        }
     }
     (*value).syntax = syntax;
     (*value).loan = loan;
@@ -112,22 +229,56 @@ fn os_borrow(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVal
 
 fn os_cast(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
     var value: *OsValue = os_expr(check, state, (*expression).left);
-    if value == null(*OsValue) || os_failed(check) { return null(*OsValue); }
-    if !os_plain(check, value, &(*expression).loc) { return null(*OsValue); }
+    if value == null(*OsValue) || os_failed(check) {
+        return null(*OsValue);
+    }
+    if !os_plain(check, value, &(*expression).loc) {
+        return null(*OsValue);
+    }
     var target: *CrustTypeSyntax = (*expression).syntax_type;
-    if !os_abstract_cast(check, target, (*value).syntax, &(*expression).loc) { return null(*OsValue); }
+    if !os_abstract_cast(check, target, (*value).syntax, &(*expression).loc) {
+        return null(*OsValue);
+    }
     if (*target).kind == CRUST_T_POINTER {
-        if !(*value).pointer { os_error(check, &(*expression).loc, "pointer casts cannot create checked storage"); return null(*OsValue); }
+        if!(*value).pointer {
+            os_error(
+                check,
+                &(*expression).loc,
+                "pointer casts cannot create checked storage"
+            );
+            return null(*OsValue);
+        }
         if (*value).allocation_type != null(*CrustTypeSyntax) {
-            if !rs_same((*(*check).stage).resources, (*target).base, (*value).allocation_type) {
-                os_error(check, &(*expression).loc, "allocation size must match its checked target type");
+            if !rs_same(
+                (*(*check).stage).resources,
+                (*target).base,
+                (*value).allocation_type
+            ) {
+                os_error(
+                    check,
+                    &(*expression).loc,
+                    "allocation size must match its checked target type"
+                );
             }
             (*value).allocation_type = null(*CrustTypeSyntax);
-        } else { if (*(*target).base).kind != CRUST_T_U8 &&
-                    !rs_same((*(*check).stage).resources, (*target).base, (*(*value).syntax).base) {
-            os_error(check, &(*expression).loc, "pointer cast cannot change the checked storage type");
-        } }
-    } else { if (*value).pointer { os_error(check, &(*expression).loc, "pointer casts cannot erase provenance"); } }
+        } else {
+            if (*(*target).base).kind != CRUST_T_U8 && !rs_same(
+                (*(*check).stage).resources,
+                (*target).base,
+                (*(*value).syntax).base
+            ) {
+                os_error(
+                    check,
+                    &(*expression).loc,
+                    "pointer cast cannot change the checked storage type"
+                );
+            }
+        }
+    } else {
+        if (*value).pointer {
+            os_error(check, &(*expression).loc, "pointer casts cannot erase provenance");
+        }
+    }
     (*value).syntax = target;
     return value;
 }
@@ -137,13 +288,24 @@ fn os_binary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVal
         var yes: OsState = *state;
         var no: OsState = *state;
         os_condition(check, state, expression, &yes, &no);
-        if !os_failed(check) { os_join(check, state, &yes, &no, &(*expression).loc); }
-        return os_value(check, os_syntax(check, CRUST_T_BOOL, &(*expression).loc), null(*OsObject), false);
+        if !os_failed(check) {
+            os_join(check, state, &yes, &no, &(*expression).loc);
+        }
+        return os_value(
+            check,
+            os_syntax(check, CRUST_T_BOOL, &(*expression).loc),
+            null(*OsObject),
+            false
+        );
     }
     var left: *OsValue = os_expr(check, state, (*expression).left);
-    if left == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+    if left == null(*OsValue) || os_failed(check) {
+        return null(*OsValue);
+    }
     var right: *OsValue = os_expr(check, state, (*expression).right);
-    if right == null(*OsValue) || os_failed(check) { return null(*OsValue); }
+    if right == null(*OsValue) || os_failed(check) {
+        return null(*OsValue);
+    }
     os_binary_access(check, expression, left, right);
     os_unused(check, state, left, &(*expression).loc);
     os_unused(check, state, right, &(*expression).loc);
@@ -156,15 +318,36 @@ fn os_binary(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsVal
 }
 
 fn os_make(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
-    if !os_abstract_make(check, expression) { return null(*OsValue); }
-    if os_opaque(os_record((*check).stage, (*expression).syntax_type)) { os_error(check, &(*expression).loc, "opaque values require their declared constructor"); return null(*OsValue); }
-    var object: *OsObject = os_object(check, state, (*expression).syntax_type, null(*OsObject), (*state).scope, false);
-    if object == null(*OsObject) { return null(*OsValue); }
+    if !os_abstract_make(check, expression) {
+        return null(*OsValue);
+    }
+    if os_opaque(os_record((*check).stage, (*expression).syntax_type)) {
+        os_error(
+            check,
+            &(*expression).loc,
+            "opaque values require their declared constructor"
+        );
+        return null(*OsValue);
+    }
+    var object: *OsObject = os_object(
+        check,
+        state,
+        (*expression).syntax_type,
+        null(*OsObject),
+        (*state).scope,
+        false
+    );
+    if object == null(*OsObject) {
+        return null(*OsValue);
+    }
     var item: *CrustInit = (*expression).inits;
     while item != null(*CrustInit) && !os_failed(check) {
         var slot: *OsSlot = os_object_slot(check, state, object, (*item).name);
         var value: *OsValue = os_expr(check, state, (*item).value);
-        if slot == null(*OsSlot) { os_error(check, &(*item).loc, "schema initializer names no field"); return null(*OsValue); }
+        if slot == null(*OsSlot) {
+            os_error(check, &(*item).loc, "schema initializer names no field");
+            return null(*OsValue);
+        }
         os_store(check, state, slot, value, &(*item).loc);
         item = (*item).next;
     }
@@ -176,25 +359,54 @@ fn os_make(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
     return result;
 }
 
-fn os_refine_values(check: *OsCheck, state: *OsState, left: *OsValue, right: *OsValue, equal: bool) -> unit {
-    if (*left).native != null(*OsField) || (*right).native != null(*OsField) { return; }
-    if !(*left).pointer || !(*right).pointer || (*left).object == null(*OsObject) { return; }
+fn os_refine_values(
+    check: *OsCheck,
+    state: *OsState,
+    left: *OsValue,
+    right: *OsValue,
+    equal: bool
+) -> unit {
+    if (*left).native != null(*OsField) || (*right).native != null(*OsField) {
+        return;
+    }
+    if!(*left).pointer ||!(*right).pointer || (*left).object == null(*OsObject) {
+        return;
+    }
     var object: *OsObject = (*left).object;
     if (*right).object == null(*OsObject) {
         var flags: u32 = os_flags(state, object);
-        if equal { flags = (flags & ~OS_NONNULL) | OS_ABSENT; }
-        else { flags = (flags & ~OS_ABSENT) | OS_NONNULL; }
+        if equal {
+            flags = (flags & ~OS_NONNULL) | OS_ABSENT;
+        } else {
+            flags = (flags & ~OS_ABSENT) | OS_NONNULL;
+        }
         os_mark(check, state, object, flags);
     }
 }
 
-fn os_binary_access(check: *OsCheck, expression: *CrustExpr, left: *OsValue, right: *OsValue) -> unit {
-    if !os_abstract_binary(check, expression, left, right) { return; }
-    if ((*left).native != null(*OsField) || (*right).native != null(*OsField)) &&
-       (*expression).op != CRUST_OP_EQ && (*expression).op != CRUST_OP_NE {
-        os_error(check, &(*expression).loc, "owned values permit equality tests, not arithmetic");
+fn os_binary_access(
+    check: *OsCheck,
+    expression: *CrustExpr,
+    left: *OsValue,
+    right: *OsValue
+) -> unit {
+    if !os_abstract_binary(check, expression, left, right) {
+        return;
+    }
+    if ((*left).native != null(*OsField) || (*right).native != null(*OsField)) && (*expression).op != CRUST_OP_EQ && (
+        *expression
+    ).op != CRUST_OP_NE {
+        os_error(
+            check,
+            &(*expression).loc,
+            "owned values permit equality tests, not arithmetic"
+        );
     }
     if ((*left).pointer || (*right).pointer) && (*expression).op != CRUST_OP_EQ && (*expression).op != CRUST_OP_NE {
-        os_error(check, &(*expression).loc, "pointer arithmetic has no checked ownership contract");
+        os_error(
+            check,
+            &(*expression).loc,
+            "pointer arithmetic has no checked ownership contract"
+        );
     }
 }

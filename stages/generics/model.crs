@@ -1,16 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record GsBinding { name: *u8; declaration: *CrustDecl; }
-record GsParameter { name: *CrustName; index: usize; }
+record GsBinding {
+    name: *u8;
+    declaration: *CrustDecl;
+}
+record GsParameter {
+    name: *CrustName;
+    index: usize;
+}
 
 record GsClone {
     context: *CrustContext;
     user: *u8;
-    type_syntax: fn(*GsClone,*CrustTypeSyntax,u32)->*CrustTypeSyntax;
-    expression: fn(*GsClone,*CrustExpr,u32)->*CrustExpr;
-    statement: fn(*GsClone,*CrustStmt,*CrustStmt)->unit;
-    kind: fn(*GsClone,u32)->u32;
-    body: fn(*GsClone,*CrustDecl,u32)->*CrustStmt;
+    type_syntax: fn(*GsClone, *CrustTypeSyntax, u32) -> *CrustTypeSyntax;
+    expression: fn(*GsClone, *CrustExpr, u32) -> *CrustExpr;
+    statement: fn(*GsClone, *CrustStmt, *CrustStmt) -> unit;
+    kind: fn(*GsClone, u32) -> u32;
+    body: fn(*GsClone, *CrustDecl, u32) -> *CrustStmt;
 }
 
 record GsStage {

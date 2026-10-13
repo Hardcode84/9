@@ -1,10 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn ownership_alloc_verify(context: *CrustContext, source: *CrustSource, trusted: *CrustSource) -> bool {
+fn ownership_alloc_verify(
+    context: *CrustContext,
+    source: *CrustSource,
+    trusted: *CrustSource
+) -> bool {
     var resources: RsStage = uninit;
     rs_init(&resources, context);
     var ownership: OsStage = uninit;
     os_init(&ownership, &resources);
-    if trusted != null(*CrustSource) && !os_trust_sources(&ownership, trusted, 1usize) { return false; }
-    return os_read(&ownership, source, 0usize, (*source).size) && os_lower(&ownership) && os_verify(&ownership);
+    if trusted != null(*CrustSource) && !os_trust_sources(&ownership, trusted, 1usize) {
+        return false;
+    }
+    return os_read(&ownership, source, 0usize, (*source).size) && os_lower(&ownership) && os_verify(
+        &ownership
+    );
 }

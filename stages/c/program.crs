@@ -31,7 +31,9 @@ fn c_driver_print_number(value: u64) -> unit {
         index = index - 1usize;
         digits[index] = (value % 10u64) as u8 + 48u8;
         value = value / 10u64;
-        if value == 0u64 { break; }
+        if value == 0u64 {
+            break;
+        }
     }
     crust0_host_write_stream(2u32, &digits[index], 20usize - index);
 }
@@ -49,7 +51,9 @@ fn c_driver_diagnostic(context: *CrustContext, tool: *u8) -> unit {
             if (*source).bytes[index] == 10u8 {
                 line = line + 1u64;
                 column = 1u64;
-            } else { column = column + 1u64; }
+            } else {
+                column = column + 1u64;
+            }
             index = index + 1usize;
         }
         c_driver_stderr((*source).path);
@@ -71,19 +75,43 @@ fn c_driver_parse(cli: *CCli, argc: i32, argv: **u8, begin: i32) -> bool {
         var arg: *u8 = argv[index as usize];
         index = index + 1i32;
         if options {
-            if c_equal(arg, "--") { options = false; continue; }
-            if c_equal(arg, "--check") { (*cli).mode = 3u32; continue; }
-            if c_equal(arg, "--prepare") { (*cli).mode = 4u32; continue; }
-            if c_equal(arg, "--emit") { (*cli).mode = 2u32; continue; }
-            if c_equal(arg, "--object") { (*cli).mode = 1u32; continue; }
-            if c_equal(arg, "--library") { (*cli).library = true; continue; }
-            if c_cli_value_option(arg) {
-                if !c_cli_argument(cli, argc, argv, &index, arg) { return false; }
+            if c_equal(arg, "--") {
+                options = false;
                 continue;
             }
-            if arg[0usize] == 45u8 { return c_driver_error(driver, "unknown command option"); }
+            if c_equal(arg, "--check") {
+                (*cli).mode = 3u32;
+                continue;
+            }
+            if c_equal(arg, "--prepare") {
+                (*cli).mode = 4u32;
+                continue;
+            }
+            if c_equal(arg, "--emit") {
+                (*cli).mode = 2u32;
+                continue;
+            }
+            if c_equal(arg, "--object") {
+                (*cli).mode = 1u32;
+                continue;
+            }
+            if c_equal(arg, "--library") {
+                (*cli).library = true;
+                continue;
+            }
+            if c_cli_value_option(arg) {
+                if !c_cli_argument(cli, argc, argv, &index, arg) {
+                    return false;
+                }
+                continue;
+            }
+            if arg[0usize] == 45u8 {
+                return c_driver_error(driver, "unknown command option");
+            }
         }
-        if !c_cli_source(cli, arg) { return false; }
+        if !c_cli_source(cli, arg) {
+            return false;
+        }
     }
     return c_cli_finish_options(cli);
 }
@@ -98,7 +126,9 @@ fn c_driver_names(driver: *CDriver) -> bool {
             if (*declaration).kind != CRUST_D_RECORD && (*declaration).link_name == null(*u8) {
                 if private == null(*u8) {
                     private = crust_try_copy_string((*stage).status.context, "", 0usize);
-                    if private == null(*u8) { return false; }
+                    if private == null(*u8) {
+                        return false;
+                    }
                 }
                 (*declaration).link_name = private;
             }
@@ -113,7 +143,9 @@ fn c_driver_abi_name(name: *u8) -> bool {
     var prefix: *u8 = "CRUST_ABI_";
     var index: usize = 0usize;
     while index < 10usize {
-        if name[index] != prefix[index] { return false; }
+        if name[index] != prefix[index] {
+            return false;
+        }
         index = index + 1usize;
     }
     return true;
@@ -124,7 +156,9 @@ fn c_driver_abi_exports(context: *CrustContext) -> unit {
     while unit_value != null(*CrustUnit) {
         var declaration: *CrustDecl = (*unit_value).declarations;
         while declaration != null(*CrustDecl) {
-            if (*declaration).kind == CRUST_D_CONST && c_driver_abi_name((*(*declaration).name).text) {
+            if (*declaration).kind == CRUST_D_CONST && c_driver_abi_name(
+                (*(*declaration).name).text
+            ) {
                 (*declaration).link_name = (*(*declaration).name).text;
             }
             declaration = (*declaration).next;
@@ -134,13 +168,17 @@ fn c_driver_abi_exports(context: *CrustContext) -> unit {
 }
 
 fn c_driver_is_entry(declaration: *CrustDecl) -> bool {
-    if (*declaration).kind != CRUST_D_FUNCTION || (*declaration).param_count != 2usize { return false; }
+    if (*declaration).kind != CRUST_D_FUNCTION || (*declaration).param_count != 2usize {
+        return false;
+    }
     var parameter: *CrustParam = (*declaration).params;
-    if (*(*declaration).syntax_type).kind != CRUST_T_I32 ||
-       (*(*parameter).syntax_type).kind != CRUST_T_I32 { return false; }
+    if (*(*declaration).syntax_type).kind != CRUST_T_I32 || (*(*parameter).syntax_type).kind != CRUST_T_I32 {
+        return false;
+    }
     var argument: *CrustTypeSyntax = (*(*parameter).next).syntax_type;
-    return (*argument).kind == CRUST_T_POINTER && (*(*argument).base).kind == CRUST_T_POINTER &&
-           (*(*(*argument).base).base).kind == CRUST_T_U8;
+    return (*argument).kind == CRUST_T_POINTER && (*(*argument).base).kind == CRUST_T_POINTER && (
+        *(*(*argument).base).base
+    ).kind == CRUST_T_U8;
 }
 
 fn c_driver_entry(cli: *CCli) -> *CrustDecl {
@@ -150,7 +188,9 @@ fn c_driver_entry(cli: *CCli) -> *CrustDecl {
         var declaration: *CrustDecl = (*parsed).declarations;
         while declaration != null(*CrustDecl) {
             if c_equal((*(*declaration).name).text, (*cli).entry_name) {
-                if c_driver_is_entry(declaration) { return declaration; }
+                if c_driver_is_entry(declaration) {
+                    return declaration;
+                }
                 c_driver_error(driver, "entry must be a defined fn(i32, **u8) -> i32");
                 return null(*CrustDecl);
             }
@@ -162,27 +202,44 @@ fn c_driver_entry(cli: *CCli) -> *CrustDecl {
     return null(*CrustDecl);
 }
 
-fn c_driver_build(cli: *CCli, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
+fn c_driver_build(
+    cli: *CCli,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
     var driver: *CDriver = &(*cli).driver;
     var stage: *CStage = (*driver).stage;
     var context: *CrustContext = (*stage).status.context;
-    if !c_cli_read(cli) { return 1i32; }
-    if !crust_collect(context) || !crust_resolve(context) || !crust_check(context) { return 1i32; }
-    if !c_driver_exports(cli) { return 1i32; }
-    if (*cli).mode == 3u32 { return 0i32; }
-    if !c_driver_names(driver) { return 1i32; }
-    var entry: *CrustDecl = null(*CrustDecl);
-    if !(*cli).library {
-        entry = c_driver_entry(cli);
-        if entry == null(*CrustDecl) { return 1i32; }
+    if !c_cli_read(cli) {
+        return 1i32;
     }
-    return backend_output(context,entry,(*driver).options,emit);
+    if !crust_collect(context) || !crust_resolve(context) || !crust_check(context) {
+        return 1i32;
+    }
+    if !c_driver_exports(cli) {
+        return 1i32;
+    }
+    if (*cli).mode == 3u32 {
+        return 0i32;
+    }
+    if !c_driver_names(driver) {
+        return 1i32;
+    }
+    var entry: *CrustDecl = null(*CrustDecl);
+    if!(*cli).library {
+        entry = c_driver_entry(cli);
+        if entry == null(*CrustDecl) {
+            return 1i32;
+        }
+    }
+    return backend_output(context, entry, (*driver).options, emit);
 }
 
 fn c_driver_option(argument: *u8, name: *u8) -> bool {
     var index: usize = 0usize;
     while name[index] != 0u8 {
-        if argument[index] != name[index] { return false; }
+        if argument[index] != name[index] {
+            return false;
+        }
         index = index + 1usize;
     }
     return argument[index] == 0u8 || argument[index] == 61u8;
@@ -190,7 +247,9 @@ fn c_driver_option(argument: *u8, name: *u8) -> bool {
 
 fn c_driver_exports(cli: *CCli) -> bool {
     var context: *CrustContext = (*cli).stage.status.context;
-    if (*cli).library { c_driver_abi_exports(context); }
+    if (*cli).library {
+        c_driver_abi_exports(context);
+    }
     var index: usize = 0usize;
     while index < (*cli).export_count {
         var name: *u8 = (*cli).exports[index];
@@ -201,10 +260,15 @@ fn c_driver_exports(cli: *CCli) -> bool {
             while declaration != null(*CrustDecl) {
                 if c_equal((*(*declaration).name).text, name) {
                     if (*declaration).kind != CRUST_D_FUNCTION && (*declaration).kind != CRUST_D_CONST {
-                        return c_driver_error(&(*cli).driver, "--export requires a defined function or constant");
+                        return c_driver_error(
+                            &(*cli).driver,
+                            "--export requires a defined function or constant"
+                        );
                     }
                     var copied: *u8 = crust_try_copy_string(context, name, c_length(name));
-                    if copied == null(*u8) { return false; }
+                    if copied == null(*u8) {
+                        return false;
+                    }
                     (*declaration).link_name = copied;
                     found = true;
                     break;
@@ -213,7 +277,9 @@ fn c_driver_exports(cli: *CCli) -> bool {
             }
             parsed = (*parsed).next;
         }
-        if !found { return c_driver_error(&(*cli).driver, "exported declaration was not found"); }
+        if !found {
+            return c_driver_error(&(*cli).driver, "exported declaration was not found");
+        }
         index = index + 1usize;
     }
     return true;
@@ -222,12 +288,20 @@ fn c_driver_exports(cli: *CCli) -> bool {
 fn c_driver_init(cli: *CCli, context: *CrustContext, argc: i32) -> bool {
     c_stage_init(&(*cli).stage, context);
     (*cli).options = make BackendOptions {
-        mode: 0u32, output: null(*u8), symbols: null(*u8),
-        cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
+        mode: 0u32,
+        output: null(*u8),
+        symbols: null(*u8),
+        cflags: null(**u8),
+        cflag_count: 0usize,
+        ldflags: null(**u8),
+        ldflag_count: 0usize
     };
     (*cli).driver = make CDriver {
-        stage: &(*cli).stage, options: &(*cli).options, command: null(**u8),
-        temporary: null(*CDriverTemp), process_status: 0i32
+        stage: &(*cli).stage,
+        options: &(*cli).options,
+        command: null(**u8),
+        temporary: null(*CDriverTemp),
+        process_status: 0i32
     };
     (*cli).sources = null(*CrustSource);
     (*cli).source_count = 0usize;
@@ -238,21 +312,44 @@ fn c_driver_init(cli: *CCli, context: *CrustContext, argc: i32) -> bool {
     (*cli).mode = 0u32;
     (*cli).library = false;
     (*cli).entry_name = "main";
-    if argc < 0i32 { return c_driver_error(&(*cli).driver, "negative argument count"); }
+    if argc < 0i32 {
+        return c_driver_error(&(*cli).driver, "negative argument count");
+    }
     var capacity: usize = argc as usize + 32usize;
-    (*cli).sources = crust_try_alloc(context, capacity * sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
-    if (*cli).sources == null(*CrustSource) { return false; }
-    (*cli).options.cflags = c_alloc(&(*cli).stage.status, capacity * sizeof(*u8), alignof(*u8)) as **u8;
-    (*cli).options.ldflags = c_alloc(&(*cli).stage.status, capacity * sizeof(*u8), alignof(*u8)) as **u8;
-    (*cli).exports = c_alloc(&(*cli).stage.status, capacity * sizeof(*u8), alignof(*u8)) as **u8;
-    return !(*cli).stage.status.failed;
+    (*cli).sources = crust_try_alloc(
+        context,
+        capacity * sizeof(CrustSource),
+        alignof(CrustSource)
+    ) as *CrustSource;
+    if (*cli).sources == null(*CrustSource) {
+        return false;
+    }
+    (*cli).options.cflags = c_alloc(
+        &(*cli).stage.status,
+        capacity * sizeof(*u8),
+        alignof(*u8)
+    ) as **u8;
+    (*cli).options.ldflags = c_alloc(
+        &(*cli).stage.status,
+        capacity * sizeof(*u8),
+        alignof(*u8)
+    ) as **u8;
+    (*cli).exports = c_alloc(
+        &(*cli).stage.status,
+        capacity * sizeof(*u8),
+        alignof(*u8)
+    ) as **u8;
+    return!(*cli).stage.status.failed;
 }
 
 // Require an initialized context with no application units and a live source.
 // Interpret request arguments as compiler options and extra source paths.
 // Keep the source live through context destruction. Extra inputs and names belong to the context.
 // Return a status and retain diagnostics in the context without printing them.
-fn c_program(request: *CrustBuild, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32) -> i32 {
+fn c_program(
+    request: *CrustBuild,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
     var context: *CrustContext = (*request).context;
     var cli: CCli = uninit;
     var success: bool = c_driver_init(&cli, context, (*request).argc);
@@ -260,25 +357,35 @@ fn c_program(request: *CrustBuild, emit:fn(*CrustContext,*CrustDecl,*BackendOpti
     cli.target_begin = (*request).target_begin;
     var result: i32 = 1i32;
     if success && c_driver_parse(&cli, (*request).argc, (*request).argv, 0i32) {
-        result = c_driver_build(&cli,emit);
+        result = c_driver_build(&cli, emit);
     }
     c_stage_destroy(&cli.stage);
     return result;
 }
 
 fn c_cli_value_option(arg: *u8) -> bool {
-    return c_driver_option(arg, "-o") || c_driver_option(arg, "--entry") || c_driver_option(arg, "--symbols") ||
-           c_driver_option(arg, "--cflag") || c_driver_option(arg, "--ldflag") || c_driver_option(arg, "--export");
+    return c_driver_option(arg, "-o") || c_driver_option(arg, "--entry") || c_driver_option(
+        arg,
+        "--symbols"
+    ) || c_driver_option(arg, "--cflag") || c_driver_option(arg, "--ldflag") || c_driver_option(
+        arg,
+        "--export"
+    );
 }
 
 fn c_cli_argument(cli: *CCli, argc: i32, argv: **u8, index: *i32, arg: *u8) -> bool {
     var driver: *CDriver = &(*cli).driver;
     var split: usize = 0usize;
-    while arg[split] != 0u8 && arg[split] != 61u8 { split = split + 1usize; }
+    while arg[split] != 0u8 && arg[split] != 61u8 {
+        split = split + 1usize;
+    }
     var value: *u8 = null(*u8);
-    if arg[split] == 61u8 { value = &arg[split + 1usize]; }
-    else {
-        if *index == argc { return c_driver_error(driver, "missing option argument"); }
+    if arg[split] == 61u8 {
+        value = &arg[split + 1usize];
+    } else {
+        if *index == argc {
+            return c_driver_error(driver, "missing option argument");
+        }
         value = argv[*index as usize];
         *index = *index + 1i32;
     }
@@ -288,9 +395,18 @@ fn c_cli_argument(cli: *CCli, argc: i32, argv: **u8, index: *i32, arg: *u8) -> b
 
 fn c_cli_option(cli: *CCli, arg: *u8, value: *u8) -> unit {
     var driver: *CDriver = &(*cli).driver;
-    if c_driver_option(arg, "-o") { (*(*driver).options).output = value; return; }
-    if c_driver_option(arg, "--entry") { (*cli).entry_name = value; return; }
-    if c_driver_option(arg, "--symbols") { (*(*driver).options).symbols = value; return; }
+    if c_driver_option(arg, "-o") {
+        (*(*driver).options).output = value;
+        return;
+    }
+    if c_driver_option(arg, "--entry") {
+        (*cli).entry_name = value;
+        return;
+    }
+    if c_driver_option(arg, "--symbols") {
+        (*(*driver).options).symbols = value;
+        return;
+    }
     if c_driver_option(arg, "--cflag") {
         (*(*driver).options).cflags[(*(*driver).options).cflag_count] = value;
         (*(*driver).options).cflag_count = (*(*driver).options).cflag_count + 1usize;
@@ -310,13 +426,18 @@ fn c_cli_source(cli: *CCli, arg: *u8) -> bool {
     var count: usize = (*cli).source_count;
     var context: *CrustContext = (*(*driver).stage).status.context;
     var path: *u8 = crust_try_copy_string(context, arg, c_length(arg));
-    if path == null(*u8) { return false; }
+    if path == null(*u8) {
+        return false;
+    }
     var identity: u64 = count as u64 + 1u64;
     if (*cli).root != null(*CrustSource) && identity >= (*(*cli).root).identity {
         identity = identity + 1u64;
     }
     (*cli).sources[count] = make CrustSource {
-        path: path, bytes: null(*u8), size: 0usize, identity: identity
+        path: path,
+        bytes: null(*u8),
+        size: 0usize,
+        identity: identity
     };
     (*cli).source_count = count + 1usize;
     return true;
@@ -324,7 +445,9 @@ fn c_cli_source(cli: *CCli, arg: *u8) -> bool {
 
 fn c_cli_finish_options(cli: *CCli) -> bool {
     var driver: *CDriver = &(*cli).driver;
-    if (*cli).source_count == 0usize && (*cli).root == null(*CrustSource) { return c_driver_error(driver, "no source files"); }
+    if (*cli).source_count == 0usize && (*cli).root == null(*CrustSource) {
+        return c_driver_error(driver, "no source files");
+    }
     if (*cli).mode >= 3u32 {
         if (*(*driver).options).output != null(*u8) {
             return c_driver_error(driver, "-o requires text, object, or executable output");
@@ -332,8 +455,12 @@ fn c_cli_finish_options(cli: *CCli) -> bool {
         if (*(*driver).options).symbols != null(*u8) {
             return c_driver_error(driver, "--symbols requires --emit");
         }
-        if cli->mode==4u32{cli->options.mode=3u32;}
-    } else { (*(*driver).options).mode = (*cli).mode; }
+        if cli -> mode == 4u32 {
+            cli -> options.mode = 3u32;
+        }
+    } else {
+        (*(*driver).options).mode = (*cli).mode;
+    }
     return true;
 }
 
@@ -343,22 +470,39 @@ fn c_cli_read(cli: *CCli) -> bool {
     var index: usize = 0usize;
     if (*cli).root != null(*CrustSource) {
         var parsed: *CrustUnit = null(*CrustUnit);
-        if !crust_read_range(context, (*cli).root, (*cli).target_begin, (*(*cli).root).size, &parsed) { return false; }
+        if !crust_read_range(
+            context,
+            (*cli).root,
+            (*cli).target_begin,
+            (*(*cli).root).size,
+            &parsed
+        ) {
+            return false;
+        }
     }
     while index < (*cli).source_count {
         var source: *CrustSource = &(*cli).sources[index];
         var bytes: *u8 = null(*u8);
         var size: usize = 0usize;
         if crust0_host_read_file((*source).path, &bytes, &size) != 0i32 {
-            c_driver_io_error(driver, "cannot read input", (*source).path, *c_driver_errno());
+            c_driver_io_error(
+                driver,
+                "cannot read input",
+                (*source).path,
+                *c_driver_errno()
+            );
             return false;
         }
         (*source).bytes = crust_try_copy_string(context, bytes, size);
         (*source).size = size;
         crust0_host_free(bytes);
-        if (*source).bytes == null(*u8) { return false; }
+        if (*source).bytes == null(*u8) {
+            return false;
+        }
         var parsed: *CrustUnit = null(*CrustUnit);
-        if !crust_read(context, source, &parsed) { return false; }
+        if !crust_read(context, source, &parsed) {
+            return false;
+        }
         index = index + 1usize;
     }
     return true;

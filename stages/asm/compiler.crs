@@ -1,25 +1,51 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Emit assembly and a symbol map for captured raw Crust sources.
-fn asm_stage_compile(request:*StageCompile)->bool {
-    var context:*CrustContext=request->context;
-    if request->options.count!=0usize{return native_error(context,"ASM package compiler accepts no source options");}
-    if !stage_read_sources(context,&request->sources) || !stage_names(request->exports,context){return false;}
-    var stream:*u8=native_fopen(request->output,"wb");
-    if stream==null(*u8){return native_error(context,"cannot open package assembly output");}
-    var success:bool=crust_x64_emit(context,stream,null(*CrustDecl));
-    if native_fclose(stream)!=0i32{return native_error(context,"cannot close package assembly output");}
-    return success && cache_save(context,request->symbols,"",0usize);
+fn asm_stage_compile(request: *StageCompile) -> bool {
+    var context: *CrustContext = request -> context;
+    if request -> options.count != 0usize {
+        return native_error(context, "ASM package compiler accepts no source options");
+    }
+    if !stage_read_sources(context, &request -> sources) || !stage_names(
+        request -> exports,
+        context
+    ) {
+        return false;
+    }
+    var stream: *u8 = native_fopen(request -> output, "wb");
+    if stream == null(*u8) {
+        return native_error(context, "cannot open package assembly output");
+    }
+    var success: bool = crust_x64_emit(context, stream, null(*CrustDecl));
+    if native_fclose(stream) != 0i32 {
+        return native_error(context, "cannot close package assembly output");
+    }
+    return success && cache_save(context, request -> symbols, "", 0usize);
 }
 
 // Capture the Linux x86-64 assembler and its loaded libraries.
-fn asm_stage_toolchain(toolchain:*StageToolchain)->bool {
-    toolchain->object=asm_stage_object;
-    var paths:[*u8;1]=make [*u8;1]{"/usr/bin/as"};
-    return cache_tools(toolchain->context,&toolchain->inputs,&paths[0usize],1usize,toolchain->directory);
+fn asm_stage_toolchain(toolchain: *StageToolchain) -> bool {
+    toolchain -> object = asm_stage_object;
+    var paths: [*u8; 1] = make [*u8; 1] {
+        "/usr/bin/as"
+    };
+    return cache_tools(
+        toolchain -> context,
+        &toolchain -> inputs,
+        &paths[0usize],
+        1usize,
+        toolchain -> directory
+    );
 }
 
-fn asm_stage_object(request:*StageObject)->bool {
-    var arguments:[*u8;6]=make [*u8;6]{"/usr/bin/as","--64",request->source,"-o",request->output,null(*u8)};
-    return cache_tool(request->context,&arguments[0usize],null(*u8));
+fn asm_stage_object(request: *StageObject) -> bool {
+    var arguments: [*u8; 6] = make [*u8; 6] {
+        "/usr/bin/as",
+        "--64",
+        request -> source,
+        "-o",
+        request -> output,
+        null(*u8)
+    };
+    return cache_tool(request -> context, &arguments[0usize], null(*u8));
 }

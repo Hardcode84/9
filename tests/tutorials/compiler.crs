@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn tutorial_stage_compile(request:*StageCompile)->bool {
-    return og_stage_emit(request,llvm_backend_build);
+fn tutorial_stage_compile(request: *StageCompile) -> bool {
+    return og_stage_emit(request, llvm_backend_build);
 }
-fn llvm_stage_toolchain(toolchain:*StageToolchain)->bool {
-    return llvm_toolchain(toolchain,LLVM_DIRECTORY,LLVM_OPTIMIZATION);
+fn llvm_stage_toolchain(toolchain: *StageToolchain) -> bool {
+    return llvm_toolchain(toolchain, LLVM_DIRECTORY, LLVM_OPTIMIZATION);
 }

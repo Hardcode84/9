@@ -165,6 +165,21 @@ class Suite:
         assert result == b'fn f() -> unit {}\n> unmatched {" \t  text\r\n'
         command([self.tool, mixed], 2)
 
+    def hook(self):
+        path = self.source("hook input.crs", b"fn f()->unit{}")
+        wrapper = ROOT / "tools/format_crust.py"
+        command(["python3", wrapper, "--check", path], 1)
+        command(["python3", wrapper, path])
+        assert path.read_bytes() == b"fn f() -> unit {}\n"
+        command(["python3", wrapper, "--check", path])
+        link = self.work / "hook-link.crs"
+        link.unlink(missing_ok=True)
+        link.symlink_to(path)
+        command(["python3", wrapper, link], 2)
+        assert path.read_bytes() == b"fn f() -> unit {}\n"
+        link.unlink()
+        command(["python3", ROOT / "tools/api.py", "--check"])
+
     def sanitize(self, source):
         output = self.work / "contracts-sanitized"
         flags = [
@@ -199,6 +214,7 @@ def main():
     suite.failures()
     suite.publication()
     suite.custom()
+    suite.hook()
     suite.sanitize(wide)
     print(
         "Formatter: layout, interpreted/native parity, failure, write, service and sanitizer checks passed"

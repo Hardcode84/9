@@ -1,17 +1,49 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn os_init(stage: *OsStage, resources: *RsStage) -> unit {
-    (*stage).records = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
-    (*stage).functions = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
-    (*stage).blocks = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
-    (*stage).imports = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).records = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
+    (*stage).functions = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
+    (*stage).blocks = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
+    (*stage).imports = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
     (*stage).resources = resources;
-    (*stage).domains = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
-    (*stage).trusted = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
-    (*stage).parameters = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
-    (*stage).verified_bodies = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    (*stage).domains = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
+    (*stage).trusted = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
+    (*stage).parameters = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
+    (*stage).verified_bodies = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
     (*stage).reference_user = null(*u8);
-    (*stage).read_reference = null(fn(*CrustReader,*u8,u32)->*CrustName);
+    (*stage).read_reference = null(fn(*CrustReader, *u8, u32) -> *CrustName);
 }
 
 fn os_failed(check: *OsCheck) -> bool {
@@ -35,7 +67,9 @@ fn os_fact_bucket(key: *u8) -> usize {
 fn os_fact(state: *OsState, key: *u8) -> *OsFact {
     var fact: *OsFact = (*state).facts[os_fact_bucket(key)];
     while fact != null(*OsFact) {
-        if (*fact).key == key { return fact; }
+        if (*fact).key == key {
+            return fact;
+        }
         fact = (*fact).next;
     }
     return null(*OsFact);
@@ -43,32 +77,48 @@ fn os_fact(state: *OsState, key: *u8) -> *OsFact {
 
 fn os_set(check: *OsCheck, state: *OsState, key: *u8, value: *OsValue, flags: u32) -> unit {
     var fact: *OsFact = os_alloc(check, sizeof(OsFact), alignof(OsFact)) as *OsFact;
-    if fact == null(*OsFact) { return; }
-    *fact = make OsFact { fields: null(*OsSlot), key: key, value: value, next: (*state).facts[os_fact_bucket(key)], flags: flags };
+    if fact == null(*OsFact) {
+        return;
+    }
+    * fact = make OsFact {
+        fields: null(*OsSlot),
+        key: key,
+        value: value,
+        next: (*state).facts[os_fact_bucket(key)],
+        flags: flags
+    };
     (*state).facts[os_fact_bucket(key)] = fact;
 }
 
 fn os_flags(state: *OsState, object: *OsObject) -> u32 {
     var fact: *OsFact = os_fact(state, object as *u8);
-    if fact == null(*OsFact) { return 0u32; }
+    if fact == null(*OsFact) {
+        return 0u32;
+    }
     return (*fact).flags;
 }
 
 fn os_mark(check: *OsCheck, state: *OsState, object: *OsObject, flags: u32) -> unit {
     var fields: *OsSlot = os_fields(state, object);
     os_set(check, state, object as *u8, null(*OsValue), flags);
-    if !os_failed(check) { (*(*state).facts[os_fact_bucket(object as *u8)]).fields = fields; }
+    if !os_failed(check) {
+        (*(*state).facts[os_fact_bucket(object as *u8)]).fields = fields;
+    }
 }
 
 fn os_bound(state: *OsState, slot: *OsSlot) -> *OsValue {
     slot = os_original(slot);
     var fact: *OsFact = os_fact(state, slot as *u8);
-    if fact == null(*OsFact) { return null(*OsValue); }
+    if fact == null(*OsFact) {
+        return null(*OsValue);
+    }
     return (*fact).value;
 }
 
 fn os_original(slot: *OsSlot) -> *OsSlot {
-    if slot != null(*OsSlot) && (*slot).original != null(*OsSlot) { return (*slot).original; }
+    if slot != null(*OsSlot) && (*slot).original != null(*OsSlot) {
+        return (*slot).original;
+    }
     return slot;
 }
 
@@ -83,35 +133,49 @@ fn os_value(check: *OsCheck, syntax: *CrustTypeSyntax, object: *OsObject, pointe
 }
 
 fn os_copy(check: *OsCheck, source: *OsValue) -> *OsValue {
-    if source == null(*OsValue) { return source; }
+    if source == null(*OsValue) {
+        return source;
+    }
     var result: *OsValue = os_alloc(check, sizeof(OsValue), alignof(OsValue)) as *OsValue;
-    if result != null(*OsValue) { *result = *source; }
+    if result != null(*OsValue) {
+        *result = *source;
+    }
     return result;
 }
 
 fn os_field(fields: *OsField, name: *CrustName) -> *OsField {
     while fields != null(*OsField) {
-        if (*fields).name == name { return fields; }
+        if (*fields).name == name {
+            return fields;
+        }
         fields = (*fields).next;
     }
     return null(*OsField);
 }
 
 fn os_record(stage: *OsStage, syntax: *CrustTypeSyntax) -> *OsRecord {
-    if syntax == null(*CrustTypeSyntax) || (*syntax).kind != CRUST_T_NAME { return null(*OsRecord); }
+    if syntax == null(*CrustTypeSyntax) || (*syntax).kind != CRUST_T_NAME {
+        return null(*OsRecord);
+    }
     var global: *RsGlobal = rs_global((*stage).resources, (*syntax).name);
-    if global == null(*RsGlobal) { return null(*OsRecord); }
+    if global == null(*RsGlobal) {
+        return null(*OsRecord);
+    }
     return crust_map_get(&(*stage).records, (*global).source as usize) as *OsRecord;
 }
 
 fn os_root(object: *OsObject) -> *OsObject {
-    while (*object).parent != null(*OsObject) { object = (*object).parent; }
+    while (*object).parent != null(*OsObject) {
+        object = (*object).parent;
+    }
     return object;
 }
 
 fn os_function(stage: *OsStage, name: *CrustName) -> *OsFunction {
     var global: *RsGlobal = rs_global((*stage).resources, name);
-    if global == null(*RsGlobal) { return null(*OsFunction); }
+    if global == null(*RsGlobal) {
+        return null(*OsFunction);
+    }
     return crust_map_get(&(*stage).functions, (*global).source as usize) as *OsFunction;
 }
 
@@ -120,7 +184,9 @@ fn os_syntax(check: *OsCheck, kind: u32, location: *CrustLoc) -> *CrustTypeSynta
 }
 
 fn os_enter(check: *OsCheck, location: *CrustLoc) -> bool {
-    if os_failed(check) { return false; }
+    if os_failed(check) {
+        return false;
+    }
     if (*check).depth >= 128usize {
         os_error(check, location, "ownership syntax nesting exceeds 128");
         return false;
@@ -131,10 +197,23 @@ fn os_enter(check: *OsCheck, location: *CrustLoc) -> bool {
 
 fn os_binding(check: *OsCheck, name: *CrustName, value: *OsValue, next: *OsBinding) -> *OsBinding {
     var binding: *OsBinding = os_alloc(check, sizeof(OsBinding), alignof(OsBinding)) as *OsBinding;
-    if binding != null(*OsBinding) { *binding = make OsBinding { name: name, value: value, next: next }; }
+    if binding != null(*OsBinding) {
+        *binding = make OsBinding {
+            name: name,
+            value: value,
+            next: next
+        };
+    }
     return binding;
 }
 
-fn os_publish_value(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
-    if !os_initialized(check, state, object) { os_error(check, location, "interface requires initialized storage"); }
+fn os_publish_value(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> unit {
+    if !os_initialized(check, state, object) {
+        os_error(check, location, "interface requires initialized storage");
+    }
 }

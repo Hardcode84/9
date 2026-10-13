@@ -1,114 +1,195 @@
 // SPDX-License-Identifier: Apache-2.0
 
-extern fn probe_clock()->u64="ownership_clock_ns";
+extern fn probe_clock() -> u64 = "ownership_clock_ns";
 
-fn probe_number(value:u64)->bool {
-    var bytes:[u8;21]=uninit;
-    var size:usize=gs_digits(&bytes[0usize],value);
-    bytes[size]=32u8;
-    return crust0_host_write_stream(1u32,&bytes[0usize],size+1usize)==0i32;
+fn probe_number(value: u64) -> bool {
+    var bytes: [u8; 21] = uninit;
+    var size: usize = gs_digits(&bytes[0usize], value);
+    bytes[size] = 32u8;
+    return crust0_host_write_stream(1u32, &bytes[0usize], size + 1usize) == 0i32;
 }
 
-fn probe_trust(program:*OgProgram,selected:*u8)->bool {
-    var found:bool=c_equal(selected,"*");
-    var unit_value:*CrustUnit=program->generics.syntax.units;
-    while unit_value!=null(*CrustUnit) {
-        var declaration:*CrustDecl=unit_value->declarations;
-        while declaration!=null(*CrustDecl) {
-            if c_equal(declaration->name->text,selected) { found=true; }
-            else { if !os_trust(&program->parsed,declaration) { return false; } }
-            declaration=declaration->next;
+fn probe_trust(program: *OgProgram, selected: *u8) -> bool {
+    var found: bool = c_equal(selected, "*");
+    var unit_value: *CrustUnit = program -> generics.syntax.units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = unit_value -> declarations;
+        while declaration != null(*CrustDecl) {
+            if c_equal(declaration -> name -> text, selected) {
+                found = true;
+            } else {
+                if !os_trust(&program -> parsed, declaration) {
+                    return false;
+                }
+            }
+            declaration = declaration -> next;
         }
-        unit_value=unit_value->next;
+        unit_value = unit_value -> next;
     }
-    if !found { crust_set_error(&program->generics.syntax,null(*CrustSource),0usize,"selected check declaration is absent"); }
+    if !found {
+        crust_set_error(
+            &program -> generics.syntax,
+            null(*CrustSource),
+            0usize,
+            "selected check declaration is absent"
+        );
+    }
     return found;
 }
 
-fn probe_names(context:*CrustContext)->unit {
-    var unit_value:*CrustUnit=context->units;
-    while unit_value!=null(*CrustUnit) {
-        var declaration:*CrustDecl=unit_value->declarations;
-        while declaration!=null(*CrustDecl) {
-            if declaration->kind==CRUST_D_FUNCTION { declaration->link_name=declaration->name->text; }
-            if declaration->kind==CRUST_D_CONST { declaration->link_name=""; }
-            declaration=declaration->next;
+fn probe_names(context: *CrustContext) -> unit {
+    var unit_value: *CrustUnit = context -> units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = unit_value -> declarations;
+        while declaration != null(*CrustDecl) {
+            if declaration -> kind == CRUST_D_FUNCTION {
+                declaration -> link_name = declaration -> name -> text;
+            }
+            if declaration -> kind == CRUST_D_CONST {
+                declaration -> link_name = "";
+            }
+            declaration = declaration -> next;
         }
-        unit_value=unit_value->next;
+        unit_value = unit_value -> next;
     }
 }
 
-fn probe_emit(program:*OgProgram,raw:bool,argv:**u8)->bool {
-    var stage:CStage=uninit;
-    c_stage_init(&stage,&program->generics.context);
-    probe_names(&program->generics.context);
-    var start:u64=probe_clock();
-    var valid:bool=false;
-    if raw { valid=c_emit(&stage,null(*CrustDecl)); }
-    else { valid=c_emit(&stage,null(*CrustDecl)); }
-    var elapsed:u64=probe_clock()-start;
+fn probe_emit(program: *OgProgram, raw: bool, argv: **u8) -> bool {
+    var stage: CStage = uninit;
+    c_stage_init(&stage, &program -> generics.context);
+    probe_names(&program -> generics.context);
+    var start: u64 = probe_clock();
+    var valid: bool = false;
+    if raw {
+        valid = c_emit(&stage, null(*CrustDecl));
+    } else {
+        valid = c_emit(&stage, null(*CrustDecl));
+    }
+    var elapsed: u64 = probe_clock() - start;
     if valid {
-        c_buffer_bytes(&stage.header,stage.body.data,stage.body.size);
-        valid=!stage.status.failed &&
-            crust0_host_write_file(argv[4usize],stage.header.data,stage.header.size)==0i32 &&
-            crust0_host_write_file(argv[5usize],stage.renames.data,stage.renames.size)==0i32;
+        c_buffer_bytes(&stage.header, stage.body.data, stage.body.size);
+        valid = !stage.status.failed && crust0_host_write_file(
+            argv[4usize],
+            stage.header.data,
+            stage.header.size
+        ) == 0i32 && crust0_host_write_file(
+            argv[5usize],
+            stage.renames.data,
+            stage.renames.size
+        ) == 0i32;
     }
     c_stage_destroy(&stage);
     return valid && probe_number(elapsed);
 }
 
-fn probe_compile(program:*OgProgram,source:*CrustSource,client:*CrustSource,argv:**u8)->bool {
-    var raw:bool=c_equal(argv[1usize],"raw");
-    var checked:bool=c_equal(argv[1usize],"checked");
-    var start:u64=probe_clock();
-    var valid:bool=false;
+fn probe_compile(
+    program: *OgProgram,
+    source: *CrustSource,
+    client: *CrustSource,
+    argv: **u8
+) -> bool {
+    var raw: bool = c_equal(argv[1usize], "raw");
+    var checked: bool = c_equal(argv[1usize], "checked");
+    var start: u64 = probe_clock();
+    var valid: bool = false;
     if raw {
-        var parsed:*CrustUnit=null(*CrustUnit);
-        valid=crust_read(&program->generics.context,source,&parsed);
+        var parsed: *CrustUnit = null(*CrustUnit);
+        valid = crust_read(&program -> generics.context, source, &parsed);
     } else {
-        if checked { valid=og_read(program,source,false) && probe_trust(program,argv[2usize]); }
-        else { valid=gp_read(&program->generics,source); }
+        if checked {
+            valid = og_read(program, source, false) && probe_trust(program, argv[2usize]);
+        } else {
+            valid = gp_read(&program -> generics, source);
+        }
     }
-    if valid && client!=null(*CrustSource) { valid=og_read(program,client,false); }
-    var read_time:u64=probe_clock()-start;
-    start=probe_clock();
+    if valid && client != null(*CrustSource) {
+        valid = og_read(program, client, false);
+    }
+    var read_time: u64 = probe_clock() - start;
+    start = probe_clock();
     if valid {
         if raw {
-            valid=crust_collect(&program->generics.context) && crust_resolve(&program->generics.context) &&
-                crust_check(&program->generics.context);
-        }
-        else {
-            if checked { valid=og_check(program); }
-            else { valid=gp_check(&program->generics); }
+            valid = crust_collect(&program -> generics.context) && crust_resolve(
+                &program -> generics.context
+            ) && crust_check(&program -> generics.context);
+        } else {
+            if checked {
+                valid = og_check(program);
+            } else {
+                valid = gp_check(&program -> generics);
+            }
         }
     }
-    var check_time:u64=probe_clock()-start;
-    if !valid { return false; }
-    return probe_number(read_time) && probe_number(check_time) && probe_emit(program,!checked,argv) &&
-        crust0_host_write_stream(1u32,"\n",1usize)==0i32;
+    var check_time: u64 = probe_clock() - start;
+    if !valid {
+        return false;
+    }
+    return probe_number(read_time) && probe_number(check_time) && probe_emit(
+        program,
+        !checked,
+        argv
+    ) && crust0_host_write_stream(1u32, "\n", 1usize) == 0i32;
 }
 
-fn main(argc:i32,argv:**u8)->i32 {
-    if argc!=6i32 && argc!=7i32 { return 2i32; }
-    if argc==7i32 && !c_equal(argv[1usize],"checked") { return 2i32; }
-    if !c_equal(argv[1usize],"raw") && !c_equal(argv[1usize],"checked") && !c_equal(argv[1usize],"generic") { return 2i32; }
-    var bytes:*u8=null(*u8); var size:usize=0usize;
-    if crust0_host_read_file(argv[3usize],&bytes,&size)!=0i32 { return 2i32; }
-    var source:CrustSource=make CrustSource { path:argv[3usize],bytes:bytes,size:size,identity:1u64 };
-    var client_bytes:*u8=null(*u8);var client_size:usize=0usize;
-    if argc==7i32 && crust0_host_read_file(argv[6usize],&client_bytes,&client_size)!=0i32 {
-        crust0_host_free(bytes);return 2i32;
+fn main(argc: i32, argv: **u8) -> i32 {
+    if argc != 6i32 && argc != 7i32 {
+        return 2i32;
     }
-    var client:CrustSource=make CrustSource {path:source.path,bytes:client_bytes,size:client_size,identity:2u64};
-    var client_source:*CrustSource=null(*CrustSource);
-    if argc==7i32 {client.path=argv[6usize];client_source=&client;}
-    var program:OgProgram=uninit;
-    if c_equal(argv[1usize],"checked") { og_init(&program,null(*CrustAllocator),3u64); }
-    else { gp_init(&program.generics,null(*CrustAllocator),2u64); }
-    var valid:bool=probe_compile(&program,&source,client_source,argv);
-    if program.generics.syntax.error_count!=0usize { c_driver_diagnostic(&program.generics.syntax,argv[0usize]); }
-    if program.generics.context.error_count!=0usize { c_driver_diagnostic(&program.generics.context,argv[0usize]); }
-    og_destroy(&program); crust0_host_free(bytes);crust0_host_free(client_bytes);
-    if valid { return 0i32; }
+    if argc == 7i32 && !c_equal(argv[1usize], "checked") {
+        return 2i32;
+    }
+    if !c_equal(argv[1usize], "raw") && !c_equal(argv[1usize], "checked") && !c_equal(
+        argv[1usize],
+        "generic"
+    ) {
+        return 2i32;
+    }
+    var bytes: *u8 = null(*u8);
+    var size: usize = 0usize;
+    if crust0_host_read_file(argv[3usize], &bytes, &size) != 0i32 {
+        return 2i32;
+    }
+    var source: CrustSource = make CrustSource {
+        path: argv[3usize],
+        bytes: bytes,
+        size: size,
+        identity: 1u64
+    };
+    var client_bytes: *u8 = null(*u8);
+    var client_size: usize = 0usize;
+    if argc == 7i32 && crust0_host_read_file(argv[6usize], &client_bytes, &client_size) != 0i32 {
+        crust0_host_free(bytes);
+        return 2i32;
+    }
+    var client: CrustSource = make CrustSource {
+        path: source.path,
+        bytes: client_bytes,
+        size: client_size,
+        identity: 2u64
+    };
+    var client_source: *CrustSource = null(*CrustSource);
+    if argc == 7i32 {
+        client.path = argv[6usize];
+        client_source = &client;
+    }
+    var program: OgProgram = uninit;
+    if c_equal(argv[1usize], "checked") {
+        og_init(&program, null(*CrustAllocator), 3u64);
+    } else {
+        gp_init(&program.generics, null(*CrustAllocator), 2u64);
+    }
+    var valid: bool = probe_compile(&program, &source, client_source, argv);
+    if program.generics.syntax.error_count != 0usize {
+        c_driver_diagnostic(&program.generics.syntax, argv[0usize]);
+    }
+    if program.generics.context.error_count != 0usize {
+        c_driver_diagnostic(&program.generics.context, argv[0usize]);
+    }
+    og_destroy(&program);
+    crust0_host_free(bytes);
+    crust0_host_free(client_bytes);
+    if valid {
+        return 0i32;
+    }
     return 1i32;
 }

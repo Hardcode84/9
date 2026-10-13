@@ -1,68 +1,100 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn stage_names(exports: *StageName, context: *CrustContext) -> bool {
-    var unit_value: *CrustUnit = context->units;
+    var unit_value: *CrustUnit = context -> units;
     while unit_value != null(*CrustUnit) {
-        var declaration: *CrustDecl = unit_value->declarations;
+        var declaration: *CrustDecl = unit_value -> declarations;
         while declaration != null(*CrustDecl) {
-            if declaration->kind != CRUST_D_EXTERN { declaration->link_name = ""; }
-            if declaration->kind == CRUST_D_CONST && native_abi_name(declaration->name->text) {
-                declaration->link_name = declaration->name->text;
+            if declaration -> kind != CRUST_D_EXTERN {
+                declaration -> link_name = "";
             }
-            declaration = declaration->next;
+            if declaration -> kind == CRUST_D_CONST && native_abi_name(
+                declaration -> name -> text
+            ) {
+                declaration -> link_name = declaration -> name -> text;
+            }
+            declaration = declaration -> next;
         }
-        unit_value = unit_value->next;
+        unit_value = unit_value -> next;
     }
     var item: *StageName = exports;
     while item != null(*StageName) {
-        var name: *CrustName = crust_try_intern(context, item->text, native_strlen(item->text));
-        if name == null(*CrustName) { return false; }
-        var symbol: *CrustSymbol = crust_map_get(&context->globals, name as usize) as *CrustSymbol;
-        if symbol == null(*CrustSymbol) || (symbol->decl->kind != CRUST_D_FUNCTION && symbol->decl->kind != CRUST_D_CONST) {
-            var message: *u8 = native_join(context, "stage export is not a function or constant: ", item->text);
-            if message == null(*u8) { return false; }
+        var name: *CrustName = crust_try_intern(
+            context,
+            item -> text,
+            native_strlen(item -> text)
+        );
+        if name == null(*CrustName) {
+            return false;
+        }
+        var symbol: *CrustSymbol = crust_map_get(&context -> globals, name as usize) as *CrustSymbol;
+        if symbol == null(*CrustSymbol) || (
+            symbol -> decl -> kind != CRUST_D_FUNCTION && symbol -> decl -> kind != CRUST_D_CONST
+        ) {
+            var message: *u8 = native_join(
+                context,
+                "stage export is not a function or constant: ",
+                item -> text
+            );
+            if message == null(*u8) {
+                return false;
+            }
             return native_error(context, message);
         }
-        symbol->decl->link_name = item->link;
-        item = item->next;
+        symbol -> decl -> link_name = item -> link;
+        item = item -> next;
     }
     return true;
 }
 
 // Return this source's selected option, or an empty string.
-fn stage_compile_option(request:*StageCompile,source:*CrustSource)->*u8 {
-    var index:usize=0usize;
-    while index<request->options.count {
-        var selected:*CrustSource=request->options.items[index];
-        if cache_strcmp(selected->path,source->path)==0i32{return selected->bytes;}
-        index=index+1usize;
+fn stage_compile_option(request: *StageCompile, source: *CrustSource) -> *u8 {
+    var index: usize = 0usize;
+    while index < request -> options.count {
+        var selected: *CrustSource = request -> options.items[index];
+        if cache_strcmp(selected -> path, source -> path) == 0i32 {
+            return selected -> bytes;
+        }
+        index = index + 1usize;
     }
     return "";
 }
 
 // Retain the diagnostic after the source context is destroyed.
-fn stage_diagnostic(context:*CrustContext,source:*CrustContext)->unit {
-    if source->error_count==0usize{return;}
-    var input:*CrustSource=source->error_loc.source;
-    var copy:*CrustSource=null(*CrustSource);
-    if input!=null(*CrustSource){
-        copy=crust_try_alloc(context,sizeof(CrustSource),alignof(CrustSource)) as *CrustSource;
-        if copy==null(*CrustSource){return;}
-        *copy=*input;
-        copy->path=crust_try_copy_string(context,input->path,native_strlen(input->path));
-        copy->bytes=crust_try_copy_string(context,input->bytes,input->size);
-        if copy->path==null(*u8) || copy->bytes==null(*u8){return;}
+fn stage_diagnostic(context: *CrustContext, source: *CrustContext) -> unit {
+    if source -> error_count == 0usize {
+        return;
     }
-    crust_set_error(context,copy,source->error_loc.offset,&source->error[0usize]);
+    var input: *CrustSource = source -> error_loc.source;
+    var copy: *CrustSource = null(*CrustSource);
+    if input != null(*CrustSource) {
+        copy = crust_try_alloc(context, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
+        if copy == null(*CrustSource) {
+            return;
+        }
+        * copy = *input;
+        copy -> path = crust_try_copy_string(
+            context,
+            input -> path,
+            native_strlen(input -> path)
+        );
+        copy -> bytes = crust_try_copy_string(context, input -> bytes, input -> size);
+        if copy -> path == null(*u8) || copy -> bytes == null(*u8) {
+            return;
+        }
+    }
+    crust_set_error(context, copy, source -> error_loc.offset, &source -> error[0usize]);
 }
 
 // Read and check captured raw source units in their selected order.
-fn stage_read_sources(context:*CrustContext,sources:*CacheInputs)->bool {
-    var index:usize=0usize;
-    while index<sources->count {
-        var parsed:*CrustUnit=null(*CrustUnit);
-        if !crust_read(context,sources->items[index],&parsed){return false;}
-        index=index+1usize;
+fn stage_read_sources(context: *CrustContext, sources: *CacheInputs) -> bool {
+    var index: usize = 0usize;
+    while index < sources -> count {
+        var parsed: *CrustUnit = null(*CrustUnit);
+        if !crust_read(context, sources -> items[index], &parsed) {
+            return false;
+        }
+        index = index + 1usize;
     }
     return crust_collect(context) && crust_resolve(context) && crust_check(context);
 }

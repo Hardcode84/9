@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-stage_include(stage,"../stages/ownership/package.crs");
-stage_include(stage,"../stages/llvm/sources.crs");
-stage_source(stage,"../api/crust0_eval.crs");
-stage_include(stage,"../stages/asm/sources.crs");
-stage_source(stage,"ownership_input.crs");
-stage_source(stage,"resource_backends.crs");
-stage_export(stage,"main");
+stage_include(stage, "../stages/ownership/package.crs");
+stage_include(stage, "../stages/llvm/sources.crs");
+stage_source(stage, "../api/crust0_eval.crs");
+stage_include(stage, "../stages/asm/sources.crs");
+stage_source(stage, "ownership_input.crs");
+stage_source(stage, "resource_backends.crs");
+stage_export(stage, "main");

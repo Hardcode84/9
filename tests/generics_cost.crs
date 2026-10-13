@@ -14,16 +14,23 @@ record CostStats {
 }
 
 fn cost_diagnostic(context: *CrustContext) -> bool {
-    if (*context).error_count == 0usize { return true; }
+    if (*context).error_count == 0usize {
+        return true;
+    }
     var text: *u8 = &(*context).error[0usize];
-    return crust0_host_write_stream(2u32, text, gs_length(text)) == 0i32 &&
-           crust0_host_write_stream(2u32, "\n", 1usize) == 0i32;
+    return crust0_host_write_stream(2u32, text, gs_length(text)) == 0i32 && crust0_host_write_stream(
+        2u32,
+        "\n",
+        1usize
+    ) == 0i32;
 }
 
 fn cost_read(program: *GsProgram, sources: *CrustSource) -> bool {
     var index: usize = 0usize;
     while index < 3usize {
-        if !gp_read(program, &sources[index]) { return false; }
+        if !gp_read(program, &sources[index]) {
+            return false;
+        }
         index = index + 1usize;
     }
     return true;
@@ -35,7 +42,9 @@ fn cost_instance_declarations(program: *GsProgram, instance: *GpInstance) -> usi
     while source != null(*CrustUnit) {
         var declaration: *CrustDecl = (*source).declarations;
         while declaration != null(*CrustDecl) {
-            if declaration == (*instance).declaration { count = count + 1usize; }
+            if declaration == (*instance).declaration {
+                count = count + 1usize;
+            }
             declaration = (*declaration).next;
         }
         source = (*source).next;
@@ -47,8 +56,11 @@ fn cost_duplicate_instances(instance: *GpInstance) -> usize {
     var duplicates: usize = 0usize;
     var next: *GpInstance = (*instance).next;
     while next != null(*GpInstance) {
-        if (*instance).definition == (*next).definition &&
-           gp_arguments_equal(next, (*instance).arguments, (*instance).count) {
+        if (*instance).definition == (*next).definition && gp_arguments_equal(
+            next,
+            (*instance).arguments,
+            (*instance).count
+        ) {
             duplicates = duplicates + 1usize;
         }
         next = (*next).next;
@@ -63,8 +75,12 @@ fn cost_cache(program: *GsProgram, stats: *CostStats) -> bool {
     var instance: *GpInstance = (*program).instances;
     while instance != null(*GpInstance) {
         if cost_instance_declarations(program, instance) != 1usize {
-            crust_set_error(&(*program).context, null(*CrustSource), 0usize,
-                            "specialization must emit exactly one concrete declaration");
+            crust_set_error(
+                &(*program).context,
+                null(*CrustSource),
+                0usize,
+                "specialization must emit exactly one concrete declaration"
+            );
             return false;
         }
         duplicates = duplicates + cost_duplicate_instances(instance);
@@ -72,8 +88,12 @@ fn cost_cache(program: *GsProgram, stats: *CostStats) -> bool {
         instance = (*instance).next;
     }
     if count != (*program).specializations || duplicates != 0usize {
-        crust_set_error(&(*program).context, null(*CrustSource), 0usize,
-                        "specialization cache count or concrete declaration reuse is incorrect");
+        crust_set_error(
+            &(*program).context,
+            null(*CrustSource),
+            0usize,
+            "specialization cache count or concrete declaration reuse is incorrect"
+        );
         return false;
     }
     (*stats).requests = (*stats).requests + (*program).requests;
@@ -100,10 +120,16 @@ fn cost_generic(sources: *CrustSource, stats: *CostStats) -> bool {
         (*stats).times[2usize] = (*stats).times[2usize] + cost_clock_ns() - start;
     }
     var bytes: usize = program.context.arena.bytes_reserved + program.syntax.arena.bytes_reserved;
-    if bytes > (*stats).generic_bytes { (*stats).generic_bytes = bytes; }
-    if success { success = cost_cache(&program, stats); }
+    if bytes > (*stats).generic_bytes {
+        (*stats).generic_bytes = bytes;
+    }
+    if success {
+        success = cost_cache(&program, stats);
+    }
     if !success {
-        if !cost_diagnostic(&program.syntax) || !cost_diagnostic(&program.context) { success = false; }
+        if !cost_diagnostic(&program.syntax) || !cost_diagnostic(&program.context) {
+            success = false;
+        }
     }
     start = cost_clock_ns();
     gp_destroy(&program);
@@ -126,7 +152,9 @@ fn cost_baseline(source: *CrustSource, stats: *CostStats) -> bool {
     if context.arena.bytes_reserved > (*stats).baseline_bytes {
         (*stats).baseline_bytes = context.arena.bytes_reserved;
     }
-    if !success && !cost_diagnostic(&context) { success = false; }
+    if !success && !cost_diagnostic(&context) {
+        success = false;
+    }
     start = cost_clock_ns();
     crust_context_destroy(&context);
     (*stats).times[6usize] = (*stats).times[6usize] + cost_clock_ns() - start;
@@ -143,21 +171,29 @@ fn cost_number(value: u64) -> bool {
 fn cost_report(stats: *CostStats) -> bool {
     var index: usize = 0usize;
     while index < 7usize {
-        if !cost_number((*stats).times[index]) { return false; }
+        if !cost_number((*stats).times[index]) {
+            return false;
+        }
         index = index + 1usize;
     }
-    return cost_number((*stats).input_io_ns) && cost_number((*stats).generic_bytes as u64) &&
-        cost_number((*stats).baseline_bytes as u64) && cost_number((*stats).requests as u64) &&
-        cost_number((*stats).hits as u64) && cost_number((*stats).instances as u64) &&
-        cost_number((*stats).duplicate_instances as u64) &&
-        crust0_host_write_stream(1u32, "\n", 1usize) == 0i32;
+    return cost_number((*stats).input_io_ns) && cost_number((*stats).generic_bytes as u64) && cost_number(
+        (*stats).baseline_bytes as u64
+    ) && cost_number((*stats).requests as u64) && cost_number((*stats).hits as u64) && cost_number(
+        (*stats).instances as u64
+    ) && cost_number((*stats).duplicate_instances as u64) && crust0_host_write_stream(
+        1u32,
+        "\n",
+        1usize
+    ) == 0i32;
 }
 
 fn cost_count(text: *u8) -> usize {
     var result: usize = 0usize;
     var index: usize = 0usize;
     while text[index] != 0u8 {
-        if text[index] < 48u8 || text[index] > 57u8 || result > 10000usize { return 0usize; }
+        if text[index] < 48u8 || text[index] > 57u8 || result > 10000usize {
+            return 0usize;
+        }
         result = result * 10usize + (text[index] - 48u8) as usize;
         index = index + 1usize;
     }
@@ -165,11 +201,22 @@ fn cost_count(text: *u8) -> usize {
 }
 
 fn cost_capture(source: *CrustSource, path: *u8, identity: u64) -> bool {
-    (*source) = make CrustSource { path: path, bytes: null(*u8), size: 0usize, identity: identity };
-    if crust0_host_read_file(path, &(*source).bytes, &(*source).size) == 0i32 { return true; }
-    if crust0_host_write_stream(2u32, "cannot read measurement input: ", 31usize) != 0i32 ||
-       crust0_host_write_stream(2u32, path, gs_length(path)) != 0i32 ||
-       crust0_host_write_stream(2u32, "\n", 1usize) != 0i32 { return false; }
+    (*source) = make CrustSource {
+        path: path,
+        bytes: null(*u8),
+        size: 0usize,
+        identity: identity
+    };
+    if crust0_host_read_file(path, &(*source).bytes, &(*source).size) == 0i32 {
+        return true;
+    }
+    if crust0_host_write_stream(2u32, "cannot read measurement input: ", 31usize) != 0i32 || crust0_host_write_stream(
+        2u32,
+        path,
+        gs_length(path)
+    ) != 0i32 || crust0_host_write_stream(2u32, "\n", 1usize) != 0i32 {
+        return false;
+    }
     return false;
 }
 
@@ -177,9 +224,13 @@ fn cost_measure(sources: *CrustSource, rounds: usize, stats: *CostStats) -> bool
     var index: usize = 0usize;
     while index < rounds {
         if index % 2usize == 0usize {
-            if !cost_generic(sources, stats) || !cost_baseline(&sources[3usize], stats) { return false; }
+            if !cost_generic(sources, stats) || !cost_baseline(&sources[3usize], stats) {
+                return false;
+            }
         } else {
-            if !cost_baseline(&sources[3usize], stats) || !cost_generic(sources, stats) { return false; }
+            if !cost_baseline(&sources[3usize], stats) || !cost_generic(sources, stats) {
+                return false;
+            }
         }
         index = index + 1usize;
     }
@@ -187,28 +238,55 @@ fn cost_measure(sources: *CrustSource, rounds: usize, stats: *CostStats) -> bool
 }
 
 fn main(argc: i32, argv: **u8) -> i32 {
-    if argc != 6i32 { return 2i32; }
+    if argc != 6i32 {
+        return 2i32;
+    }
     var rounds: usize = cost_count(argv[5usize]);
-    if rounds == 0usize || rounds > 100000usize { return 2i32; }
+    if rounds == 0usize || rounds > 100000usize {
+        return 2i32;
+    }
     var stats: CostStats = make CostStats {
-        times: make [u64; 7] { 0u64, 0u64, 0u64, 0u64, 0u64, 0u64, 0u64 },
-        input_io_ns: 0u64, generic_bytes: 0usize, baseline_bytes: 0usize,
-        requests: 0usize, hits: 0usize, instances: 0usize, duplicate_instances: 0usize
+        times: make [u64; 7] {
+            0u64,
+            0u64,
+            0u64,
+            0u64,
+            0u64,
+            0u64,
+            0u64
+        },
+        input_io_ns: 0u64,
+        generic_bytes: 0usize,
+        baseline_bytes: 0usize,
+        requests: 0usize,
+        hits: 0usize,
+        instances: 0usize,
+        duplicate_instances: 0usize
     };
     var sources: [CrustSource; 4] = uninit;
     var captured: usize = 0usize;
     var start: u64 = cost_clock_ns();
     while captured < 4usize {
-        if !cost_capture(&sources[captured], argv[captured + 1usize], captured as u64 + 1u64) { break; }
+        if !cost_capture(
+            &sources[captured],
+            argv[captured + 1usize],
+            captured as u64 + 1u64
+        ) {
+            break;
+        }
         captured = captured + 1usize;
     }
     stats.input_io_ns = cost_clock_ns() - start;
     var success: bool = captured == 4usize;
-    if success { success = cost_measure(&sources[0usize], rounds, &stats); }
+    if success {
+        success = cost_measure(&sources[0usize], rounds, &stats);
+    }
     while captured != 0usize {
         captured = captured - 1usize;
         crust0_host_free(sources[captured].bytes);
     }
-    if success { return 0i32; }
+    if success {
+        return 0i32;
+    }
     return 1i32;
 }

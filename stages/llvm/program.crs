@@ -1,181 +1,417 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn ll_native_equal(stage:*LlStage,left:*CrustType,right:*CrustType,depth:usize)->bool {
-    if depth>=512usize{ll_error(stage,"LLVM ABI comparison depth exceeded");return false;}
-    var a:u32=left->kind;var b:u32=right->kind;
-    if a==CRUST_T_ISIZE{a=CRUST_T_I64;}if a==CRUST_T_USIZE{a=CRUST_T_U64;}
-    if b==CRUST_T_ISIZE{b=CRUST_T_I64;}if b==CRUST_T_USIZE{b=CRUST_T_U64;}
-    if a!=b{return false;}if a!=CRUST_T_FUNCTION{return true;}
-    if left->param_count!=right->param_count || !ll_native_equal(stage,left->base,right->base,depth+1usize){return false;}
-    var index:usize=0usize;
-    while index<left->param_count {
-        if !ll_native_equal(stage,left->params[index],right->params[index],depth+1usize){return false;}
-        index=index+1usize;
+fn ll_native_equal(stage: *LlStage, left: *CrustType, right: *CrustType, depth: usize) -> bool {
+    if depth >= 512usize {
+        ll_error(stage, "LLVM ABI comparison depth exceeded");
+        return false;
+    }
+    var a: u32 = left -> kind;
+    var b: u32 = right -> kind;
+    if a == CRUST_T_ISIZE {
+        a = CRUST_T_I64;
+    }
+    if a == CRUST_T_USIZE {
+        a = CRUST_T_U64;
+    }
+    if b == CRUST_T_ISIZE {
+        b = CRUST_T_I64;
+    }
+    if b == CRUST_T_USIZE {
+        b = CRUST_T_U64;
+    }
+    if a != b {
+        return false;
+    }
+    if a != CRUST_T_FUNCTION {
+        return true;
+    }
+    if left -> param_count != right -> param_count || !ll_native_equal(
+        stage,
+        left -> base,
+        right -> base,
+        depth + 1usize
+    ) {
+        return false;
+    }
+    var index: usize = 0usize;
+    while index < left -> param_count {
+        if !ll_native_equal(
+            stage,
+            left -> params[index],
+            right -> params[index],
+            depth + 1usize
+        ) {
+            return false;
+        }
+        index = index + 1usize;
     }
     return true;
 }
-fn ll_name_valid(stage:*LlStage,declaration:*CrustDecl)->bool {
-    var name:*u8=declaration->link_name;
-    if name==null(*u8){ll_error(stage,"LLVM declaration has no native link name");return false;}
-    if name[0usize]==0u8 && declaration->kind==CRUST_D_EXTERN {ll_error(stage,"private LLVM linkage requires a definition");return false;}
-    if stage->entry!=null(*CrustDecl) && c_equal(name,"main"){ll_error(stage,"native symbol main conflicts with the hosted entry adapter");return false;}
-    var index:usize=0usize;while name[index]!=0u8 {
-        if name[index]>127u8{ll_error(stage,"native link name is not ASCII");return false;}index=index+1usize;
+fn ll_name_valid(stage: *LlStage, declaration: *CrustDecl) -> bool {
+    var name: *u8 = declaration -> link_name;
+    if name == null(*u8) {
+        ll_error(stage, "LLVM declaration has no native link name");
+        return false;
+    }
+    if name[0usize] == 0u8 && declaration -> kind == CRUST_D_EXTERN {
+        ll_error(stage, "private LLVM linkage requires a definition");
+        return false;
+    }
+    if stage -> entry != null(*CrustDecl) && c_equal(name, "main") {
+        ll_error(stage, "native symbol main conflicts with the hosted entry adapter");
+        return false;
+    }
+    var index: usize = 0usize;
+    while name[index] != 0u8 {
+        if name[index] > 127u8 {
+            ll_error(stage, "native link name is not ASCII");
+            return false;
+        }
+        index = index + 1usize;
     }
     return true;
 }
-fn ll_binding_compatible(stage:*LlStage,binding:*LlBinding,declaration:*CrustDecl)->bool {
-    var old:*CrustDecl=binding->declaration;
-    var equal:bool=(old->kind==CRUST_D_CONST)==(declaration->kind==CRUST_D_CONST);
+fn ll_binding_compatible(stage: *LlStage, binding: *LlBinding, declaration: *CrustDecl) -> bool {
+    var old: *CrustDecl = binding -> declaration;
+    var equal: bool = (old -> kind == CRUST_D_CONST) == (declaration -> kind == CRUST_D_CONST);
     if equal {
-        if declaration->kind==CRUST_D_CONST{crust_try_type_equal(ll_context(stage),old->type,declaration->type,&equal);}
-        else{equal=ll_native_equal(stage,old->type,declaration->type,0usize);}
+        if declaration -> kind == CRUST_D_CONST {
+            crust_try_type_equal(
+                ll_context(stage),
+                old -> type,
+                declaration -> type,
+                &equal
+            );
+        } else {
+            equal = ll_native_equal(stage, old -> type, declaration -> type, 0usize);
+        }
     }
-    if !equal{ll_error(stage,"conflicting native ABI for symbol");return false;}return ll_ok(stage);
+    if !equal {
+        ll_error(stage, "conflicting native ABI for symbol");
+        return false;
+    }
+    return ll_ok(stage);
 }
-fn ll_new_binding(stage:*LlStage,declaration:*CrustDecl)->*LlBinding {
-    if !ll_name_valid(stage,declaration){return null(*LlBinding);}
-    var name:*CrustName=null(*CrustName);var binding:*LlBinding=null(*LlBinding);
-    if declaration->link_name[0usize]!=0u8 {
-        name=crust_try_intern(ll_context(stage),declaration->link_name,c_length(declaration->link_name));
-        if name==null(*CrustName){return null(*LlBinding);}
-        binding=crust_map_get(&stage->native_names,name as usize) as *LlBinding;
+fn ll_new_binding(stage: *LlStage, declaration: *CrustDecl) -> *LlBinding {
+    if !ll_name_valid(stage, declaration) {
+        return null(*LlBinding);
     }
-    if binding!=null(*LlBinding){
-        if !ll_binding_compatible(stage,binding,declaration){return null(*LlBinding);}
+    var name: *CrustName = null(*CrustName);
+    var binding: *LlBinding = null(*LlBinding);
+    if declaration -> link_name[0usize] != 0u8 {
+        name = crust_try_intern(
+            ll_context(stage),
+            declaration -> link_name,
+            c_length(declaration -> link_name)
+        );
+        if name == null(*CrustName) {
+            return null(*LlBinding);
+        }
+        binding = crust_map_get(&stage -> native_names, name as usize) as *LlBinding;
+    }
+    if binding != null(*LlBinding) {
+        if !ll_binding_compatible(stage, binding, declaration) {
+            return null(*LlBinding);
+        }
         return binding;
     }
-    binding=c_alloc(&stage->memory.status,sizeof(LlBinding),alignof(LlBinding)) as *LlBinding;
-    if binding==null(*LlBinding){return binding;}
-    *binding=make LlBinding{declaration:declaration,definition:null(*CrustDecl),name:ll_id(stage,"@g"),next:null(*LlBinding)};
-    if stage->last==null(*LlBinding){stage->first=binding;}else{stage->last->next=binding;}
-    stage->last=binding;
-    if name!=null(*CrustName){crust_try_map_set(ll_context(stage),&stage->native_names,name as usize,binding as *u8);}
+    binding = c_alloc(&stage -> memory.status, sizeof(LlBinding), alignof(LlBinding)) as *LlBinding;
+    if binding == null(*LlBinding) {
+        return binding;
+    }
+    * binding = make LlBinding {
+        declaration: declaration,
+        definition: null(*CrustDecl),
+        name: ll_id(stage, "@g"),
+        next: null(*LlBinding)
+    };
+    if stage -> last == null(*LlBinding) {
+        stage -> first = binding;
+    } else {
+        stage -> last -> next = binding;
+    }
+    stage -> last = binding;
+    if name != null(*CrustName) {
+        crust_try_map_set(
+            ll_context(stage),
+            &stage -> native_names,
+            name as usize,
+            binding as *u8
+        );
+    }
     return binding;
 }
-fn ll_bind(stage:*LlStage,declaration:*CrustDecl,owned:bool)->*LlBinding {
-    var binding:*LlBinding=crust_map_get(&stage->bindings,declaration as usize) as *LlBinding;
-    if binding==null(*LlBinding){
-        binding=ll_new_binding(stage,declaration);if binding==null(*LlBinding){return binding;}
-        crust_try_map_set(ll_context(stage),&stage->bindings,declaration as usize,binding as *u8);
+fn ll_bind(stage: *LlStage, declaration: *CrustDecl, owned: bool) -> *LlBinding {
+    var binding: *LlBinding = crust_map_get(&stage -> bindings, declaration as usize) as *LlBinding;
+    if binding == null(*LlBinding) {
+        binding = ll_new_binding(stage, declaration);
+        if binding == null(*LlBinding) {
+            return binding;
+        }
+        crust_try_map_set(
+            ll_context(stage),
+            &stage -> bindings,
+            declaration as usize,
+            binding as *u8
+        );
     }
-    if owned && declaration->kind!=CRUST_D_EXTERN {
-        if binding->definition!=null(*CrustDecl){ll_error(stage,"duplicate native definition for symbol");return null(*LlBinding);}
-        binding->definition=declaration;
+    if owned && declaration -> kind != CRUST_D_EXTERN {
+        if binding -> definition != null(*CrustDecl) {
+            ll_error(stage, "duplicate native definition for symbol");
+            return null(*LlBinding);
+        }
+        binding -> definition = declaration;
     }
     return binding;
 }
-fn ll_global(stage:*LlStage,declaration:*CrustDecl)->*u8 {
-    var binding:*LlBinding=ll_bind(stage,declaration,false);
-    if binding==null(*LlBinding){return "";}return binding->name;
+fn ll_global(stage: *LlStage, declaration: *CrustDecl) -> *u8 {
+    var binding: *LlBinding = ll_bind(stage, declaration, false);
+    if binding == null(*LlBinding) {
+        return "";
+    }
+    return binding -> name;
 }
-fn ll_quoted(out:*CBuffer,bytes:*u8,count:usize)->unit {
-    c_buffer_text(out,"c\"");var index:usize=0usize;var digits:*u8="0123456789ABCDEF";
-    while index<count {
-        c_buffer_text(out,"\\");c_buffer_bytes(out,&digits[(bytes[index]>>4u8) as usize],1usize);
-        c_buffer_bytes(out,&digits[(bytes[index]&15u8) as usize],1usize);index=index+1usize;
-    }c_buffer_text(out,"\"");
+fn ll_quoted(out: *CBuffer, bytes: *u8, count: usize) -> unit {
+    c_buffer_text(out, "c\"");
+    var index: usize = 0usize;
+    var digits: *u8 = "0123456789ABCDEF";
+    while index < count {
+        c_buffer_text(out, "\\");
+        c_buffer_bytes(out, &digits[(bytes[index] >> 4u8) as usize], 1usize);
+        c_buffer_bytes(out, &digits[(bytes[index] & 15u8) as usize], 1usize);
+        index = index + 1usize;
+    }
+    c_buffer_text(out, "\"");
 }
-fn ll_string(stage:*LlStage,input:*CrustExpr)->*u8 {
-    var name:*u8=crust_map_get(&stage->strings,input as usize);if name!=null(*u8){return name;}
-    name=ll_id(stage,"@s");crust_try_map_set(ll_context(stage),&stage->strings,input as usize,name);
-    var out:*CBuffer=&stage->memory.header;c_buffer_text(out,name);c_buffer_text(out," = private constant [");
-    c_buffer_number(out,input->byte_count as u64);c_buffer_text(out," x i8] ");
-    ll_quoted(out,input->bytes,input->byte_count);c_buffer_text(out,", align 1\n");return name;
+fn ll_string(stage: *LlStage, input: *CrustExpr) -> *u8 {
+    var name: *u8 = crust_map_get(&stage -> strings, input as usize);
+    if name != null(*u8) {
+        return name;
+    }
+    name = ll_id(stage, "@s");
+    crust_try_map_set(ll_context(stage), &stage -> strings, input as usize, name);
+    var out: *CBuffer = &stage -> memory.header;
+    c_buffer_text(out, name);
+    c_buffer_text(out, " = private constant [");
+    c_buffer_number(out, input -> byte_count as u64);
+    c_buffer_text(out, " x i8] ");
+    ll_quoted(out, input -> bytes, input -> byte_count);
+    c_buffer_text(out, ", align 1\n");
+    return name;
 }
-fn ll_constant(stage:*LlStage,input:*CrustExpr,out:*CBuffer)->unit {
-    if !ll_ok(stage){return;}
-    if stage->depth>=512usize{ll_error(stage,"LLVM constant traversal depth exceeded");return;}
-    stage->depth=stage->depth+1usize;ll_constant_value(stage,input,out);stage->depth=stage->depth-1usize;
+fn ll_constant(stage: *LlStage, input: *CrustExpr, out: *CBuffer) -> unit {
+    if !ll_ok(stage) {
+        return;
+    }
+    if stage -> depth >= 512usize {
+        ll_error(stage, "LLVM constant traversal depth exceeded");
+        return;
+    }
+    stage -> depth = stage -> depth + 1usize;
+    ll_constant_value(stage, input, out);
+    stage -> depth = stage -> depth - 1usize;
 }
-fn ll_constant_value(stage:*LlStage,input:*CrustExpr,out:*CBuffer)->unit {
-    var kind:u32=input->kind;
-    if kind==CRUST_E_GROUP{ll_constant(stage,input->left,out);return;}
-    if kind==CRUST_E_UNARY{c_buffer_number(out,0u64-input->left->integer);return;}
-    if kind==CRUST_E_STRING{c_buffer_text(out,ll_string(stage,input));return;}
-    if kind==CRUST_E_NAME{c_buffer_text(out,ll_global(stage,input->symbol->decl));return;}
-    if kind==CRUST_E_NULL{c_buffer_text(out,"null");return;}
-    if kind==CRUST_E_ARRAY{ll_constant_array(stage,input,out);return;}
-    if kind==CRUST_E_RECORD{ll_constant_record(stage,input,out);return;}
-    c_buffer_number(out,input->integer);
+fn ll_constant_value(stage: *LlStage, input: *CrustExpr, out: *CBuffer) -> unit {
+    var kind: u32 = input -> kind;
+    if kind == CRUST_E_GROUP {
+        ll_constant(stage, input -> left, out);
+        return;
+    }
+    if kind == CRUST_E_UNARY {
+        c_buffer_number(out, 0u64 - input -> left -> integer);
+        return;
+    }
+    if kind == CRUST_E_STRING {
+        c_buffer_text(out, ll_string(stage, input));
+        return;
+    }
+    if kind == CRUST_E_NAME {
+        c_buffer_text(out, ll_global(stage, input -> symbol -> decl));
+        return;
+    }
+    if kind == CRUST_E_NULL {
+        c_buffer_text(out, "null");
+        return;
+    }
+    if kind == CRUST_E_ARRAY {
+        ll_constant_array(stage, input, out);
+        return;
+    }
+    if kind == CRUST_E_RECORD {
+        ll_constant_record(stage, input, out);
+        return;
+    }
+    c_buffer_number(out, input -> integer);
 }
-fn ll_constant_array(stage:*LlStage,input:*CrustExpr,out:*CBuffer)->unit {
-    c_buffer_text(out,"[");var index:usize=0usize;
-    while index<input->arg_count {
-        if index!=0usize{c_buffer_text(out,", ");}
-        c_buffer_text(out,ll_type(stage,input->args[index]->type));c_buffer_text(out," ");
-        ll_constant(stage,input->args[index],out);index=index+1usize;
-    }c_buffer_text(out,"]");
+fn ll_constant_array(stage: *LlStage, input: *CrustExpr, out: *CBuffer) -> unit {
+    c_buffer_text(out, "[");
+    var index: usize = 0usize;
+    while index < input -> arg_count {
+        if index != 0usize {
+            c_buffer_text(out, ", ");
+        }
+        c_buffer_text(out, ll_type(stage, input -> args[index] -> type));
+        c_buffer_text(out, " ");
+        ll_constant(stage, input -> args[index], out);
+        index = index + 1usize;
+    }
+    c_buffer_text(out, "]");
 }
-fn ll_constant_record(stage:*LlStage,input:*CrustExpr,out:*CBuffer)->unit {
-    var count:usize=input->type->record_decl->field_count;
-    var values:**CrustExpr=c_alloc(&stage->memory.status,count*sizeof(*CrustExpr),alignof(*CrustExpr)) as **CrustExpr;
-    if values==null(**CrustExpr){return;}
-    var init:*CrustInit=input->inits;while init!=null(*CrustInit){values[init->field->index]=init->value;init=init->next;}
-    c_buffer_text(out,"{ ");var index:usize=0usize;
-    while index<count {
-        if index!=0usize{c_buffer_text(out,", ");}
-        c_buffer_text(out,ll_type(stage,values[index]->type));c_buffer_text(out," ");
-        ll_constant(stage,values[index],out);index=index+1usize;
-    }c_buffer_text(out," }");
+fn ll_constant_record(stage: *LlStage, input: *CrustExpr, out: *CBuffer) -> unit {
+    var count: usize = input -> type -> record_decl -> field_count;
+    var values: **CrustExpr = c_alloc(
+        &stage -> memory.status,
+        count * sizeof(*CrustExpr),
+        alignof(*CrustExpr)
+    ) as **CrustExpr;
+    if values == null(**CrustExpr) {
+        return;
+    }
+    var init: *CrustInit = input -> inits;
+    while init != null(*CrustInit) {
+        values[init -> field -> index] = init -> value;
+        init = init -> next;
+    }
+    c_buffer_text(out, "{ ");
+    var index: usize = 0usize;
+    while index < count {
+        if index != 0usize {
+            c_buffer_text(out, ", ");
+        }
+        c_buffer_text(out, ll_type(stage, values[index] -> type));
+        c_buffer_text(out, " ");
+        ll_constant(stage, values[index], out);
+        index = index + 1usize;
+    }
+    c_buffer_text(out, " }");
 }
-fn ll_rename(stage:*LlStage,binding:*LlBinding)->unit {
-    var name:*u8=binding->declaration->link_name;if name[0usize]==0u8{return;}
-    var out:*CBuffer=&stage->memory.renames;c_buffer_text(out,"\"--redefine-sym\"\n\"");
-    c_buffer_text(out,binding->name+1isize);c_buffer_text(out,"=");var index:usize=0usize;
-    while name[index]!=0u8 {
-        if name[index]==34u8 || name[index]==92u8{c_buffer_text(out,"\\");}
-        c_buffer_bytes(out,&name[index],1usize);index=index+1usize;
-    }c_buffer_text(out,"\"\n");
+fn ll_rename(stage: *LlStage, binding: *LlBinding) -> unit {
+    var name: *u8 = binding -> declaration -> link_name;
+    if name[0usize] == 0u8 {
+        return;
+    }
+    var out: *CBuffer = &stage -> memory.renames;
+    c_buffer_text(out, "\"--redefine-sym\"\n\"");
+    c_buffer_text(out, binding -> name + 1isize);
+    c_buffer_text(out, "=");
+    var index: usize = 0usize;
+    while name[index] != 0u8 {
+        if name[index] == 34u8 || name[index] == 92u8 {
+            c_buffer_text(out, "\\");
+        }
+        c_buffer_bytes(out, &name[index], 1usize);
+        index = index + 1usize;
+    }
+    c_buffer_text(out, "\"\n");
 }
-fn ll_signature(stage:*LlStage,binding:*LlBinding,out:*CBuffer)->unit {
-    var definition:bool=binding->definition!=null(*CrustDecl);
-    if definition{c_buffer_text(out,"define ");}else{c_buffer_text(out,"declare ");}
-    if binding->declaration->link_name[0usize]==0u8{c_buffer_text(out,"internal ");}
-    var type:*CrustType=binding->declaration->type;
-    c_buffer_text(out,ll_abi_type(stage,type->base,true));c_buffer_text(out," ");c_buffer_text(out,binding->name);c_buffer_text(out,"(");
-    var index:usize=0usize;while index<type->param_count {
-        if index!=0usize{c_buffer_text(out,", ");}c_buffer_text(out,ll_abi_type(stage,type->params[index],false));
-        if definition{c_buffer_text(out," %p");c_buffer_number(out,index as u64);}index=index+1usize;
-    }c_buffer_text(out,")");
+fn ll_signature(stage: *LlStage, binding: *LlBinding, out: *CBuffer) -> unit {
+    var definition: bool = binding -> definition != null(*CrustDecl);
+    if definition {
+        c_buffer_text(out, "define ");
+    } else {
+        c_buffer_text(out, "declare ");
+    }
+    if binding -> declaration -> link_name[0usize] == 0u8 {
+        c_buffer_text(out, "internal ");
+    }
+    var type: *CrustType = binding -> declaration -> type;
+    c_buffer_text(out, ll_abi_type(stage, type -> base, true));
+    c_buffer_text(out, " ");
+    c_buffer_text(out, binding -> name);
+    c_buffer_text(out, "(");
+    var index: usize = 0usize;
+    while index < type -> param_count {
+        if index != 0usize {
+            c_buffer_text(out, ", ");
+        }
+        c_buffer_text(out, ll_abi_type(stage, type -> params[index], false));
+        if definition {
+            c_buffer_text(out, " %p");
+            c_buffer_number(out, index as u64);
+        }
+        index = index + 1usize;
+    }
+    c_buffer_text(out, ")");
     // Raw function names do not grant C library semantics, including inside a runtime.
-    if definition{c_buffer_text(out," \"no-builtins\"");}
-}
-fn ll_emit_constant(stage:*LlStage,binding:*LlBinding)->unit {
-    var declaration:*CrustDecl=binding->declaration;var out:*CBuffer=&stage->memory.body;
-    c_buffer_text(out,binding->name);c_buffer_text(out," = ");
-    if binding->definition==null(*CrustDecl){c_buffer_text(out,"external ");}
-    else{declaration=binding->definition;if declaration->link_name[0usize]==0u8{c_buffer_text(out,"internal ");}}
-    c_buffer_text(out,"constant ");c_buffer_text(out,ll_type(stage,declaration->type));
-    if binding->definition!=null(*CrustDecl){c_buffer_text(out," ");ll_constant(stage,declaration->init,out);}
-    c_buffer_text(out,", align ");c_buffer_number(out,declaration->type->align as u64);c_buffer_text(out,"\n");
-}
-fn ll_emit_binding(stage:*LlStage,binding:*LlBinding)->unit {
-    if binding->definition==null(*CrustDecl) && binding->declaration->link_name[0usize]==0u8{
-        ll_error(stage,"private LLVM linkage requires a definition in this output");return;
+    if definition {
+        c_buffer_text(out, " \"no-builtins\"");
     }
-    ll_rename(stage,binding);
-    if binding->declaration->kind==CRUST_D_CONST{ll_emit_constant(stage,binding);return;}
-    if binding->definition==null(*CrustDecl){ll_signature(stage,binding,&stage->memory.body);c_buffer_text(&stage->memory.body,"\n");return;}
-    ll_function(stage,binding);
+}
+fn ll_emit_constant(stage: *LlStage, binding: *LlBinding) -> unit {
+    var declaration: *CrustDecl = binding -> declaration;
+    var out: *CBuffer = &stage -> memory.body;
+    c_buffer_text(out, binding -> name);
+    c_buffer_text(out, " = ");
+    if binding -> definition == null(*CrustDecl) {
+        c_buffer_text(out, "external ");
+    } else {
+        declaration = binding -> definition;
+        if declaration -> link_name[0usize] == 0u8 {
+            c_buffer_text(out, "internal ");
+        }
+    }
+    c_buffer_text(out, "constant ");
+    c_buffer_text(out, ll_type(stage, declaration -> type));
+    if binding -> definition != null(*CrustDecl) {
+        c_buffer_text(out, " ");
+        ll_constant(stage, declaration -> init, out);
+    }
+    c_buffer_text(out, ", align ");
+    c_buffer_number(out, declaration -> type -> align as u64);
+    c_buffer_text(out, "\n");
+}
+fn ll_emit_binding(stage: *LlStage, binding: *LlBinding) -> unit {
+    if binding -> definition == null(*CrustDecl) && binding -> declaration -> link_name[0usize] == 0u8 {
+        ll_error(stage, "private LLVM linkage requires a definition in this output");
+        return;
+    }
+    ll_rename(stage, binding);
+    if binding -> declaration -> kind == CRUST_D_CONST {
+        ll_emit_constant(stage, binding);
+        return;
+    }
+    if binding -> definition == null(*CrustDecl) {
+        ll_signature(stage, binding, &stage -> memory.body);
+        c_buffer_text(&stage -> memory.body, "\n");
+        return;
+    }
+    ll_function(stage, binding);
 }
 // Emit complete checked raw bodies. Keep input storage live through stage destruction.
 // Empty native names select private definitions. Output buffers belong to the stage.
-fn ll_emit(stage:*LlStage,entry:*CrustDecl)->bool {
-    stage->entry=entry;var unit_value:*CrustUnit=ll_context(stage)->units;
-    while unit_value!=null(*CrustUnit) && ll_ok(stage){
-        var declaration:*CrustDecl=unit_value->declarations;
-        while declaration!=null(*CrustDecl) && ll_ok(stage){
-            if declaration->kind!=CRUST_D_RECORD{ll_bind(stage,declaration,true);}declaration=declaration->next;
-        }unit_value=unit_value->next;
+fn ll_emit(stage: *LlStage, entry: *CrustDecl) -> bool {
+    stage -> entry = entry;
+    var unit_value: *CrustUnit = ll_context(stage) -> units;
+    while unit_value != null(*CrustUnit) && ll_ok(stage) {
+        var declaration: *CrustDecl = unit_value -> declarations;
+        while declaration != null(*CrustDecl) && ll_ok(stage) {
+            if declaration -> kind != CRUST_D_RECORD {
+                ll_bind(stage, declaration, true);
+            }
+            declaration = declaration -> next;
+        }
+        unit_value = unit_value -> next;
     }
-    var out:*CBuffer=&stage->memory.header;
-    c_buffer_text(out,"target triple = \"x86_64-unknown-linux-gnu\"\n");
-    c_buffer_text(out,"target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128\"\n");
-    c_buffer_text(out,"declare void @llvm.trap()\ndeclare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1 immarg)\n");
-    var binding:*LlBinding=stage->first;while binding!=null(*LlBinding) && ll_ok(stage){ll_emit_binding(stage,binding);binding=binding->next;}
-    if entry!=null(*CrustDecl){
-        out=&stage->memory.body;c_buffer_text(out,"define i32 @main(i32 %argc, ptr %argv) {\n  %r = call i32 ");
-        c_buffer_text(out,ll_global(stage,entry));c_buffer_text(out,"(i32 %argc, ptr %argv)\n  ret i32 %r\n}\n");
-    }return ll_ok(stage);
+    var out: *CBuffer = &stage -> memory.header;
+    c_buffer_text(out, "target triple = \"x86_64-unknown-linux-gnu\"\n");
+    c_buffer_text(
+        out,
+        "target datalayout = \"e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128\"\n"
+    );
+    c_buffer_text(
+        out,
+        "declare void @llvm.trap()\ndeclare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1 immarg)\n"
+    );
+    var binding: *LlBinding = stage -> first;
+    while binding != null(*LlBinding) && ll_ok(stage) {
+        ll_emit_binding(stage, binding);
+        binding = binding -> next;
+    }
+    if entry != null(*CrustDecl) {
+        out = &stage -> memory.body;
+        c_buffer_text(out, "define i32 @main(i32 %argc, ptr %argv) {\n  %r = call i32 ");
+        c_buffer_text(out, ll_global(stage, entry));
+        c_buffer_text(out, "(i32 %argc, ptr %argv)\n  ret i32 %r\n}\n");
+    }
+    return ll_ok(stage);
 }

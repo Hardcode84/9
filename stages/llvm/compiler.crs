@@ -1,39 +1,110 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Write LLVM text and a native-symbol response file from checked raw bodies.
-fn ll_save(stage:*LlStage,output:*u8,symbols:*u8)->bool {
-    if !ll_ok(stage){return false;}
-    c_buffer_bytes(&stage->memory.header,stage->memory.body.data,stage->memory.body.size);
-    return ll_ok(stage) && cache_save(ll_context(stage),output,stage->memory.header.data,stage->memory.header.size) &&
-        cache_save(ll_context(stage),symbols,stage->memory.renames.data,stage->memory.renames.size);
+fn ll_save(stage: *LlStage, output: *u8, symbols: *u8) -> bool {
+    if !ll_ok(stage) {
+        return false;
+    }
+    c_buffer_bytes(
+        &stage -> memory.header,
+        stage -> memory.body.data,
+        stage -> memory.body.size
+    );
+    return ll_ok(stage) && cache_save(
+        ll_context(stage),
+        output,
+        stage -> memory.header.data,
+        stage -> memory.header.size
+    ) && cache_save(
+        ll_context(stage),
+        symbols,
+        stage -> memory.renames.data,
+        stage -> memory.renames.size
+    );
 }
-fn llvm_stage_compile(request:*StageCompile)->bool {
-    if request->options.count!=0usize{return native_error(request->context,"LLVM raw compiler accepts no source options");}
-    if !stage_read_sources(request->context,&request->sources) || !stage_names(request->exports,request->context){return false;}
-    var stage:LlStage=uninit;ll_init(&stage,request->context);
-    var success:bool=ll_emit(&stage,null(*CrustDecl)) && ll_save(&stage,request->output,request->symbols);
-    ll_destroy(&stage);return success;
+fn llvm_stage_compile(request: *StageCompile) -> bool {
+    if request -> options.count != 0usize {
+        return native_error(request -> context, "LLVM raw compiler accepts no source options");
+    }
+    if !stage_read_sources(request -> context, &request -> sources) || !stage_names(
+        request -> exports,
+        request -> context
+    ) {
+        return false;
+    }
+    var stage: LlStage = uninit;
+    ll_init(&stage, request -> context);
+    var success: bool = ll_emit(&stage, null(*CrustDecl)) && ll_save(
+        &stage,
+        request -> output,
+        request -> symbols
+    );
+    ll_destroy(&stage);
+    return success;
 }
-record LlTools { compiler:*u8; optimization:*u8; }
-const LLVM_LEVELS:[*u8;4]=make [*u8;4]{"-O0","-O1","-O2","-O3"};
+record LlTools {
+    compiler: *u8;
+    optimization: *u8;
+}
+const LLVM_LEVELS: [*u8; 4] = make [*u8; 4] {
+    "-O0",
+    "-O1",
+    "-O2",
+    "-O3"
+};
 // Select an explicit LLVM installation and optimization level 0..3.
 // The installation and its libraries must remain fixed through compilation.
-fn llvm_toolchain(toolchain:*StageToolchain,directory:*u8,optimization:u32)->bool {
-    var context:*CrustContext=toolchain->context;
-    if optimization>3u32{return native_error(context,"LLVM optimization level must be 0..3");}
-    var tools:*LlTools=crust_try_alloc(context,sizeof(LlTools),alignof(LlTools)) as *LlTools;
-    if tools==null(*LlTools){return false;}
-    tools->compiler=native_join(context,directory,"/bin/clang");
-    tools->optimization=LLVM_LEVELS[optimization as usize];
-    toolchain->user=tools as *u8;toolchain->object=llvm_stage_object;
-    var recipe:*CrustSource=crust_try_alloc(context,sizeof(CrustSource),alignof(CrustSource)) as *CrustSource;
-    if recipe==null(*CrustSource) || tools->compiler==null(*u8){return false;}
-    *recipe=make CrustSource{path:"llvm-optimization",bytes:tools->optimization,size:3usize,identity:0u64};
-    return cache_add(context,&toolchain->inputs,recipe) && cache_tools(context,&toolchain->inputs,&tools->compiler,1usize,toolchain->directory);
+fn llvm_toolchain(toolchain: *StageToolchain, directory: *u8, optimization: u32) -> bool {
+    var context: *CrustContext = toolchain -> context;
+    if optimization > 3u32 {
+        return native_error(context, "LLVM optimization level must be 0..3");
+    }
+    var tools: *LlTools = crust_try_alloc(context, sizeof(LlTools), alignof(LlTools)) as *LlTools;
+    if tools == null(*LlTools) {
+        return false;
+    }
+    tools -> compiler = native_join(context, directory, "/bin/clang");
+    tools -> optimization = LLVM_LEVELS[optimization as usize];
+    toolchain -> user = tools as *u8;
+    toolchain -> object = llvm_stage_object;
+    var recipe: *CrustSource = crust_try_alloc(
+        context,
+        sizeof(CrustSource),
+        alignof(CrustSource)
+    ) as *CrustSource;
+    if recipe == null(*CrustSource) || tools -> compiler == null(*u8) {
+        return false;
+    }
+    * recipe = make CrustSource {
+        path: "llvm-optimization",
+        bytes: tools -> optimization,
+        size: 3usize,
+        identity: 0u64
+    };
+    return cache_add(context, &toolchain -> inputs, recipe) && cache_tools(
+        context,
+        &toolchain -> inputs,
+        &tools -> compiler,
+        1usize,
+        toolchain -> directory
+    );
 }
-fn llvm_stage_object(request:*StageObject)->bool {
-    var tools:*LlTools=request->user as *LlTools;
-    var arguments:[*u8;13]=make [*u8;13]{tools->compiler,"--no-default-config","-target","x86_64-unknown-linux-gnu","-fPIC",tools->optimization,
-        "-x","ir","-c",request->source,"-o",request->output,null(*u8)};
-    return cache_tool(request->context,&arguments[0usize],null(*u8));
+fn llvm_stage_object(request: *StageObject) -> bool {
+    var tools: *LlTools = request -> user as *LlTools;
+    var arguments: [*u8; 13] = make [*u8; 13] {
+        tools -> compiler,
+        "--no-default-config",
+        "-target",
+        "x86_64-unknown-linux-gnu",
+        "-fPIC",
+        tools -> optimization,
+        "-x",
+        "ir",
+        "-c",
+        request -> source,
+        "-o",
+        request -> output,
+        null(*u8)
+    };
+    return cache_tool(request -> context, &arguments[0usize], null(*u8));
 }

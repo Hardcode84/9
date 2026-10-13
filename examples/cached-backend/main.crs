@@ -29,8 +29,11 @@ fn increment(counter: *usize) -> usize {
 
 var counter: usize = 0usize;
 var state: BuildState = make BuildState {
-    counter: &counter, callback: increment, original: increment,
-    first: null(fn(*CrustRun, *u8) -> i32), output: host_path(run, "../../build/cached-hello")
+    counter: &counter,
+    callback: increment,
+    original: increment,
+    first: null(fn(*CrustRun, *u8) -> i32),
+    output: host_path(run, "../../build/cached-hello")
 };
 var sources: [*u8; 30] = make [*u8; 30] {
     "../../api/crust0.crs",
@@ -67,40 +70,82 @@ var sources: [*u8; 30] = make [*u8; 30] {
 {
     var ctx: *CrustContext = (*run).context;
     var directory: *u8 = host_path(run, "../../build/backend-cache");
-    if directory == null(*u8) || !cache_directory(ctx, directory) { return 1i32; }
-    var inputs: CacheInputs = make CacheInputs { items: null(**CrustSource), count: 0usize, capacity: 0usize };
+    if directory == null(*u8) || !cache_directory(ctx, directory) {
+        return 1i32;
+    }
+    var inputs: CacheInputs = make CacheInputs {
+        items: null(**CrustSource),
+        count: 0usize,
+        capacity: 0usize
+    };
     var index: usize = 0usize;
     while index < 30usize {
         var path: *u8 = host_path(run, sources[index]);
-        if path == null(*u8) || !cache_input(ctx, &inputs, path) { return 1i32; }
+        if path == null(*u8) || !cache_input(ctx, &inputs, path) {
+            return 1i32;
+        }
         index = index + 1usize;
     }
-    if !cache_add(ctx, &inputs, (*run).source) || !cache_loaded_sources(run, &inputs) || !cache_loaded_inputs(ctx, &inputs) { return 1i32; }
-    var tools: [*u8; 2] = make [*u8; 2] { "/usr/bin/as", "/usr/bin/ld" };
-    if !cache_tools(ctx, &inputs, &tools[0usize], 2usize, directory) { return 1i32; }
-    var producer: BackendBuild = make BackendBuild { source_count: 21usize, seed_count: 10usize };
+    if !cache_add(ctx, &inputs, (*run).source) || !cache_loaded_sources(run, &inputs) || !cache_loaded_inputs(
+        ctx,
+        &inputs
+    ) {
+        return 1i32;
+    }
+    var tools: [*u8; 2] = make [*u8; 2] {
+        "/usr/bin/as",
+        "/usr/bin/ld"
+    };
+    if !cache_tools(ctx, &inputs, &tools[0usize], 2usize, directory) {
+        return 1i32;
+    }
+    var producer: BackendBuild = make BackendBuild {
+        source_count: 21usize,
+        seed_count: 10usize
+    };
     var request: CacheBuild = make CacheBuild {
-        inputs: inputs.items, count: inputs.count, build: backend_build, user: &producer as *u8
+        inputs: inputs.items,
+        count: inputs.count,
+        build: backend_build,
+        user: &producer as *u8
     };
     var artifact: CacheArtifact = uninit;
     // Loading and execution stay explicit. No runner behavior depends on caching.
-    if !cache_artifact(ctx, directory, &request, &artifact) ||
-       !crust_run_link(run, artifact.path) { return 1i32; }
+    if !cache_artifact(ctx, directory, &request, &artifact) || !crust_run_link(
+        run,
+        artifact.path
+    ) {
+        return 1i32;
+    }
     var session: NativeSession = make NativeSession {
-        images: null(*NativeImage), compile: cached_asm, user: &state as *u8,
-        temporary: host_path(run, "../../build"), libraries: &artifact.path, library_count: 1usize
+        images: null(*NativeImage),
+        compile: cached_asm,
+        user: &state as *u8,
+        temporary: host_path(run, "../../build"),
+        libraries: &artifact.path,
+        library_count: 1usize
     };
-    if increment(&counter) != 1usize { return 80i32; }
+    if increment(&counter) != 1usize {
+        return 80i32;
+    }
     var status: i32 = native_start(run, &session);
-    if !native_cleanup(ctx, &session) { return 1i32; }
-    if status == 0i32 && (counter != 3usize || state.counter != &counter || state.callback != increment) { return 81i32; }
+    if !native_cleanup(ctx, &session) {
+        return 1i32;
+    }
+    if status == 0i32 && (
+        counter != 3usize || state.counter != &counter || state.callback != increment
+    ) {
+        return 81i32;
+    }
     return status;
 };
 
 // This complete function is the first native action. Select C for the next one.
 fn select_c(root: *CrustRun, user: *u8) -> i32 {
     var state: *BuildState = user as *BuildState;
-    if (*state).callback != (*state).original || (*state).callback((*state).counter) != 2usize { return 82i32; }
+    if (*state).callback != (*state).original || (*state).callback((*state).counter) != 2usize {
+        return 82i32;
+    }
     (*state).first = select_c;
     var session: *NativeSession = (*root).user as *NativeSession;
     (*session).compile = native_c_image;
@@ -110,18 +155,34 @@ fn select_c(root: *CrustRun, user: *u8) -> i32 {
 // This function runs natively after compilation with the source-supplied C stage.
 fn build_target(root: *CrustRun, user: *u8) -> i32 {
     var state: *BuildState = user as *BuildState;
-    if (*state).first != select_c || (*state).callback((*state).counter) != 3usize { return 83i32; }
+    if (*state).first != select_c || (*state).callback((*state).counter) != 3usize {
+        return 83i32;
+    }
     var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
-    var arguments: [*u8; 2] = make [*u8; 2] { "-o", (*state).output };
-    var request: CrustBuild = make CrustBuild {
-        context: &context, source: (*root).source, target_begin: (*root).cursor,
-        argc: 2i32, argv: &arguments[0usize]
+    var arguments: [*u8; 2] = make [*u8; 2] {
+        "-o",
+        (*state).output
     };
-    if (*root).argc != 0i32 { request.argc = (*root).argc; request.argv = (*root).argv; }
+    var request: CrustBuild = make CrustBuild {
+        context: &context,
+        source: (*root).source,
+        target_begin: (*root).cursor,
+        argc: 2i32,
+        argv: &arguments[0usize]
+    };
+    if (*root).argc != 0i32 {
+        request.argc = (*root).argc;
+        request.argv = (*root).argv;
+    }
     var status: i32 = c_program(&request, c_backend_build);
     if context.error_count != 0usize {
-        crust_set_error((*root).context, context.error_loc.source, context.error_loc.offset, &context.error[0usize]);
+        crust_set_error(
+            (*root).context,
+            context.error_loc.source,
+            context.error_loc.offset,
+            &context.error[0usize]
+        );
     }
     crust_context_destroy(&context);
     (*root).returned = true;
@@ -133,6 +194,8 @@ fn build_target(root: *CrustRun, user: *u8) -> i32 {
 extern fn puts(text: *u8) -> i32 = "puts";
 
 fn main(argc: i32, argv: **u8) -> i32 {
-    if puts("Hello from a bootstrapped native stage!") < 0i32 { return 1i32; }
+    if puts("Hello from a bootstrapped native stage!") < 0i32 {
+        return 1i32;
+    }
     return 0i32;
 }

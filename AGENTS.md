@@ -114,6 +114,8 @@ does not veto the selected capability.
   is not a bound.
 - CCN <= 15. Lizard: `src/`, `include/`, `runtime/`. Crust CCN stage:
   `api/`, `stages/`, `tests/`. Split responsibilities. No exclusions/counting tricks.
+- Crust sources: `tools/format_crust.py`. Pre-commit formats changed `.crs` files.
+  Custom grammars select their own service in the repository wrapper.
 - Never install Node.js or npm.
 - Source/config/docs: one `SPDX-License-Identifier: Apache-2.0` comment at file
   start, after shebang if present. Change generators for generated headers.

@@ -242,7 +242,7 @@ def check_tutorial_assembly(suite, package):
     )
     helper = root.with_name("build.crs")
     source = helper.read_text()
-    call = "return backend_output(&(*program).context,entry,&options,emit);"
+    call = "return backend_output(&(*program).context, entry, &options, emit);"
     assert source.count(call) == 1
     source = source.replace(call, "return test_asm(&(*program).context, entry, options.output);")
     source = source.replace("generics.c", "generics.s")

@@ -1,19 +1,35 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn os_join_value(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
-                   slot: *OsSlot, a: *OsValue, b: *OsValue, location: *CrustLoc) -> unit {
+fn os_join_value(
+    check: *OsCheck,
+    target: *OsState,
+    left: *OsState,
+    right: *OsState,
+    slot: *OsSlot,
+    a: *OsValue,
+    b: *OsValue,
+    location: *CrustLoc
+) -> unit {
     if (*a).borrow_scope != (*b).borrow_scope || (*a).loan != (*b).loan {
-        os_error(check, location, "continuing paths must agree on borrow lifetimes"); return;
+        os_error(check, location, "continuing paths must agree on borrow lifetimes");
+        return;
     }
     var value: *OsValue = os_copy(check, a);
-    if value == null(*OsValue) { return; }
-    if (*a).native != (*b).native { os_error(check, location, "continuing paths must agree on resource kind"); return; }
+    if value == null(*OsValue) {
+        return;
+    }
+    if (*a).native != (*b).native {
+        os_error(check, location, "continuing paths must agree on resource kind");
+        return;
+    }
     (*value).presence = (*a).presence & (*b).presence;
     if (*a).object != (*b).object {
-        if (*slot).owns || !(*a).pointer || !(*b).pointer {
-            os_error(check, location, "continuing paths must agree on storage ownership"); return;
+        if (*slot).owns ||!(*a).pointer ||!(*b).pointer {
+            os_error(check, location, "continuing paths must agree on storage ownership");
+            return;
         }
-        os_error(check, location, "pointer branch merge requires a declared scoped view"); return;
+        os_error(check, location, "pointer branch merge requires a declared scoped view");
+        return;
     }
     os_set(check, target, slot as *u8, value, OS_READY);
 }

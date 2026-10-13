@@ -1,24 +1,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn ov_read_function_end(reader:*CrustReader, declaration:*CrustDecl, user:*u8)->bool {
-    if (*declaration).kind!=CRUST_D_FUNCTION || (*reader).token.kind!=59u32 { return false; }
+fn ov_read_function_end(reader: *CrustReader, declaration: *CrustDecl, user: *u8) -> bool {
+    if (*declaration).kind != CRUST_D_FUNCTION || (*reader).token.kind != 59u32 {
+        return false;
+    }
     rr_next(reader);
     return true;
 }
 
 // Append this set to the root-selected reader chain. Retain its storage through reading.
-fn ov_reader_hooks(hooks:*CrustReaderHooks, next:*CrustReaderHooks)->unit {
-    *hooks=make CrustReaderHooks {
-        next:next, user:null(*u8), function_end:ov_read_function_end,
-        declaration:null(fn(*CrustReader,*u8)->*CrustDecl),
-        statement:null(fn(*CrustReader,*u8)->*CrustStmt),
-        prefix:null(fn(*CrustReader,*u8)->*CrustExpr),
-        type_syntax:null(fn(*CrustReader,*u8)->*CrustTypeSyntax)
+fn ov_reader_hooks(hooks: *CrustReaderHooks, next: *CrustReaderHooks) -> unit {
+    *hooks = make CrustReaderHooks {
+        next: next,
+        user: null(*u8),
+        function_end: ov_read_function_end,
+        declaration: null(fn(*CrustReader, *u8) -> *CrustDecl),
+        statement: null(fn(*CrustReader, *u8) -> *CrustStmt),
+        prefix: null(fn(*CrustReader, *u8) -> *CrustExpr),
+        type_syntax: null(fn(*CrustReader, *u8) -> *CrustTypeSyntax)
     };
 }
 
-fn ov_read(stage:*OvStage, source:*CrustSource, begin:usize, end:usize)->bool {
-    var hooks:CrustReaderHooks=uninit; ov_reader_hooks(&hooks,null(*CrustReaderHooks));
-    if rr_read((*stage).context,source,begin,end,&hooks)==null(*CrustUnit) { (*stage).failed=true; }
-    return !(*stage).failed;
+fn ov_read(stage: *OvStage, source: *CrustSource, begin: usize, end: usize) -> bool {
+    var hooks: CrustReaderHooks = uninit;
+    ov_reader_hooks(&hooks, null(*CrustReaderHooks));
+    if rr_read((*stage).context, source, begin, end, &hooks) == null(*CrustUnit) {
+        (*stage).failed = true;
+    }
+    return!(*stage).failed;
 }

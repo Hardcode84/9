@@ -1,47 +1,90 @@
 // SPDX-License-Identifier: Apache-2.0
 
 record ExampleBackend {
-    emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32;
-    compiler:*u8;
-    entry:*u8;
-    toolchain:*u8;
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32;
+    compiler: *u8;
+    entry: *u8;
+    toolchain: *u8;
 }
-extern fn example_output_abi(context:*CrustContext,entry:*CrustDecl,options:*BackendOptions)->i32="example_output_abi";
+extern fn example_output_abi(
+    context: *CrustContext,
+    entry: *CrustDecl,
+    options: *BackendOptions
+) -> i32 = "example_output_abi";
 
 // Consume leading backend selections. Retain all selected libraries in the root.
-fn example_backend(root:*CrustRun,stages:*StageSession,result:*ExampleBackend)->bool {
-    *result=make ExampleBackend{emit:c_backend_build,compiler:null(*u8),entry:null(*u8),toolchain:null(*u8)};
-    while root->argc>0i32 {
-        var count:i32=0i32;
-        if cache_strcmp(root->argv[0usize],"--backend")==0i32 {
-            count=3i32;if root->argc<count{return native_error(root->context,"--backend requires PACKAGE ENTRY");}
-            if !stage_load(stages,root->argv[1usize]) || !stage_native_callback(root,"example_output_abi",root->argv[2usize],&result->emit as *u8){return false;}
+fn example_backend(root: *CrustRun, stages: *StageSession, result: *ExampleBackend) -> bool {
+    *result = make ExampleBackend {
+        emit: c_backend_build,
+        compiler: null(*u8),
+        entry: null(*u8),
+        toolchain: null(*u8)
+    };
+    while root -> argc > 0i32 {
+        var count: i32 = 0i32;
+        if cache_strcmp(root -> argv[0usize], "--backend") == 0i32 {
+            count = 3i32;
+            if root -> argc < count {
+                return native_error(root -> context, "--backend requires PACKAGE ENTRY");
+            }
+            if !stage_load(stages, root -> argv[1usize]) || !stage_native_callback(
+                root,
+                "example_output_abi",
+                root -> argv[2usize],
+                &result -> emit as *u8
+            ) {
+                return false;
+            }
         } else {
-            if cache_strcmp(root->argv[0usize],"--stage-compiler")!=0i32{break;}
-            count=4i32;if root->argc<count{return native_error(root->context,"--stage-compiler requires PACKAGE ENTRY TOOLCHAIN");}
-            result->compiler=root->argv[1usize];result->entry=root->argv[2usize];result->toolchain=root->argv[3usize];
+            if cache_strcmp(root -> argv[0usize], "--stage-compiler") != 0i32 {
+                break;
+            }
+            count = 4i32;
+            if root -> argc < count {
+                return native_error(
+                    root -> context,
+                    "--stage-compiler requires PACKAGE ENTRY TOOLCHAIN"
+                );
+            }
+            result -> compiler = root -> argv[1usize];
+            result -> entry = root -> argv[2usize];
+            result -> toolchain = root -> argv[3usize];
         }
-        root->argc=root->argc-count;root->argv=root->argv+count as isize;
+        root -> argc = root -> argc - count;
+        root -> argv = root -> argv + count as isize;
     }
     return true;
 }
 // Compile selected stage sources with the declared frontend or a caller-selected compiler.
 // The replacement compiler must accept this package's source options.
-fn example_load(stages:*StageSession,backend:*ExampleBackend,manifest:*u8)->bool {
-    var package:StagePackage=uninit;stage_init(&package,stages->root,stages->base);
-    if !stage_include(&package,manifest){return false;}
-    if backend->compiler!=null(*u8){
-        if package.compiler==null(*u8){
-            var index:usize=0usize;
-            while index<package.sources.count {
-                if !stage_source_option(&package,package.sources.items[index],"raw"){return false;}
-                index=index+1usize;
+fn example_load(stages: *StageSession, backend: *ExampleBackend, manifest: *u8) -> bool {
+    var package: StagePackage = uninit;
+    stage_init(&package, stages -> root, stages -> base);
+    if !stage_include(&package, manifest) {
+        return false;
+    }
+    if backend -> compiler != null(*u8) {
+        if package.compiler == null(*u8) {
+            var index: usize = 0usize;
+            while index < package.sources.count {
+                if !stage_source_option(&package, package.sources.items[index], "raw") {
+                    return false;
+                }
+                index = index + 1usize;
             }
         }
-        var selected:StagePackage=uninit;stage_init(&selected,stages->root,stages->base);
-        if !stage_compiler(&selected,backend->compiler,backend->entry) || !stage_toolchain(&selected,backend->toolchain){return false;}
-        package.compiler=selected.compiler;package.entry=selected.entry;package.toolchain=selected.toolchain;
+        var selected: StagePackage = uninit;
+        stage_init(&selected, stages -> root, stages -> base);
+        if !stage_compiler(&selected, backend -> compiler, backend -> entry) || !stage_toolchain(
+            &selected,
+            backend -> toolchain
+        ) {
+            return false;
+        }
+        package.compiler = selected.compiler;
+        package.entry = selected.entry;
+        package.toolchain = selected.toolchain;
     }
-    var path:*u8=stage_package_library(stages,&package);
-    return path!=null(*u8) && crust_run_link(stages->root,path);
+    var path: *u8 = stage_package_library(stages, &package);
+    return path != null(*u8) && crust_run_link(stages -> root, path);
 }

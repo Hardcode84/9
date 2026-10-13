@@ -1,37 +1,65 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn rs_match_state(function: *RsFunction, a: *RsChange, b: *RsChange, location: *CrustLoc) -> unit {
+fn rs_match_state(
+    function: *RsFunction,
+    a: *RsChange,
+    b: *RsChange,
+    location: *CrustLoc
+) -> unit {
     var initialized: bool = (*(*a).local).initialized;
     var readers: usize = (*(*a).local).readers;
     var exclusive: bool = (*(*a).local).exclusive;
-    if b != null(*RsChange) { initialized = (*b).initialized; readers = (*b).readers; exclusive = (*b).exclusive; }
+    if b != null(*RsChange) {
+        initialized = (*b).initialized;
+        readers = (*b).readers;
+        exclusive = (*b).exclusive;
+    }
     if (*a).initialized != initialized || (*a).readers != readers || (*a).exclusive != exclusive {
-        rs_error((*function).stage, location, "continuing paths must agree on initialization and ownership");
+        rs_error(
+            (*function).stage,
+            location,
+            "continuing paths must agree on initialization and ownership"
+        );
     }
 }
 
 fn rs_join(function: *RsFunction, a: *RsChange, b: *RsChange, location: *CrustLoc) -> unit {
     var stage: *RsStage = (*function).stage;
-    var left: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
-    var right: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    var left: CrustMap = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
+    var right: CrustMap = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
     var entry: *RsChange = a;
-    while entry != null(*RsChange) && !(*stage).failed {
+    while entry != null(*RsChange) &&!(*stage).failed {
         rs_put(stage, &left, (*entry).local as usize, entry as *u8);
         entry = (*entry).next;
     }
     entry = b;
-    while entry != null(*RsChange) && !(*stage).failed {
+    while entry != null(*RsChange) &&!(*stage).failed {
         rs_put(stage, &right, (*entry).local as usize, entry as *u8);
         entry = (*entry).next;
     }
     entry = a;
-    while entry != null(*RsChange) && !(*stage).failed {
-        rs_match_state(function, entry, crust_map_get(&right, (*entry).local as usize) as *RsChange, location);
+    while entry != null(*RsChange) &&!(*stage).failed {
+        rs_match_state(
+            function,
+            entry,
+            crust_map_get(&right, (*entry).local as usize) as *RsChange,
+            location
+        );
         entry = (*entry).next;
     }
     entry = b;
-    while entry != null(*RsChange) && !(*stage).failed {
-        if crust_map_get(&left, (*entry).local as usize) == null(*u8) { rs_match_state(function, entry, null(*RsChange), location); }
+    while entry != null(*RsChange) &&!(*stage).failed {
+        if crust_map_get(&left, (*entry).local as usize) == null(*u8) {
+            rs_match_state(function, entry, null(*RsChange), location);
+        }
         entry = (*entry).next;
     }
 }
@@ -40,21 +68,35 @@ fn rs_loop_state(function: *RsFunction, loop: *RsLoop, location: *CrustLoc) -> u
     var stage: *RsStage = (*function).stage;
     var marker: *RsChange = (*function).changes;
     var scope: *RsScope = (*function).scope;
-    while scope != (*loop).scope && !(*stage).failed { rs_release_scope(function, scope); scope = (*scope).parent; }
-    var entries: CrustMap = make CrustMap { entries: null(*CrustMapEntry), count: 0usize, capacity: 0usize };
+    while scope != (*loop).scope &&!(*stage).failed {
+        rs_release_scope(function, scope);
+        scope = (*scope).parent;
+    }
+    var entries: CrustMap = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
     var change: *RsChange = (*function).changes;
-    while change != (*loop).entry && !(*stage).failed {
-        if rs_outer((*change).local, (*loop).scope) { rs_put(stage, &entries, (*change).local as usize, change as *u8); }
+    while change != (*loop).entry &&!(*stage).failed {
+        if rs_outer((*change).local, (*loop).scope) {
+            rs_put(stage, &entries, (*change).local as usize, change as *u8);
+        }
         change = (*change).next;
     }
     var index: usize = 0usize;
-    while index < entries.capacity && !(*stage).failed {
+    while index < entries.capacity &&!(*stage).failed {
         if entries.entries[index].key != 0usize {
             change = entries.entries[index].value as *RsChange;
             var local: *RsLocal = (*change).local;
-            if (*local).initialized != (*change).initialized || (*local).readers != (*change).readers ||
-               (*local).exclusive != (*change).exclusive {
-                rs_error(stage, location, "loop edges must restore outer initialization and ownership states");
+            if (*local).initialized != (*change).initialized || (*local).readers != (*change).readers || (
+                *local
+            ).exclusive != (*change).exclusive {
+                rs_error(
+                    stage,
+                    location,
+                    "loop edges must restore outer initialization and ownership states"
+                );
             }
         }
         index = index + 1usize;
@@ -63,17 +105,24 @@ fn rs_loop_state(function: *RsFunction, loop: *RsLoop, location: *CrustLoc) -> u
 }
 
 fn rs_loop_forever(expression: *CrustExpr) -> bool {
-    while (*expression).kind == CRUST_E_GROUP { expression = (*expression).left; }
+    while (*expression).kind == CRUST_E_GROUP {
+        expression = (*expression).left;
+    }
     return (*expression).kind == CRUST_E_BOOL && (*expression).integer != 0u64;
 }
 
 fn rs_loop_break(function: *RsFunction, loop: *RsLoop) -> unit {
     var stage: *RsStage = (*function).stage;
     var exit: *RsLoopExit = rs_alloc(stage, sizeof(RsLoopExit), alignof(RsLoopExit)) as *RsLoopExit;
-    if exit == null(*RsLoopExit) { return; }
+    if exit == null(*RsLoopExit) {
+        return;
+    }
     var marker: *RsChange = (*function).changes;
     var scope: *RsScope = (*function).scope;
-    while scope != (*loop).scope && !(*stage).failed { rs_release_scope(function, scope); scope = (*scope).parent; }
+    while scope != (*loop).scope &&!(*stage).failed {
+        rs_release_scope(function, scope);
+        scope = (*scope).parent;
+    }
     (*exit).changes = rs_snapshot(function, (*loop).entry, (*loop).scope);
     rs_restore(function, marker);
     (*exit).next = (*loop).exits;
@@ -86,11 +135,13 @@ fn rs_loop_join(function: *RsFunction, loop: *RsLoop, source: *CrustStmt) -> boo
     var exit: *RsLoopExit = (*loop).exits;
     var joined: *RsChange = null(*RsChange);
     if rs_loop_forever((*source).expr) {
-        if exit == null(*RsLoopExit) { return false; }
+        if exit == null(*RsLoopExit) {
+            return false;
+        }
         joined = (*exit).changes;
         exit = (*exit).next;
     }
-    while exit != null(*RsLoopExit) && !(*(*function).stage).failed {
+    while exit != null(*RsLoopExit) &&!(*(*function).stage).failed {
         rs_join(function, joined, (*exit).changes, &(*source).loc);
         exit = (*exit).next;
     }
@@ -100,17 +151,34 @@ fn rs_loop_join(function: *RsFunction, loop: *RsLoop, source: *CrustStmt) -> boo
 
 fn rs_condition(function: *RsFunction, expression: *CrustExpr, output: *RsStatements) -> *RsValue {
     rs_scope(function);
-    var effects: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    var effects: RsStatements = make RsStatements {
+        first: null(*CrustStmt),
+        last: null(*CrustStmt)
+    };
     var value: *RsValue = rs_expr(function, expression, &effects);
-    var expected: *CrustTypeSyntax = rs_type_node((*function).stage, CRUST_T_BOOL, &(*expression).loc);
-    if !rs_require_value(function, value, expected, &(*expression).loc) { return null(*RsValue); }
+    var expected: *CrustTypeSyntax = rs_type_node(
+        (*function).stage,
+        CRUST_T_BOOL,
+        &(*expression).loc
+    );
+    if !rs_require_value(function, value, expected, &(*expression).loc) {
+        return null(*RsValue);
+    }
     rs_append(output, rs_expression_scope(function, &effects, &(*expression).loc));
     return value;
 }
 
-fn rs_initialize(function: *RsFunction, local: *RsLocal, value: *RsValue,
-                 syntax: *CrustTypeSyntax, output: *RsStatements, location: *CrustLoc) -> unit {
-    if !rs_require_value(function, value, syntax, location) { return; }
+fn rs_initialize(
+    function: *RsFunction,
+    local: *RsLocal,
+    value: *RsValue,
+    syntax: *CrustTypeSyntax,
+    output: *RsStatements,
+    location: *CrustLoc
+) -> unit {
+    if !rs_require_value(function, value, syntax, location) {
+        return;
+    }
     var stage: *RsStage = (*function).stage;
     if (*local).mode == rs_kind(stage, RS_READ) || (*local).mode == rs_kind(stage, RS_MUT) {
         var parent: *RsLocal = (*(*value).local).parent_loan;
@@ -121,7 +189,13 @@ fn rs_initialize(function: *RsFunction, local: *RsLocal, value: *RsValue,
         (*local).parent_loan = parent;
         rs_live(function, (*value).local, false);
     }
-    rs_assign(function, output, rs_named(stage, (*local).storage, location), (*value).expression, location);
+    rs_assign(
+        function,
+        output,
+        rs_named(stage, (*local).storage, location),
+        (*value).expression,
+        location
+    );
     rs_transfer(function, value);
     rs_live(function, local, true);
 }
@@ -129,10 +203,13 @@ fn rs_initialize(function: *RsFunction, local: *RsLocal, value: *RsValue,
 fn rs_lower_block(function: *RsFunction, source: *CrustStmt, output: *RsStatements) -> bool {
     var stage: *RsStage = (*function).stage;
     rs_scope(function);
-    var body: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    var body: RsStatements = make RsStatements {
+        first: null(*CrustStmt),
+        last: null(*CrustStmt)
+    };
     var current: *CrustStmt = (*source).body;
     var falls: bool = true;
-    while current != null(*CrustStmt) && !(*stage).failed {
+    while current != null(*CrustStmt) &&!(*stage).failed {
         if !falls {
             rs_error(stage, &(*current).loc, "statement is unreachable");
             return false;
@@ -140,13 +217,25 @@ fn rs_lower_block(function: *RsFunction, source: *CrustStmt, output: *RsStatemen
         falls = rs_lower_statement(function, current, &body);
         current = (*current).next;
     }
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     var block: *CrustStmt = rs_block(stage, &body, &(*source).loc);
-    if block == null(*CrustStmt) { return false; }
+    if block == null(*CrustStmt) {
+        return false;
+    }
     if falls {
         var continuation: *RsChain = rs_terminal(function);
-        if continuation == null(*RsChain) { return false; }
-        rs_exit(function, block, (*(*function).scope).parent, continuation, continuation);
+        if continuation == null(*RsChain) {
+            return false;
+        }
+        rs_exit(
+            function,
+            block,
+            (*(*function).scope).parent,
+            continuation,
+            continuation
+        );
     }
     rs_leave_scope(function);
     rs_append(output, block);
@@ -155,10 +244,14 @@ fn rs_lower_block(function: *RsFunction, source: *CrustStmt, output: *RsStatemen
 
 fn rs_lower_statement(function: *RsFunction, source: *CrustStmt, output: *RsStatements) -> bool {
     var stage: *RsStage = (*function).stage;
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     var kind: u32 = (*source).kind;
     var location: *CrustLoc = &(*source).loc;
-    if kind == CRUST_S_BLOCK { return rs_lower_block(function, source, output); }
+    if kind == CRUST_S_BLOCK {
+        return rs_lower_block(function, source, output);
+    }
     if kind == rs_kind(stage, RS_UNSAFE) {
         (*function).unsafe_depth = (*function).unsafe_depth + 1usize;
         var falls: bool = rs_lower_block(function, (*source).body, output);
@@ -182,10 +275,16 @@ fn rs_lower_statement(function: *RsFunction, source: *CrustStmt, output: *RsStat
         return rs_lower_variable(function, source, output);
     }
     if kind == CRUST_S_LABEL || kind == CRUST_S_GOTO {
-        rs_error(stage, location, "labels and jumps require raw Crust; resource source control flow must be structured");
+        rs_error(
+            stage,
+            location,
+            "labels and jumps require raw Crust; resource source control flow must be structured"
+        );
         return false;
     }
-    if kind == rs_kind(stage, RS_DROP) { return rs_lower_drop(function, source, output); }
+    if kind == rs_kind(stage, RS_DROP) {
+        return rs_lower_drop(function, source, output);
+    }
     return rs_lower_effect(function, source, output);
 }
 
@@ -193,36 +292,72 @@ fn rs_function(stage: *RsStage, global: *RsGlobal) -> bool {
     var source: *CrustDecl = (*global).source;
     var target: *CrustDecl = (*global).lowered;
     var function: *RsFunction = rs_alloc(stage, sizeof(RsFunction), alignof(RsFunction)) as *RsFunction;
-    if function == null(*RsFunction) { return false; }
+    if function == null(*RsFunction) {
+        return false;
+    }
     (*function).stage = stage;
     (*function).global = global;
     (*function).returned = rs_terminal(function);
-    if (*global).unsafe_call || (*stage).delegate_memory { (*function).unsafe_depth = 1usize; }
+    if (*global).unsafe_call || (*stage).delegate_memory {
+        (*function).unsafe_depth = 1usize;
+    }
     rs_scope(function);
     var result_type: *CrustTypeSyntax = rs_function_parameters(function, source, target);
-    if (*stage).failed { return false; }
-    var body: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    if (*stage).failed {
+        return false;
+    }
+    var body: RsStatements = make RsStatements {
+        first: null(*CrustStmt),
+        last: null(*CrustStmt)
+    };
     var falls: bool = rs_lower_block(function, (*source).body, &body);
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     if falls {
         if (*result_type).kind != CRUST_T_UNIT {
-            rs_error(stage, &(*source).loc, "non-unit function can reach the end of its body");
+            rs_error(
+                stage,
+                &(*source).loc,
+                "non-unit function can reach the end of its body"
+            );
             return false;
         }
         var returning: *CrustStmt = rs_stmt_node(stage, CRUST_S_RETURN, &(*source).loc);
-        if returning == null(*CrustStmt) { return false; }
-        rs_exit(function, returning, null(*RsScope), (*function).returned, null(*RsChain));
+        if returning == null(*CrustStmt) {
+            return false;
+        }
+        rs_exit(
+            function,
+            returning,
+            null(*RsScope),
+            (*function).returned,
+            null(*RsChain)
+        );
         rs_append(&body, returning);
     }
     (*function).body = rs_block(stage, &body, &(*source).loc);
     (*function).epilogue = rs_stmt_node(stage, CRUST_S_RETURN, &(*source).loc);
-    if (*stage).failed { return false; }
-    if (*function).output != null(*CrustName) { (*(*function).epilogue).expr = rs_named(stage, (*function).output, &(*source).loc); }
-    else { if (*function).result != null(*RsLocal) {
-        (*(*function).epilogue).expr = rs_named(stage, (*(*function).result).storage, &(*source).loc);
-    } }
+    if (*stage).failed {
+        return false;
+    }
+    if (*function).output != null(*CrustName) {
+        (*(*function).epilogue).expr = rs_named(
+            stage,
+            (*function).output,
+            &(*source).loc
+        );
+    } else {
+        if (*function).result != null(*RsLocal) {
+            (*(*function).epilogue).expr = rs_named(
+                stage,
+                (*(*function).result).storage,
+                &(*source).loc
+            );
+        }
+    }
     (*target).body = rs_seed_body(function);
-    return !(*stage).failed;
+    return!(*stage).failed;
 }
 
 // Publish interfaces, check resource operations, and produce checked target trees.
@@ -240,16 +375,25 @@ fn rs_prepare_delegated(stage: *RsStage) -> bool {
 
 fn rs_prepare_policy(stage: *RsStage, delegate_memory: bool) -> bool {
     (*stage).delegate_memory = delegate_memory;
-    if !rs_collect(stage) || !rs_publish(stage) { return false; }
+    if !rs_collect(stage) || !rs_publish(stage) {
+        return false;
+    }
     var global: *RsGlobal = (*stage).first_global;
-    while global != null(*RsGlobal) && !(*stage).failed {
+    while global != null(*RsGlobal) &&!(*stage).failed {
         if (*(*global).source).kind == CRUST_D_FUNCTION {
-            if !rs_function(stage, global) { return false; }
+            if !rs_function(stage, global) {
+                return false;
+            }
         }
         global = (*global).next;
     }
-    if (*stage).failed { return false; }
-    if !crust_check((*stage).context) { (*stage).failed = true; return false; }
+    if (*stage).failed {
+        return false;
+    }
+    if !crust_check((*stage).context) {
+        (*stage).failed = true;
+        return false;
+    }
     return rs_check_constants(stage);
 }
 
@@ -257,18 +401,28 @@ fn rs_lower_if(function: *RsFunction, source: *CrustStmt, output: *RsStatements)
     var stage: *RsStage = (*function).stage;
     var location: *CrustLoc = &(*source).loc;
     var condition: *RsValue = rs_condition(function, (*source).expr, output);
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     var conditional: *CrustStmt = rs_stmt_node(stage, CRUST_S_IF, location);
-    if conditional == null(*CrustStmt) { return false; }
+    if conditional == null(*CrustStmt) {
+        return false;
+    }
     (*conditional).expr = (*condition).expression;
     var marker: *RsChange = (*function).changes;
     var parent: *RsScope = (*function).scope;
-    var body: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    var body: RsStatements = make RsStatements {
+        first: null(*CrustStmt),
+        last: null(*CrustStmt)
+    };
     var left_falls: bool = rs_lower_statement(function, (*source).body, &body);
     var left: *RsChange = rs_snapshot(function, marker, parent);
     rs_restore(function, marker);
     (*conditional).body = rs_block(stage, &body, location);
-    body = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    body = make RsStatements {
+        first: null(*CrustStmt),
+        last: null(*CrustStmt)
+    };
     var right_falls: bool = true;
     if (*source).otherwise != null(*CrustStmt) {
         right_falls = rs_lower_statement(function, (*source).otherwise, &body);
@@ -276,9 +430,16 @@ fn rs_lower_if(function: *RsFunction, source: *CrustStmt, output: *RsStatements)
     }
     var right: *RsChange = rs_snapshot(function, marker, parent);
     rs_restore(function, marker);
-    if left_falls && right_falls { rs_join(function, left, right, location); }
-    if left_falls { rs_apply(function, left); }
-    else { if right_falls { rs_apply(function, right); } }
+    if left_falls && right_falls {
+        rs_join(function, left, right, location);
+    }
+    if left_falls {
+        rs_apply(function, left);
+    } else {
+        if right_falls {
+            rs_apply(function, right);
+        }
+    }
     rs_append(output, conditional);
     return left_falls || right_falls;
 }
@@ -288,7 +449,9 @@ fn rs_lower_while(function: *RsFunction, source: *CrustStmt, output: *RsStatemen
     var location: *CrustLoc = &(*source).loc;
     var loop: *RsLoop = rs_alloc(stage, sizeof(RsLoop), alignof(RsLoop)) as *RsLoop;
     var target: *CrustStmt = rs_stmt_node(stage, CRUST_S_WHILE, location);
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     (*loop).parent = (*function).loop;
     (*loop).scope = (*function).scope;
     (*loop).entry = (*function).changes;
@@ -297,21 +460,38 @@ fn rs_lower_while(function: *RsFunction, source: *CrustStmt, output: *RsStatemen
     (*function).loop = loop;
     rs_put(stage, &(*function).loop_targets, target as usize, loop as *u8);
     (*target).expr = rs_expr_node(stage, CRUST_E_BOOL, location);
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     (*(*target).expr).integer = 1u64;
-    var body: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    var body: RsStatements = make RsStatements {
+        first: null(*CrustStmt),
+        last: null(*CrustStmt)
+    };
     var condition: *RsValue = rs_condition(function, (*source).expr, &body);
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     rs_loop_state(function, loop, location);
     var test: *CrustStmt = rs_stmt_node(stage, CRUST_S_IF, location);
     var finish: *CrustStmt = rs_stmt_node(stage, CRUST_S_BREAK, location);
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     (*test).expr = rs_unary(stage, CRUST_OP_NOT, (*condition).expression, location);
     (*test).body = finish;
-    rs_exit(function, finish, (*loop).scope, (*loop).break_target, null(*RsChain));
+    rs_exit(
+        function,
+        finish,
+        (*loop).scope,
+        (*loop).break_target,
+        null(*RsChain)
+    );
     rs_append(&body, test);
     var falls: bool = rs_lower_statement(function, (*source).body, &body);
-    if falls { rs_loop_state(function, loop, location); }
+    if falls {
+        rs_loop_state(function, loop, location);
+    }
     var exits: bool = rs_loop_join(function, loop, source);
     (*target).body = rs_block(stage, &body, location);
     (*function).loop = (*loop).parent;
@@ -324,13 +504,23 @@ fn rs_lower_loop_exit(function: *RsFunction, source: *CrustStmt, output: *RsStat
     var location: *CrustLoc = &(*source).loc;
     var kind: u32 = (*source).kind;
     var loop: *RsLoop = (*function).loop;
-    if loop == null(*RsLoop) { rs_error(stage, location, "loop exit outside a loop"); return false; }
-    if kind == CRUST_S_BREAK { rs_loop_break(function, loop); }
-    else { rs_loop_state(function, loop, location); }
+    if loop == null(*RsLoop) {
+        rs_error(stage, location, "loop exit outside a loop");
+        return false;
+    }
+    if kind == CRUST_S_BREAK {
+        rs_loop_break(function, loop);
+    } else {
+        rs_loop_state(function, loop, location);
+    }
     var target: *CrustStmt = rs_stmt_node(stage, kind, location);
-    if target == null(*CrustStmt) { return false; }
+    if target == null(*CrustStmt) {
+        return false;
+    }
     var destination: *RsChain = (*loop).continue_target;
-    if kind == CRUST_S_BREAK { destination = (*loop).break_target; }
+    if kind == CRUST_S_BREAK {
+        destination = (*loop).break_target;
+    }
     rs_exit(function, target, (*loop).scope, destination, null(*RsChain));
     rs_append(output, target);
     return false;
@@ -339,18 +529,35 @@ fn rs_lower_loop_exit(function: *RsFunction, source: *CrustStmt, output: *RsStat
 fn rs_lower_variable(function: *RsFunction, source: *CrustStmt, output: *RsStatements) -> bool {
     var stage: *RsStage = (*function).stage;
     var location: *CrustLoc = &(*source).loc;
-    var local: *RsLocal = rs_local(function, (*source).name, (*source).syntax_type, null(*CrustParam), location);
-    if local == null(*RsLocal) { return false; }
+    var local: *RsLocal = rs_local(
+        function,
+        (*source).name,
+        (*source).syntax_type,
+        null(*CrustParam),
+        location
+    );
+    if local == null(*RsLocal) {
+        return false;
+    }
     if (*source).uninitialized {
-        if (*local).mode != 0u32 { rs_error(stage, location, "borrowed bindings require an initializer"); }
+        if (*local).mode != 0u32 {
+            rs_error(stage, location, "borrowed bindings require an initializer");
+        }
         return true;
     }
     rs_scope(function);
-    var effects: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    var effects: RsStatements = make RsStatements {
+        first: null(*CrustStmt),
+        last: null(*CrustStmt)
+    };
     var value: *RsValue = rs_expr(function, (*source).value, &effects);
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     rs_initialize(function, local, value, (*source).syntax_type, &effects, location);
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     rs_append(output, rs_expression_scope(function, &effects, location));
     return true;
 }
@@ -361,59 +568,132 @@ fn rs_lower_effect(function: *RsFunction, source: *CrustStmt, output: *RsStateme
     var kind: u32 = (*source).kind;
     var enclosing: *RsScope = (*function).scope;
     rs_scope(function);
-    var effects: RsStatements = make RsStatements { first: null(*CrustStmt), last: null(*CrustStmt) };
+    var effects: RsStatements = make RsStatements {
+        first: null(*CrustStmt),
+        last: null(*CrustStmt)
+    };
     if kind == CRUST_S_RETURN {
-        rs_lower_return(function, source, output, &effects); return false;
+        rs_lower_return(function, source, output, &effects);
+        return false;
     }
     if kind == rs_kind(stage, RS_DEFER) {
         var call: *CrustExpr = (*source).expr;
-        while (*call).kind == CRUST_E_GROUP { call = (*call).left; }
-        if (*call).kind != CRUST_E_CALL { rs_error(stage, location, "defer requires a call expression"); return false; }
+        while (*call).kind == CRUST_E_GROUP {
+            call = (*call).left;
+        }
+        if (*call).kind != CRUST_E_CALL {
+            rs_error(stage, location, "defer requires a call expression");
+            return false;
+        }
         rs_call(function, call, &effects, enclosing);
-    } else { if kind == rs_kind(stage, RS_FORGET) {
-        if (*function).unsafe_depth == 0usize { rs_error(stage, location, "forget requires an unsafe region"); return false; }
-        var value: *RsValue = rs_expr(function, (*source).expr, &effects);
-        if (*stage).failed { return false; }
-        if !(*value).owned { rs_error(stage, location, "forget requires an owned value"); return false; }
-        rs_transfer(function, value);
-    } else { if kind == CRUST_S_EXPR {
-        var value: *RsValue = rs_expr(function, (*source).expr, &effects);
-        if (*stage).failed { return false; }
-        if (*value).unsafe_call { rs_error(stage, location, "unsafe functions can only be called directly"); }
-    } else { if kind == CRUST_S_ASSIGN {
-        rs_lower_assignment(function, source, &effects);
-    } else { rs_error(stage, location, "unsupported source statement"); return false; } } } }
-    if (*stage).failed { return false; }
+    } else {
+        if kind == rs_kind(stage, RS_FORGET) {
+            if (*function).unsafe_depth == 0usize {
+                rs_error(stage, location, "forget requires an unsafe region");
+                return false;
+            }
+            var value: *RsValue = rs_expr(function, (*source).expr, &effects);
+            if (*stage).failed {
+                return false;
+            }
+            if!(*value).owned {
+                rs_error(stage, location, "forget requires an owned value");
+                return false;
+            }
+            rs_transfer(function, value);
+        } else {
+            if kind == CRUST_S_EXPR {
+                var value: *RsValue = rs_expr(function, (*source).expr, &effects);
+                if (*stage).failed {
+                    return false;
+                }
+                if (*value).unsafe_call {
+                    rs_error(stage, location, "unsafe functions can only be called directly");
+                }
+            } else {
+                if kind == CRUST_S_ASSIGN {
+                    rs_lower_assignment(function, source, &effects);
+                } else {
+                    rs_error(stage, location, "unsupported source statement");
+                    return false;
+                }
+            }
+        }
+    }
+    if (*stage).failed {
+        return false;
+    }
     rs_append(output, rs_expression_scope(function, &effects, location));
     return true;
 }
 
-fn rs_lower_return(function: *RsFunction, source: *CrustStmt, output: *RsStatements, effects: *RsStatements) -> unit {
+fn rs_lower_return(
+    function: *RsFunction,
+    source: *CrustStmt,
+    output: *RsStatements,
+    effects: *RsStatements
+) -> unit {
     var stage: *RsStage = (*function).stage;
     var location: *CrustLoc = &(*source).loc;
     var result_type: *CrustTypeSyntax = (*(*(*function).global).syntax).base;
     if (*result_type).kind == CRUST_T_UNIT {
-        if (*source).expr != null(*CrustExpr) { rs_error(stage, location, "unit return must have no expression"); return; }
+        if (*source).expr != null(*CrustExpr) {
+            rs_error(stage, location, "unit return must have no expression");
+            return;
+        }
     } else {
-        if (*source).expr == null(*CrustExpr) { rs_error(stage, location, "return requires a value"); return; }
+        if (*source).expr == null(*CrustExpr) {
+            rs_error(stage, location, "return requires a value");
+            return;
+        }
         var value: *RsValue = rs_expr(function, (*source).expr, effects);
-        if !rs_require_value(function, value, result_type, location) { return; }
-        if !rs_check_return_loan(function, value, location) { return; }
+        if !rs_require_value(function, value, result_type, location) {
+            return;
+        }
+        if !rs_check_return_loan(function, value, location) {
+            return;
+        }
         var destination: *CrustExpr = null(*CrustExpr);
         if (*function).output != null(*CrustName) {
-            destination = rs_unary(stage, CRUST_OP_DEREF, rs_named(stage, (*function).output, location), location);
-        } else { destination = rs_named(stage, (*(*function).result).storage, location); }
+            destination = rs_unary(
+                stage,
+                CRUST_OP_DEREF,
+                rs_named(stage, (*function).output, location),
+                location
+            );
+        } else {
+            destination = rs_named(stage, (*(*function).result).storage, location);
+        }
         rs_assign(function, effects, destination, (*value).expression, location);
         rs_transfer(function, value);
     }
     var returning: *CrustStmt = rs_stmt_node(stage, CRUST_S_RETURN, location);
-    if returning == null(*CrustStmt) { return; }
-    if (*function).output != null(*CrustName) { (*returning).expr = rs_named(stage, (*function).output, location); }
-    else { if (*function).result != null(*RsLocal) { (*returning).expr = rs_named(stage, (*(*function).result).storage, location); } }
-    rs_exit(function, returning, null(*RsScope), (*function).returned, null(*RsChain));
+    if returning == null(*CrustStmt) {
+        return;
+    }
+    if (*function).output != null(*CrustName) {
+        (*returning).expr = rs_named(stage, (*function).output, location);
+    } else {
+        if (*function).result != null(*RsLocal) {
+            (*returning).expr = rs_named(
+                stage,
+                (*(*function).result).storage,
+                location
+            );
+        }
+    }
+    rs_exit(
+        function,
+        returning,
+        null(*RsScope),
+        (*function).returned,
+        null(*RsChain)
+    );
     rs_append(effects, returning);
     var block: *CrustStmt = rs_block(stage, effects, location);
-    if block == null(*CrustStmt) { return; }
+    if block == null(*CrustStmt) {
+        return;
+    }
     rs_leave_scope(function);
     rs_append(output, block);
     return;
@@ -421,16 +701,27 @@ fn rs_lower_return(function: *RsFunction, source: *CrustStmt, output: *RsStateme
 
 fn rs_check_return_loan(function: *RsFunction, value: *RsValue, location: *CrustLoc) -> bool {
     var stage: *RsStage = (*function).stage;
-    if (*stage).delegate_return_loans { return true; }
+    if (*stage).delegate_return_loans {
+        return true;
+    }
     var contract: *RsReturnLoan = rs_return_loan(stage, (*(*function).global).syntax);
-    if contract == null(*RsReturnLoan) { return true; }
-    var parameter: *RsLocal = crust_map_get(&(*function).locals, (*contract).parameter as usize) as *RsLocal;
+    if contract == null(*RsReturnLoan) {
+        return true;
+    }
+    var parameter: *RsLocal = crust_map_get(
+        &(*function).locals,
+        (*contract).parameter as usize
+    ) as *RsLocal;
     var ancestor: *RsLocal = (*value).local;
     while ancestor != null(*RsLocal) && ancestor != parameter {
         ancestor = (*ancestor).parent_loan;
     }
     if ancestor == null(*RsLocal) {
-        rs_error(stage, location, "returned loan does not derive from its declared source parameter");
+        rs_error(
+            stage,
+            location,
+            "returned loan does not derive from its declared source parameter"
+        );
         return false;
     }
     return true;
@@ -440,32 +731,56 @@ fn rs_lower_assignment(function: *RsFunction, source: *CrustStmt, effects: *RsSt
     var stage: *RsStage = (*function).stage;
     var location: *CrustLoc = &(*source).loc;
     var place: *RsValue = rs_place(function, (*source).expr, effects, true, true);
-    if (*stage).failed { return; }
+    if (*stage).failed {
+        return;
+    }
     var value: *RsValue = rs_expr(function, (*source).value, effects);
-    if !rs_require_value(function, value, (*place).syntax, location) { return; }
+    if !rs_require_value(function, value, (*place).syntax, location) {
+        return;
+    }
     var lhs: *CrustExpr = (*source).expr;
-    while (*lhs).kind == CRUST_E_GROUP { lhs = (*lhs).left; }
+    while (*lhs).kind == CRUST_E_GROUP {
+        lhs = (*lhs).left;
+    }
     var whole: bool = (*lhs).kind == CRUST_E_NAME;
     rs_assignment_access(function, place, whole, location);
     if (*place).local != null(*RsLocal) && rs_owns(stage, (*place).syntax) {
         if !whole || (*(*place).local).initialized {
-            var drop: *CrustStmt = rs_drop_tree(function, (*place).syntax, (*place).expression);
-            if drop == null(*CrustStmt) { return; }
+            var drop: *CrustStmt = rs_drop_tree(
+                function,
+                (*place).syntax,
+                (*place).expression
+            );
+            if drop == null(*CrustStmt) {
+                return;
+            }
             rs_put(stage, &(*function).seed_blocks, drop as usize, drop as *u8);
             rs_append(effects, drop);
         }
     }
     rs_assign(function, effects, (*place).expression, (*value).expression, location);
     rs_transfer(function, value);
-    if whole && (*place).local != null(*RsLocal) { rs_live(function, (*place).local, true); }
+    if whole && (*place).local != null(*RsLocal) {
+        rs_live(function, (*place).local, true);
+    }
 }
 
-fn rs_assignment_access(function: *RsFunction, place: *RsValue, whole: bool, location: *CrustLoc) -> unit {
+fn rs_assignment_access(
+    function: *RsFunction,
+    place: *RsValue,
+    whole: bool,
+    location: *CrustLoc
+) -> unit {
     var stage: *RsStage = (*function).stage;
     if (*place).local != null(*RsLocal) {
         var local: *RsLocal = (*place).local;
-        if !whole || (*local).initialized { rs_access(function, local, true, location); }
-        else { if (*local).exclusive || (*local).readers != 0usize { rs_error(stage, location, "assignment conflicts with an active borrow"); } }
+        if !whole || (*local).initialized {
+            rs_access(function, local, true, location);
+        } else {
+            if (*local).exclusive || (*local).readers != 0usize {
+                rs_error(stage, location, "assignment conflicts with an active borrow");
+            }
+        }
     }
 }
 
@@ -473,15 +788,30 @@ fn rs_function_parameters(function: *RsFunction, source: *CrustDecl, target: *Cr
     var stage: *RsStage = (*function).stage;
     var source_param: *CrustParam = (*source).params;
     var parameter: *CrustParam = (*target).params;
-    while source_param != null(*CrustParam) && !(*stage).failed {
-        rs_local(function, (*source_param).name, (*source_param).syntax_type, parameter, &(*source_param).loc);
+    while source_param != null(*CrustParam) &&!(*stage).failed {
+        rs_local(
+            function,
+            (*source_param).name,
+            (*source_param).syntax_type,
+            parameter,
+            &(*source_param).loc
+        );
         source_param = (*source_param).next;
         parameter = (*parameter).next;
     }
     var result_type: *CrustTypeSyntax = (*source).syntax_type;
-    if rs_indirect(result_type) { (*function).output = (*parameter).name; }
-    else { if (*result_type).kind != CRUST_T_UNIT {
-        (*function).result = rs_local(function, null(*CrustName), result_type, null(*CrustParam), &(*source).loc);
-    } }
+    if rs_indirect(result_type) {
+        (*function).output = (*parameter).name;
+    } else {
+        if (*result_type).kind != CRUST_T_UNIT {
+            (*function).result = rs_local(
+                function,
+                null(*CrustName),
+                result_type,
+                null(*CrustParam),
+                &(*source).loc
+            );
+        }
+    }
     return result_type;
 }

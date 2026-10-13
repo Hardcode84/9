@@ -1,78 +1,114 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn ov_init(stage:*OvStage, context:*CrustContext, abi:*u8, hooks:*CsHooks)->unit {
+fn ov_init(stage: *OvStage, context: *CrustContext, abi: *u8, hooks: *CsHooks) -> unit {
     (*stage).context = context;
     (*stage).abi = abi;
     (*stage).hooks = hooks;
-    (*stage).globals = make CrustMap { entries:null(*CrustMapEntry), count:0usize, capacity:0usize };
+    (*stage).globals = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
     (*stage).declarations = (*stage).globals;
     (*stage).type_keys = (*stage).globals;
     (*stage).first_global = null(*OvGlobal);
     (*stage).first_function = null(*OvFunction);
-    (*stage).scratch = make CsText { data:null(*u8), size:0usize, capacity:0usize };
+    (*stage).scratch = make CsText {
+        data: null(*u8),
+        size: 0usize,
+        capacity: 0usize
+    };
     (*stage).failed = false;
 }
 
-fn ov_error(stage:*OvStage, loc:*CrustLoc, message:*u8)->unit {
-    if (*stage).failed { return; }
+fn ov_error(stage: *OvStage, loc: *CrustLoc, message: *u8) -> unit {
+    if (*stage).failed {
+        return;
+    }
     (*stage).failed = true;
     crust_set_error((*stage).context, (*loc).source, (*loc).offset, message);
 }
 
-fn ov_alloc(stage:*OvStage, size:usize, alignment:usize)->*u8 {
-    if (*stage).failed || size == 0usize { return null(*u8); }
-    var result:*u8 = crust_try_alloc((*stage).context, size, alignment);
-    if result == null(*u8) { (*stage).failed = true; }
+fn ov_alloc(stage: *OvStage, size: usize, alignment: usize) -> *u8 {
+    if (*stage).failed || size == 0usize {
+        return null(*u8);
+    }
+    var result: *u8 = crust_try_alloc((*stage).context, size, alignment);
+    if result == null(*u8) {
+        (*stage).failed = true;
+    }
     return result;
 }
 
-fn ov_put(stage:*OvStage, map:*CrustMap, key:usize, value:*u8)->unit {
-    if (*stage).failed { return; }
-    if !crust_try_map_set((*stage).context, map, key, value) { (*stage).failed = true; }
+fn ov_put(stage: *OvStage, map: *CrustMap, key: usize, value: *u8) -> unit {
+    if (*stage).failed {
+        return;
+    }
+    if !crust_try_map_set((*stage).context, map, key, value) {
+        (*stage).failed = true;
+    }
 }
 
-fn ov_intern(stage:*OvStage, bytes:*u8, size:usize)->*CrustName {
-    if (*stage).failed { return null(*CrustName); }
-    var name:*CrustName = crust_try_intern((*stage).context, bytes, size);
-    if name == null(*CrustName) { (*stage).failed = true; }
+fn ov_intern(stage: *OvStage, bytes: *u8, size: usize) -> *CrustName {
+    if (*stage).failed {
+        return null(*CrustName);
+    }
+    var name: *CrustName = crust_try_intern((*stage).context, bytes, size);
+    if name == null(*CrustName) {
+        (*stage).failed = true;
+    }
     return name;
 }
 
-fn ov_bytes(stage:*OvStage, buffer:*CsText, bytes:*u8, size:usize)->unit {
-    if (*stage).failed { return; }
+fn ov_bytes(stage: *OvStage, buffer: *CsText, bytes: *u8, size: usize) -> unit {
+    if (*stage).failed {
+        return;
+    }
     cs_bytes((*stage).context, buffer, bytes, size);
     ov_hook_failed(stage);
 }
 
-fn ov_text(stage:*OvStage, buffer:*CsText, text:*u8)->unit {
+fn ov_text(stage: *OvStage, buffer: *CsText, text: *u8) -> unit {
     ov_bytes(stage, buffer, text, c_length(text));
 }
 
-fn ov_number(stage:*OvStage, buffer:*CsText, value:u64)->unit {
-    if (*stage).failed { return; }
+fn ov_number(stage: *OvStage, buffer: *CsText, value: u64) -> unit {
+    if (*stage).failed {
+        return;
+    }
     cs_number((*stage).context, buffer, value);
     ov_hook_failed(stage);
 }
 
-fn ov_part(stage:*OvStage, buffer:*CsText, bytes:*u8, size:usize)->unit {
+fn ov_part(stage: *OvStage, buffer: *CsText, bytes: *u8, size: usize) -> unit {
     ov_number(stage, buffer, size as u64);
     ov_bytes(stage, buffer, bytes, size);
 }
 
-fn ov_finish_key(stage:*OvStage, begin:usize)->*CrustName {
-    var buffer:*CsText = &(*stage).scratch;
-    var result:*CrustName = ov_intern(stage, (*buffer).data + begin as isize,
-                                     (*buffer).size - begin);
+fn ov_finish_key(stage: *OvStage, begin: usize) -> *CrustName {
+    var buffer: *CsText = &(*stage).scratch;
+    var result: *CrustName = ov_intern(
+        stage,
+        (*buffer).data + begin as isize,
+        (*buffer).size - begin
+    );
     (*buffer).size = begin;
     return result;
 }
 
-fn ov_type(stage:*OvStage, kind:u32, loc:*CrustLoc)->*CrustTypeSyntax {
-    var syntax:*CrustTypeSyntax = ov_alloc(stage, sizeof(CrustTypeSyntax), alignof(CrustTypeSyntax)) as *CrustTypeSyntax;
-    if syntax != null(*CrustTypeSyntax) { (*syntax).kind = kind; (*syntax).loc = *loc; }
+fn ov_type(stage: *OvStage, kind: u32, loc: *CrustLoc) -> *CrustTypeSyntax {
+    var syntax: *CrustTypeSyntax = ov_alloc(
+        stage,
+        sizeof(CrustTypeSyntax),
+        alignof(CrustTypeSyntax)
+    ) as *CrustTypeSyntax;
+    if syntax != null(*CrustTypeSyntax) {
+        (*syntax).kind = kind;
+        (*syntax).loc = *loc;
+    }
     return syntax;
 }
 
-fn ov_global(stage:*OvStage, name:*CrustName)->*OvGlobal {
+fn ov_global(stage: *OvStage, name: *CrustName) -> *OvGlobal {
     return crust_map_get(&(*stage).globals, name as usize) as *OvGlobal;
 }

@@ -3,91 +3,194 @@
 fn os_view_source_type(check: *OsCheck, origin: *OsOrigin, syntax: *CrustTypeSyntax) -> *CrustTypeSyntax {
     var path: *OsField = (*origin).path;
     while path != null(*OsField) && !os_failed(check) {
-        if os_borrowed(check, syntax) || (*syntax).kind == CRUST_T_POINTER { syntax = (*syntax).base; }
+        if os_borrowed(check, syntax) || (*syntax).kind == CRUST_T_POINTER {
+            syntax = (*syntax).base;
+        }
         var schema: *OsRecord = os_record((*check).stage, syntax);
-        if schema == null(*OsRecord) { os_error(check, &(*syntax).loc, "view result origin requires a record field path"); return null(*CrustTypeSyntax); }
-        var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*schema).declaration).name);
-        var field: *CrustField = crust_map_get(&(*global).fields, (*path).name as usize) as *CrustField;
-        if field == null(*CrustField) { os_error(check, &(*syntax).loc, "view result origin names an absent field"); return null(*CrustTypeSyntax); }
+        if schema == null(*OsRecord) {
+            os_error(
+                check,
+                &(*syntax).loc,
+                "view result origin requires a record field path"
+            );
+            return null(*CrustTypeSyntax);
+        }
+        var global: *RsGlobal = rs_global(
+            (*(*check).stage).resources,
+            (*(*schema).declaration).name
+        );
+        var field: *CrustField = crust_map_get(
+            &(*global).fields,
+            (*path).name as usize
+        ) as *CrustField;
+        if field == null(*CrustField) {
+            os_error(check, &(*syntax).loc, "view result origin names an absent field");
+            return null(*CrustTypeSyntax);
+        }
         syntax = (*field).syntax_type;
         path = (*path).next;
     }
-    if os_borrowed(check, syntax) || (*syntax).kind == CRUST_T_POINTER { syntax = (*syntax).base; }
+    if os_borrowed(check, syntax) || (*syntax).kind == CRUST_T_POINTER {
+        syntax = (*syntax).base;
+    }
     return syntax;
 }
 
-fn os_view_result_types(check: *OsCheck, syntax: *CrustTypeSyntax, target: *CrustTypeSyntax) -> unit {
-    if !os_enter(check, &(*syntax).loc) { return; }
+fn os_view_result_types(
+    check: *OsCheck,
+    syntax: *CrustTypeSyntax,
+    target: *CrustTypeSyntax
+) -> unit {
+    if !os_enter(check, &(*syntax).loc) {
+        return;
+    }
     if os_borrowed(check, syntax) {
         if !rs_same((*(*check).stage).resources, (*syntax).base, target) {
-            os_error(check, &(*syntax).loc, "stored result type differs from its declared origin");
+            os_error(
+                check,
+                &(*syntax).loc,
+                "stored result type differs from its declared origin"
+            );
         }
-    } else { if (*syntax).kind == CRUST_T_NAME {
-        var schema: *OsRecord = os_record((*check).stage, syntax);
-        var field: *CrustField = (*(*schema).declaration).fields;
-        while field != null(*CrustField) && !os_failed(check) {
-            os_view_result_types(check, (*field).syntax_type, target);
-            field = (*field).next;
+    } else {
+        if (*syntax).kind == CRUST_T_NAME {
+            var schema: *OsRecord = os_record((*check).stage, syntax);
+            var field: *CrustField = (*(*schema).declaration).fields;
+            while field != null(*CrustField) && !os_failed(check) {
+                os_view_result_types(check, (*field).syntax_type, target);
+                field = (*field).next;
+            }
         }
-    } }
+    }
     (*check).depth = (*check).depth - 1usize;
 }
 
-fn os_return_view_record(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+fn os_return_view_record(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> unit {
     os_view_result_fields(check, state, object, location);
 }
 
-fn os_view_result_fields(check: *OsCheck, state: *OsState, object: *OsObject,
-                         location: *CrustLoc) -> unit {
-    if !os_enter(check, location) { return; }
+fn os_view_result_fields(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> unit {
+    if !os_enter(check, location) {
+        return;
+    }
     var field: *OsSlot = os_fields(state, object);
     while field != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, field);
         if value != null(*OsValue) {
             if os_borrowed(check, (*field).syntax) {
                 os_return_view(check, state, value, location);
-            } else { if !(*value).pointer && (*value).object != null(*OsObject) {
-                os_view_result_fields(check, state, (*value).object, location);
-            } }
+            } else {
+                if!(*value).pointer && (*value).object != null(*OsObject) {
+                    os_view_result_fields(check, state, (*value).object, location);
+                }
+            }
         }
         field = (*field).next;
     }
     (*check).depth = (*check).depth - 1usize;
 }
 
-fn os_view_call_fields(check: *OsCheck, state: *OsState, object: *OsObject,
-                       contract: *OsFunction, arguments: **OsValue, location: *CrustLoc) -> unit {
-    if !os_enter(check, location) { return; }
+fn os_view_call_fields(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    contract: *OsFunction,
+    arguments: **OsValue,
+    location: *CrustLoc
+) -> unit {
+    if !os_enter(check, location) {
+        return;
+    }
     var field: *OsSlot = os_fields(state, object);
     while field != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, field);
-        if os_borrowed(check, (*field).syntax) { value = os_call_origins(check, state, contract, (*field).syntax, arguments, location); }
-        else { if value != null(*OsValue) && (*value).object != null(*OsObject) {
-            os_view_call_fields(check, state, (*value).object, contract, arguments, location);
-        } else { value = os_field_value(check, state, field); } }
-        if value != null(*OsValue) { os_loan_keep(check, state, value); os_set(check, state, field as *u8, value, OS_READY); }
+        if os_borrowed(check, (*field).syntax) {
+            value = os_call_origins(
+                check,
+                state,
+                contract,
+                (*field).syntax,
+                arguments,
+                location
+            );
+        } else {
+            if value != null(*OsValue) && (*value).object != null(*OsObject) {
+                os_view_call_fields(
+                    check,
+                    state,
+                    (*value).object,
+                    contract,
+                    arguments,
+                    location
+                );
+            } else {
+                value = os_field_value(check, state, field);
+            }
+        }
+        if value != null(*OsValue) {
+            os_loan_keep(check, state, value);
+            os_set(check, state, field as *u8, value, OS_READY);
+        }
         field = (*field).next;
     }
     os_mark(check, state, object, os_flags(state, object) | OS_READY);
     (*check).depth = (*check).depth - 1usize;
 }
 
-fn os_call_view_record(check: *OsCheck, state: *OsState, contract: *OsFunction,
-                       arguments: **OsValue, location: *CrustLoc) -> *OsValue {
+fn os_call_view_record(
+    check: *OsCheck,
+    state: *OsState,
+    contract: *OsFunction,
+    arguments: **OsValue,
+    location: *CrustLoc
+) -> *OsValue {
     var syntax: *CrustTypeSyntax = (*(*contract).declaration).syntax_type;
-    var object: *OsObject = os_object(check, state, syntax, null(*OsObject), (*state).scope, false);
-    if object == null(*OsObject) { return null(*OsValue); }
+    var object: *OsObject = os_object(
+        check,
+        state,
+        syntax,
+        null(*OsObject),
+        (*state).scope,
+        false
+    );
+    if object == null(*OsObject) {
+        return null(*OsValue);
+    }
     os_view_call_fields(check, state, object, contract, arguments, location);
     var result: *OsValue = os_value(check, syntax, object, false);
-    if result != null(*OsValue) { (*result).owner = true; (*result).fresh = true; }
+    if result != null(*OsValue) {
+        (*result).owner = true;
+        (*result).fresh = true;
+    }
     return result;
 }
 
 // An origin identifies storage without creating or reading through a loan.
-fn os_view_origin(check: *OsCheck, state: *OsState, field: *OsSlot, location: *CrustLoc) -> *OsValue {
+fn os_view_origin(
+    check: *OsCheck,
+    state: *OsState,
+    field: *OsSlot,
+    location: *CrustLoc
+) -> *OsValue {
     var slot: *OsSlot = os_view_place(check, state, field, null(*OsLoan), location);
-    if slot == null(*OsSlot) { return null(*OsValue); }
+    if slot == null(*OsSlot) {
+        return null(*OsValue);
+    }
     var value: *OsValue = os_copy(check, os_bound(state, slot));
-    if value != null(*OsValue) { (*value).place = slot; (*value).loan = (*slot).loan; (*value).owner = false; }
+    if value != null(*OsValue) {
+        (*value).place = slot;
+        (*value).loan = (*slot).loan;
+        (*value).owner = false;
+    }
     return value;
 }

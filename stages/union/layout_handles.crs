@@ -5,120 +5,338 @@
 // syntax node. A size with zero alignment ends field or variant iteration;
 // the context diagnostic distinguishes a failed step. Keep the arena live
 // through the edit scope. Only context destruction retires its storage.
-domain CompilerArena(SuArena,SuDeclaration,SuLayoutHandle,SuLocation,SuFields,SuVariants,SuTypeCursor,SuBuilder,SuName,SuSyntax,SuExpression,SuStatement,SuMatchNames,SuReader,SuSum,SuArmHandle,SuParsedOperation,SuArms,SuBranches,SuSums,SuDeclarations,SuDriver);
-record SuArena{stage:*SuStage;} opaque;
-record SuDeclaration{pointer:*CrustDecl;} opaque scoped;
-record SuLayoutHandle{pointer:*SuLayout;} opaque scoped;
-record SuLocation{pointer:*CrustLoc;} opaque scoped;
-record SuFields{next:*CrustField;location:*CrustLoc;} opaque scoped;
-record SuVariants{sum:*SuType;next:*SuVariant;} opaque scoped;
-record SuTypeCursor{next:*CrustTypeSyntax;} opaque scoped;
-record SuTypeStep{size:u64;count:u64;align:u32;kind:u32;}
-record SuStorage{count:u64;carrier:u32;}
-record SuSize{size:u64;align:u32;}
-record SuLayoutData{size:u64;align:u32;state:u32;}
+domain CompilerArena(
+    SuArena,
+    SuDeclaration,
+    SuLayoutHandle,
+    SuLocation,
+    SuFields,
+    SuVariants,
+    SuTypeCursor,
+    SuBuilder,
+    SuName,
+    SuSyntax,
+    SuExpression,
+    SuStatement,
+    SuMatchNames,
+    SuReader,
+    SuSum,
+    SuArmHandle,
+    SuParsedOperation,
+    SuArms,
+    SuBranches,
+    SuSums,
+    SuDeclarations,
+    SuDriver
+);
+record SuArena {
+    stage: *SuStage;
+}
+opaque;
+record SuDeclaration {
+    pointer: *CrustDecl;
+}
+opaque scoped;
+record SuLayoutHandle {
+    pointer: *SuLayout;
+}
+opaque scoped;
+record SuLocation {
+    pointer: *CrustLoc;
+}
+opaque scoped;
+record SuFields {
+    next: *CrustField;
+    location: *CrustLoc;
+}
+opaque scoped;
+record SuVariants {
+    sum: *SuType;
+    next: *SuVariant;
+}
+opaque scoped;
+record SuTypeCursor {
+    next: *CrustTypeSyntax;
+}
+opaque scoped;
+record SuTypeStep {
+    size: u64;
+    count: u64;
+    align: u32;
+    kind: u32;
+}
+record SuStorage {
+    count: u64;
+    carrier: u32;
+}
+record SuSize {
+    size: u64;
+    align: u32;
+}
+record SuLayoutData {
+    size: u64;
+    align: u32;
+    state: u32;
+}
 
-fn su_handle_publish(arena:read SuArena,decl:read SuDeclaration,layout:read SuLayoutHandle)->bool access(edit,CompilerArena){
-    return crust_try_map_set(arena.stage->context,&arena.stage->layouts,decl.pointer as usize,layout.pointer as *u8);
+fn su_handle_publish(
+    arena: read SuArena,
+    decl: read SuDeclaration,
+    layout: read SuLayoutHandle
+) -> bool access(edit, CompilerArena) {
+    return crust_try_map_set(
+        arena.stage -> context,
+        &arena.stage -> layouts,
+        decl.pointer as usize,
+        layout.pointer as *u8
+    );
 }
-fn su_handle_load(layout:read SuLayoutHandle)->SuLayoutData access(read,CompilerArena){
-    return make SuLayoutData{size:layout.pointer->size,align:layout.pointer->align,state:layout.pointer->state};
+fn su_handle_load(layout: read SuLayoutHandle) -> SuLayoutData access(read, CompilerArena) {
+    return make SuLayoutData {
+        size: layout.pointer -> size,
+        align: layout.pointer -> align,
+        state: layout.pointer -> state
+    };
 }
-fn su_handle_save(layout:read SuLayoutHandle,value:read SuLayoutData)->unit access(edit,CompilerArena){
-    layout.pointer->size=value.size;layout.pointer->align=value.align;layout.pointer->state=value.state;
+fn su_handle_save(layout: read SuLayoutHandle, value: read SuLayoutData) -> unit access(
+    edit,
+    CompilerArena
+) {
+    layout.pointer -> size = value.size;
+    layout.pointer -> align = value.align;
+    layout.pointer -> state = value.state;
 }
-fn su_handle_fill(arena:read SuArena,decl:read SuDeclaration,layout:read SuLayoutHandle,depth:usize)->bool access(edit,CompilerArena){
-    var sum:*SuType=su_cache_get!(SuType)(&arena.stage->types,decl.pointer->name as usize);
-    if sum!=null(*SuType){
-        var cursor:SuVariants=make SuVariants{sum:sum,next:sum->variants};
-        return su_checked_variants(read arena,read decl,read layout,mut cursor,depth);
+fn su_handle_fill(
+    arena: read SuArena,
+    decl: read SuDeclaration,
+    layout: read SuLayoutHandle,
+    depth: usize
+) -> bool access(edit, CompilerArena) {
+    var sum: *SuType = su_cache_get!(SuType)(
+        &arena.stage -> types,
+        decl.pointer -> name as usize
+    );
+    if sum != null(*SuType) {
+        var cursor: SuVariants = make SuVariants {
+            sum: sum,
+            next: sum -> variants
+        };
+        return su_checked_variants(read arena, read decl, read layout, mut cursor, depth);
     }
-    var cursor:SuFields=make SuFields{next:decl.pointer->fields,location:&decl.pointer->loc};
-    return su_checked_fields(read arena,read decl,read layout,mut cursor,depth);
+    var cursor: SuFields = make SuFields {
+        next: decl.pointer -> fields,
+        location: &decl.pointer -> loc
+    };
+    return su_checked_fields(read arena, read decl, read layout, mut cursor, depth);
 }
-fn su_fields_next(arena:read SuArena,cursor:mut SuFields,depth:usize)->SuSize access(edit,CompilerArena){
-    var value:SuSize=make SuSize{size:0u64,align:0u32};
-    var field:*CrustField=cursor.next;
-    if field==null(*CrustField){return value;}
-    cursor.location=&field->loc;cursor.next=field->next;
-    if !su_layout_syntax(arena.stage,field->syntax_type,depth,&value.size,&value.align){value.align=0u32;}
+fn su_fields_next(arena: read SuArena, cursor: mut SuFields, depth: usize) -> SuSize access(
+    edit,
+    CompilerArena
+) {
+    var value: SuSize = make SuSize {
+        size: 0u64,
+        align: 0u32
+    };
+    var field: *CrustField = cursor.next;
+    if field == null(*CrustField) {
+        return value;
+    }
+    cursor.location = &field -> loc;
+    cursor.next = field -> next;
+    if !su_layout_syntax(
+        arena.stage,
+        field -> syntax_type,
+        depth,
+        &value.size,
+        &value.align
+    ) {
+        value.align = 0u32;
+    }
     return value;
 }
-fn su_fields_location(cursor:read SuFields)->SuLocation access(read,CompilerArena){
-    return make SuLocation{pointer:cursor.location};
+fn su_fields_location(cursor: read SuFields) -> SuLocation access(read, CompilerArena) {
+    return make SuLocation {
+        pointer: cursor.location
+    };
 }
-fn su_variants_next(arena:read SuArena,cursor:mut SuVariants,depth:usize)->SuSize access(edit,CompilerArena){
-    var value:SuSize=make SuSize{size:0u64,align:0u32};
-    var variant:*SuVariant=cursor.next;
-    if variant==null(*SuVariant){return value;}
-    cursor.next=variant->next;
-    if su_cache_get!(SuVariant)(&cursor.sum->names,variant->name as usize)!=null(*SuVariant){
-        su_error(arena.stage,&variant->syntax->loc,"duplicate union variant");return value;
+fn su_variants_next(arena: read SuArena, cursor: mut SuVariants, depth: usize) -> SuSize access(
+    edit,
+    CompilerArena
+) {
+    var value: SuSize = make SuSize {
+        size: 0u64,
+        align: 0u32
+    };
+    var variant: *SuVariant = cursor.next;
+    if variant == null(*SuVariant) {
+        return value;
     }
-    if !crust_try_map_set(arena.stage->context,&cursor.sum->names,variant->name as usize,variant as *u8){return value;}
-    value.align=1u32;
-    if variant->syntax->kind!=CRUST_T_UNIT {
-        if !su_layout_syntax(arena.stage,variant->syntax,depth,&value.size,&value.align){value.align=0u32;}
+    cursor.next = variant -> next;
+    if su_cache_get!(SuVariant)(&cursor.sum -> names, variant -> name as usize) != null(
+        *SuVariant
+    ) {
+        su_error(arena.stage, &variant -> syntax -> loc, "duplicate union variant");
+        return value;
     }
-    return value;
-}
-fn su_handle_storage(arena:read SuArena,decl:read SuDeclaration,plan:read SuStorage)->bool access(edit,CompilerArena){
-    return su_storage_field(arena.stage,decl.pointer,&plan);
-}
-fn su_handle_location(decl:read SuDeclaration)->SuLocation access(read,CompilerArena){return make SuLocation{pointer:&decl.pointer->loc};}
-fn su_type_location(cursor:read SuTypeCursor)->SuLocation access(read,CompilerArena){return make SuLocation{pointer:&cursor.next->loc};}
-fn su_layout_diagnostic(arena:read SuArena,location:read SuLocation,code:u32)->unit access(edit,CompilerArena){
-    var message:*u8="union layout exceeds isize limit";
-    if code==SU_ARRAY_EMPTY{message="array count must be positive";}
-    if code==SU_ARRAY_OVERFLOW{message="union payload array exceeds isize limit";}
-    if code==SU_RECORD_OVERFLOW{message="record payload exceeds isize limit";}
-    if code==SU_TAG_OVERFLOW{message="tagged storage exceeds isize limit";}
-    if code==SU_RECORD_EMPTY{message="records must have at least one field";}
-    if code==SU_LAYOUT_DEPTH{message="union layout depth exceeded";}
-    if code==SU_LAYOUT_CYCLE{message="by-value cycle in union payload";}
-    if code==SU_UNIT_STORAGE{message="unit has no stored value";}
-    if code==SU_PAYLOAD_TYPE{message="union stage requires seed payload types";}
-    su_error(arena.stage,location.pointer,message);
-}
-fn su_handle_failed(arena:read SuArena)->bool access(read,CompilerArena){return arena.stage->context->error_count!=0usize;}
-
-fn su_layout_record(stage:*SuStage,decl:*CrustDecl,depth:usize)->*SuLayout {
-    domain CompilerArena { edit CompilerArena {
-        var arena:SuArena=make SuArena{stage:stage};
-        var declaration:SuDeclaration=make SuDeclaration{pointer:decl};
-        if !su_checked_layout_depth(read arena,read declaration,depth){return null(*SuLayout);}
-        var pointer:*SuLayout=su_cache_get!(SuLayout)(&stage->layouts,decl as usize);
-        if pointer==null(*SuLayout){
-            pointer=su_alloc(stage,sizeof(SuLayout),alignof(SuLayout)) as *SuLayout;
-            if pointer==null(*SuLayout){return pointer;}
-            pointer->declaration=decl;
+    if !crust_try_map_set(
+        arena.stage -> context,
+        &cursor.sum -> names,
+        variant -> name as usize,
+        variant as *u8
+    ) {
+        return value;
+    }
+    value.align = 1u32;
+    if variant -> syntax -> kind != CRUST_T_UNIT {
+        if !su_layout_syntax(
+            arena.stage,
+            variant -> syntax,
+            depth,
+            &value.size,
+            &value.align
+        ) {
+            value.align = 0u32;
         }
-        var layout:SuLayoutHandle=make SuLayoutHandle{pointer:pointer};
-        if !su_checked_layout_record(read arena,read declaration,read layout,depth){return null(*SuLayout);}
-        return pointer;
-    } }
+    }
+    return value;
+}
+fn su_handle_storage(arena: read SuArena, decl: read SuDeclaration, plan: read SuStorage) -> bool access(
+    edit,
+    CompilerArena
+) {
+    return su_storage_field(arena.stage, decl.pointer, &plan);
+}
+fn su_handle_location(decl: read SuDeclaration) -> SuLocation access(read, CompilerArena) {
+    return make SuLocation {
+        pointer: &decl.pointer -> loc
+    };
+}
+fn su_type_location(cursor: read SuTypeCursor) -> SuLocation access(read, CompilerArena) {
+    return make SuLocation {
+        pointer: &cursor.next -> loc
+    };
+}
+fn su_layout_diagnostic(arena: read SuArena, location: read SuLocation, code: u32) -> unit access(
+    edit,
+    CompilerArena
+) {
+    var message: *u8 = "union layout exceeds isize limit";
+    if code == SU_ARRAY_EMPTY {
+        message = "array count must be positive";
+    }
+    if code == SU_ARRAY_OVERFLOW {
+        message = "union payload array exceeds isize limit";
+    }
+    if code == SU_RECORD_OVERFLOW {
+        message = "record payload exceeds isize limit";
+    }
+    if code == SU_TAG_OVERFLOW {
+        message = "tagged storage exceeds isize limit";
+    }
+    if code == SU_RECORD_EMPTY {
+        message = "records must have at least one field";
+    }
+    if code == SU_LAYOUT_DEPTH {
+        message = "union layout depth exceeded";
+    }
+    if code == SU_LAYOUT_CYCLE {
+        message = "by-value cycle in union payload";
+    }
+    if code == SU_UNIT_STORAGE {
+        message = "unit has no stored value";
+    }
+    if code == SU_PAYLOAD_TYPE {
+        message = "union stage requires seed payload types";
+    }
+    su_error(arena.stage, location.pointer, message);
+}
+fn su_handle_failed(arena: read SuArena) -> bool access(read, CompilerArena) {
+    return arena.stage -> context -> error_count != 0usize;
 }
 
-fn su_cache_get!(Value)(cache:*CrustMap,key:usize)->*Value {
-    return crust_map_get(cache,key) as *Value;
+fn su_layout_record(stage: *SuStage, decl: *CrustDecl, depth: usize) -> *SuLayout {
+    domain CompilerArena {
+        edit CompilerArena {
+            var arena: SuArena = make SuArena {
+                stage: stage
+            };
+            var declaration: SuDeclaration = make SuDeclaration {
+                pointer: decl
+            };
+            if !su_checked_layout_depth(read arena, read declaration, depth) {
+                return null(*SuLayout);
+            }
+            var pointer: *SuLayout = su_cache_get!(SuLayout)(&stage -> layouts, decl as usize);
+            if pointer == null(*SuLayout) {
+                pointer = su_alloc(stage, sizeof(SuLayout), alignof(SuLayout)) as *SuLayout;
+                if pointer == null(*SuLayout) {
+                    return pointer;
+                }
+                pointer -> declaration = decl;
+            }
+            var layout: SuLayoutHandle = make SuLayoutHandle {
+                pointer: pointer
+            };
+            if !su_checked_layout_record(read arena, read declaration, read layout, depth) {
+                return null(*SuLayout);
+            }
+            return pointer;
+        }
+    }
+}
+
+fn su_cache_get!(Value)(cache: *CrustMap, key: usize) -> *Value {
+    return crust_map_get(cache, key) as *Value;
 }
 
 // Advance through an array base; leaf steps keep their position. Parser-owned
 // array syntax has a live base. Named leaves use the checked layout cache.
-fn su_type_step(arena:read SuArena,cursor:mut SuTypeCursor,depth:usize)->SuTypeStep access(edit,CompilerArena){
-    var syntax:*CrustTypeSyntax=cursor.next;
-    var kind:u32=syntax->kind;
-    var value:SuTypeStep=make SuTypeStep{size:0u64,count:syntax->count,align:0u32,kind:kind};
-    if kind==CRUST_T_ARRAY{cursor.next=syntax->base;return value;}
-    if kind==CRUST_T_NAME{
-        var symbol:*CrustSymbol=su_cache_get!(CrustSymbol)(&arena.stage->context->globals,syntax->name as usize);
-        if symbol==null(*CrustSymbol){su_error(arena.stage,&syntax->loc,"unknown payload type");return value;}
-        if symbol->kind!=CRUST_SYM_RECORD{su_error(arena.stage,&syntax->loc,"payload name must denote a record or union");return value;}
-        var layout:*SuLayout=su_layout_record(arena.stage,symbol->decl,depth+1usize);
-        if layout!=null(*SuLayout){value.size=layout->size;value.align=layout->align;}
+fn su_type_step(arena: read SuArena, cursor: mut SuTypeCursor, depth: usize) -> SuTypeStep access(
+    edit,
+    CompilerArena
+) {
+    var syntax: *CrustTypeSyntax = cursor.next;
+    var kind: u32 = syntax -> kind;
+    var value: SuTypeStep = make SuTypeStep {
+        size: 0u64,
+        count: syntax -> count,
+        align: 0u32,
+        kind: kind
+    };
+    if kind == CRUST_T_ARRAY {
+        cursor.next = syntax -> base;
         return value;
     }
-    if kind==CRUST_T_POINTER || kind==CRUST_T_FUNCTION{kind=CRUST_T_USIZE;}
-    if kind<CRUST_T_UNIT{value.size=arena.stage->context->builtins[kind as usize].size;value.align=arena.stage->context->builtins[kind as usize].align;}
+    if kind == CRUST_T_NAME {
+        var symbol: *CrustSymbol = su_cache_get!(CrustSymbol)(
+            &arena.stage -> context -> globals,
+            syntax -> name as usize
+        );
+        if symbol == null(*CrustSymbol) {
+            su_error(arena.stage, &syntax -> loc, "unknown payload type");
+            return value;
+        }
+        if symbol -> kind != CRUST_SYM_RECORD {
+            su_error(
+                arena.stage,
+                &syntax -> loc,
+                "payload name must denote a record or union"
+            );
+            return value;
+        }
+        var layout: *SuLayout = su_layout_record(arena.stage, symbol -> decl, depth + 1usize);
+        if layout != null(*SuLayout) {
+            value.size = layout -> size;
+            value.align = layout -> align;
+        }
+        return value;
+    }
+    if kind == CRUST_T_POINTER || kind == CRUST_T_FUNCTION {
+        kind = CRUST_T_USIZE;
+    }
+    if kind < CRUST_T_UNIT {
+        value.size = arena.stage -> context -> builtins[kind as usize].size;
+        value.align = arena.stage -> context -> builtins[kind as usize].align;
+    }
     return value;
 }

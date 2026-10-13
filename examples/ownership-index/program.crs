@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record Comparison { actual: read i64; expected: read i64; }
+record Comparison {
+    actual: read i64;
+    expected: read i64;
+}
 
 fn comparison_equal(pair: read Comparison) -> bool {
     return pair.actual == pair.expected;
@@ -9,22 +12,33 @@ fn comparison_equal(pair: read Comparison) -> bool {
 fn expect_alias(index: read Index, key: i64, expected: read i64) -> unit access(read, Symbols) {
     var selection: Selection = index_select(read index, key);
     var present: bool = selection_present(read selection);
-    if !present { trap; }
+    if !present {
+        trap;
+    }
     var value: read i64 = selection_value(read selection);
-    var pair: Comparison = make Comparison { actual: read value, expected: read expected };
+    var pair: Comparison = make Comparison {
+        actual: read value,
+        expected: read expected
+    };
     var equal: bool = comparison_equal(read pair);
-    if !equal { trap; }
+    if !equal {
+        trap;
+    }
 }
 
 fn expect_unbound(index: read Index, key: i64) -> unit access(read, Symbols) {
     var selection: Selection = index_select(read index, key);
     var present: bool = selection_present(read selection);
-    if present { trap; }
+    if present {
+        trap;
+    }
 }
 
 fn remove_required(index: mut Index, key: i64) -> unit access(reclaim, Symbols) {
     var removed: bool = index_remove(mut index, key);
-    if !removed { trap; }
+    if !removed {
+        trap;
+    }
 }
 
 fn main(argc: i32, argv: **u8) -> i32 {
@@ -51,9 +65,13 @@ fn main(argc: i32, argv: **u8) -> i32 {
             // A selection keeps the old target while the alias changes.
             var old: Selection = index_select(read index, 20i64);
             var bound: bool = index_bind(mut index, 20i64, 1i64);
-            if !bound { trap; }
+            if !bound {
+                trap;
+            }
             var value: read i64 = selection_value(read old);
-            if value != 42i64 { trap; }
+            if value != 42i64 {
+                trap;
+            }
         }
         expected = 43i64;
         expect_alias(read index, 20i64, read expected);
@@ -61,7 +79,9 @@ fn main(argc: i32, argv: **u8) -> i32 {
         expect_alias(read index, 20i64, read expected);
         remove_required(mut index, 1i64);
         var removed: bool = index_remove(mut index, 1i64);
-        if removed { trap; }
+        if removed {
+            trap;
+        }
         expect_unbound(read index, 20i64);
         // Leave live entries for automatic cleanup. The loop size is a runtime value.
         var key: i64 = 0i64;
@@ -74,6 +94,8 @@ fn main(argc: i32, argv: **u8) -> i32 {
         expected = count - 1i64;
         expect_alias(read index, count + 99i64, read expected);
     }
-    emit(79i32); emit(75i32); emit(10i32);
+    emit(79i32);
+    emit(75i32);
+    emit(10i32);
     return 0i32;
 }

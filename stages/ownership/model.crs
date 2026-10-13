@@ -26,7 +26,7 @@ record OsStage {
     verified_bodies: CrustMap;
     resources: *RsStage;
     reference_user: *u8;
-    read_reference: fn(*CrustReader,*u8,u32)->*CrustName;
+    read_reference: fn(*CrustReader, *u8, u32) -> *CrustName;
 }
 
 record OsField {
@@ -38,7 +38,10 @@ record OsField {
     storage: bool;
 }
 
-record OsDomain { declaration: *CrustDecl; records: *OsField; }
+record OsDomain {
+    declaration: *CrustDecl;
+    records: *OsField;
+}
 
 record OsRecord {
     declaration: *CrustDecl;
@@ -71,12 +74,29 @@ record OsFunction {
     has_modifies: bool;
 }
 
-record OsOrigin { parameter: *CrustName; path: *OsField; next: *OsOrigin; index: usize; }
-record OsParameter { closed: bool; }
-record OsChoice { value: *OsValue; next: *OsChoice; }
-record OsSelection { target: *OsValue; sources: *OsChoice; }
+record OsOrigin {
+    parameter: *CrustName;
+    path: *OsField;
+    next: *OsOrigin;
+    index: usize;
+}
+record OsParameter {
+    closed: bool;
+}
+record OsChoice {
+    value: *OsValue;
+    next: *OsChoice;
+}
+record OsSelection {
+    target: *OsValue;
+    sources: *OsChoice;
+}
 
-record OsAccess { domain: *CrustName; effect: u32; fresh: bool; }
+record OsAccess {
+    domain: *CrustName;
+    effect: u32;
+    fresh: bool;
+}
 
 const OS_LIVE: u32 = 1u32;
 const OS_NONNULL: u32 = 2u32;
@@ -153,11 +173,22 @@ record OsLoan {
     mode: u32;
 }
 
-record OsScope { parent: *OsScope; locals: *OsSlot; domain: *CrustName; brand: *OsScope; effect: u32; access: bool; }
-record OsBinding { name: *CrustName; value: *OsValue; next: *OsBinding; }
+record OsScope {
+    parent: *OsScope;
+    locals: *OsSlot;
+    domain: *CrustName;
+    brand: *OsScope;
+    effect: u32;
+    access: bool;
+}
+record OsBinding {
+    name: *CrustName;
+    value: *OsValue;
+    next: *OsBinding;
+}
 
 record OsState {
-    facts: [*OsFact;64];
+    facts: [*OsFact; 64];
     scope: *OsScope;
     brand: *OsScope;
     domain: *CrustName;
@@ -179,14 +210,39 @@ record OsCheck {
     drop: bool;
 }
 
-record OsDeferred { contract: *OsFunction; arguments: **OsValue; location: *CrustLoc; count: usize; }
-
-record OsLoopSlot { slot: *OsSlot; next: *OsLoopSlot; }
-record OsLoop { entry: *OsState; exit: *OsState; bindings: *OsLoopSlot; parent: *OsLoop; }
-
-record OsLivePlan { names:CrustMap; points:CrustMap; words:usize; stamp:usize; }
-record OsLivePoint {
-    source:*CrustStmt; previous:*OsLivePoint; body:*OsLivePoint; otherwise:*OsLivePoint;
-    before:*u64; after:*u64;
+record OsDeferred {
+    contract: *OsFunction;
+    arguments: **OsValue;
+    location: *CrustLoc;
+    count: usize;
 }
-record OsLiveLoop { before:*u64; after:*u64; }
+
+record OsLoopSlot {
+    slot: *OsSlot;
+    next: *OsLoopSlot;
+}
+record OsLoop {
+    entry: *OsState;
+    exit: *OsState;
+    bindings: *OsLoopSlot;
+    parent: *OsLoop;
+}
+
+record OsLivePlan {
+    names: CrustMap;
+    points: CrustMap;
+    words: usize;
+    stamp: usize;
+}
+record OsLivePoint {
+    source: *CrustStmt;
+    previous: *OsLivePoint;
+    body: *OsLivePoint;
+    otherwise: *OsLivePoint;
+    before: *u64;
+    after: *u64;
+}
+record OsLiveLoop {
+    before: *u64;
+    after: *u64;
+}

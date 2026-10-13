@@ -1,19 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn rs_constant_syntax(stage: *RsStage, expression: *CrustExpr) -> unit {
-    if expression == null(*CrustExpr) || (*stage).failed { return; }
+    if expression == null(*CrustExpr) || (*stage).failed {
+        return;
+    }
     if (*expression).syntax_type != null(*CrustTypeSyntax) {
         (*expression).syntax_type = rs_lower_type(stage, (*expression).syntax_type);
     }
     rs_constant_syntax(stage, (*expression).left);
     rs_constant_syntax(stage, (*expression).right);
     var index: usize = 0usize;
-    while index < (*expression).arg_count && !(*stage).failed {
+    while index < (*expression).arg_count &&!(*stage).failed {
         rs_constant_syntax(stage, (*expression).args[index]);
         index = index + 1usize;
     }
     var item: *CrustInit = (*expression).inits;
-    while item != null(*CrustInit) && !(*stage).failed {
+    while item != null(*CrustInit) &&!(*stage).failed {
         rs_constant_syntax(stage, (*item).value);
         item = (*item).next;
     }
@@ -24,12 +26,16 @@ fn rs_constant_syntax(stage: *RsStage, expression: *CrustExpr) -> unit {
 fn rs_lower_constant(stage: *RsStage, expression: *CrustExpr) -> *CrustExpr {
     var result: *CrustExpr = rs_clone_expr(stage, expression);
     rs_constant_syntax(stage, result);
-    if (*stage).failed { return null(*CrustExpr); }
+    if (*stage).failed {
+        return null(*CrustExpr);
+    }
     return result;
 }
 
 fn rs_constant_source(stage: *RsStage, expression: *CrustExpr, expected: *CrustTypeSyntax) -> unit {
-    if (*stage).failed { return; }
+    if (*stage).failed {
+        return;
+    }
     var kind: u32 = (*expression).kind;
     var location: *CrustLoc = &(*expression).loc;
     if kind == CRUST_E_GROUP {
@@ -37,19 +43,27 @@ fn rs_constant_source(stage: *RsStage, expression: *CrustExpr, expected: *CrustT
         return;
     }
     if kind == CRUST_E_NAME {
-        rs_constant_name(stage, expression, expected); return;
+        rs_constant_name(stage, expression, expected);
+        return;
     }
     if kind == CRUST_E_NULL || kind == CRUST_E_RECORD || kind == CRUST_E_ARRAY {
         if !rs_same(stage, (*expression).syntax_type, expected) {
-            rs_error(stage, location, "constant initializer has incompatible source types or borrow modes");
+            rs_error(
+                stage,
+                location,
+                "constant initializer has incompatible source types or borrow modes"
+            );
             return;
         }
     }
     if kind == CRUST_E_RECORD {
         var global: *RsGlobal = rs_global(stage, (*expected).name);
         var item: *CrustInit = (*expression).inits;
-        while item != null(*CrustInit) && !(*stage).failed {
-            var field: *CrustField = crust_map_get(&(*global).fields, (*item).name as usize) as *CrustField;
+        while item != null(*CrustInit) &&!(*stage).failed {
+            var field: *CrustField = crust_map_get(
+                &(*global).fields,
+                (*item).name as usize
+            ) as *CrustField;
             rs_constant_source(stage, (*item).value, (*field).syntax_type);
             item = (*item).next;
         }
@@ -57,7 +71,7 @@ fn rs_constant_source(stage: *RsStage, expression: *CrustExpr, expected: *CrustT
     }
     if kind == CRUST_E_ARRAY {
         var index: usize = 0usize;
-        while index < (*expression).arg_count && !(*stage).failed {
+        while index < (*expression).arg_count &&!(*stage).failed {
             rs_constant_source(stage, (*expression).args[index], (*expected).base);
             index = index + 1usize;
         }
@@ -68,13 +82,13 @@ fn rs_constant_source(stage: *RsStage, expression: *CrustExpr, expected: *CrustT
 // Check source function effects and borrow modes before any target emission.
 fn rs_check_constants(stage: *RsStage) -> bool {
     var global: *RsGlobal = (*stage).first_global;
-    while global != null(*RsGlobal) && !(*stage).failed {
+    while global != null(*RsGlobal) &&!(*stage).failed {
         if (*(*global).source).kind == CRUST_D_CONST {
             rs_constant_source(stage, (*(*global).source).init, (*global).syntax);
         }
         global = (*global).next;
     }
-    return !(*stage).failed;
+    return!(*stage).failed;
 }
 
 fn rs_constant_name(stage: *RsStage, expression: *CrustExpr, expected: *CrustTypeSyntax) -> unit {
@@ -84,9 +98,15 @@ fn rs_constant_name(stage: *RsStage, expression: *CrustExpr, expected: *CrustTyp
         rs_error(stage, location, "constant initializer cannot retain an unsafe function");
         return;
     }
-    if !rs_check_function_value(stage, (*global).syntax, location) { return; }
+    if !rs_check_function_value(stage, (*global).syntax, location) {
+        return;
+    }
     if !rs_same(stage, (*global).syntax, expected) {
-        rs_error(stage, location, "constant function value has incompatible source types or borrow modes");
+        rs_error(
+            stage,
+            location,
+            "constant function value has incompatible source types or borrow modes"
+        );
     }
     return;
 }

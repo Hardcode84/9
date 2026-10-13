@@ -38,7 +38,10 @@ extern fn c_driver_execvp(file: *u8, arguments: **u8) -> i32 = "execvp";
 extern fn c_driver_waitpid(pid: i32, status: *i32, options: i32) -> i32 = "waitpid";
 extern fn c_driver_exit(status: i32) -> unit = "_exit";
 
-record CDriverTemp { path: *u8; next: *CDriverTemp; }
+record CDriverTemp {
+    path: *u8;
+    next: *CDriverTemp;
+}
 
 // Mode 0 emits an executable, 1 an object, 2 backend text, and 3 builds text
 // without publication. Native outputs require a file path. Null or "-" selects
@@ -63,7 +66,12 @@ record CDriver {
 }
 
 fn c_driver_buffer(status: *CStatus, result: *CBuffer) -> unit {
-    *result = make CBuffer { status: status, data: null(*u8), size: 0usize, capacity: 0usize };
+    *result = make CBuffer {
+        status: status,
+        data: null(*u8),
+        size: 0usize,
+        capacity: 0usize
+    };
 }
 
 fn c_driver_join(status: *CStatus, left: *u8, right: *u8) -> *u8 {
@@ -91,25 +99,36 @@ fn c_driver_io_error(driver: *CDriver, action: *u8, path: *u8, number: i32) -> b
     c_buffer_text(&buffer, ": ");
     c_buffer_text(&buffer, c_driver_strerror(number));
     var message: *u8 = c_buffer_end(&buffer);
-    if message != null(*u8) { c_driver_error(driver, message); }
+    if message != null(*u8) {
+        c_driver_error(driver, message);
+    }
     return false;
 }
 
 fn c_driver_temporary_name(driver: *CDriver, destination: *u8) -> *u8 {
     var random: [u8; 16] = uninit;
     if c_driver_entropy(&random[0usize], 16usize) != 0i32 {
-        c_driver_io_error(driver, "cannot obtain temporary randomness", destination, *c_driver_errno());
+        c_driver_io_error(
+            driver,
+            "cannot obtain temporary randomness",
+            destination,
+            *c_driver_errno()
+        );
         return null(*u8);
     }
     var directory: usize = 0usize;
     var index: usize = 0usize;
     while destination[index] != 0u8 {
-        if destination[index] == 47u8 { directory = index + 1usize; }
+        if destination[index] == 47u8 {
+            directory = index + 1usize;
+        }
         index = index + 1usize;
     }
     var buffer: CBuffer = uninit;
     c_driver_buffer(&(*(*driver).stage).status, &buffer);
-    if destination[0usize] != 47u8 && !(destination[0usize] == 46u8 && destination[1usize] == 47u8) {
+    if destination[0usize] != 47u8 &&!(
+        destination[0usize] == 46u8 && destination[1usize] == 47u8
+    ) {
         c_buffer_text(&buffer, "./");
     }
     c_buffer_bytes(&buffer, destination, directory);
@@ -134,25 +153,42 @@ fn c_driver_output_mode(driver: *CDriver, path: *u8) -> u32 {
         // The toolchain must read and write the temporary before publication.
         return (info.mode & 511u32) | 384u32;
     }
-    if *c_driver_errno() == 2i32 { return 511u32; }
+    if *c_driver_errno() == 2i32 {
+        return 511u32;
+    }
     c_driver_io_error(driver, "cannot inspect output permissions", path, *c_driver_errno());
     return 0u32;
 }
 
 fn c_driver_temporary(driver: *CDriver, destination: *u8, mode: u32) -> *u8 {
-    if mode == 0u32 { return null(*u8); }
-    var item: *CDriverTemp = c_alloc(&(*(*driver).stage).status, sizeof(CDriverTemp), alignof(CDriverTemp)) as *CDriverTemp;
-    if item == null(*CDriverTemp) { return null(*u8); }
+    if mode == 0u32 {
+        return null(*u8);
+    }
+    var item: *CDriverTemp = c_alloc(
+        &(*(*driver).stage).status,
+        sizeof(CDriverTemp),
+        alignof(CDriverTemp)
+    ) as *CDriverTemp;
+    if item == null(*CDriverTemp) {
+        return null(*u8);
+    }
     var attempt: usize = 0usize;
     while attempt < 128usize {
         var path: *u8 = c_driver_temporary_name(driver, destination);
-        if path == null(*u8) { return null(*u8); }
+        if path == null(*u8) {
+            return null(*u8);
+        }
         // Linux O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC.
         var descriptor: i32 = c_driver_open(path, 524481i32, mode & 438u32);
         if descriptor >= 0i32 {
-            *item = make CDriverTemp { path: path, next: (*driver).temporary };
+            *item = make CDriverTemp {
+                path: path,
+                next: (*driver).temporary
+            };
             (*driver).temporary = item;
-            if c_driver_close(descriptor) == 0i32 { return path; }
+            if c_driver_close(descriptor) == 0i32 {
+                return path;
+            }
             c_driver_io_error(driver, "cannot close temporary", path, *c_driver_errno());
             return null(*u8);
         }
@@ -175,7 +211,11 @@ fn c_driver_cleanup(driver: *CDriver, keep: *u8) -> bool {
             if c_driver_unlink((*item).path) != 0i32 && *c_driver_errno() != 2i32 {
                 var prefix: *u8 = "cannot remove temporary '";
                 crust0_host_write_stream(2u32, prefix, c_length(prefix));
-                crust0_host_write_stream(2u32, (*item).path, c_length((*item).path));
+                crust0_host_write_stream(
+                    2u32,
+                    (*item).path,
+                    c_length((*item).path)
+                );
                 crust0_host_write_stream(2u32, "'\n", 2usize);
                 success = false;
             }
@@ -190,11 +230,15 @@ fn c_driver_cleanup(driver: *CDriver, keep: *u8) -> bool {
 fn c_driver_output_kind(driver: *CDriver, path: *u8) -> i32 {
     var info: CDriverStat = uninit;
     if c_driver_lstat(path, &info) == 0i32 {
-        if (info.mode & 61440u32) == 32768u32 { return 1i32; }
+        if (info.mode & 61440u32) == 32768u32 {
+            return 1i32;
+        }
         return 2i32;
     }
     var error: i32 = *c_driver_errno();
-    if error == 2i32 { return 0i32; }
+    if error == 2i32 {
+        return 0i32;
+    }
     c_driver_io_error(driver, "cannot inspect output", path, error);
     return -1i32;
 }
@@ -213,11 +257,21 @@ fn c_driver_publish(driver: *CDriver, temporary: *u8, output: *u8) -> bool {
             return c_driver_error(driver, "output changed to a nonregular file");
         }
         if c_driver_chmod(temporary, info.mode & 511u32) != 0i32 {
-            return c_driver_io_error(driver, "cannot set output permissions", output, *c_driver_errno());
+            return c_driver_io_error(
+                driver,
+                "cannot set output permissions",
+                output,
+                *c_driver_errno()
+            );
         }
     } else {
         if *c_driver_errno() != 2i32 {
-            return c_driver_io_error(driver, "cannot inspect output permissions", output, *c_driver_errno());
+            return c_driver_io_error(
+                driver,
+                "cannot inspect output permissions",
+                output,
+                *c_driver_errno()
+            );
         }
     }
     if c_driver_rename(temporary, output) != 0i32 {
@@ -230,7 +284,12 @@ fn c_driver_run(driver: *CDriver, count: usize, mode: u32) -> bool {
     (*driver).command[count] = null(*u8);
     var pid: i32 = c_driver_fork();
     if pid < 0i32 {
-        return c_driver_io_error(driver, "cannot start", (*driver).command[0usize], *c_driver_errno());
+        return c_driver_io_error(
+            driver,
+            "cannot start",
+            (*driver).command[0usize],
+            *c_driver_errno()
+        );
     }
     if pid == 0i32 {
         // Change only the child mask. Linkers add execute bits before publication.
@@ -239,7 +298,11 @@ fn c_driver_run(driver: *CDriver, count: usize, mode: u32) -> bool {
         c_driver_execvp((*driver).command[0usize], (*driver).command);
         var prefix: *u8 = "cannot execute ";
         crust0_host_write_stream(2u32, prefix, c_length(prefix));
-        crust0_host_write_stream(2u32, (*driver).command[0usize], c_length((*driver).command[0usize]));
+        crust0_host_write_stream(
+            2u32,
+            (*driver).command[0usize],
+            c_length((*driver).command[0usize])
+        );
         crust0_host_write_stream(2u32, "\n", 1usize);
         c_driver_exit(127i32);
         trap;
@@ -247,27 +310,40 @@ fn c_driver_run(driver: *CDriver, count: usize, mode: u32) -> bool {
     var status: i32 = 0i32;
     while true {
         var result: i32 = c_driver_waitpid(pid, &status, 0i32);
-        if result == pid { break; }
-        if result < 0i32 && *c_driver_errno() == 4i32 { continue; }
-        return c_driver_io_error(driver, "cannot wait for", (*driver).command[0usize], *c_driver_errno());
+        if result == pid {
+            break;
+        }
+        if result < 0i32 && *c_driver_errno() == 4i32 {
+            continue;
+        }
+        return c_driver_io_error(
+            driver,
+            "cannot wait for",
+            (*driver).command[0usize],
+            *c_driver_errno()
+        );
     }
     if (status & 127i32) == 0i32 {
         (*driver).process_status = (status >> 8i32) & 255i32;
     } else {
         (*driver).process_status = 128i32 + (status & 127i32);
     }
-    if (*driver).process_status == 0i32 { return true; }
+    if (*driver).process_status == 0i32 {
+        return true;
+    }
     var message: CBuffer = uninit;
     c_driver_buffer(&(*(*driver).stage).status, &message);
     c_buffer_text(&message, (*driver).command[0usize]);
     c_buffer_text(&message, " failed with status ");
     c_buffer_number(&message, (*driver).process_status as u64);
     var text: *u8 = c_buffer_end(&message);
-    if text != null(*u8) { c_driver_error(driver, text); }
+    if text != null(*u8) {
+        c_driver_error(driver, text);
+    }
     return false;
 }
 
-fn c_driver_object(driver:*CDriver,source:*u8,output:*u8,mode:u32)->bool {
+fn c_driver_object(driver: *CDriver, source: *u8, output: *u8, mode: u32) -> bool {
     var arguments: **u8 = (*driver).command;
     arguments[0usize] = "gcc";
     arguments[1usize] = "-std=c99";
@@ -292,15 +368,22 @@ fn c_driver_object(driver:*CDriver,source:*u8,output:*u8,mode:u32)->bool {
     return c_driver_run(driver, count + 6usize, mode);
 }
 
-fn c_driver_compile(driver: *CDriver, compile:fn(*CDriver,*u8,*u8,u32)->bool) -> bool {
+fn c_driver_compile(driver: *CDriver, compile: fn(*CDriver, *u8, *u8, u32) -> bool) -> bool {
     var kind: i32 = c_driver_output_kind(driver, (*(*driver).options).output);
-    if kind < 0i32 { return false; }
+    if kind < 0i32 {
+        return false;
+    }
     if kind == 2i32 || c_equal((*(*driver).options).output, "-") {
-        return c_driver_error(driver, "object and executable outputs require a regular file path");
+        return c_driver_error(
+            driver,
+            "object and executable outputs require a regular file path"
+        );
     }
     var stage: *CStage = (*driver).stage;
     var mode: u32 = c_driver_output_mode(driver, (*(*driver).options).output);
-    if mode == 0u32 { return false; }
+    if mode == 0u32 {
+        return false;
+    }
     var destination: *u8 = (*(*driver).options).output;
     var source: *u8 = c_driver_temporary(driver, destination, 384u32);
     var response: *u8 = c_driver_temporary(driver, destination, 384u32);
@@ -308,17 +391,29 @@ fn c_driver_compile(driver: *CDriver, compile:fn(*CDriver,*u8,*u8,u32)->bool) ->
     var object: *u8 = c_driver_temporary(driver, destination, mode);
     var binary: *u8 = c_driver_temporary(driver, destination, mode);
     var response_argument: *u8 = c_driver_join(&(*stage).status, "@", response);
-    if (*stage).status.failed { return false; }
-    if !c_driver_write(driver, source, &(*stage).header) ||
-       !c_driver_write(driver, response, &(*stage).renames) { return false; }
-    if !compile(driver,source,original,mode){return false;}
-    var arguments:**u8=driver->command;
-    var count:usize=0usize;var index:usize=0usize;
+    if (*stage).status.failed {
+        return false;
+    }
+    if !c_driver_write(driver, source, &(*stage).header) || !c_driver_write(
+        driver,
+        response,
+        &(*stage).renames
+    ) {
+        return false;
+    }
+    if !compile(driver, source, original, mode) {
+        return false;
+    }
+    var arguments: **u8 = driver -> command;
+    var count: usize = 0usize;
+    var index: usize = 0usize;
     arguments[0usize] = "objcopy";
     arguments[1usize] = response_argument;
     arguments[2usize] = original;
     arguments[3usize] = object;
-    if !c_driver_run(driver, 4usize, mode) { return false; }
+    if !c_driver_run(driver, 4usize, mode) {
+        return false;
+    }
     var result: *u8 = object;
     if (*(*driver).options).mode == 0u32 {
         arguments[0usize] = "gcc";
@@ -333,10 +428,14 @@ fn c_driver_compile(driver: *CDriver, compile:fn(*CDriver,*u8,*u8,u32)->bool) ->
         }
         arguments[count] = "-o";
         arguments[count + 1usize] = binary;
-        if !c_driver_run(driver, count + 2usize, mode) { return false; }
+        if !c_driver_run(driver, count + 2usize, mode) {
+            return false;
+        }
         result = binary;
     }
-    if !c_driver_cleanup(driver, result) { return c_driver_error(driver, "temporary cleanup failed"); }
+    if !c_driver_cleanup(driver, result) {
+        return c_driver_error(driver, "temporary cleanup failed");
+    }
     return c_driver_publish(driver, result, (*(*driver).options).output);
 }
 
@@ -347,22 +446,51 @@ fn c_driver_dump(driver: *CDriver) -> bool {
     var output_temporary: *u8 = null(*u8);
     var symbols_temporary: *u8 = null(*u8);
     var stream_output: bool = output == null(*u8) || c_equal(output, "-");
-    if !stream_output && !c_driver_dump_temporary(driver, output, &(*stage).header, &output_temporary) { return false; }
-    if symbols != null(*u8) && !c_driver_dump_temporary(driver, symbols, &(*stage).renames, &symbols_temporary) { return false; }
+    if !stream_output && !c_driver_dump_temporary(
+        driver,
+        output,
+        &(*stage).header,
+        &output_temporary
+    ) {
+        return false;
+    }
+    if symbols != null(*u8) && !c_driver_dump_temporary(
+        driver,
+        symbols,
+        &(*stage).renames,
+        &symbols_temporary
+    ) {
+        return false;
+    }
     if symbols != null(*u8) {
         if symbols_temporary != null(*u8) {
-            if !c_driver_publish(driver, symbols_temporary, symbols) { return false; }
+            if !c_driver_publish(driver, symbols_temporary, symbols) {
+                return false;
+            }
         } else {
-            if !c_driver_write(driver, symbols, &(*stage).renames) { return false; }
+            if !c_driver_write(driver, symbols, &(*stage).renames) {
+                return false;
+            }
         }
     }
     if stream_output {
-        if crust0_host_write_stream(1u32, (*stage).header.data, (*stage).header.size) != 0i32 {
-            return c_driver_io_error(driver, "cannot write standard output", null(*u8), *c_driver_errno());
+        if crust0_host_write_stream(
+            1u32,
+            (*stage).header.data,
+            (*stage).header.size
+        ) != 0i32 {
+            return c_driver_io_error(
+                driver,
+                "cannot write standard output",
+                null(*u8),
+                *c_driver_errno()
+            );
         }
         return true;
     }
-    if output_temporary != null(*u8) { return c_driver_publish(driver, output_temporary, output); }
+    if output_temporary != null(*u8) {
+        return c_driver_publish(driver, output_temporary, output);
+    }
     return c_driver_write(driver, output, &(*stage).header);
 }
 
@@ -395,22 +523,36 @@ fn c_driver_canonical(driver: *CDriver, path: *u8) -> *u8 {
         return null(*u8);
     }
     var split: usize = size;
-    while split != 0usize && path[split - 1usize] != 47u8 { split = split - 1usize; }
+    while split != 0usize && path[split - 1usize] != 47u8 {
+        split = split - 1usize;
+    }
     var parent: CBuffer = uninit;
     c_driver_buffer(status, &parent);
-    if split == 0usize { c_buffer_text(&parent, "."); }
-    else { c_buffer_bytes(&parent, path, split); }
+    if split == 0usize {
+        c_buffer_text(&parent, ".");
+    } else {
+        c_buffer_bytes(&parent, path, split);
+    }
     var parent_path: *u8 = c_buffer_end(&parent);
-    if (*status).failed { return null(*u8); }
+    if (*status).failed {
+        return null(*u8);
+    }
     resolved = c_driver_realpath(parent_path, null(*u8));
     if resolved == null(*u8) {
-        c_driver_io_error(driver, "cannot resolve output directory", parent_path, *c_driver_errno());
+        c_driver_io_error(
+            driver,
+            "cannot resolve output directory",
+            parent_path,
+            *c_driver_errno()
+        );
         return null(*u8);
     }
     var result: CBuffer = uninit;
     c_driver_buffer(status, &result);
     c_buffer_text(&result, resolved);
-    if resolved[c_length(resolved) - 1usize] != 47u8 { c_buffer_text(&result, "/"); }
+    if resolved[c_length(resolved) - 1usize] != 47u8 {
+        c_buffer_text(&result, "/");
+    }
     c_buffer_bytes(&result, &path[split], size - split);
     crust0_host_free(resolved);
     return c_buffer_end(&result);
@@ -418,22 +560,39 @@ fn c_driver_canonical(driver: *CDriver, path: *u8) -> *u8 {
 
 fn c_driver_validate(driver: *CDriver) -> bool {
     if (*(*driver).options).mode > 3u32 {
-        return c_driver_error(driver, "backend mode must be executable, object, text, or prepare");
+        return c_driver_error(
+            driver,
+            "backend mode must be executable, object, text, or prepare"
+        );
     }
-    if ((*(*driver).options).cflag_count != 0usize && (*(*driver).options).cflags == null(**u8)) ||
-       ((*(*driver).options).ldflag_count != 0usize && (*(*driver).options).ldflags == null(**u8)) {
+    if (
+        (*(*driver).options).cflag_count != 0usize && (*(*driver).options).cflags == null(**u8)
+    ) || (
+        (*(*driver).options).ldflag_count != 0usize && (*(*driver).options).ldflags == null(
+            **u8
+        )
+    ) {
         return c_driver_error(driver, "backend flag array is null");
     }
     if (*(*driver).options).mode < 2u32 && (*(*driver).options).output == null(*u8) {
         return c_driver_error(driver, "object and executable modes require -o OUTPUT");
     }
     if (*(*driver).options).symbols != null(*u8) {
-        if (*(*driver).options).mode != 2u32 { return c_driver_error(driver, "--symbols requires --emit"); }
-        if c_equal((*(*driver).options).symbols, "-") ||
-           ((*(*driver).options).output != null(*u8) && c_equal((*(*driver).options).symbols, (*(*driver).options).output)) {
+        if (*(*driver).options).mode != 2u32 {
+            return c_driver_error(driver, "--symbols requires --emit");
+        }
+        if c_equal((*(*driver).options).symbols, "-") || (
+            (*(*driver).options).output != null(*u8) && c_equal(
+                (*(*driver).options).symbols,
+                (*(*driver).options).output
+            )
+        ) {
             return c_driver_error(driver, "--symbols requires a separate file path");
         }
-        if (*(*driver).options).output != null(*u8) && !c_equal((*(*driver).options).output, "-") {
+        if (*(*driver).options).output != null(*u8) && !c_equal(
+            (*(*driver).options).output,
+            "-"
+        ) {
             return c_driver_distinct_outputs(driver);
         }
     }
@@ -445,8 +604,13 @@ fn c_driver_validate(driver: *CDriver) -> bool {
 // Retain input trees and names unchanged. Record failures in the caller's context.
 // Return 0 on success, a failed tool's status, or 1 for another failure.
 fn c_backend_build(context: *CrustContext, entry: *CrustDecl, options: *BackendOptions) -> i32 {
-    return c_backend_build_with_body(context, entry, options,
-                                    null(fn(*CStage,*CrustDecl,*u8)->bool), null(*u8));
+    return c_backend_build_with_body(
+        context,
+        entry,
+        options,
+        null(fn(*CStage, *CrustDecl, *u8) -> bool),
+        null(*u8)
+    );
 }
 
 // Require valid target types, layouts, signatures, parameter symbols, assigned link
@@ -455,38 +619,62 @@ fn c_backend_build(context: *CrustContext, entry: *CrustDecl, options: *BackendO
 // Keep callback code and user storage live until this synchronous call returns.
 // Null requires checked seed bodies and selects the default emitter.
 // A false callback result or a new diagnostic fails the build.
-fn c_backend_build_with_body(context: *CrustContext, entry: *CrustDecl, options: *BackendOptions,
-                            body: fn(*CStage,*CrustDecl,*u8)->bool, user: *u8) -> i32 {
+fn c_backend_build_with_body(
+    context: *CrustContext,
+    entry: *CrustDecl,
+    options: *BackendOptions,
+    body: fn(*CStage, *CrustDecl, *u8) -> bool,
+    user: *u8
+) -> i32 {
     var stage: CStage = uninit;
     c_stage_init(&stage, context);
     var driver: CDriver = make CDriver {
-        stage: &stage, options: options, command: null(**u8),
-        temporary: null(*CDriverTemp), process_status: 0i32
+        stage: &stage,
+        options: options,
+        command: null(**u8),
+        temporary: null(*CDriverTemp),
+        process_status: 0i32
     };
     var success: bool = c_driver_validate(&driver);
-    if success { success = c_emit_with_body(&stage, entry, body, user); }
+    if success {
+        success = c_emit_with_body(&stage, entry, body, user);
+    }
     if success {
         c_buffer_bytes(&stage.header, stage.body.data, stage.body.size);
         success = !stage.status.failed;
     }
-    var result:i32=c_driver_finish(&driver,success,c_driver_object);
-    c_stage_destroy(&stage);return result;
+    var result: i32 = c_driver_finish(&driver, success, c_driver_object);
+    c_stage_destroy(&stage);
+    return result;
 }
 
-fn c_driver_finish(driver:*CDriver,success:bool,compile:fn(*CDriver,*u8,*u8,u32)->bool)->i32 {
-    if success && (*driver->options).mode < 2u32 {
-        var capacity: usize = (*driver->options).cflag_count;
-        if (*driver->options).ldflag_count > capacity { capacity = (*driver->options).ldflag_count; }
+fn c_driver_finish(
+    driver: *CDriver,
+    success: bool,
+    compile: fn(*CDriver, *u8, *u8, u32) -> bool
+) -> i32 {
+    if success && (*driver -> options).mode < 2u32 {
+        var capacity: usize = (*driver -> options).cflag_count;
+        if (*driver -> options).ldflag_count > capacity {
+            capacity = (*driver -> options).ldflag_count;
+        }
         if capacity > 9223372036854775807usize / sizeof(*u8) - 16usize {
             success = c_driver_error(driver, "backend argument array size overflow");
         } else {
-            driver->command = c_alloc(&driver->stage->status, (capacity + 16usize) * sizeof(*u8), alignof(*u8)) as **u8;
-            success = !driver->stage->status.failed;
+            driver -> command = c_alloc(
+                &driver -> stage -> status,
+                (capacity + 16usize) * sizeof(*u8),
+                alignof(*u8)
+            ) as **u8;
+            success = !driver -> stage -> status.failed;
         }
     }
-    if success && driver->options->mode!=3u32 {
-        if (*driver->options).mode == 2u32 { success = c_driver_dump(driver); }
-        else { success = c_driver_compile(driver,compile); }
+    if success && driver -> options -> mode != 3u32 {
+        if (*driver -> options).mode == 2u32 {
+            success = c_driver_dump(driver);
+        } else {
+            success = c_driver_compile(driver, compile);
+        }
     }
     if !c_driver_cleanup(driver, null(*u8)) {
         c_driver_error(driver, "temporary cleanup failed");
@@ -494,25 +682,40 @@ fn c_driver_finish(driver:*CDriver,success:bool,compile:fn(*CDriver,*u8,*u8,u32)
     }
     var result: i32 = 0i32;
     if !success {
-        result = driver->process_status;
-        if result == 0i32 { result = 1i32; }
+        result = driver -> process_status;
+        if result == 0i32 {
+            result = 1i32;
+        }
     }
     return result;
 }
 
-fn c_driver_dump_temporary(driver: *CDriver, path: *u8, buffer: *CBuffer, temporary: **u8) -> bool {
+fn c_driver_dump_temporary(
+    driver: *CDriver,
+    path: *u8,
+    buffer: *CBuffer,
+    temporary: **u8
+) -> bool {
     var kind: i32 = c_driver_output_kind(driver, path);
-    if kind < 0i32 { return false; }
-    if kind == 2i32 { return true; }
-    *temporary = c_driver_temporary(driver, path, c_driver_output_mode(driver, path));
+    if kind < 0i32 {
+        return false;
+    }
+    if kind == 2i32 {
+        return true;
+    }
+    * temporary = c_driver_temporary(driver, path, c_driver_output_mode(driver, path));
     return *temporary != null(*u8) && c_driver_write(driver, *temporary, buffer);
 }
 
 fn c_driver_distinct_outputs(driver: *CDriver) -> bool {
     var output_path: *u8 = c_driver_canonical(driver, (*(*driver).options).output);
-    if output_path == null(*u8) { return false; }
+    if output_path == null(*u8) {
+        return false;
+    }
     var symbols_path: *u8 = c_driver_canonical(driver, (*(*driver).options).symbols);
-    if symbols_path == null(*u8) { return false; }
+    if symbols_path == null(*u8) {
+        return false;
+    }
     if c_equal(output_path, symbols_path) {
         return c_driver_error(driver, "text and symbol outputs must name separate destinations");
     }
@@ -520,27 +723,55 @@ fn c_driver_distinct_outputs(driver: *CDriver) -> bool {
     var symbols_info: CDriverStat = uninit;
     var output_exists: bool = c_driver_lstat(output_path, &output_info) == 0i32;
     if !output_exists && *c_driver_errno() != 2i32 {
-        return c_driver_io_error(driver, "cannot inspect paired output", output_path, *c_driver_errno());
+        return c_driver_io_error(
+            driver,
+            "cannot inspect paired output",
+            output_path,
+            *c_driver_errno()
+        );
     }
     var symbols_exist: bool = c_driver_lstat(symbols_path, &symbols_info) == 0i32;
     if !symbols_exist && *c_driver_errno() != 2i32 {
-        return c_driver_io_error(driver, "cannot inspect paired output", symbols_path, *c_driver_errno());
+        return c_driver_io_error(
+            driver,
+            "cannot inspect paired output",
+            symbols_path,
+            *c_driver_errno()
+        );
     }
-    if output_exists && symbols_exist && output_info.device == symbols_info.device &&
-       output_info.inode == symbols_info.inode {
+    if output_exists && symbols_exist && output_info.device == symbols_info.device && output_info.inode == symbols_info.inode {
         return c_driver_error(driver, "text and symbol outputs must name separate files");
     }
     return true;
 }
 
 // Invoke a caller-selected emitter on checked raw bodies. Preserve its diagnostic.
-fn backend_output(context:*CrustContext,entry:*CrustDecl,options:*BackendOptions,emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32 {
-    var diagnostic:CStatus=make CStatus{context:context,blocks:null(*CBlock),failed:context->error_count!=0usize};
-    if emit==null(fn(*CrustContext,*CrustDecl,*BackendOptions)->i32){
-        c_error(&diagnostic,null(*CrustSource),0usize,"output callback is required");return 1i32;
+fn backend_output(
+    context: *CrustContext,
+    entry: *CrustDecl,
+    options: *BackendOptions,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
+    var diagnostic: CStatus = make CStatus {
+        context: context,
+        blocks: null(*CBlock),
+        failed: context -> error_count != 0usize
+    };
+    if emit == null(fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32) {
+        c_error(&diagnostic, null(*CrustSource), 0usize, "output callback is required");
+        return 1i32;
     }
-    var status:i32=emit(context,entry,options);
-    if status!=0i32 && context->error_count==0usize{c_error(&diagnostic,null(*CrustSource),0usize,"output callback failed without a diagnostic");}
-    if context->error_count!=0usize && status==0i32{return 1i32;}
+    var status: i32 = emit(context, entry, options);
+    if status != 0i32 && context -> error_count == 0usize {
+        c_error(
+            &diagnostic,
+            null(*CrustSource),
+            0usize,
+            "output callback failed without a diagnostic"
+        );
+    }
+    if context -> error_count != 0usize && status == 0i32 {
+        return 1i32;
+    }
     return status;
 }

@@ -2,63 +2,113 @@
 
 fn os_read_result_path(reader: *CrustReader, origin: *OsOrigin) -> unit {
     var last: *OsField = null(*OsField);
-    while (*reader).token.kind == 46u32 && !(*reader).failed {
+    while (*reader).token.kind == 46u32 &&!(*reader).failed {
         rr_next(reader);
         var field: *OsField = rr_alloc(reader, sizeof(OsField), alignof(OsField)) as *OsField;
-        if field == null(*OsField) { return; }
+        if field == null(*OsField) {
+            return;
+        }
         (*field).name = rr_name(reader);
-        if last == null(*OsField) { (*origin).path = field; }
-        else { (*last).next = field; }
+        if last == null(*OsField) {
+            (*origin).path = field;
+        } else {
+            (*last).next = field;
+        }
         last = field;
     }
 }
 
-fn os_result_step(check: *OsCheck, state: *OsState, value: *OsValue,
-                   field: *OsField, location: *CrustLoc) -> *OsValue {
+fn os_result_step(
+    check: *OsCheck,
+    state: *OsState,
+    value: *OsValue,
+    field: *OsField,
+    location: *CrustLoc
+) -> *OsValue {
     if (*value).object == null(*OsObject) {
-        os_error(check, location, "returned view path requires schema storage"); return null(*OsValue);
+        os_error(check, location, "returned view path requires schema storage");
+        return null(*OsValue);
     }
     var slot: *OsSlot = os_object_slot(check, state, (*value).object, (*field).name);
-    if slot == null(*OsSlot) { os_error(check, location, "returned view path names an absent field"); return null(*OsValue); }
+    if slot == null(*OsSlot) {
+        os_error(check, location, "returned view path names an absent field");
+        return null(*OsValue);
+    }
     if os_borrowed(check, (*slot).syntax) {
         return os_view_origin(check, state, slot, location);
     }
     var result: *OsValue = os_copy(check, os_bound(state, slot));
-    if result == null(*OsValue) { os_error(check, location, "returned view path is uninitialized"); return result; }
+    if result == null(*OsValue) {
+        os_error(check, location, "returned view path is uninitialized");
+        return result;
+    }
     (*result).place = slot;
     (*result).loan = (*value).loan;
     (*result).owner = false;
     return result;
 }
 
-fn os_result_path(check: *OsCheck, state: *OsState, origin: *OsOrigin,
-                   source: *OsValue, location: *CrustLoc) -> *OsValue {
+fn os_result_path(
+    check: *OsCheck,
+    state: *OsState,
+    origin: *OsOrigin,
+    source: *OsValue,
+    location: *CrustLoc
+) -> *OsValue {
     var value: *OsValue = os_copy(check, source);
-    if value == null(*OsValue) { return value; }
+    if value == null(*OsValue) {
+        return value;
+    }
     var field: *OsField = (*origin).path;
     while field != null(*OsField) && !os_failed(check) {
         value = os_result_step(check, state, value, field, location);
-        if value == null(*OsValue) { return value; }
+        if value == null(*OsValue) {
+            return value;
+        }
         field = (*field).next;
     }
     return value;
 }
 
-fn os_call_view(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax, origin: *OsOrigin,
-                  source: *OsValue, location: *CrustLoc) -> *OsValue {
-    if source == null(*OsValue) { os_error(check, location, "returned view requires its source loan"); return null(*OsValue); }
-    if (*source).object != null(*OsObject) && os_opaque((*(*source).object).contract) && (*origin).path == null(*OsField) {
+fn os_call_view(
+    check: *OsCheck,
+    state: *OsState,
+    syntax: *CrustTypeSyntax,
+    origin: *OsOrigin,
+    source: *OsValue,
+    location: *CrustLoc
+) -> *OsValue {
+    if source == null(*OsValue) {
+        os_error(check, location, "returned view requires its source loan");
+        return null(*OsValue);
+    }
+    if (*source).object != null(*OsObject) && os_opaque((*(*source).object).contract) && (
+        *origin
+    ).path == null(*OsField) {
         return os_opaque_view(check, state, syntax, source, location);
     }
     var result: *OsValue = os_result_path(check, state, origin, source, location);
-    if result == null(*OsValue) { return result; }
-    (*result).loan = os_loan_via(check, state, (*result).loan, (*source).loan);
-    if (*result).loan == null(*OsLoan) { return null(*OsValue); }
-    if !os_result_type(check, state, result, (*syntax).base, location) { return null(*OsValue); }
-    if (*result).object != null(*OsObject) {
-        os_mark(check, state, (*result).object, (os_flags(state, (*result).object) | OS_NONNULL) & ~OS_ABSENT);
+    if result == null(*OsValue) {
+        return result;
     }
-    if (*result).pointer { (*result).place = null(*OsSlot); }
+    (*result).loan = os_loan_via(check, state, (*result).loan, (*source).loan);
+    if (*result).loan == null(*OsLoan) {
+        return null(*OsValue);
+    }
+    if !os_result_type(check, state, result, (*syntax).base, location) {
+        return null(*OsValue);
+    }
+    if (*result).object != null(*OsObject) {
+        os_mark(
+            check,
+            state,
+            (*result).object,
+            (os_flags(state, (*result).object) | OS_NONNULL) & ~OS_ABSENT
+        );
+    }
+    if (*result).pointer {
+        (*result).place = null(*OsSlot);
+    }
     (*result).pointer = false;
     (*result).syntax = (*syntax).base;
     (*result).loan = os_loan_new(check, state, result, (*syntax).kind, location);
@@ -67,11 +117,20 @@ fn os_call_view(check: *OsCheck, state: *OsState, syntax: *CrustTypeSyntax, orig
     return result;
 }
 
-fn os_result_type(check: *OsCheck, state: *OsState, value: *OsValue,
-                   syntax: *CrustTypeSyntax, location: *CrustLoc) -> bool {
+fn os_result_type(
+    check: *OsCheck,
+    state: *OsState,
+    value: *OsValue,
+    syntax: *CrustTypeSyntax,
+    location: *CrustLoc
+) -> bool {
     var current: *CrustTypeSyntax = (*value).syntax;
-    if (*value).pointer || os_borrowed(check, current) { current = (*current).base; }
-    if rs_same((*(*check).stage).resources, syntax, current) { return true; }
+    if (*value).pointer || os_borrowed(check, current) {
+        current = (*current).base;
+    }
+    if rs_same((*(*check).stage).resources, syntax, current) {
+        return true;
+    }
     os_error(check, location, "returned view type does not match its field path");
     return false;
 }

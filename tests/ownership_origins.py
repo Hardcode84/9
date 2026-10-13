@@ -173,7 +173,9 @@ def check_imports(build, directory, source):
     output = directory / "origins-imported"
     import_command(import_arguments(driver, cache, receipt, client, output))
     assert command([output]).stdout == b"A\n"
-    client.write_text(client.read_text().replace("if first!=65i64", "right=0i64;if first!=65i64"))
+    original = client.read_text()
+    assert "if first != 65i64" in original
+    client.write_text(original.replace("if first != 65i64", "right = 0i64; if first != 65i64"))
     result = import_command(import_arguments(driver, cache, receipt, client, output), success=False)
     assert "active" in result.stderr
 

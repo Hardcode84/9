@@ -81,6 +81,12 @@ repos:
         args: [src/, include/, runtime/, -l, c, --CCN, '15', -w]
         files: ^(src/.*\.[ch]|runtime/.*\.c|include/.*\.h|\.pre-commit-config\.yaml)$
         pass_filenames: false
+      - id: crust-format
+        name: format Crust sources
+        language: python
+        entry: python tools/format_crust.py --
+        files: '\.crs$'
+        require_serial: true
       - id: crust-api
         name: check generated Crust APIs
         language: python

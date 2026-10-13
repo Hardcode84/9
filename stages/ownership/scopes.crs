@@ -2,17 +2,29 @@
 
 fn os_scope_contains(outer: *OsScope, inner: *OsScope) -> bool {
     while inner != null(*OsScope) {
-        if inner == outer { return true; }
+        if inner == outer {
+            return true;
+        }
         inner = (*inner).parent;
     }
     return false;
 }
 
 fn os_unused(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> unit {
-    if value == null(*OsValue) || !(*value).owner || os_failed(check) { return; }
-    if (*value).native != null(*OsField) { os_error(check, location, "unused resource must be consumed or assigned an owner"); return; }
-    if (*value).pointer { os_error(check, location, "unused allocation must be released or assigned an owner"); return; }
-    if (*value).object != null(*OsObject) { os_drop_object(check, state, (*value).object, location); }
+    if value == null(*OsValue) ||!(*value).owner || os_failed(check) {
+        return;
+    }
+    if (*value).native != null(*OsField) {
+        os_error(check, location, "unused resource must be consumed or assigned an owner");
+        return;
+    }
+    if (*value).pointer {
+        os_error(check, location, "unused allocation must be released or assigned an owner");
+        return;
+    }
+    if (*value).object != null(*OsObject) {
+        os_drop_object(check, state, (*value).object, location);
+    }
 }
 
 fn os_scope(check: *OsCheck, state: *OsState) -> unit {
@@ -26,14 +38,28 @@ fn os_scope(check: *OsCheck, state: *OsState) -> unit {
     }
 }
 
-fn os_bind(check: *OsCheck, state: *OsState, name: *CrustName, syntax: *CrustTypeSyntax,
-           value: *OsValue, location: *CrustLoc) -> *OsSlot {
+fn os_bind(
+    check: *OsCheck,
+    state: *OsState,
+    name: *CrustName,
+    syntax: *CrustTypeSyntax,
+    value: *OsValue,
+    location: *CrustLoc
+) -> *OsSlot {
     var slot: *OsSlot = os_slot(check, syntax, name, null(*OsObject), (*state).scope);
-    if slot == null(*OsSlot) { return slot; }
-    if value != null(*OsValue) && (*value).owner && ((*value).pointer || (*value).native != null(*OsField)) { (*slot).owns = true; }
+    if slot == null(*OsSlot) {
+        return slot;
+    }
+    if value != null(*OsValue) && (*value).owner && (
+        (*value).pointer || (*value).native != null(*OsField)
+    ) {
+        (*slot).owns = true;
+    }
     (*slot).next = (*(*state).scope).locals;
     (*(*state).scope).locals = slot;
-    if value != null(*OsValue) { os_store(check, state, slot, value, location); }
+    if value != null(*OsValue) {
+        os_store(check, state, slot, value, location);
+    }
     return slot;
 }
 
@@ -42,8 +68,12 @@ fn os_scope_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> unit {
     var slot: *OsSlot = (*(*state).scope).locals;
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
-        if (*slot).deferred != null(*OsDeferred) { os_defer_finish(check, state, (*slot).deferred); }
-        if value != null(*OsValue) { os_end_local(check, state, slot, value, location); }
+        if (*slot).deferred != null(*OsDeferred) {
+            os_defer_finish(check, state, (*slot).deferred);
+        }
+        if value != null(*OsValue) {
+            os_end_local(check, state, slot, value, location);
+        }
         os_set(check, state, slot as *u8, null(*OsValue), 0u32);
         slot = (*slot).next;
     }
@@ -53,35 +83,77 @@ fn os_scope_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> unit {
     (*state).effect = (*scope).effect;
 }
 
-fn os_end_local(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsValue, location: *CrustLoc) -> unit {
-    if os_borrowed(check, (*slot).syntax) { os_loan_end(check, state, value); return; }
+fn os_end_local(
+    check: *OsCheck,
+    state: *OsState,
+    slot: *OsSlot,
+    value: *OsValue,
+    location: *CrustLoc
+) -> unit {
+    if os_borrowed(check, (*slot).syntax) {
+        os_loan_end(check, state, value);
+        return;
+    }
     if (*value).native != null(*OsField) {
-        if (*value).presence != OS_ABSENT { os_error(check, location, "owned value must be consumed or moved before its scope ends"); }
+        if (*value).presence != OS_ABSENT {
+            os_error(
+                check,
+                location,
+                "owned value must be consumed or moved before its scope ends"
+            );
+        }
         return;
     }
     if (*value).pointer {
-        if (*slot).owns && (*value).object != null(*OsObject) &&
-           (os_flags(state, (*value).object) & OS_ABSENT) == 0u32 {
-            os_error(check, location, "owned pointer must be released or moved before its scope ends");
+        if (*slot).owns && (*value).object != null(*OsObject) && (
+            os_flags(state, (*value).object) & OS_ABSENT
+        ) == 0u32 {
+            os_error(
+                check,
+                location,
+                "owned pointer must be released or moved before its scope ends"
+            );
         }
         return;
     }
     var object: *OsObject = (*value).object;
-    if object == null(*OsObject) { return; }
-    if (*slot).owns { os_drop_object(check, state, object, location); }
+    if object == null(*OsObject) {
+        return;
+    }
+    if (*slot).owns {
+        os_drop_object(check, state, object, location);
+    }
     os_mark(check, state, object, os_flags(state, object) & ~OS_LIVE);
 }
 
-fn os_drop_object(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
-    if !os_enter(check, location) { return; }
+fn os_drop_object(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> unit {
+    if !os_enter(check, location) {
+        return;
+    }
     if !os_initialized(check, state, object) {
         os_error(check, location, "resource destruction requires initialized owner fields");
     }
-    if !os_failed(check) && os_loan_access(check, state, object, null(*OsLoan), true, location) {
+    if !os_failed(check) && os_loan_access(
+        check,
+        state,
+        object,
+        null(*OsLoan),
+        true,
+        location
+    ) {
         os_unfold(check, state, object);
-        var global: *RsGlobal = rs_global((*(*check).stage).resources, (*(*object).syntax).name);
-        if global != null(*RsGlobal) && (*global).resource != null(*RsResource) { os_drop_callback(check, state, object, location); }
-        else {
+        var global: *RsGlobal = rs_global(
+            (*(*check).stage).resources,
+            (*(*object).syntax).name
+        );
+        if global != null(*RsGlobal) && (*global).resource != null(*RsResource) {
+            os_drop_callback(check, state, object, location);
+        } else {
             os_drop_fields(check, state, object, location);
         }
         if !os_failed(check) {
@@ -91,38 +163,69 @@ fn os_drop_object(check: *OsCheck, state: *OsState, object: *OsObject, location:
     (*check).depth = (*check).depth - 1usize;
 }
 
-fn os_expire_owned(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
-    if !os_enter(check, location) { return; }
+fn os_expire_owned(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> unit {
+    if !os_enter(check, location) {
+        return;
+    }
     var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
-        if value != null(*OsValue) && os_borrowed(check, (*slot).syntax) { os_loan_end(check, state, value); }
-        else { if value != null(*OsValue) && (*value).object != null(*OsObject) {
-            if (*slot).owns && (*value).pointer {
-                os_expire_owned(check, state, (*value).object, location);
-            } else { if !(*value).pointer { os_expire_owned(check, state, (*value).object, location); } }
-        } }
+        if value != null(*OsValue) && os_borrowed(check, (*slot).syntax) {
+            os_loan_end(check, state, value);
+        } else {
+            if value != null(*OsValue) && (*value).object != null(*OsObject) {
+                if (*slot).owns && (*value).pointer {
+                    os_expire_owned(check, state, (*value).object, location);
+                } else {
+                    if!(*value).pointer {
+                        os_expire_owned(check, state, (*value).object, location);
+                    }
+                }
+            }
+        }
         os_set(check, state, slot as *u8, null(*OsValue), 0u32);
         slot = (*slot).next;
     }
-    os_mark(check, state, object, (os_flags(state, object) & ~(OS_LIVE | OS_SUMMARY)) | OS_DESTROYED);
+    os_mark(
+        check,
+        state,
+        object,
+        (os_flags(state, object) & ~(OS_LIVE | OS_SUMMARY)) | OS_DESTROYED
+    );
     (*check).depth = (*check).depth - 1usize;
 }
 
-fn os_destructor_end(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
+fn os_destructor_end(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> unit {
     var slot: *OsSlot = os_fields(state, object);
     while slot != null(*OsSlot) && !os_failed(check) {
         var value: *OsValue = os_bound(state, slot);
         if value != null(*OsValue) && (*value).native != null(*OsField) && (*value).presence == OS_ABSENT {
             value = null(*OsValue);
         }
-        if (*slot).owns && value != null(*OsValue) &&
-           ((*(*slot).syntax).kind == CRUST_T_POINTER || (*value).native != null(*OsField)) {
-            os_error(check, location, "destructor must consume each owned field"); return;
+        if (*slot).owns && value != null(*OsValue) && (
+            (*(*slot).syntax).kind == CRUST_T_POINTER || (*value).native != null(*OsField)
+        ) {
+            os_error(check, location, "destructor must consume each owned field");
+            return;
         }
         if rs_owns((*(*check).stage).resources, (*slot).syntax) {
             if value == null(*OsValue) || !os_initialized(check, state, (*value).object) {
-                os_error(check, location, "destructor must leave embedded resources initialized for field cleanup"); return;
+                os_error(
+                    check,
+                    location,
+                    "destructor must leave embedded resources initialized for field cleanup"
+                );
+                return;
             }
         }
         slot = (*slot).next;

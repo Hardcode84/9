@@ -2,7 +2,9 @@
 
 fn proof_length(text: *u8) -> usize {
     var size: usize = 0usize;
-    while text[size] != 0u8 { size = size + 1usize; }
+    while text[size] != 0u8 {
+        size = size + 1usize;
+    }
     return size;
 }
 
@@ -11,7 +13,10 @@ fn proof_error(session: *ProofSession, offset: usize, message: *u8) -> i32 {
     return 1i32;
 }
 
-fn set_backend(session: *ProofSession, backend: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32) -> i32 {
+fn set_backend(
+    session: *ProofSession,
+    backend: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
     if backend == null(fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32) {
         return proof_error(session, (*session).cursor, "null backend");
     }
@@ -19,7 +24,10 @@ fn set_backend(session: *ProofSession, backend: fn(*CrustContext, *CrustDecl, *B
     return 0i32;
 }
 
-fn set_reader(session: *ProofSession, reader: fn(*ProofSession, *CrustContext, *ProofAction) -> i32) -> i32 {
+fn set_reader(
+    session: *ProofSession,
+    reader: fn(*ProofSession, *CrustContext, *ProofAction) -> i32
+) -> i32 {
     (*session).selections = (*session).selections + 1usize;
     if reader == null(fn(*ProofSession, *CrustContext, *ProofAction) -> i32) {
         return proof_error(session, (*session).cursor, "null reader");
@@ -29,7 +37,10 @@ fn set_reader(session: *ProofSession, reader: fn(*ProofSession, *CrustContext, *
     return 0i32;
 }
 
-fn reject_reader(session: *ProofSession, reader: fn(*ProofSession, *CrustContext, *ProofAction) -> i32) -> i32 {
+fn reject_reader(
+    session: *ProofSession,
+    reader: fn(*ProofSession, *CrustContext, *ProofAction) -> i32
+) -> i32 {
     (*session).selections = (*session).selections + 1usize;
     return proof_error(session, (*session).cursor, "reader selection rejected");
 }
@@ -38,7 +49,9 @@ fn proof_match(session: *ProofSession, offset: usize, text: *u8) -> usize {
     var source: *CrustSource = (*session).source;
     var index: usize = 0usize;
     while text[index] != 0u8 {
-        if offset >= (*source).size || (*source).bytes[offset] != text[index] { return 0usize; }
+        if offset >= (*source).size || (*source).bytes[offset] != text[index] {
+            return 0usize;
+        }
         offset = offset + 1usize;
         index = index + 1usize;
     }
@@ -46,7 +59,11 @@ fn proof_match(session: *ProofSession, offset: usize, text: *u8) -> usize {
 }
 
 fn proof_expr(context: *CrustContext, source: *CrustSource, offset: usize, kind: u32) -> *CrustExpr {
-    var expression: *CrustExpr = crust_try_alloc(context, sizeof(CrustExpr), alignof(CrustExpr)) as *CrustExpr;
+    var expression: *CrustExpr = crust_try_alloc(
+        context,
+        sizeof(CrustExpr),
+        alignof(CrustExpr)
+    ) as *CrustExpr;
     if expression != null(*CrustExpr) {
         (*expression).kind = kind;
         (*expression).loc.source = source;
@@ -57,46 +74,85 @@ fn proof_expr(context: *CrustContext, source: *CrustSource, offset: usize, kind:
 
 fn proof_name(context: *CrustContext, source: *CrustSource, offset: usize, name: *u8) -> *CrustExpr {
     var expression: *CrustExpr = proof_expr(context, source, offset, CRUST_E_NAME);
-    if expression == null(*CrustExpr) { return expression; }
+    if expression == null(*CrustExpr) {
+        return expression;
+    }
     (*expression).name = crust_try_intern(context, name, proof_length(name));
-    if (*expression).name == null(*CrustName) { return null(*CrustExpr); }
+    if (*expression).name == null(*CrustName) {
+        return null(*CrustExpr);
+    }
     return expression;
 }
 
-fn proof_include_path(session: *ProofSession, context: *CrustContext, begin: usize, end: *usize) -> *CrustExpr {
+fn proof_include_path(
+    session: *ProofSession,
+    context: *CrustContext,
+    begin: usize,
+    end: *usize
+) -> *CrustExpr {
     var source: *CrustSource = (*session).source;
     var offset: usize = begin;
     while offset < (*source).size && (*source).bytes[offset] != 124u8 {
         if (*source).bytes[offset] == 0u8 || (*source).bytes[offset] == 10u8 {
-            proof_error(session, offset, "invalid alternate include path"); return null(*CrustExpr);
+            proof_error(session, offset, "invalid alternate include path");
+            return null(*CrustExpr);
         }
         offset = offset + 1usize;
     }
     if offset == (*source).size || offset == begin {
-        proof_error(session, offset, "alternate include needs a nonempty closed path"); return null(*CrustExpr);
+        proof_error(session, offset, "alternate include needs a nonempty closed path");
+        return null(*CrustExpr);
     }
     var path: *CrustExpr = proof_expr(context, source, begin, CRUST_E_STRING);
-    if path == null(*CrustExpr) { return path; }
-    (*path).bytes = crust_try_copy_string(context, (*source).bytes + (begin as isize), offset - begin);
-    if (*path).bytes == null(*u8) { return null(*CrustExpr); }
+    if path == null(*CrustExpr) {
+        return path;
+    }
+    (*path).bytes = crust_try_copy_string(
+        context,
+        (*source).bytes + (begin as isize),
+        offset - begin
+    );
+    if (*path).bytes == null(*u8) {
+        return null(*CrustExpr);
+    }
     (*path).byte_count = offset - begin + 1usize;
     *end = offset + 1usize;
     return path;
 }
 
-fn proof_call(context: *CrustContext, source: *CrustSource, start: usize, path: *CrustExpr) -> *CrustExpr {
+fn proof_call(
+    context: *CrustContext,
+    source: *CrustSource,
+    start: usize,
+    path: *CrustExpr
+) -> *CrustExpr {
     var name: *u8 = "queue_emit";
     var count: usize = 1usize;
-    if path != null(*CrustExpr) { name = "include_input"; count = 2usize; }
+    if path != null(*CrustExpr) {
+        name = "include_input";
+        count = 2usize;
+    }
     var call: *CrustExpr = proof_expr(context, source, start, CRUST_E_CALL);
-    if call == null(*CrustExpr) { return call; }
+    if call == null(*CrustExpr) {
+        return call;
+    }
     (*call).left = proof_name(context, source, start, name);
-    (*call).args = crust_try_alloc(context, count * sizeof(*CrustExpr), alignof(*CrustExpr)) as **CrustExpr;
-    if (*call).left == null(*CrustExpr) || (*call).args == null(**CrustExpr) { return null(*CrustExpr); }
+    (*call).args = crust_try_alloc(
+        context,
+        count * sizeof(*CrustExpr),
+        alignof(*CrustExpr)
+    ) as **CrustExpr;
+    if (*call).left == null(*CrustExpr) || (*call).args == null(**CrustExpr) {
+        return null(*CrustExpr);
+    }
     (*call).arg_count = count;
     (*call).args[0usize] = proof_name(context, source, start, "session");
-    if (*call).args[0usize] == null(*CrustExpr) { return null(*CrustExpr); }
-    if path != null(*CrustExpr) { (*call).args[1usize] = path; }
+    if (*call).args[0usize] == null(*CrustExpr) {
+        return null(*CrustExpr);
+    }
+    if path != null(*CrustExpr) {
+        (*call).args[1usize] = path;
+    }
     return call;
 }
 
@@ -104,7 +160,7 @@ fn alternate(session: *ProofSession, context: *CrustContext, action: *ProofActio
     (*session).reads = (*session).reads + 1usize;
     var source: *CrustSource = (*session).source;
     var offset: usize = (*session).cursor;
-    if !(*session).custom_started {
+    if!(*session).custom_started {
         if offset >= (*source).size || (*source).bytes[offset] != 0u8 {
             proof_error(session, offset, "alternate reader requires the hostile zero byte");
             return -1i32;
@@ -112,27 +168,38 @@ fn alternate(session: *ProofSession, context: *CrustContext, action: *ProofActio
         (*session).custom_started = true;
         offset = offset + 1usize;
     }
-    while offset < (*source).size && ((*source).bytes[offset] == 10u8 || (*source).bytes[offset] == 32u8) {
+    while offset < (*source).size && (
+        (*source).bytes[offset] == 10u8 || (*source).bytes[offset] == 32u8
+    ) {
         offset = offset + 1usize;
     }
-    if offset == (*source).size { (*action).next_offset = offset; return 0i32; }
+    if offset == (*source).size {
+        (*action).next_offset = offset;
+        return 0i32;
+    }
     var start: usize = offset;
     var after: usize = proof_match(session, offset, "@include |");
     var path: *CrustExpr = null(*CrustExpr);
     if after != 0usize {
         path = proof_include_path(session, context, after, &offset);
-        if path == null(*CrustExpr) { return -1i32; }
+        if path == null(*CrustExpr) {
+            return -1i32;
+        }
     } else {
         offset = proof_match(session, offset, "@emit");
         if offset == 0usize {
-            proof_error(session, start, "unknown alternate root form"); return -1i32;
+            proof_error(session, start, "unknown alternate root form");
+            return -1i32;
         }
     }
     if offset < (*source).size && (*source).bytes[offset] != 10u8 {
-        proof_error(session, offset, "alternate root form needs a line end"); return -1i32;
+        proof_error(session, offset, "alternate root form needs a line end");
+        return -1i32;
     }
     (*action).call = proof_call(context, source, start, path);
-    if (*action).call == null(*CrustExpr) { return -1i32; }
+    if (*action).call == null(*CrustExpr) {
+        return -1i32;
+    }
     (*action).next_offset = offset;
     return 1i32;
 }
@@ -140,7 +207,9 @@ fn alternate(session: *ProofSession, context: *CrustContext, action: *ProofActio
 fn proof_allocate(user: *u8, size: usize) -> *u8 {
     var session: *ProofSession = user as *ProofSession;
     var allocation: *u8 = crust0_host_alloc(size, 8usize);
-    if allocation != null(*u8) { (*session).allocations = (*session).allocations + 1usize; }
+    if allocation != null(*u8) {
+        (*session).allocations = (*session).allocations + 1usize;
+    }
     return allocation;
 }
 
@@ -151,28 +220,44 @@ fn proof_release(user: *u8, allocation: *u8) -> unit {
 }
 
 fn include_input(session: *ProofSession, path: *u8) -> i32 {
-    if (*session).includes != 0usize { return proof_error(session, (*session).cursor, "proof accepts one target input"); }
+    if (*session).includes != 0usize {
+        return proof_error(session, (*session).cursor, "proof accepts one target input");
+    }
     var context: *CrustContext = (*session).target;
     crust_context_destroy(context);
     var allocator: CrustAllocator = make CrustAllocator {
-        user: session as *u8, allocate: proof_allocate, release: proof_release
+        user: session as *u8,
+        allocate: proof_allocate,
+        release: proof_release
     };
     crust_context_init(context, &allocator);
-    var source: *CrustSource = crust_try_alloc((*session).owner, sizeof(CrustSource), alignof(CrustSource)) as *CrustSource;
-    if source == null(*CrustSource) { return 1i32; }
+    var source: *CrustSource = crust_try_alloc(
+        (*session).owner,
+        sizeof(CrustSource),
+        alignof(CrustSource)
+    ) as *CrustSource;
+    if source == null(*CrustSource) {
+        return 1i32;
+    }
     (*source).path = crust_try_copy_string((*session).owner, path, proof_length(path));
-    if (*source).path == null(*u8) { return 1i32; }
+    if (*source).path == null(*u8) {
+        return 1i32;
+    }
     var bytes: *u8 = null(*u8);
     if crust0_host_read_file(path, &bytes, &(*source).size) != 0i32 {
         return proof_error(session, (*session).cursor, "cannot read explicit target input");
     }
     (*source).bytes = crust_try_copy_string((*session).owner, bytes, (*source).size);
     crust0_host_free(bytes);
-    if (*source).bytes == null(*u8) { return 1i32; }
+    if (*source).bytes == null(*u8) {
+        return 1i32;
+    }
     (*source).identity = 1u64;
     (*session).target_source = source;
     var parsed: *CrustUnit = null(*CrustUnit);
-    if !crust_read(context, source, &parsed) { return 1i32; }
+    if !crust_read(context, source, &parsed) {
+        return 1i32;
+    }
     (*session).includes = 1usize;
     return 0i32;
 }
@@ -188,7 +273,9 @@ fn proof_entry(context: *CrustContext, private: *u8) -> *CrustDecl {
             }
             var word: *u8 = (*(*declaration).name).text;
             if (*declaration).kind == CRUST_D_FUNCTION && (*(*declaration).name).size == 4usize {
-                if word[0usize] == 109u8 && word[1usize] == 97u8 && word[2usize] == 105u8 && word[3usize] == 110u8 {
+                if word[0usize] == 109u8 && word[1usize] == 97u8 && word[2usize] == 105u8 && word[
+                    3usize
+                ] == 110u8 {
                     entry = declaration;
                 }
             }
@@ -200,22 +287,43 @@ fn proof_entry(context: *CrustContext, private: *u8) -> *CrustDecl {
 }
 
 fn proof_emit(session: *ProofSession) -> i32 {
-    if !(*session).root_done || (*session).reader_active {
-        return proof_error(session, (*session).cursor, "target ran before root-reader return");
+    if!(*session).root_done || (*session).reader_active {
+        return proof_error(
+            session,
+            (*session).cursor,
+            "target ran before root-reader return"
+        );
     }
     if (*session).backend == null(fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32) {
         return proof_error(session, (*session).cursor, "backend was not selected");
     }
     var context: *CrustContext = (*session).target;
-    if !crust_collect(context) || !crust_resolve(context) || !crust_check(context) { return 1i32; }
+    if !crust_collect(context) || !crust_resolve(context) || !crust_check(context) {
+        return 1i32;
+    }
     var private: *u8 = crust_try_copy_string(context, "", 0usize);
-    if private == null(*u8) { return 1i32; }
+    if private == null(*u8) {
+        return 1i32;
+    }
     var entry: *CrustDecl = proof_entry(context, private);
-    if entry == null(*CrustDecl) { return proof_error(session, (*session).cursor, "target main was not found"); }
-    if (*session).argc != 1i32 { return proof_error(session, (*session).cursor, "proof root requires one symbol-output argument"); }
+    if entry == null(*CrustDecl) {
+        return proof_error(session, (*session).cursor, "target main was not found");
+    }
+    if (*session).argc != 1i32 {
+        return proof_error(
+            session,
+            (*session).cursor,
+            "proof root requires one symbol-output argument"
+        );
+    }
     var options: BackendOptions = make BackendOptions {
-        mode: 2u32, output: null(*u8), symbols: (*session).argv[0usize],
-        cflags: null(**u8), cflag_count: 0usize, ldflags: null(**u8), ldflag_count: 0usize
+        mode: 2u32,
+        output: null(*u8),
+        symbols: (*session).argv[0usize],
+        cflags: null(**u8),
+        cflag_count: 0usize,
+        ldflags: null(**u8),
+        ldflag_count: 0usize
     };
     (*session).emits = (*session).emits + 1usize;
     return (*session).backend(context, entry, &options);
@@ -223,7 +331,11 @@ fn proof_emit(session: *ProofSession) -> i32 {
 
 fn queue_emit(session: *ProofSession) -> i32 {
     if (*session).pending != null(fn(*ProofSession) -> i32) || (*session).includes != 1usize {
-        return proof_error(session, (*session).cursor, "emit requires one input and no pending job");
+        return proof_error(
+            session,
+            (*session).cursor,
+            "emit requires one input and no pending job"
+        );
     }
     (*session).pending = proof_emit;
     return 0i32;

@@ -289,16 +289,40 @@ extern fn crust_arena_alloc(arena: *CrustArena, size: usize, alignment: usize) -
 extern fn crust_context_init(ctx: *CrustContext, allocator: *CrustAllocator) -> unit = "crust_context_init";
 extern fn crust_context_destroy(ctx: *CrustContext) -> unit = "crust_context_destroy";
 extern fn crust_allocate_kinds(ctx: *CrustContext, count: u32) -> u32 = "crust_allocate_kinds";
-extern fn crust_set_error(ctx: *CrustContext, source: *CrustSource, offset: usize, message: *u8) -> unit = "crust_set_error";
+extern fn crust_set_error(
+    ctx: *CrustContext,
+    source: *CrustSource,
+    offset: usize,
+    message: *u8
+) -> unit = "crust_set_error";
 extern fn crust_try_alloc(ctx: *CrustContext, size: usize, alignment: usize) -> *u8 = "crust_try_alloc";
 extern fn crust_try_intern(ctx: *CrustContext, text: *u8, size: usize) -> *CrustName = "crust_try_intern";
-extern fn crust_try_grow_array(ctx: *CrustContext, old: *u8, count: usize, capacity: usize, item_size: usize, alignment: usize) -> *u8 = "crust_try_grow_array";
+extern fn crust_try_grow_array(
+    ctx: *CrustContext,
+    old: *u8,
+    count: usize,
+    capacity: usize,
+    item_size: usize,
+    alignment: usize
+) -> *u8 = "crust_try_grow_array";
 extern fn crust_try_copy_string(ctx: *CrustContext, text: *u8, size: usize) -> *u8 = "crust_try_copy_string";
 extern fn crust_try_map_set(ctx: *CrustContext, map: *CrustMap, key: usize, value: *u8) -> bool = "crust_try_map_set";
 extern fn crust_map_get(map: *CrustMap, key: usize) -> *u8 = "crust_map_get";
 extern fn crust_read(ctx: *CrustContext, source: *CrustSource, result: **CrustUnit) -> bool = "crust_read";
-extern fn crust_read_range(ctx: *CrustContext, source: *CrustSource, begin: usize, end: usize, result: **CrustUnit) -> bool = "crust_read_range";
-extern fn crust_read_one(ctx: *CrustContext, source: *CrustSource, begin: usize, end: usize, result: *CrustAction) -> bool = "crust_read_one";
+extern fn crust_read_range(
+    ctx: *CrustContext,
+    source: *CrustSource,
+    begin: usize,
+    end: usize,
+    result: **CrustUnit
+) -> bool = "crust_read_range";
+extern fn crust_read_one(
+    ctx: *CrustContext,
+    source: *CrustSource,
+    begin: usize,
+    end: usize,
+    result: *CrustAction
+) -> bool = "crust_read_one";
 extern fn crust_bind(ctx: *CrustContext, name: *CrustName, declaration: *CrustDecl) -> bool = "crust_bind";
 extern fn crust_collect(ctx: *CrustContext) -> bool = "crust_collect";
 extern fn crust_resolve(ctx: *CrustContext) -> bool = "crust_resolve";
@@ -307,9 +331,18 @@ extern fn crust_check(ctx: *CrustContext) -> bool = "crust_check";
 extern fn crust_collect_unit(ctx: *CrustContext, unit_value: *CrustUnit) -> bool = "crust_collect_unit";
 extern fn crust_resolve_unit(ctx: *CrustContext, unit_value: *CrustUnit) -> bool = "crust_resolve_unit";
 extern fn crust_check_unit(ctx: *CrustContext, unit_value: *CrustUnit) -> bool = "crust_check_unit";
-extern fn crust_check_root(ctx: *CrustContext, scope: *CrustRootScope, statement: *CrustStmt) -> bool = "crust_check_root";
+extern fn crust_check_root(
+    ctx: *CrustContext,
+    scope: *CrustRootScope,
+    statement: *CrustStmt
+) -> bool = "crust_check_root";
 extern fn crust_try_resolve_type(ctx: *CrustContext, syntax: *CrustTypeSyntax) -> *CrustType = "crust_try_resolve_type";
-extern fn crust_try_type_equal(ctx: *CrustContext, a: *CrustType, b: *CrustType, result: *bool) -> bool = "crust_try_type_equal";
+extern fn crust_try_type_equal(
+    ctx: *CrustContext,
+    a: *CrustType,
+    b: *CrustType,
+    result: *bool
+) -> bool = "crust_try_type_equal";
 extern fn crust_type_integer(type: *CrustType) -> bool = "crust_type_integer";
 extern fn crust_type_signed(type: *CrustType) -> bool = "crust_type_signed";
 extern fn crust_type_scalar(type: *CrustType) -> bool = "crust_type_scalar";

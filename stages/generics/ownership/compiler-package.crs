@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
-stage_include(stage,"sources.crs");
-stage_source(stage,"../../build/interface.crs");
-stage_source(stage,"../../build/names.crs");
-stage_source(stage,"compiler.crs");
-stage_export(stage,"og_stage_compile");
+stage_include(stage, "sources.crs");
+stage_source(stage, "../../build/interface.crs");
+stage_source(stage, "../../build/names.crs");
+stage_source(stage, "compiler.crs");
+stage_export(stage, "og_stage_compile");

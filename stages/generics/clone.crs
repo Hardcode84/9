@@ -5,34 +5,61 @@ fn gs_clone_initializers(clone: *GsClone, source: *CrustInit, depth: u32) -> *Cr
     var first: *CrustInit = null(*CrustInit);
     var last: *CrustInit = null(*CrustInit);
     while source != null(*CrustInit) && (*context).error_count == 0usize {
-        var target: *CrustInit = crust_try_alloc(context, sizeof(CrustInit), alignof(CrustInit)) as *CrustInit;
-        if target == null(*CrustInit) { return null(*CrustInit); }
+        var target: *CrustInit = crust_try_alloc(
+            context,
+            sizeof(CrustInit),
+            alignof(CrustInit)
+        ) as *CrustInit;
+        if target == null(*CrustInit) {
+            return null(*CrustInit);
+        }
         (*target).loc = (*source).loc;
         (*target).name = gs_name(context, (*source).name);
         (*target).value = gs_clone_expression(clone, (*source).value, depth + 1u32);
-        if last == null(*CrustInit) { first = target; } else { (*last).next = target; }
+        if last == null(*CrustInit) {
+            first = target;
+        } else {
+            (*last).next = target;
+        }
         last = target;
         source = (*source).next;
     }
     return first;
 }
 
-fn gs_clone_arguments(clone: *GsClone, source: *CrustExpr,
-                      target: *CrustExpr, depth: u32) -> unit {
+fn gs_clone_arguments(
+    clone: *GsClone,
+    source: *CrustExpr,
+    target: *CrustExpr,
+    depth: u32
+) -> unit {
     (*target).arg_count = (*source).arg_count;
-    (*target).args = gs_array_storage((*clone).context, (*source).arg_count,
-        sizeof(*CrustExpr), alignof(*CrustExpr), &(*source).loc) as **CrustExpr;
+    (*target).args = gs_array_storage(
+        (*clone).context,
+        (*source).arg_count,
+        sizeof(*CrustExpr),
+        alignof(*CrustExpr),
+        &(*source).loc
+    ) as **CrustExpr;
     var index: usize = 0usize;
     while index < (*source).arg_count && (*(*clone).context).error_count == 0usize {
-        (*target).args[index] = gs_clone_expression(clone, (*source).args[index], depth + 1u32);
+        (*target).args[index] = gs_clone_expression(
+            clone,
+            (*source).args[index],
+            depth + 1u32
+        );
         index = index + 1usize;
     }
 }
 
 fn gs_clone_expression(clone: *GsClone, source: *CrustExpr, depth: u32) -> *CrustExpr {
-    if source == null(*CrustExpr) { return null(*CrustExpr); }
-    if !gs_depth((*clone).context, &(*source).loc, depth) { return null(*CrustExpr); }
-    if (*clone).expression != null(fn(*GsClone,*CrustExpr,u32)->*CrustExpr) {
+    if source == null(*CrustExpr) {
+        return null(*CrustExpr);
+    }
+    if !gs_depth((*clone).context, &(*source).loc, depth) {
+        return null(*CrustExpr);
+    }
+    if (*clone).expression != null(fn(*GsClone, *CrustExpr, u32) -> *CrustExpr) {
         return (*clone).expression(clone, source, depth);
     }
     return gs_clone_standard_expression(clone, source, depth);
@@ -40,10 +67,21 @@ fn gs_clone_expression(clone: *GsClone, source: *CrustExpr, depth: u32) -> *Crus
 
 fn gs_clone_standard_expression(clone: *GsClone, source: *CrustExpr, depth: u32) -> *CrustExpr {
     var context: *CrustContext = (*clone).context;
-    var target: *CrustExpr = crust_try_alloc(context, sizeof(CrustExpr), alignof(CrustExpr)) as *CrustExpr;
-    if target == null(*CrustExpr) { return target; }
+    var target: *CrustExpr = crust_try_alloc(
+        context,
+        sizeof(CrustExpr),
+        alignof(CrustExpr)
+    ) as *CrustExpr;
+    if target == null(*CrustExpr) {
+        return target;
+    }
     (*target).loc = (*source).loc;
-    (*target).kind = gs_clone_kind(clone, (*source).kind, CRUST_E_END, &(*source).loc);
+    (*target).kind = gs_clone_kind(
+        clone,
+        (*source).kind,
+        CRUST_E_END,
+        &(*source).loc
+    );
     (*target).op = (*source).op;
     (*target).literal_type = (*source).literal_type;
     (*target).integer = (*source).integer;
@@ -56,7 +94,9 @@ fn gs_clone_standard_expression(clone: *GsClone, source: *CrustExpr, depth: u32)
     (*target).right = gs_clone_expression(clone, (*source).right, depth + 1u32);
     (*target).inits = gs_clone_initializers(clone, (*source).inits, depth);
     gs_clone_arguments(clone, source, target, depth);
-    if (*context).error_count != 0usize { return null(*CrustExpr); }
+    if (*context).error_count != 0usize {
+        return null(*CrustExpr);
+    }
     return target;
 }
 
@@ -65,10 +105,18 @@ fn gs_clone_statements(clone: *GsClone, source: *CrustStmt, depth: u32) -> *Crus
     var first: *CrustStmt = null(*CrustStmt);
     var last: *CrustStmt = null(*CrustStmt);
     while source != null(*CrustStmt) && (*context).error_count == 0usize {
-        if !gs_depth((*clone).context, &(*source).loc, depth) { return null(*CrustStmt); }
+        if !gs_depth((*clone).context, &(*source).loc, depth) {
+            return null(*CrustStmt);
+        }
         var target: *CrustStmt = gs_clone_statement(clone, source, depth);
-        if target == null(*CrustStmt) { return target; }
-        if last == null(*CrustStmt) { first = target; } else { (*last).next = target; }
+        if target == null(*CrustStmt) {
+            return target;
+        }
+        if last == null(*CrustStmt) {
+            first = target;
+        } else {
+            (*last).next = target;
+        }
         last = target;
         source = (*source).next;
     }
@@ -77,10 +125,21 @@ fn gs_clone_statements(clone: *GsClone, source: *CrustStmt, depth: u32) -> *Crus
 
 fn gs_clone_statement(clone: *GsClone, source: *CrustStmt, depth: u32) -> *CrustStmt {
     var context: *CrustContext = (*clone).context;
-    var target: *CrustStmt = crust_try_alloc(context, sizeof(CrustStmt), alignof(CrustStmt)) as *CrustStmt;
-    if target == null(*CrustStmt) { return target; }
+    var target: *CrustStmt = crust_try_alloc(
+        context,
+        sizeof(CrustStmt),
+        alignof(CrustStmt)
+    ) as *CrustStmt;
+    if target == null(*CrustStmt) {
+        return target;
+    }
     (*target).loc = (*source).loc;
-    (*target).kind = gs_clone_kind(clone, (*source).kind, CRUST_S_END, &(*source).loc);
+    (*target).kind = gs_clone_kind(
+        clone,
+        (*source).kind,
+        CRUST_S_END,
+        &(*source).loc
+    );
     (*target).uninitialized = (*source).uninitialized;
     (*target).name = gs_name(context, (*source).name);
     (*target).syntax_type = gs_clone_type(clone, (*source).syntax_type, depth + 1u32);
@@ -88,10 +147,14 @@ fn gs_clone_statement(clone: *GsClone, source: *CrustStmt, depth: u32) -> *Crust
     (*target).value = gs_clone_expression(clone, (*source).value, depth + 1u32);
     (*target).body = gs_clone_statements(clone, (*source).body, depth + 1u32);
     (*target).otherwise = gs_clone_statements(clone, (*source).otherwise, depth + 1u32);
-    if (*context).error_count == 0usize && (*clone).statement != null(fn(*GsClone,*CrustStmt,*CrustStmt)->unit) {
+    if (*context).error_count == 0usize && (*clone).statement != null(
+        fn(*GsClone, *CrustStmt, *CrustStmt) -> unit
+    ) {
         (*clone).statement(clone, source, target);
     }
-    if (*context).error_count != 0usize { return null(*CrustStmt); }
+    if (*context).error_count != 0usize {
+        return null(*CrustStmt);
+    }
     return target;
 }
 
@@ -100,12 +163,22 @@ fn gs_clone_fields(clone: *GsClone, source: *CrustField) -> *CrustField {
     var first: *CrustField = null(*CrustField);
     var last: *CrustField = null(*CrustField);
     while source != null(*CrustField) && (*context).error_count == 0usize {
-        var target: *CrustField = crust_try_alloc(context, sizeof(CrustField), alignof(CrustField)) as *CrustField;
-        if target == null(*CrustField) { return null(*CrustField); }
+        var target: *CrustField = crust_try_alloc(
+            context,
+            sizeof(CrustField),
+            alignof(CrustField)
+        ) as *CrustField;
+        if target == null(*CrustField) {
+            return null(*CrustField);
+        }
         (*target).loc = (*source).loc;
         (*target).name = gs_name(context, (*source).name);
         (*target).syntax_type = gs_clone_type(clone, (*source).syntax_type, 0u32);
-        if last == null(*CrustField) { first = target; } else { (*last).next = target; }
+        if last == null(*CrustField) {
+            first = target;
+        } else {
+            (*last).next = target;
+        }
         last = target;
         source = (*source).next;
     }
@@ -117,12 +190,22 @@ fn gs_clone_formals(clone: *GsClone, source: *CrustParam) -> *CrustParam {
     var first: *CrustParam = null(*CrustParam);
     var last: *CrustParam = null(*CrustParam);
     while source != null(*CrustParam) && (*context).error_count == 0usize {
-        var target: *CrustParam = crust_try_alloc(context, sizeof(CrustParam), alignof(CrustParam)) as *CrustParam;
-        if target == null(*CrustParam) { return null(*CrustParam); }
+        var target: *CrustParam = crust_try_alloc(
+            context,
+            sizeof(CrustParam),
+            alignof(CrustParam)
+        ) as *CrustParam;
+        if target == null(*CrustParam) {
+            return null(*CrustParam);
+        }
         (*target).loc = (*source).loc;
         (*target).name = gs_name(context, (*source).name);
         (*target).syntax_type = gs_clone_type(clone, (*source).syntax_type, 0u32);
-        if last == null(*CrustParam) { first = target; } else { (*last).next = target; }
+        if last == null(*CrustParam) {
+            first = target;
+        } else {
+            (*last).next = target;
+        }
         last = target;
         source = (*source).next;
     }
@@ -131,8 +214,14 @@ fn gs_clone_formals(clone: *GsClone, source: *CrustParam) -> *CrustParam {
 
 fn gs_clone_declaration(clone: *GsClone, source: *CrustDecl) -> *CrustDecl {
     var context: *CrustContext = (*clone).context;
-    var target: *CrustDecl = crust_try_alloc(context, sizeof(CrustDecl), alignof(CrustDecl)) as *CrustDecl;
-    if target == null(*CrustDecl) { return target; }
+    var target: *CrustDecl = crust_try_alloc(
+        context,
+        sizeof(CrustDecl),
+        alignof(CrustDecl)
+    ) as *CrustDecl;
+    if target == null(*CrustDecl) {
+        return target;
+    }
     (*target).loc = (*source).loc;
     (*target).kind = (*source).kind;
     (*target).name = gs_name(context, (*source).name);
@@ -142,28 +231,46 @@ fn gs_clone_declaration(clone: *GsClone, source: *CrustDecl) -> *CrustDecl {
     (*target).params = gs_clone_formals(clone, (*source).params);
     (*target).param_count = (*source).param_count;
     if (*source).body != null(*CrustStmt) {
-        if (*clone).body == null(fn(*GsClone,*CrustDecl,u32)->*CrustStmt) {
+        if (*clone).body == null(fn(*GsClone, *CrustDecl, u32) -> *CrustStmt) {
             (*target).body = gs_clone_statements(clone, (*source).body, 0u32);
-        } else { (*target).body = (*clone).body(clone, source, 0u32); }
+        } else {
+            (*target).body = (*clone).body(clone, source, 0u32);
+        }
     }
     (*target).init = gs_clone_expression(clone, (*source).init, 0u32);
-    if (*context).error_count != 0usize { return null(*CrustDecl); }
+    if (*context).error_count != 0usize {
+        return null(*CrustDecl);
+    }
     return target;
 }
 
 // Clone one parsed unit. Source bytes stay borrowed; all checked facts start empty.
 fn gs_clone_unit(clone: *GsClone, source: *CrustUnit) -> *CrustUnit {
     var context: *CrustContext = (*clone).context;
-    if (*context).error_count != 0usize { return null(*CrustUnit); }
-    var target: *CrustUnit = crust_try_alloc(context, sizeof(CrustUnit), alignof(CrustUnit)) as *CrustUnit;
-    if target == null(*CrustUnit) { return target; }
+    if (*context).error_count != 0usize {
+        return null(*CrustUnit);
+    }
+    var target: *CrustUnit = crust_try_alloc(
+        context,
+        sizeof(CrustUnit),
+        alignof(CrustUnit)
+    ) as *CrustUnit;
+    if target == null(*CrustUnit) {
+        return target;
+    }
     (*target).source = (*source).source;
     var declaration: *CrustDecl = (*source).declarations;
     var last: *CrustDecl = null(*CrustDecl);
     while declaration != null(*CrustDecl) {
         var copied: *CrustDecl = gs_clone_declaration(clone, declaration);
-        if copied == null(*CrustDecl) { return null(*CrustUnit); }
-        if last == null(*CrustDecl) { (*target).declarations = copied; } else { (*last).next = copied; }
+        if copied == null(*CrustDecl) {
+            return null(*CrustUnit);
+        }
+        if last == null(*CrustDecl) {
+            (*target).declarations = copied;
+        } else {
+            (*last).next = copied;
+        }
         last = copied;
         declaration = (*declaration).next;
     }

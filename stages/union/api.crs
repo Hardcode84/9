@@ -3,4 +3,7 @@
 // Include stages/c/api.crs for BackendOptions.
 // Require an empty initialized context and source bytes live through context destruction.
 // Apply union syntax and checks, then run the selected backend output mode.
-extern fn union_program(request:*CrustBuild, emit:fn(*CrustContext,*CrustDecl,*BackendOptions)->i32)->i32="union_program";
+extern fn union_program(
+    request: *CrustBuild,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 = "union_program";

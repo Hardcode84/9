@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn load_example_stages(root: *CrustRun, stages: *StageSession,backend:*ExampleBackend) -> bool {
-    return host_source(root, "../../stages/generics/model.crs") &&
-        host_source(root, "../../stages/generics/source_model.crs") &&
-        host_source(root, "../../stages/generics/source_api.crs") &&
-        example_load(stages,backend, "stages/generics/package.crs");
+fn load_example_stages(root: *CrustRun, stages: *StageSession, backend: *ExampleBackend) -> bool {
+    return host_source(root, "../../stages/generics/model.crs") && host_source(
+        root,
+        "../../stages/generics/source_model.crs"
+    ) && host_source(root, "../../stages/generics/source_api.crs") && example_load(
+        stages,
+        backend,
+        "stages/generics/package.crs"
+    );
 }

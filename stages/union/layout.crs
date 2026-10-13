@@ -1,29 +1,58 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn su_layout_syntax(stage:*SuStage,syntax:*CrustTypeSyntax,depth:usize,size:*u64,alignment:*u32)->bool {
-    domain CompilerArena { edit CompilerArena {
-        var arena:SuArena=make SuArena{stage:stage};
-        var cursor:SuTypeCursor=make SuTypeCursor{next:syntax};
-        var value:SuSize=su_checked_syntax(read arena,mut cursor,depth);
-        *size=value.size;*alignment=value.align;
-        return value.align!=0u32;
-    } }
+fn su_layout_syntax(
+    stage: *SuStage,
+    syntax: *CrustTypeSyntax,
+    depth: usize,
+    size: *u64,
+    alignment: *u32
+) -> bool {
+    domain CompilerArena {
+        edit CompilerArena {
+            var arena: SuArena = make SuArena {
+                stage: stage
+            };
+            var cursor: SuTypeCursor = make SuTypeCursor {
+                next: syntax
+            };
+            var value: SuSize = su_checked_syntax(read arena, mut cursor, depth);
+            *size = value.size;
+            *alignment = value.align;
+            return value.align != 0u32;
+        }
+    }
 }
 
-fn su_storage_field(stage:*SuStage,decl:*CrustDecl,plan:*SuStorage)->bool {
-    var tag:*CrustField=su_alloc(stage,sizeof(CrustField),alignof(CrustField)) as *CrustField;
-    if tag==null(*CrustField) { return false; }
-    tag->name=stage->tag_name;tag->loc=decl->loc;tag->syntax_type=su_type(stage,CRUST_T_U32,&decl->loc);
-    if tag->syntax_type==null(*CrustTypeSyntax) { return false; }
-    decl->fields=tag;decl->field_count=1usize;
-    if plan->count==0u64 { return true; }
-    var storage:*CrustField=su_alloc(stage,sizeof(CrustField),alignof(CrustField)) as *CrustField;
-    if storage==null(*CrustField) { return false; }
-    storage->name=stage->storage_name;storage->loc=decl->loc;
-    storage->syntax_type=su_type(stage,CRUST_T_ARRAY,&decl->loc);
-    if storage->syntax_type==null(*CrustTypeSyntax) { return false; }
-    storage->syntax_type->base=su_type(stage,plan->carrier,&decl->loc);
-    storage->syntax_type->count=plan->count;
-    storage->next=tag;decl->fields=storage;decl->field_count=2usize;
-    return stage->context->error_count==0usize;
+fn su_storage_field(stage: *SuStage, decl: *CrustDecl, plan: *SuStorage) -> bool {
+    var tag: *CrustField = su_alloc(stage, sizeof(CrustField), alignof(CrustField)) as *CrustField;
+    if tag == null(*CrustField) {
+        return false;
+    }
+    tag -> name = stage -> tag_name;
+    tag -> loc = decl -> loc;
+    tag -> syntax_type = su_type(stage, CRUST_T_U32, &decl -> loc);
+    if tag -> syntax_type == null(*CrustTypeSyntax) {
+        return false;
+    }
+    decl -> fields = tag;
+    decl -> field_count = 1usize;
+    if plan -> count == 0u64 {
+        return true;
+    }
+    var storage: *CrustField = su_alloc(stage, sizeof(CrustField), alignof(CrustField)) as *CrustField;
+    if storage == null(*CrustField) {
+        return false;
+    }
+    storage -> name = stage -> storage_name;
+    storage -> loc = decl -> loc;
+    storage -> syntax_type = su_type(stage, CRUST_T_ARRAY, &decl -> loc);
+    if storage -> syntax_type == null(*CrustTypeSyntax) {
+        return false;
+    }
+    storage -> syntax_type -> base = su_type(stage, plan -> carrier, &decl -> loc);
+    storage -> syntax_type -> count = plan -> count;
+    storage -> next = tag;
+    decl -> fields = storage;
+    decl -> field_count = 2usize;
+    return stage -> context -> error_count == 0usize;
 }

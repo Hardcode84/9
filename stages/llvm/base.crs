@@ -1,131 +1,304 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn ll_init(stage:*LlStage,context:*CrustContext)->unit {
-    c_stage_init(&stage->memory,context);
-    var empty:CrustMap=make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize};
-    stage->bindings=empty;stage->native_names=empty;stage->types=empty;stage->strings=empty;
-    stage->first=null(*LlBinding);stage->last=null(*LlBinding);stage->entry=null(*CrustDecl);
-    stage->expression=ll_expression;stage->user=null(*u8);stage->identity=1u64;stage->depth=0usize;
+fn ll_init(stage: *LlStage, context: *CrustContext) -> unit {
+    c_stage_init(&stage -> memory, context);
+    var empty: CrustMap = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
+    stage -> bindings = empty;
+    stage -> native_names = empty;
+    stage -> types = empty;
+    stage -> strings = empty;
+    stage -> first = null(*LlBinding);
+    stage -> last = null(*LlBinding);
+    stage -> entry = null(*CrustDecl);
+    stage -> expression = ll_expression;
+    stage -> user = null(*u8);
+    stage -> identity = 1u64;
+    stage -> depth = 0usize;
 }
-fn ll_destroy(stage:*LlStage)->unit {c_stage_destroy(&stage->memory);}
-fn ll_context(stage:*LlStage)->*CrustContext {return stage->memory.status.context;}
-fn ll_ok(stage:*LlStage)->bool {return !stage->memory.status.failed && ll_context(stage)->error_count==0usize;}
-fn ll_error(stage:*LlStage,message:*u8)->unit {c_error(&stage->memory.status,null(*CrustSource),0usize,message);}
-fn ll_buffer(stage:*LlStage,buffer:*CBuffer)->unit {
-    *buffer=make CBuffer{status:&stage->memory.status,data:null(*u8),size:0usize,capacity:0usize};
+fn ll_destroy(stage: *LlStage) -> unit {
+    c_stage_destroy(&stage -> memory);
 }
-fn ll_number(stage:*LlStage,number:u64)->*u8 {
-    var text:CBuffer=uninit;ll_buffer(stage,&text);c_buffer_number(&text,number);return c_buffer_end(&text);
+fn ll_context(stage: *LlStage) -> *CrustContext {
+    return stage -> memory.status.context;
 }
-fn ll_join(stage:*LlStage,left:*u8,right:*u8)->*u8 {
-    if !ll_ok(stage){return "";}
-    var text:CBuffer=uninit;ll_buffer(stage,&text);c_buffer_text(&text,left);c_buffer_text(&text,right);
-    var result:*u8=c_buffer_end(&text);if result==null(*u8){return "";}return result;
+fn ll_ok(stage: *LlStage) -> bool {
+    return !stage -> memory.status.failed && ll_context(stage) -> error_count == 0usize;
 }
-fn ll_id(stage:*LlStage,prefix:*u8)->*u8 {
-    var id:u64=stage->identity;stage->identity=id+1u64;return ll_join(stage,prefix,ll_number(stage,id));
+fn ll_error(stage: *LlStage, message: *u8) -> unit {
+    c_error(&stage -> memory.status, null(*CrustSource), 0usize, message);
 }
-fn ll_register(function:*LlFunction)->*u8 {
-    var id:u64=function->identity;function->identity=id+1u64;
-    return ll_join(function->stage,"%v",ll_number(function->stage,id));
+fn ll_buffer(stage: *LlStage, buffer: *CBuffer) -> unit {
+    *buffer = make CBuffer {
+        status: &stage -> memory.status,
+        data: null(*u8),
+        size: 0usize,
+        capacity: 0usize
+    };
 }
-fn ll_text(function:*LlFunction,text:*u8)->unit {c_buffer_text(&function->body,text);}
-fn ll_line(function:*LlFunction,result:*u8,operation:*u8)->unit {
-    ll_text(function,"  ");ll_text(function,result);ll_text(function," = ");ll_text(function,operation);
+fn ll_number(stage: *LlStage, number: u64) -> *u8 {
+    var text: CBuffer = uninit;
+    ll_buffer(stage, &text);
+    c_buffer_number(&text, number);
+    return c_buffer_end(&text);
 }
-fn ll_typed(stage:*LlStage,type:*CrustType,value:*u8)->*u8 {
-    return ll_join(stage,ll_join(stage,ll_type(stage,type)," "),value);
-}
-fn ll_aggregate_type(type:*CrustType)->bool {return type->kind==CRUST_T_RECORD || type->kind==CRUST_T_ARRAY;}
-fn ll_signed(type:*CrustType)->bool {
-    return type->kind<=CRUST_T_USIZE && (type->kind&1u32)==0u32;
-}
-fn ll_pointer(type:*CrustType)->bool {return type->kind==CRUST_T_POINTER || type->kind==CRUST_T_FUNCTION;}
-const LL_SCALARS:[*u8;12]=make [*u8;12]{"i8","i8","i16","i16","i32","i32","i64","i64","i64","i64","i8","void"};
-fn ll_type(stage:*LlStage,type:*CrustType)->*u8 {
-    if !ll_ok(stage){return "i8";}
-    if ll_pointer(type){return "ptr";}
-    if type->kind<=CRUST_T_UNIT{return LL_SCALARS[type->kind as usize];}
-    if !ll_aggregate_type(type){ll_error(stage,"unsupported LLVM type kind");return "i8";}
-    var old:*u8=crust_map_get(&stage->types,type as usize);if old!=null(*u8){return old;}
-    if stage->depth>=512usize{ll_error(stage,"LLVM type traversal depth exceeded");return "i8";}
-    stage->depth=stage->depth+1usize;
-    var name:*u8=ll_id(stage,"%t");crust_try_map_set(ll_context(stage),&stage->types,type as usize,name);
-    var text:CBuffer=uninit;ll_buffer(stage,&text);c_buffer_text(&text,name);c_buffer_text(&text," = type ");
-    ll_type_body(stage,type,&text);c_buffer_text(&text,"\n");
-    c_buffer_bytes(&stage->memory.header,text.data,text.size);stage->depth=stage->depth-1usize;return name;
-}
-fn ll_type_body(stage:*LlStage,type:*CrustType,out:*CBuffer)->unit {
-    if type->kind==CRUST_T_ARRAY {
-        c_buffer_text(out,"[");c_buffer_number(out,type->count);c_buffer_text(out," x ");
-        c_buffer_text(out,ll_type(stage,type->base));c_buffer_text(out,"]");return;
+fn ll_join(stage: *LlStage, left: *u8, right: *u8) -> *u8 {
+    if !ll_ok(stage) {
+        return "";
     }
-    c_buffer_text(out,"{ ");var field:*CrustField=type->record_decl->fields;
-    while field!=null(*CrustField){
-        c_buffer_text(out,ll_type(stage,field->type));field=field->next;
-        if field!=null(*CrustField){c_buffer_text(out,", ");}
+    var text: CBuffer = uninit;
+    ll_buffer(stage, &text);
+    c_buffer_text(&text, left);
+    c_buffer_text(&text, right);
+    var result: *u8 = c_buffer_end(&text);
+    if result == null(*u8) {
+        return "";
     }
-    c_buffer_text(out," }");
+    return result;
 }
-fn ll_abi_type(stage:*LlStage,type:*CrustType,result:bool)->*u8 {
-    if type->kind==CRUST_T_BOOL {if result{return "zeroext i1";}return "i1 zeroext";}
-    var text:*u8=ll_type(stage,type);
-    if type->kind<=CRUST_T_U16 {
-        var extension:*u8="zeroext";if ll_signed(type){extension="signext";}
-        if result{return ll_join(stage,ll_join(stage,extension," "),text);}
-        return ll_join(stage,ll_join(stage,text," "),extension);
+fn ll_id(stage: *LlStage, prefix: *u8) -> *u8 {
+    var id: u64 = stage -> identity;
+    stage -> identity = id + 1u64;
+    return ll_join(stage, prefix, ll_number(stage, id));
+}
+fn ll_register(function: *LlFunction) -> *u8 {
+    var id: u64 = function -> identity;
+    function -> identity = id + 1u64;
+    return ll_join(function -> stage, "%v", ll_number(function -> stage, id));
+}
+fn ll_text(function: *LlFunction, text: *u8) -> unit {
+    c_buffer_text(&function -> body, text);
+}
+fn ll_line(function: *LlFunction, result: *u8, operation: *u8) -> unit {
+    ll_text(function, "  ");
+    ll_text(function, result);
+    ll_text(function, " = ");
+    ll_text(function, operation);
+}
+fn ll_typed(stage: *LlStage, type: *CrustType, value: *u8) -> *u8 {
+    return ll_join(stage, ll_join(stage, ll_type(stage, type), " "), value);
+}
+fn ll_aggregate_type(type: *CrustType) -> bool {
+    return type -> kind == CRUST_T_RECORD || type -> kind == CRUST_T_ARRAY;
+}
+fn ll_signed(type: *CrustType) -> bool {
+    return type -> kind <= CRUST_T_USIZE && (type -> kind & 1u32) == 0u32;
+}
+fn ll_pointer(type: *CrustType) -> bool {
+    return type -> kind == CRUST_T_POINTER || type -> kind == CRUST_T_FUNCTION;
+}
+const LL_SCALARS: [*u8; 12] = make [*u8; 12] {
+    "i8",
+    "i8",
+    "i16",
+    "i16",
+    "i32",
+    "i32",
+    "i64",
+    "i64",
+    "i64",
+    "i64",
+    "i8",
+    "void"
+};
+fn ll_type(stage: *LlStage, type: *CrustType) -> *u8 {
+    if !ll_ok(stage) {
+        return "i8";
+    }
+    if ll_pointer(type) {
+        return "ptr";
+    }
+    if type -> kind <= CRUST_T_UNIT {
+        return LL_SCALARS[type -> kind as usize];
+    }
+    if !ll_aggregate_type(type) {
+        ll_error(stage, "unsupported LLVM type kind");
+        return "i8";
+    }
+    var old: *u8 = crust_map_get(&stage -> types, type as usize);
+    if old != null(*u8) {
+        return old;
+    }
+    if stage -> depth >= 512usize {
+        ll_error(stage, "LLVM type traversal depth exceeded");
+        return "i8";
+    }
+    stage -> depth = stage -> depth + 1usize;
+    var name: *u8 = ll_id(stage, "%t");
+    crust_try_map_set(ll_context(stage), &stage -> types, type as usize, name);
+    var text: CBuffer = uninit;
+    ll_buffer(stage, &text);
+    c_buffer_text(&text, name);
+    c_buffer_text(&text, " = type ");
+    ll_type_body(stage, type, &text);
+    c_buffer_text(&text, "\n");
+    c_buffer_bytes(&stage -> memory.header, text.data, text.size);
+    stage -> depth = stage -> depth - 1usize;
+    return name;
+}
+fn ll_type_body(stage: *LlStage, type: *CrustType, out: *CBuffer) -> unit {
+    if type -> kind == CRUST_T_ARRAY {
+        c_buffer_text(out, "[");
+        c_buffer_number(out, type -> count);
+        c_buffer_text(out, " x ");
+        c_buffer_text(out, ll_type(stage, type -> base));
+        c_buffer_text(out, "]");
+        return;
+    }
+    c_buffer_text(out, "{ ");
+    var field: *CrustField = type -> record_decl -> fields;
+    while field != null(*CrustField) {
+        c_buffer_text(out, ll_type(stage, field -> type));
+        field = field -> next;
+        if field != null(*CrustField) {
+            c_buffer_text(out, ", ");
+        }
+    }
+    c_buffer_text(out, " }");
+}
+fn ll_abi_type(stage: *LlStage, type: *CrustType, result: bool) -> *u8 {
+    if type -> kind == CRUST_T_BOOL {
+        if result {
+            return "zeroext i1";
+        }
+        return "i1 zeroext";
+    }
+    var text: *u8 = ll_type(stage, type);
+    if type -> kind <= CRUST_T_U16 {
+        var extension: *u8 = "zeroext";
+        if ll_signed(type) {
+            extension = "signext";
+        }
+        if result {
+            return ll_join(stage, ll_join(stage, extension, " "), text);
+        }
+        return ll_join(stage, ll_join(stage, text, " "), extension);
     }
     return text;
 }
-fn ll_alloca(function:*LlFunction,type:*CrustType)->*u8 {
-    var result:*u8=ll_register(function);var out:*CBuffer=&function->slots;
-    c_buffer_text(out,"  ");c_buffer_text(out,result);c_buffer_text(out," = alloca ");
-    c_buffer_text(out,ll_type(function->stage,type));c_buffer_text(out,", align ");
-    c_buffer_number(out,type->align as u64);c_buffer_text(out,"\n");return result;
+fn ll_alloca(function: *LlFunction, type: *CrustType) -> *u8 {
+    var result: *u8 = ll_register(function);
+    var out: *CBuffer = &function -> slots;
+    c_buffer_text(out, "  ");
+    c_buffer_text(out, result);
+    c_buffer_text(out, " = alloca ");
+    c_buffer_text(out, ll_type(function -> stage, type));
+    c_buffer_text(out, ", align ");
+    c_buffer_number(out, type -> align as u64);
+    c_buffer_text(out, "\n");
+    return result;
 }
-fn ll_instruction(function:*LlFunction,operation:*u8,type:*u8,left:*u8,right:*u8)->*u8 {
-    var result:*u8=ll_register(function);ll_line(function,result,operation);ll_text(function," ");
-    ll_text(function,type);ll_text(function," ");ll_text(function,left);
-    if right!=null(*u8){ll_text(function,", ");ll_text(function,right);}ll_text(function,"\n");return result;
+fn ll_instruction(
+    function: *LlFunction,
+    operation: *u8,
+    type: *u8,
+    left: *u8,
+    right: *u8
+) -> *u8 {
+    var result: *u8 = ll_register(function);
+    ll_line(function, result, operation);
+    ll_text(function, " ");
+    ll_text(function, type);
+    ll_text(function, " ");
+    ll_text(function, left);
+    if right != null(*u8) {
+        ll_text(function, ", ");
+        ll_text(function, right);
+    }
+    ll_text(function, "\n");
+    return result;
 }
-fn ll_convert(function:*LlFunction,operation:*u8,from:*u8,value:*u8,to:*u8)->*u8 {
-    var result:*u8=ll_register(function);ll_line(function,result,operation);ll_text(function," ");
-    ll_text(function,from);ll_text(function," ");ll_text(function,value);ll_text(function," to ");
-    ll_text(function,to);ll_text(function,"\n");return result;
+fn ll_convert(function: *LlFunction, operation: *u8, from: *u8, value: *u8, to: *u8) -> *u8 {
+    var result: *u8 = ll_register(function);
+    ll_line(function, result, operation);
+    ll_text(function, " ");
+    ll_text(function, from);
+    ll_text(function, " ");
+    ll_text(function, value);
+    ll_text(function, " to ");
+    ll_text(function, to);
+    ll_text(function, "\n");
+    return result;
 }
-fn ll_condition(function:*LlFunction,value:*u8)->*u8 {return ll_instruction(function,"icmp ne","i8",value,"0");}
-fn ll_jump(function:*LlFunction,destination:*u8)->unit {
-    ll_text(function,"  br label %");ll_text(function,destination);ll_text(function,"\n");function->terminated=true;
+fn ll_condition(function: *LlFunction, value: *u8) -> *u8 {
+    return ll_instruction(function, "icmp ne", "i8", value, "0");
 }
-fn ll_block(function:*LlFunction,destination:*u8)->unit {
-    if !function->terminated{ll_jump(function,destination);}
-    ll_text(function,destination);ll_text(function,":\n");function->terminated=false;
+fn ll_jump(function: *LlFunction, destination: *u8) -> unit {
+    ll_text(function, "  br label %");
+    ll_text(function, destination);
+    ll_text(function, "\n");
+    function -> terminated = true;
 }
-fn ll_branch(function:*LlFunction,condition:*u8,yes:*u8,no:*u8)->unit {
-    ll_text(function,"  br i1 ");ll_text(function,condition);ll_text(function,", label %");ll_text(function,yes);
-    ll_text(function,", label %");ll_text(function,no);ll_text(function,"\n");function->terminated=true;
+fn ll_block(function: *LlFunction, destination: *u8) -> unit {
+    if !function -> terminated {
+        ll_jump(function, destination);
+    }
+    ll_text(function, destination);
+    ll_text(function, ":\n");
+    function -> terminated = false;
 }
-fn ll_guard(function:*LlFunction,bad:*u8)->unit {
-    var fail:*u8=ll_id(function->stage,"b");var good:*u8=ll_id(function->stage,"b");
-    ll_branch(function,bad,fail,good);ll_block(function,fail);
-    ll_text(function,"  call void @llvm.trap()\n  unreachable\n");function->terminated=true;ll_block(function,good);
+fn ll_branch(function: *LlFunction, condition: *u8, yes: *u8, no: *u8) -> unit {
+    ll_text(function, "  br i1 ");
+    ll_text(function, condition);
+    ll_text(function, ", label %");
+    ll_text(function, yes);
+    ll_text(function, ", label %");
+    ll_text(function, no);
+    ll_text(function, "\n");
+    function -> terminated = true;
 }
-fn ll_copy(function:*LlFunction,type:*CrustType,to:*u8,from:*u8)->unit {
-    ll_text(function,"  call void @llvm.memcpy.p0.p0.i64(ptr ");ll_text(function,to);
-    ll_text(function,", ptr ");ll_text(function,from);ll_text(function,", i64 ");
-    ll_text(function,ll_number(function->stage,type->size));ll_text(function,", i1 false)\n");
+fn ll_guard(function: *LlFunction, bad: *u8) -> unit {
+    var fail: *u8 = ll_id(function -> stage, "b");
+    var good: *u8 = ll_id(function -> stage, "b");
+    ll_branch(function, bad, fail, good);
+    ll_block(function, fail);
+    ll_text(function, "  call void @llvm.trap()\n  unreachable\n");
+    function -> terminated = true;
+    ll_block(function, good);
 }
-fn ll_store(function:*LlFunction,type:*CrustType,address:*u8,value:*u8)->unit {
-    if ll_aggregate_type(type){ll_copy(function,type,address,value);return;}
-    ll_text(function,"  store ");ll_text(function,ll_typed(function->stage,type,value));
-    ll_text(function,", ptr ");ll_text(function,address);ll_text(function,", align 1\n");
+fn ll_copy(function: *LlFunction, type: *CrustType, to: *u8, from: *u8) -> unit {
+    ll_text(function, "  call void @llvm.memcpy.p0.p0.i64(ptr ");
+    ll_text(function, to);
+    ll_text(function, ", ptr ");
+    ll_text(function, from);
+    ll_text(function, ", i64 ");
+    ll_text(function, ll_number(function -> stage, type -> size));
+    ll_text(function, ", i1 false)\n");
 }
-fn ll_load(function:*LlFunction,type:*CrustType,address:*u8)->*u8 {
-    if ll_aggregate_type(type){var slot:*u8=ll_alloca(function,type);ll_copy(function,type,slot,address);return slot;}
-    var result:*u8=ll_register(function);ll_line(function,result,"load ");ll_text(function,ll_type(function->stage,type));
-    ll_text(function,", ptr ");ll_text(function,address);ll_text(function,", align 1\n");return result;
+fn ll_store(function: *LlFunction, type: *CrustType, address: *u8, value: *u8) -> unit {
+    if ll_aggregate_type(type) {
+        ll_copy(function, type, address, value);
+        return;
+    }
+    ll_text(function, "  store ");
+    ll_text(function, ll_typed(function -> stage, type, value));
+    ll_text(function, ", ptr ");
+    ll_text(function, address);
+    ll_text(function, ", align 1\n");
 }
-fn ll_offset(function:*LlFunction,base:*u8,offset:*u8)->*u8 {
-    var result:*u8=ll_register(function);ll_line(function,result,"getelementptr i8, ptr ");
-    ll_text(function,base);ll_text(function,", i64 ");ll_text(function,offset);ll_text(function,"\n");return result;
+fn ll_load(function: *LlFunction, type: *CrustType, address: *u8) -> *u8 {
+    if ll_aggregate_type(type) {
+        var slot: *u8 = ll_alloca(function, type);
+        ll_copy(function, type, slot, address);
+        return slot;
+    }
+    var result: *u8 = ll_register(function);
+    ll_line(function, result, "load ");
+    ll_text(function, ll_type(function -> stage, type));
+    ll_text(function, ", ptr ");
+    ll_text(function, address);
+    ll_text(function, ", align 1\n");
+    return result;
+}
+fn ll_offset(function: *LlFunction, base: *u8, offset: *u8) -> *u8 {
+    var result: *u8 = ll_register(function);
+    ll_line(function, result, "getelementptr i8, ptr ");
+    ll_text(function, base);
+    ll_text(function, ", i64 ");
+    ll_text(function, offset);
+    ll_text(function, "\n");
+    return result;
 }

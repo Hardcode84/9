@@ -1,11 +1,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn os_statement(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if statement == null(*CrustStmt) || (*state).flow != OS_NORMAL { return; }
-    if !os_enter(check, &(*statement).loc) { return; }
-    var point:*OsLivePoint=os_live_point(check,statement);
-    if point!=null(*OsLivePoint) { os_live_end(check,state,(*point).before,&(*statement).loc); }
-    if os_failed(check) { return; }
+    if statement == null(*CrustStmt) || (*state).flow != OS_NORMAL {
+        return;
+    }
+    if !os_enter(check, &(*statement).loc) {
+        return;
+    }
+    var point: *OsLivePoint = os_live_point(check, statement);
+    if point != null(*OsLivePoint) {
+        os_live_end(check, state, (*point).before, &(*statement).loc);
+    }
+    if os_failed(check) {
+        return;
+    }
     var before: *OsLoan = (*check).loans;
     os_statement_inner(check, state, statement);
     os_end_expression(check, state, before);
@@ -14,15 +22,32 @@ fn os_statement(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit
 
 fn os_statement_inner(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     var kind: u32 = (*statement).kind;
-    if kind == CRUST_S_BLOCK { os_block(check, state, statement); return; }
-    if kind == CRUST_S_IF { os_if(check, state, statement); return; }
-    if kind == CRUST_S_WHILE { os_while(check, state, statement); return; }
-    if kind == CRUST_S_BREAK || kind == CRUST_S_CONTINUE { os_loop_jump(check, state, statement); return; }
-    if kind == CRUST_S_VAR { os_variable(check, state, statement); return; }
+    if kind == CRUST_S_BLOCK {
+        os_block(check, state, statement);
+        return;
+    }
+    if kind == CRUST_S_IF {
+        os_if(check, state, statement);
+        return;
+    }
+    if kind == CRUST_S_WHILE {
+        os_while(check, state, statement);
+        return;
+    }
+    if kind == CRUST_S_BREAK || kind == CRUST_S_CONTINUE {
+        os_loop_jump(check, state, statement);
+        return;
+    }
+    if kind == CRUST_S_VAR {
+        os_variable(check, state, statement);
+        return;
+    }
     if kind == CRUST_S_ASSIGN {
         var slot: *OsSlot = os_place(check, state, (*statement).expr);
         var value: *OsValue = os_expr(check, state, (*statement).value);
-        if slot != null(*OsSlot) { os_store(check, state, slot, value, &(*statement).loc); }
+        if slot != null(*OsSlot) {
+            os_store(check, state, slot, value, &(*statement).loc);
+        }
         return;
     }
     if kind == CRUST_S_EXPR {
@@ -30,40 +55,68 @@ fn os_statement_inner(check: *OsCheck, state: *OsState, statement: *CrustStmt) -
         os_unused(check, state, unused, &(*statement).loc);
         return;
     }
-    if kind == CRUST_S_RETURN { os_return(check, state, statement); return; }
-    if kind == rs_kind((*(*check).stage).resources, RS_DEFER) { os_defer(check, state, (*statement).expr); return; }
-    if kind == rs_kind((*(*check).stage).resources, RS_DROP) { os_drop_statement(check, state, statement); return; }
-    if kind == CRUST_S_TRAP { (*state).flow = OS_TRAP; return; }
+    if kind == CRUST_S_RETURN {
+        os_return(check, state, statement);
+        return;
+    }
+    if kind == rs_kind((*(*check).stage).resources, RS_DEFER) {
+        os_defer(check, state, (*statement).expr);
+        return;
+    }
+    if kind == rs_kind((*(*check).stage).resources, RS_DROP) {
+        os_drop_statement(check, state, statement);
+        return;
+    }
+    if kind == CRUST_S_TRAP {
+        (*state).flow = OS_TRAP;
+        return;
+    }
     os_error(check, &(*statement).loc, "statement has no modular ownership contract");
 }
 
 fn os_block(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     os_scope(check, state);
-    if os_failed(check) { return; }
-    var access: *OsAccess = crust_map_get(&(*(*check).stage).blocks, statement as usize) as *OsAccess;
-    if access != null(*OsAccess) { os_access_scope(check, state, access, &(*statement).loc); }
+    if os_failed(check) {
+        return;
+    }
+    var access: *OsAccess = crust_map_get(
+        &(*(*check).stage).blocks,
+        statement as usize
+    ) as *OsAccess;
+    if access != null(*OsAccess) {
+        os_access_scope(check, state, access, &(*statement).loc);
+    }
     var child: *CrustStmt = (*statement).body;
     while child != null(*CrustStmt) && (*state).flow == OS_NORMAL && !os_failed(check) {
         os_statement(check, state, child);
         child = (*child).next;
     }
     if (*state).flow == OS_NORMAL {
-        var point:*OsLivePoint=os_live_point(check,statement);
-        if point!=null(*OsLivePoint) { os_live_end(check,state,(*point).after,&(*statement).loc); }
+        var point: *OsLivePoint = os_live_point(check, statement);
+        if point != null(*OsLivePoint) {
+            os_live_end(check, state, (*point).after, &(*statement).loc);
+        }
         os_scope_end(check, state, &(*statement).loc);
     }
 }
 
-fn os_access_scope(check: *OsCheck, state: *OsState, access: *OsAccess, location: *CrustLoc) -> unit {
+fn os_access_scope(
+    check: *OsCheck,
+    state: *OsState,
+    access: *OsAccess,
+    location: *CrustLoc
+) -> unit {
     if (*access).fresh {
         if crust_map_get(&(*(*check).stage).domains, (*access).domain as usize) == null(*u8) {
-            os_error(check, location, "fresh domain requires a declared schema"); return;
+            os_error(check, location, "fresh domain requires a declared schema");
+            return;
         }
         (*state).domain = (*access).domain;
         (*state).brand = (*state).scope;
     } else {
         if (*access).domain != (*state).domain || (*access).effect > (*state).effect {
-            os_error(check, location, "access scope cannot acquire undeclared authority"); return;
+            os_error(check, location, "access scope cannot acquire undeclared authority");
+            return;
         }
         (*(*state).scope).access = true;
     }
@@ -71,16 +124,46 @@ fn os_access_scope(check: *OsCheck, state: *OsState, access: *OsAccess, location
 }
 
 fn os_variable(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
-    if !os_abstract_local(check, state, (*statement).name, &(*statement).loc) { return; }
-    if os_abstract_active(check) && !os_abstract_type(check, (*statement).syntax_type, false) { return; }
+    if !os_abstract_local(check, state, (*statement).name, &(*statement).loc) {
+        return;
+    }
+    if os_abstract_active(check) && !os_abstract_type(
+        check,
+        (*statement).syntax_type,
+        false
+    ) {
+        return;
+    }
     var value: *OsValue = null(*OsValue);
-    if !(*statement).uninitialized { value = os_expr(check, state, (*statement).value); }
-    else { if (*(*statement).syntax_type).kind == CRUST_T_NAME {
-        var object: *OsObject = os_object(check, state, (*statement).syntax_type, null(*OsObject), (*state).scope, false);
-        value = os_value(check, (*statement).syntax_type, object, false);
-        if value != null(*OsValue) { (*value).owner = os_affine(check, (*statement).syntax_type); (*value).fresh = true; }
-    } }
-    if !os_failed(check) { os_bind(check, state, (*statement).name, (*statement).syntax_type, value, &(*statement).loc); }
+    if!(*statement).uninitialized {
+        value = os_expr(check, state, (*statement).value);
+    } else {
+        if (*(*statement).syntax_type).kind == CRUST_T_NAME {
+            var object: *OsObject = os_object(
+                check,
+                state,
+                (*statement).syntax_type,
+                null(*OsObject),
+                (*state).scope,
+                false
+            );
+            value = os_value(check, (*statement).syntax_type, object, false);
+            if value != null(*OsValue) {
+                (*value).owner = os_affine(check, (*statement).syntax_type);
+                (*value).fresh = true;
+            }
+        }
+    }
+    if !os_failed(check) {
+        os_bind(
+            check,
+            state,
+            (*statement).name,
+            (*statement).syntax_type,
+            value,
+            &(*statement).loc
+        );
+    }
 }
 
 fn os_if(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
@@ -90,19 +173,36 @@ fn os_if(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     os_condition(check, state, (*statement).expr, &yes, &no);
     os_end_expression(check, &yes, before);
     os_end_expression(check, &no, before);
-    if os_failed(check) { return; }
+    if os_failed(check) {
+        return;
+    }
     os_statement(check, &yes, (*statement).body);
     os_statement(check, &no, (*statement).otherwise);
-    var point:*OsLivePoint=os_live_point(check,statement);
-    if point!=null(*OsLivePoint) && (*statement).otherwise==null(*CrustStmt) && no.flow==OS_NORMAL {
-        os_live_end(check,&no,(*point).after,&(*statement).loc);
+    var point: *OsLivePoint = os_live_point(check, statement);
+    if point != null(*OsLivePoint) && (*statement).otherwise == null(*CrustStmt) && no.flow == OS_NORMAL {
+        os_live_end(check, &no, (*point).after, &(*statement).loc);
     }
-    if yes.flow != OS_NORMAL { *state = no; if no.flow != OS_NORMAL { (*state).flow = yes.flow; } return; }
-    if no.flow != OS_NORMAL { *state = yes; return; }
+    if yes.flow != OS_NORMAL {
+        *state = no;
+        if no.flow != OS_NORMAL {
+            (*state).flow = yes.flow;
+        }
+        return;
+    }
+    if no.flow != OS_NORMAL {
+        *state = yes;
+        return;
+    }
     os_join(check, state, &yes, &no, &(*statement).loc);
 }
 
-fn os_join(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState, location: *CrustLoc) -> unit {
+fn os_join(
+    check: *OsCheck,
+    target: *OsState,
+    left: *OsState,
+    right: *OsState,
+    location: *CrustLoc
+) -> unit {
     os_join_loans(check, target, left, right);
     var scope: *OsScope = (*target).scope;
     while scope != null(*OsScope) && !os_failed(check) {
@@ -122,8 +222,12 @@ fn os_join(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState, l
         }
         var a: u32 = os_flags(left, object);
         var b: u32 = os_flags(right, object);
-        if os_absent_storage(check, left, object, location) { a = b & ~OS_NONNULL; }
-        if os_absent_storage(check, right, object, location) { b = a & ~OS_NONNULL; }
+        if os_absent_storage(check, left, object, location) {
+            a = b & ~OS_NONNULL;
+        }
+        if os_absent_storage(check, right, object, location) {
+            b = a & ~OS_NONNULL;
+        }
         if os_join_summary(check, target, left, right, object, location) {
             object = (*object).next;
             continue;
@@ -140,13 +244,27 @@ fn os_join(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState, l
     }
 }
 
-fn os_join_new_object(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
-                       object: *OsObject, location: *CrustLoc) -> unit {
-    if os_fact(target, object as *u8) != null(*OsFact) { return; }
+fn os_join_new_object(
+    check: *OsCheck,
+    target: *OsState,
+    left: *OsState,
+    right: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> unit {
+    if os_fact(target, object as *u8) != null(*OsFact) {
+        return;
+    }
     var source: *OsState = null(*OsState);
-    if os_absent_path(check, left, right, object, location) { source = right; }
-    if os_absent_path(check, right, left, object, location) { source = left; }
-    if source == null(*OsState) || os_fact(source, object as *u8) == null(*OsFact) { return; }
+    if os_absent_path(check, left, right, object, location) {
+        source = right;
+    }
+    if os_absent_path(check, right, left, object, location) {
+        source = left;
+    }
+    if source == null(*OsState) || os_fact(source, object as *u8) == null(*OsFact) {
+        return;
+    }
     os_mark(check, target, object, os_flags(source, object));
     os_set_owner(check, target, object, os_owner(source, object));
     os_set_fields(check, target, object, os_fields(source, object));
@@ -157,81 +275,160 @@ fn os_join_new_object(check: *OsCheck, target: *OsState, left: *OsState, right: 
     }
 }
 
-fn os_absent_storage(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> bool {
+fn os_absent_storage(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> bool {
     return os_absent_path(check, state, state, object, location);
 }
 
-fn os_absent_path(check: *OsCheck, state: *OsState, edges: *OsState,
-                    object: *OsObject, location: *CrustLoc) -> bool {
-    if !os_enter(check, location) { return false; }
+fn os_absent_path(
+    check: *OsCheck,
+    state: *OsState,
+    edges: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> bool {
+    if !os_enter(check, location) {
+        return false;
+    }
     var absent: bool = (os_flags(state, object) & OS_ABSENT) != 0u32;
     if !absent {
-        if (*object).parent != null(*OsObject) { absent = os_absent_path(check, state, edges, (*object).parent, location); }
-        else {
+        if (*object).parent != null(*OsObject) {
+            absent = os_absent_path(check, state, edges, (*object).parent, location);
+        } else {
             var owner: *OsObject = os_owner(edges, object);
-            if owner != null(*OsObject) { absent = os_absent_path(check, state, edges, owner, location); }
+            if owner != null(*OsObject) {
+                absent = os_absent_path(check, state, edges, owner, location);
+            }
         }
     }
     (*check).depth = (*check).depth - 1usize;
     return absent;
 }
 
-fn os_join_owner(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
-                   object: *OsObject, location: *CrustLoc) -> unit {
+fn os_join_owner(
+    check: *OsCheck,
+    target: *OsState,
+    left: *OsState,
+    right: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> unit {
     var a: *OsObject = os_owner(left, object);
     var b: *OsObject = os_owner(right, object);
-    if os_absent_storage(check, left, object, location) { a = b; }
-    if os_absent_storage(check, right, object, location) { b = a; }
-    if a != b && (os_flags(left, object) & OS_LIVE) != 0u32 && (os_flags(right, object) & OS_LIVE) != 0u32 {
-        os_error(check, location, "continuing paths must agree on the owner of live storage"); return;
+    if os_absent_storage(check, left, object, location) {
+        a = b;
+    }
+    if os_absent_storage(check, right, object, location) {
+        b = a;
+    }
+    if a != b && (os_flags(left, object) & OS_LIVE) != 0u32 && (
+        os_flags(right, object) & OS_LIVE
+    ) != 0u32 {
+        os_error(check, location, "continuing paths must agree on the owner of live storage");
+        return;
     }
     os_set_owner(check, target, object, a);
 }
 
-fn os_shared_object(target: *OsState, left: *OsState, right: *OsState, object: *OsObject) -> bool {
-    return os_fact(target, object as *u8) != null(*OsFact) &&
-        os_fact(left, object as *u8) != null(*OsFact) && os_fact(right, object as *u8) != null(*OsFact);
+fn os_shared_object(
+    target: *OsState,
+    left: *OsState,
+    right: *OsState,
+    object: *OsObject
+) -> bool {
+    return os_fact(target, object as *u8) != null(*OsFact) && os_fact(left, object as *u8) != null(
+        *OsFact
+    ) && os_fact(right, object as *u8) != null(*OsFact);
 }
 
-fn os_join_construction(check: *OsCheck, left: *OsState, right: *OsState, object: *OsObject,
-                         a: u32, b: u32, location: *CrustLoc) -> unit {
+fn os_join_construction(
+    check: *OsCheck,
+    left: *OsState,
+    right: *OsState,
+    object: *OsObject,
+    a: u32,
+    b: u32,
+    location: *CrustLoc
+) -> unit {
     var root: *OsObject = os_root(object);
-    if (os_flags(left, root) & OS_LIVE) == 0u32 && (os_flags(right, root) & OS_LIVE) == 0u32 { return; }
+    if (os_flags(left, root) & OS_LIVE) == 0u32 && (os_flags(right, root) & OS_LIVE) == 0u32 {
+        return;
+    }
     if ((a ^ b) & (OS_READY | OS_PINNED | OS_DESTROYED)) != 0u32 {
-        os_error(check, location, "continuing paths must agree on construction and stable storage");
+        os_error(
+            check,
+            location,
+            "continuing paths must agree on construction and stable storage"
+        );
     }
 }
 
-fn os_join_slot(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
-                slot: *OsSlot, location: *CrustLoc) -> unit {
+fn os_join_slot(
+    check: *OsCheck,
+    target: *OsState,
+    left: *OsState,
+    right: *OsState,
+    slot: *OsSlot,
+    location: *CrustLoc
+) -> unit {
     var a: *OsValue = os_bound(left, slot);
     var b: *OsValue = os_bound(right, slot);
     if (*slot).object != null(*OsObject) {
-        if os_absent_storage(check, left, (*slot).object, location) { a = b; }
-        if os_absent_storage(check, right, (*slot).object, location) { b = a; }
+        if os_absent_storage(check, left, (*slot).object, location) {
+            a = b;
+        }
+        if os_absent_storage(check, right, (*slot).object, location) {
+            b = a;
+        }
     }
     if a == b {
         // Equal branches can still differ from the incoming binding.
-        if os_bound(target, slot) != a { os_set(check, target, slot as *u8, a, 0u32); }
+        if os_bound(target, slot) != a {
+            os_set(check, target, slot as *u8, a, 0u32);
+        }
         return;
     }
-    if a == null(*OsValue) || b == null(*OsValue) { os_join_absent(check, target, left, right, slot, a, b, location); return; }
+    if a == null(*OsValue) || b == null(*OsValue) {
+        os_join_absent(check, target, left, right, slot, a, b, location);
+        return;
+    }
     os_join_value(check, target, left, right, slot, a, b, location);
 }
 
-fn os_join_absent(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
-                  slot: *OsSlot, a: *OsValue, b: *OsValue, location: *CrustLoc) -> unit {
+fn os_join_absent(
+    check: *OsCheck,
+    target: *OsState,
+    left: *OsState,
+    right: *OsState,
+    slot: *OsSlot,
+    a: *OsValue,
+    b: *OsValue,
+    location: *CrustLoc
+) -> unit {
     var live: *OsValue = a;
     var branch: *OsState = left;
-    if live == null(*OsValue) { live = b; branch = right; }
+    if live == null(*OsValue) {
+        live = b;
+        branch = right;
+    }
     if live != null(*OsValue) && (*live).native != null(*OsField) && (*live).presence == OS_ABSENT {
-        os_set(check, target, slot as *u8, null(*OsValue), 0u32); return;
+        os_set(check, target, slot as *u8, null(*OsValue), 0u32);
+        return;
     }
-    if (*slot).owns && live != null(*OsValue) && (*live).pointer && (*live).object != null(*OsObject) &&
-       (os_flags(branch, (*live).object) & OS_ABSENT) != 0u32 {
-        os_set(check, target, slot as *u8, null(*OsValue), 0u32); return;
+    if (*slot).owns && live != null(*OsValue) && (*live).pointer && (*live).object != null(
+        *OsObject
+    ) && (os_flags(branch, (*live).object) & OS_ABSENT) != 0u32 {
+        os_set(check, target, slot as *u8, null(*OsValue), 0u32);
+        return;
     }
-    if (*slot).owns { os_error(check, location, "continuing paths must agree on owner consumption"); return; }
+    if (*slot).owns {
+        os_error(check, location, "continuing paths must agree on owner consumption");
+        return;
+    }
     os_set(check, target, slot as *u8, null(*OsValue), 0u32);
 }
 
@@ -241,7 +438,9 @@ fn os_while(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
 
 fn os_return(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     os_return_value(check, state, statement);
-    if os_failed(check) { return; }
+    if os_failed(check) {
+        return;
+    }
     os_function_exit(check, state, &(*statement).loc);
     while (*state).scope != null(*OsScope) && !os_failed(check) {
         os_scope_end(check, state, &(*statement).loc);
@@ -250,16 +449,31 @@ fn os_return(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     (*state).flow = OS_RETURN;
 }
 
-fn os_join_summary(check: *OsCheck, target: *OsState, left: *OsState, right: *OsState,
-                   object: *OsObject, location: *CrustLoc) -> bool {
-    if os_fields(left, object) == os_fields(right, object) { return false; }
+fn os_join_summary(
+    check: *OsCheck,
+    target: *OsState,
+    left: *OsState,
+    right: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> bool {
+    if os_fields(left, object) == os_fields(right, object) {
+        return false;
+    }
     var a: u32 = os_flags(left, object);
     var b: u32 = os_flags(right, object);
-    if ((a | b | os_flags(target, object)) & OS_SUMMARY) == 0u32 { return false; }
-    if os_absent_storage(check, left, object, location) { a = b & ~OS_NONNULL; }
-    if os_absent_storage(check, right, object, location) { b = a & ~OS_NONNULL; }
+    if ((a | b | os_flags(target, object)) & OS_SUMMARY) == 0u32 {
+        return false;
+    }
+    if os_absent_storage(check, left, object, location) {
+        a = b & ~OS_NONNULL;
+    }
+    if os_absent_storage(check, right, object, location) {
+        b = a & ~OS_NONNULL;
+    }
     if ((a ^ b) & (OS_LIVE | OS_READY | OS_DESTROYED)) != 0u32 {
-        os_error(check, location, "continuing paths must agree on owned storage lifetime"); return true;
+        os_error(check, location, "continuing paths must agree on owned storage lifetime");
+        return true;
     }
     var flags: u32 = (a & b & ~OS_SUMMARY) | ((a | b) & OS_PINNED);
     if (flags & OS_LIVE) != 0u32 && (flags & OS_DESTROYED) == 0u32 {
@@ -273,40 +487,99 @@ fn os_join_summary(check: *OsCheck, target: *OsState, left: *OsState, right: *Os
     return true;
 }
 
-fn os_summary_initialized(check: *OsCheck, state: *OsState, object: *OsObject, location: *CrustLoc) -> unit {
-    if !os_absent_storage(check, state, object, location) && !os_initialized(check, state, object) {
+fn os_summary_initialized(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> unit {
+    if !os_absent_storage(check, state, object, location) && !os_initialized(
+        check,
+        state,
+        object
+    ) {
         os_error(check, location, "continuing paths must preserve initialized owned storage");
     }
 }
 
 fn os_return_value(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
     if (*statement).expr == null(*CrustExpr) {
-        os_abstract_empty_return(check, &(*statement).loc); return;
+        os_abstract_empty_return(check, &(*statement).loc);
+        return;
     }
     var value: *OsValue = os_expr(check, state, (*statement).expr);
-    if value == null(*OsValue) || os_failed(check) || !os_plain(check, value, &(*statement).loc) { return; }
-    if !os_abstract_same(check, (*(*(*check).function).declaration).syntax_type, (*value).syntax, &(*statement).loc) { return; }
-    if (*value).object != null(*OsObject) && !(*value).pointer && !os_borrowed(check, (*value).syntax) {
+    if value == null(*OsValue) || os_failed(check) || !os_plain(
+        check,
+        value,
+        &(*statement).loc
+    ) {
+        return;
+    }
+    if !os_abstract_same(
+        check,
+        (*(*(*check).function).declaration).syntax_type,
+        (*value).syntax,
+        &(*statement).loc
+    ) {
+        return;
+    }
+    if (*value).object != null(*OsObject) &&!(*value).pointer && !os_borrowed(
+        check,
+        (*value).syntax
+    ) {
         os_publish_value(check, state, (*value).object, &(*statement).loc);
     }
-    if !os_transferable(check, state, value, &(*statement).loc) || !os_brand_return(check, state, value, &(*statement).loc) { return; }
+    if !os_transferable(check, state, value, &(*statement).loc) || !os_brand_return(
+        check,
+        state,
+        value,
+        &(*statement).loc
+    ) {
+        return;
+    }
     os_return_lifetime(check, state, value, &(*statement).loc);
-    if !os_failed(check) { os_result_ready(check, state, value, &(*statement).loc); }
+    if !os_failed(check) {
+        os_result_ready(check, state, value, &(*statement).loc);
+    }
 }
 
-fn os_result_ready(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> unit {
+fn os_result_ready(
+    check: *OsCheck,
+    state: *OsState,
+    value: *OsValue,
+    location: *CrustLoc
+) -> unit {
     if os_scoped(check, (*value).syntax) && (*(*check).function).effect == OS_RECLAIM {
-        os_error(check, location, "scoped result cannot escape reclamation authority"); return;
+        os_error(check, location, "scoped result cannot escape reclamation authority");
+        return;
     }
     if !os_initialized(check, state, (*value).object) {
-        os_error(check, location, "return value is not fully initialized"); return;
+        os_error(check, location, "return value is not fully initialized");
+        return;
     }
 }
 
-fn os_return_lifetime(check: *OsCheck, state: *OsState, value: *OsValue, location: *CrustLoc) -> unit {
-    if !os_borrowed(check, (*value).syntax) && os_view_mode(check, (*value).syntax) >= rs_kind((*(*check).stage).resources, RS_READ) {
+fn os_return_lifetime(
+    check: *OsCheck,
+    state: *OsState,
+    value: *OsValue,
+    location: *CrustLoc
+) -> unit {
+    if !os_borrowed(check, (*value).syntax) && os_view_mode(check, (*value).syntax) >= rs_kind(
+        (*(*check).stage).resources,
+        RS_READ
+    ) {
         os_return_view_record(check, state, (*value).object, location);
     }
-    if os_borrowed(check, (*value).syntax) { os_return_view(check, state, value, location); }
-    else { if (*value).pointer { os_error(check, location, "returning a cursor requires a declared lifetime interface"); } }
+    if os_borrowed(check, (*value).syntax) {
+        os_return_view(check, state, value, location);
+    } else {
+        if (*value).pointer {
+            os_error(
+                check,
+                location,
+                "returning a cursor requires a declared lifetime interface"
+            );
+        }
+    }
 }

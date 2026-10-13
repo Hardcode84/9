@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-stage_include(stage,"sources.crs");
-stage_include(stage,"../generics/ownership/sources.crs");
-stage_source(stage,"ownership.crs");
-stage_export_as(stage,"ccn_ownership_main","crust_tool_main");
+stage_include(stage, "sources.crs");
+stage_include(stage, "../generics/ownership/sources.crs");
+stage_source(stage, "ownership.crs");
+stage_export_as(stage, "ccn_ownership_main", "crust_tool_main");

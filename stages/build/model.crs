@@ -17,7 +17,7 @@ record StageBuild {
     toolchain: *StageToolchain;
     interpreter: *CrustRun;
     emitter: *CrustDecl;
-    compile: fn(*StageCompile)->bool;
+    compile: fn(*StageCompile) -> bool;
     interpreted: bool;
 }
 extern fn stage_realpath(path: *u8, result: *u8) -> *u8 = "realpath";

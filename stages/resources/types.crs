@@ -10,7 +10,9 @@ fn rs_indirect(syntax: *CrustTypeSyntax) -> bool {
 
 fn rs_pointer(stage: *RsStage, base: *CrustTypeSyntax) -> *CrustTypeSyntax {
     var result: *CrustTypeSyntax = rs_type_node(stage, CRUST_T_POINTER, &(*base).loc);
-    if result != null(*CrustTypeSyntax) { (*result).base = base; }
+    if result != null(*CrustTypeSyntax) {
+        (*result).base = base;
+    }
     return result;
 }
 
@@ -19,51 +21,85 @@ fn rs_borrow_type(stage: *RsStage, syntax: *CrustTypeSyntax) -> bool {
 }
 
 fn rs_lower_type(stage: *RsStage, source: *CrustTypeSyntax) -> *CrustTypeSyntax {
-    if source == null(*CrustTypeSyntax) || (*stage).failed { return null(*CrustTypeSyntax); }
+    if source == null(*CrustTypeSyntax) || (*stage).failed {
+        return null(*CrustTypeSyntax);
+    }
     // These leaves are unchanged by lowering and retain their source arena lifetime.
-    if (*source).kind <= CRUST_T_UNIT || (*source).kind == CRUST_T_NAME { return source; }
+    if (*source).kind <= CRUST_T_UNIT || (*source).kind == CRUST_T_NAME {
+        return source;
+    }
     var found: *CrustTypeSyntax = crust_map_get(&(*stage).lowered_types, source as usize) as *CrustTypeSyntax;
-    if found != null(*CrustTypeSyntax) { return found; }
+    if found != null(*CrustTypeSyntax) {
+        return found;
+    }
     var kind: u32 = (*source).kind;
     var target: *CrustTypeSyntax = rs_type_node(stage, kind, &(*source).loc);
-    if target == null(*CrustTypeSyntax) { return target; }
-    *target = *source;
+    if target == null(*CrustTypeSyntax) {
+        return target;
+    }
+    * target = *source;
     rs_put(stage, &(*stage).lowered_types, source as usize, target as *u8);
     if rs_borrow_type(stage, source) {
         if rs_borrow_type(stage, (*source).base) {
-            rs_error(stage, &(*source).loc, "borrow modes require a value type, not another borrow mode");
+            rs_error(
+                stage,
+                &(*source).loc,
+                "borrow modes require a value type, not another borrow mode"
+            );
             return null(*CrustTypeSyntax);
         }
         (*target).kind = CRUST_T_POINTER;
         (*target).base = rs_lower_type(stage, (*source).base);
-    } else { if kind == CRUST_T_POINTER || kind == CRUST_T_ARRAY {
-        if rs_borrow_type(stage, (*source).base) {
-            rs_error(stage, &(*source).loc, "borrow types cannot be stored in pointers or arrays");
-            return null(*CrustTypeSyntax);
+    } else {
+        if kind == CRUST_T_POINTER || kind == CRUST_T_ARRAY {
+            if rs_borrow_type(stage, (*source).base) {
+                rs_error(
+                    stage,
+                    &(*source).loc,
+                    "borrow types cannot be stored in pointers or arrays"
+                );
+                return null(*CrustTypeSyntax);
+            }
+            (*target).base = rs_lower_type(stage, (*source).base);
+        } else {
+            if kind == CRUST_T_FUNCTION {
+                return rs_lower_function_type(stage, source, target);
+            }
         }
-        (*target).base = rs_lower_type(stage, (*source).base);
-    } else { if kind == CRUST_T_FUNCTION {
-        return rs_lower_function_type(stage, source, target);
-    } } }
+    }
     return target;
 }
 
 fn rs_storage_type(stage: *RsStage, syntax: *CrustTypeSyntax) -> *CrustType {
     var lowered: *CrustTypeSyntax = rs_lower_type(stage, syntax);
-    if (*stage).failed { return null(*CrustType); }
+    if (*stage).failed {
+        return null(*CrustType);
+    }
     var result: *CrustType = crust_try_resolve_type((*stage).context, lowered);
-    if result == null(*CrustType) { (*stage).failed = true; }
+    if result == null(*CrustType) {
+        (*stage).failed = true;
+    }
     return result;
 }
 
 fn rs_same(stage: *RsStage, a: *CrustTypeSyntax, b: *CrustTypeSyntax) -> bool {
-    if (*stage).failed || a == null(*CrustTypeSyntax) || b == null(*CrustTypeSyntax) { return false; }
-    if (*a).kind != (*b).kind { return false; }
-    if (*a).kind == rs_kind(stage, RS_READ) || (*a).kind == rs_kind(stage, RS_MUT) || (*a).kind == CRUST_T_POINTER || (*a).kind == CRUST_T_ARRAY {
-        if (*a).kind == CRUST_T_ARRAY && (*a).count != (*b).count { return false; }
+    if (*stage).failed || a == null(*CrustTypeSyntax) || b == null(*CrustTypeSyntax) {
+        return false;
+    }
+    if (*a).kind != (*b).kind {
+        return false;
+    }
+    if (*a).kind == rs_kind(stage, RS_READ) || (*a).kind == rs_kind(stage, RS_MUT) || (*a).kind == CRUST_T_POINTER || (
+        *a
+    ).kind == CRUST_T_ARRAY {
+        if (*a).kind == CRUST_T_ARRAY && (*a).count != (*b).count {
+            return false;
+        }
         return rs_same(stage, (*a).base, (*b).base);
     }
-    if (*a).kind == CRUST_T_NAME { return (*a).name == (*b).name; }
+    if (*a).kind == CRUST_T_NAME {
+        return (*a).name == (*b).name;
+    }
     if (*a).kind == CRUST_T_FUNCTION {
         return rs_same_signature(stage, a, b);
     }
@@ -71,18 +107,30 @@ fn rs_same(stage: *RsStage, a: *CrustTypeSyntax, b: *CrustTypeSyntax) -> bool {
 }
 
 fn rs_owns(stage: *RsStage, syntax: *CrustTypeSyntax) -> bool {
-    if (*stage).failed { return false; }
-    if (*syntax).kind == CRUST_T_ARRAY { return rs_owns(stage, (*syntax).base); }
-    if (*syntax).kind != CRUST_T_NAME { return false; }
-    if crust_map_get(&(*stage).affine_types, (*syntax).name as usize) != null(*u8) { return true; }
+    if (*stage).failed {
+        return false;
+    }
+    if (*syntax).kind == CRUST_T_ARRAY {
+        return rs_owns(stage, (*syntax).base);
+    }
+    if (*syntax).kind != CRUST_T_NAME {
+        return false;
+    }
+    if crust_map_get(&(*stage).affine_types, (*syntax).name as usize) != null(*u8) {
+        return true;
+    }
     var global: *RsGlobal = rs_global(stage, (*syntax).name);
     if global == null(*RsGlobal) || (*(*global).source).kind != CRUST_D_RECORD {
         rs_error(stage, &(*syntax).loc, "expected a declared record type");
         return false;
     }
     var state: usize = crust_map_get(&(*stage).ownership, global as usize) as usize;
-    if state == 1usize { return false; }
-    if state == 2usize { return true; }
+    if state == 1usize {
+        return false;
+    }
+    if state == 2usize {
+        return true;
+    }
     if state == 3usize {
         rs_error(stage, &(*syntax).loc, "resource layout contains a value cycle");
         return false;
@@ -90,26 +138,45 @@ fn rs_owns(stage: *RsStage, syntax: *CrustTypeSyntax) -> bool {
     rs_put(stage, &(*stage).ownership, global as usize, 3usize as *u8);
     var owns: bool = (*global).resource != null(*RsResource);
     var field: *CrustField = (*(*global).source).fields;
-    while field != null(*CrustField) && !(*stage).failed {
-        if rs_owns(stage, (*field).syntax_type) { owns = true; }
+    while field != null(*CrustField) &&!(*stage).failed {
+        if rs_owns(stage, (*field).syntax_type) {
+            owns = true;
+        }
         field = (*field).next;
     }
     state = 1usize;
-    if owns { state = 2usize; }
+    if owns {
+        state = 2usize;
+    }
     rs_put(stage, &(*stage).ownership, global as usize, state as *u8);
     return owns;
 }
 
 fn rs_signature(stage: *RsStage, declaration: *CrustDecl) -> *CrustTypeSyntax {
-    var signature: *CrustTypeSyntax = rs_type_node(stage, CRUST_T_FUNCTION, &(*declaration).loc);
-    if signature == null(*CrustTypeSyntax) { return signature; }
+    var signature: *CrustTypeSyntax = rs_type_node(
+        stage,
+        CRUST_T_FUNCTION,
+        &(*declaration).loc
+    );
+    if signature == null(*CrustTypeSyntax) {
+        return signature;
+    }
     (*signature).base = (*declaration).syntax_type;
     var parameter: *CrustParam = (*declaration).params;
     var count: usize = 0usize;
-    while parameter != null(*CrustParam) { count = count + 1usize; parameter = (*parameter).next; }
+    while parameter != null(*CrustParam) {
+        count = count + 1usize;
+        parameter = (*parameter).next;
+    }
     (*signature).param_count = count;
-    (*signature).params = rs_alloc(stage, count * sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
-    if (*stage).failed { return null(*CrustTypeSyntax); }
+    (*signature).params = rs_alloc(
+        stage,
+        count * sizeof(*CrustTypeSyntax),
+        alignof(*CrustTypeSyntax)
+    ) as **CrustTypeSyntax;
+    if (*stage).failed {
+        return null(*CrustTypeSyntax);
+    }
     parameter = (*declaration).params;
     count = 0usize;
     while parameter != null(*CrustParam) {
@@ -121,9 +188,13 @@ fn rs_signature(stage: *RsStage, declaration: *CrustDecl) -> *CrustTypeSyntax {
 }
 
 fn rs_return_loan(stage: *RsStage, syntax: *CrustTypeSyntax) -> *RsReturnLoan {
-    if (*syntax).kind != CRUST_T_FUNCTION { return null(*RsReturnLoan); }
+    if (*syntax).kind != CRUST_T_FUNCTION {
+        return null(*RsReturnLoan);
+    }
     var result: u32 = (*(*syntax).base).kind;
-    if result != rs_kind(stage, RS_READ) && result != rs_kind(stage, RS_MUT) { return null(*RsReturnLoan); }
+    if result != rs_kind(stage, RS_READ) && result != rs_kind(stage, RS_MUT) {
+        return null(*RsReturnLoan);
+    }
     return crust_map_get(&(*stage).return_loans, syntax as usize) as *RsReturnLoan;
 }
 
@@ -131,15 +202,24 @@ fn rs_collect_return(stage: *RsStage, global: *RsGlobal) -> bool {
     var declaration: *CrustDecl = (*global).source;
     var result: *CrustTypeSyntax = (*declaration).syntax_type;
     var name: *CrustName = crust_map_get(&(*stage).return_sources, declaration as usize) as *CrustName;
-    var borrowed: bool = (*result).kind == rs_kind(stage, RS_READ) || (*result).kind == rs_kind(stage, RS_MUT);
-    if !borrowed && !(name != null(*CrustName) && (*stage).delegate_return_loans && (*result).kind == CRUST_T_NAME) {
+    var borrowed: bool = (*result).kind == rs_kind(stage, RS_READ) || (*result).kind == rs_kind(
+        stage,
+        RS_MUT
+    );
+    if !borrowed &&!(
+        name != null(*CrustName) && (*stage).delegate_return_loans && (*result).kind == CRUST_T_NAME
+    ) {
         if name != null(*CrustName) {
             rs_error(stage, &(*result).loc, "from requires a borrowed function result");
         }
-        return !(*stage).failed;
+        return!(*stage).failed;
     }
     if name == null(*CrustName) {
-        rs_error(stage, &(*result).loc, "function results cannot be borrowed views without a from parameter");
+        rs_error(
+            stage,
+            &(*result).loc,
+            "function results cannot be borrowed views without a from parameter"
+        );
         return false;
     }
     var parameter: *CrustParam = (*declaration).params;
@@ -149,45 +229,67 @@ fn rs_collect_return(stage: *RsStage, global: *RsGlobal) -> bool {
         index = index + 1usize;
     }
     if parameter == null(*CrustParam) {
-        rs_error(stage, &(*result).loc, "from must name a borrow parameter of this function");
+        rs_error(
+            stage,
+            &(*result).loc,
+            "from must name a borrow parameter of this function"
+        );
         return false;
     }
     return rs_collect_return_parameter(stage, global, parameter, index);
 }
 
-fn rs_collect_return_parameter(stage: *RsStage, global: *RsGlobal,
-                              parameter: *CrustParam, index: usize) -> bool {
+fn rs_collect_return_parameter(
+    stage: *RsStage,
+    global: *RsGlobal,
+    parameter: *CrustParam,
+    index: usize
+) -> bool {
     var declaration: *CrustDecl = (*global).source;
     var result: *CrustTypeSyntax = (*declaration).syntax_type;
     var mode: u32 = (*(*parameter).syntax_type).kind;
     if mode != rs_kind(stage, RS_READ) && mode != rs_kind(stage, RS_MUT) {
-        rs_error(stage, &(*parameter).loc, "returned loan source must be a borrow parameter");
+        rs_error(
+            stage,
+            &(*parameter).loc,
+            "returned loan source must be a borrow parameter"
+        );
         return false;
     }
     if (*result).kind == rs_kind(stage, RS_MUT) && mode != rs_kind(stage, RS_MUT) {
-        rs_error(stage, &(*result).loc, "mutable result requires a mutable source parameter");
+        rs_error(
+            stage,
+            &(*result).loc,
+            "mutable result requires a mutable source parameter"
+        );
         return false;
     }
-    if (*declaration).kind == CRUST_D_EXTERN &&
-       crust_map_get(&(*stage).source_imports, declaration as usize) == null(*u8) {
+    if (*declaration).kind == CRUST_D_EXTERN && crust_map_get(
+        &(*stage).source_imports,
+        declaration as usize
+    ) == null(*u8) {
         rs_error(stage, &(*declaration).loc, "returned loans require a source ABI import");
         return false;
     }
     var loan: *RsReturnLoan = rs_alloc(stage, sizeof(RsReturnLoan), alignof(RsReturnLoan)) as *RsReturnLoan;
-    if loan == null(*RsReturnLoan) { return false; }
+    if loan == null(*RsReturnLoan) {
+        return false;
+    }
     (*loan).parameter = (*parameter).name;
     (*loan).index = index;
     rs_put(stage, &(*stage).return_loans, (*global).syntax as usize, loan as *u8);
-    return !(*stage).failed;
+    return!(*stage).failed;
 }
 
 fn rs_collect(stage: *RsStage) -> bool {
     (*stage).sources = (*(*stage).context).units;
     var unit_value: *CrustUnit = (*stage).sources;
-    while unit_value != null(*CrustUnit) && !(*stage).failed {
+    while unit_value != null(*CrustUnit) &&!(*stage).failed {
         var declaration: *CrustDecl = (*unit_value).declarations;
-        while declaration != null(*CrustDecl) && !(*stage).failed {
-            if !rs_collect_global(stage, declaration) { return false; }
+        while declaration != null(*CrustDecl) &&!(*stage).failed {
+            if !rs_collect_global(stage, declaration) {
+                return false;
+            }
             declaration = (*declaration).next;
         }
         unit_value = (*unit_value).next;
@@ -200,59 +302,103 @@ fn rs_publish(stage: *RsStage) -> bool {
     (*context).units = null(*CrustUnit);
     (*context).last_unit = null(*CrustUnit);
     var source_unit: *CrustUnit = (*stage).sources;
-    while source_unit != null(*CrustUnit) && !(*stage).failed {
-        var target_unit: *CrustUnit = rs_alloc(stage, sizeof(CrustUnit), alignof(CrustUnit)) as *CrustUnit;
-        if target_unit == null(*CrustUnit) { return false; }
+    while source_unit != null(*CrustUnit) &&!(*stage).failed {
+        var target_unit: *CrustUnit = rs_alloc(
+            stage,
+            sizeof(CrustUnit),
+            alignof(CrustUnit)
+        ) as *CrustUnit;
+        if target_unit == null(*CrustUnit) {
+            return false;
+        }
         (*target_unit).source = (*source_unit).source;
-        if (*context).units == null(*CrustUnit) { (*context).units = target_unit; }
-        else { (*(*context).last_unit).next = target_unit; }
+        if (*context).units == null(*CrustUnit) {
+            (*context).units = target_unit;
+        } else {
+            (*(*context).last_unit).next = target_unit;
+        }
         (*context).last_unit = target_unit;
         var source: *CrustDecl = (*source_unit).declarations;
         var last: *CrustDecl = null(*CrustDecl);
-        while source != null(*CrustDecl) && !(*stage).failed {
+        while source != null(*CrustDecl) &&!(*stage).failed {
             var global: *RsGlobal = rs_global(stage, (*source).name);
-            var target: *CrustDecl = rs_alloc(stage, sizeof(CrustDecl), alignof(CrustDecl)) as *CrustDecl;
-            if target == null(*CrustDecl) { return false; }
-            *target = *source;
+            var target: *CrustDecl = rs_alloc(
+                stage,
+                sizeof(CrustDecl),
+                alignof(CrustDecl)
+            ) as *CrustDecl;
+            if target == null(*CrustDecl) {
+                return false;
+            }
+            * target = *source;
             (*target).next = null(*CrustDecl);
             (*target).body = null(*CrustStmt);
             (*global).lowered = target;
-            if last == null(*CrustDecl) { (*target_unit).declarations = target; }
-            else { (*last).next = target; }
+            if last == null(*CrustDecl) {
+                (*target_unit).declarations = target;
+            } else {
+                (*last).next = target;
+            }
             last = target;
-            if !rs_publish_declaration(stage, global, source, target) { return false; }
+            if !rs_publish_declaration(stage, global, source, target) {
+                return false;
+            }
             source = (*source).next;
         }
         source_unit = (*source_unit).next;
     }
-    if (*stage).failed { return false; }
-    if !crust_collect(context) || !crust_resolve(context) { (*stage).failed = true; return false; }
+    if (*stage).failed {
+        return false;
+    }
+    if !crust_collect(context) || !crust_resolve(context) {
+        (*stage).failed = true;
+        return false;
+    }
     return rs_check_global_ownership(stage);
 }
 
-fn rs_lower_function_type(stage: *RsStage, source: *CrustTypeSyntax, target: *CrustTypeSyntax) -> *CrustTypeSyntax {
+fn rs_lower_function_type(
+    stage: *RsStage,
+    source: *CrustTypeSyntax,
+    target: *CrustTypeSyntax
+) -> *CrustTypeSyntax {
     var result: *CrustTypeSyntax = (*source).base;
-    if ((*result).kind == rs_kind(stage, RS_READ) || (*result).kind == rs_kind(stage, RS_MUT)) &&
-       rs_return_loan(stage, source) == null(*RsReturnLoan) {
-        rs_error(stage, &(*result).loc, "function results cannot be borrowed views in indirect function types");
+    if (
+        (*result).kind == rs_kind(stage, RS_READ) || (*result).kind == rs_kind(stage, RS_MUT)
+    ) && rs_return_loan(stage, source) == null(*RsReturnLoan) {
+        rs_error(
+            stage,
+            &(*result).loc,
+            "function results cannot be borrowed views in indirect function types"
+        );
         return null(*CrustTypeSyntax);
     }
     var count: usize = (*source).param_count;
     var by_address: bool = rs_indirect(result);
     (*target).param_count = count;
-    if by_address { (*target).param_count = count + 1usize; }
-    (*target).params = rs_alloc(stage, (*target).param_count * sizeof(*CrustTypeSyntax), alignof(*CrustTypeSyntax)) as **CrustTypeSyntax;
-    if (*stage).failed { return null(*CrustTypeSyntax); }
+    if by_address {
+        (*target).param_count = count + 1usize;
+    }
+    (*target).params = rs_alloc(
+        stage,
+        (*target).param_count * sizeof(*CrustTypeSyntax),
+        alignof(*CrustTypeSyntax)
+    ) as **CrustTypeSyntax;
+    if (*stage).failed {
+        return null(*CrustTypeSyntax);
+    }
     var index: usize = 0usize;
-    while index < count && !(*stage).failed {
+    while index < count &&!(*stage).failed {
         var parameter: *CrustTypeSyntax = (*source).params[index];
         var lowered: *CrustTypeSyntax = rs_lower_type(stage, parameter);
-        if rs_indirect(parameter) && lowered != null(*CrustTypeSyntax) { lowered = rs_pointer(stage, lowered); }
+        if rs_indirect(parameter) && lowered != null(*CrustTypeSyntax) {
+            lowered = rs_pointer(stage, lowered);
+        }
         (*target).params[index] = lowered;
         index = index + 1usize;
     }
     (*target).base = rs_lower_type(stage, result);
-    if by_address && !(*stage).failed {
+    if by_address &&!(*stage).failed {
         (*target).base = rs_pointer(stage, (*target).base);
         (*target).params[count] = (*target).base;
     }
@@ -260,10 +406,14 @@ fn rs_lower_function_type(stage: *RsStage, source: *CrustTypeSyntax, target: *Cr
 }
 
 fn rs_same_signature(stage: *RsStage, a: *CrustTypeSyntax, b: *CrustTypeSyntax) -> bool {
-    if (*a).param_count != (*b).param_count || !rs_same(stage, (*a).base, (*b).base) { return false; }
+    if (*a).param_count != (*b).param_count || !rs_same(stage, (*a).base, (*b).base) {
+        return false;
+    }
     var index: usize = 0usize;
     while index < (*a).param_count {
-        if !rs_same(stage, (*a).params[index], (*b).params[index]) { return false; }
+        if !rs_same(stage, (*a).params[index], (*b).params[index]) {
+            return false;
+        }
         index = index + 1usize;
     }
     return true;
@@ -275,14 +425,16 @@ fn rs_collect_global(stage: *RsStage, declaration: *CrustDecl) -> bool {
         return false;
     }
     var global: *RsGlobal = rs_alloc(stage, sizeof(RsGlobal), alignof(RsGlobal)) as *RsGlobal;
-    if global == null(*RsGlobal) { return false; }
+    if global == null(*RsGlobal) {
+        return false;
+    }
     (*global).source = declaration;
     if (*declaration).identity > (*stage).next_helper_identity {
         (*stage).next_helper_identity = (*declaration).identity;
     }
     (*global).syntax = (*declaration).syntax_type;
     var field: *CrustField = (*declaration).fields;
-    while field != null(*CrustField) && !(*stage).failed {
+    while field != null(*CrustField) &&!(*stage).failed {
         if crust_map_get(&(*global).fields, (*field).name as usize) != null(*u8) {
             rs_error(stage, &(*field).loc, "duplicate record field");
             return false;
@@ -292,82 +444,127 @@ fn rs_collect_global(stage: *RsStage, declaration: *CrustDecl) -> bool {
     }
     if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_EXTERN {
         (*global).syntax = rs_signature(stage, declaration);
-        if (*stage).failed || !rs_collect_return(stage, global) { return false; }
-        (*global).unsafe_call = ((*declaration).kind == CRUST_D_EXTERN &&
-            crust_map_get(&(*stage).source_imports, declaration as usize) == null(*u8)) ||
-            crust_map_get(&(*stage).unsafe_functions, declaration as usize) != null(*u8);
+        if (*stage).failed || !rs_collect_return(stage, global) {
+            return false;
+        }
+        (*global).unsafe_call = (
+            (*declaration).kind == CRUST_D_EXTERN && crust_map_get(
+                &(*stage).source_imports,
+                declaration as usize
+            ) == null(*u8)
+        ) || crust_map_get(&(*stage).unsafe_functions, declaration as usize) != null(*u8);
     }
     rs_put(stage, &(*stage).globals, (*declaration).name as usize, global as *u8);
-    if (*stage).first_global == null(*RsGlobal) { (*stage).first_global = global; }
-    else { (*(*stage).last_global).next = global; }
+    if (*stage).first_global == null(*RsGlobal) {
+        (*stage).first_global = global;
+    } else {
+        (*(*stage).last_global).next = global;
+    }
     (*stage).last_global = global;
-    return !(*stage).failed;
+    return!(*stage).failed;
 }
 
 fn rs_collect_drops(stage: *RsStage) -> bool {
     var resource: *RsResource = (*stage).resources;
-    while resource != null(*RsResource) && !(*stage).failed {
+    while resource != null(*RsResource) &&!(*stage).failed {
         var global: *RsGlobal = rs_global(stage, (*(*resource).declaration).name);
         (*global).resource = resource;
         (*global).drop = rs_global(stage, (*resource).drop_name);
         var drop: *RsGlobal = (*global).drop;
-        if drop == null(*RsGlobal) || (*drop).unsafe_call ||
-           ((*(*drop).source).kind != CRUST_D_FUNCTION &&
-            crust_map_get(&(*stage).source_imports, (*drop).source as usize) == null(*u8)) {
-            rs_error(stage, &(*(*resource).declaration).loc, "resource drop must name a safe defined function or source ABI import");
+        if drop == null(*RsGlobal) || (*drop).unsafe_call || (
+            (*(*drop).source).kind != CRUST_D_FUNCTION && crust_map_get(
+                &(*stage).source_imports,
+                (*drop).source as usize
+            ) == null(*u8)
+        ) {
+            rs_error(
+                stage,
+                &(*(*resource).declaration).loc,
+                "resource drop must name a safe defined function or source ABI import"
+            );
             return false;
         }
         var signature: *CrustTypeSyntax = (*drop).syntax;
         if (*signature).param_count != 1usize || (*(*signature).base).kind != CRUST_T_UNIT {
-            rs_error(stage, &(*(*drop).source).loc, "drop requires one mut resource parameter and a unit result");
+            rs_error(
+                stage,
+                &(*(*drop).source).loc,
+                "drop requires one mut resource parameter and a unit result"
+            );
             return false;
         }
         var parameter: *CrustTypeSyntax = (*signature).params[0usize];
-        if (*parameter).kind != rs_kind(stage, RS_MUT) || (*(*parameter).base).kind != CRUST_T_NAME ||
-           (*(*parameter).base).name != (*(*global).source).name {
-            rs_error(stage, &(*parameter).loc, "drop parameter must borrow its resource exclusively");
+        if (*parameter).kind != rs_kind(stage, RS_MUT) || (*(*parameter).base).kind != CRUST_T_NAME || (
+            *(*parameter).base
+        ).name != (*(*global).source).name {
+            rs_error(
+                stage,
+                &(*parameter).loc,
+                "drop parameter must borrow its resource exclusively"
+            );
             return false;
         }
         (*drop).drop_only = true;
         resource = (*resource).next;
     }
-    return !(*stage).failed;
+    return!(*stage).failed;
 }
 
 fn rs_publish_record(stage: *RsStage, source: *CrustDecl, target: *CrustDecl) -> bool {
     (*target).fields = null(*CrustField);
     var field: *CrustField = (*source).fields;
     var previous: *CrustField = null(*CrustField);
-    while field != null(*CrustField) && !(*stage).failed {
-        if !(*stage).delegate_memory &&
-           ((*(*field).syntax_type).kind == rs_kind(stage, RS_READ) || (*(*field).syntax_type).kind == rs_kind(stage, RS_MUT)) {
+    while field != null(*CrustField) &&!(*stage).failed {
+        if!(*stage).delegate_memory && (
+            (*(*field).syntax_type).kind == rs_kind(stage, RS_READ) || (
+                *(*field).syntax_type
+            ).kind == rs_kind(stage, RS_MUT)
+        ) {
             rs_error(stage, &(*field).loc, "borrowed views cannot be record fields");
             return false;
         }
         var copy: *CrustField = rs_alloc(stage, sizeof(CrustField), alignof(CrustField)) as *CrustField;
-        if copy == null(*CrustField) { return false; }
-        *copy = *field;
+        if copy == null(*CrustField) {
+            return false;
+        }
+        * copy = *field;
         (*copy).syntax_type = rs_lower_type(stage, (*field).syntax_type);
         (*copy).next = null(*CrustField);
-        if previous == null(*CrustField) { (*target).fields = copy; }
-        else { (*previous).next = copy; }
+        if previous == null(*CrustField) {
+            (*target).fields = copy;
+        } else {
+            (*previous).next = copy;
+        }
         previous = copy;
         field = (*field).next;
     }
-    return !(*stage).failed;
+    return!(*stage).failed;
 }
 
-fn rs_publish_function(stage: *RsStage, global: *RsGlobal, source: *CrustDecl, target: *CrustDecl) -> bool {
+fn rs_publish_function(
+    stage: *RsStage,
+    global: *RsGlobal,
+    source: *CrustDecl,
+    target: *CrustDecl
+) -> bool {
     var signature: *CrustTypeSyntax = rs_lower_type(stage, (*global).syntax);
-    if (*stage).failed { return false; }
+    if (*stage).failed {
+        return false;
+    }
     (*target).syntax_type = (*signature).base;
     (*target).params = null(*CrustParam);
     var source_param: *CrustParam = (*source).params;
     var last_param: *CrustParam = null(*CrustParam);
     var index: usize = 0usize;
-    while index < (*signature).param_count && !(*stage).failed {
-        var parameter: *CrustParam = rs_alloc(stage, sizeof(CrustParam), alignof(CrustParam)) as *CrustParam;
-        if parameter == null(*CrustParam) { return false; }
+    while index < (*signature).param_count &&!(*stage).failed {
+        var parameter: *CrustParam = rs_alloc(
+            stage,
+            sizeof(CrustParam),
+            alignof(CrustParam)
+        ) as *CrustParam;
+        if parameter == null(*CrustParam) {
+            return false;
+        }
         (*parameter).loc = (*source).loc;
         (*parameter).name = rs_name(stage);
         (*parameter).syntax_type = (*signature).params[index];
@@ -375,8 +572,11 @@ fn rs_publish_function(stage: *RsStage, global: *RsGlobal, source: *CrustDecl, t
             (*parameter).loc = (*source_param).loc;
             source_param = (*source_param).next;
         }
-        if last_param == null(*CrustParam) { (*target).params = parameter; }
-        else { (*last_param).next = parameter; }
+        if last_param == null(*CrustParam) {
+            (*target).params = parameter;
+        } else {
+            (*last_param).next = parameter;
+        }
         last_param = parameter;
         index = index + 1usize;
     }
@@ -384,51 +584,85 @@ fn rs_publish_function(stage: *RsStage, global: *RsGlobal, source: *CrustDecl, t
 }
 
 fn rs_foreign_signature(stage: *RsStage, global: *RsGlobal, source: *CrustDecl) -> bool {
-    if (*source).kind == CRUST_D_EXTERN &&
-       crust_map_get(&(*stage).source_imports, source as usize) == null(*u8) {
+    if (*source).kind == CRUST_D_EXTERN && crust_map_get(
+        &(*stage).source_imports,
+        source as usize
+    ) == null(*u8) {
         var index: usize = 0usize;
         while index < (*(*global).syntax).param_count {
             var parameter: *CrustTypeSyntax = (*(*global).syntax).params[index];
-            if rs_indirect(parameter) || (*parameter).kind == rs_kind(stage, RS_READ) || (*parameter).kind == rs_kind(stage, RS_MUT) {
-                rs_error(stage, &(*parameter).loc, "foreign signatures require explicit scalar ABI types");
+            if rs_indirect(parameter) || (*parameter).kind == rs_kind(stage, RS_READ) || (
+                *parameter
+            ).kind == rs_kind(stage, RS_MUT) {
+                rs_error(
+                    stage,
+                    &(*parameter).loc,
+                    "foreign signatures require explicit scalar ABI types"
+                );
                 return false;
             }
             index = index + 1usize;
         }
         if rs_indirect((*(*global).syntax).base) {
-            rs_error(stage, &(*source).loc, "foreign results require an explicit scalar ABI type");
+            rs_error(
+                stage,
+                &(*source).loc,
+                "foreign results require an explicit scalar ABI type"
+            );
             return false;
         }
     }
-    return !(*stage).failed;
+    return!(*stage).failed;
 }
 
-fn rs_publish_declaration(stage: *RsStage, global: *RsGlobal, source: *CrustDecl, target: *CrustDecl) -> bool {
+fn rs_publish_declaration(
+    stage: *RsStage,
+    global: *RsGlobal,
+    source: *CrustDecl,
+    target: *CrustDecl
+) -> bool {
     if (*source).kind == CRUST_D_RECORD {
-        if !rs_publish_record(stage, source, target) { return false; }
-    } else { if (*source).kind == CRUST_D_FUNCTION || (*source).kind == CRUST_D_EXTERN {
-        if !rs_publish_function(stage, global, source, target) { return false; }
-    } else {
-        if (*(*source).syntax_type).kind == rs_kind(stage, RS_READ) ||
-           (*(*source).syntax_type).kind == rs_kind(stage, RS_MUT) {
-            rs_error(stage, &(*source).loc, "global constants cannot own resources or local views");
+        if !rs_publish_record(stage, source, target) {
             return false;
         }
-        (*target).syntax_type = rs_lower_type(stage, (*source).syntax_type);
-        (*target).init = rs_lower_constant(stage, (*source).init);
-        if (*stage).failed { return false; }
-    } }
-    return !(*stage).failed;
+    } else {
+        if (*source).kind == CRUST_D_FUNCTION || (*source).kind == CRUST_D_EXTERN {
+            if !rs_publish_function(stage, global, source, target) {
+                return false;
+            }
+        } else {
+            if (*(*source).syntax_type).kind == rs_kind(stage, RS_READ) || (
+                *(*source).syntax_type
+            ).kind == rs_kind(stage, RS_MUT) {
+                rs_error(
+                    stage,
+                    &(*source).loc,
+                    "global constants cannot own resources or local views"
+                );
+                return false;
+            }
+            (*target).syntax_type = rs_lower_type(stage, (*source).syntax_type);
+            (*target).init = rs_lower_constant(stage, (*source).init);
+            if (*stage).failed {
+                return false;
+            }
+        }
+    }
+    return!(*stage).failed;
 }
 
 fn rs_check_global_ownership(stage: *RsStage) -> bool {
     var global: *RsGlobal = (*stage).first_global;
-    while global != null(*RsGlobal) && !(*stage).failed {
+    while global != null(*RsGlobal) &&!(*stage).failed {
         var source: *CrustDecl = (*global).source;
         if (*source).kind == CRUST_D_CONST && rs_owns(stage, (*source).syntax_type) {
-            rs_error(stage, &(*source).loc, "global constants cannot own resources or local views");
+            rs_error(
+                stage,
+                &(*source).loc,
+                "global constants cannot own resources or local views"
+            );
         }
         global = (*global).next;
     }
-    return !(*stage).failed;
+    return!(*stage).failed;
 }

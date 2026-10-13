@@ -1,19 +1,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 host_source(run, "../../../stages/build/load.crs");
-if !stage_setup(run, "../../..") { return 1i32; };
+if !stage_setup(run, "../../..") {
+    return 1i32;
+};
 var stages: *StageSession = stage_open(run, "../../..", "../../../build/stage-cache");
-if stages == null(*StageSession) { return 1i32; };
-host_source(run,"../../backend.crs");
-var backend:ExampleBackend=uninit;
-if !example_backend(run,stages,&backend){return 1i32;};
+if stages == null(*StageSession) {
+    return 1i32;
+};
+host_source(run, "../../backend.crs");
+var backend: ExampleBackend = uninit;
+if !example_backend(run, stages, &backend) {
+    return 1i32;
+};
 host_source(run, "../../../stages/resources/api.crs");
-if !example_load(stages,&backend,"stages/resources/package.crs") { return 1i32; };
+if !example_load(stages, &backend, "stages/resources/package.crs") {
+    return 1i32;
+};
 
-var target:*CrustSource = host_input(run, "program.crs", 1u64);
-var capacity:usize = ((*run).argc as usize) + 12usize;
-var arguments:**u8 = crust_try_alloc((*run).context, capacity * sizeof(*u8), alignof(*u8)) as **u8;
-if arguments == null(**u8) { return 1i32; };
+var target: *CrustSource = host_input(run, "program.crs", 1u64);
+var capacity: usize = ((*run).argc as usize) + 12usize;
+var arguments: **u8 = crust_try_alloc(
+    (*run).context,
+    capacity * sizeof(*u8),
+    alignof(*u8)
+) as **u8;
+if arguments == null(**u8) {
+    return 1i32;
+};
 arguments[0usize] = host_path(run, "library.crs");
 arguments[1usize] = "--ldflag";
 arguments[2usize] = host_path(run, "../../../.profile-cache/resources-baseline/sqlite3.o");
@@ -23,14 +37,14 @@ arguments[5usize] = "--ldflag";
 arguments[6usize] = "-lm";
 arguments[7usize] = "--ldflag";
 arguments[8usize] = "-pthread";
-var count:usize = 9usize;
+var count: usize = 9usize;
 if (*run).argc == 0i32 {
     arguments[count] = "-o";
     arguments[count + 1usize] = host_path(run, "../../../build/sqlite-resource");
     arguments[count + 2usize] = "--cflag=-O2";
     count = count + 3usize;
 } else {
-    var index:usize = 0usize;
+    var index: usize = 0usize;
     while index < (*run).argc as usize {
         arguments[count] = (*run).argv[index];
         count = count + 1usize;

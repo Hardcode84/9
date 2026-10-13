@@ -1,148 +1,408 @@
 // SPDX-License-Identifier: Apache-2.0
 
-fn su_variant(stage:*SuStage,sum:*SuType,name:*CrustName,location:*CrustLoc)->*SuVariant {
-    var variant:*SuVariant=su_cache_get!(SuVariant)(&sum->names,name as usize);
-    if variant!=null(*SuVariant){return variant;}
-    su_error(stage,location,"unknown union variant");return null(*SuVariant);
+fn su_variant(stage: *SuStage, sum: *SuType, name: *CrustName, location: *CrustLoc) -> *SuVariant {
+    var variant: *SuVariant = su_cache_get!(SuVariant)(&sum -> names, name as usize);
+    if variant != null(*SuVariant) {
+        return variant;
+    }
+    su_error(stage, location, "unknown union variant");
+    return null(*SuVariant);
 }
 
-fn su_construct(stage:*SuStage,stmt:*CrustStmt,sum:*SuType,op:*SuOperation)->unit {
-    var variant:*SuVariant=su_variant(stage,sum,op->variant,&stmt->loc);
-    if variant==null(*SuVariant){return;}
-    domain CompilerArena{edit CompilerArena{
-        var builder:SuBuilder=make SuBuilder{stage:stage,location:&stmt->loc};
-        var name:SuName=make SuName{pointer:op->type_name};
-        var syntax:SuSyntax=make SuSyntax{pointer:variant->syntax};
-        var target:SuExpression=make SuExpression{pointer:stmt->expr};
-        var payload:SuExpression=make SuExpression{pointer:stmt->value};
-        var result:SuStatement=su_checked_construct(read builder,read name,read syntax,read target,read payload,variant->tag,variant->syntax->kind==CRUST_T_UNIT);
-        if stage->context->error_count==0usize{
-            stmt->kind=CRUST_S_BLOCK;stmt->body=result.pointer;stmt->expr=null(*CrustExpr);stmt->value=null(*CrustExpr);
+fn su_construct(stage: *SuStage, stmt: *CrustStmt, sum: *SuType, op: *SuOperation) -> unit {
+    var variant: *SuVariant = su_variant(stage, sum, op -> variant, &stmt -> loc);
+    if variant == null(*SuVariant) {
+        return;
+    }
+    domain CompilerArena {
+        edit CompilerArena {
+            var builder: SuBuilder = make SuBuilder {
+                stage: stage,
+                location: &stmt -> loc
+            };
+            var name: SuName = make SuName {
+                pointer: op -> type_name
+            };
+            var syntax: SuSyntax = make SuSyntax {
+                pointer: variant -> syntax
+            };
+            var target: SuExpression = make SuExpression {
+                pointer: stmt -> expr
+            };
+            var payload: SuExpression = make SuExpression {
+                pointer: stmt -> value
+            };
+            var result: SuStatement = su_checked_construct(
+                read builder,
+                read name,
+                read syntax,
+                read target,
+                read payload,
+                variant -> tag,
+                variant -> syntax -> kind == CRUST_T_UNIT
+            );
+            if stage -> context -> error_count == 0usize {
+                stmt -> kind = CRUST_S_BLOCK;
+                stmt -> body = result.pointer;
+                stmt -> expr = null(*CrustExpr);
+                stmt -> value = null(*CrustExpr);
+            }
         }
-    }}
+    }
 }
 
-fn su_match_arm(stage:*SuStage,arm:*SuArm,variant:*SuVariant,snapshot:*CrustName)->*CrustStmt {
-    domain CompilerArena{edit CompilerArena{
-        var builder:SuBuilder=make SuBuilder{stage:stage,location:&arm->location};
-        var name:SuName=make SuName{pointer:snapshot};
-        var binding:SuName=make SuName{pointer:arm->binding};
-        var body:SuStatement=make SuStatement{pointer:arm->body};
-        var syntax:SuSyntax=make SuSyntax{pointer:variant->syntax};
-        var result:SuStatement=su_checked_arm(read builder,read name,read binding,read body,read syntax,variant->syntax->kind==CRUST_T_UNIT);
-        return result.pointer;
-    }}
-}
-
-fn su_match_test(stage:*SuStage,snapshot:*CrustName,variant:*SuVariant,location:*CrustLoc)->*CrustExpr {
-    domain CompilerArena{edit CompilerArena{
-        var builder:SuBuilder=make SuBuilder{stage:stage,location:location};
-        var name:SuName=make SuName{pointer:snapshot};
-        var result:SuExpression=su_checked_test(read builder,read name,variant->tag);
-        return result.pointer;
-    }}
-}
-
-fn su_match(stage:*SuStage,stmt:*CrustStmt,sum:*SuType,op:*SuOperation)->unit {
-    domain CompilerArena{edit CompilerArena{
-        var builder:SuBuilder=make SuBuilder{stage:stage,location:&stmt->loc};
-        var cursor:SuMatchNames=make SuMatchNames{seen:make CrustMap{entries:null(*CrustMapEntry),count:0usize,capacity:0usize},sum:sum,next:op->arms,location:&stmt->loc};
-        var arms:SuArms=make SuArms{stage:stage,sum:sum,next:op->arms};
-        var type_name:SuName=make SuName{pointer:op->type_name};
-        var value:SuExpression=make SuExpression{pointer:stmt->expr};
-        var body:SuStatement=su_checked_match(read builder,mut cursor,mut arms,read type_name,read value,sum->count);
-        if stage->context->error_count==0usize{
-            stmt->kind=CRUST_S_BLOCK;stmt->body=body.pointer;stmt->expr=null(*CrustExpr);
+fn su_match_arm(
+    stage: *SuStage,
+    arm: *SuArm,
+    variant: *SuVariant,
+    snapshot: *CrustName
+) -> *CrustStmt {
+    domain CompilerArena {
+        edit CompilerArena {
+            var builder: SuBuilder = make SuBuilder {
+                stage: stage,
+                location: &arm -> location
+            };
+            var name: SuName = make SuName {
+                pointer: snapshot
+            };
+            var binding: SuName = make SuName {
+                pointer: arm -> binding
+            };
+            var body: SuStatement = make SuStatement {
+                pointer: arm -> body
+            };
+            var syntax: SuSyntax = make SuSyntax {
+                pointer: variant -> syntax
+            };
+            var result: SuStatement = su_checked_arm(
+                read builder,
+                read name,
+                read binding,
+                read body,
+                read syntax,
+                variant -> syntax -> kind == CRUST_T_UNIT
+            );
+            return result.pointer;
         }
-    }}
+    }
 }
 
-fn su_operation_kind(arena:read SuArena,cursor:read SuStatement)->u32 access(read,CompilerArena){
-    if cursor.pointer==null(*CrustStmt){return 0u32;}
-    if cursor.pointer->kind==arena.stage->construct_kind{return 1u32;}
-    if cursor.pointer->kind==arena.stage->match_kind{return 2u32;}
+fn su_match_test(
+    stage: *SuStage,
+    snapshot: *CrustName,
+    variant: *SuVariant,
+    location: *CrustLoc
+) -> *CrustExpr {
+    domain CompilerArena {
+        edit CompilerArena {
+            var builder: SuBuilder = make SuBuilder {
+                stage: stage,
+                location: location
+            };
+            var name: SuName = make SuName {
+                pointer: snapshot
+            };
+            var result: SuExpression = su_checked_test(read builder, read name, variant -> tag);
+            return result.pointer;
+        }
+    }
+}
+
+fn su_match(stage: *SuStage, stmt: *CrustStmt, sum: *SuType, op: *SuOperation) -> unit {
+    domain CompilerArena {
+        edit CompilerArena {
+            var builder: SuBuilder = make SuBuilder {
+                stage: stage,
+                location: &stmt -> loc
+            };
+            var cursor: SuMatchNames = make SuMatchNames {
+                seen: make CrustMap {
+                    entries: null(*CrustMapEntry),
+                    count: 0usize,
+                    capacity: 0usize
+                },
+                sum: sum,
+                next: op -> arms,
+                location: &stmt -> loc
+            };
+            var arms: SuArms = make SuArms {
+                stage: stage,
+                sum: sum,
+                next: op -> arms
+            };
+            var type_name: SuName = make SuName {
+                pointer: op -> type_name
+            };
+            var value: SuExpression = make SuExpression {
+                pointer: stmt -> expr
+            };
+            var body: SuStatement = su_checked_match(
+                read builder,
+                mut cursor,
+                mut arms,
+                read type_name,
+                read value,
+                sum -> count
+            );
+            if stage -> context -> error_count == 0usize {
+                stmt -> kind = CRUST_S_BLOCK;
+                stmt -> body = body.pointer;
+                stmt -> expr = null(*CrustExpr);
+            }
+        }
+    }
+}
+
+fn su_operation_kind(arena: read SuArena, cursor: read SuStatement) -> u32 access(
+    read,
+    CompilerArena
+) {
+    if cursor.pointer == null(*CrustStmt) {
+        return 0u32;
+    }
+    if cursor.pointer -> kind == arena.stage -> construct_kind {
+        return 1u32;
+    }
+    if cursor.pointer -> kind == arena.stage -> match_kind {
+        return 2u32;
+    }
     return 0u32;
 }
-fn su_operation_type(arena:read SuArena,cursor:read SuStatement)->SuSum access(read,CompilerArena){
-    var sum:*SuType=null(*SuType);
-    var op:*SuOperation=su_cache_get!(SuOperation)(&arena.stage->operations,cursor.pointer as usize);
-    if op!=null(*SuOperation){sum=su_cache_get!(SuType)(&arena.stage->types,op->type_name as usize);}
-    return make SuSum{pointer:sum,tail:null(*SuVariant)};
+fn su_operation_type(arena: read SuArena, cursor: read SuStatement) -> SuSum access(
+    read,
+    CompilerArena
+) {
+    var sum: *SuType = null(*SuType);
+    var op: *SuOperation = su_cache_get!(SuOperation)(
+        &arena.stage -> operations,
+        cursor.pointer as usize
+    );
+    if op != null(*SuOperation) {
+        sum = su_cache_get!(SuType)(&arena.stage -> types, op -> type_name as usize);
+    }
+    return make SuSum {
+        pointer: sum,
+        tail: null(*SuVariant)
+    };
 }
-fn su_has_sum(sum:read SuSum)->bool access(read,CompilerArena){return sum.pointer!=null(*SuType);}
-fn su_operation_type_error(arena:read SuArena,cursor:read SuStatement)->unit access(edit,CompilerArena){
-    if cursor.pointer!=null(*CrustStmt){su_error(arena.stage,&cursor.pointer->loc,"unknown union type");}
+fn su_has_sum(sum: read SuSum) -> bool access(read, CompilerArena) {
+    return sum.pointer != null(*SuType);
 }
-fn su_construct_operation(arena:read SuArena,cursor:read SuStatement,sum:read SuSum)->unit access(edit,CompilerArena){
-    var op:*SuOperation=su_cache_get!(SuOperation)(&arena.stage->operations,cursor.pointer as usize);
-    if op!=null(*SuOperation) && sum.pointer!=null(*SuType){su_construct(arena.stage,cursor.pointer,sum.pointer,op);}
+fn su_operation_type_error(arena: read SuArena, cursor: read SuStatement) -> unit access(
+    edit,
+    CompilerArena
+) {
+    if cursor.pointer != null(*CrustStmt) {
+        su_error(arena.stage, &cursor.pointer -> loc, "unknown union type");
+    }
 }
-fn su_match_operation(arena:read SuArena,cursor:read SuStatement,sum:read SuSum)->unit access(edit,CompilerArena){
-    var op:*SuOperation=su_cache_get!(SuOperation)(&arena.stage->operations,cursor.pointer as usize);
-    if op!=null(*SuOperation) && sum.pointer!=null(*SuType){su_match(arena.stage,cursor.pointer,sum.pointer,op);}
+fn su_construct_operation(arena: read SuArena, cursor: read SuStatement, sum: read SuSum) -> unit access(
+    edit,
+    CompilerArena
+) {
+    var op: *SuOperation = su_cache_get!(SuOperation)(
+        &arena.stage -> operations,
+        cursor.pointer as usize
+    );
+    if op != null(*SuOperation) && sum.pointer != null(*SuType) {
+        su_construct(arena.stage, cursor.pointer, sum.pointer, op);
+    }
 }
-fn su_lower_depth_error(arena:read SuArena,cursor:read SuStatement)->unit access(edit,CompilerArena){
-    if cursor.pointer!=null(*CrustStmt){su_error(arena.stage,&cursor.pointer->loc,"union lowering depth exceeded");}
+fn su_match_operation(arena: read SuArena, cursor: read SuStatement, sum: read SuSum) -> unit access(
+    edit,
+    CompilerArena
+) {
+    var op: *SuOperation = su_cache_get!(SuOperation)(
+        &arena.stage -> operations,
+        cursor.pointer as usize
+    );
+    if op != null(*SuOperation) && sum.pointer != null(*SuType) {
+        su_match(arena.stage, cursor.pointer, sum.pointer, op);
+    }
+}
+fn su_lower_depth_error(arena: read SuArena, cursor: read SuStatement) -> unit access(
+    edit,
+    CompilerArena
+) {
+    if cursor.pointer != null(*CrustStmt) {
+        su_error(arena.stage, &cursor.pointer -> loc, "union lowering depth exceeded");
+    }
 }
 
 // Read declaration source with union, construct, and match statements enabled.
-fn su_read(stage:*SuStage,source:*CrustSource,begin:usize,end:usize)->bool {
-    return rr_read(stage->context,source,begin,end,&stage->hooks)!=null(*CrustUnit);
+fn su_read(stage: *SuStage, source: *CrustSource, begin: usize, end: usize) -> bool {
+    return rr_read(stage -> context, source, begin, end, &stage -> hooks) != null(*CrustUnit);
 }
 
 // The arm cursor keeps a live diagnostic location, including at exhaustion.
 // The union's name map is complete after layout. The seen map belongs to this
 // coverage check; its entries use the same arena lifetime as the source names.
-record SuMatchNames{seen:CrustMap;sum:*SuType;next:*SuArm;location:*CrustLoc;} opaque scoped;
+record SuMatchNames {
+    seen: CrustMap;
+    sum: *SuType;
+    next: *SuArm;
+    location: *CrustLoc;
+}
+opaque scoped;
 
-fn su_match_name_next(cursor:mut SuMatchNames)->SuName access(read,CompilerArena){
-    var arm:*SuArm=cursor.next;
-    if arm==null(*SuArm){return make SuName{pointer:null(*CrustName)};}
-    cursor.next=arm->next;cursor.location=&arm->location;
-    return make SuName{pointer:arm->name};
+fn su_match_name_next(cursor: mut SuMatchNames) -> SuName access(read, CompilerArena) {
+    var arm: *SuArm = cursor.next;
+    if arm == null(*SuArm) {
+        return make SuName {
+            pointer: null(*CrustName)
+        };
+    }
+    cursor.next = arm -> next;
+    cursor.location = &arm -> location;
+    return make SuName {
+        pointer: arm -> name
+    };
 }
-fn su_match_name_known(cursor:read SuMatchNames,name:read SuName)->bool access(read,CompilerArena){
-    return crust_map_get(&cursor.sum->names,name.pointer as usize)!=null(*u8);
+fn su_match_name_known(cursor: read SuMatchNames, name: read SuName) -> bool access(
+    read,
+    CompilerArena
+) {
+    return crust_map_get(&cursor.sum -> names, name.pointer as usize) != null(*u8);
 }
-fn su_match_name_insert(builder:read SuBuilder,cursor:mut SuMatchNames,name:read SuName)->bool access(edit,CompilerArena){
-    if crust_map_get(&cursor.seen,name.pointer as usize)!=null(*u8){return false;}
-    return crust_try_map_set(builder.stage->context,&cursor.seen,name.pointer as usize,name.pointer as *u8);
+fn su_match_name_insert(builder: read SuBuilder, cursor: mut SuMatchNames, name: read SuName) -> bool access(
+    edit,
+    CompilerArena
+) {
+    if crust_map_get(&cursor.seen, name.pointer as usize) != null(*u8) {
+        return false;
+    }
+    return crust_try_map_set(
+        builder.stage -> context,
+        &cursor.seen,
+        name.pointer as usize,
+        name.pointer as *u8
+    );
 }
-fn su_match_error(builder:read SuBuilder,cursor:read SuMatchNames,code:u32)->unit access(edit,CompilerArena){
-    var location:*CrustLoc=cursor.location;
-    var message:*u8="unknown union variant";
-    if code==SU_MATCH_DUPLICATE{message="duplicate match variant";}
-    if code==SU_MATCH_INCOMPLETE{message="match must cover every union variant";location=builder.location;}
-    su_error(builder.stage,location,message);
+fn su_match_error(builder: read SuBuilder, cursor: read SuMatchNames, code: u32) -> unit access(
+    edit,
+    CompilerArena
+) {
+    var location: *CrustLoc = cursor.location;
+    var message: *u8 = "unknown union variant";
+    if code == SU_MATCH_DUPLICATE {
+        message = "duplicate match variant";
+    }
+    if code == SU_MATCH_INCOMPLETE {
+        message = "match must cover every union variant";
+        location = builder.location;
+    }
+    su_error(builder.stage, location, message);
 }
 
 // Arm lookup uses the map completed by coverage checking. Empty cursors have
 // no test or body. The branch chain owns only arena links, not node storage.
-record SuArms{stage:*SuStage;sum:*SuType;next:*SuArm;} opaque scoped;
-record SuBranches{first:*CrustStmt;tail:*CrustStmt;} opaque scoped;
-fn su_branches()->SuBranches access(read,CompilerArena){return make SuBranches{first:null(*CrustStmt),tail:null(*CrustStmt)};}
-fn su_arm_test(cursor:read SuArms,snapshot:read SuName)->SuExpression access(edit,CompilerArena){
-    if cursor.next==null(*SuArm){return make SuExpression{pointer:null(*CrustExpr)};}
-    var variant:*SuVariant=su_variant(cursor.stage,cursor.sum,cursor.next->name,&cursor.next->location);
-    if variant==null(*SuVariant){return make SuExpression{pointer:null(*CrustExpr)};}
-    return make SuExpression{pointer:su_match_test(cursor.stage,snapshot.pointer,variant,&cursor.next->location)};
+record SuArms {
+    stage: *SuStage;
+    sum: *SuType;
+    next: *SuArm;
 }
-fn su_arm_binding(cursor:read SuArms,snapshot:read SuName)->SuStatement access(edit,CompilerArena){
-    if cursor.next==null(*SuArm){return su_no_statements();}
-    var variant:*SuVariant=su_variant(cursor.stage,cursor.sum,cursor.next->name,&cursor.next->location);
-    if variant==null(*SuVariant){return su_no_statements();}
-    return make SuStatement{pointer:su_match_arm(cursor.stage,cursor.next,variant,snapshot.pointer)};
+opaque scoped;
+record SuBranches {
+    first: *CrustStmt;
+    tail: *CrustStmt;
 }
-fn su_arms_more(cursor:read SuArms)->bool access(read,CompilerArena){return cursor.next!=null(*SuArm) && cursor.stage->context->error_count==0usize;}
-fn su_arms_advance(cursor:mut SuArms)->unit access(read,CompilerArena){if cursor.next!=null(*SuArm){cursor.next=cursor.next->next;}}
-fn su_branch_append(builder:read SuBuilder,chain:mut SuBranches,test:read SuExpression,body:read SuStatement,final:bool)->unit access(edit,CompilerArena){
-    if builder.stage->context->error_count!=0usize{return;}
-    var branch:*CrustStmt=su_stmt(builder.stage,CRUST_S_IF,builder.location);
-    if branch==null(*CrustStmt){return;}
-    branch->expr=test.pointer;branch->body=body.pointer;
+opaque scoped;
+fn su_branches() -> SuBranches access(read, CompilerArena) {
+    return make SuBranches {
+        first: null(*CrustStmt),
+        tail: null(*CrustStmt)
+    };
+}
+fn su_arm_test(cursor: read SuArms, snapshot: read SuName) -> SuExpression access(
+    edit,
+    CompilerArena
+) {
+    if cursor.next == null(*SuArm) {
+        return make SuExpression {
+            pointer: null(*CrustExpr)
+        };
+    }
+    var variant: *SuVariant = su_variant(
+        cursor.stage,
+        cursor.sum,
+        cursor.next -> name,
+        &cursor.next -> location
+    );
+    if variant == null(*SuVariant) {
+        return make SuExpression {
+            pointer: null(*CrustExpr)
+        };
+    }
+    return make SuExpression {
+        pointer: su_match_test(
+            cursor.stage,
+            snapshot.pointer,
+            variant,
+            &cursor.next -> location
+        )
+    };
+}
+fn su_arm_binding(cursor: read SuArms, snapshot: read SuName) -> SuStatement access(
+    edit,
+    CompilerArena
+) {
+    if cursor.next == null(*SuArm) {
+        return su_no_statements();
+    }
+    var variant: *SuVariant = su_variant(
+        cursor.stage,
+        cursor.sum,
+        cursor.next -> name,
+        &cursor.next -> location
+    );
+    if variant == null(*SuVariant) {
+        return su_no_statements();
+    }
+    return make SuStatement {
+        pointer: su_match_arm(cursor.stage, cursor.next, variant, snapshot.pointer)
+    };
+}
+fn su_arms_more(cursor: read SuArms) -> bool access(read, CompilerArena) {
+    return cursor.next != null(*SuArm) && cursor.stage -> context -> error_count == 0usize;
+}
+fn su_arms_advance(cursor: mut SuArms) -> unit access(read, CompilerArena) {
+    if cursor.next != null(*SuArm) {
+        cursor.next = cursor.next -> next;
+    }
+}
+fn su_branch_append(
+    builder: read SuBuilder,
+    chain: mut SuBranches,
+    test: read SuExpression,
+    body: read SuStatement,
+    final: bool
+) -> unit access(edit, CompilerArena) {
+    if builder.stage -> context -> error_count != 0usize {
+        return;
+    }
+    var branch: *CrustStmt = su_stmt(builder.stage, CRUST_S_IF, builder.location);
+    if branch == null(*CrustStmt) {
+        return;
+    }
+    branch -> expr = test.pointer;
+    branch -> body = body.pointer;
     // Preserve the arm location used by the checked body builder.
-    if body.pointer!=null(*CrustStmt){branch->loc=body.pointer->loc;if final{*branch=*body.pointer;}}
-    if chain.tail==null(*CrustStmt){chain.first=branch;}else{chain.tail->otherwise=branch;}
-    chain.tail=branch;
+    if body.pointer != null(*CrustStmt) {
+        branch -> loc = body.pointer -> loc;
+        if final {
+            *branch = *body.pointer;
+        }
+    }
+    if chain.tail == null(*CrustStmt) {
+        chain.first = branch;
+    } else {
+        chain.tail -> otherwise = branch;
+    }
+    chain.tail = branch;
 }
-fn su_branch_result(chain:read SuBranches)->SuStatement access(read,CompilerArena){return make SuStatement{pointer:chain.first};}
+fn su_branch_result(chain: read SuBranches) -> SuStatement access(read, CompilerArena) {
+    return make SuStatement {
+        pointer: chain.first
+    };
+}

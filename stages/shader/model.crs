@@ -15,7 +15,10 @@ record ShaderResource {
     length: u32;
     height: u32;
 }
-// Dispatch exactly invocations/local_size groups along X, and one along Y/Z.
+// Dispatch at most invocations/local_size groups along X, and one along Y/Z.
+// Status accumulates failure across ordered dispatches. Clear it before a sequence.
+// Only dispatched invocations write status.
+// The caller enforces the dispatch bound; the entry does not check it.
 // Status is a separate storage buffer of invocations u32 elements.
 record ShaderConfig {
     resources: *ShaderResource;

@@ -68,11 +68,11 @@ fn commands_record(v: *Vulkan) -> bool {
     zero(&barrier as *u8, sizeof(VkMemoryBarrier));
     barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
     barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
     vkCmdPipelineBarrier(
         v -> commands,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_HOST_BIT,
+        VK_PIPELINE_STAGE_HOST_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
         0u32,
         1u32,
         &barrier,
@@ -88,6 +88,10 @@ fn dispatch(v: *Vulkan) -> bool {
     if !commands_create(v) || !commands_record(v) {
         return false;
     }
+    return submit_commands(v);
+}
+
+fn submit_commands(v: *Vulkan) -> bool {
     var submit: VkSubmitInfo = uninit;
     zero(&submit as *u8, sizeof(VkSubmitInfo));
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;

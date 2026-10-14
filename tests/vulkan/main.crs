@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+extern fn strcmp(a: *u8, b: *u8) -> i32 = "strcmp";
+
 fn check_result(v: *Vulkan, expected: *u8) -> bool {
     var good: bool = memcmp(v -> mapped, expected, 16usize) == 0i32 && memcmp(
         v -> mapped + 256isize,
@@ -20,12 +22,15 @@ fn check_result(v: *Vulkan, expected: *u8) -> bool {
     return good;
 }
 
-fn execute(code: *Input, expected: *u8) -> bool {
+fn execute(code: *Input, expected: *u8, twice: bool) -> bool {
     var v: Vulkan = uninit;
     zero(&v as *u8, sizeof(Vulkan));
     var good: bool = device_open(&v) && buffer_create(&v) && image_create(&v) && layout_create(
         &v
     ) && pipeline_create(&v, code) && descriptors_create(&v) && dispatch(&v);
+    if good && twice {
+        good = submit_commands(&v);
+    }
     if good {
         good = check_result(&v, expected);
     }
@@ -34,8 +39,12 @@ fn execute(code: *Input, expected: *u8) -> bool {
 }
 
 fn main(argc: i32, argv: **u8) -> i32 {
-    if argc != 3i32 {
-        puts("expected SPIRV_FILE EXPECTED_FILE");
+    if argc != 3i32 && argc != 4i32 {
+        puts("expected SPIRV_FILE EXPECTED_FILE [--twice]");
+        return 2i32;
+    }
+    if argc == 4i32 && strcmp(argv[3usize], "--twice") != 0i32 {
+        puts("expected --twice");
         return 2i32;
     }
     var expected: Input = make Input {
@@ -61,7 +70,7 @@ fn main(argc: i32, argv: **u8) -> i32 {
     var status: i32 = 2i32;
     if good {
         status = 1i32;
-        if execute(&code, expected.bytes) {
+        if execute(&code, expected.bytes, argc == 4i32) {
             status = 0i32;
             puts("Vulkan result and status match");
         }

@@ -64,6 +64,7 @@ fn buffer_create(v: *Vulkan) -> bool {
         return false;
     }
     memset(v -> mapped, 255i32, 272usize);
+    zero(v -> mapped + 256isize, 16usize);
     var data: *f32 = v -> mapped as *f32;
     var index: usize = 0usize;
     while index < 4usize {

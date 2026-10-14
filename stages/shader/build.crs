@@ -3,10 +3,25 @@
 fn sp_tools(stage: *SpStage, driver: *CDriver, output: *u8) -> bool {
     var source: *u8 = c_driver_temporary(driver, output, 438u32);
     var binary: *u8 = c_driver_temporary(driver, output, 438u32);
-    if source == null(*u8) || binary == null(*u8) {
+    var normalized: *u8 = c_driver_temporary(driver, output, 438u32);
+    if source == null(*u8) || binary == null(*u8) || normalized == null(*u8) {
         return false;
     }
     if !c_driver_write(driver, source, &stage -> llvm.memory.header) {
+        return false;
+    }
+    var context: *CrustContext = ll_context(&stage -> llvm);
+    var opt: *u8 = ll_join(&stage -> llvm, stage -> config -> llvm_directory, "/bin/opt");
+    var normalize: [*u8; 7] = make [*u8; 7] {
+        opt,
+        "-S",
+        "-passes=mem2reg,structurizecfg",
+        source,
+        "-o",
+        normalized,
+        null(*u8)
+    };
+    if !ll_ok(&stage -> llvm) || !cache_tool(context, &normalize[0usize], null(*u8)) {
         return false;
     }
     var llc: *u8 = ll_join(&stage -> llvm, stage -> config -> llvm_directory, "/bin/llc");
@@ -15,12 +30,11 @@ fn sp_tools(stage: *SpStage, driver: *CDriver, output: *u8) -> bool {
         "--spirv-ext=+SPV_KHR_float_controls",
         "-O0",
         "-filetype=obj",
-        source,
+        normalized,
         "-o",
         binary,
         null(*u8)
     };
-    var context: *CrustContext = ll_context(&stage -> llvm);
     if !ll_ok(&stage -> llvm) || !cache_tool(context, &arguments[0usize], null(*u8)) {
         return false;
     }
@@ -49,6 +63,7 @@ fn shader_build(
     var stage: SpStage = uninit;
     ll_init(&stage.llvm, context);
     stage.llvm.boolean_type = "i1";
+    stage.llvm.single_exit = true;
     stage.llvm.expression = sp_expression;
     stage.llvm.user = &stage as *u8;
     stage.functions = stage.llvm.types;

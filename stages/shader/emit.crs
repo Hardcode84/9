@@ -81,10 +81,8 @@ fn sp_builtins(stage: *SpStage) -> unit {
 fn sp_entry(stage: *SpStage) -> unit {
     sp_text(
         stage,
-        "define void @main() #0 {\nentry:\n  %global = call i32 @llvm.spv.thread.id.i32(i32 0)\n  %local = call i32 @llvm.spv.thread.id.in.group.i32(i32 0)\n  %outside = icmp uge i32 %global, "
+        "define void @main() #0 {\nentry:\n  %global = call i32 @llvm.spv.thread.id.i32(i32 0)\n  %local = call i32 @llvm.spv.thread.id.in.group.i32(i32 0)\n  store i1 false, ptr addrspace(10) @sp_failed\n"
     );
-    sp_number(stage, stage -> config -> invocations);
-    sp_text(stage, "\n  store i1 %outside, ptr addrspace(10) @sp_failed\n");
     var index: usize = 0usize;
     var shared: bool = false;
     while index < stage -> config -> resource_count {
@@ -102,7 +100,7 @@ fn sp_entry(stage: *SpStage) -> unit {
     }
     sp_text(stage, "  call void ");
     sp_text(stage, ll_global(&stage -> llvm, stage -> entry));
-    sp_text(stage, "()\n  br i1 %outside, label %end, label %status\nstatus:\n");
+    sp_text(stage, "()\n");
     var status: ShaderResource = make ShaderResource {
         name: "",
         kind: SHADER_BUFFER_U32,
@@ -114,7 +112,7 @@ fn sp_entry(stage: *SpStage) -> unit {
     sp_resource_pointer(stage, &status, "%global");
     sp_text(
         stage,
-        "  %failed = load i1, ptr addrspace(10) @sp_failed\n  %code = zext i1 %failed to i32\n  store i32 %code, ptr addrspace(11) %p, align 4\n  br label %end\nend:\n  ret void\n}\nattributes #0 = { \"hlsl.numthreads\"=\""
+        "  %failed = load i1, ptr addrspace(10) @sp_failed\n  %code = zext i1 %failed to i32\n  %previous = load i32, ptr addrspace(11) %p, align 4\n  %statuscode = or i32 %previous, %code\n  store i32 %statuscode, ptr addrspace(11) %p, align 4\n  ret void\n}\nattributes #0 = { \"hlsl.numthreads\"=\""
     );
     sp_number(stage, stage -> config -> local_size);
     sp_text(stage, ",1,1\" \"hlsl.shader\"=\"compute\" }\n");

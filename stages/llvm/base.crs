@@ -19,6 +19,7 @@ fn ll_init(stage: *LlStage, context: *CrustContext) -> unit {
     stage -> boolean_type = "i8";
     stage -> identity = 1u64;
     stage -> depth = 0usize;
+    stage -> single_exit = false;
 }
 fn ll_destroy(stage: *LlStage) -> unit {
     c_stage_destroy(&stage -> memory);

@@ -201,6 +201,12 @@ apply to both native and device numeric lowering.
 
 ## Device scalar lowering
 
+`LlStage.single_exit` selects one return block per emitted function. It defaults
+to `false`. Set it before emission when the target needs a single exit for
+control-flow normalization. Non-unit return values then use a temporary slot;
+a later `mem2reg` pass can replace that slot with SSA values. With the default
+setting, returns emit directly and require no return slot or extra block.
+
 `LlStage.boolean_type` selects `i8` host storage or `i1` device storage.
 `ll_boolean` converts an LLVM predicate to this representation. The expression
 callback applies inside expressions and statements. Typed element addressing

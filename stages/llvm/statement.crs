@@ -95,23 +95,56 @@ fn ll_jump_statement(function: *LlFunction, input: *CrustStmt) -> unit {
     }
     ll_error(function -> stage, "unsupported LLVM statement kind");
 }
-fn ll_return(function: *LlFunction, input: *CrustStmt) -> unit {
-    if input -> expr == null(*CrustExpr) {
+fn ll_return_value(function: *LlFunction, type: *CrustType, value: *u8) -> unit {
+    if type -> kind == CRUST_T_UNIT {
         ll_text(function, "  ret void\n");
     } else {
-        var value: *u8 = ll_value(function, input -> expr);
-        var type: *u8 = ll_type(function -> stage, input -> expr -> type);
-        if input -> expr -> type -> kind == CRUST_T_BOOL {
+        var name: *u8 = ll_type(function -> stage, type);
+        if type -> kind == CRUST_T_BOOL {
             value = ll_condition(function, value);
-            type = "i1";
+            name = "i1";
         }
         ll_text(function, "  ret ");
-        ll_text(function, type);
+        ll_text(function, name);
         ll_text(function, " ");
         ll_text(function, value);
         ll_text(function, "\n");
     }
     function -> terminated = true;
+}
+fn ll_return(function: *LlFunction, input: *CrustStmt) -> unit {
+    if function -> return_block == null(*u8) {
+        var value: *u8 = null(*u8);
+        if input -> expr != null(*CrustExpr) {
+            value = ll_value(function, input -> expr);
+        }
+        ll_return_value(function, function -> return_type, value);
+        return;
+    }
+    if input -> expr != null(*CrustExpr) {
+        var value: *u8 = ll_value(function, input -> expr);
+        ll_store(function, function -> return_type, function -> return_slot, value);
+    }
+    ll_jump(function, function -> return_block);
+}
+fn ll_return_block(function: *LlFunction) -> unit {
+    ll_block(function, function -> return_block);
+    var value: *u8 = null(*u8);
+    if function -> return_type -> kind != CRUST_T_UNIT {
+        value = ll_load(function, function -> return_type, function -> return_slot);
+    }
+    ll_return_value(function, function -> return_type, value);
+}
+fn ll_return_setup(function: *LlFunction, type: *CrustType) -> unit {
+    function -> return_type = type;
+    function -> return_block = null(*u8);
+    function -> return_slot = null(*u8);
+    if function -> stage -> single_exit {
+        function -> return_block = ll_id(function -> stage, "return");
+        if type -> kind != CRUST_T_UNIT {
+            function -> return_slot = ll_alloca(function, type);
+        }
+    }
 }
 fn ll_if(function: *LlFunction, input: *CrustStmt) -> unit {
     var yes: *u8 = ll_id(function -> stage, "b");
@@ -186,14 +219,23 @@ fn ll_function(stage: *LlStage, binding: *LlBinding) -> unit {
     function.identity = 1u64;
     function.depth = 0usize;
     function.terminated = false;
+    ll_return_setup(&function, binding -> definition -> type -> base);
     ll_parameters(&function, binding -> definition);
     ll_statement(&function, binding -> definition -> body);
     if !function.terminated {
         if binding -> definition -> type -> base -> kind == CRUST_T_UNIT {
-            ll_text(&function, "  ret void\n");
+            if function.return_block != null(*u8) {
+                ll_jump(&function, function.return_block);
+            } else {
+                ll_return_value(&function, function.return_type, null(*u8));
+            }
         } else {
             ll_text(&function, "  unreachable\n");
+            function.terminated = true;
         }
+    }
+    if function.return_block != null(*u8) {
+        ll_return_block(&function);
     }
     var out: *CBuffer = &stage -> memory.body;
     ll_signature(stage, binding, out);

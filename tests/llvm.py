@@ -80,6 +80,37 @@ class Suite:
             self.count += 1
 
 
+def exits(suite):
+    source = """
+fn constant()->i32{return 42i32;}
+fn choose(i:i32)->f32 {
+ var j:i32=0i32;
+ while j<4i32 {if j==i{return (j+20i32) as f32;}j=j+1i32;}
+ return 99f32;
+}
+fn truth(i:i32)->bool {if i==1i32{return true;}return false;}
+fn select(a:*i32,b:*i32,first:bool)->*i32 {if first{return a;}return b;}
+fn set(p:*i32,first:bool)->unit {if first{*p=7i32;return;}*p=9i32;}
+fn main(argc:i32,argv:**u8)->i32 {
+ var a:i32=0i32; var b:i32=0i32;
+ set(select(&a,&b,true),true);set(select(&a,&b,false),false);
+ if a!=7i32 || b!=9i32 || !truth(1i32) || truth(0i32) {return 1i32;}
+ if choose(2i32)!=22f32 || choose(8i32)!=99f32 || constant()!=42i32 {return 2i32;}
+ return 0i32;
+}
+"""
+    for mode in ("raw", "single-exit"):
+        ir = suite.emit("exits-" + mode, source, mode=mode)
+        bodies = [part.split("}\n", 1)[0] for part in ir.read_text().split("define ")[1:]]
+        if mode == "single-exit":
+            assert all(body.count("  ret ") == 1 for body in bodies)
+        else:
+            assert any(body.count("  ret ") > 1 for body in bodies)
+            constant = next(body for body in bodies if "  ret i32 42\n" in body)
+            assert "alloca" not in constant
+        suite.execute(ir)
+
+
 def raw(suite):
     native = suite.work / "native.o"
     check(["gcc", "-std=c99", "-pedantic-errors", "-O2", "-c", "tests/native.c", "-o", native])
@@ -282,6 +313,7 @@ def main():
     suite = Suite(build, llvm.resolve())
     check([suite.driver, "allocation", "tests/runtime.crs"])
     raw(suite)
+    exits(suite)
     native_contracts(suite)
     cleanup(suite)
     sqlite(suite)

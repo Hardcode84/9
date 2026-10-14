@@ -157,6 +157,33 @@ fn compute()->unit {
             [2, 4, 6, 8],
             [0, 0, 0, 0],
         ),
+        "helper-exits": (
+            """
+fn choose(i:u32)->f32 {
+ if i==0u32{return 11f32;}
+ if i==1u32{return 13f32;}
+ var j:u32=0u32;
+ while j<4u32 {
+  if j==i{return (j+20u32) as f32;}
+  j=j+1u32;
+ }
+ return 99f32;
+}
+fn compute()->unit {var i:u32=shader_global_x();values_store(i,choose(i));}
+""",
+            [11, 13, 22, 23],
+            [0, 0, 0, 0],
+        ),
+        "sticky-status": (
+            """
+fn compute()->unit {
+ var i:u32=shader_global_x();
+ if values_load(i)>0f32 {values_store(i,0f32);shader_require(i!=0u32);}
+}
+""",
+            [0, 0, 0, 0],
+            [1, 0, 0, 0],
+        ),
         "zero-shared": (
             """
 fn compute()->unit {
@@ -176,7 +203,10 @@ fn compute()->unit {
         assert b"OpTypeInt 64" not in assembly
         expected = work / f"{name}.expected"
         expected.write_bytes(struct.pack("=4f4I", *values, *status))
-        run([native, output, expected], env=environment)
+        run(
+            [native, output, expected, *(["--twice"] if name == "sticky-status" else [])],
+            env=environment,
+        )
     fault_library = work / "faults.so"
     compile_package(
         build,
@@ -237,6 +267,13 @@ fn compute()->unit {
         assert output.read_bytes() == previous, name
     source.write_text(cases["exchange"][0])
     run([compiler, root, llvm, "/bin/false", output, source], expected=1)
+    assert output.read_bytes() == previous
+    failed_tools = work / "failed-tools" / "bin"
+    failed_tools.mkdir(parents=True, exist_ok=True)
+    normalizer = failed_tools / "opt"
+    normalizer.write_text("#!/bin/sh\nexit 1\n")
+    normalizer.chmod(0o755)
+    run([compiler, root, failed_tools.parent, tools / "spirv-val", output, source], expected=1)
     assert output.read_bytes() == previous
     assert not list(work.glob(".crust-*")), "temporary output leaked"
     print(

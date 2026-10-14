@@ -27,7 +27,9 @@ spirv-dis build/exchange.spv
 ```
 
 The output has a `GLCompute` entry named `main`, local size `(4, 1, 1)`, and
-Vulkan descriptor bindings. The stage runs `spirv-val --target-env vulkan1.2`
+Vulkan descriptor bindings. The shader stage selects the LLVM emitter's `single_exit` option and runs
+`opt -passes=mem2reg,structurizecfg` before SPIR-V emission. This preserves
+structured exits from helpers and loops. The stage runs `spirv-val --target-env vulkan1.2`
 before it replaces the output file. A failed compile preserves the previous
 file. The root can accept another device source as a fourth argument.
 
@@ -135,8 +137,10 @@ the operation.
 After failure, device reads produce zero and buffer/image writes are skipped.
 A valid workgroup write stores zero. An invalid workgroup write is skipped.
 Loops stop when they next test their condition. Barriers still execute.
-`shader_failed()` reads the state. The entry wrapper writes `1` to this
-invocation's status element on failure, or `0` on success. Earlier writes
+`shader_failed()` reads the state. The entry wrapper ORs `1` into this
+invocation's status element on failure. Success preserves the previous value.
+Clear the status buffer before a dispatch sequence. Insert storage-buffer memory
+dependencies between dispatches that use the same status range. Earlier writes
 remain visible; this mechanism provides no rollback.
 
 A barrier must be a direct statement in the entry body. Entry returns must
@@ -175,8 +179,12 @@ this requirement needs LLVM to delete these name values before it collects
 SPIR-V capabilities. The stage validates the complete emitted module.
 
 `local_size` is 1 through 128. `invocations` must be a multiple of that size,
-with at most 65535 workgroups. Dispatch exactly
-`(invocations / local_size, 1, 1)`. Total workgroup storage is at most 16 KiB.
+with at most 65535 workgroups. Dispatch at most
+`(invocations / local_size, 1, 1)`. Smaller and zero-X dispatches are permitted.
+The caller must enforce this bound. The entry writes status without a dispatch
+bounds check. Only dispatched invocations write status. Clear the complete
+status range before starting a dispatch sequence. Total workgroup storage is
+at most 16 KiB.
 Check descriptor and image limits against the selected device.
 
 ## Run the tests

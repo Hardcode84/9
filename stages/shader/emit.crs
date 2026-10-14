@@ -5,6 +5,7 @@ fn sp_intrinsics(stage: *SpStage) -> unit {
         stage,
         "target triple = \"spirv1.5-unknown-vulkan1.2\"\n@sp_status_name = private unnamed_addr constant [8 x i8] c\"-status\\00\"\n@sp_failed = internal addrspace(10) global i1 false\ndeclare i32 @llvm.spv.thread.id.i32(i32)\ndeclare i32 @llvm.spv.thread.id.in.group.i32(i32)\ndeclare void @llvm.spv.all.memory.barrier.with.group.sync()\n"
     );
+    sp_text(stage, "declare float @llvm.sqrt.f32(float)\n");
     var kind: u32 = 0u32;
     while kind <= SHADER_IMAGE_R32F {
         var resource: ShaderResource = make ShaderResource {
@@ -47,6 +48,12 @@ fn sp_builtin_body(stage: *SpStage, name: *u8, before: *u8, after: *u8) -> unit 
     sp_text(stage, after);
 }
 fn sp_builtins(stage: *SpStage) -> unit {
+    sp_builtin_body(
+        stage,
+        "shader_sqrt",
+        "define internal float ",
+        "(float %x) {\n %v = call float @llvm.sqrt.f32(float %x)\n ret float %v\n}\n"
+    );
     sp_builtin_body(
         stage,
         "shader_global_x",

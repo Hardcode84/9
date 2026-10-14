@@ -60,6 +60,10 @@ fn compute() -> unit {
 the barrier. After the barrier, each invocation can read the value written by
 its neighbor. Input `[1, 2, 3, 4]` produces `[4, 3, 6, 5]`.
 
+`shader_sqrt(value: f32) -> f32` returns the square root. The input must be
+finite and non-negative. Zero returns zero. The result uses device Float32
+precision. This function does not change invocation status.
+
 The stage supplies the resource functions from the root's resource table.
 The name `values` creates `values_load(index: u32) -> f32` and
 `values_store(index: u32, value: f32) -> unit`. The device source needs no

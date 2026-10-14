@@ -135,6 +135,7 @@ fn sp_prelude(stage: *SpStage, identity: u64) -> bool {
         &out,
         "extern fn shader_global_x()->u32=\"shader_global_x\";\nextern fn shader_local_x()->u32=\"shader_local_x\";\nextern fn shader_barrier()->unit=\"shader_barrier\";\nextern fn shader_require(ok:bool)->unit=\"shader_require\";\nextern fn shader_failed()->bool=\"shader_failed\";\n"
     );
+    c_buffer_text(&out, "extern fn shader_sqrt(value:f32)->f32=\"shader_sqrt\";\n");
     var index: usize = 0usize;
     while index < stage -> config -> resource_count {
         sp_accessor(&out, &stage -> config -> resources[index], false);

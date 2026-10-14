@@ -146,6 +146,17 @@ fn compute()->unit {
             [1, 2, 3, 4],
             [1, 1, 1, 1],
         ),
+        "sqrt": (
+            """
+fn compute()->unit {
+ var i:u32=shader_global_x(); var value:f32=(i*i) as f32;
+ if i==1u32 {value=0.25f32;}
+ values_store(i,shader_sqrt(value));
+}
+""",
+            [0, 0.5, 2, 3],
+            [0, 0, 0, 0],
+        ),
         "float-casts": (
             """
 fn compute()->unit {

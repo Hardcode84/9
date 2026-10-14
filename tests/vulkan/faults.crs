@@ -29,7 +29,7 @@ fn enumerate_probe(instance: *u8, count: *u32, physical: **u8) -> i32 {
         "vkEnumeratePhysicalDevices"
     );
     var result: i32 = actual(instance, count, physical);
-    if fault("incomplete") && result == VK_SUCCESS && *count != 0u32 {
+    if fault("incomplete") && (result == VK_SUCCESS || result == VK_INCOMPLETE) && *count != 0u32 {
         puts("injected VK_INCOMPLETE");
         return VK_INCOMPLETE;
     }

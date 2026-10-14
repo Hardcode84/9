@@ -698,3 +698,31 @@ query chains. Resolve calls while `read T` and `mut T` still have their source
 types. Then call ownership lowering and verification before output. The
 [composition tutorial](../examples/composition/README.md) has the setup and a
 complete program with overloaded functions, a destructor, and `defer`.
+
+## Inline arrays
+
+Use a complete constructor before indexed access:
+
+```crust
+record Sample { value: f32; }
+fn samples() -> f32 {
+    var data: [Sample; 2] = make [Sample; 2] {
+        make Sample { value: 1f32 }, make Sample { value: 2f32 }
+    };
+    var i: usize = 0usize;
+    while i < 2usize {
+        data[i].value = data[i].value + 1f32;
+        i = i + 1usize;
+    }
+    return data[1usize].value;
+}
+```
+
+Dynamic indices have bounds checks. Element loans conservatively cover all
+indices. Array elements must be scalar values, nested arrays, or transparent
+records without pointers, resources, or stored loans.
+
+Initialize every field before copying, passing, or returning a record. A record
+declared with `uninit` can receive field assignments before that transfer.
+Copying a partially initialized record into an initialized destination is an
+error. This rule also applies to array elements and assignments inside loops.

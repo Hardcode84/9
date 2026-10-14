@@ -109,6 +109,9 @@ fn os_place(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsSlot
     if (*expression).kind == CRUST_E_NAME {
         return os_named_place(check, state, expression);
     }
+    if (*expression).kind == CRUST_E_INDEX {
+        return os_index_place(check, state, expression);
+    }
     if (*expression).kind == CRUST_E_FIELD {
         return os_field_place(check, state, expression);
     }
@@ -159,7 +162,7 @@ fn os_projection_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr)
     if (*expression).kind == CRUST_E_GROUP {
         return os_projection(check, state, (*expression).left);
     }
-    if (*expression).kind == CRUST_E_NAME || (*expression).kind == CRUST_E_FIELD {
+    if (*expression).kind == CRUST_E_NAME || (*expression).kind == CRUST_E_FIELD || (*expression).kind == CRUST_E_INDEX {
         var slot: *OsSlot = os_place(check, state, expression);
         if slot == null(*OsSlot) || os_failed(check) {
             return null(*OsValue);
@@ -539,6 +542,14 @@ fn os_transferable(
 ) -> bool {
     if os_borrowed(check, (*value).syntax) {
         return true;
+    }
+    if!(*value).pointer && (*value).object != null(*OsObject) && !os_initialized(
+        check,
+        state,
+        (*value).object
+    ) {
+        os_error(check, location, "cannot transfer uninitialized storage");
+        return false;
     }
     if!(*value).pointer && (*value).object != null(*OsObject) {
         if (os_flags(state, (*value).object) & OS_PINNED) != 0u32 || (

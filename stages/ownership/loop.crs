@@ -33,6 +33,12 @@ fn os_loop_widen(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *Cru
     if (*slot).owns {
         return os_loop_owner(check, state, slot, location);
     }
+    if value != null(*OsValue) && (*value).object != null(*OsObject) && os_plain_storage(
+        check,
+        (*slot).syntax
+    ) && os_initialized(check, state, (*value).object) {
+        return os_copy(check, value);
+    }
     if value == null(*OsValue) || os_borrowed(check, (*slot).syntax) || (*value).object != null(
         *OsObject
     ) || (*value).pointer {

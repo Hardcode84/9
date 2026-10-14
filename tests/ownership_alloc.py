@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from ownership import RUNTIME_TREE
+from ownership_arrays import PROGRAM as ARRAYS
 from ownership_loops import LOOPS
 from ownership_origins import RECORDS
 
@@ -97,6 +98,8 @@ def main():
                 work / "sweep",
             ]
         )
+        arrays = work / "arrays.crs"
+        arrays.write_text(ARRAYS)
         runtime_tree = work / "runtime-tree.crs"
         runtime_tree.write_text(RUNTIME_TREE)
         loops = work / "loops.crs"
@@ -104,6 +107,7 @@ def main():
         origins = work / "origins.crs"
         origins.write_text(RECORDS)
         for source, trusted in [
+            (arrays, ""),
             (origins, ""),
             (loops, ""),
             ("examples/ownership-basics/origins.crs", ""),

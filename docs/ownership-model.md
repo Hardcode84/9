@@ -419,3 +419,28 @@ source-free imports, receipt tampering, and compiler allocation failures.
 Use `--sanitize` with the ownership Python tests for native ASan and UBSan.
 The [benchmark](../benchmarks/ownership/README.md) measures a compiled stage in
 fresh application builds and excludes target GCC compilation and linking.
+
+## Inline value arrays and text literals
+
+Checked bodies can construct, copy, pass, and index fixed arrays of scalar
+values or transparent records that contain only such values. Nested arrays
+use the same rules. Elements cannot contain resources, pointers, stored loans,
+opaque values, or domain-managed records. Initialize all elements with an array
+constructor before indexed access. The resource lowerer emits a bounds trap for
+each dynamic index, before the access.
+
+Indices share a conservative storage origin. A live loan of one element can
+therefore prevent access to another element. A copy of an array has separate
+storage and loan state. Loops can replace initialized plain record values;
+this does not permit replacement of borrowed storage. Record and array value
+transfers require every field and element to be initialized. A record declared
+with `uninit` can be initialized field by field before transfer. An array declared
+with `uninit` can receive a complete array value before indexed access.
+
+Generic definitions check array constructor counts, element types, and `usize`
+index types before instantiation.
+
+A string literal can be passed as `*u8` to an explicitly trusted function.
+The provider must treat those bytes as immutable static storage. Checked code
+cannot index or write through that pointer. This rule does not permit arbitrary
+raw pointers at a checked call boundary.

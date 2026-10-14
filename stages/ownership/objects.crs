@@ -122,6 +122,10 @@ fn os_object_fields(
     initialized: bool
 ) -> unit {
     var syntax: *CrustTypeSyntax = (*object).syntax;
+    if (*syntax).kind == CRUST_T_ARRAY {
+        os_array_fields(check, state, object, initialized);
+        return;
+    }
     if (*syntax).kind != CRUST_T_NAME || os_opaque((*object).contract) || os_parameter_type(
         (*check).stage,
         syntax
@@ -169,7 +173,7 @@ fn os_object_field(
         }
     }
     var value: *OsValue = null(*OsValue);
-    if (*syntax).kind == CRUST_T_NAME {
+    if (*syntax).kind == CRUST_T_NAME || (*syntax).kind == CRUST_T_ARRAY {
         var child: *OsObject = os_object(
             check,
             state,

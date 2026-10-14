@@ -150,6 +150,7 @@ record OsValue {
     pointer: bool;
     unknown: bool;
     fresh: bool;
+    literal_text: bool;
 }
 
 record OsFact {

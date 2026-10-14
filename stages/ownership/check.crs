@@ -63,9 +63,11 @@ fn os_validate_field(check: *OsCheck, contract: *OsRecord, field: *CrustField) -
         os_validate_embedded(check, contract, field);
         return;
     }
-    if (*(*field).syntax_type).kind == CRUST_T_POINTER || (*(*field).syntax_type).kind == CRUST_T_FUNCTION || (
-        *(*field).syntax_type
-    ).kind == CRUST_T_ARRAY {
+    if (*(*field).syntax_type).kind == CRUST_T_ARRAY {
+        os_array_validate(check, (*field).syntax_type);
+        return;
+    }
+    if (*(*field).syntax_type).kind == CRUST_T_POINTER || (*(*field).syntax_type).kind == CRUST_T_FUNCTION {
         os_error(
             check,
             &(*field).loc,
@@ -220,7 +222,7 @@ fn os_parameter(check: *OsCheck, state: *OsState, parameter: *CrustParam) -> uni
         (*parameter).name
     ) != null(*OsField);
     var object: *OsObject = null(*OsObject);
-    if (*base).kind == CRUST_T_NAME {
+    if (*base).kind == CRUST_T_NAME || (*base).kind == CRUST_T_ARRAY {
         if pointer {
             object = os_pointer_parameter(check, state, parameter, output);
         } else {

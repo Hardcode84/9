@@ -43,7 +43,7 @@ fn os_affine(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {
 fn os_view_parameter(check: *OsCheck, state: *OsState, slot: *OsSlot) -> *OsValue {
     var syntax: *CrustTypeSyntax = (*slot).syntax;
     var target: *OsObject = null(*OsObject);
-    if (*(*syntax).base).kind == CRUST_T_NAME {
+    if (*(*syntax).base).kind == CRUST_T_NAME || (*(*syntax).base).kind == CRUST_T_ARRAY {
         target = os_object_header(
             check,
             state,

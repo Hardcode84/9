@@ -1,0 +1,158 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Array elements must have no retained storage or cleanup obligations.
+fn os_plain_storage(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {
+    if !os_enter(check, &(*syntax).loc) {
+        return false;
+    }
+    var valid: bool = (*syntax).kind <= CRUST_T_BOOL;
+    if (*syntax).kind == CRUST_T_ARRAY {
+        valid = os_plain_storage(check, (*syntax).base);
+    }
+    if (*syntax).kind == CRUST_T_NAME {
+        var schema: *OsRecord = os_record((*check).stage, syntax);
+        valid = schema != null(*OsRecord) && !os_affine(check, syntax);
+        if valid {
+            valid =!(*schema).opaque && (*schema).domain == null(*CrustName);
+        }
+        if valid {
+            var field: *CrustField = (*(*schema).declaration).fields;
+            while field != null(*CrustField) && valid {
+                valid = os_plain_storage(check, (*field).syntax_type);
+                field = (*field).next;
+            }
+        }
+    }
+    (*check).depth = (*check).depth - 1usize;
+    return valid;
+}
+fn os_array_validate(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {
+    if !os_plain_storage(check, syntax) {
+        os_error(
+            check,
+            &(*syntax).loc,
+            "checked arrays require plain scalar or transparent value elements"
+        );
+        return false;
+    }
+    return true;
+}
+fn os_array_fields(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    initialized: bool
+) -> unit {
+    var syntax: *CrustTypeSyntax = (*object).syntax;
+    if !os_array_validate(check, syntax) {
+        return;
+    }
+    // All indices share one conservative storage origin. Values carry no loans.
+    var slot: *OsSlot = os_slot(
+        check,
+        (*syntax).base,
+        null(*CrustName),
+        object,
+        (*object).scope
+    );
+    if slot == null(*OsSlot) {
+        return;
+    }
+    os_set_fields(check, state, object, slot);
+    os_object_field(check, state, object, slot, initialized);
+}
+fn os_array_make(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue {
+    var syntax: *CrustTypeSyntax = (*expression).syntax_type;
+    if os_abstract_active(check) && !os_abstract_type(check, syntax, false) {
+        return null(*OsValue);
+    }
+    if !os_array_validate(check, syntax) {
+        return null(*OsValue);
+    }
+    var count: usize = 0usize;
+    while count < (*expression).arg_count && !os_failed(check) {
+        var item: *CrustExpr = (*expression).args[count];
+        var value: *OsValue = os_expr(check, state, item);
+        if value == null(*OsValue) || !os_plain(check, value, &(*item).loc) {
+            return null(*OsValue);
+        }
+        if !os_transferable(check, state, value, &(*item).loc) {
+            return null(*OsValue);
+        }
+        if !os_abstract_same(
+            check,
+            (*syntax).base,
+            (*value).syntax,
+            &(*item).loc
+        ) {
+            return null(*OsValue);
+        }
+        count = count + 1usize;
+    }
+    if os_abstract_active(check) && count as u64 != (*syntax).count {
+        os_error(
+            check,
+            &(*expression).loc,
+            "array construction must initialize every element"
+        );
+        return null(*OsValue);
+    }
+    var object: *OsObject = os_object(
+        check,
+        state,
+        syntax,
+        null(*OsObject),
+        (*state).scope,
+        true
+    );
+    var result: *OsValue = os_value(check, syntax, object, false);
+    if result != null(*OsValue) {
+        (*result).fresh = true;
+    }
+    return result;
+}
+fn os_index_place(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsSlot {
+    var base: *OsValue = os_projection(check, state, (*expression).left);
+    if base == null(*OsValue) || os_failed(check) {
+        return null(*OsSlot);
+    }
+    var syntax: *CrustTypeSyntax = os_abstract_base(check, (*base).syntax);
+    if (*syntax).kind != CRUST_T_ARRAY || (*base).object == null(*OsObject) {
+        os_error(check, &(*expression).loc, "index requires checked inline array storage");
+        return null(*OsSlot);
+    }
+    if !os_access_through(
+        check,
+        state,
+        (*base).object,
+        (*base).loan,
+        false,
+        &(*expression).loc
+    ) {
+        return null(*OsSlot);
+    }
+    if !os_initialized(check, state, (*base).object) {
+        os_error(check, &(*expression).loc, "indexed array must be fully initialized");
+        return null(*OsSlot);
+    }
+    var index: *OsValue = os_expr(check, state, (*expression).right);
+    if index == null(*OsValue) || !os_plain(check, index, &(*expression).loc) {
+        return null(*OsSlot);
+    }
+    if os_abstract_active(check) && (*os_abstract_base(check, (*index).syntax)).kind != CRUST_T_USIZE {
+        os_error(check, &(*expression).loc, "array indexes require usize");
+        return null(*OsSlot);
+    }
+    if !os_access_through(
+        check,
+        state,
+        (*base).object,
+        (*base).loan,
+        false,
+        &(*expression).loc
+    ) {
+        return null(*OsSlot);
+    }
+    os_unfold(check, state, (*base).object);
+    return os_loan_slot(check, os_fields(state, (*base).object), (*base).loan);
+}

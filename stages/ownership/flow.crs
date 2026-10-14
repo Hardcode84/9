@@ -23,6 +23,7 @@ fn os_join_value(
         return;
     }
     (*value).presence = (*a).presence & (*b).presence;
+    (*value).literal_text = (*a).literal_text && (*b).literal_text;
     if (*a).object != (*b).object {
         if (*slot).owns ||!(*a).pointer ||!(*b).pointer {
             os_error(check, location, "continuing paths must agree on storage ownership");

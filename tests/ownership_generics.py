@@ -22,6 +22,11 @@ fn stream_drop(value:mut Stream)->unit {
 """
 
 DEFINITIONS = """
+fn array_value!(T)(i:usize)->i32 {
+ var a:[[i32;2];1]=make [[i32;2];1]{make [i32;2]{3i32,7i32}};
+ return a[0usize][i];
+}
+
 fn transfer!(Value)(value:Value)->Value {
     var view:read Value=observe!(Value)(read value);inspect_view!(Value)(read view);return move value;
 }
@@ -47,6 +52,7 @@ fn wrapper_drop!(Value)(value:mut Wrapper!(Value))->unit {}
 
 PROGRAM = """
 fn main(argc:i32,argv:**u8)->i32 {
+    if array_value!(i32)(1usize)!=7i32 {trap;}
     if sizeof(Plain)!=sizeof(Ticket) || alignof(Plain)!=alignof(Ticket) {trap;}
     var scalar:i64=transfer!(i64)(42i64);
     var boxed_scalar:Box!(i64)=wrap!(i64)(scalar);
@@ -99,6 +105,31 @@ def rejection_cases():
             "b.value=0i64;var later:i64=x.value;}",
             "active",
         ),
+        "unused-array-short": (
+            "fn bad!(T)()->[i32;2]{return make [i32;2]{1i32};}",
+            "initialize every element",
+        ),
+        "unused-array-long": (
+            "fn bad!(T)()->[i32;2]{return make [i32;2]{1i32,2i32,3i32};}",
+            "initialize every element",
+        ),
+        "unused-array-type": (
+            "fn bad!(T)()->[i32;2]{return make [i32;2]{true,false};}",
+            "type mismatch",
+        ),
+        "unused-array-nested-type": (
+            "fn bad!(T)()->[[i32;1];1]{return make [[i32;1];1]{make [bool;1]{true}};}",
+            "type mismatch",
+        ),
+        "unused-array-bool-index": (
+            "fn bad!(T)()->i32 {var a:[i32;1]=make [i32;1]{1i32};return a[false];}",
+            "indexes require usize",
+        ),
+        "unused-array-signed-index": (
+            "fn bad!(T)()->i32 {var a:[i32;1]=make [i32;1]{1i32};return a[0i32];}",
+            "indexes require usize",
+        ),
+        "unused-array-zero": ("fn bad!(T)()->unit {make [i32;0]{};}", "count must be positive"),
         "unused-copy": ("fn bad!(T)(value:T)->T{return value;}", "movable owned"),
         "unused-release-type": (
             'extern fn release(value:*u8)->unit foreign(release)="free";'

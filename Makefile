@@ -185,6 +185,7 @@ check-ownership: all test-tools $(BUILD)/crust-ownership-test $(BUILD)/crust-own
 	python3 tests/ownership_index.py --build $(BUILD)
 	python3 tests/ownership_views.py --build $(BUILD)
 	python3 tests/ownership_native.py --build $(BUILD)
+	python3 tests/ownership_arrays.py --build $(BUILD)
 
 check-ownership-ergonomics: all test-tools $(BUILD)/crust-ownership-test
 	python3 tests/ownership_ergonomics.py --build $(BUILD)

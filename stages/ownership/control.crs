@@ -134,26 +134,11 @@ fn os_variable(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit 
     ) {
         return;
     }
-    var value: *OsValue = null(*OsValue);
-    if!(*statement).uninitialized {
-        value = os_expr(check, state, (*statement).value);
-    } else {
-        if (*(*statement).syntax_type).kind == CRUST_T_NAME {
-            var object: *OsObject = os_object(
-                check,
-                state,
-                (*statement).syntax_type,
-                null(*OsObject),
-                (*state).scope,
-                false
-            );
-            value = os_value(check, (*statement).syntax_type, object, false);
-            if value != null(*OsValue) {
-                (*value).owner = os_affine(check, (*statement).syntax_type);
-                (*value).fresh = true;
-            }
-        }
+    if (*statement).uninitialized {
+        os_bind_uninitialized(check, state, statement);
+        return;
     }
+    var value: *OsValue = os_expr(check, state, (*statement).value);
     if !os_failed(check) {
         os_bind(
             check,

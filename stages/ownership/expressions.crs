@@ -14,7 +14,7 @@ fn os_expr_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *O
     if kind == CRUST_E_GROUP {
         return os_expr(check, state, (*expression).left);
     }
-    if kind == CRUST_E_NAME || kind == CRUST_E_FIELD {
+    if kind == CRUST_E_NAME || kind == CRUST_E_FIELD || kind == CRUST_E_INDEX {
         return os_load(check, state, expression);
     }
     if kind == CRUST_E_CALL {
@@ -22,6 +22,9 @@ fn os_expr_inner(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *O
     }
     if kind == rs_kind((*(*check).stage).resources, RS_MOVE) {
         return os_move(check, state, expression);
+    }
+    if kind == CRUST_E_ARRAY {
+        return os_array_make(check, state, expression);
     }
     if kind == CRUST_E_RECORD {
         return os_make(check, state, expression);
@@ -48,6 +51,22 @@ fn os_literal(check: *OsCheck, expression: *CrustExpr) -> *OsValue {
     var kind: u32 = (*expression).kind;
     if !os_abstract_literal(check, expression) {
         return null(*OsValue);
+    }
+    if kind == CRUST_E_STRING {
+        var syntax: *CrustTypeSyntax = os_syntax(
+            check,
+            CRUST_T_POINTER,
+            &(*expression).loc
+        );
+        if syntax == null(*CrustTypeSyntax) {
+            return null(*OsValue);
+        }
+        (*syntax).base = os_syntax(check, CRUST_T_U8, &(*expression).loc);
+        var value: *OsValue = os_value(check, syntax, null(*OsObject), true);
+        if value != null(*OsValue) {
+            (*value).literal_text = true;
+        }
+        return value;
     }
     if kind == CRUST_E_NULL {
         return os_value(check, (*expression).syntax_type, null(*OsObject), true);

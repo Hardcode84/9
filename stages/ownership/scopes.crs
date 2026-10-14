@@ -63,6 +63,40 @@ fn os_bind(
     return slot;
 }
 
+fn os_bind_uninitialized(check: *OsCheck, state: *OsState, statement: *CrustStmt) -> unit {
+    var syntax: *CrustTypeSyntax = (*statement).syntax_type;
+    var slot: *OsSlot = os_bind(
+        check,
+        state,
+        (*statement).name,
+        syntax,
+        null(*OsValue),
+        &(*statement).loc
+    );
+    if slot == null(*OsSlot) || os_failed(check) || (
+        (*syntax).kind != CRUST_T_NAME && (*syntax).kind != CRUST_T_ARRAY
+    ) {
+        return;
+    }
+    var object: *OsObject = os_object(
+        check,
+        state,
+        syntax,
+        null(*OsObject),
+        (*state).scope,
+        false
+    );
+    if object == null(*OsObject) || os_failed(check) {
+        return;
+    }
+    var value: *OsValue = os_value(check, syntax, object, false);
+    if value != null(*OsValue) {
+        (*value).owner = (*slot).owns;
+        (*value).fresh = true;
+        os_set(check, state, slot as *u8, value, OS_READY);
+    }
+}
+
 fn os_scope_end(check: *OsCheck, state: *OsState, location: *CrustLoc) -> unit {
     var scope: *OsScope = (*state).scope;
     var slot: *OsSlot = (*(*state).scope).locals;

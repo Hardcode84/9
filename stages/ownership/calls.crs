@@ -419,7 +419,7 @@ fn os_call_owned(
         return null(*OsValue);
     }
     var object: *OsObject = null(*OsObject);
-    if (*syntax).kind == CRUST_T_NAME {
+    if (*syntax).kind == CRUST_T_NAME || (*syntax).kind == CRUST_T_ARRAY {
         object = os_object(
             check,
             state,
@@ -581,6 +581,9 @@ fn os_argument(
         os_borrow_argument(check, state, contract, syntax, value, location);
         return;
     }
+    if os_literal_argument(check, contract, syntax, value) {
+        return;
+    }
     if (*value).pointer {
         os_output_argument(check, state, contract, parameter, value, location);
         return;
@@ -673,4 +676,15 @@ fn os_arguments(
         return null(**OsValue);
     }
     return arguments;
+}
+
+fn os_literal_argument(
+    check: *OsCheck,
+    contract: *OsFunction,
+    syntax: *CrustTypeSyntax,
+    value: *OsValue
+) -> bool {
+    return (*value).literal_text && os_trusted((*check).stage, (*contract).declaration) && (
+        *syntax
+    ).kind == CRUST_T_POINTER && (*(*syntax).base).kind == CRUST_T_U8;
 }

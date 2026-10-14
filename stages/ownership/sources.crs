@@ -47,3 +47,4 @@ stage_source(stage, "interface.crs");
 stage_source(stage, "artifact.crs");
 stage_source(stage, "publish.crs");
 stage_source(stage, "imports.crs");
+stage_source(stage, "arrays.crs");

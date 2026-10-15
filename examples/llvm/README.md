@@ -61,15 +61,14 @@ object toolchain. LLVM emits the machine code for `hello`.
 host_source(run,"../../stages/build/load.crs");
 if !stage_setup(run,"../.."){return 1i32;};
 var stages:*StageSession=stage_open(run,"../..","../../build/stage-cache");
-if stages==null(*StageSession) || !stage_load(stages,"examples/llvm/package.crs"){return 1i32;};
 extern fn hello()->i32="hello";
+if stages==null(*StageSession) || !stage_import(stages,"examples/llvm/package.crs"){return 1i32;};
 return hello();
 ```
 
 The shared loader prepares the compiler package and its dependencies.
-`stage_load` obtains the native application library and links it into the
-running compilation program. The following declaration binds `hello` to its
-native export. The final call executes it.
+`stage_import` obtains the native application library and binds the declared
+`hello` function to that provider. The final call executes it.
 
 On a cache miss, the shared bootstrap compiles the LLVM emitter through C.
 The emitter writes LLVM IR directly for the selected application. Clang

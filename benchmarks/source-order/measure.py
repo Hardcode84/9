@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 """Measure source-order execution through complete C and rename output.
 
 Use existing binaries in --build-dir. No build artifact is replaced. Each
@@ -135,7 +136,8 @@ def staged_source(target, output, native_library):
     ]
     lines.extend(
         (
-            f"host_link(run, {crust_string(os.path.relpath(native_library, output.parent))});",
+            f"var library:*u8=host_open(run, {crust_string(os.path.relpath(native_library, output.parent))});",
+            'host_bind(run,library,"c_backend_build");host_bind(run,library,"c_program");',
             f"var target: *CrustSource = host_input(run, {crust_string(os.path.relpath(target, output.parent))}, 1u64);",
             "return c_build(target, 0usize, (*run).argc, (*run).argv, c_backend_build);",
             "",

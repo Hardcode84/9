@@ -313,8 +313,10 @@ The setup uses these helpers:
 | `application_setup(run, base)` | Load the shared application interfaces |
 | `application(stages, output, emit)` | Compile the remaining root source with the selected callback |
 | `stage_open(run, base, cache)` | Prepare the C provider and capture toolchain inputs |
-| `stage_load(stages, package)` | Prepare and load a selected source package |
-| `host_link(run, path)` | Load a shared library containing native functions |
+| `stage_import(stages, package)` | Prepare a package and bind its declared interface |
+| `host_open(run, path)` | Open a shared library and return its handle |
+| `host_import(run, library, path)` | Load and bind a consumer interface to that library |
+| `host_bind(run, library, name)` | Bind a checked extern to that library |
 | `host_path(run, path)` | Resolve a path relative to the root source file |
 | `c_build(source, begin, argc, argv, c_backend_build)` | Compile the selected target source with the C backend |
 

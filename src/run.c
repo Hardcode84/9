@@ -7,7 +7,7 @@
 #include <string.h>
 
 struct CrustRunState {
-    CrustNativeModule *modules;
+    CrustLibrary *modules;
     CrustEval *initial_eval;
 };
 
@@ -41,12 +41,21 @@ static bool run_error(CrustRun *run, const char *message)
 static bool resolve_native(void *user, CrustDecl *declaration, void **result)
 {
     CrustRun *run = user;
-    return crust_run_native_resolve(run, run->state->modules, declaration, result);
+    return crust_run_native_host(run, declaration, result);
 }
 
-bool crust_run_link(CrustRun *run, const char *path)
+CrustLibrary *crust_run_open(CrustRun *run, const char *path)
 {
-    return crust_run_native_link(run, &run->state->modules, path);
+    return crust_run_native_open(run, &run->state->modules, path);
+}
+
+bool crust_run_import(CrustRun *run, CrustLibrary *library, CrustDecl *declaration)
+{
+    void *address;
+    if (declaration == NULL || declaration->kind != CRUST_D_EXTERN)
+        return run_error(run, "native import requires an extern declaration");
+    return crust_run_native_symbol(run, library, declaration, &address) &&
+           crust_eval_import(run->eval, declaration, address);
 }
 
 bool crust_run_init(CrustRun *run, CrustContext *context, CrustSource *source, int32_t argc,
@@ -85,7 +94,7 @@ bool crust_run_destroy(CrustRun *run)
     return success;
 }
 
-bool crust_run_check_unit(CrustRun *run, CrustUnit *unit)
+static bool check_unit(CrustRun *run, CrustLibrary *library, CrustUnit *unit)
 {
     CrustDecl *declaration;
     for (declaration = unit->declarations; declaration != NULL; declaration = declaration->next) {
@@ -99,10 +108,22 @@ bool crust_run_check_unit(CrustRun *run, CrustUnit *unit)
         !crust_check_unit(run->context, unit))
         return false;
     for (declaration = unit->declarations; declaration != NULL; declaration = declaration->next) {
-        if (!crust_eval_prepare(run->eval, declaration))
+        if (library != NULL && declaration->kind == CRUST_D_EXTERN) {
+            if (!crust_run_import(run, library, declaration))
+                return false;
+        } else if (!crust_eval_prepare(run->eval, declaration))
             return false;
     }
     return true;
+}
+
+bool crust_run_check_unit(CrustRun *run, CrustUnit *unit) { return check_unit(run, NULL, unit); }
+
+bool crust_run_import_unit(CrustRun *run, CrustLibrary *library, CrustUnit *unit)
+{
+    if (library == NULL)
+        return run_error(run, "native import requires a library");
+    return check_unit(run, library, unit);
 }
 
 bool crust_run_read(CrustRun *run, void *user, void **result)

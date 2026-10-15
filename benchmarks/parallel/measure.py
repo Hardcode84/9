@@ -114,8 +114,9 @@ def root_file(directory, library, workers, count, check, deep):
         ]
     source = directory / f"root-{workers}-{'check' if check else 'handoff'}.crs"
     source.write_text(
-        f"host_link(run,{quote(library)});\n"
+        f"var library:*u8=host_open(run,{quote(library)});\n"
         'extern fn compile_graph(ctx:*CrustContext,workers:usize,count:usize,arguments:**u8,check:bool,deep:bool)->i32="compile_graph";\n'
+        'host_bind(run,library,"compile_graph");\n'
         f"var arguments:[*u8;{len(arguments)}]=make [*u8;{len(arguments)}]{{{','.join(map(quote,arguments))}}};\n"
         f"return compile_graph((*run).context,{workers}usize,{count}usize,&arguments[0usize],{str(check).lower()},{str(deep).lower()});\n"
     )

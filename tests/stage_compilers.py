@@ -49,8 +49,9 @@ var stages:*StageSession=stage_open(run,".","build/stage-cache");
 if stages==null(*StageSession){return 1i32;};
 var path:*u8=stage_library(stages,"custom compiler/package.crs");
 if path==null(*u8){return 1i32;};
-if crust0_host_write_stream(1u32,path,native_strlen(path))!=0i32 || !crust_run_link(run,path){return 1i32;};
+if crust0_host_write_stream(1u32,path,native_strlen(path))!=0i32 || crust_run_open(run,path)==null(*u8){return 1i32;};
 extern fn answer()->i32="answer";
+if !host_bind(run,crust_run_open(run,path),"answer"){return 1i32;};
 return answer();
 """
     )

@@ -344,8 +344,8 @@ def main():
         root_source = "\n".join(
             [
                 f'host_source(run,"{relative("api/crust0_stage.crs")}");',
-                f'host_source(run,"{relative("stages/resources/api.crs")}");',
-                f'host_link(run,"{relative(dso)}");',
+                f'host_import(run,host_open(run,"{relative("build/crust-c-library.so")}"),"{relative("stages/c/api.crs")}");',
+                f'host_import(run,host_open(run,"{relative(dso)}"),"{relative("stages/resources/api.crs")}");',
                 f'var target:*CrustSource=host_input(run,"{crust_path.name}",1u64);',
                 'var arguments:[*u8;1]=make [*u8;1]{"--prepare"};',
                 "return resource_build(target,0usize,1i32,&arguments[0usize], c_backend_build);",

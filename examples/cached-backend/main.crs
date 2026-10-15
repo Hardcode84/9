@@ -111,9 +111,14 @@ var sources: [*u8; 30] = make [*u8; 30] {
     };
     var artifact: CacheArtifact = uninit;
     // Loading and execution stay explicit. No runner behavior depends on caching.
-    if !cache_artifact(ctx, directory, &request, &artifact) || !crust_run_link(
+    if !cache_artifact(ctx, directory, &request, &artifact) {
+        return 1i32;
+    }
+    var library: *u8 = crust_run_open(run, artifact.path);
+    if library == null(*u8) || !host_bind(run, library, "cached_asm") || !host_bind(
         run,
-        artifact.path
+        library,
+        "native_start"
     ) {
         return 1i32;
     }

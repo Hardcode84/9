@@ -54,7 +54,8 @@ on libc and the runner's public C API. It has no temporary stage dependency.
 
 ## Keep selection and lifetime explicit
 
-The cache call returns a path. The root calls `crust_run_link`, assigns
+The cache call returns a path. The root opens the library and binds
+`cached_asm` and `native_start` to its exports. It assigns
 `session.compile`, and calls `native_start`. These are separate source actions;
 a cache hit does not install operations or run an old root result.
 

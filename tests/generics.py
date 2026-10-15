@@ -237,7 +237,7 @@ def check_tutorial_assembly(suite, package):
         source.replace(
             "    return ",
             '    return host_source(root, "../../api/crust0_x64.crs") &&\n'
-            '        stage_load(stages, "stages/asm/package.crs") &&\n        ',
+            '        stage_import(stages, "stages/asm/package.crs") &&\n        ',
         )
     )
     helper = root.with_name("build.crs")

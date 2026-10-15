@@ -32,7 +32,15 @@ SCALARS = {
     "uintptr_t": "usize",
     "unsigned": "u32",
 }
-OPAQUE = {"void", "FILE", "CrustArenaBlock", "CrustFailureFrame", "CrustEval", "CrustRunState"}
+OPAQUE = {
+    "void",
+    "FILE",
+    "CrustArenaBlock",
+    "CrustFailureFrame",
+    "CrustEval",
+    "CrustRunState",
+    "CrustLibrary",
+}
 
 
 def publish(path, output, check):

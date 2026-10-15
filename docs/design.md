@@ -144,7 +144,7 @@ counts more than one visit per function call. Embedders must provide enough
 stack for their budget and native callees. See the
 [execution contract](source-runner.md#execution-and-lifetime).
 
-`host_source` checks a host declaration unit. `host_link` loads an explicit
+`host_source` checks a host declaration unit. `host_open` loads an explicit
 shared-library path. Application roots use the shared
 [stage preparation API](../stages/build/README.md) to obtain that code from
 captured sources. Each package selects its own source dependencies and public
@@ -160,7 +160,7 @@ compilation code. A backend can then compile its next generation explicitly.
 ASM and C are the available emission paths.
 
 This handoff uses `CrustRun.read`, `execute`, and `user`. Loading a library
-with `host_link` alone leaves the default root executor in place. The selected
+with `host_open` alone leaves the default root executor in place. The selected
 stage must take responsibility for later code execution as well as emission.
 The [native stage tutorial](../stages/native/README.md) supplies this handoff.
 It starts with explicit source inputs and a selected assembly stage,

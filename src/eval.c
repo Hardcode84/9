@@ -70,6 +70,7 @@ struct CrustEval {
     CrustMap declarations;
     CrustMap identities;
     CrustMap natives;
+    CrustMap imports;
     CrustMap functions;
     CrustMap abis;
     CrustMap roots;
@@ -389,6 +390,55 @@ bool crust_eval_prepare(CrustEval *eval, CrustDecl *declaration)
             return false;
     }
     return prepare_declaration(eval, declaration, name, native, key);
+}
+
+static EvalNative *import_address(CrustEval *eval, CrustDecl *declaration, void *address)
+{
+    EvalNative *native;
+    native = crust_map_get(&eval->imports, (uintptr_t)address);
+    if (native != NULL) {
+        if (!check_native_declaration(eval, declaration, native))
+            return NULL;
+    } else {
+        native = allocate(eval, sizeof(*native), CRUST_ALIGNOF(EvalNative));
+        if (native == NULL)
+            return NULL;
+        native->prototype = declaration;
+        native->address = address;
+        native->published = true;
+        if (!crust_try_map_set(eval->context, &eval->imports, (uintptr_t)address, native))
+            return NULL;
+    }
+    return native;
+}
+
+bool crust_eval_import(CrustEval *eval, CrustDecl *declaration, void *address)
+{
+    EvalDecl *prepared;
+    EvalNative *native;
+    if (declaration == NULL || declaration->kind != CRUST_D_EXTERN || declaration->type == NULL ||
+        address == NULL)
+        return error_at(eval, no_location(), "native import requires a checked extern and address");
+    prepared = find_declaration(eval, declaration);
+    if (prepared == NULL) {
+        prepared = find_identity(eval, declaration, identity_key(declaration));
+        if (prepared != NULL && !crust_try_map_set(eval->context, &eval->declarations,
+                                                   (uintptr_t)declaration, prepared))
+            return false;
+    }
+    if (prepared != NULL && prepared->native != NULL && prepared->native->published) {
+        if (prepared->native->address == address)
+            return true;
+        return error_at(eval, declaration->loc, "native import is already bound");
+    }
+    native = import_address(eval, declaration, address);
+    if (native == NULL)
+        return false;
+    if (prepared != NULL) {
+        prepared->native = native;
+        return true;
+    }
+    return prepare_declaration(eval, declaration, NULL, native, identity_key(declaration));
 }
 
 static EvalDecl *get_declaration(CrustEval *eval, CrustDecl *declaration)

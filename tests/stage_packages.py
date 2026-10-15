@@ -58,8 +58,9 @@ if stages==null(*StageSession) {return 1i32;};
 var artifact:*u8=stage_library(stages, "custom package/package.crs");
 if artifact==null(*u8) {return 1i32;};
 if crust0_host_write_stream(1u32,artifact,native_strlen(artifact))!=0i32 {return 1i32;};
-if !crust_run_link(run,artifact) {return 1i32;};
+if crust_run_open(run,artifact)==null(*u8) {return 1i32;};
 extern fn answer()->i32="answer";
+if !host_bind(run,crust_run_open(run,artifact),"answer"){return 1i32;};
 return answer();
 """
     )

@@ -33,7 +33,7 @@ Hello, overloads!
 
 Open [main.crs](../../examples/overload/hello/main.crs). Its compilation
 program loads [api.crs](api.crs) and calls
-`stage_load(stages, "stages/overload/package.crs")` to prepare the library.
+`stage_import(stages, "stages/overload/package.crs")` to prepare the library.
 The final `overload_build` call passes the unread range of the same file.
 The runner treats this as an ordinary library call.
 

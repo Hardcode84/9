@@ -24,10 +24,13 @@ CrustEval *crust_eval_create(CrustContext *context, const CrustEvalOptions *opti
    Destroy the evaluator before its context and native library handles. */
 void crust_eval_destroy(CrustEval *eval);
 
-/* Register checked declaration facts without native symbol lookup. Native names
+/* Register checked declaration facts without native symbol lookup. Unbound names
    must have compatible ABI types. Empty names on definitions select private
    identities; extern names must be nonempty. A published callable cannot change identity. */
 bool crust_eval_prepare(CrustEval *eval, CrustDecl *declaration);
+/* Bind a checked extern to an explicit native address. The binding is immutable.
+   The caller must keep the provider live and uphold the declaration's ABI. */
+bool crust_eval_import(CrustEval *eval, CrustDecl *declaration, void *address);
 /* Write a native function pointer to exact function-typed result storage. */
 bool crust_eval_function(CrustEval *eval, CrustDecl *declaration, void *result);
 /* Arguments and result point to exact typed storage. A unit result needs no

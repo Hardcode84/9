@@ -66,8 +66,8 @@ def root_source(work, build):
         "\n".join(
             [
                 f'host_source(run, {json.dumps(str(ROOT / "api/crust0_stage.crs"))});',
-                f'host_source(run, {json.dumps(str(ROOT / "stages/resources/api.crs"))});',
-                f'host_link(run, {json.dumps(str(build / "crust-resource-library.so"))});',
+                f'host_import(run,host_open(run,{json.dumps(str(build / "crust-c-library.so"))}),{json.dumps(str(ROOT / "stages/c/api.crs"))});',
+                f'host_import(run,host_open(run,{json.dumps(str(build / "crust-resource-library.so"))}),{json.dumps(str(ROOT / "stages/resources/api.crs"))});',
                 "return resource_build(null(*CrustSource), 0usize, (*run).argc, (*run).argv, c_backend_build);",
                 "",
             ]

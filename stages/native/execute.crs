@@ -134,7 +134,15 @@ fn native_compile(root: *CrustRun, session: *NativeSession, declaration: *CrustD
         success = false;
     }
     crust_context_destroy(&context);
-    return success && crust_run_link(root, (*image).library);
+    if !success {
+        return false;
+    }
+    var library: *u8 = crust_run_open(root, image -> library);
+    if library == null(*u8) {
+        return false;
+    }
+    declaration -> kind = CRUST_D_EXTERN;
+    return crust_run_import(root, library, declaration);
 }
 
 // Consume one complete function from crust_run_read. Each function executes once.

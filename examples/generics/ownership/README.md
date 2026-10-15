@@ -34,7 +34,7 @@ var stages: *StageSession = stage_open(run, "../../..", "../../../build/stage-ca
 if stages == null(*StageSession) { return 1i32; };
 host_source(run, "../../../stages/generics/ownership/api.crs");
 host_source(run, "../../../stages/generics/ownership/build.crs");
-if !stage_load(stages, "stages/generics/ownership/package.crs") { return 1i32; };
+if !stage_import(stages, "stages/generics/ownership/package.crs") { return 1i32; };
 
 return ownership_generics_build(null(*CrustSource), 0usize,
     (*run).argc, (*run).argv, null(*CrustSource), 0usize, c_backend_build);

@@ -33,8 +33,9 @@ class Suite:
     def load(self, runner, library, expected=0, diagnostic=b"", before=""):
         root = self.work / "load.crs"
         root.write_text(
-            before + f"host_link(run, {json.dumps(str(library))});\n"
+            before + f"var provider:*u8=host_open(run, {json.dumps(str(library))});\n"
             'extern fn inspect(value:*CrustExpr)->u64="inspect";\n'
+            'if !host_bind(run,provider,"inspect"){return 1i32;};\n'
             "var value:CrustExpr=uninit; value.integer=42u64;\n"
             "if inspect(&value)!=42u64 { return 2i32; };\nreturn 0i32;\n"
         )

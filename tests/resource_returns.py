@@ -299,9 +299,17 @@ def import_root(suite, output, provider, target, register):
         "stages/resources/model.crs",
         "stages/resources/extension.crs",
     ]
-    text = "".join(f"host_source(run,{json.dumps(str(ROOT / path))});\n" for path in paths)
-    for name in ("crust-c-library.so", "crust-resource-library.so"):
-        text += f"host_link(run,{json.dumps(str(suite.build / name))});\n"
+    providers = {
+        "stages/c/api.crs": "crust-c-library.so",
+        "stages/resources/api.crs": "crust-resource-library.so",
+        "stages/resources/extension.crs": "crust-resource-library.so",
+    }
+    text = ""
+    for path in paths:
+        if path in providers:
+            text += f"host_import(run,host_open(run,{json.dumps(str(suite.build / providers[path]))}),{json.dumps(str(ROOT / path))});\n"
+        else:
+            text += f"host_source(run,{json.dumps(str(ROOT / path))});\n"
     text += """
 fn compile_target(source:*CrustSource,begin:usize)->i32 {
 var context:CrustContext=uninit;

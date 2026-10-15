@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import shutil
 import statistics
 import struct
@@ -37,10 +38,13 @@ def timed_cache(source):
         "    if cache_clock(1i32,&capture_start)!=0i32 {return 90i32;}\n"
         "    var inputs: CacheInputs",
     )
-    old = """    if !cache_artifact(ctx, directory, &request, &artifact) ||
-       !crust_run_link(run, artifact.path) { return 1i32; }"""
-    if source.count(old) != 1:
+    boundary = re.search(
+        r"    if !cache_artifact\(ctx,\s*directory,\s*&request,\s*&artifact\)\s*{\s*return 1i32;\s*}",
+        source,
+    )
+    if boundary is None:
         raise RuntimeError("Cache tutorial lookup boundary changed")
+    old = boundary.group()
     return source.replace(
         old,
         """    if cache_clock(1i32,&capture_end)!=0i32 {return 90i32;}
@@ -52,7 +56,7 @@ def timed_cache(source):
         artifact.hit as i64
     };
     if crust0_host_write_stream(2u32,&durations as *u8,sizeof([i64;3]))!=0i32 {return 91i32;}
-    if !crust_run_link(run,artifact.path) {return 1i32;}""",
+""",
     )
 
 

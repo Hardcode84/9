@@ -599,6 +599,10 @@ An `extern fn` has no body. Its string names an exact native symbol. The decoded
 name must be nonempty ASCII with no embedded zero. It has the declared scalar
 signature. The foreign implementation must obey the same ABI and the declared
 memory contract. A declaration cannot make a mismatched native function safe.
+In the source runner, library imports bind a declaration to one explicit provider.
+Loading a library does not publish its symbols. Unbound externs use the predefined
+host interface. See the [runner contract](source-runner.md) for
+provider lifetime and binding rules.
 Variable arguments and aggregate calls need an ordinary
 native bridge or another frontend's ABI adapter.
 

@@ -4,9 +4,9 @@ host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") {
     return 1i32;
 };
+extern fn hello() -> i32 = "hello";
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
-if stages == null(*StageSession) || !stage_load(stages, "examples/llvm/package.crs") {
+if stages == null(*StageSession) || !stage_import(stages, "examples/llvm/package.crs") {
     return 1i32;
 };
-extern fn hello() -> i32 = "hello";
 return hello();

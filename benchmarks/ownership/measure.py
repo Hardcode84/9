@@ -106,12 +106,19 @@ def application(build, work, name, source, provider, pairs, rng):
         ROOT / path
         for path in (
             "api/crust0_stage.crs",
+            "stages/c/api.crs",
             "stages/ownership/api.crs",
             "stages/ownership/build.crs",
         )
     ]
     lines = [f"host_source(run, {json.dumps(str(path))});" for path in interfaces]
-    lines += [f"host_link(run, {json.dumps(str(build / 'crust-ownership-library.so'))});"]
+    lines += [
+        f"var library:*u8=host_open(run, {json.dumps(str(build / 'crust-ownership-library.so'))});"
+    ]
+    lines += ['host_bind(run,library,"ownership_program");']
+    lines += [
+        f'host_bind(run,host_open(run,{json.dumps(str(build / "crust-c-library.so"))}),"c_backend_build");'
+    ]
     if provider:
         lines += [
             f"var provider:*CrustSource=host_input(run,{json.dumps(str(provider))},100u64);",
@@ -139,9 +146,9 @@ def application(build, work, name, source, provider, pairs, rng):
             capture_output=True,
             timeout=120,
         )
-        memory[mode] = int(usage.read_text())
         if result.returncode or result.stdout or result.stderr:
             raise RuntimeError((command, result))
+        memory[mode] = int(usage.read_text())
     expected_output = {"handles": b"OK\nSFF", "heap": b"AB\n"}.get(name, b"OK\n")
     execute(target, symbols, work, name, False, expected_output)
     erasure = [build / "crust-ownership-erasure"]

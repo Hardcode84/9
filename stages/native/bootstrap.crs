@@ -109,11 +109,11 @@ fn native_bootstrap(
         count,
         exports,
         export_count
-    ) && (*session).compile(&context, session, image) && crust_run_link(
-        root,
-        (*image).library
-    ) {
-        status = native_start(root, session);
+    ) && (*session).compile(&context, session, image) {
+        var library: *u8 = crust_run_open(root, image -> library);
+        if library != null(*u8) && host_bind(root, library, "native_start") {
+            status = native_start(root, session);
+        }
     }
     if context.error_count != 0usize {
         crust_set_error(

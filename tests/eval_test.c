@@ -364,6 +364,49 @@ static void test_native_type_graph(void)
     check(state.live == 0, "shared native signature checking releases its workspace");
 }
 
+static void test_explicit_imports(void)
+{
+    CrustSource source = source_text("extern fn a(n:i32)->i32=\"same\";"
+                                     "extern fn b(n:u64)->u64=\"same\";"
+                                     "extern fn bad(n:u64)->u64=\"other\";");
+    CrustContext context;
+    CrustUnit *unit;
+    CrustEval *eval;
+    Resolver resolver;
+    CrustDecl copy;
+    void *a = dlsym(RTLD_DEFAULT, "native_i32");
+    void *b = dlsym(RTLD_DEFAULT, "native_u64");
+    int32_t (*first)(int32_t) = NULL;
+    uint64_t (*second)(uint64_t) = NULL;
+    crust_context_init(&context, NULL);
+    if (!parse(&context, &source, &unit)) {
+        check(false, "explicit import source checks");
+        crust_context_destroy(&context);
+        return;
+    }
+    eval = new_eval(&context, &resolver);
+    resolver.enabled = false;
+    check(crust_eval_import(eval, named(unit, "a"), a) &&
+              crust_eval_import(eval, named(unit, "b"), b),
+          "distinct providers can use one link name with distinct signatures");
+    check(crust_eval_function(eval, named(unit, "a"), &first) && first(-42) == -42 &&
+              crust_eval_function(eval, named(unit, "b"), &second) &&
+              second(UINT64_MAX) == UINT64_MAX,
+          "explicit imports preserve typed calls without ambient resolution");
+    check(crust_eval_import(eval, named(unit, "a"), a), "same explicit import is idempotent");
+    check(!crust_eval_import(eval, named(unit, "a"), b) &&
+              strstr(context.error, "already bound") != NULL,
+          "explicit imports cannot change provider");
+    copy = *named(unit, "a");
+    check(!crust_eval_import(eval, &copy, b), "declaration copies retain their imported identity");
+    check(!crust_eval_import(eval, named(unit, "bad"), a) &&
+              strstr(context.error, "conflicting native ABI") != NULL,
+          "one native address cannot acquire conflicting import signatures");
+    check(resolver.lookups == 0, "explicit imports never use the ambient resolver");
+    crust_eval_destroy(eval);
+    crust_context_destroy(&context);
+}
+
 static void test_native_identity(void)
 {
     const char *text = "extern fn a(p:*u8)->u64=\"shared\";"
@@ -1003,6 +1046,7 @@ int main(void)
     test_reentry();
     test_evaluation_depth();
     test_native_identity();
+    test_explicit_imports();
     test_jumps();
     test_native_type_graph();
     test_callback_types();

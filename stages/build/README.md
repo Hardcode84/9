@@ -33,18 +33,19 @@ The C backend's consumer interface is available after setup.
 Select another stage with the same session:
 
 ```crust
-if !stage_load(stages, "stages/ownership/package.crs") { return 1i32; };
 host_source(run, "../../stages/ownership/api.crs");
+if !stage_import(stages, "stages/ownership/package.crs") { return 1i32; };
 ```
 
 Load that stage's consumer declarations before calling its functions. The
 stage's package selects its implementation inputs. The root selects its use.
-Paths passed to `stage_load` start at the package base given to `stage_open`.
+Paths passed to `stage_import` start at the package base given to `stage_open`.
 An absolute manifest path can select code outside that base.
 
 `stage_library(stages, path)` returns the validated artifact path without
 loading it. Use this form when another native image must link against the
-stage. Call `crust_run_link` to load the returned path for root calls.
+stage. Call `crust_run_open` to obtain a handle, then bind the selected
+interface or callback. Loading alone publishes no symbols.
 
 ## Define a package
 
@@ -262,7 +263,8 @@ that the root has already captured with `stage_init` and `stage_include`.
 The root can configure its compiler and toolchain before this call. Keep the
 captured sources and configuration live through return. Both entry points
 capture dependencies and use the same cache and compiler-depth rules.
-Loading the returned library remains an explicit `crust_run_link` operation.
+Open the returned library with `crust_run_open`. Bind each selected callback
+through `stage_native_callback(root, library, prototype_name, entry, output)`.
 
 ## Build an application
 
@@ -293,3 +295,21 @@ Custom roots can call `application_backend(root, session, result, emit)` and
 `application_load(session, result, manifest)` directly. They can then pass
 `result.emit` to their selected frontend. These calls use the same selection and
 cache code as the application helper.
+
+## Native providers
+
+Load consumer declarations before `stage_import(session, manifest)`. This call
+builds the package and binds the root's declared subset of its exported interface
+to that library. Exports without a root declaration remain accessible through a
+library handle. Declaring an extern after the import does not bind it.
+
+For two providers with the same export name, open each package with
+`crust_run_open(root, stage_library(session, manifest))`. Use `host_import` to
+load a consumer interface from that handle, or `stage_native_callback` to obtain
+a typed callback. The callback helper takes an existing prototype name, a native
+export name, and storage for the function value. It imports a separate declaration
+for each callback. Backend and package compiler selection use this path.
+
+The root owns all library handles until it ends. An imported function keeps its
+provider. A second import cannot replace it. The source runner reports missing
+exports and provider conflicts at the import operation.

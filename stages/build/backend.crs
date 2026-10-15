@@ -32,8 +32,14 @@ fn application_backend(
             if root -> argc < count {
                 return native_error(root -> context, "--backend requires PACKAGE ENTRY");
             }
-            if !stage_load(stages, root -> argv[1usize]) || !stage_native_callback(
+            var path: *u8 = stage_library(stages, root -> argv[1usize]);
+            if path == null(*u8) {
+                return false;
+            }
+            var library: *u8 = crust_run_open(root, path);
+            if library == null(*u8) || !stage_native_callback(
                 root,
+                library,
                 "application_output_abi",
                 root -> argv[2usize],
                 &result -> emit as *u8
@@ -90,6 +96,5 @@ fn application_load(stages: *StageSession, backend: *ApplicationBackend, manifes
         package.entry = selected.entry;
         package.toolchain = selected.toolchain;
     }
-    var path: *u8 = stage_package_library(stages, &package);
-    return path != null(*u8) && crust_run_link(stages -> root, path);
+    return stage_import_package(stages, &package);
 }

@@ -34,8 +34,7 @@ def string(value):
 def compilation_root(target, library, allocator_checks=False):
     prefix = (
         f'host_source(run, {string(ROOT / "api/crust0_stage.crs")});\n'
-        f'host_source(run, {string(ROOT / "stages/c/api.crs")});\n'
-        f"host_link(run, {string(library)});\n"
+        f'host_import(run,host_open(run,{string(library)}),{string(ROOT / "stages/c/api.crs")});\n'
     )
     allocation = "crust_context_init(&target_context, null(*CrustAllocator));\n"
     release = ""
@@ -144,10 +143,12 @@ class Suite:
 
     def host_unit_source(self, name, body, native=False):
         path = self.write(name + "-unit.crs", body)
-        prefix = f"host_link(run, {string(self.native)});\n" if native else ""
-        return (
-            prefix + f"host_source(run, {string(path)});\nreturn main((*run).argc, (*run).argv);\n"
+        load = (
+            f'host_source(run,{string(path)});host_bind(run,host_open(run,{string(self.native)}),"native_callback");\n'
+            if native
+            else f"host_source(run,{string(path)});\n"
         )
+        return load + "return main((*run).argc,(*run).argv);\n"
 
     def host_unit(self, name, body, expected=0, native=False):
         return self.root(
@@ -315,7 +316,7 @@ def check_runtime(suite, jobs=4):
     suite.native_library()
     suite.root(
         "full-runtime",
-        f'host_link(run,{string(suite.native)}); host_source(run,{string(ROOT / "tests/runtime.crs")}); '
+        f'host_import(run,host_open(run,{string(suite.native)}),{string(ROOT / "tests/runtime.crs")}); '
         "return main((*run).argc,(*run).argv);",
         ["runtime-witness"],
     )
@@ -332,7 +333,7 @@ def check_runtime(suite, jobs=4):
             "callback-error",
             'extern fn absent()->i32="crust_callback_missing_symbol";',
             "return absent();",
-            b"unresolved native symbol",
+            b"unresolved host symbol",
         ),
     ):
         body = (
@@ -390,8 +391,9 @@ def check_runtime(suite, jobs=4):
     for index, statement in enumerate(dynamic):
         path = suite.write(
             f"native-trap-{index}.crs",
-            f"host_link(run,{string(suite.native)});"
-            'extern fn native_i32(value:i32)->i32="native_i32";' + statement,
+            f"var provider:*u8=host_open(run,{string(suite.native)});"
+            'extern fn native_i32(value:i32)->i32="native_i32";'
+            'host_bind(run,provider,"native_i32");' + statement,
         )
         trap_cases.append(([suite.runner, path], b"required execution trap"))
     check_traps(suite, trap_cases, jobs)
@@ -515,7 +517,11 @@ extern fn first_executor(current:*CrustRun,user:*u8,action:*u8)->bool="first_exe
 """
     suite.root(
         "reader-state-native",
-        f"host_link(run,{string(library)});\n" + state + declarations + setup,
+        f"var provider:*u8=host_open(run,{string(library)});\n"
+        + state
+        + declarations
+        + 'host_bind(run,provider,"first_reader");host_bind(run,provider,"first_executor");'
+        + setup,
         stdout=b"AB",
     )
 
@@ -634,7 +640,7 @@ def check_foreign_errors(suite):
         "missing-native-symbol",
         'extern fn absent()->i32="crust_test_absent_symbol"; return absent();',
         expected=1,
-        diagnostic=b"unresolved native symbol",
+        diagnostic=b"unresolved host symbol",
     )
     suite.root(
         "native-signature-conflict",
@@ -653,13 +659,13 @@ def check_foreign_errors(suite):
     )
     suite.root(
         "missing-library",
-        'host_link(run,"no-such-library.plugin");',
+        'host_open(run,"no-such-library.plugin");',
         expected=1,
         diagnostic=b"cannot load native input",
     )
     suite.root(
         "no-implicit-loader-search",
-        'crust_run_link(run,"libc.so.6");',
+        'crust_run_open(run,"libc.so.6");',
         expected=1,
         diagnostic=b"error:",
     )
@@ -686,17 +692,43 @@ def check_foreign_errors(suite):
             ]
         )
         libraries.append(library)
-    code = "".join(f"host_link(run,{string(path)});" for path in libraries)
-    suite.root(
-        "ambiguous-native-symbol",
-        code + 'extern fn value()->i32="shared_symbol"; return value();',
-        expected=1,
-        diagnostic=b"ambiguous native symbol",
+    code = (
+        f"var first:*u8=host_open(run,{string(libraries[0])});"
+        f"var second:*u8=host_open(run,{string(libraries[1])});"
     )
     suite.root(
-        "resolved-native-address-stays-fixed",
-        f'host_link(run,{string(libraries[0])}); extern fn value()->i32="shared_symbol";'
-        f"if value()!=0i32{{return 1i32;}}; host_link(run,{string(libraries[1])}); return value();",
+        "loaded-exports-are-not-global",
+        code + 'extern fn value()->i32="shared_symbol";return value();',
+        expected=1,
+        diagnostic=b"unresolved host symbol",
+    )
+    suite.root(
+        "qualified-native-symbols",
+        code + 'extern fn a()->i32="shared_symbol";extern fn b()->i32="shared_symbol";'
+        'host_bind(run,first,"a");host_bind(run,second,"b");'
+        "if a()!=0i32 || b()!=1i32{return 2i32;};return a();",
+    )
+    suite.root(
+        "native-import-before-later-library-load",
+        f"var first:*u8=host_open(run,{string(libraries[0])});"
+        'extern fn a()->i32="shared_symbol";host_bind(run,first,"a");'
+        "if a()!=0i32{return 2i32;};"
+        f"var second:*u8=host_open(run,{string(libraries[1])});"
+        'extern fn b()->i32="shared_symbol";host_bind(run,second,"b");'
+        "if b()!=1i32{return 3i32;};return a();",
+    )
+    suite.root(
+        "native-import-cannot-rebind",
+        code + 'extern fn a()->i32="shared_symbol";host_bind(run,first,"a");'
+        'host_bind(run,second,"a");return 0i32;',
+        expected=1,
+        diagnostic=b"native import is already bound",
+    )
+    suite.root(
+        "library-import-has-no-host-fallback",
+        code + 'extern fn output(text:*u8)->i32="puts";host_bind(run,first,"output");',
+        expected=1,
+        diagnostic=b"library does not export",
     )
 
 
@@ -711,9 +743,8 @@ def check_target(suite):
     assert result.stdout == prepared.stdout and response.read_bytes() == reference.read_bytes()
     prefix = (
         f'host_source(run,{string(ROOT / "api/crust0_stage.crs")});\n'
-        f'host_source(run,{string(ROOT / "stages/c/api.crs")});\n'
+        f'host_import(run,host_open(run,{string(suite.backend)}),{string(ROOT / "stages/c/api.crs")});\n'
         f'host_source(run,{string(ROOT / "stages/c/build.crs")});\n'
-        f"host_link(run,{string(suite.backend)});\n"
         f"var captured:*CrustSource=host_input(run,{string(target)},1u64);\n"
     )
     reader = READER_PREFIX.replace(
@@ -932,6 +963,8 @@ def check_examples(suite):
     assert suite.command([output / "composition"]).stdout == b"!B"
 
     hello = compile_example("hello")
+    assert suite.command([output / "hello"]).stdout == b"Hello, world!\n"
+    compile_example("hello", ["--backend", "stages/c/package.crs", "c_backend_build"])
     assert suite.command([output / "hello"]).stdout == b"Hello, world!\n"
     compile_example("multiple-files")
     assert suite.command([output / "multiple-files"]).stdout == b"Hello from another source file!\n"

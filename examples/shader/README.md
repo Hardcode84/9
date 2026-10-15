@@ -77,7 +77,7 @@ foreign declarations for these functions.
 host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
-if stages == null(*StageSession) || !stage_load(stages, "stages/shader/package.crs") {
+if stages == null(*StageSession) || !stage_import(stages, "stages/shader/package.crs") {
     return 1i32;
 };
 host_source(run, "../../stages/shader/model.crs");

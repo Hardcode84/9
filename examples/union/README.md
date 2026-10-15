@@ -32,7 +32,7 @@ var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
 host_source(run, "../../stages/union/api.crs");
 host_source(run, "../../stages/union/build.crs");
-if !stage_load(stages, "stages/union/package.crs") { return 1i32; };
+if !stage_import(stages, "stages/union/package.crs") { return 1i32; };
 ```
 
 `union_build` receives the source range and command-line arguments. This example

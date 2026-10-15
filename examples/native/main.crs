@@ -8,11 +8,11 @@ var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) {
     return 1i32;
 };
+host_source(run, "../../api/crust0_x64.crs");
 var assembly: *u8 = stage_library(stages, "stages/asm/package.crs");
-if assembly == null(*u8) || !crust_run_link(run, assembly) {
+if assembly == null(*u8) || !stage_import(stages, "stages/asm/package.crs") {
     return 1i32;
 };
-host_source(run, "../../api/crust0_x64.crs");
 host_source(run, "../../stages/native/api.crs");
 host_source(run, "../../stages/native/asm.crs");
 host_source(run, "../../stages/native/bootstrap.crs");

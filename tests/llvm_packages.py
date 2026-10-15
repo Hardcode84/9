@@ -75,9 +75,9 @@ def run_packages(build, llvm=None):
         f'var session:*StageSession=stage_open(run,{quote(ROOT)},{quote(build / "stage-cache")});\n'
         "if session==null(*StageSession){return 1i32;};\n"
         "var library:*u8=stage_library(session,run->argv[0usize]);\n"
-        "if library==null(*u8) || !crust_run_link(run,library){return 1i32;};\n"
+        "if library==null(*u8) || crust_run_open(run,library)==null(*u8){return 1i32;};\n"
         "if crust0_host_write_stream(1u32,library,native_strlen(library))!=0i32{return 1i32;};\n"
-        'extern fn answer()->i32="answer";\nreturn answer();\n'
+        'extern fn answer()->i32="answer";\nhost_bind(run,crust_run_open(run,library),"answer");\nreturn answer();\n'
     )
     artifacts = []
     for generation in (1, 2, 3):

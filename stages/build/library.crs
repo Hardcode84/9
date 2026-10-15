@@ -131,10 +131,11 @@ fn stage_open(root: *CrustRun, base: *u8, directory: *u8) -> *StageSession {
         return null(*StageSession);
     }
     var artifact: CacheArtifact = uninit;
-    if !stage_artifact(session, &package, true, &artifact) || !crust_run_link(
-        root,
-        artifact.path
-    ) {
+    if !stage_artifact(session, &package, true, &artifact) {
+        return null(*StageSession);
+    }
+    var library: *u8 = crust_run_open(root, artifact.path);
+    if library == null(*u8) || !stage_bind_exports(root, library, package.exports) {
         return null(*StageSession);
     }
     session -> backend = artifact.path;
@@ -167,9 +168,91 @@ fn stage_package_library(session: *StageSession, package: *StagePackage) -> *u8 
     return artifact.path;
 }
 
-fn stage_load(session: *StageSession, manifest: *u8) -> bool {
-    var path: *u8 = stage_library(session, manifest);
-    return path != null(*u8) && crust_run_link(session -> root, path);
+// Bind the package's exported interface to declarations already loaded by the root.
+fn stage_import(session: *StageSession, manifest: *u8) -> bool {
+    var package: StagePackage = uninit;
+    stage_init(&package, session -> root, session -> base);
+    if !stage_include(&package, manifest) {
+        return false;
+    }
+    return stage_import_package(session, &package);
+}
+
+fn stage_import_package(session: *StageSession, package: *StagePackage) -> bool {
+    var path: *u8 = stage_package_library(session, package);
+    if path == null(*u8) {
+        return false;
+    }
+    var library: *u8 = crust_run_open(session -> root, path);
+    return library != null(*u8) && stage_bind_exports(
+        session -> root,
+        library,
+        package -> exports
+    );
+}
+
+// Bind the root's declared subset of this package interface to one provider.
+fn stage_bind_exports(root: *CrustRun, library: *u8, exports: *StageName) -> bool {
+    var names: CrustMap = make CrustMap {
+        entries: null(*CrustMapEntry),
+        count: 0usize,
+        capacity: 0usize
+    };
+    var item: *StageName = exports;
+    while item != null(*StageName) {
+        var name: *CrustName = crust_try_intern(
+            root -> context,
+            item -> link,
+            native_strlen(item -> link)
+        );
+        if name == null(*CrustName) || !crust_try_map_set(
+            root -> context,
+            &names,
+            name as usize,
+            item as *u8
+        ) {
+            return false;
+        }
+        item = item -> next;
+    }
+    var unit_value: *CrustUnit = root -> context -> units;
+    while unit_value != null(*CrustUnit) {
+        if !stage_bind_unit(root, library, unit_value, &names) {
+            return false;
+        }
+        unit_value = unit_value -> next;
+    }
+    return true;
+}
+
+fn stage_bind_unit(
+    root: *CrustRun,
+    library: *u8,
+    unit_value: *CrustUnit,
+    names: *CrustMap
+) -> bool {
+    var declaration: *CrustDecl = unit_value -> declarations;
+    while declaration != null(*CrustDecl) {
+        if declaration -> kind == CRUST_D_EXTERN {
+            var name: *CrustName = crust_try_intern(
+                root -> context,
+                declaration -> link_name,
+                native_strlen(declaration -> link_name)
+            );
+            if name == null(*CrustName) {
+                return false;
+            }
+            if crust_map_get(names, name as usize) != null(*u8) && !crust_run_import(
+                root,
+                library,
+                declaration
+            ) {
+                return false;
+            }
+        }
+        declaration = declaration -> next;
+    }
+    return true;
 }
 
 fn stage_export_inputs(
@@ -220,7 +303,11 @@ fn stage_compiler_load(
     var path: *u8 = stage_library(session, package -> compiler);
     var root: *CrustRun = session -> root;
     var context: *CrustContext = root -> context;
-    if path == null(*u8) || !cache_input(context, inputs, path) || !crust_run_link(root, path) {
+    if path == null(*u8) || !cache_input(context, inputs, path) {
+        return false;
+    }
+    var library: *u8 = crust_run_open(root, path);
+    if library == null(*u8) {
         return false;
     }
     if !stage_selection_input(context, inputs, "stage-compiler-entry", package -> entry) {
@@ -228,17 +315,19 @@ fn stage_compiler_load(
     }
     if !stage_native_callback(
         root,
+        library,
         "stage_compiler_abi",
         package -> entry,
         &build -> compile as *u8
     ) {
         return false;
     }
-    return stage_toolchain_load(root, package, inputs, build, toolchain);
+    return stage_toolchain_load(root, library, package, inputs, build, toolchain);
 }
 
 fn stage_toolchain_load(
     root: *CrustRun,
+    library: *u8,
     package: *StagePackage,
     inputs: *CacheInputs,
     build: *StageBuild,
@@ -254,6 +343,7 @@ fn stage_toolchain_load(
     var prepare: fn(*StageToolchain) -> bool = null(fn(*StageToolchain) -> bool);
     if !stage_native_callback(
         root,
+        library,
         "stage_toolchain_abi",
         package -> toolchain,
         &prepare as *u8
@@ -274,7 +364,13 @@ fn stage_toolchain_load(
     return true;
 }
 
-fn stage_native_callback(root: *CrustRun, prototype_name: *u8, entry: *u8, output: *u8) -> bool {
+fn stage_native_callback(
+    root: *CrustRun,
+    library: *u8,
+    prototype_name: *u8,
+    entry: *u8,
+    output: *u8
+) -> bool {
     var context: *CrustContext = root -> context;
     var name: *CrustName = crust_try_intern(
         context,
@@ -298,7 +394,11 @@ fn stage_native_callback(root: *CrustRun, prototype_name: *u8, entry: *u8, outpu
     declaration -> identity = 0u64;
     declaration -> unit_identity = 0u64;
     declaration -> link_name = entry;
-    return crust_eval_function(root -> eval, declaration, output);
+    return crust_run_import(root, library, declaration) && crust_eval_function(
+        root -> eval,
+        declaration,
+        output
+    );
 }
 
 fn stage_link_inputs(context: *CrustContext, inputs: *CacheInputs, directory: *u8) -> bool {

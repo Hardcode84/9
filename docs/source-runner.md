@@ -214,7 +214,7 @@ available compiler configuration, then installs the execution stage for
 subsequent compilation code. The backend can compile its next generation
 explicitly. Bootstrap policy stays in Crust code.
 
-`host_link` only loads native code. It does not select a new root executor.
+`host_open` only loads native code. It does not select a new root executor.
 A complete bootstrap must also install the operations that execute later
 code, with explicit state and code lifetimes. The action performing the
 handoff finishes under its captured operations. Later actions use the new
@@ -239,7 +239,9 @@ The installed Crust helper library provides four operations:
 | `host_path(run, path)` | Root-relative absolute path copied into the host arena |
 | `host_input(run, path, identity)` | Captured source descriptor, path, and bytes in that arena |
 | `host_source(run, path)` | Read and check one complete host declaration unit |
-| `host_link(run, path)` | Check the native API digest and load one exact shared-library path for host calls |
+| `host_open(run, path)` | Validate and retain a library; return its handle |
+| `host_import(run, library, path)` | Load an interface and bind its externs to the library |
+| `host_bind(run, library, name)` | Bind one checked extern declaration to the library |
 
 Relative paths start at the directory of the root operand. They do not change
 after a host working-directory change. The root operand's directory is used
@@ -272,7 +274,7 @@ one translation unit:
 CRUST_ABI_EXPORT;
 ```
 
-`host_link` and `crust_run_link` reject a missing marker or a digest mismatch
+`host_open` and `crust_run_open` reject a missing marker or a digest mismatch
 before the runner can resolve calls into the library. The diagnostic names the
 library. Rebuild the library with the current generated API. Extra markers for
 other public headers must also match. The check covers the compiler's public
@@ -280,17 +282,27 @@ API. User-defined stage interfaces remain the caller's ABI contract. Native
 libraries are trusted code; system loader constructors run during `dlopen`.
 
 Native libraries use immediate symbol binding and local loader visibility.
-They remain loaded through runner destruction. The default resolver searches
-the process and explicitly loaded libraries. At first resolution, different
-addresses for the same native name are an error. The resolved address then
-stays fixed for the evaluator's lifetime, including after a later library load.
-An unresolved requested name is an error.
-Extern declarations can precede `host_link`: symbol lookup occurs when the
-function value is needed. Native declarations with one link name must have
-compatible scalar ABI types, including when they are not called.
+They remain loaded through runner destruction. Loading a library publishes no
+symbols to the evaluator. Unbound extern declarations use the predefined process
+host interface, which supplies the seed API and system C functions.
 
-Only shared libraries are input to `host_link`. The direct `crust_run_link` API
-requires a path containing `/`; it does not search for a bare library name.
+`host_open(run, path)` returns a library handle. `host_import(run, library, path)`
+loads an interface and binds its extern declarations to that library.
+`host_bind(run, library, name)` binds one already checked extern declaration by
+its Crust name. Its link name selects the export. A missing export is an error,
+including when another library or a library dependency supplies that name.
+
+Bindings are immutable. Bind before taking a function value or making a call.
+A later library load cannot change a binding. Different providers can export
+the same name. Give their declarations distinct Crust names, or use a stage
+helper to return separate typed callbacks. Imports of one native address must
+agree on the mapped scalar ABI. The provider must uphold that ABI; symbol lookup
+cannot verify a native function signature.
+
+The C APIs are `crust_run_open`, `crust_run_import`, and `crust_run_import_unit`.
+A handle belongs to its runner. Complete calls before runner destruction.
+Only shared libraries are input to `host_open`. `crust_run_open` requires a path
+containing `/`; it does not search for a bare library name.
 Preparing an object, archive,
 or changed native library is an explicit build operation in source. The
 launcher does not invoke a hidden compiler or linker to prepare root actions.

@@ -8,6 +8,7 @@
 
 typedef struct CrustRun CrustRun;
 typedef struct CrustRunState CrustRunState;
+typedef struct CrustLibrary CrustLibrary;
 
 /* A runner borrows its source and context through destruction. Readers advance
    cursor and return a non-null action, return null at source EOF, or set returned
@@ -50,11 +51,14 @@ bool crust_run_execute(CrustRun *run, void *user, void *action);
 /* Check only this owned unit and prepare its host declarations. The unit must
    already be linked into context. Reject root-local name conflicts. */
 bool crust_run_check_unit(CrustRun *run, CrustUnit *unit_value);
-/* Load an explicit native path containing '/'. Require this package's generated
-   API digest on the library itself. Keep its code live through runner destruction.
-   Check symbol conflicts on first resolution; a resolved callable keeps its
-   address for the evaluator lifetime. */
-bool crust_run_link(CrustRun *run, const char *path);
+/* Load an explicit shared-library path containing '/'. Check its API digest.
+   Retain the library through runner destruction. Loading publishes no symbols. */
+CrustLibrary *crust_run_open(CrustRun *run, const char *path);
+/* Bind a checked extern to its exact export in this library. No host or other
+   library fallback. The library must belong to run. Bindings are immutable. */
+bool crust_run_import(CrustRun *run, CrustLibrary *library, CrustDecl *declaration);
+/* Check a unit and bind its extern declarations to this provider. */
+bool crust_run_import_unit(CrustRun *run, CrustLibrary *library, CrustUnit *unit_value);
 /* Print a retained diagnostic with its original source location. */
 void crust_run_diagnostic(const CrustContext *context);
 

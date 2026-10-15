@@ -4,12 +4,12 @@ host_source(run, "../../stages/build/load.crs");
 if !stage_setup(run, "../..") {
     return 1i32;
 };
-var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
-if stages == null(*StageSession) || !stage_load(stages, "stages/shader/package.crs") {
-    return 1i32;
-};
 host_source(run, "../../stages/shader/model.crs");
 host_source(run, "../../stages/shader/api.crs");
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) || !stage_import(stages, "stages/shader/package.crs") {
+    return 1i32;
+};
 extern fn puts(text: *u8) -> i32 = "puts";
 if run -> argc != 3i32 && run -> argc != 4i32 && run -> argc != 5i32 {
     puts(

@@ -208,7 +208,7 @@ def check_loaded_inputs(suite):
     root, cache, _, _ = suite.fixture("loaded-library")
     library = root.parent / "provider.so"
     source = root.read_text()
-    source = f"host_link(run,{quoted(library)});\n" + source
+    source = f"host_open(run,{quoted(library)});\n" + source
     source = source.replace(
         "var result:CacheArtifact=uninit;",
         """

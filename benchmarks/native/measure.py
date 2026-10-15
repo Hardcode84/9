@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import random
+import re
 import resource
 import statistics
 import struct
@@ -37,7 +38,7 @@ BOOTSTRAP = """
     var image:*NativeImage=native_image((*run).context,&session);
     if image!=null(*NativeImage) &&
        native_prepare(run,&context,&sources[0usize],17usize,&exports[0usize],4usize) &&
-       native_asm_image(&context,&session,image) && crust_run_link(run,(*image).library) {
+       native_asm_image(&context,&session,image) && host_bind(run,crust_run_open(run,image->library),"native_start") {
         if bench_clock(1i32,&ready)!=0i32 {return 90i32;}
         status=native_start(run,&session);
         if bench_clock(1i32,&done)!=0i32 {return 90i32;}
@@ -65,7 +66,10 @@ def roots(workload, directory, build, backend="prepared", source_root=ROOT):
         ]
         combined = directory / "assembly-stage.crs"
         combined.write_bytes(b"\n".join(path.read_bytes() for path in paths))
-        source = source.replace('host_link(run, "../../build/crust-asm-library.so");\n', "")
+        source, count = re.subn(
+            r"var assembly:.*?;\s*if assembly.*?};", "", source, count=1, flags=re.S
+        )
+        assert count == 1
         source = source.replace(
             'host_source(run, "../../api/crust0_x64.crs");', f"host_source(run, {quote(combined)});"
         )
@@ -74,18 +78,20 @@ def roots(workload, directory, build, backend="prepared", source_root=ROOT):
         )
         source = source.replace("[*u8; 17]", "[*u8; 21]").replace("17usize", "21usize")
         source = source.replace("[*u8; 4]", "[*u8; 5]").replace(
-            '"native_start", "native_c_image", "c_program", "c_backend_build"',
-            '"native_start", "native_c_image", "c_program", "c_backend_build", "native_asm_image"',
+            '    "native_start",', '    "native_asm_image",\n    "native_start",'
         )
-        source = source.replace("&exports[0usize], 4usize", "&exports[0usize], 5usize")
-        source = source.replace(
-            'var libraries: [*u8; 1] = make [*u8; 1] { host_path(run, "../../build/crust-asm-library.so") };',
-            'extern fn bench_native_asm(context:*CrustContext, session:*NativeSession, image:*NativeImage)->bool="native_asm_image";',
+        source = source.replace("4usize", "5usize")
+        source, count = re.subn(
+            r"var libraries:.*?\n};",
+            'extern fn bench_native_asm(context:*CrustContext,session:*NativeSession,image:*NativeImage)->bool="native_asm_image";\n'
+            "var libraries:[*u8;1]=make [*u8;1]{stages->backend};",
+            source,
+            count=1,
+            flags=re.S,
         )
-        source = source.replace(
-            "libraries: &libraries[0usize], library_count: 1usize",
-            "libraries: null(**u8), library_count: 0usize",
-        )
+        assert count == 1
+        source = source.replace("library_count: 2usize", "library_count: 1usize")
+    source = source.replace('"../.."', quote(source_root))
     source = source.replace('"../../', f'"{source_root}/')
     source = source.replace(f'"{source_root}/build"', quote(directory))
     source = source.replace(
@@ -93,15 +99,19 @@ def roots(workload, directory, build, backend="prepared", source_root=ROOT):
     )
     source = source.replace("record BuildState", CLOCK + "record BuildState")
     count, exports = (21, 5) if backend == "source" else (17, 4)
-    old = f"var status: i32 = native_bootstrap(run, &session, &sources[0usize], {count}usize, &exports[0usize], {exports}usize);"
-    assert source.count(old) == 1
+    pattern = (
+        r"var status:\s*i32\s*=\s*native_bootstrap\(\s*run,\s*&session,"
+        rf"\s*&sources\[0usize\],\s*{count}usize,\s*&exports\[0usize\],\s*{exports}usize\s*\);"
+    )
     bootstrap = BOOTSTRAP.replace("17usize", f"{count}usize").replace("4usize", f"{exports}usize")
     if backend == "source":
         bootstrap = bootstrap.replace(
             "status=native_start(run,&session);",
+            'if !host_bind(run,crust_run_open(run,image->library),"bench_native_asm"){return 1i32;}\n'
             "session.compile=bench_native_asm;\n        status=native_start(run,&session);",
         )
-    source = source.replace(old, bootstrap)
+    source, replacements = re.subn(pattern, lambda _: bootstrap, source)
+    assert replacements == 1
     source = source.replace(
         "var status: i32 = c_program(&request, c_backend_build);",
         """

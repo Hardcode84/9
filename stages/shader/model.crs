@@ -31,7 +31,7 @@ record ShaderResource {
 // Only dispatched invocations write status.
 // The caller enforces the dispatch bound; the entry does not check it.
 // CHECKED execution uses a separate status buffer of invocations u32 elements.
-// RAW execution requires valid arithmetic and accesses; it has no status/cleanup.
+// RAW execution requires valid arithmetic and accesses; it has no status or automatic initialization.
 record ShaderConfig {
     resources: *ShaderResource;
     entry: *u8;

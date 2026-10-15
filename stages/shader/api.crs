@@ -10,10 +10,10 @@ extern fn shader_build(
     output: *u8
 ) -> bool = "shader_build";
 
-// Add device declarations before collection. Retain config through emission.
+// Add device declarations before collection. Retain resource/execution configuration through emission.
 // The returned unit identifies the declarations; null reports a context diagnostic.
 extern fn shader_prepare(context: *CrustContext, config: *ShaderConfig, identity: u64) -> *CrustUnit = "shader_prepare";
-// Require collected, resolved, checked units and the unchanged prepared config.
+// Require collected, resolved, checked units and the unchanged prepared resource/execution configuration.
 // Emit device-checked LLVM source into context-owned storage.
 extern fn shader_emit(
     context: *CrustContext,

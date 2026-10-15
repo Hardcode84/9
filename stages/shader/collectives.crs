@@ -1,0 +1,165 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn sp_collective(stage: *SpStage, declaration: *CrustDecl) -> bool {
+    return declaration == stage -> barrier || crust_map_get(
+        &stage -> collective,
+        declaration as usize
+    ) != null(*u8);
+}
+fn sp_call_participation(stage: *SpStage, declaration: *CrustDecl, uniform: bool) -> bool {
+    if !sp_collective(stage, declaration) {
+        return true;
+    }
+    if !uniform {
+        return sp_error(stage, "collective call requires a uniform statement context");
+    }
+    return crust_try_map_set(
+        ll_context(&stage -> llvm),
+        &stage -> collective,
+        stage -> current as usize,
+        stage -> current as *u8
+    );
+}
+fn sp_collective_result(stage: *SpStage, declaration: *CrustDecl) -> bool {
+    if !sp_collective(stage, declaration) {
+        return true;
+    }
+    if declaration -> type -> base -> kind != CRUST_T_UNIT || crust_map_get(
+        &stage -> early_returns,
+        declaration as usize
+    ) != null(*u8) {
+        return sp_error(stage, "collective helpers require unit result and no early returns");
+    }
+    return true;
+}
+fn sp_counter_name(expression: *CrustExpr, counter: *CrustSymbol) -> bool {
+    while expression != null(*CrustExpr) && expression -> kind == CRUST_E_GROUP {
+        expression = expression -> left;
+    }
+    return expression != null(*CrustExpr) && expression -> kind == CRUST_E_NAME && expression -> symbol == counter;
+}
+fn sp_counter_step(statement: *CrustStmt, counter: *CrustSymbol) -> bool {
+    if statement -> kind != CRUST_S_ASSIGN || !sp_counter_name(statement -> expr, counter) {
+        return false;
+    }
+    var value: *CrustExpr = statement -> value;
+    if value -> kind != CRUST_E_BINARY || value -> op != CRUST_OP_ADD || !sp_counter_name(
+        value -> left,
+        counter
+    ) {
+        return false;
+    }
+    return value -> right -> kind == CRUST_E_INTEGER && value -> right -> integer == 1u64;
+}
+fn sp_counter_body(
+    stage: *SpStage,
+    statement: *CrustStmt,
+    counter: *CrustSymbol,
+    step: *CrustStmt
+) -> bool {
+    if statement == null(*CrustStmt) {
+        return true;
+    }
+    if stage -> depth >= 512usize {
+        return sp_error(stage, "collective loop depth exceeded");
+    }
+    stage -> depth = stage -> depth + 1usize;
+    var valid: bool = true;
+    var item: *CrustStmt = statement;
+    while item != null(*CrustStmt) && valid {
+        valid = sp_counter_statement(stage, item, counter, step);
+        item = item -> next;
+    }
+    stage -> depth = stage -> depth - 1usize;
+    return valid;
+}
+fn sp_counter_statement(
+    stage: *SpStage,
+    item: *CrustStmt,
+    counter: *CrustSymbol,
+    step: *CrustStmt
+) -> bool {
+    if item -> kind == CRUST_S_BREAK || item -> kind == CRUST_S_CONTINUE || item -> kind == CRUST_S_RETURN {
+        return false;
+    }
+    if item != step && item -> kind == CRUST_S_ASSIGN && sp_counter_name(item -> expr, counter) {
+        return false;
+    }
+    return sp_counter_body(stage, item -> body, counter, step) && sp_counter_body(
+        stage,
+        item -> otherwise,
+        counter,
+        step
+    );
+}
+fn sp_counted_loop(stage: *SpStage, previous: *CrustStmt, loop: *CrustStmt) -> bool {
+    if previous == null(*CrustStmt) || previous -> kind != CRUST_S_VAR || previous -> uninitialized {
+        return false;
+    }
+    if previous -> symbol -> type -> kind != CRUST_T_U32 || previous -> value -> kind != CRUST_E_INTEGER {
+        return false;
+    }
+    var condition: *CrustExpr = loop -> expr;
+    if condition -> kind != CRUST_E_BINARY || condition -> op != CRUST_OP_LT {
+        return false;
+    }
+    if !sp_counter_name(condition -> left, previous -> symbol) || condition -> right -> kind != CRUST_E_INTEGER {
+        return false;
+    }
+    var last: *CrustStmt = loop -> body -> body;
+    if last == null(*CrustStmt) {
+        return false;
+    }
+    while last -> next != null(*CrustStmt) {
+        last = last -> next;
+    }
+    return sp_counter_step(last, previous -> symbol) && sp_counter_body(
+        stage,
+        loop -> body,
+        previous -> symbol,
+        last
+    );
+}
+fn sp_scan_loops(stage: *SpStage, body: *CrustStmt) -> bool {
+    if body == null(*CrustStmt) {
+        return true;
+    }
+    if stage -> depth >= 512usize {
+        return sp_error(stage, "collective loop depth exceeded");
+    }
+    stage -> depth = stage -> depth + 1usize;
+    var previous: *CrustStmt = null(*CrustStmt);
+    var item: *CrustStmt = body;
+    var valid: bool = true;
+    while item != null(*CrustStmt) && valid {
+        if item -> kind == CRUST_S_WHILE && sp_counted_loop(stage, previous, item) {
+            valid = crust_try_map_set(
+                ll_context(&stage -> llvm),
+                &stage -> uniform_loops,
+                item as usize,
+                item as *u8
+            );
+        }
+        valid = valid && sp_scan_loops(stage, item -> body) && sp_scan_loops(
+            stage,
+            item -> otherwise
+        );
+        previous = item;
+        item = item -> next;
+    }
+    stage -> depth = stage -> depth - 1usize;
+    return valid;
+}
+fn sp_uniform_loop(stage: *SpStage, input: *CrustStmt, uniform: bool) -> bool {
+    var child: *CrustStmt = input -> body -> body;
+    if !sp_expression_check(stage, input -> expr, false) {
+        return false;
+    }
+    while child != null(*CrustStmt) {
+        if !sp_statement_check(stage, child, uniform) {
+            return false;
+        }
+        child = child -> next;
+    }
+    return true;
+}

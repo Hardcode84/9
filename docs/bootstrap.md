@@ -590,7 +590,8 @@ units in the same context. Apply source transformations before collection, then
 call `crust_collect`, `crust_resolve`, and `crust_check`.
 
 Call `shader_emit(context, config, builtins, &ir)` with those checked units.
-Keep the prepared configuration unchanged. The result is context-owned LLVM
+Keep the prepared resource and execution configuration unchanged. Tool paths
+can be set before publication; preparation and emission do not require them. The result is context-owned LLVM
 source. `shader_publish(context, config, &ir, output)` invokes the selected tools
 and publishes validated SPIR-V. `shader_build` combines these calls for a source.
 
@@ -606,3 +607,15 @@ zero initialization. Raw execution omits these operations and requires the calle
 to satisfy access, initialization, arithmetic, and synchronization preconditions.
 Failure builtins are rejected in raw code. `SHADER_UNBOUNDED` buffers have no
 header, require length zero, and are available only with raw execution.
+
+### Collective control flow
+
+The device checker records a collective effect for functions that call barriers
+or other collective functions. Such helpers must return `unit` and have no
+early returns. Call them as direct statements in uniform contexts.
+
+Uniform counted loops use an immediately preceding literal-initialized `u32`
+counter, a strict comparison with a literal bound, and one final increment by
+one. Other counter writes and exits are rejected. Failed invocations complete
+these finite loops; ordinary loops retain failure-driven exit. Conditional
+collective calls are rejected. The shader tutorial shows the accepted form.

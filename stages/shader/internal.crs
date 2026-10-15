@@ -5,6 +5,9 @@ record SpStage {
     functions: CrustMap;
     used: CrustMap;
     loop_conditions: CrustMap;
+    collective: CrustMap;
+    early_returns: CrustMap;
+    uniform_loops: CrustMap;
     config: *ShaderConfig;
     builtins: *CrustUnit;
     entry: *CrustDecl;

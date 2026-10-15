@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 from prepare import compile_package
+from shader_collectives import check_collectives
 from shader_composition import check_composition
 from shader_features import check_features
 from shader_policy import check_policy
@@ -80,6 +81,7 @@ def main():
     check_composition(run, compiler, root, llvm, tools, work, native, environment)
     check_features(run, command, tools, source, output, environment)
     check_policy(run, compiler, root, llvm, tools, work, native, environment)
+    check_collectives(run, command, source, output, work, native, environment)
     cases = {
         "exchange": (
             (ROOT / "examples/shader/program.crs").read_text(),
@@ -343,11 +345,7 @@ fn compute()->unit {
     rejected = {
         "divergent barrier": (
             "fn compute()->unit{if shader_local_x()==0u32{shader_barrier();}}",
-            "top-level",
-        ),
-        "helper barrier": (
-            "fn helper()->unit{shader_barrier();}fn compute()->unit{helper();}",
-            "top-level",
+            "uniform statement",
         ),
         "early return": (
             "fn compute()->unit{if shader_local_x()==0u32{return;}shader_barrier();}",
@@ -382,8 +380,8 @@ fn compute()->unit {
     assert output.read_bytes() == previous
     assert not list(work.glob(".crust-*")), "temporary output leaked"
     print(
-        f"Shader: {len(cases)} fixed-size, 4 integer-workgroup and 10 runtime-size Vulkan dispatches, 4 injected enumeration/setup cases, "
-        f"3 malformed inputs, 4 invalid runner options, {len(rejected)} source rejections and failed-tool output preservation passed"
+        f"Shader: 1 composed, 2 raw, 6 collective, {len(cases)} fixed-size, 4 integer-workgroup and 10 runtime-size Vulkan dispatches, 4 injected enumeration/setup cases, "
+        f"3 feature-emission cases, 11 collective rejections, 2 policy rejections, 3 malformed inputs, 4 invalid runner options, {len(rejected)} source rejections and failed-tool output preservation passed"
     )
 
 

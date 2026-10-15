@@ -62,6 +62,9 @@ fn sp_init(stage: *SpStage, context: *CrustContext, config: *ShaderConfig) -> un
     stage -> reachable = false;
     stage -> floating = false;
     stage -> loop_conditions = stage -> llvm.types;
+    stage -> collective = stage -> llvm.types;
+    stage -> early_returns = stage -> llvm.types;
+    stage -> uniform_loops = stage -> llvm.types;
     stage -> config = config;
     stage -> builtins = null(*CrustUnit);
     stage -> entry = null(*CrustDecl);
@@ -109,6 +112,12 @@ fn shader_publish(
     ir: *CrustSource,
     output: *u8
 ) -> bool {
+    if config -> llvm_directory == null(*u8) || config -> validator == null(*u8) {
+        return native_error(
+            context,
+            "shader publication requires an explicit LLVM directory and SPIR-V validator"
+        );
+    }
     var stage: SpStage = uninit;
     sp_init(&stage, context, config);
     c_buffer_bytes(&stage.llvm.memory.header, ir -> bytes, ir -> size);

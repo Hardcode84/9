@@ -171,12 +171,38 @@ Clear the status buffer before a dispatch sequence. Insert storage-buffer memory
 dependencies between dispatches that use the same status range. Earlier writes
 remain visible; this mechanism provides no rollback.
 
-A barrier must be a direct statement in the entry body. Entry returns must
-be the final top-level statement. Helper functions can contain local returns
-and loops. Calls to the entry, recursive calls, and barriers in helpers or
-conditional blocks fail at compilation. These rules keep each barrier on the
-same path for every invocation. As with Vulkan source in general, the caller
-must ensure that code terminates and that concurrent accesses have no races.
+A barrier or a call to a collective helper must be a direct statement in a
+uniform context. A collective helper is a function that calls a barrier or
+another collective helper. It returns `unit` and has no early returns. Its
+optional return must be the final statement. Calls under conditional branches
+are rejected. Entry returns must also be final. Recursive calls and calls to
+the entry are rejected.
+
+A counted loop is uniform when its immediately preceding statement declares a
+`u32` counter with a literal initializer, its condition is `counter < LITERAL`,
+and its final statement is `counter = counter + 1u32`. Its body must have no
+other counter assignments, `break`, `continue`, or `return`. These rules prove
+that every participating invocation executes the same finite number of rounds.
+Nested counted loops follow the same rules. Conditional contexts remain
+nonuniform even when a loop inside them has a fixed count.
+
+```crs
+fn synchronize() -> unit { shader_barrier(); }
+fn compute() -> unit {
+    var round: u32 = 0u32;
+    while round < 4u32 {
+        // Each invocation can update shared data here.
+        synchronize();
+        round = round + 1u32;
+    }
+}
+```
+
+In checked execution, failed invocations complete counted loops and continue
+through collective helpers. Their checked accesses retain the failure rules.
+Other loops stop when invocation failure is set. Helpers without collectives
+can use ordinary local returns and loops. The caller must ensure that ordinary
+loops terminate and that concurrent memory accesses have no races.
 
 `shader_barrier()` waits for the workgroup and orders workgroup, buffer, and
 image memory. Workgroups synchronize with each other through separate Vulkan

@@ -45,16 +45,13 @@ fn sp_call_check(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> b
         ) {
             return sp_error(stage, "failure builtins require checked execution");
         }
-        if declaration == stage -> barrier && !barrier_allowed {
-            return sp_error(
-                stage,
-                "shader barrier must be a direct top-level statement in the entry"
-            );
-        }
     } else {
         if !sp_function_check(stage, declaration) {
             return false;
         }
+    }
+    if !sp_call_participation(stage, declaration, barrier_allowed) {
+        return false;
     }
     var index: usize = 0usize;
     while index < input -> arg_count {
@@ -123,6 +120,14 @@ fn sp_statement_contract(stage: *SpStage, input: *CrustStmt, top: bool) -> bool 
     if kind == CRUST_S_LABEL || kind == CRUST_S_GOTO {
         return sp_error(stage, "shader control flow requires structured if and while statements");
     }
+    if kind == CRUST_S_RETURN && (!top || input -> next != null(*CrustStmt)) {
+        crust_try_map_set(
+            ll_context(&stage -> llvm),
+            &stage -> early_returns,
+            stage -> current as usize,
+            stage -> current as *u8
+        );
+    }
     if kind == CRUST_S_RETURN && stage -> current == stage -> entry && (
         !top || input -> next != null(*CrustStmt)
     ) {
@@ -150,6 +155,11 @@ fn sp_statement_body(stage: *SpStage, input: *CrustStmt, top: bool) -> bool {
     }
     if !sp_statement_contract(stage, input, top) {
         return false;
+    }
+    if kind == CRUST_S_WHILE && crust_map_get(&stage -> uniform_loops, input as usize) != null(
+        *u8
+    ) {
+        return sp_uniform_loop(stage, input, top);
     }
     if kind == CRUST_S_WHILE {
         if !crust_try_map_set(
@@ -196,16 +206,22 @@ fn sp_function_check(stage: *SpStage, declaration: *CrustDecl) -> bool {
     if !crust_try_map_set(context, &stage -> functions, declaration as usize, 1usize as *u8) {
         return false;
     }
+    if !sp_scan_loops(stage, declaration -> body) {
+        return false;
+    }
     var previous: *CrustDecl = stage -> current;
     stage -> current = declaration;
     var child: *CrustStmt = declaration -> body -> body;
     while child != null(*CrustStmt) {
-        if !sp_statement_check(stage, child, declaration == stage -> entry) {
+        if !sp_statement_check(stage, child, true) {
             return false;
         }
         child = child -> next;
     }
     stage -> current = previous;
+    if !sp_collective_result(stage, declaration) {
+        return false;
+    }
     return crust_try_map_set(
         context,
         &stage -> functions,

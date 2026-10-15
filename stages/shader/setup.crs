@@ -99,9 +99,6 @@ fn sp_config(stage: *SpStage) -> bool {
     if config -> resource_count != 0usize && config -> resources == null(*ShaderResource) {
         return sp_error(stage, "shader resources are missing");
     }
-    if config -> llvm_directory == null(*u8) || config -> validator == null(*u8) {
-        return sp_error(stage, "shader requires an explicit LLVM directory and SPIR-V validator");
-    }
     var index: usize = 0usize;
     var shared: u64 = 0u64;
     while index < config -> resource_count {

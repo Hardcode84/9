@@ -5,6 +5,7 @@ stage_source(stage, "model.crs");
 stage_source(stage, "internal.crs");
 stage_source(stage, "setup.crs");
 stage_source(stage, "check.crs");
+stage_source(stage, "collectives.crs");
 stage_source(stage, "expression.crs");
 stage_source(stage, "resources.crs");
 stage_source(stage, "emit.crs");

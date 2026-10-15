@@ -15,6 +15,21 @@ fn sp_name(stage: *SpStage, name: *u8) -> *u8 {
     var symbol: *CrustSymbol = crust_map_get(&context -> globals, key as usize) as *CrustSymbol;
     return ll_global(&stage -> llvm, symbol -> decl);
 }
+fn sp_used(stage: *SpStage, name: *u8) -> bool {
+    var context: *CrustContext = ll_context(&stage -> llvm);
+    var key: *CrustName = crust_try_intern(context, name, c_length(name));
+    if key == null(*CrustName) {
+        return false;
+    }
+    var symbol: *CrustSymbol = crust_map_get(&context -> globals, key as usize) as *CrustSymbol;
+    return crust_map_get(&stage -> used, symbol -> decl as usize) != null(*u8);
+}
+fn sp_resource_used(stage: *SpStage, resource: *ShaderResource) -> bool {
+    return sp_used(stage, ll_join(&stage -> llvm, resource -> name, "_load")) || sp_used(
+        stage,
+        ll_join(&stage -> llvm, resource -> name, "_store")
+    );
+}
 fn sp_resource_type(resource: *ShaderResource) -> *u8 {
     if resource -> kind == SHADER_BUFFER_U32 || resource -> kind == SHADER_WORKGROUP_U32 {
         return "i32";
@@ -126,6 +141,9 @@ fn sp_resource_access(stage: *SpStage, resource: *ShaderResource, write: bool) -
     if write {
         suffix = "_store";
         result = "void";
+    }
+    if !sp_used(stage, ll_join(&stage -> llvm, resource -> name, suffix)) {
+        return;
     }
     sp_text(stage, "define internal ");
     sp_text(stage, result);

@@ -58,6 +58,9 @@ fn sp_init(stage: *SpStage, context: *CrustContext, config: *ShaderConfig) -> un
     stage -> llvm.expression = sp_expression;
     stage -> llvm.user = stage as *u8;
     stage -> functions = stage -> llvm.types;
+    stage -> used = stage -> llvm.types;
+    stage -> reachable = false;
+    stage -> floating = false;
     stage -> loop_conditions = stage -> llvm.types;
     stage -> config = config;
     stage -> builtins = null(*CrustUnit);

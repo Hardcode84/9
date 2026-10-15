@@ -593,3 +593,9 @@ Call `shader_emit(context, config, builtins, &ir)` with those checked units.
 Keep the prepared configuration unchanged. The result is context-owned LLVM
 source. `shader_publish(context, config, &ir, output)` invokes the selected tools
 and publishes validated SPIR-V. `shader_build` combines these calls for a source.
+
+Shader emission includes functions and resource accessors reachable from the
+selected entry. All source bodies still receive device checks. Floating-point
+execution modes apply when reachable code uses `f32`; integer-only code does
+not require those modes. Unused resources do not require descriptor bindings
+in the emitted entry interface.

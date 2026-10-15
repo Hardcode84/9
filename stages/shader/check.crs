@@ -2,6 +2,9 @@
 
 fn sp_scalar(stage: *SpStage, type: *CrustType) -> bool {
     var k: u32 = type -> kind;
+    if stage -> reachable && k == CRUST_T_F32 {
+        stage -> floating = true;
+    }
     if k == CRUST_T_I32 || k == CRUST_T_U32 || k == CRUST_T_F32 || k == CRUST_T_BOOL || k == CRUST_T_UNIT {
         return true;
     }
@@ -24,6 +27,14 @@ fn sp_call_check(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> b
     var declaration: *CrustDecl = callee -> symbol -> decl;
     if declaration == stage -> entry {
         return sp_error(stage, "shader entry cannot be called by shader code");
+    }
+    if stage -> reachable {
+        crust_try_map_set(
+            ll_context(&stage -> llvm),
+            &stage -> used,
+            declaration as usize,
+            declaration as *u8
+        );
     }
     if sp_builtin(stage, declaration) {
         if declaration == stage -> barrier && !barrier_allowed {
@@ -224,6 +235,17 @@ fn sp_check(stage: *SpStage) -> bool {
     if stage -> entry -> type -> base -> kind != CRUST_T_UNIT || stage -> entry -> param_count != 0usize {
         return sp_error(stage, "shader entry requires fn()->unit");
     }
+    stage -> reachable = true;
+    crust_try_map_set(
+        ll_context(&stage -> llvm),
+        &stage -> used,
+        stage -> entry as usize,
+        stage -> entry as *u8
+    );
+    if !sp_function_check(stage, stage -> entry) {
+        return false;
+    }
+    stage -> reachable = false;
     var unit_value: *CrustUnit = ll_context(&stage -> llvm) -> units;
     while unit_value != null(*CrustUnit) {
         var declaration: *CrustDecl = unit_value -> declarations;

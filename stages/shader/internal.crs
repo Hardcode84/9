@@ -3,6 +3,7 @@
 record SpStage {
     llvm: LlStage;
     functions: CrustMap;
+    used: CrustMap;
     loop_conditions: CrustMap;
     config: *ShaderConfig;
     builtins: *CrustUnit;
@@ -10,4 +11,6 @@ record SpStage {
     barrier: *CrustDecl;
     current: *CrustDecl;
     depth: usize;
+    reachable: bool;
+    floating: bool;
 }

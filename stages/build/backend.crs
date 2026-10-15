@@ -1,21 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
-record ExampleBackend {
+record ApplicationBackend {
     emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32;
     compiler: *u8;
     entry: *u8;
     toolchain: *u8;
 }
-extern fn example_output_abi(
+extern fn application_output_abi(
     context: *CrustContext,
     entry: *CrustDecl,
     options: *BackendOptions
-) -> i32 = "example_output_abi";
+) -> i32 = "application_output_abi";
 
 // Consume leading backend selections. Retain all selected libraries in the root.
-fn example_backend(root: *CrustRun, stages: *StageSession, result: *ExampleBackend) -> bool {
-    *result = make ExampleBackend {
-        emit: c_backend_build,
+fn application_backend(
+    root: *CrustRun,
+    stages: *StageSession,
+    result: *ApplicationBackend,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> bool {
+    *result = make ApplicationBackend {
+        emit: emit,
         compiler: null(*u8),
         entry: null(*u8),
         toolchain: null(*u8)
@@ -29,7 +34,7 @@ fn example_backend(root: *CrustRun, stages: *StageSession, result: *ExampleBacke
             }
             if !stage_load(stages, root -> argv[1usize]) || !stage_native_callback(
                 root,
-                "example_output_abi",
+                "application_output_abi",
                 root -> argv[2usize],
                 &result -> emit as *u8
             ) {
@@ -57,7 +62,7 @@ fn example_backend(root: *CrustRun, stages: *StageSession, result: *ExampleBacke
 }
 // Compile selected stage sources with the declared frontend or a caller-selected compiler.
 // The replacement compiler must accept this package's source options.
-fn example_load(stages: *StageSession, backend: *ExampleBackend, manifest: *u8) -> bool {
+fn application_load(stages: *StageSession, backend: *ApplicationBackend, manifest: *u8) -> bool {
     var package: StagePackage = uninit;
     stage_init(&package, stages -> root, stages -> base);
     if !stage_include(&package, manifest) {

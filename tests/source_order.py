@@ -970,6 +970,38 @@ def check_examples(suite):
     assert b"expected '> ' before text" in result.stderr, result.stderr
 
     original = hello.read_text()
+    callback_root = hello.with_name("callback.crs")
+    callback_root.write_text(
+        original.replace(
+            'return application(stages, "../../build/hello", c_backend_build);',
+            "fn selected(context:*CrustContext,entry:*CrustDecl,options:*BackendOptions)->i32"
+            "{return 7i32;}\n"
+            'return application(stages, "../../build/hello", selected);',
+        )
+    )
+    suite.command([suite.runner, callback_root], expected=7, cwd=elsewhere)
+    alternate_source = hello.with_name("alternate.crs")
+    alternate_source.write_text(
+        "fn alternate_emit(context:*CrustContext,entry:*CrustDecl,options:*BackendOptions)->i32"
+        "{return c_backend_build(context,entry,options); }\n"
+    )
+    alternate_package = hello.with_name("alternate-package.crs")
+    alternate_package.write_text(
+        'stage_include(stage,"../../stages/c/sources.crs");\n'
+        'stage_source(stage,"alternate.crs");\n'
+        'stage_export(stage,"alternate_emit");\n'
+    )
+    suite.command(
+        [suite.runner, callback_root, "--backend", alternate_package, "alternate_emit"],
+        cwd=elsewhere,
+    )
+    assert suite.command([output / "hello"]).stdout == b"Hello, world!\n"
+    for arguments, diagnostic in (
+        (["unexpected"], b"application received unexpected arguments"),
+        (["--backend"], b"--backend requires PACKAGE ENTRY"),
+    ):
+        result = suite.command([suite.runner, hello, *arguments], expected=1, cwd=elsewhere)
+        assert diagnostic in result.stderr, result.stderr
     broken = hello.with_name("bad-target.crs")
     broken.write_text(original + "fn bad()->i32{return missing_value;}\n")
     retained = (output / "hello").read_bytes()

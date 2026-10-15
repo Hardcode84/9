@@ -31,13 +31,13 @@ build/crust examples/intrusive/main.crs \
 build/intrusive-checked
 ```
 
-[backend.crs](backend.crs) implements this option in ordinary compilation code.
+[backend selection](../stages/build/backend.crs) implements this option in ordinary compilation code.
 It loads a package, gets its output callback, and passes the callback to the
 frontend. The callback receives checked raw bodies, the entry declaration, and
 `BackendOptions`. Root source controls this selection. Package paths are
 relative to the repository directory selected by each root.
 
-`--stage-compiler PACKAGE ENTRY TOOLCHAIN` also selects how `example_load`
+`--stage-compiler PACKAGE ENTRY TOOLCHAIN` also selects how `application_load`
 builds the frontend libraries. Its compiler must accept the packages' source
 annotations: `raw`, `trusted`, or empty for checked ownership code. The helper
 preserves these annotations. It marks ordinary raw packages as `raw`. This

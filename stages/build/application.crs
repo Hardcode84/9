@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Compile the remaining root source. Paths are relative to the root file.
+// Command-line backend selections override emit. Keep the root live until return.
+fn application(
+    stages: *StageSession,
+    output: *u8,
+    emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+) -> i32 {
+    var root: *CrustRun = stages -> root;
+    var backend: ApplicationBackend = uninit;
+    if !application_backend(root, stages, &backend, emit) {
+        return 1i32;
+    }
+    if root -> argc != 0i32 {
+        native_error(root -> context, "application received unexpected arguments");
+        return 1i32;
+    }
+    var path: *u8 = host_path(root, output);
+    if path == null(*u8) {
+        return 1i32;
+    }
+    var arguments: [*u8; 2] = make [*u8; 2] {
+        "-o",
+        path
+    };
+    // Build in an independent target context; the emitter compiles and links output.
+    return c_build(
+        root -> source,
+        root -> cursor,
+        2i32,
+        &arguments[0usize],
+        backend.emit
+    );
+}

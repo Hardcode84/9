@@ -2,19 +2,14 @@
 
 # Tutorial: Hello World in one file
 
-This example contains two programs in [main.crs](main.crs). The first program
-controls compilation. The second program prints a greeting. You will build
-the file, follow the boundary between these programs, and change the output.
-
-The compilation program uses ordinary Crust calls. It selects the C backend,
-passes source text to it, and sets an output path. This is the same mechanism
-that later tutorials use to select overloads and ownership rules.
+[main.crs](main.crs) contains the compilation program and the target program.
+The compilation program selects a backend and an output file. The target
+program prints a greeting.
 
 ## Build and run
 
-Use Linux x86-64 with Make, GCC, and binutils. Run these commands from the
-repository root. The [bootstrap guide](../../docs/bootstrap.md) describes
-the build tools in more detail.
+Use Linux x86-64 with the tools listed in the
+[bootstrap guide](../../docs/bootstrap.md). Run from the repository root:
 
 ```sh
 make all
@@ -22,84 +17,37 @@ build/crust examples/hello/main.crs
 build/hello
 ```
 
-The last command prints this line and returns zero:
+The executable prints `Hello, world!` and returns zero.
+`make all` builds the seed. The compilation program prepares its backend from
+source and reuses the cached library on later builds.
 
-```text
-Hello, world!
-```
-
-`make` prepares the seed launcher. `build/crust` prepares the selected backend
-from source through the cache, then executes the
-compilation program, which produces `build/hello`. Only the last command runs
-the target program.
-
-This build uses the C backend and includes GCC compilation and linking.
-GCC work can dominate its total time. The frontend speed gate excludes those
-steps; the [complete-build benchmark](../../benchmarks/build-time/README.md)
-compares complete C and assembly builds of the intrusive-list example.
-
-## Read the compilation program
-
-The first actions prepare the backend and load a build helper:
+## Select the build
 
 ```crust
 host_source(run, "../../stages/build/load.crs");
-if !stage_setup(run, "../..") { return 1i32; };
+if !application_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
-host_source(run, "../../stages/c/build.crs");
+return application(stages, "../../build/hello", c_backend_build);
 ```
 
-The launcher supplies `run`, a pointer to the current root execution state.
-`stage_setup` loads the shared preparation code and C backend interface.
-`stage_open` obtains native backend code from captured sources. A valid cache
-entry supplies that code on later runs. A changed stage input causes a rebuild.
-The last file defines `c_build`, which creates and releases a target compiler
-context for one build. The [stage preparation guide](../../stages/build/README.md)
-explains package files and cache inputs.
+`run` is the current compilation program's state. Setup loads the shared
+build interfaces. `stage_open` prepares the backend and retains its libraries
+until the root ends. It must succeed before the root takes a native backend
+callback. Paths start at the directory that contains `main.crs`.
 
-The next lines select the target output and start compilation:
+`application` compiles the source after the final `return` statement.
+Its last argument selects the backend callback. Here, `c_backend_build` emits C
+and calls GCC. A root can pass another loaded callback with the same contract.
+The [build helper guide](../../stages/build/README.md#build-an-application)
+describes the callback and command-line backend overrides.
 
-```crust
-var arguments: [*u8; 2] = make [*u8; 2] {
-    "-o", host_path(run, "../../build/hello")
-};
-return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize], c_backend_build);
-```
+The build helper uses a separate target context. Target declarations have their
+own scope. Diagnostics refer to line numbers in the complete source file.
+The comment before the target is for the reader; the root cursor sets the
+source boundary.
 
-`[*u8; 2]` is an array of two string pointers. The helper receives an
-argument count and a pointer to the first element. There is no executable
-name in this argument array. `2i32` and `0usize` are explicitly typed integer
-literals.
-
-Paths passed to `host_source`, `host_link`, and `host_path` start at the root
-file's directory. Thus `../../build/hello` selects the repository's build
-directory. A plain path passed directly as `-o` would start at the process
-working directory. `host_path` makes that distinction explicit.
-
-## Find the source boundary
-
-The runner reads one complete root action before it executes that action.
-During the final `return`, `(*run).cursor` already points past its semicolon.
-`c_build` receives that byte offset and compiles the rest of the source.
-
-```mermaid
-flowchart TD
-    A[Root actions load the stage] --> B[Call c_build with source and cursor]
-    B --> C[Compile the remaining target declarations]
-    C --> D[build/hello]
-```
-
-The comment `// The target program starts here.` is for the reader. It is
-not a compiler directive. The cursor determines the boundary. Do not save
-the cursor before the final action: it would include later compilation
-instructions in the target input.
-
-The target has its own compiler context and name scope. Loading an API into
-the root does not declare that API in the target. Diagnostics still refer
-to line numbers in the complete original file.
-
-## Read the target program
+## Write the target program
 
 ```crust
 extern fn puts(text: *u8) -> i32 = "puts";
@@ -111,32 +59,19 @@ fn main(argc: i32, argv: **u8) -> i32 {
 ```
 
 The external declaration gives the type and native link name of `puts`.
-The C backend links the target with the system C library. `puts` appends a
-newline. The target returns one if the call fails.
+The backend links the system C library. `puts` appends a newline; a negative
+result causes the target to return one.
 
-The hosted entry has type `fn(i32, **u8) -> i32`. It receives the target
-argument count and argument array, even when the program does not use them.
-The generated executable does not need the compiler library to run.
+The hosted entry takes an argument count and an argument array, even when it
+does not use them. The executable runs independently of the compiler library.
 
-## Make a small change
+Change the greeting, then repeat the build and run commands. To change the
+output path, edit the second argument to `application`.
 
-Change the string inside the target `puts` call, then repeat:
+## Continue
 
-```sh
-build/crust examples/hello/main.crs
-build/hello
-```
-
-The new executable must print your new string. The compilation program
-does not need to change. To select a different output file, change the
-string passed to `host_path` and run that new executable after compilation.
-Restore the example after this exercise.
-
-The root uses a fixed backend argument array. Adding options after
-`examples/hello/main.crs` does not forward them to the backend. A root must
-read `(*run).argc` and `(*run).argv` and choose how to use them. See the
-[arguments example](../arguments/README.md) for that pattern.
-
-Continue with the [C backend tutorial](../../stages/c/README.md) to inspect
-the generated C and native symbols. The [runner contract](../../docs/source-runner.md)
-defines the complete source execution and lifetime rules.
+The [multiple-file example](../multiple-files/README.md) selects source files
+explicitly. The [arguments example](../arguments/README.md) shows how a root
+handles compiler and target arguments. The [C backend tutorial](../../stages/c/README.md)
+explains emission. The [source runner contract](../../docs/source-runner.md)
+defines execution and source boundaries.

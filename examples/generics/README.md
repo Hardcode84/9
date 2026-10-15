@@ -26,12 +26,11 @@ passes it the input files.
 
 ```crust
 host_source(run, "../../stages/build/load.crs");
-if !stage_setup(run, "../..") { return 1i32; };
+if !application_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
-host_source(run,"../backend.crs");
-var backend:ExampleBackend=uninit;
-if !example_backend(run,stages,&backend){return 1i32;};
+var backend:ApplicationBackend=uninit;
+if !application_backend(run,stages,&backend,c_backend_build){return 1i32;};
 host_source(run, "setup.crs");
 if !load_example_stages(run,stages,&backend) { return 1i32; };
 host_source(run, "build.crs");
@@ -49,7 +48,7 @@ Its generics calls are:
 host_source(root, "../../stages/generics/model.crs");
 host_source(root, "../../stages/generics/source_model.crs");
 host_source(root, "../../stages/generics/source_api.crs");
-example_load(stages, backend, "stages/generics/package.crs");
+application_load(stages, backend, "stages/generics/package.crs");
 ```
 
 `generic_build` reads the selected inputs into one module, checks the program,

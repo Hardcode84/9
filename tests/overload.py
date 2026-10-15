@@ -727,7 +727,7 @@ class Suite:
             package = self.work / name
             for directory in ("api", "stages", "examples/overload/" + example):
                 shutil.copytree(ROOT / directory, package / directory)
-            shutil.copyfile(ROOT / "examples/backend.crs", package / "examples/backend.crs")
+
             (package / "build").mkdir()
             source = package / "examples/overload" / example / "main.crs"
             result = self.command([self.build / "crust", source])

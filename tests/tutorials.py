@@ -226,9 +226,9 @@ class Matrix:
             f"if !stage_setup(run,{json.dumps(str(ROOT))}){{return 1i32;}};\n"
             f'var stages:*StageSession=stage_open(run,{json.dumps(str(ROOT))},{json.dumps(str(self.output/"stage-cache"))});\n'
             "if stages==null(*StageSession){return 1i32;};\n"
-            f'host_source(run,{json.dumps(str(ROOT/"examples/backend.crs"))});\n'
-            "var backend:ExampleBackend=uninit;if !example_backend(run,stages,&backend){return 1i32;};\n"
-            "if run->argc<1i32 || !example_load(stages,&backend,run->argv[0usize]){return 1i32;};\n"
+            f'host_source(run,{json.dumps(str(ROOT/"stages/build/backend.crs"))});\n'
+            "var backend:ApplicationBackend=uninit;if !application_backend(run,stages,&backend,c_backend_build){return 1i32;};\n"
+            "if run->argc<1i32 || !application_load(stages,&backend,run->argv[0usize]){return 1i32;};\n"
             'extern fn entry(argc:i32,argv:**u8)->i32="crust_tool_main";return entry(run->argc,run->argv);\n'
         )
         cases = (

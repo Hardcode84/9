@@ -4,21 +4,31 @@
 // relative to the root. Keep the root live through all stage calls.
 fn stage_setup(root: *CrustRun, base: *u8) -> bool {
     var paths: [*u8; 16] = make [*u8; 16] {
+        // Compiler contexts, source trees, and runner interfaces.
         "api/crust0_stage.crs",
+        // Target frontend and backend callback contracts.
         "stages/c/api.crs",
+        // Native library and process support.
         "stages/native/model.crs",
         "stages/native/linux.crs",
+        // Content-based artifact caching and captured dependency inputs.
         "stages/cache/model.crs",
         "stages/cache/linux.crs",
         "stages/cache/artifact.crs",
         "stages/cache/inputs.crs",
+        // Package, compiler, and object-toolchain contracts.
         "stages/build/interface.crs",
         "stages/build/model.crs",
+        // Exported symbol names and package source descriptions.
         "stages/build/names.crs",
         "stages/build/package.crs",
+        // Load the compiler selected by a package.
         "stages/build/compiler.crs",
+        // C bootstrap emission and the host GCC object toolchain.
         "stages/build/c.crs",
+        // Compile package sources and link native stage libraries.
         "stages/build/compile.crs",
+        // Prepare sessions and reuse or build cached stage packages.
         "stages/build/library.crs"
     };
     var index: usize = 0usize;
@@ -69,4 +79,29 @@ fn stage_path(root: *CrustRun, base: *u8, path: *u8) -> *u8 {
         index = index + 1usize;
     }
     return host_path(root, joined);
+}
+
+// Load the standard application interfaces once, before application calls.
+fn application_setup(root: *CrustRun, base: *u8) -> bool {
+    // Package preparation captures dependencies and caches compiled stages.
+    if !stage_setup(root, base) {
+        return false;
+    }
+    var paths: [*u8; 3] = make [*u8; 3] {
+        // Select output callbacks and optional package compiler overrides.
+        "stages/build/backend.crs",
+        // Read and check target source in a separate compiler context.
+        "stages/c/build.crs",
+        // Compile the remaining root source with the selected output callback.
+        "stages/build/application.crs"
+    };
+    var index: usize = 0usize;
+    while index < 3usize {
+        var path: *u8 = stage_path(root, base, paths[index]);
+        if path == null(*u8) || !host_source(root, path) {
+            return false;
+        }
+        index = index + 1usize;
+    }
+    return true;
 }

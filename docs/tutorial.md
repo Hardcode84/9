@@ -32,15 +32,10 @@ Save this as `build/learn/main.crs`:
 
 ```crust
 host_source(run, "../../stages/build/load.crs");
-if !stage_setup(run, "../..") { return 1i32; };
+if !application_setup(run, "../..") { return 1i32; };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) { return 1i32; };
-host_source(run, "../../stages/c/build.crs");
-
-var arguments: [*u8; 2] = make [*u8; 2] {
-    "-o", host_path(run, "hello")
-};
-return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize], c_backend_build);
+return application(stages, "hello", c_backend_build);
 
 extern fn puts(text: *u8) -> i32 = "puts";
 
@@ -60,8 +55,8 @@ build/learn/hello
 The first command runs the compilation program and creates the executable.
 The second command runs that executable and prints `Hello, world!`.
 
-The part through `return c_build(..., c_backend_build)` sets up compilation. The declarations
-after it form the target program. `c_build` receives the remaining source,
+The part through `return application(...)` sets up compilation. The declarations
+after it form the target program. `application` receives the remaining source,
 compiles it, and returns a status. The C backend produces C code and calls GCC
 and the native linker to make the executable.
 
@@ -90,7 +85,7 @@ Try changing the greeting and running the two commands again.
 
 ## Values, functions, and control flow
 
-Keep the compilation setup. Replace everything after its `return c_build(..., c_backend_build)`
+Keep the compilation setup. Replace everything after its `return application(...)`
 statement with this target program:
 
 ```crust
@@ -315,6 +310,8 @@ The setup uses these helpers:
 | Call | Effect |
 | --- | --- |
 | `host_source(run, path)` | Read and check a whole file of declarations for the compilation program |
+| `application_setup(run, base)` | Load the shared application interfaces |
+| `application(stages, output, emit)` | Compile the remaining root source with the selected callback |
 | `stage_open(run, base, cache)` | Prepare the C provider and capture toolchain inputs |
 | `stage_load(stages, package)` | Prepare and load a selected source package |
 | `host_link(run, path)` | Load a shared library containing native functions |
@@ -322,12 +319,13 @@ The setup uses these helpers:
 | `c_build(source, begin, argc, argv, c_backend_build)` | Compile the selected target source with the C backend |
 
 The shared preparation code supplies the build request and C backend interface.
-The root loads `c_build` separately. The validated library supplies native backend code.
+`application_setup` also loads `c_build`, which the application helper calls.
+The validated library supplies native backend code.
 The launcher already supplies the core compiler and host interfaces.
 
 `(*run).source` points to the root's captured source bytes. `(*run).cursor`
 is the byte offset just after the current action. By the time the final
-`return c_build(..., c_backend_build)` executes, the cursor is past its semicolon. That is where
+`return application(...)` executes, the cursor is past its semicolon. That is where
 the helper starts reading the target declarations. Keep this cursor access
 in the action that hands the remaining source to the target compiler.
 
@@ -360,7 +358,7 @@ relative to the process working directory.
 
 The launcher places arguments after the root path in `(*run).argc` and
 `(*run).argv`. To let the command line select the output and other C backend
-options, replace the argument array and build call with:
+options, replace the application call with:
 
 ```crust
 return c_build((*run).source, (*run).cursor, (*run).argc, (*run).argv, c_backend_build);

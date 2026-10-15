@@ -14,7 +14,7 @@ Build the seed once:
 make all
 ```
 
-A root at `examples/hello/main.crs` selects the C backend with these actions:
+A root selects the C backend with these actions:
 
 ```crust
 host_source(run, "../../stages/build/load.crs");
@@ -263,3 +263,33 @@ The root can configure its compiler and toolchain before this call. Keep the
 captured sources and configuration live through return. Both entry points
 capture dependencies and use the same cache and compiler-depth rules.
 Loading the returned library remains an explicit `crust_run_link` operation.
+
+## Build an application
+
+Load `load.crs`, call `application_setup(root, base)`, and open a session with
+`stage_open`. Setup loads the shared package code, backend selection, and target
+build helpers. The session prepares the C bootstrap provider and retains native
+libraries until the root ends. See the [hello tutorial](../../examples/hello/README.md).
+
+`application(session, output, emit)` compiles the unread part of the root file.
+Call it in the final root `return`. The output path starts at the root file's
+directory. The emitter has this signature:
+
+```crust
+fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
+```
+
+Pass `c_backend_build` for C output, or a loaded backend callback with that
+contract. The callback receives a checked target context and output options.
+It returns the build status. The helper reports target diagnostics and releases
+the target context.
+
+`--backend PACKAGE ENTRY` loads a package and replaces the supplied callback.
+`--stage-compiler PACKAGE ENTRY TOOLCHAIN` selects the compiler used by
+`application_load`. The raw application helper loads no additional frontend
+packages. Other arguments produce an error.
+
+Custom roots can call `application_backend(root, session, result, emit)` and
+`application_load(session, result, manifest)` directly. They can then pass
+`result.emit` to their selected frontend. These calls use the same selection and
+cache code as the application helper.

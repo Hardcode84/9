@@ -39,15 +39,14 @@ description and target program in one file:
 
 ```crust
 host_source(run, "../../stages/build/load.crs");
-if !stage_setup(run, "../..") { return 1i32; };
-var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
-if stages == null(*StageSession) { return 1i32; };
-host_source(run, "../../stages/c/build.crs");
-
-var arguments: [*u8; 2] = make [*u8; 2] {
-    "-o", host_path(run, "../../build/hello")
+if !application_setup(run, "../..") {
+    return 1i32;
 };
-return c_build((*run).source, (*run).cursor, 2i32, &arguments[0usize], c_backend_build);
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) {
+    return 1i32;
+};
+return application(stages, "../../build/hello", c_backend_build);
 
 // The target program starts here.
 extern fn puts(text: *u8) -> i32 = "puts";

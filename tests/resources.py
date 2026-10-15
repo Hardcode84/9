@@ -1528,7 +1528,7 @@ class Suite:
             package = self.work / "ordinary resource package"
             for directory in ("api", "stages", "examples/resources/hello"):
                 shutil.copytree(ROOT / directory, package / directory)
-            shutil.copyfile(ROOT / "examples/backend.crs", package / "examples/backend.crs")
+
             output = package / "build/resource-hello"
             output.parent.mkdir()
             source = package / "examples/resources/hello/main.crs"

@@ -204,7 +204,7 @@ def tutorial_package(suite):
     package = suite.work / "copied package with spaces"
     for directory in ("api", "stages", "examples/generics"):
         shutil.copytree(ROOT / directory, package / directory, dirs_exist_ok=True)
-    shutil.copyfile(ROOT / "examples/backend.crs", package / "examples/backend.crs")
+
     (package / "build").mkdir(exist_ok=True)
     return package
 

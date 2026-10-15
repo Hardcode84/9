@@ -1,38 +1,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
+// Load the shared build helper definitions. Paths start beside this file.
 host_source(run, "../../stages/build/load.crs");
-if !stage_setup(run, "../..") {
-    return 1i32;
+// Load package caching, backend selection, and target compilation interfaces.
+if !application_setup(run, "../..") {
+    return 1i32; // Stop the build if setup fails.
 };
+// Prepare the native backend, using the repository base and this cache directory.
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+// A null session means backend preparation failed.
 if stages == null(*StageSession) {
     return 1i32;
 };
-host_source(run, "../backend.crs");
-var backend: ExampleBackend = uninit;
-if !example_backend(run, stages, &backend) {
-    return 1i32;
-};
-host_source(run, "../../stages/c/build.crs");
-
-var arguments: [*u8; 2] = make [*u8; 2] {
-    "-o",
-    host_path(run, "../../build/hello")
-};
-return c_build(
-    (*run).source,
-    (*run).cursor,
-    2i32,
-    &arguments[0usize],
-    backend.emit
-);
+// Compile the remaining source to build/hello with the C emitter callback.
+return application(stages, "../../build/hello", c_backend_build);
 
 // The target program starts here.
+// Declare the system C function that prints text and a newline.
 extern fn puts(text: *u8) -> i32 = "puts";
 
+// The hosted entry receives the argument count and argument pointers.
 fn main(argc: i32, argv: **u8) -> i32 {
+    // Print the greeting; return failure if output fails.
     if puts("Hello, world!") < 0i32 {
         return 1i32;
     }
-    return 0i32;
+    return 0i32; // Report success to the operating system.
 }

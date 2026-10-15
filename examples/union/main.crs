@@ -1,21 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 host_source(run, "../../stages/build/load.crs");
-if !stage_setup(run, "../..") {
+if !application_setup(run, "../..") {
     return 1i32;
 };
 var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
 if stages == null(*StageSession) {
     return 1i32;
 };
-host_source(run, "../backend.crs");
-var backend: ExampleBackend = uninit;
-if !example_backend(run, stages, &backend) {
+var backend: ApplicationBackend = uninit;
+if !application_backend(run, stages, &backend, c_backend_build) {
     return 1i32;
 };
 host_source(run, "../../stages/union/api.crs");
 host_source(run, "../../stages/union/build.crs");
-if !example_load(stages, &backend, "stages/union/package.crs") {
+if !application_load(stages, &backend, "stages/union/package.crs") {
     return 1i32;
 };
 

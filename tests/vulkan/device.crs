@@ -21,6 +21,8 @@ record Vulkan {
     command_pool: *u8;
     commands: *u8;
     family: u32;
+    count: u32;
+    runtime: bool;
 }
 
 fn device_profile(v: *Vulkan) -> bool {

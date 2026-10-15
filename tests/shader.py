@@ -205,6 +205,60 @@ fn compute()->unit {
             [0, 0, 0, 0],
         ),
     }
+    runtime_cases = [
+        (
+            "runtime-f32",
+            "fn compute()->unit { var i:u32=shader_global_x(); values_store(i,values_load(i)+2f32); }",
+            [3, 4, 5, 6],
+            [0, 0, 0, 0],
+        ),
+        (
+            "runtime-f32",
+            "fn compute()->unit { var i:u32=shader_global_x(); var value:f32=values_load(i+1u32); shader_barrier(); values_store(i,value); }",
+            [2, 3, 4, 4],
+            [0, 0, 0, 1],
+        ),
+        (
+            "runtime-u32",
+            "fn compute()->unit { var i:u32=shader_global_x(); values_store(i,values_load(i)^0x80000000u32); }",
+            [-1, -2, -3, -4],
+            [0, 0, 0, 0],
+        ),
+        (
+            "runtime-u32",
+            "fn compute()->unit { var i:u32=shader_global_x(); values_store(i+4u32,values_load(i)); }",
+            [1, 2, 3, 4],
+            [1, 1, 1, 1],
+        ),
+    ]
+    for mode, program, values, status in runtime_cases:
+        source.write_text(program)
+        run(command + [mode], env=environment)
+        expected = work / "runtime.expected"
+        expected.write_bytes(struct.pack("<4f4I", *values, *status))
+        run([native, output, expected, "--runtime", "4"], env=environment)
+
+    # Reuse each binary across lengths; the count comes from the bound buffer.
+    for mode in ("runtime-f32", "runtime-u32"):
+        operation = (
+            "values_load(i)+2f32" if mode == "runtime-f32" else "values_load(i)^0x80000000u32"
+        )
+        source.write_text(
+            "fn compute()->unit {var i:u32=shader_global_x();values_store(i,"
+            + operation
+            + ");shader_barrier();}"
+        )
+        run(command + [mode], env=environment)
+        for count in (0, 1, 3):
+            values = [
+                (i + 3 if mode == "runtime-f32" else -(i + 1)) if i < count else i + 1
+                for i in range(4)
+            ]
+            expected.write_bytes(
+                struct.pack("<4f4I", *values, *[int(i >= count) for i in range(4)])
+            )
+            run([native, output, expected, "--runtime", str(count)], env=environment)
+
     for name, (program, values, status) in cases.items():
         source.write_text(program)
         run(command)
@@ -246,6 +300,9 @@ fn compute()->unit {
         assert diagnostic.encode() in result.stdout
     result = run([native, output, malformed], expected=2, env=environment)
     assert b"expected data must contain" in result.stdout
+    for options in (["--runtime"], ["--runtime", "5"], ["--runtime", "-1"], ["--runtime", "1x"]):
+        result = run([native, output, fixture, *options], expected=2, env=environment)
+        assert b"COUNT(0..4)" in result.stdout
     rejected = {
         "divergent barrier": (
             "fn compute()->unit{if shader_local_x()==0u32{shader_barrier();}}",
@@ -288,8 +345,8 @@ fn compute()->unit {
     assert output.read_bytes() == previous
     assert not list(work.glob(".crust-*")), "temporary output leaked"
     print(
-        f"Shader: {len(cases)} Vulkan dispatches, 4 injected enumeration/setup cases, "
-        f"3 malformed inputs, {len(rejected)} source rejections and failed-tool output preservation passed"
+        f"Shader: {len(cases)} fixed-size and 10 runtime-size Vulkan dispatches, 4 injected enumeration/setup cases, "
+        f"3 malformed inputs, 4 invalid runner options, {len(rejected)} source rejections and failed-tool output preservation passed"
     )
 
 

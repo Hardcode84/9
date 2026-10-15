@@ -561,3 +561,15 @@ requires Vulkan headers, the Vulkan loader, and a compute driver. Use
 `VULKAN_INCLUDE` for a separate header directory. See the
 [shader tutorial](../examples/shader/README.md) for device requirements and
 commands. The target builds test fixtures; the Crust root prepares the stage.
+
+### Runtime-sized shader buffers
+
+A `ShaderResource` with length zero selects a runtime-sized storage buffer.
+This form supports `SHADER_BUFFER_F32` and `SHADER_BUFFER_U32` resources only.
+The first four bytes contain a `u32` payload element count. Four-byte payload elements
+follow that header. The caller must bind a descriptor range that covers the
+header and all declared elements. Keep the header unchanged during dispatch.
+Generated accessors check the payload index
+against the header before access. An out-of-range access sets invocation
+status and does not access the payload. A positive length retains the fixed-size
+layout, without a count header.

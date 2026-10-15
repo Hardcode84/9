@@ -90,8 +90,17 @@ fn sp_resource_pointer(stage: *SpStage, resource: *ShaderResource, index: *u8) -
     sp_text(stage, ")\n");
 }
 fn sp_resource_bounds(stage: *SpStage, resource: *ShaderResource) -> unit {
+    if resource -> length == 0u32 {
+        sp_text(stage, "  %size = call i32 @size_");
+        sp_text(stage, resource -> name);
+        sp_text(stage, "()\n");
+    }
     sp_text(stage, "  %x_bad = icmp uge i32 %index, ");
-    sp_number(stage, resource -> length);
+    if resource -> length == 0u32 {
+        sp_text(stage, "%size");
+    } else {
+        sp_number(stage, resource -> length);
+    }
     sp_text(stage, "\n");
     if resource -> kind == SHADER_IMAGE_R32F {
         sp_text(stage, "  %y_bad = icmp uge i32 %y, ");
@@ -138,7 +147,12 @@ fn sp_resource_access(stage: *SpStage, resource: *ShaderResource, write: bool) -
     sp_text(stage, "  br i1 ");
     sp_text(stage, bad);
     sp_text(stage, ", label %invalid, label %valid\nvalid:\n");
-    sp_resource_pointer(stage, resource, "%index");
+    if resource -> length == 0u32 {
+        sp_text(stage, "  %physical = add i32 %index, 1\n");
+        sp_resource_pointer(stage, resource, "%physical");
+    } else {
+        sp_resource_pointer(stage, resource, "%index");
+    }
     sp_resource_operation(stage, resource, write);
     sp_text(stage, "invalid:\n  ret ");
     sp_text(stage, result);
@@ -193,6 +207,9 @@ fn sp_shared_init(stage: *SpStage, resource: *ShaderResource) -> unit {
 }
 
 fn sp_resource_name(stage: *SpStage, resource: *ShaderResource) -> unit {
+    if resource -> length == 0u32 {
+        sp_runtime_size(stage, resource);
+    }
     sp_text(stage, "@sp_name_");
     sp_text(stage, resource -> name);
     sp_text(stage, " = private unnamed_addr constant [");
@@ -207,4 +224,19 @@ fn sp_resource_name(stage: *SpStage, resource: *ShaderResource) -> unit {
         c_length(resource -> name) + 1usize
     );
     sp_text(stage, "\n");
+}
+
+fn sp_runtime_size(stage: *SpStage, resource: *ShaderResource) -> unit {
+    sp_text(stage, "define internal i32 @size_");
+    sp_text(stage, resource -> name);
+    sp_text(stage, "() {\nentry:\n");
+    sp_resource_pointer(stage, resource, "0");
+    sp_text(stage, "  %bits = load ");
+    sp_text(stage, sp_resource_type(resource));
+    sp_text(stage, ", ptr addrspace(11) %p, align 4\n");
+    if resource -> kind == SHADER_BUFFER_F32 {
+        sp_text(stage, "  %size = bitcast float %bits to i32\n  ret i32 %size\n}\n");
+    } else {
+        sp_text(stage, "  ret i32 %bits\n}\n");
+    }
 }

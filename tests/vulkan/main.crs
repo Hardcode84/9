@@ -2,15 +2,37 @@
 
 extern fn strcmp(a: *u8, b: *u8) -> i32 = "strcmp";
 
+fn check_buffer_guards(v: *Vulkan) -> bool {
+    var offset: usize = 16usize;
+    if v -> runtime {
+        if (v -> mapped as *u32)[0usize] != v -> count {
+            return error("runtime count header was modified");
+        }
+        offset = 20usize;
+    }
+    while offset < 256usize {
+        if v -> mapped[offset] != 255u8 {
+            return error("buffer guard was modified");
+        }
+        offset = offset + 1usize;
+    }
+    return true;
+}
+
 fn check_result(v: *Vulkan, expected: *u8) -> bool {
-    var good: bool = memcmp(v -> mapped, expected, 16usize) == 0i32 && memcmp(
+    var data: *u8 = v -> mapped;
+    if v -> runtime {
+        data = data + 4isize;
+    }
+    var good: bool = memcmp(data, expected, 16usize) == 0i32 && memcmp(
         v -> mapped + 256isize,
         expected + 16isize,
         16usize
     ) == 0i32;
+    good = check_buffer_guards(v) && good;
     if !good {
         puts("Vulkan result mismatch (value bits / status per lane):");
-        var values: *u32 = v -> mapped as *u32;
+        var values: *u32 = data as *u32;
         var status: *u32 = (v -> mapped + 256isize) as *u32;
         var index: usize = 0usize;
         while index < 4usize {
@@ -22,9 +44,11 @@ fn check_result(v: *Vulkan, expected: *u8) -> bool {
     return good;
 }
 
-fn execute(code: *Input, expected: *u8, twice: bool) -> bool {
+fn execute(code: *Input, expected: *u8, twice: bool, runtime: bool, count: u32) -> bool {
     var v: Vulkan = uninit;
     zero(&v as *u8, sizeof(Vulkan));
+    v.runtime = runtime;
+    v.count = count;
     var good: bool = device_open(&v) && buffer_create(&v) && image_create(&v) && layout_create(
         &v
     ) && pipeline_create(&v, code) && descriptors_create(&v) && dispatch(&v);
@@ -38,14 +62,27 @@ fn execute(code: *Input, expected: *u8, twice: bool) -> bool {
     return good;
 }
 
+fn valid_arguments(argc: i32, argv: **u8) -> bool {
+    if argc == 3i32 {
+        return true;
+    }
+    if argc == 4i32 {
+        return strcmp(argv[3usize], "--twice") == 0i32;
+    }
+    if argc != 5i32 || strcmp(argv[3usize], "--runtime") != 0i32 {
+        return false;
+    }
+    var count: *u8 = argv[4usize];
+    return count[0usize] >= 48u8 && count[0usize] <= 52u8 && count[1usize] == 0u8;
+}
 fn main(argc: i32, argv: **u8) -> i32 {
-    if argc != 3i32 && argc != 4i32 {
-        puts("expected SPIRV_FILE EXPECTED_FILE [--twice]");
+    if !valid_arguments(argc, argv) {
+        puts("expected SPIRV_FILE EXPECTED_FILE [--twice|--runtime COUNT(0..4)]");
         return 2i32;
     }
-    if argc == 4i32 && strcmp(argv[3usize], "--twice") != 0i32 {
-        puts("expected --twice");
-        return 2i32;
+    var count: u32 = 4u32;
+    if argc == 5i32 {
+        count = (argv[4usize][0usize] - 48u8) as u32;
     }
     var expected: Input = make Input {
         bytes: null(*u8),
@@ -70,7 +107,7 @@ fn main(argc: i32, argv: **u8) -> i32 {
     var status: i32 = 2i32;
     if good {
         status = 1i32;
-        if execute(&code, expected.bytes, argc == 4i32) {
+        if execute(&code, expected.bytes, argc == 4i32, argc == 5i32, count) {
             status = 0i32;
             puts("Vulkan result and status match");
         }

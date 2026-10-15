@@ -66,6 +66,10 @@ fn buffer_create(v: *Vulkan) -> bool {
     memset(v -> mapped, 255i32, 272usize);
     zero(v -> mapped + 256isize, 16usize);
     var data: *f32 = v -> mapped as *f32;
+    if v -> runtime {
+        (v -> mapped as *u32)[0usize] = v -> count;
+        data = data + 1isize;
+    }
     var index: usize = 0usize;
     while index < 4usize {
         data[index] = (index + 1usize) as f32;
@@ -210,6 +214,9 @@ fn descriptor_update(v: *Vulkan) -> unit {
             range: 16u64
         }
     };
+    if v -> runtime {
+        buffers[0usize].range = 4u64 + 4u64 * v -> count as u64;
+    }
     var image: VkDescriptorImageInfo = make VkDescriptorImageInfo {
         sampler: null(*u8),
         imageView: v -> image_view,

@@ -11,8 +11,10 @@ if stages == null(*StageSession) || !stage_load(stages, "stages/shader/package.c
 host_source(run, "../../stages/shader/model.crs");
 host_source(run, "../../stages/shader/api.crs");
 extern fn puts(text: *u8) -> i32 = "puts";
-if run -> argc != 3i32 && run -> argc != 4i32 {
-    puts("usage: crust examples/shader/main.crs LLVM_DIRECTORY SPIRV_VAL OUTPUT [SOURCE]");
+if run -> argc != 3i32 && run -> argc != 4i32 && run -> argc != 5i32 {
+    puts(
+        "usage: crust examples/shader/main.crs LLVM_DIRECTORY SPIRV_VAL OUTPUT [SOURCE [runtime-f32|runtime-u32]]"
+    );
     return 1i32;
 };
 var resources: [ShaderResource; 3] = make [ShaderResource; 3] {
@@ -41,6 +43,16 @@ var resources: [ShaderResource; 3] = make [ShaderResource; 3] {
         height: 1u32
     }
 };
+if run -> argc == 5i32 {
+    resources[0usize].length = 0u32;
+    if cache_strcmp(run -> argv[4usize], "runtime-u32") == 0i32 {
+        resources[0usize].kind = SHADER_BUFFER_U32;
+    } else {
+        if cache_strcmp(run -> argv[4usize], "runtime-f32") != 0i32 {
+            return 1i32;
+        }
+    }
+};
 var config: ShaderConfig = make ShaderConfig {
     resources: &resources[0usize],
     entry: "compute",
@@ -57,7 +69,7 @@ var context: CrustContext = uninit;
 crust_context_init(&context, null(*CrustAllocator));
 var source: CrustSource = uninit;
 var source_path: *u8 = host_path(run, "program.crs");
-if run -> argc == 4i32 {
+if run -> argc >= 4i32 {
     source_path = run -> argv[3usize];
 };
 var ok: bool = cache_read(&context, source_path, &source) && shader_build(

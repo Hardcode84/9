@@ -111,13 +111,35 @@ The example declares these resources:
 | `pixels` | `SHADER_IMAGE_R32F` | 0/2 | A 4 by 1 R32f storage image |
 | `scratch` | `SHADER_WORKGROUP_F32` | None | Four shared `f32` values |
 
-Buffers have a four-byte element stride and an initial offset of zero.
+Fixed-size buffers have a four-byte element stride and an initial offset of zero.
 `SHADER_BUFFER_U32` supplies the same interface with `u32` values. Images
 supply `pixels_load(x: u32, y: u32) -> f32` and
 `pixels_store(x: u32, y: u32, value: f32) -> unit`. Bind an image in `GENERAL`
 layout with the declared extent and `VK_FORMAT_R32_SFLOAT`. Workgroup arrays
 have zero set and binding fields. The stage initializes them to zero before
 the user entry starts.
+
+Set a buffer resource's `length` to zero to select a runtime-sized buffer.
+Store the payload element count as a `u32` at byte zero. The first payload
+element starts at byte four. Both `SHADER_BUFFER_F32` and `SHADER_BUFFER_U32`
+use this layout. The count is an integer even for an `f32` buffer.
+Bind a descriptor range that covers the four-byte header and all counted
+elements. A count of zero requires only the header. Each access checks its
+index against that count. A failed check sets invocation status and skips
+the payload access. Initialize the header before dispatch and keep it unchanged
+while the shader runs.
+
+The tutorial root accepts `runtime-f32` or `runtime-u32` after the source path
+to select this layout for `values`. For example:
+
+```sh
+build/crust examples/shader/main.crs "$CRUST_LLVM" \
+  "$(command -v spirv-val)" build/exchange.spv examples/shader/program.crs runtime-f32
+```
+
+For `runtime-u32`, write a source that uses `u32` arguments and results for
+`values_load` and `values_store`. See the
+[runtime buffer contract](../../docs/bootstrap.md#runtime-sized-shader-buffers).
 
 For example, this device body copies values through the image:
 
@@ -157,8 +179,8 @@ must ensure that code terminates and that concurrent accesses have no races.
 `shader_barrier()` waits for the workgroup and orders workgroup, buffer, and
 image memory. Workgroups synchronize with each other through separate Vulkan
 dispatches and host barriers. Bindings must have the declared extents, and the
-status buffer must have a separate range. Bounds checks use the declared
-extents. The host remains responsible for descriptor validity and aliasing.
+status buffer must have a separate range. Fixed-size bounds checks use the declared
+extents. Runtime buffer checks use the count header. The host remains responsible for descriptor validity and aliasing.
 
 ## Numeric and device contracts
 
@@ -210,7 +232,9 @@ constants with the selected C headers before it executes the runner.
 
 Set `VK_ICD_FILENAMES` to select a software or hardware Vulkan driver.
 The test compiles shaders, validates SPIR-V, dispatches them, and checks both
-the values and the status buffer. It also checks rejected programs,
+the values and the status buffer. Runtime buffer tests vary the count, bind
+exact descriptor ranges, and check that headers and guard bytes stay unchanged.
+The test also checks rejected programs,
 allocation failure, and preservation of output after a tool failure. A Crust
 interposition library tests truncated enumeration, an empty device list,
 an enumeration error, and a descriptor-pool allocation error.

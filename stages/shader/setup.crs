@@ -22,10 +22,12 @@ fn sp_identifier(name: *u8) -> bool {
 fn sp_resource_config(stage: *SpStage, index: usize) -> bool {
     var config: *ShaderConfig = stage -> config;
     var resource: *ShaderResource = &config -> resources[index];
-    if !sp_identifier(resource -> name) || resource -> length == 0u32 || resource -> kind > SHADER_WORKGROUP_F32 {
+    if !sp_identifier(resource -> name) || (
+        resource -> length == 0u32 && resource -> kind > SHADER_BUFFER_U32
+    ) || resource -> kind > SHADER_WORKGROUP_F32 {
         return sp_error(
             stage,
-            "shader resource requires an identifier, supported kind and positive length"
+            "shader resource requires an identifier and supported kind; images and workgroup arrays require positive length"
         );
     }
     if (resource -> kind == SHADER_IMAGE_R32F) != (resource -> height != 0u32) {

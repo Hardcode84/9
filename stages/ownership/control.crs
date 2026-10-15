@@ -282,7 +282,13 @@ fn os_absent_path(
     var absent: bool = (os_flags(state, object) & OS_ABSENT) != 0u32;
     if !absent {
         if (*object).parent != null(*OsObject) {
-            absent = os_absent_path(check, state, edges, (*object).parent, location);
+            absent = (os_flags(state, (*object).parent) & OS_SUMMARY) != 0u32 || os_absent_path(
+                check,
+                state,
+                edges,
+                (*object).parent,
+                location
+            );
         } else {
             var owner: *OsObject = os_owner(edges, object);
             if owner != null(*OsObject) {
@@ -449,6 +455,12 @@ fn os_join_summary(
     var b: u32 = os_flags(right, object);
     if ((a | b | os_flags(target, object)) & OS_SUMMARY) == 0u32 {
         return false;
+    }
+    if os_initialized(check, left, object) {
+        a = a | OS_READY;
+    }
+    if os_initialized(check, right, object) {
+        b = b | OS_READY;
     }
     if os_absent_storage(check, left, object, location) {
         a = b & ~OS_NONNULL;

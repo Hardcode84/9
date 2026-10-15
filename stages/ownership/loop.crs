@@ -83,17 +83,9 @@ fn os_loop_owner(check: *OsCheck, state: *OsState, slot: *OsSlot, location: *Cru
     }
     var previous: *OsValue = os_bound(state, slot);
     os_expire_owned(check, state, (*previous).object, location);
-    var object: *OsObject = os_object(
-        check,
-        state,
-        (*slot).syntax,
-        null(*OsObject),
-        (*slot).scope,
-        true
-    );
-    if object == null(*OsObject) {
-        return null(*OsValue);
-    }
+    var object: *OsObject = (*previous).object;
+    os_set_fields(check, state, object, null(*OsSlot));
+    os_mark(check, state, object, OS_LIVE | OS_NONNULL | OS_READY | OS_SUMMARY);
     os_abstract_value(check, state, object, true);
     var value: *OsValue = os_value(check, (*slot).syntax, object, false);
     if value != null(*OsValue) {

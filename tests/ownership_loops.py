@@ -72,6 +72,8 @@ while i<2i32 {
 }
 drop replacement;
 if choose(true)!=1i64 || choose(false)!=2i64 {trap;}
+conditional_replace(true);
+conditional_replace(false);
 emit(10i32);
 """
 FUNCTIONS = """
@@ -83,9 +85,22 @@ fn choose(flag:bool)->i64 {
     return result;
 }
 fn forever()->i64 {while true {continue;}}
+record Bundle {value:Trace;}
+fn conditional_replace(flag:bool)->unit {
+    var owner:Bundle=make Bundle{value:trace_new(75i32)};
+    if flag {
+        var i:i32=0i32;
+        while i<2i32 {
+            drop owner;
+            owner=make Bundle{value:trace_new(76i32+i)};
+            i=i+1i32;
+        }
+    }
+    drop owner;
+}
 """
 LOOPS = HELPERS + FUNCTIONS + main_body(BODY)
-OUTPUT = b"NNN0A1B2CXZDBAXZEFGHIJ\n"
+OUTPUT = b"NNN0A1B2CXZDBAXZEFGHIJKLMK\n"
 
 
 def bad_cases():
@@ -222,6 +237,16 @@ def check_heap(build, directory, sanitize):
                 ),
                 "live non-null storage",
             ),
+            "conditional-loop-freed-alias": (
+                provider
+                + main_body(
+                    "var owner:CellOwner=cell_new(7i64);if owner.cell==null(*Cell) {return 0i32;}"
+                    "var alias:*Cell=owner.cell;if argc>0i32 {var i:i32=0i32;while i<2i32 {"
+                    "drop owner;owner=cell_new(8i64);i=i+1i32;}}"
+                    "if alias.value!=7i64 {trap;}"
+                ),
+                "continuing paths must agree",
+            ),
         },
     )
 
@@ -287,7 +312,7 @@ def check_loops(build, directory, sanitize):
     check_import(build, directory)
     print(
         "ownership loops: exit joins, backedges, cleanup, O0/O2, erasure, imports, "
-        f"{len(bad_cases()) + 5} rejections"
+        f"{len(bad_cases()) + 6} rejections"
     )
 
 

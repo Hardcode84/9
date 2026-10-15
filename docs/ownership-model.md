@@ -376,6 +376,9 @@ owner records can be replaced with new initialized owners. The checker forgets
 old allocation and native-handle validity facts; check them again before use.
 Raw aliases to replaced owners expire at the loop boundary. Read replacement
 storage through the current owner.
+An owner replacement loop can occur on one branch of a conditional. Both
+continuing branches must leave the owner initialized. The enclosing local
+keeps its storage identity; replaced allocation aliases do not remain valid.
 `continue` follows the backedge rule. `break` joins the states after the loop,
 including the state where the condition is false. These exits must agree on
 owner consumption and loan origins. A scalar is initialized after the loop only

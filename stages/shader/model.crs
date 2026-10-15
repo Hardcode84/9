@@ -6,13 +6,21 @@ const SHADER_IMAGE_R32F: u32 = 2u32;
 const SHADER_WORKGROUP_F32: u32 = 3u32;
 const SHADER_WORKGROUP_U32: u32 = 4u32;
 
+const SHADER_CHECKED: u32 = 0u32;
+const SHADER_RAW: u32 = 1u32;
+const SHADER_FIXED: u32 = 0u32;
+const SHADER_COUNTED: u32 = 1u32;
+const SHADER_UNBOUNDED: u32 = 2u32;
+
 // Buffers use length elements at stride four. Images use length by height texels.
-// A zero-length buffer uses a u32 element-count header followed by its payload.
+// COUNTED buffers use a u32 count header and length zero; payload follows it.
+// UNBOUNDED buffers have no header and require RAW execution and length zero.
 // The caller must bind the header and at least that many four-byte elements.
 // Workgroup arrays use length elements; set and binding must be zero.
 record ShaderResource {
     name: *u8;
     kind: u32;
+    layout: u32;
     set: u32;
     binding: u32;
     length: u32;
@@ -22,13 +30,15 @@ record ShaderResource {
 // Status accumulates failure across ordered dispatches. Clear it before a sequence.
 // Only dispatched invocations write status.
 // The caller enforces the dispatch bound; the entry does not check it.
-// Status is a separate storage buffer of invocations u32 elements.
+// CHECKED execution uses a separate status buffer of invocations u32 elements.
+// RAW execution requires valid arithmetic and accesses; it has no status/cleanup.
 record ShaderConfig {
     resources: *ShaderResource;
     entry: *u8;
     llvm_directory: *u8;
     validator: *u8;
     resource_count: usize;
+    execution: u32;
     invocations: u32;
     local_size: u32;
     status_set: u32;
@@ -38,4 +48,8 @@ record ShaderConfig {
 
 fn shader_workgroup(kind: u32) -> bool {
     return kind == SHADER_WORKGROUP_F32 || kind == SHADER_WORKGROUP_U32;
+}
+
+fn shader_checked(config: *ShaderConfig) -> bool {
+    return config -> execution == SHADER_CHECKED;
 }

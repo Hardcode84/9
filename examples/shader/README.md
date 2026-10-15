@@ -95,6 +95,7 @@ A resource entry has a name, kind, descriptor set, binding, and extent:
 make ShaderResource {
     name: "values",
     kind: SHADER_BUFFER_F32,
+    layout: SHADER_FIXED,
     set: 0u32,
     binding: 0u32,
     length: 4u32,
@@ -119,7 +120,8 @@ layout with the declared extent and `VK_FORMAT_R32_SFLOAT`. Workgroup arrays
 have zero set and binding fields. The stage initializes them to zero before
 the user entry starts.
 
-Set a buffer resource's `length` to zero to select a runtime-sized buffer.
+Set a buffer resource's `layout` to `SHADER_COUNTED` and `length` to zero
+to select a runtime-sized buffer.
 Store the payload element count as a `u32` at byte zero. The first payload
 element starts at byte four. Both `SHADER_BUFFER_F32` and `SHADER_BUFFER_U32`
 use this layout. The count is an integer even for an `f32` buffer.
@@ -276,3 +278,23 @@ Use `SHADER_WORKGROUP_U32` for integer workgroup arrays. These arrays preserve
 all 32 bits, including values above 2²⁴. The example root accepts `shared-u32`
 to select this type for `scratch`. Its accessors take and return `u32`; all
 other resources keep their default types.
+
+## Select execution and layout policy
+
+The tutorial selects `execution: SHADER_CHECKED`. This mode checks resource
+indices and integer division/shifts, reports sticky failure to the status buffer,
+and initializes workgroup arrays to zero. Failed invocations continue through
+barriers under the checked control-flow rules.
+
+Select `SHADER_RAW` explicitly for caller-validated accesses and arithmetic.
+This mode has no status descriptor, failure state, bounds checks, or automatic
+workgroup initialization. Initialize shared values before reading them and order
+cross-invocation accesses with barriers. Divisors must be valid, signed division
+must not overflow, and shift counts must be below 32. Failure builtins require
+checked execution.
+
+Resource layouts are explicit. `SHADER_FIXED` uses a positive element count and
+no header. `SHADER_COUNTED` uses length zero and a count header. For a headerless
+buffer whose extent the caller manages, use `SHADER_UNBOUNDED` with length zero
+and raw execution. Images and workgroup arrays use fixed layout. Raw execution
+preserves the selected layout but omits its access checks.

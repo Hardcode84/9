@@ -107,13 +107,13 @@ fn sp_resource_pointer(stage: *SpStage, resource: *ShaderResource, index: *u8) -
     sp_text(stage, ")\n");
 }
 fn sp_resource_bounds(stage: *SpStage, resource: *ShaderResource) -> unit {
-    if resource -> length == 0u32 {
+    if resource -> layout == SHADER_COUNTED {
         sp_text(stage, "  %size = call i32 @size_");
         sp_text(stage, resource -> name);
         sp_text(stage, "()\n");
     }
     sp_text(stage, "  %x_bad = icmp uge i32 %index, ");
-    if resource -> length == 0u32 {
+    if resource -> layout == SHADER_COUNTED {
         sp_text(stage, "%size");
     } else {
         sp_number(stage, resource -> length);
@@ -159,6 +159,12 @@ fn sp_resource_access(stage: *SpStage, resource: *ShaderResource, write: bool) -
         sp_text(stage, " %value");
     }
     sp_text(stage, ") {\nentry:\n");
+    if !shader_checked(stage -> config) {
+        sp_payload_pointer(stage, resource);
+        sp_resource_operation(stage, resource, write);
+        sp_text(stage, "}\n");
+        return;
+    }
     sp_resource_bounds(stage, resource);
     var bad: *u8 = "%failed";
     if write && shader_workgroup(resource -> kind) {
@@ -167,12 +173,7 @@ fn sp_resource_access(stage: *SpStage, resource: *ShaderResource, write: bool) -
     sp_text(stage, "  br i1 ");
     sp_text(stage, bad);
     sp_text(stage, ", label %invalid, label %valid\nvalid:\n");
-    if resource -> length == 0u32 {
-        sp_text(stage, "  %physical = add i32 %index, 1\n");
-        sp_resource_pointer(stage, resource, "%physical");
-    } else {
-        sp_resource_pointer(stage, resource, "%index");
-    }
+    sp_payload_pointer(stage, resource);
     sp_resource_operation(stage, resource, write);
     sp_text(stage, "invalid:\n  ret ");
     sp_text(stage, result);
@@ -181,11 +182,19 @@ fn sp_resource_access(stage: *SpStage, resource: *ShaderResource, write: bool) -
     }
     sp_text(stage, "\n}\n");
 }
+fn sp_payload_pointer(stage: *SpStage, resource: *ShaderResource) -> unit {
+    if resource -> layout == SHADER_COUNTED {
+        sp_text(stage, "  %physical = add i32 %index, 1\n");
+        sp_resource_pointer(stage, resource, "%physical");
+    } else {
+        sp_resource_pointer(stage, resource, "%index");
+    }
+}
 fn sp_resource_operation(stage: *SpStage, resource: *ShaderResource, write: bool) -> unit {
     var type: *u8 = sp_resource_type(resource);
     if write {
         var value: *u8 = "%value";
-        if shader_workgroup(resource -> kind) {
+        if shader_workgroup(resource -> kind) && shader_checked(stage -> config) {
             sp_text(stage, "  %safe = select i1 %failed, ");
             sp_text(stage, type);
             sp_text(stage, " zeroinitializer, ");
@@ -218,6 +227,9 @@ fn sp_shared_init(stage: *SpStage, resource: *ShaderResource) -> unit {
     sp_text(stage, " x ");
     sp_text(stage, sp_resource_type(resource));
     sp_text(stage, "] undef, align 4\n");
+    if !shader_checked(stage -> config) {
+        return;
+    }
     sp_text(stage, "define internal void @init_");
     sp_text(stage, resource -> name);
     sp_text(
@@ -235,7 +247,7 @@ fn sp_shared_init(stage: *SpStage, resource: *ShaderResource) -> unit {
 }
 
 fn sp_resource_name(stage: *SpStage, resource: *ShaderResource) -> unit {
-    if resource -> length == 0u32 {
+    if resource -> layout == SHADER_COUNTED && shader_checked(stage -> config) {
         sp_runtime_size(stage, resource);
     }
     sp_text(stage, "@sp_name_");

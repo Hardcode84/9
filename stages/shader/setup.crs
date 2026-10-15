@@ -19,15 +19,24 @@ fn sp_identifier(name: *u8) -> bool {
     }
     return true;
 }
+fn sp_resource_layout(stage: *SpStage, resource: *ShaderResource) -> bool {
+    if resource -> layout == SHADER_FIXED {
+        return resource -> length != 0u32;
+    }
+    if resource -> kind > SHADER_BUFFER_U32 || resource -> length != 0u32 {
+        return false;
+    }
+    return resource -> layout == SHADER_COUNTED || (
+        resource -> layout == SHADER_UNBOUNDED && !shader_checked(stage -> config)
+    );
+}
 fn sp_resource_config(stage: *SpStage, index: usize) -> bool {
     var config: *ShaderConfig = stage -> config;
     var resource: *ShaderResource = &config -> resources[index];
-    if !sp_identifier(resource -> name) || (
-        resource -> length == 0u32 && resource -> kind > SHADER_BUFFER_U32
-    ) || resource -> kind > SHADER_WORKGROUP_U32 {
+    if !sp_identifier(resource -> name) || !sp_resource_layout(stage, resource) || resource -> kind > SHADER_WORKGROUP_U32 {
         return sp_error(
             stage,
-            "shader resource requires an identifier and supported kind; images and workgroup arrays require positive length"
+            "shader resource requires an identifier, supported kind and valid layout/length"
         );
     }
     if (resource -> kind == SHADER_IMAGE_R32F) != (resource -> height != 0u32) {
@@ -41,7 +50,7 @@ fn sp_resource_config(stage: *SpStage, index: usize) -> bool {
             );
         }
     } else {
-        if resource -> set == config -> status_set && resource -> binding == config -> status_binding {
+        if shader_checked(config) && resource -> set == config -> status_set && resource -> binding == config -> status_binding {
             return sp_error(stage, "resource binding conflicts with shader status buffer");
         }
     }
@@ -63,8 +72,11 @@ fn sp_unique_resource(stage: *SpStage, index: usize) -> bool {
     }
     return true;
 }
-fn sp_config(stage: *SpStage) -> bool {
+fn sp_dispatch_config(stage: *SpStage) -> bool {
     var config: *ShaderConfig = stage -> config;
+    if config -> execution > SHADER_RAW {
+        return sp_error(stage, "invalid shader execution policy");
+    }
     if !sp_identifier(config -> entry) || config -> local_size == 0u32 || config -> local_size > 128u32 || config -> invocations == 0u32 {
         return sp_error(
             stage,
@@ -76,6 +88,13 @@ fn sp_config(stage: *SpStage) -> bool {
             stage,
             "shader invocation count must be a local-size multiple with at most 65535 groups"
         );
+    }
+    return true;
+}
+fn sp_config(stage: *SpStage) -> bool {
+    var config: *ShaderConfig = stage -> config;
+    if !sp_dispatch_config(stage) {
+        return false;
     }
     if config -> resource_count != 0usize && config -> resources == null(*ShaderResource) {
         return sp_error(stage, "shader resources are missing");

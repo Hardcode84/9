@@ -37,6 +37,14 @@ fn sp_call_check(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> b
         );
     }
     if sp_builtin(stage, declaration) {
+        if !shader_checked(stage -> config) && (
+            c_equal(declaration -> name -> text, "shader_require") || c_equal(
+                declaration -> name -> text,
+                "shader_failed"
+            )
+        ) {
+            return sp_error(stage, "failure builtins require checked execution");
+        }
         if declaration == stage -> barrier && !barrier_allowed {
             return sp_error(
                 stage,

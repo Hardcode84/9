@@ -3,8 +3,14 @@
 fn sp_intrinsics(stage: *SpStage) -> unit {
     sp_text(
         stage,
-        "target triple = \"spirv1.5-unknown-vulkan1.2\"\n@sp_status_name = private unnamed_addr constant [8 x i8] c\"-status\\00\"\n@sp_failed = internal addrspace(10) global i1 false\ndeclare i32 @llvm.spv.thread.id.i32(i32)\ndeclare i32 @llvm.spv.thread.id.in.group.i32(i32)\ndeclare void @llvm.spv.all.memory.barrier.with.group.sync()\n"
+        "target triple = \"spirv1.5-unknown-vulkan1.2\"\ndeclare i32 @llvm.spv.thread.id.i32(i32)\ndeclare i32 @llvm.spv.thread.id.in.group.i32(i32)\ndeclare void @llvm.spv.all.memory.barrier.with.group.sync()\n"
     );
+    if shader_checked(stage -> config) {
+        sp_text(
+            stage,
+            "@sp_status_name = private unnamed_addr constant [8 x i8] c\"-status\\00\"\n@sp_failed = internal addrspace(10) global i1 false\n"
+        );
+    }
     if sp_used(stage, "shader_sqrt") {
         sp_text(stage, "declare float @llvm.sqrt.f32(float)\n");
     }
@@ -13,6 +19,7 @@ fn sp_intrinsics(stage: *SpStage) -> unit {
         var resource: ShaderResource = make ShaderResource {
             name: "",
             kind: kind,
+            layout: SHADER_FIXED,
             set: 0u32,
             binding: 0u32,
             length: 1u32,
@@ -93,13 +100,19 @@ fn sp_builtins(stage: *SpStage) -> unit {
 fn sp_entry(stage: *SpStage) -> unit {
     sp_text(
         stage,
-        "define void @main() #0 {\nentry:\n  %global = call i32 @llvm.spv.thread.id.i32(i32 0)\n  %local = call i32 @llvm.spv.thread.id.in.group.i32(i32 0)\n  store i1 false, ptr addrspace(10) @sp_failed\n"
+        "define void @main() #0 {\nentry:\n  %global = call i32 @llvm.spv.thread.id.i32(i32 0)\n  %local = call i32 @llvm.spv.thread.id.in.group.i32(i32 0)\n"
     );
+    if shader_checked(stage -> config) {
+        sp_text(stage, "  store i1 false, ptr addrspace(10) @sp_failed\n");
+    }
     var index: usize = 0usize;
     var shared: bool = false;
     while index < stage -> config -> resource_count {
         var resource: *ShaderResource = &stage -> config -> resources[index];
-        if shader_workgroup(resource -> kind) && sp_resource_used(stage, resource) {
+        if shader_checked(stage -> config) && shader_workgroup(resource -> kind) && sp_resource_used(
+            stage,
+            resource
+        ) {
             sp_text(stage, "  call void @init_");
             sp_text(stage, resource -> name);
             sp_text(stage, "(i32 %local)\n");
@@ -113,19 +126,10 @@ fn sp_entry(stage: *SpStage) -> unit {
     sp_text(stage, "  call void ");
     sp_text(stage, ll_global(&stage -> llvm, stage -> entry));
     sp_text(stage, "()\n");
-    var status: ShaderResource = make ShaderResource {
-        name: "",
-        kind: SHADER_BUFFER_U32,
-        set: stage -> config -> status_set,
-        binding: stage -> config -> status_binding,
-        length: stage -> config -> invocations,
-        height: 0u32
-    };
-    sp_resource_pointer(stage, &status, "%global");
-    sp_text(
-        stage,
-        "  %failed = load i1, ptr addrspace(10) @sp_failed\n  %code = zext i1 %failed to i32\n  %previous = load i32, ptr addrspace(11) %p, align 4\n  %statuscode = or i32 %previous, %code\n  store i32 %statuscode, ptr addrspace(11) %p, align 4\n  ret void\n}\nattributes #0 = { \"hlsl.numthreads\"=\""
-    );
+    if shader_checked(stage -> config) {
+        sp_status(stage);
+    }
+    sp_text(stage, "  ret void\n}\nattributes #0 = { \"hlsl.numthreads\"=\"");
     sp_number(stage, stage -> config -> local_size);
     sp_text(stage, ",1,1\" \"hlsl.shader\"=\"compute\" }\n");
     if !stage -> floating {
@@ -140,6 +144,22 @@ fn sp_entry(stage: *SpStage) -> unit {
         sp_text(stage, "!spirv.ExecutionMode = !{!1,!2}\n");
     }
     sp_text(stage, "!1 = !{ptr @main, i32 4461, i32 32}\n!2 = !{ptr @main, i32 4462, i32 32}\n");
+}
+fn sp_status(stage: *SpStage) -> unit {
+    var status: ShaderResource = make ShaderResource {
+        name: "",
+        kind: SHADER_BUFFER_U32,
+        layout: SHADER_FIXED,
+        set: stage -> config -> status_set,
+        binding: stage -> config -> status_binding,
+        length: stage -> config -> invocations,
+        height: 0u32
+    };
+    sp_resource_pointer(stage, &status, "%global");
+    sp_text(
+        stage,
+        "  %failed = load i1, ptr addrspace(10) @sp_failed\n  %code = zext i1 %failed to i32\n  %previous = load i32, ptr addrspace(11) %p, align 4\n  %statuscode = or i32 %previous, %code\n  store i32 %statuscode, ptr addrspace(11) %p, align 4\n"
+    );
 }
 fn sp_emit(stage: *SpStage) -> bool {
     sp_intrinsics(stage);

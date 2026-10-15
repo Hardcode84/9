@@ -16,6 +16,14 @@ fn sp_arithmetic(function: *LlFunction, input: *CrustExpr) -> *u8 {
     var right: *u8 = ll_value(function, input -> right);
     var op: u32 = input -> op;
     var type: *CrustType = input -> type;
+    var operation: *u8 = LL_BINARY[op as usize];
+    if ll_signed(type) {
+        operation = LL_SIGNED[op as usize];
+    }
+    var stage: *SpStage = function -> stage -> user as *SpStage;
+    if !shader_checked(stage -> config) {
+        return ll_instruction(function, operation, "i32", left, right);
+    }
     var bad: *u8 = "";
     var safe: *u8 = "1";
     if op == CRUST_OP_SHL || op == CRUST_OP_SHR {
@@ -37,10 +45,6 @@ fn sp_arithmetic(function: *LlFunction, input: *CrustExpr) -> *u8 {
     }
     sp_fail(function, bad);
     right = ll_select(function, "i32", bad, safe, right);
-    var operation: *u8 = LL_BINARY[op as usize];
-    if ll_signed(type) {
-        operation = LL_SIGNED[op as usize];
-    }
     var result: *u8 = ll_instruction(function, operation, "i32", left, right);
     return ll_select(function, "i32", bad, "0", result);
 }
@@ -62,7 +66,10 @@ fn sp_expression_value(function: *LlFunction, input: *CrustExpr) -> *u8 {
 fn sp_expression(function: *LlFunction, input: *CrustExpr) -> *u8 {
     var value: *u8 = sp_expression_value(function, input);
     var stage: *SpStage = function -> stage -> user as *SpStage;
-    if crust_map_get(&stage -> loop_conditions, input as usize) != null(*u8) {
+    if shader_checked(stage -> config) && crust_map_get(
+        &stage -> loop_conditions,
+        input as usize
+    ) != null(*u8) {
         var active: *u8 = ll_instruction(
             function,
             "xor",

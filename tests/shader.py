@@ -12,6 +12,7 @@ from pathlib import Path
 from prepare import compile_package
 from shader_composition import check_composition
 from shader_features import check_features
+from shader_policy import check_policy
 from vulkan.abi import check_abi
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -78,6 +79,7 @@ def main():
     )
     check_composition(run, compiler, root, llvm, tools, work, native, environment)
     check_features(run, command, tools, source, output, environment)
+    check_policy(run, compiler, root, llvm, tools, work, native, environment)
     cases = {
         "exchange": (
             (ROOT / "examples/shader/program.crs").read_text(),

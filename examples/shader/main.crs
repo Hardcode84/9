@@ -21,6 +21,7 @@ var resources: [ShaderResource; 3] = make [ShaderResource; 3] {
     make ShaderResource {
         name: "values",
         kind: SHADER_BUFFER_F32,
+        layout: SHADER_FIXED,
         set: 0u32,
         binding: 0u32,
         length: 4u32,
@@ -29,6 +30,7 @@ var resources: [ShaderResource; 3] = make [ShaderResource; 3] {
     make ShaderResource {
         name: "scratch",
         kind: SHADER_WORKGROUP_F32,
+        layout: SHADER_FIXED,
         set: 0u32,
         binding: 0u32,
         length: 4u32,
@@ -37,6 +39,7 @@ var resources: [ShaderResource; 3] = make [ShaderResource; 3] {
     make ShaderResource {
         name: "pixels",
         kind: SHADER_IMAGE_R32F,
+        layout: SHADER_FIXED,
         set: 0u32,
         binding: 2u32,
         length: 4u32,
@@ -48,6 +51,7 @@ if run -> argc == 5i32 {
         resources[1usize].kind = SHADER_WORKGROUP_U32;
     } else {
         resources[0usize].length = 0u32;
+        resources[0usize].layout = SHADER_COUNTED;
         if cache_strcmp(run -> argv[4usize], "runtime-u32") == 0i32 {
             resources[0usize].kind = SHADER_BUFFER_U32;
         } else {
@@ -63,6 +67,7 @@ var config: ShaderConfig = make ShaderConfig {
     llvm_directory: run -> argv[0usize],
     validator: run -> argv[1usize],
     resource_count: 3usize,
+    execution: SHADER_CHECKED,
     invocations: 4u32,
     local_size: 4u32,
     status_set: 0u32,

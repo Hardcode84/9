@@ -564,15 +564,15 @@ commands. The target builds test fixtures; the Crust root prepares the stage.
 
 ### Runtime-sized shader buffers
 
-A `ShaderResource` with length zero selects a runtime-sized storage buffer.
+A `ShaderResource` with `layout: SHADER_COUNTED` and length zero selects a
+runtime-sized storage buffer.
 This form supports `SHADER_BUFFER_F32` and `SHADER_BUFFER_U32` resources only.
 The first four bytes contain a `u32` payload element count. Four-byte payload elements
 follow that header. The caller must bind a descriptor range that covers the
 header and all declared elements. Keep the header unchanged during dispatch.
 Generated accessors check the payload index
 against the header before access. An out-of-range access sets invocation
-status and does not access the payload. A positive length retains the fixed-size
-layout, without a count header.
+status and does not access the payload. `SHADER_FIXED` uses a positive length without a count header.
 
 ### Integer workgroup arrays
 
@@ -599,3 +599,10 @@ selected entry. All source bodies still receive device checks. Floating-point
 execution modes apply when reachable code uses `f32`; integer-only code does
 not require those modes. Unused resources do not require descriptor bindings
 in the emitted entry interface.
+
+`ShaderConfig.execution` selects `SHADER_CHECKED` or `SHADER_RAW`. Checked
+execution retains bounds checks, sticky failure, a status descriptor, and shared
+zero initialization. Raw execution omits these operations and requires the caller
+to satisfy access, initialization, arithmetic, and synchronization preconditions.
+Failure builtins are rejected in raw code. `SHADER_UNBOUNDED` buffers have no
+header, require length zero, and are available only with raw execution.

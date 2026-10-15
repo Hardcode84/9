@@ -271,3 +271,8 @@ The driver uses `llc -O0` and the LLVM float-controls extension. Changing
 optimization policy requires the same validation and dispatch tests. Stage
 bootstrap uses the existing package cache. Shader execution state exists only
 in programs which select this stage.
+
+Use `SHADER_WORKGROUP_U32` for integer workgroup arrays. These arrays preserve
+all 32 bits, including values above 2²⁴. The example root accepts `shared-u32`
+to select this type for `scratch`. Its accessors take and return `u32`; all
+other resources keep their default types.

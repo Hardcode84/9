@@ -24,7 +24,7 @@ fn sp_resource_config(stage: *SpStage, index: usize) -> bool {
     var resource: *ShaderResource = &config -> resources[index];
     if !sp_identifier(resource -> name) || (
         resource -> length == 0u32 && resource -> kind > SHADER_BUFFER_U32
-    ) || resource -> kind > SHADER_WORKGROUP_F32 {
+    ) || resource -> kind > SHADER_WORKGROUP_U32 {
         return sp_error(
             stage,
             "shader resource requires an identifier and supported kind; images and workgroup arrays require positive length"
@@ -33,7 +33,7 @@ fn sp_resource_config(stage: *SpStage, index: usize) -> bool {
     if (resource -> kind == SHADER_IMAGE_R32F) != (resource -> height != 0u32) {
         return sp_error(stage, "only a shader image has a nonzero height");
     }
-    if resource -> kind == SHADER_WORKGROUP_F32 {
+    if shader_workgroup(resource -> kind) {
         if resource -> set != 0u32 || resource -> binding != 0u32 || resource -> length > 4096u32 {
             return sp_error(
                 stage,
@@ -56,7 +56,7 @@ fn sp_unique_resource(stage: *SpStage, index: usize) -> bool {
         if c_equal(other -> name, resource -> name) {
             return sp_error(stage, "duplicate shader resource name");
         }
-        if other -> kind != SHADER_WORKGROUP_F32 && resource -> kind != SHADER_WORKGROUP_F32 && other -> set == resource -> set && other -> binding == resource -> binding {
+        if !shader_workgroup(other -> kind) && !shader_workgroup(resource -> kind) && other -> set == resource -> set && other -> binding == resource -> binding {
             return sp_error(stage, "duplicate shader descriptor binding");
         }
         previous = previous + 1usize;
@@ -89,7 +89,7 @@ fn sp_config(stage: *SpStage) -> bool {
         if !sp_resource_config(stage, index) {
             return false;
         }
-        if config -> resources[index].kind == SHADER_WORKGROUP_F32 {
+        if shader_workgroup(config -> resources[index].kind) {
             shared = shared + config -> resources[index].length as u64;
         }
         index = index + 1usize;
@@ -112,7 +112,7 @@ fn sp_accessor(out: *CBuffer, resource: *ShaderResource, write: bool) -> unit {
         c_buffer_text(out, ",y:u32");
     }
     var type: *u8 = "f32";
-    if resource -> kind == SHADER_BUFFER_U32 {
+    if resource -> kind == SHADER_BUFFER_U32 || resource -> kind == SHADER_WORKGROUP_U32 {
         type = "u32";
     }
     if write {

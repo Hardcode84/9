@@ -205,6 +205,37 @@ fn compute()->unit {
             [0, 0, 0, 0],
         ),
     }
+    shared_cases = [
+        (
+            "scratch_store(shader_local_x(), 16777217u32 + shader_local_x());shader_barrier();"
+            "values_store(shader_global_x(), (scratch_load((shader_local_x()+1u32)%4u32)-16777216u32) as f32);",
+            [2.0, 3.0, 4.0, 1.0],
+            [0, 0, 0, 0],
+        ),
+        (
+            "shader_barrier();values_store(shader_global_x(),scratch_load(shader_local_x()) as f32);",
+            [0.0] * 4,
+            [0] * 4,
+        ),
+        (
+            "scratch_store(shader_local_x()+4u32, 0xffffffffu32);shader_barrier();",
+            [1.0, 2.0, 3.0, 4.0],
+            [1] * 4,
+        ),
+        (
+            "scratch_store(shader_local_x(),0xffffffffu32);shader_barrier();"
+            "shader_require(scratch_load((shader_local_x()+1u32)%4u32)==0xffffffffu32);",
+            [1.0, 2.0, 3.0, 4.0],
+            [0] * 4,
+        ),
+    ]
+    for program, values, status in shared_cases:
+        source.write_text("fn compute()->unit{" + program + "}")
+        run(command + ["shared-u32"], env=environment)
+        expected = work / "shared-u32.expected"
+        expected.write_bytes(struct.pack("<4f4I", *values, *status))
+        run([native, output, expected], env=environment)
+
     runtime_cases = [
         (
             "runtime-f32",
@@ -345,7 +376,7 @@ fn compute()->unit {
     assert output.read_bytes() == previous
     assert not list(work.glob(".crust-*")), "temporary output leaked"
     print(
-        f"Shader: {len(cases)} fixed-size and 10 runtime-size Vulkan dispatches, 4 injected enumeration/setup cases, "
+        f"Shader: {len(cases)} fixed-size, 4 integer-workgroup and 10 runtime-size Vulkan dispatches, 4 injected enumeration/setup cases, "
         f"3 malformed inputs, 4 invalid runner options, {len(rejected)} source rejections and failed-tool output preservation passed"
     )
 

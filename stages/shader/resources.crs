@@ -16,7 +16,7 @@ fn sp_name(stage: *SpStage, name: *u8) -> *u8 {
     return ll_global(&stage -> llvm, symbol -> decl);
 }
 fn sp_resource_type(resource: *ShaderResource) -> *u8 {
-    if resource -> kind == SHADER_BUFFER_U32 {
+    if resource -> kind == SHADER_BUFFER_U32 || resource -> kind == SHADER_WORKGROUP_U32 {
         return "i32";
     }
     return "float";
@@ -40,16 +40,18 @@ fn sp_suffix(resource: *ShaderResource) -> *u8 {
     return "tspirv.VulkanBuffer_a0f32_12_1t";
 }
 fn sp_pointer_type(resource: *ShaderResource) -> *u8 {
-    if resource -> kind == SHADER_WORKGROUP_F32 {
+    if shader_workgroup(resource -> kind) {
         return "ptr addrspace(3)";
     }
     return "ptr addrspace(11)";
 }
 fn sp_resource_pointer(stage: *SpStage, resource: *ShaderResource, index: *u8) -> unit {
-    if resource -> kind == SHADER_WORKGROUP_F32 {
+    if shader_workgroup(resource -> kind) {
         sp_text(stage, "  %p = getelementptr [");
         sp_number(stage, resource -> length);
-        sp_text(stage, " x float], ptr addrspace(3) @shared_");
+        sp_text(stage, " x ");
+        sp_text(stage, sp_resource_type(resource));
+        sp_text(stage, "], ptr addrspace(3) @shared_");
         sp_text(stage, resource -> name);
         sp_text(stage, ", i32 0, i32 ");
         sp_text(stage, index);
@@ -141,7 +143,7 @@ fn sp_resource_access(stage: *SpStage, resource: *ShaderResource, write: bool) -
     sp_text(stage, ") {\nentry:\n");
     sp_resource_bounds(stage, resource);
     var bad: *u8 = "%failed";
-    if write && resource -> kind == SHADER_WORKGROUP_F32 {
+    if write && shader_workgroup(resource -> kind) {
         bad = "%bad";
     }
     sp_text(stage, "  br i1 ");
@@ -165,8 +167,12 @@ fn sp_resource_operation(stage: *SpStage, resource: *ShaderResource, write: bool
     var type: *u8 = sp_resource_type(resource);
     if write {
         var value: *u8 = "%value";
-        if resource -> kind == SHADER_WORKGROUP_F32 {
-            sp_text(stage, "  %safe = select i1 %failed, float 0.0, float %value\n");
+        if shader_workgroup(resource -> kind) {
+            sp_text(stage, "  %safe = select i1 %failed, ");
+            sp_text(stage, type);
+            sp_text(stage, " zeroinitializer, ");
+            sp_text(stage, type);
+            sp_text(stage, " %value\n");
             value = "%safe";
         }
         sp_text(stage, "  store ");
@@ -191,7 +197,9 @@ fn sp_shared_init(stage: *SpStage, resource: *ShaderResource) -> unit {
     sp_text(stage, resource -> name);
     sp_text(stage, " = internal addrspace(3) global [");
     sp_number(stage, resource -> length);
-    sp_text(stage, " x float] undef, align 4\n");
+    sp_text(stage, " x ");
+    sp_text(stage, sp_resource_type(resource));
+    sp_text(stage, "] undef, align 4\n");
     sp_text(stage, "define internal void @init_");
     sp_text(stage, resource -> name);
     sp_text(
@@ -201,7 +209,9 @@ fn sp_shared_init(stage: *SpStage, resource: *ShaderResource) -> unit {
     sp_number(stage, resource -> length);
     sp_text(stage, "\n  br i1 %done, label %end, label %body\nbody:\n");
     sp_resource_pointer(stage, resource, "%index");
-    sp_text(stage, "  store float 0.0, ptr addrspace(3) %p, align 4\n  %next = add i32 %index, ");
+    sp_text(stage, "  store ");
+    sp_text(stage, sp_resource_type(resource));
+    sp_text(stage, " zeroinitializer, ptr addrspace(3) %p, align 4\n  %next = add i32 %index, ");
     sp_number(stage, stage -> config -> local_size);
     sp_text(stage, "\n  br label %test\nend:\n  ret void\n}\n");
 }

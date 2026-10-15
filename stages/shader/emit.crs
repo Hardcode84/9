@@ -94,7 +94,7 @@ fn sp_entry(stage: *SpStage) -> unit {
     var shared: bool = false;
     while index < stage -> config -> resource_count {
         var resource: *ShaderResource = &stage -> config -> resources[index];
-        if resource -> kind == SHADER_WORKGROUP_F32 {
+        if shader_workgroup(resource -> kind) {
             sp_text(stage, "  call void @init_");
             sp_text(stage, resource -> name);
             sp_text(stage, "(i32 %local)\n");
@@ -139,7 +139,7 @@ fn sp_emit(stage: *SpStage) -> bool {
     var index: usize = 0usize;
     while index < stage -> config -> resource_count && ll_ok(&stage -> llvm) {
         var resource: *ShaderResource = &stage -> config -> resources[index];
-        if resource -> kind == SHADER_WORKGROUP_F32 {
+        if shader_workgroup(resource -> kind) {
             sp_shared_init(stage, resource);
         } else {
             sp_resource_name(stage, resource);

@@ -4,6 +4,7 @@ const SHADER_BUFFER_F32: u32 = 0u32;
 const SHADER_BUFFER_U32: u32 = 1u32;
 const SHADER_IMAGE_R32F: u32 = 2u32;
 const SHADER_WORKGROUP_F32: u32 = 3u32;
+const SHADER_WORKGROUP_U32: u32 = 4u32;
 
 // Buffers use length elements at stride four. Images use length by height texels.
 // A zero-length buffer uses a u32 element-count header followed by its payload.
@@ -33,4 +34,8 @@ record ShaderConfig {
     status_set: u32;
     status_binding: u32;
     preserve_denorms: bool;
+}
+
+fn shader_workgroup(kind: u32) -> bool {
+    return kind == SHADER_WORKGROUP_F32 || kind == SHADER_WORKGROUP_U32;
 }

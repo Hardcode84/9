@@ -13,7 +13,7 @@ host_source(run, "../../stages/shader/api.crs");
 extern fn puts(text: *u8) -> i32 = "puts";
 if run -> argc != 3i32 && run -> argc != 4i32 && run -> argc != 5i32 {
     puts(
-        "usage: crust examples/shader/main.crs LLVM_DIRECTORY SPIRV_VAL OUTPUT [SOURCE [runtime-f32|runtime-u32]]"
+        "usage: crust examples/shader/main.crs LLVM_DIRECTORY SPIRV_VAL OUTPUT [SOURCE [runtime-f32|runtime-u32|shared-u32]]"
     );
     return 1i32;
 };
@@ -44,12 +44,16 @@ var resources: [ShaderResource; 3] = make [ShaderResource; 3] {
     }
 };
 if run -> argc == 5i32 {
-    resources[0usize].length = 0u32;
-    if cache_strcmp(run -> argv[4usize], "runtime-u32") == 0i32 {
-        resources[0usize].kind = SHADER_BUFFER_U32;
+    if cache_strcmp(run -> argv[4usize], "shared-u32") == 0i32 {
+        resources[1usize].kind = SHADER_WORKGROUP_U32;
     } else {
-        if cache_strcmp(run -> argv[4usize], "runtime-f32") != 0i32 {
-            return 1i32;
+        resources[0usize].length = 0u32;
+        if cache_strcmp(run -> argv[4usize], "runtime-u32") == 0i32 {
+            resources[0usize].kind = SHADER_BUFFER_U32;
+        } else {
+            if cache_strcmp(run -> argv[4usize], "runtime-f32") != 0i32 {
+                return 1i32;
+            }
         }
     }
 };

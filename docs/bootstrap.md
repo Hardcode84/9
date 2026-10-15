@@ -573,3 +573,11 @@ Generated accessors check the payload index
 against the header before access. An out-of-range access sets invocation
 status and does not access the payload. A positive length retains the fixed-size
 layout, without a count header.
+
+### Integer workgroup arrays
+
+`SHADER_WORKGROUP_U32` provides unsigned 32-bit shared elements. Its load
+and store accessors use `u32`. Set and binding must be zero; length must be
+positive. Integer and floating-point workgroup arrays share the 16 KiB budget.
+The stage initializes both to zero before entry and applies the same checked
+access and failed-invocation rules. Integer values retain all 32 bits.

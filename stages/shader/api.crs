@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Read and check one device source in an empty context. Keep source/config live
+// Read and check a device source into an unresolved context. Keep source/config live
 // through return. Publish validated SPIR-V atomically; preserve output on error.
 // Failure records a diagnostic in context. The context owns all compiler storage.
 extern fn shader_build(
@@ -9,3 +9,22 @@ extern fn shader_build(
     config: *ShaderConfig,
     output: *u8
 ) -> bool = "shader_build";
+
+// Add device declarations before collection. Retain config through emission.
+// The returned unit identifies the declarations; null reports a context diagnostic.
+extern fn shader_prepare(context: *CrustContext, config: *ShaderConfig, identity: u64) -> *CrustUnit = "shader_prepare";
+// Require collected, resolved, checked units and the unchanged prepared config.
+// Emit device-checked LLVM source into context-owned storage.
+extern fn shader_emit(
+    context: *CrustContext,
+    config: *ShaderConfig,
+    builtins: *CrustUnit,
+    ir: *CrustSource
+) -> bool = "shader_emit";
+// Compile and validate LLVM source; replace output only on success.
+extern fn shader_publish(
+    context: *CrustContext,
+    config: *ShaderConfig,
+    ir: *CrustSource,
+    output: *u8
+) -> bool = "shader_publish";

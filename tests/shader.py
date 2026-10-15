@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 from prepare import compile_package
+from shader_composition import check_composition
 from vulkan.abi import check_abi
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -74,6 +75,7 @@ def main():
         [build / "shader-alloc", llvm, tools / "spirv-val", work / "allocation.spv"],
         env=environment,
     )
+    check_composition(run, compiler, root, llvm, tools, work, native, environment)
     cases = {
         "exchange": (
             (ROOT / "examples/shader/program.crs").read_text(),

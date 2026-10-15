@@ -51,29 +51,64 @@ fn sp_tools(stage: *SpStage, driver: *CDriver, output: *u8) -> bool {
         output
     );
 }
-fn shader_build(
+fn sp_init(stage: *SpStage, context: *CrustContext, config: *ShaderConfig) -> unit {
+    ll_init(&stage -> llvm, context);
+    stage -> llvm.boolean_type = "i1";
+    stage -> llvm.single_exit = true;
+    stage -> llvm.expression = sp_expression;
+    stage -> llvm.user = stage as *u8;
+    stage -> functions = stage -> llvm.types;
+    stage -> loop_conditions = stage -> llvm.types;
+    stage -> config = config;
+    stage -> builtins = null(*CrustUnit);
+    stage -> entry = null(*CrustDecl);
+    stage -> barrier = null(*CrustDecl);
+    stage -> current = null(*CrustDecl);
+    stage -> depth = 0usize;
+}
+fn shader_prepare(context: *CrustContext, config: *ShaderConfig, identity: u64) -> *CrustUnit {
+    var stage: SpStage = uninit;
+    sp_init(&stage, context, config);
+    var unit_value: *CrustUnit = null(*CrustUnit);
+    if sp_config(&stage) && sp_prelude(&stage, identity) {
+        unit_value = stage.builtins;
+    }
+    ll_destroy(&stage.llvm);
+    return unit_value;
+}
+fn shader_emit(
     context: *CrustContext,
-    source: *CrustSource,
     config: *ShaderConfig,
+    builtins: *CrustUnit,
+    ir: *CrustSource
+) -> bool {
+    var stage: SpStage = uninit;
+    sp_init(&stage, context, config);
+    stage.builtins = builtins;
+    var success: bool = sp_check(&stage) && sp_emit(&stage);
+    if success {
+        ir -> bytes = crust_try_copy_string(
+            context,
+            stage.llvm.memory.header.data,
+            stage.llvm.memory.header.size
+        );
+        ir -> size = stage.llvm.memory.header.size;
+        ir -> path = "shader-llvm";
+        ir -> identity = 0u64;
+        success = ir -> bytes != null(*u8);
+    }
+    ll_destroy(&stage.llvm);
+    return success;
+}
+fn shader_publish(
+    context: *CrustContext,
+    config: *ShaderConfig,
+    ir: *CrustSource,
     output: *u8
 ) -> bool {
-    if context -> units != null(*CrustUnit) {
-        return native_error(context, "shader build requires an empty context");
-    }
     var stage: SpStage = uninit;
-    ll_init(&stage.llvm, context);
-    stage.llvm.boolean_type = "i1";
-    stage.llvm.single_exit = true;
-    stage.llvm.expression = sp_expression;
-    stage.llvm.user = &stage as *u8;
-    stage.functions = stage.llvm.types;
-    stage.loop_conditions = stage.llvm.types;
-    stage.config = config;
-    stage.builtins = null(*CrustUnit);
-    stage.entry = null(*CrustDecl);
-    stage.barrier = null(*CrustDecl);
-    stage.current = null(*CrustDecl);
-    stage.depth = 0usize;
+    sp_init(&stage, context, config);
+    c_buffer_bytes(&stage.llvm.memory.header, ir -> bytes, ir -> size);
     var driver: CDriver = make CDriver {
         stage: &stage.llvm.memory,
         options: null(*BackendOptions),
@@ -81,20 +116,28 @@ fn shader_build(
         temporary: null(*CDriverTemp),
         process_status: 0i32
     };
-    var unit_value: *CrustUnit = null(*CrustUnit);
-    var success: bool = sp_config(&stage) && sp_prelude(&stage, source -> identity ^ 1u64) && crust_read(
-        context,
-        source,
-        &unit_value
-    ) && crust_collect(context) && crust_resolve(context) && crust_check(context) && sp_check(
-        &stage
-    ) && sp_emit(&stage);
-    if success {
-        success = sp_tools(&stage, &driver, output);
-    }
+    var success: bool = ll_ok(&stage.llvm) && sp_tools(&stage, &driver, output);
     if !c_driver_cleanup(&driver, null(*u8)) {
         success = false;
     }
     ll_destroy(&stage.llvm);
     return success;
+}
+fn shader_build(
+    context: *CrustContext,
+    source: *CrustSource,
+    config: *ShaderConfig,
+    output: *u8
+) -> bool {
+    var builtins: *CrustUnit = shader_prepare(context, config, source -> identity ^ 1u64);
+    var unit_value: *CrustUnit = null(*CrustUnit);
+    var ir: CrustSource = uninit;
+    return builtins != null(*CrustUnit) && crust_read(context, source, &unit_value) && crust_collect(
+        context
+    ) && crust_resolve(context) && crust_check(context) && shader_emit(
+        context,
+        config,
+        builtins,
+        &ir
+    ) && shader_publish(context, config, &ir, output);
 }

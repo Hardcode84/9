@@ -581,3 +581,15 @@ and store accessors use `u32`. Set and binding must be zero; length must be
 positive. Integer and floating-point workgroup arrays share the 16 KiB budget.
 The stage initializes both to zero before entry and applies the same checked
 access and failed-invocation rules. Integer values retain all 32 bits.
+
+### Compose shader stages
+
+Call `shader_prepare(context, config, identity)` before symbol collection. It
+adds the selected device interface and returns its unit. Read or generate device
+units in the same context. Apply source transformations before collection, then
+call `crust_collect`, `crust_resolve`, and `crust_check`.
+
+Call `shader_emit(context, config, builtins, &ir)` with those checked units.
+Keep the prepared configuration unchanged. The result is context-owned LLVM
+source. `shader_publish(context, config, &ir, output)` invokes the selected tools
+and publishes validated SPIR-V. `shader_build` combines these calls for a source.

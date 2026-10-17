@@ -115,7 +115,7 @@ fn main(argc: i32, argv: **u8) -> i32 {
         status_binding: 1u32,
         preserve_denorms: false
     };
-    var bytes: *u8 = "fn sync()->unit{shader_barrier();}fn compute()->unit{var round:u32=0u32;while round<2u32{var i:u32=shader_local_x();scratch_store(i,values_load(i));shader_barrier();pixels_store(i,0u32,scratch_load(i));shader_barrier();values_store(i,pixels_load(i,0u32));sync();round=round+1u32;}}";
+    var bytes: *u8 = "fn sync()->unit{(shader_barrier)();}fn sample()->f32{return values_load(0u32);}fn compute()->unit{1u32;(sample)()+sample();var round:u32=0u32;while round<2u32{var i:u32=shader_local_x();scratch_store(i,values_load(i));shader_barrier();pixels_store(i,0u32,scratch_load(i));shader_barrier();values_store(i,pixels_load(i,0u32));(sync)();round=round+1u32;}}";
     var source: CrustSource = make CrustSource {
         path: "shader-allocation",
         bytes: bytes,

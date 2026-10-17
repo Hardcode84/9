@@ -642,3 +642,8 @@ WGSL uses WebGPU floating-point rules. It cannot promise the SPIR-V target's
 floating-point execution modes. A `preserve_denorms` request is rejected.
 Runtime shader compilation and device feature validation belong to the consumer.
 See [WGSL floating-point evaluation](https://www.w3.org/TR/WGSL/#floating-point-evaluation).
+
+Set `WGSL_VALIDATOR` for `make check-shader` to validate the generated WGSL
+fixture. The executable must accept one source file and return a nonzero status
+for invalid WGSL. The fixture covers grouped calls, discarded scalar values,
+resource access, and collective loops.

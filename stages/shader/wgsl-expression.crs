@@ -56,7 +56,11 @@ fn wg_cast(stage: *SpStage, input: *CrustExpr) -> unit {
     sp_text(stage, ")");
 }
 fn wg_call(stage: *SpStage, input: *CrustExpr) -> unit {
-    wg_name(stage, input -> left -> symbol -> decl -> name);
+    var callee: *CrustExpr = input -> left;
+    while callee -> kind == CRUST_E_GROUP {
+        callee = callee -> left;
+    }
+    wg_name(stage, callee -> symbol -> decl -> name);
     sp_text(stage, "(");
     var index: usize = 0usize;
     while index < input -> arg_count {

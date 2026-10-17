@@ -81,6 +81,9 @@ fn wg_effect(stage: *SpStage, input: *CrustStmt) -> unit {
         return;
     }
     if kind == CRUST_S_EXPR {
+        if input -> expr -> type -> kind != CRUST_T_UNIT {
+            sp_text(stage, "_ = ");
+        }
         wg_expression(stage, input -> expr);
         return;
     }

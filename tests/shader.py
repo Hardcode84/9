@@ -40,6 +40,7 @@ def main():
     parser.add_argument("--spirv-tools", type=Path, required=True)
     parser.add_argument("--vulkan-include", type=Path)
     parser.add_argument("--cc", default="cc")
+    parser.add_argument("--wgsl-validator", type=Path)
     args = parser.parse_args()
     build = args.build.resolve()
     work = build / "shader-tests"
@@ -79,6 +80,8 @@ def main():
         env=environment,
     )
     run([build / "shader-alloc", "wgsl", "unused", work / "allocation.wgsl"])
+    if args.wgsl_validator:
+        run([args.wgsl_validator.resolve(), work / "allocation.wgsl"])
     check_composition(run, compiler, root, llvm, tools, work, native, environment)
     check_features(run, command, tools, source, output, environment)
     check_policy(run, compiler, root, llvm, tools, work, native, environment)

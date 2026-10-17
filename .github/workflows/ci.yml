@@ -1,0 +1,124 @@
+# SPDX-License-Identifier: Apache-2.0
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libffi-dev curl unzip
+          python -m pip install pre-commit==4.5.1
+      - name: Check all files
+        run: pre-commit run --all-files --show-diff-on-failure
+
+  test:
+    name: ${{ matrix.suite }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: core
+            amalgamation: '1'
+            targets: >-
+              check check-c check-asm check-cache check-stage check-reader
+              check-native check-examples check-modules check-generics check-parallel
+          - suite: split-core
+            amalgamation: '0'
+            targets: check
+          - suite: ownership
+            amalgamation: '1'
+            targets: >-
+              check-resources check-resource-alloc check-ownership check-ownership-alloc
+              check-ownership-ergonomics check-ownership-imports check-overload
+              check-overload-alloc check-union check-union-alloc check-ownership-generics
+          - suite: tooling
+            amalgamation: '1'
+            targets: check-format check-highlight check-vscode check-ccn
+          - suite: llvm
+            amalgamation: '1'
+            targets: check-llvm check-llvm-fetch check-tutorials check-shader
+    env:
+      AMALGAMATION: ${{ matrix.amalgamation }}
+      TEST_TARGETS: ${{ matrix.targets }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        if: matrix.suite == 'tooling' || matrix.suite == 'llvm'
+        with:
+          bun-version: '1.3.11'
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libffi-dev curl unzip
+          python -m pip install lizard==1.21.6
+      - name: Free runner space for the LLVM distribution
+        if: matrix.suite == 'llvm'
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet
+      - name: Install shader tools
+        if: matrix.suite == 'llvm'
+        run: |
+          sudo apt-get install -y libvulkan-dev mesa-vulkan-drivers spirv-tools
+          rustup toolchain install 1.89.0 --profile minimal
+          cargo +1.89.0 install naga-cli --version 27.0.0 --locked --root "$RUNNER_TEMP/naga"
+          echo "WGSL_VALIDATOR=$RUNNER_TEMP/naga/bin/naga" >> "$GITHUB_ENV"
+          echo "SPIRV_TOOLS=/usr/bin" >> "$GITHUB_ENV"
+          icd=$(dpkg -L mesa-vulkan-drivers | grep -E '/lvp_icd[^/]*\.json$')
+          test -f "$icd"
+          echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+      - name: Prepare the pinned SQLite tutorial input
+        if: matrix.suite == 'llvm'
+        run: |
+          mkdir -p .profile-cache/sources
+          curl -fL https://sqlite.org/2025/sqlite-amalgamation-3500400.zip -o .profile-cache/sqlite.download
+          printf '%s  %s\n' 1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032 .profile-cache/sqlite.download | sha256sum -c -
+          unzip -jo .profile-cache/sqlite.download 'sqlite-amalgamation-3500400/sqlite3.[ch]' -d .profile-cache/sources
+          python3 benchmarks/resources/verify.py
+      - name: Fetch the latest released LLVM
+        if: matrix.suite == 'llvm'
+        run: |
+          llvm_directory=$(python3 tools/fetch_llvm.py release)
+          echo "LLVM_DIRECTORY=$llvm_directory" >> "$GITHUB_ENV"
+      - name: Build seed
+        run: make all
+      - name: Run suite
+        run: |
+          read -r -a targets <<< "$TEST_TARGETS"
+          make "${targets[@]}"
+      - name: Check wasm32 execution
+        if: matrix.suite == 'llvm'
+        run: python3 tests/c_body.py --wasm-clang "$LLVM_DIRECTORY/bin/clang"
+      - name: Check generated files
+        run: git diff --exit-code

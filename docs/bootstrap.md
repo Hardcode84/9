@@ -460,6 +460,13 @@ Lizard limits functions in `src/`,
 `include/`, and `runtime/` to CCN 15. Recorded benchmark inputs and reports are
 excluded from formatters because their hashes identify the measured bytes.
 
+The [CI workflow](../.github/workflows/ci.yml) runs on pushes, pull requests,
+and manual dispatch. It runs the hooks and separate core, split-core, ownership,
+tooling, and LLVM jobs on Ubuntu 24.04. Each job builds from source with an empty
+build directory. The LLVM job fetches the latest official release, prepares the
+pinned SQLite tutorial input, and checks wasm32 execution. Shader tests use
+Mesa's software Vulkan driver and Naga for WGSL validation.
+
 ## Validation and measurements
 
 Run `make check` for reader, checker, allocator, host, parallel, evaluator, and backend API

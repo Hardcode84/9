@@ -471,3 +471,11 @@ counts and duties. The gate runs both versions and checks rejected Rust loans.
 These measurements support a client regression budget. They do not establish
 a general complexity ordering for either application or container authors.
 The tutorials supply the complete providers and clients for this comparison.
+
+## Data capabilities
+
+The [transfer and sharing contract](ownership-model.md#transfer-and-sharing-capabilities)
+checks data at library boundaries. Ordinary functions need no execution marker.
+Thread-bound authority is an opaque value that cannot be transferred or shared.
+Providers retain captures until retirement and expose required authority in their
+input contracts. Task captures and channel messages use the same structural rules.

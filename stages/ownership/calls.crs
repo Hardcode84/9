@@ -45,6 +45,13 @@ fn os_call(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
 }
 
 fn os_explicit_call(check: *OsCheck, contract: *OsFunction, location: *CrustLoc) -> bool {
+    if (*(*contract).declaration).kind == CRUST_D_EXTERN && (*contract).foreign == 0u32 && !os_imported(
+        (*check).stage,
+        (*contract).declaration
+    ) {
+        os_error(check, location, "foreign calls require an explicit foreign contract");
+        return false;
+    }
     var global: *RsGlobal = rs_global(
         (*(*check).stage).resources,
         (*(*contract).declaration).name

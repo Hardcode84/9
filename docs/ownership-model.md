@@ -459,3 +459,68 @@ A string literal can be passed as `*u8` to an explicitly trusted function.
 The provider must treat those bytes as immutable static storage. Checked code
 cannot index or write through that pointer. This rule does not permit arbitrary
 raw pointers at a checked call boundary.
+
+## Transfer and sharing capabilities
+
+Execution context is a property of values and library APIs. Ordinary functions
+use the same signature on the application thread and on a pool thread. Checked
+code has no ambient mutable storage. It receives access through owned values,
+loans, and existing domain permissions.
+
+The `transfers(parameter, ...)` clause checks the types at a library transfer
+boundary. The rule applies to task captures, channel messages, and ownership
+handoff. It does not start a thread or change a function's execution context.
+The provider must retain each borrowed input until the operation retires.
+Owned inputs require `move`. The `from` clause describes retained loans.
+
+| Type | Transfer | Concurrent shared access |
+| --- | --- | --- |
+| Scalar | Yes | Yes |
+| Array or ordinary record | All elements or fields permit transfer | All elements or fields permit sharing |
+| `read T` | `T` permits sharing | `T` permits sharing |
+| `mut T` | `T` permits transfer | No |
+| Raw pointer or function pointer | Rejected | Rejected |
+| Opaque type | Explicit trusted `send` assertion | Explicit trusted `share` assertion |
+
+The two capabilities are independent. A unique mutable container can permit
+transfer without permitting shared access. A borrowed view can permit shared
+access while its owner remains on one thread. An owning transfer includes the
+right to destroy the value on the destination thread. The same structural rule
+applies to resources with embedded owners and custom cleanup.
+
+Thread-bound authority is an opaque type without `send` or `share`. Every
+operation that needs that authority takes the value or a loan of it. A containing
+record also fails transfer checks. The trusted entry point creates the authority
+on the required thread. Its constructor must remain inaccessible to checked
+clients. Checked code cannot manufacture opaque values or obtain raw authority
+through a pointer. A library must not expose a zero-argument factory that bypasses
+this rule.
+
+For example, an event API can require `mut Application` for event processing.
+A task capture that contains `Application`, `read Application`, or
+`mut Application` is rejected. Computation that receives ordinary numeric data
+requires no execution annotation. A channel that consumes an owned message uses
+the same transfer check and rejects reuse after the send.
+
+Trusted functions must be safe for all calls permitted by their input contracts,
+including concurrent calls with independent inputs and shared calls permitted by
+`share`. Thread-bound state must appear as a required capability. Mutable shared
+state must have synchronization inside the provider. An opaque `send` assertion
+covers destruction and all embedded cleanup on the destination thread. A `share`
+assertion covers all operations that accept a shared loan. These are provider
+obligations; the checker cannot prove raw pointer implementations.
+
+Raw foreign declarations inside a trusted provider are implementation details.
+A checked caller needs an explicit `foreign(...)` contract or a typed wrapper.
+Exported ownership interfaces omit raw foreign declarations. Compiled functions
+retain their callable interfaces when imported. Foreign contracts must permit
+execution with the authority supplied by their arguments; a declaration for a
+thread-bound platform call must not claim unrestricted scalar access.
+
+An opaque operation result retains the origins in its `from` clause until
+cleanup. Each origin retains one loan with the declared access mode, including
+when several private fields refer to that origin. Nested private handles cannot
+release this loan early. The caller cannot reuse or destroy the retained owner
+until the operation result is dropped. Moving the result into another record
+preserves every captured loan, including separate paths from the same parameter.
+Cleanup of the containing record ends these loans.

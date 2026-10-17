@@ -345,18 +345,20 @@ fn os_store_record(
         (*check).depth = (*check).depth - 1usize;
         return;
     }
-    var slot: *OsSlot = os_fields(state, target);
-    while slot != null(*OsSlot) && !os_failed(check) {
-        os_store_record_field(check, state, slot, source, location);
-        slot = (*slot).next;
-    }
     if os_opaque((*target).contract) || os_parameter_type(
         (*check).stage,
         (*target).syntax
     ) {
+        // Opaque captures belong to the moved value, independent of layout names.
+        os_set_fields(check, state, target, os_fields(state, source));
         os_mark(check, state, target, os_flags(state, source));
         (*check).depth = (*check).depth - 1usize;
         return;
+    }
+    var slot: *OsSlot = os_fields(state, target);
+    while slot != null(*OsSlot) && !os_failed(check) {
+        os_store_record_field(check, state, slot, source, location);
+        slot = (*slot).next;
     }
     if !os_failed(check) && os_initialized(check, state, target) {
         os_mark(check, state, target, os_flags(state, target) | OS_READY);

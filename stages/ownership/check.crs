@@ -18,6 +18,14 @@ fn os_validate_record(check: *OsCheck, global: *RsGlobal) -> unit {
         os_validate_opaque(check, global, contract);
         return;
     }
+    if (*contract).send || (*contract).share {
+        os_error(
+            check,
+            &(*declaration).loc,
+            "send and share assertions require a trusted opaque representation"
+        );
+        return;
+    }
     if (*contract).scoped || (*contract).stable {
         os_error(
             check,
@@ -433,6 +441,9 @@ fn os_check(stage: *OsStage) -> bool {
             }
         }
         global = (*global).next;
+    }
+    if !os_failed(&check) {
+        os_check_transfers(&check);
     }
     return !os_failed(&check);
 }

@@ -18,6 +18,7 @@ from ownership_origins import check_origins
 from ownership_places import check_places
 from ownership_runtime import check_runtime
 from ownership_support import ROOT, SCALAR_FLOW, command, execute
+from ownership_transfers import check_transfers
 from resources import consumption_rejects
 
 
@@ -327,6 +328,7 @@ def run(build, directory, sanitize):
     check_ending(build, directory, sanitize)
     check_liveness(build, directory, sanitize)
     check_leases(build, directory, sanitize)
+    check_transfers(build, directory)
     check_boundaries(build, directory, sanitize)
     check_heap(build, directory, sanitize)
     check_handles(build, directory, sanitize)

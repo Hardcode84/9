@@ -166,13 +166,66 @@ fn os_call_view_record(
     if object == null(*OsObject) {
         return null(*OsValue);
     }
-    os_view_call_fields(check, state, object, contract, arguments, location);
+    if os_opaque((*object).contract) {
+        os_opaque_call_captures(check, state, object, contract, arguments, location);
+    } else {
+        os_view_call_fields(check, state, object, contract, arguments, location);
+    }
     var result: *OsValue = os_value(check, syntax, object, false);
     if result != null(*OsValue) {
         (*result).owner = true;
         (*result).fresh = true;
     }
     return result;
+}
+
+fn os_opaque_call_captures(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    contract: *OsFunction,
+    arguments: **OsValue,
+    location: *CrustLoc
+) -> unit {
+    var origin: *OsOrigin = (*contract).origins;
+    var fields: *OsSlot = null(*OsSlot);
+    var maximum: u32 = os_view_mode(check, (*object).syntax);
+    while origin != null(*OsOrigin) && !os_failed(check) {
+        var source: *OsValue = arguments[(*origin).index];
+        var mode: u32 = (*(*source).syntax).kind;
+        if mode > maximum {
+            mode = maximum;
+        }
+        var syntax: *CrustTypeSyntax = os_syntax(check, mode, location);
+        if syntax == null(*CrustTypeSyntax) {
+            return;
+        }
+        (*syntax).base = os_view_source_type(check, origin, (*source).syntax);
+        if (*syntax).base == null(*CrustTypeSyntax) {
+            return;
+        }
+        var value: *OsValue = os_call_view(check, state, syntax, origin, source, location);
+        if value == null(*OsValue) || os_failed(check) {
+            return;
+        }
+        var field: *OsSlot = os_slot(
+            check,
+            syntax,
+            (*origin).parameter,
+            object,
+            (*state).scope
+        );
+        if field == null(*OsSlot) {
+            return;
+        }
+        (*field).next = fields;
+        fields = field;
+        os_loan_keep(check, state, value);
+        os_set(check, state, field as *u8, value, OS_READY);
+        origin = (*origin).next;
+    }
+    os_set_fields(check, state, object, fields);
+    os_mark(check, state, object, os_flags(state, object) | OS_READY);
 }
 
 // An origin identifies storage without creating or reading through a loan.

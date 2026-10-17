@@ -13,6 +13,8 @@ from ownership_arrays import PROGRAM as ARRAYS
 from ownership_leases import EMBEDDED, PROVIDER, embedded_client
 from ownership_loops import LOOPS
 from ownership_origins import RECORDS
+from ownership_transfers import PROVIDER as TRANSFER_PROVIDER
+from ownership_transfers import VALID as TRANSFER_CLIENT
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -111,7 +113,12 @@ def main():
         leases.write_text(embedded_client(EMBEDDED["nested"]))
         lease_provider = work / "lease-provider.crs"
         lease_provider.write_text(PROVIDER)
+        transfers = work / "transfers.crs"
+        transfers.write_text(TRANSFER_CLIENT)
+        transfer_provider = work / "transfer-provider.crs"
+        transfer_provider.write_text(TRANSFER_PROVIDER)
         for source, trusted in [
+            (transfers, transfer_provider),
             (leases, lease_provider),
             (arrays, ""),
             (origins, ""),

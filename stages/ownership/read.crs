@@ -44,6 +44,15 @@ fn os_read_fields(reader: *CrustReader, fields: **OsField) -> unit {
 }
 
 fn os_read_record_clause(reader: *CrustReader, contract: *OsRecord) -> bool {
+    if rr_is_name(reader, "send") || rr_is_name(reader, "share") {
+        if rr_is_name(reader, "send") {
+            (*contract).send = true;
+        } else {
+            (*contract).share = true;
+        }
+        rr_next(reader);
+        return true;
+    }
     if rr_is_name(reader, "opaque") {
         (*contract).opaque = true;
         rr_next(reader);
@@ -183,6 +192,10 @@ fn os_read_foreign(reader: *CrustReader, stage: *OsStage, function: *OsFunction)
 }
 
 fn os_read_function_clause(reader: *CrustReader, stage: *OsStage, function: *OsFunction) -> bool {
+    if rr_is_name(reader, "transfers") {
+        os_read_fields(reader, &(*function).transfers);
+        return true;
+    }
     if rr_is_name(reader, "access") {
         if (*function).effect != 0u32 {
             rr_error(reader, (*reader).token.offset, "duplicate access contract");

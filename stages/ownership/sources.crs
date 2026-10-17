@@ -30,6 +30,7 @@ stage_source(stage, "defer.crs");
 stage_source(stage, "loop.crs");
 stage_source(stage, "control.crs");
 stage_source(stage, "check.crs");
+stage_source(stage, "transfers.crs");
 stage_source(stage, "live.crs");
 stage_source(stage, "live_end.crs");
 stage_source(stage, "program.crs");

@@ -265,6 +265,9 @@ def run(build):
         )
         rejected += domain_membership_checks(directory, driver, cache, environment)
         rejected += lease_imports(directory, driver, cache, environment)
+        from ownership_transfers import check_transfer_imports
+
+        rejected += check_transfer_imports(directory, driver, cache, environment)
         links.unlink()
         library.unlink()
         output = directory / "client"

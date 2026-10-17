@@ -1,0 +1,104 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn os_transfer_type(check: *OsCheck, syntax: *CrustTypeSyntax, shared: bool) -> bool {
+    if !os_enter(check, &(*syntax).loc) {
+        return false;
+    }
+    var valid: bool = os_transfer_type_inner(check, syntax, shared);
+    (*check).depth = (*check).depth - 1usize;
+    return valid;
+}
+
+fn os_transfer_type_inner(check: *OsCheck, syntax: *CrustTypeSyntax, shared: bool) -> bool {
+    var kind: u32 = (*syntax).kind;
+    if kind <= CRUST_T_BOOL {
+        return true;
+    }
+    if kind == CRUST_T_ARRAY {
+        return os_transfer_type(check, (*syntax).base, shared);
+    }
+    var resources: *RsStage = (*(*check).stage).resources;
+    if kind == rs_kind(resources, RS_READ) {
+        return os_transfer_type(check, (*syntax).base, true);
+    }
+    if kind == rs_kind(resources, RS_MUT) {
+        return !shared && os_transfer_type(check, (*syntax).base, false);
+    }
+    var schema: *OsRecord = os_record((*check).stage, syntax);
+    if schema == null(*OsRecord) {
+        return false;
+    }
+    if (*schema).opaque {
+        if shared {
+            return (*schema).share;
+        }
+        return (*schema).send;
+    }
+    return os_transfer_record(check, schema, shared);
+}
+
+fn os_transfer_record(check: *OsCheck, schema: *OsRecord, shared: bool) -> bool {
+    var result: *u32 = &(*schema).send_result;
+    if shared {
+        result = &(*schema).share_result;
+    }
+    if *result != 0u32 {
+        return *result == 2u32;
+    }
+    var valid: bool = os_transfer_fields(check, schema, shared);
+    if !os_failed(check) {
+        *result = 1u32 + valid as u32;
+    }
+    return valid;
+}
+
+fn os_transfer_fields(check: *OsCheck, schema: *OsRecord, shared: bool) -> bool {
+    var field: *CrustField = (*(*schema).declaration).fields;
+    while field != null(*CrustField) {
+        if !os_transfer_type(check, (*field).syntax_type, shared) {
+            return false;
+        }
+        field = (*field).next;
+    }
+    return true;
+}
+
+fn os_transfer_parameters(check: *OsCheck, function: *OsFunction) -> unit {
+    var item: *OsField = (*function).transfers;
+    while item != null(*OsField) && !os_failed(check) {
+        var parameter: *CrustParam = (*(*function).declaration).params;
+        while parameter != null(*CrustParam) && (*parameter).name != (*item).name {
+            parameter = (*parameter).next;
+        }
+        if parameter == null(*CrustParam) {
+            os_error(
+                check,
+                &(*(*function).declaration).loc,
+                "transfers must name a function parameter"
+            );
+            return;
+        }
+        if !os_transfer_type(check, (*parameter).syntax_type, false) {
+            os_error(
+                check,
+                &(*parameter).loc,
+                "transfer requires transferable storage or a shareable read loan"
+            );
+        }
+        item = (*item).next;
+    }
+}
+
+fn os_check_transfers(check: *OsCheck) -> unit {
+    var global: *RsGlobal = (*(*(*check).stage).resources).first_global;
+    while global != null(*RsGlobal) && !os_failed(check) {
+        var declaration: *CrustDecl = (*global).source;
+        if (*declaration).kind == CRUST_D_FUNCTION || (*declaration).kind == CRUST_D_EXTERN {
+            os_transfer_parameters(
+                check,
+                os_function((*check).stage, (*declaration).name)
+            );
+        }
+        global = (*global).next;
+    }
+}

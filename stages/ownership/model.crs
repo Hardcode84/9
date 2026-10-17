@@ -48,9 +48,13 @@ record OsRecord {
     domain: *CrustName;
     owns: *OsField;
     view_mode: u32;
+    send_result: u32;
+    share_result: u32;
     opaque: bool;
     stable: bool;
     scoped: bool;
+    send: bool;
+    share: bool;
 }
 
 record OsNative {
@@ -68,6 +72,7 @@ record OsFunction {
     origins: *OsOrigin;
     initializes: *OsField;
     modifies: *OsField;
+    transfers: *OsField;
     native: *OsNative;
     effect: u32;
     foreign: u32;

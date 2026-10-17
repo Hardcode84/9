@@ -60,6 +60,7 @@ fn os_source_contract(
     cs_name((*query).context, text, (*function).domain);
     cs_number((*query).context, text, (*function).foreign as u64);
     cs_number((*query).context, text, (*function).has_modifies as u64);
+    os_source_fields(query, text, (*function).transfers);
     os_source_fields(query, text, (*function).modifies);
     var origin: *OsOrigin = (*function).origins;
     while origin != null(*OsOrigin) {

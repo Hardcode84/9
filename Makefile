@@ -261,7 +261,7 @@ check-resources: all test-tools $(BUILD)/kind_composition $(BUILD)/resource-back
 $(BUILD)/composition-test: $(BUILD)/crust-c   examples/composition/build.crs tests/composition_driver.crs Makefile test-tools
 	$< -o $@ $(OWNERSHIP_LIBRARY) $(OVERLOAD) examples/composition/build.crs tests/composition_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
-check-overload: all test-tools $(BUILD)/composition-test
+check-overload: all test-tools $(BUILD)/crust0 $(BUILD)/composition-test
 	python3 tests/overload.py --build $(BUILD)
 	python3 tests/overload_resources.py --build $(BUILD)
 	python3 tests/overload_hooks.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'

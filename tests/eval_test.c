@@ -1041,6 +1041,11 @@ static void test_failures(void)
 
 int main(void)
 {
+    CrustContext target;
+    crust_context_init_wasm32(&target, NULL);
+    check(crust_eval_create(&target, NULL) == NULL && target.error_count != 0,
+          "host evaluator rejects wasm32 target storage");
+    crust_context_destroy(&target);
     test_program("tests/runtime.crs");
     test_program("tests/float.crs");
     test_reentry();

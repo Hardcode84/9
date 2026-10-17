@@ -1,0 +1,160 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn wg_resource_type(stage: *SpStage, resource: *ShaderResource) -> unit {
+    var kind: u32 = CRUST_T_U32;
+    if resource -> kind == SHADER_BUFFER_F32 || resource -> kind == SHADER_WORKGROUP_F32 {
+        kind = CRUST_T_F32;
+    }
+    wg_type(stage, kind);
+}
+fn wg_resource(stage: *SpStage, r: *ShaderResource) -> unit {
+    if r -> kind == SHADER_IMAGE_R32F {
+        wg_image(stage, r);
+        return;
+    }
+    if shader_workgroup(r -> kind) {
+        sp_text(stage, "var<workgroup> ");
+    } else {
+        sp_text(stage, "struct B_");
+        sp_text(stage, r -> name);
+        sp_text(stage, " {\n");
+        if r -> layout == SHADER_COUNTED {
+            sp_text(stage, "count: u32,\n");
+        }
+        sp_text(stage, "data: array<");
+        wg_resource_type(stage, r);
+        if r -> layout == SHADER_FIXED {
+            sp_text(stage, ", ");
+            sp_number(stage, r -> length);
+        }
+        sp_text(stage, ">,\n}\n@group(");
+        sp_number(stage, r -> set);
+        sp_text(stage, ") @binding(");
+        sp_number(stage, r -> binding);
+        sp_text(stage, ") var<storage, read_write> ");
+    }
+    sp_text(stage, "r_");
+    sp_text(stage, r -> name);
+    sp_text(stage, ": ");
+    if shader_workgroup(r -> kind) {
+        sp_text(stage, "array<");
+        wg_resource_type(stage, r);
+        sp_text(stage, ", ");
+        sp_number(stage, r -> length);
+        sp_text(stage, ">");
+    } else {
+        sp_text(stage, "B_");
+        sp_text(stage, r -> name);
+    }
+    sp_text(stage, ";\n");
+    wg_access(stage, r, false);
+    wg_access(stage, r, true);
+}
+fn wg_access(stage: *SpStage, r: *ShaderResource, write: bool) -> unit {
+    var suffix: *u8 = "_load";
+    if write {
+        suffix = "_store";
+    }
+    sp_text(stage, "fn s_");
+    sp_text(stage, r -> name);
+    sp_text(stage, suffix);
+    sp_text(stage, "(index: u32");
+    if write {
+        sp_text(stage, ", value: ");
+        wg_resource_type(stage, r);
+    }
+    sp_text(stage, ")");
+    if !write {
+        sp_text(stage, " -> ");
+        wg_resource_type(stage, r);
+    }
+    sp_text(stage, " { ");
+    if shader_checked(stage -> config) {
+        wg_access_check(stage, r, write);
+    }
+    if !write {
+        sp_text(stage, "return ");
+    }
+    sp_text(stage, "r_");
+    sp_text(stage, r -> name);
+    if !shader_workgroup(r -> kind) {
+        sp_text(stage, ".data");
+    }
+    sp_text(stage, "[index]");
+    if write {
+        sp_text(stage, " = value");
+    }
+    sp_text(stage, "; }\n");
+}
+fn wg_module(stage: *SpStage) -> bool {
+    if stage -> config -> preserve_denorms {
+        return sp_error(stage, "WGSL cannot require denormal preservation");
+    }
+    sp_text(
+        stage,
+        "var<private> global_x: u32;\nvar<private> local_x: u32;\nfn s_shader_global_x() -> u32 { return global_x; }\nfn s_shader_local_x() -> u32 { return local_x; }\nfn s_shader_sqrt(x: f32) -> f32 { return sqrt(x); }\nfn s_shader_barrier() { workgroupBarrier(); storageBarrier(); }\n"
+    );
+    if shader_checked(stage -> config) {
+        wg_checks(stage);
+    }
+    var index: usize = 0usize;
+    while index < stage -> config -> resource_count {
+        var r: *ShaderResource = &stage -> config -> resources[index];
+        if sp_resource_used(stage, r) {
+            wg_resource(stage, r);
+        }
+        index = index + 1usize;
+    }
+    var unit_value: *CrustUnit = ll_context(&stage -> llvm) -> units;
+    while unit_value != null(*CrustUnit) {
+        var decl: *CrustDecl = unit_value -> declarations;
+        while decl != null(*CrustDecl) {
+            if decl -> kind == CRUST_D_FUNCTION && crust_map_get(&stage -> used, decl as usize) != null(
+                *u8
+            ) {
+                wg_function(stage, decl);
+            }
+            decl = decl -> next;
+        }
+        unit_value = unit_value -> next;
+    }
+    sp_text(stage, "@compute @workgroup_size(");
+    sp_number(stage, stage -> config -> local_size);
+    sp_text(
+        stage,
+        ", 1, 1) fn main(@builtin(global_invocation_id) global: vec3<u32>, @builtin(local_invocation_id) local: vec3<u32>) { global_x = global.x; local_x = local.x; "
+    );
+    wg_name(stage, stage -> entry -> name);
+    sp_text(stage, "(); ");
+    if shader_checked(stage -> config) {
+        sp_text(stage, "status[global_x] = status[global_x] | select(0u, 1u, failed); ");
+    }
+    sp_text(stage, "}\n");
+    return ll_ok(&stage -> llvm);
+}
+// Require checked shader input and its prepared resource declarations. The context
+// owns the returned source. Report unsupported target requirements as diagnostics.
+fn shader_wgsl(
+    context: *CrustContext,
+    config: *ShaderConfig,
+    builtins: *CrustUnit,
+    output: *CrustSource
+) -> bool {
+    var stage: SpStage = uninit;
+    sp_init(&stage, context, config);
+    stage.builtins = builtins;
+    var success: bool = sp_check(&stage) && wg_module(&stage);
+    if success {
+        output -> bytes = crust_try_copy_string(
+            context,
+            stage.llvm.memory.header.data,
+            stage.llvm.memory.header.size
+        );
+        output -> size = stage.llvm.memory.header.size;
+        output -> path = "shader-wgsl";
+        output -> identity = 0u64;
+        success = output -> bytes != null(*u8);
+    }
+    ll_destroy(&stage.llvm);
+    return success;
+}

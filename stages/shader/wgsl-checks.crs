@@ -1,0 +1,114 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn wg_zero(stage: *SpStage, resource: *ShaderResource) -> unit {
+    wg_resource_type(stage, resource);
+    sp_text(stage, "(0)");
+}
+fn wg_access_check(stage: *SpStage, resource: *ShaderResource, write: bool) -> unit {
+    sp_text(stage, "let bad = index >= ");
+    if resource -> layout == SHADER_COUNTED {
+        sp_text(stage, "r_");
+        sp_text(stage, resource -> name);
+        sp_text(stage, ".count");
+    } else {
+        sp_number(stage, resource -> length);
+        sp_text(stage, "u");
+    }
+    sp_text(stage, "; failed = failed || bad; ");
+    if write {
+        if shader_workgroup(resource -> kind) {
+            sp_text(stage, "if (bad) { return; } if (failed) { r_");
+            sp_text(stage, resource -> name);
+            sp_text(stage, "[index] = ");
+            wg_zero(stage, resource);
+            sp_text(stage, "; return; } ");
+        } else {
+            sp_text(stage, "if (failed) { return; } ");
+        }
+    } else {
+        sp_text(stage, "if (failed) { return ");
+        wg_zero(stage, resource);
+        sp_text(stage, "; } ");
+    }
+}
+fn wg_checked_binary(stage: *SpStage, input: *CrustExpr) -> bool {
+    if !shader_checked(stage -> config) || input -> type -> kind == CRUST_T_F32 {
+        return false;
+    }
+    var name: *u8 = null(*u8);
+    if input -> op == CRUST_OP_DIV {
+        name = "div";
+    }
+    if input -> op == CRUST_OP_REM {
+        name = "rem";
+    }
+    if input -> op == CRUST_OP_SHL {
+        name = "shl";
+    }
+    if input -> op == CRUST_OP_SHR {
+        name = "shr";
+    }
+    if name == null(*u8) {
+        return false;
+    }
+    sp_text(stage, "checked_");
+    sp_text(stage, name);
+    sp_text(stage, "_");
+    wg_type(stage, input -> type -> kind);
+    sp_text(stage, "(");
+    wg_expression(stage, input -> left);
+    sp_text(stage, ", ");
+    wg_expression(stage, input -> right);
+    sp_text(stage, ")");
+    return true;
+}
+fn wg_check_operation(stage: *SpStage, name: *u8, op: *u8, kind: u32, shift: bool) -> unit {
+    sp_text(stage, "fn checked_");
+    sp_text(stage, name);
+    sp_text(stage, "_");
+    wg_type(stage, kind);
+    sp_text(stage, "(a: ");
+    wg_type(stage, kind);
+    sp_text(stage, ", b: ");
+    wg_type(stage, kind);
+    sp_text(stage, ") -> ");
+    wg_type(stage, kind);
+    sp_text(stage, " { if (");
+    if shift {
+        sp_text(stage, "u32(b) >= 32u");
+    } else {
+        sp_text(stage, "b == 0");
+        if kind == CRUST_T_I32 {
+            sp_text(stage, " || (a == bitcast<i32>(2147483648u) && b == -1)");
+        }
+    }
+    sp_text(stage, ") { failed = true; return ");
+    wg_type(stage, kind);
+    sp_text(stage, "(0); } return a ");
+    sp_text(stage, op);
+    sp_text(stage, " ");
+    if shift {
+        sp_text(stage, "u32(b)");
+    } else {
+        sp_text(stage, "b");
+    }
+    sp_text(stage, "; }\n");
+}
+fn wg_checks(stage: *SpStage) -> unit {
+    sp_text(
+        stage,
+        "var<private> failed: bool;\nfn s_shader_require(ok: bool) { failed = failed || !ok; }\nfn s_shader_failed() -> bool { return failed; }\n@group("
+    );
+    sp_number(stage, stage -> config -> status_set);
+    sp_text(stage, ") @binding(");
+    sp_number(stage, stage -> config -> status_binding);
+    sp_text(stage, ") var<storage, read_write> status: array<u32>;\n");
+    wg_check_arithmetic(stage, CRUST_T_U32);
+    wg_check_arithmetic(stage, CRUST_T_I32);
+}
+fn wg_check_arithmetic(stage: *SpStage, kind: u32) -> unit {
+    wg_check_operation(stage, "div", "/", kind, false);
+    wg_check_operation(stage, "rem", "%", kind, false);
+    wg_check_operation(stage, "shl", "<<", kind, true);
+    wg_check_operation(stage, "shr", ">>", kind, true);
+}

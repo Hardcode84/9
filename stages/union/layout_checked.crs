@@ -61,7 +61,7 @@ fn su_checked_round(
     alignment: u32
 ) -> u64 access(edit, CompilerArena) {
     var mask: u64 = alignment as u64 - 1u64;
-    if size > 9223372036854775807u64 - mask {
+    if size > su_handle_layout_limit(read arena) - mask {
         su_layout_diagnostic(read arena, read location, SU_LAYOUT_OVERFLOW);
         return 0u64;
     }
@@ -118,7 +118,7 @@ fn su_checked_array(
     if value.align == 0u32 {
         return value;
     }
-    if count > 9223372036854775807u64 / value.size {
+    if count > su_handle_layout_limit(read arena) / value.size {
         su_layout_diagnostic(read arena, read location, SU_ARRAY_OVERFLOW);
         return empty;
     }
@@ -142,7 +142,7 @@ fn su_checked_fields(
         any = true;
         var location: SuLocation = su_fields_location(read cursor);
         data.size = su_checked_round(read arena, read location, data.size, value.align);
-        if value.size > 9223372036854775807u64 - data.size {
+        if value.size > su_handle_layout_limit(read arena) - data.size {
             su_layout_diagnostic(read arena, read location, SU_RECORD_OVERFLOW);
             return false;
         }
@@ -184,7 +184,7 @@ fn su_checked_variants(
     }
     var location: SuLocation = su_handle_location(read decl);
     data.size = su_checked_round(read arena, read location, data.size, data.align);
-    if data.size > 9223372036854775803u64 {
+    if data.size > su_handle_layout_limit(read arena) - 4u64 {
         su_layout_diagnostic(read arena, read location, SU_TAG_OVERFLOW);
         return false;
     }

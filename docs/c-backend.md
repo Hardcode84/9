@@ -414,3 +414,31 @@ results. Integer conversions clamp before the C cast, so NaN and out-of-range
 values cannot cause an undefined C conversion. The shared numeric tests cover
 register and stack arguments, callbacks, signed zero, subnormals, NaNs, and
 conversion boundaries.
+
+## WebAssembly target
+
+Select `crust_context_init_wasm32` before reading and checking application input.
+The context uses the wasm32 layout from the [specification](crust0-spec.md#2-target-profile).
+The compiler and its stages still execute on the native build host. Do not use
+this context to evaluate application code on that host.
+
+Emit C with `c_backend_build` and its emit-only option, then compile that C with
+Clang for wasm32. Emscripten supplies libc and browser imports when the application
+needs them. The root owns the target linker command and resource packaging.
+The seed does not select a browser runtime or a JavaScript library.
+
+The generated prelude checks the target pointer, integer, and boolean layout.
+Foreign symbols keep their declared linkage names through Clang assembly labels.
+The wasm32 path does not use host `objcopy` renames. `usize` and `u32` remain
+distinct C types in function signatures even though both have 32 bits. This
+preserves typed callbacks through `uintptr_t` and `uint32_t`.
+
+Run the target ABI fixture with a wasm-capable Clang and Bun:
+
+```sh
+python3 tests/c_body.py --build build --wasm-clang path/to/clang
+```
+
+The fixture checks layouts, callbacks, imported functions, pointer round trips,
+and integer operations at both optimization levels. The native evaluator, LLVM
+host emitter, and assembly emitter reject the wasm32 execution profile.

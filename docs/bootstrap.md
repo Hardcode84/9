@@ -619,3 +619,26 @@ counter, a strict comparison with a literal bound, and one final increment by
 one. Other counter writes and exits are rejected. Failed invocations complete
 these finite loops; ordinary loops retain failure-driven exit. Conditional
 collective calls are rejected. The shader tutorial shows the accepted form.
+
+### Emit WebGPU shaders
+
+Use `shader_prepare` and the same collection, resolution, and checking sequence
+as SPIR-V. Call `shader_wgsl(context, config, builtins, &source)` to get
+context-owned WGSL. `shader_build_wgsl` combines reading, checking, emission, and
+file publication. It needs no LLVM executable or SPIR-V translator.
+
+The same device subset, resource declarations, reachability checks, and
+collective control-flow rules apply. Resources use their configured bind groups
+and bindings. R32F images use `r32float` storage textures with read and
+write access. Runtime-sized counted buffers retain their leading length word.
+Workgroup arrays use WGSL workgroup storage.
+
+Checked mode retains sticky failure, checked access and integer arithmetic,
+zero values after failure, and a per-invocation status word. Failed invocations
+still participate in accepted uniform collective loops. Raw mode requires the
+caller to meet the same access and arithmetic preconditions as raw SPIR-V.
+
+WGSL uses WebGPU floating-point rules. It cannot promise the SPIR-V target's
+floating-point execution modes. A `preserve_denorms` request is rejected.
+Runtime shader compilation and device feature validation belong to the consumer.
+See [WGSL floating-point evaluation](https://www.w3.org/TR/WGSL/#floating-point-evaluation).

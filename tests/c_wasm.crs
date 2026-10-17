@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn c_wasm_emit(path: *u8, output: *u8) -> i32 {
+    var context: CrustContext = uninit;
+    crust_context_init_wasm32(&context, null(*CrustAllocator));
+    var source: CrustSource = make CrustSource {
+        path: path,
+        bytes: null(*u8),
+        size: 0usize,
+        identity: 1u64
+    };
+    var result: i32 = 1i32;
+    if crust0_host_read_file(path, &source.bytes, &source.size) == 0i32 {
+        result = c_wasm_source(&context, &source, output);
+        crust0_host_free(source.bytes);
+    }
+    crust_context_destroy(&context);
+    return result;
+}
+fn c_wasm_source(context: *CrustContext, source: *CrustSource, output: *u8) -> i32 {
+    var parsed: *CrustUnit = null(*CrustUnit);
+    if !crust_read(context, source, &parsed) || !crust_collect(context) || !crust_resolve(context) || !crust_check(
+        context
+    ) {
+        return 2i32;
+    }
+    var decl: *CrustDecl = parsed -> declarations;
+    while decl != null(*CrustDecl) {
+        if decl -> kind == CRUST_D_FUNCTION && decl -> body != null(*CrustStmt) {
+            decl -> link_name = "";
+            if body_test_equal(decl -> name -> text, "wasm_probe") {
+                decl -> link_name = "wasm_probe";
+            }
+        }
+        decl = decl -> next;
+    }
+    var options: BackendOptions = make BackendOptions {
+        mode: 2u32,
+        output: output,
+        symbols: null(*u8),
+        cflags: null(**u8),
+        cflag_count: 0usize,
+        ldflags: null(**u8),
+        ldflag_count: 0usize
+    };
+    return c_backend_build(context, null(*CrustDecl), &options);
+}

@@ -388,6 +388,10 @@ fn ll_emit_binding(stage: *LlStage, binding: *LlBinding) -> unit {
 // Emit complete checked raw bodies. Keep input storage live through stage destruction.
 // Empty native names select private definitions. Output buffers belong to the stage.
 fn ll_emit(stage: *LlStage, entry: *CrustDecl) -> bool {
+    if ll_context(stage) -> builtins[CRUST_T_USIZE as usize].size != 8u64 {
+        ll_error(stage, "LLVM host emission requires the Linux x86-64 target profile");
+        return false;
+    }
     stage -> entry = entry;
     var unit_value: *CrustUnit = ll_context(stage) -> units;
     while unit_value != null(*CrustUnit) && ll_ok(stage) {

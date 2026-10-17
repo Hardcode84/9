@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn wg_image(stage: *SpStage, resource: *ShaderResource) -> unit {
+    sp_text(stage, "@group(");
+    sp_number(stage, resource -> set);
+    sp_text(stage, ") @binding(");
+    sp_number(stage, resource -> binding);
+    sp_text(stage, ") var r_");
+    sp_text(stage, resource -> name);
+    sp_text(stage, ": texture_storage_2d<r32float, read_write>;\n");
+    wg_image_access(stage, resource, false);
+    wg_image_access(stage, resource, true);
+}
+fn wg_image_access(stage: *SpStage, resource: *ShaderResource, write: bool) -> unit {
+    sp_text(stage, "fn s_");
+    sp_text(stage, resource -> name);
+    if write {
+        sp_text(stage, "_store(x: u32, y: u32, value: f32) { ");
+    } else {
+        sp_text(stage, "_load(x: u32, y: u32) -> f32 { ");
+    }
+    if shader_checked(stage -> config) {
+        sp_text(stage, "failed = failed || x >= ");
+        sp_number(stage, resource -> length);
+        sp_text(stage, "u || y >= ");
+        sp_number(stage, resource -> height);
+        sp_text(stage, "u; if (failed) { return");
+        if !write {
+            sp_text(stage, " 0.0f");
+        }
+        sp_text(stage, "; } ");
+    }
+    if write {
+        sp_text(stage, "textureStore(");
+    } else {
+        sp_text(stage, "return textureLoad(");
+    }
+    sp_text(stage, "r_");
+    sp_text(stage, resource -> name);
+    sp_text(stage, ", vec2<i32>(i32(x), i32(y))");
+    if write {
+        sp_text(stage, ", vec4<f32>(value, 0.0f, 0.0f, 0.0f)); }\n");
+    } else {
+        sp_text(stage, ").x; }\n");
+    }
+}

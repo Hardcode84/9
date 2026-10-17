@@ -733,7 +733,16 @@ fn x64_prepare_units(program: *CrustX64Program, aliases: bool) -> bool {
 }
 
 fn crust_x64_prepare(ctx: *CrustContext, result: **CrustX64Program, entry: *CrustDecl) -> bool {
-    *result = null(*CrustX64Program);
+    if (*ctx).builtins[CRUST_T_USIZE as usize].size != 8u64 {
+        crust_set_error(
+            ctx,
+            null(*CrustSource),
+            0usize,
+            "assembly emission requires the Linux x86-64 target profile"
+        );
+        return false;
+    }
+    * result = null(*CrustX64Program);
     var program: *CrustX64Program = crust_try_alloc(
         ctx,
         sizeof(CrustX64Program),

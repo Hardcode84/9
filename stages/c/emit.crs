@@ -527,14 +527,25 @@ fn c_prelude(stage: *CStage) -> unit {
         stage,
         "#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#include <limits.h>\n"
     );
-    c_text(
-        stage,
-        "#if !defined(__GNUC__) || !defined(__linux__) || !defined(__x86_64__)\n#error CRUST0 C output requires GCC on Linux x86-64\n#endif\n"
-    );
-    c_text(
-        stage,
-        "typedef char r_profile[(CHAR_BIT==8 && sizeof(void*)==8 && sizeof(uintptr_t)==8 && sizeof(long)==8 && sizeof(bool)==1 && sizeof(void(*)(void))==8)?1:-1];\n"
-    );
+    if (*(*stage).status.context).builtins[CRUST_T_USIZE as usize].size == 4u64 {
+        c_text(
+            stage,
+            "#if !defined(__clang__) || !defined(__wasm32__)\n#error CRUST0 C output requires Clang wasm32\n#endif\n"
+        );
+        c_text(
+            stage,
+            "typedef char r_profile[(CHAR_BIT==8 && sizeof(void*)==4 && sizeof(uintptr_t)==4 && sizeof(long)==4 && sizeof(bool)==1 && sizeof(void(*)(void))==4)?1:-1];\n"
+        );
+    } else {
+        c_text(
+            stage,
+            "#if !defined(__GNUC__) || !defined(__linux__) || !defined(__x86_64__)\n#error CRUST0 C output requires GCC on Linux x86-64\n#endif\n"
+        );
+        c_text(
+            stage,
+            "typedef char r_profile[(CHAR_BIT==8 && sizeof(void*)==8 && sizeof(uintptr_t)==8 && sizeof(long)==8 && sizeof(bool)==1 && sizeof(void(*)(void))==8)?1:-1];\n"
+        );
+    }
     c_text(
         stage,
         "static inline void *r_addr(uintptr_t x){void *p;__asm__(\"\" : \"=r\"(p) : \"0\"(x));return p;}\n"

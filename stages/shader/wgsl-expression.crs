@@ -1,0 +1,146 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn wg_type(stage: *SpStage, kind: u32) -> unit {
+    var text: *u8 = "u32";
+    if kind == CRUST_T_I32 {
+        text = "i32";
+    }
+    if kind == CRUST_T_F32 {
+        text = "f32";
+    }
+    if kind == CRUST_T_BOOL {
+        text = "bool";
+    }
+    sp_text(stage, text);
+}
+fn wg_name(stage: *SpStage, name: *CrustName) -> unit {
+    sp_text(stage, "s_");
+    sp_text(stage, name -> text);
+}
+fn wg_literal(stage: *SpStage, input: *CrustExpr) -> unit {
+    if input -> type -> kind == CRUST_T_BOOL {
+        var value: *u8 = "false";
+        if input -> integer != 0u64 {
+            value = "true";
+        }
+        sp_text(stage, value);
+        return;
+    }
+    if input -> type -> kind != CRUST_T_U32 {
+        sp_text(stage, "bitcast<");
+        wg_type(stage, input -> type -> kind);
+        sp_text(stage, ">(");
+    }
+    sp_number(stage, input -> integer as u32);
+    sp_text(stage, "u");
+    if input -> type -> kind != CRUST_T_U32 {
+        sp_text(stage, ")");
+    }
+}
+fn wg_cast(stage: *SpStage, input: *CrustExpr) -> unit {
+    var source: u32 = input -> left -> type -> kind;
+    var target: u32 = input -> type -> kind;
+    if source == CRUST_T_BOOL && target != CRUST_T_BOOL {
+        sp_text(stage, "select(");
+        wg_type(stage, target);
+        sp_text(stage, "(0), ");
+        wg_type(stage, target);
+        sp_text(stage, "(1), ");
+        wg_expression(stage, input -> left);
+        sp_text(stage, ")");
+        return;
+    }
+    wg_type(stage, target);
+    sp_text(stage, "(");
+    wg_expression(stage, input -> left);
+    sp_text(stage, ")");
+}
+fn wg_call(stage: *SpStage, input: *CrustExpr) -> unit {
+    wg_name(stage, input -> left -> symbol -> decl -> name);
+    sp_text(stage, "(");
+    var index: usize = 0usize;
+    while index < input -> arg_count {
+        if index != 0usize {
+            sp_text(stage, ", ");
+        }
+        wg_expression(stage, input -> args[index]);
+        index = index + 1usize;
+    }
+    sp_text(stage, ")");
+}
+fn wg_binary(stage: *SpStage, input: *CrustExpr) -> unit {
+    var op: u32 = input -> op;
+    if wg_checked_binary(stage, input) {
+        return;
+    }
+    sp_text(stage, "(");
+    wg_expression(stage, input -> left);
+    sp_text(stage, " ");
+    if op == CRUST_OP_AND {
+        sp_text(stage, "&&");
+    } else {
+        if op == CRUST_OP_OR {
+            sp_text(stage, "||");
+        } else {
+            sp_text(stage, C_BINARY_OPERATORS[op as usize]);
+        }
+    }
+    sp_text(stage, " ");
+    var shift: bool = op == CRUST_OP_SHL || op == CRUST_OP_SHR;
+    if shift {
+        sp_text(stage, "u32(");
+    }
+    wg_expression(stage, input -> right);
+    if shift {
+        sp_text(stage, ")");
+    }
+    sp_text(stage, ")");
+}
+fn wg_expression(stage: *SpStage, input: *CrustExpr) -> unit {
+    var kind: u32 = input -> kind;
+    if kind == CRUST_E_NAME {
+        if input -> symbol -> kind == CRUST_SYM_CONST {
+            wg_expression(stage, input -> symbol -> decl -> init);
+        } else {
+            wg_name(stage, input -> symbol -> name);
+        }
+        return;
+    }
+    if kind == CRUST_E_CALL {
+        wg_call(stage, input);
+        return;
+    }
+    if kind == CRUST_E_BINARY {
+        wg_binary(stage, input);
+        return;
+    }
+    if kind == CRUST_E_CAST {
+        wg_cast(stage, input);
+        return;
+    }
+    if kind == CRUST_E_GROUP {
+        wg_expression(stage, input -> left);
+        return;
+    }
+    if kind == CRUST_E_UNARY {
+        wg_unary(stage, input);
+        return;
+    }
+    wg_literal(stage, input);
+}
+fn wg_unary(stage: *SpStage, input: *CrustExpr) -> unit {
+    var op: *u8 = "-";
+    if input -> type -> kind == CRUST_T_U32 {
+        op = "0u - ";
+    }
+    if input -> op == CRUST_OP_NOT {
+        op = "!";
+    }
+    if input -> op == CRUST_OP_BIT_NOT {
+        op = "~";
+    }
+    sp_text(stage, "(");
+    sp_text(stage, op);
+    wg_expression(stage, input -> left);
+    sp_text(stage, ")");
+}

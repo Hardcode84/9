@@ -49,8 +49,13 @@ fn st_attempt(
     };
     var context: CrustContext = uninit;
     crust_context_init(&context, &allocator);
-    var success: bool = shader_build(&context, source, config, output);
-    *calls = state.calls;
+    var success: bool = false;
+    if c_equal(config -> llvm_directory, "wgsl") {
+        success = shader_build_wgsl(&context, source, config, output);
+    } else {
+        success = shader_build(&context, source, config, output);
+    }
+    * calls = state.calls;
     var valid: bool = success && fail_at == 0usize;
     if fail_at != 0usize {
         valid = !success && context.error_count != 0usize;

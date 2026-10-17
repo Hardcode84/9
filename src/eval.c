@@ -228,6 +228,10 @@ CrustEval *crust_eval_create(CrustContext *context, const CrustEvalOptions *opti
     CrustEval *eval;
     if (context == NULL)
         return NULL;
+    if (context->builtins[CRUST_T_USIZE].size != sizeof(uintptr_t)) {
+        crust_set_error(context, NULL, 0, "evaluation requires the build host target profile");
+        return NULL;
+    }
     eval = crust_try_alloc(context, sizeof(*eval), CRUST_ALIGNOF(CrustEval));
     if (eval == NULL)
         return NULL;

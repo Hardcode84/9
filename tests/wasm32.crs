@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record WasmRecord {
+    tag: u8;
+    pointer: *u32;
+    callback: fn(usize) -> usize;
+    wide: u64;
+}
+extern fn roundtrip(value: u32) -> u32 = "wasm_roundtrip";
+fn scalar(value: u32) -> u32 {
+    return value + 1u32;
+}
+fn address(value: usize) -> usize {
+    return value + 2usize;
+}
+fn wasm_probe() -> i32 {
+    if sizeof(usize) != 4usize || sizeof(*u32) != 4usize || sizeof(WasmRecord) != 24usize || alignof(
+        WasmRecord
+    ) != 8usize || offsetof(WasmRecord, wide) != 16usize {
+        return 1i32;
+    }
+    var f: fn(u32) -> u32 = scalar;
+    var g: fn(usize) -> usize = address;
+    var number: u32 = 25u32;
+    var value: WasmRecord = make WasmRecord {
+        tag: 7u8,
+        pointer: &number,
+        callback: g,
+        wide: 0x123456789abcdef0u64
+    };
+    var member: **u32 = ((&value as usize) + offsetof(WasmRecord, pointer)) as **u32;
+    **member = 27u32;
+    var maximum: usize = 0xffffffffusize;
+    if maximum + 1usize != 0usize || number != 27u32 || value.wide >> 32u64 != 0x12345678u64 {
+        return 2i32;
+    }
+    if f(5u32) != 6u32 || value.callback(5usize) != 7usize || roundtrip(0x123u32) != 0x176u32 {
+        return 3i32;
+    }
+    return 0i32;
+}

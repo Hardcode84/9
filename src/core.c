@@ -119,6 +119,20 @@ void crust_context_init(CrustContext *ctx, const CrustAllocator *allocator)
     }
 }
 
+void crust_context_init_wasm32(CrustContext *ctx, const CrustAllocator *allocator)
+{
+    crust_context_init(ctx, allocator);
+    ctx->builtins[CRUST_T_ISIZE].size = 4;
+    ctx->builtins[CRUST_T_ISIZE].align = 4;
+    ctx->builtins[CRUST_T_USIZE].size = 4;
+    ctx->builtins[CRUST_T_USIZE].align = 4;
+}
+
+uint64_t crust_layout_limit(const CrustContext *ctx)
+{
+    return UINT64_MAX >> (65 - ctx->builtins[CRUST_T_USIZE].size * 8);
+}
+
 void crust_context_destroy(CrustContext *ctx)
 {
     crust_arena_destroy(&ctx->arena);

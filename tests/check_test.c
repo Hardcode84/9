@@ -988,8 +988,42 @@ static void test_extension_rejection(void)
     }
 }
 
+static void test_wasm32_layout(void)
+{
+    CrustContext ctx;
+    CrustUnit *unit;
+    CrustSource source =
+        source_text("record R { a:u8; p:*u8; f:fn(u32)->u32; v:u64; arr:[usize;3]; }"
+                    "const n:usize=sizeof(R); const a:usize=alignof(R);"
+                    "const o:usize=offsetof(R,v);",
+                    1);
+    crust_context_init_wasm32(&ctx, NULL);
+    check(crust_layout_limit(&ctx) == UINT32_MAX / 2, "wasm32 signed layout bound");
+    check(check_source(&ctx, &source, &unit), "wasm32 record resolves");
+    if (ctx.error_count == 0) {
+        CrustDecl *record = unit->declarations;
+        check(record->type->size == 40 && record->type->align == 8, "wasm32 mixed record layout");
+        check(record->fields->next->offset == 4 && record->fields->next->type->size == 4 &&
+                  record->fields->next->next->type->size == 4,
+              "wasm32 data and function pointer layouts");
+        check(record->next->init->integer == 40 && record->next->next->init->integer == 8 &&
+                  record->next->next->next->init->integer == 16,
+              "wasm32 layout expressions use target facts");
+    }
+    crust_context_destroy(&ctx);
+    crust_context_init_wasm32(&ctx, NULL);
+    source = source_text("const n:usize=4294967296usize;", 2);
+    check(!check_source(&ctx, &source, &unit), "wasm32 rejects oversized usize literal");
+    crust_context_destroy(&ctx);
+    crust_context_init_wasm32(&ctx, NULL);
+    source = source_text("record R { a:[u8;2147483648]; }", 3);
+    check(!check_source(&ctx, &source, &unit), "wasm32 rejects oversized array layout");
+    crust_context_destroy(&ctx);
+}
+
 int main(void)
 {
+    test_wasm32_layout();
     test_witness_rules();
     test_float_rules();
     test_generated_scopes();

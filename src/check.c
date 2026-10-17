@@ -402,8 +402,8 @@ CrustType *crust_pointer_type(CrustContext *ctx, CrustType *base)
         return NULL;
     }
     type = new_type(ctx, CRUST_T_POINTER);
-    type->size = 8;
-    type->align = 8;
+    type->size = ctx->builtins[CRUST_T_USIZE].size;
+    type->align = ctx->builtins[CRUST_T_USIZE].align;
     type->base = base;
     return type;
 }
@@ -512,8 +512,8 @@ static CrustType *resolve_syntax(CrustContext *ctx, CrustTypeSyntax *syntax, uns
         return type;
     case CRUST_T_FUNCTION:
         type = new_type(ctx, CRUST_T_FUNCTION);
-        type->size = 8;
-        type->align = 8;
+        type->size = ctx->builtins[CRUST_T_USIZE].size;
+        type->align = ctx->builtins[CRUST_T_USIZE].align;
         type->base = resolve_syntax(ctx, syntax->base, depth + 1);
         if (type->base->kind != CRUST_T_UNIT && !crust_type_scalar(type->base)) {
             crust_fail(ctx, syntax->loc, "function results must be scalar or unit");
@@ -537,7 +537,7 @@ static uint64_t align_size(CrustContext *ctx, uint64_t size, uint32_t align, Cru
 {
     uint64_t remainder = size % align;
     uint64_t padding = remainder == 0 ? 0 : align - remainder;
-    if (size > (uint64_t)INT64_MAX - padding) {
+    if (size > crust_layout_limit(ctx) - padding) {
         crust_fail(ctx, loc, "type layout exceeds the isize limit");
         return 0;
     }
@@ -549,7 +549,9 @@ static unsigned check_bound_shape(Binding *binding, CrustType *type, CrustLoc lo
 static unsigned check_bound_pointer(Binding *binding, CrustType *type, CrustLoc loc, unsigned depth)
 {
     unsigned height = 1 + check_bound_shape(binding, type->base, loc, depth + 1);
-    if (type->base->kind == CRUST_T_UNIT || type->size != 8 || type->align != 8)
+    if (type->base->kind == CRUST_T_UNIT ||
+        type->size != binding->ctx->builtins[CRUST_T_USIZE].size ||
+        type->align != binding->ctx->builtins[CRUST_T_USIZE].align)
         crust_fail(binding->ctx, loc, "invalid bound pointer type");
     return height;
 }
@@ -558,7 +560,7 @@ static unsigned check_bound_array(Binding *binding, CrustType *type, CrustLoc lo
 {
     unsigned height = 1 + check_bound_shape(binding, type->base, loc, depth + 1);
     if (type->base->kind == CRUST_T_UNIT || type->count == 0 ||
-        type->count > (uint64_t)INT64_MAX / type->base->size ||
+        type->count > crust_layout_limit(binding->ctx) / type->base->size ||
         type->size != type->count * type->base->size || type->align != type->base->align)
         crust_fail(binding->ctx, loc, "invalid bound array layout");
     return height;
@@ -570,8 +572,10 @@ static unsigned check_bound_function(Binding *binding, CrustType *type, CrustLoc
     CrustContext *ctx = binding->ctx;
     size_t i;
     unsigned height = 1 + check_bound_shape(binding, type->base, loc, depth + 1);
-    if ((type->base->kind != CRUST_T_UNIT && !crust_type_scalar(type->base)) || type->size != 8 ||
-        type->align != 8 || (type->param_count != 0 && type->params == NULL))
+    if ((type->base->kind != CRUST_T_UNIT && !crust_type_scalar(type->base)) ||
+        type->size != ctx->builtins[CRUST_T_USIZE].size ||
+        type->align != ctx->builtins[CRUST_T_USIZE].align ||
+        (type->param_count != 0 && type->params == NULL))
         crust_fail(ctx, loc, "invalid bound function signature");
     for (i = 0; i < type->param_count; ++i) {
         unsigned child = 1 + check_bound_shape(binding, type->params[i], loc, depth + 1);
@@ -633,7 +637,7 @@ static unsigned check_bound_shape(Binding *binding, CrustType *type, CrustLoc lo
             crust_fail(ctx, loc, "bound scalar layout does not match the target profile");
         return 0;
     }
-    if (type->size == 0 || type->size > (uint64_t)INT64_MAX || type->align == 0 ||
+    if (type->size == 0 || type->size > crust_layout_limit(ctx) || type->align == 0 ||
         type->align > 8 || (type->align & (type->align - 1)) != 0)
         crust_fail(ctx, loc, "incomplete bound storage layout");
     if (type->kind == CRUST_T_RECORD) {
@@ -675,7 +679,7 @@ static void queue_bound_record(Binding *binding, CrustDecl *decl)
         size = align_size(ctx, size, field->type->align, field->loc);
         if (field->offset != size || field->index != index++)
             crust_fail(ctx, field->loc, "inconsistent bound field layout");
-        if (field->type->size > (uint64_t)INT64_MAX - size)
+        if (field->type->size > crust_layout_limit(ctx) - size)
             crust_fail(ctx, field->loc, "bound record layout exceeds the isize limit");
         size += field->type->size;
         if (field->type->align > align)
@@ -826,7 +830,7 @@ static void finish_layout(CrustContext *ctx, CrustType *type, CrustLoc loc, unsi
         resolve_declaration(ctx, type->record_decl, depth);
     } else if (type->kind == CRUST_T_ARRAY && type->align == 0) {
         require_storage(ctx, type->base, loc, depth + 1);
-        if (type->count > (uint64_t)INT64_MAX / type->base->size) {
+        if (type->count > crust_layout_limit(ctx) / type->base->size) {
             crust_fail(ctx, loc, "array layout exceeds the isize limit");
             return;
         }
@@ -922,7 +926,7 @@ static void resolve_record(CrustContext *ctx, CrustDecl *decl, unsigned depth)
         size = align_size(ctx, size, field->type->align, field->loc);
         field->offset = size;
         field->index = index++;
-        if (field->type->size > (uint64_t)INT64_MAX - size) {
+        if (field->type->size > crust_layout_limit(ctx) - size) {
             crust_fail(ctx, field->loc, "record layout exceeds the isize limit");
             return;
         }
@@ -958,8 +962,8 @@ static void resolve_declaration(CrustContext *ctx, CrustDecl *decl, unsigned dep
     case CRUST_D_FUNCTION:
     case CRUST_D_EXTERN:
         type = new_type(ctx, CRUST_T_FUNCTION);
-        type->size = 8;
-        type->align = 8;
+        type->size = ctx->builtins[CRUST_T_USIZE].size;
+        type->align = ctx->builtins[CRUST_T_USIZE].align;
         type->base = resolve_syntax(ctx, decl->syntax_type, 0);
         if (type->base->kind != CRUST_T_UNIT && !crust_type_scalar(type->base)) {
             crust_fail(ctx, decl->loc, "function results must be scalar or unit");

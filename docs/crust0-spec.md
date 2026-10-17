@@ -70,7 +70,7 @@ representation; section 12 describes its construction and replacement APIs.
 
 ## 2 Target profile
 
-The supported execution profile is Linux x86-64, little endian, with 8-bit bytes
+The native execution profile is Linux x86-64, little endian, with 8-bit bytes
 and 64-bit data pointers. It uses the System V AMD64 scalar calling convention.
 This is a bounded bootstrap target, not a claim of kernel or full C support.
 
@@ -95,6 +95,19 @@ A different execution profile must define these representations and its ABI
 before it accepts a program. It must have a distinct profile identity. A
 backend adapter can target another machine without changing the host profile
 of the Crust0 compiler program itself.
+
+`crust_context_init_wasm32` selects the WebAssembly application profile before
+input is read or checked. It has little-endian memory and 8-bit bytes. Scalar
+sizes and alignments match the table except that `usize`, `isize`, data pointers,
+and function values have size and alignment 4. The 64-bit integer alignment is
+8. Size types remain distinct from the fixed-width integer types.
+
+This profile uses the Clang wasm32 C ABI. Data pointers are linear-memory
+offsets. Function values identify typed table entries. Null representations are
+zero. Object sizes must fit positive `isize`; layout checks use this target
+bound. The C backend emits this profile. The native evaluator and native LLVM
+and assembly emitters reject it. Compilation stages still run in native
+contexts; the wasm32 application context does not change their ABI.
 
 ## 3 Lexical rules
 

@@ -78,6 +78,7 @@ def main():
         [build / "shader-alloc", llvm, tools / "spirv-val", work / "allocation.spv"],
         env=environment,
     )
+    run([build / "shader-alloc", "wgsl", "unused", work / "allocation.wgsl"])
     check_composition(run, compiler, root, llvm, tools, work, native, environment)
     check_features(run, command, tools, source, output, environment)
     check_policy(run, compiler, root, llvm, tools, work, native, environment)

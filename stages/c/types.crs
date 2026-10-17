@@ -20,9 +20,15 @@ const C_NATIVE_TYPES: [*u8; 14] = make [*u8; 14] {
 
 fn c_native_kind(input: *CrustType) -> u32 {
     if (*input).kind == CRUST_T_ISIZE {
+        if (*input).size == 4u64 {
+            return CRUST_T_ISIZE;
+        }
         return CRUST_T_I64;
     }
     if (*input).kind == CRUST_T_USIZE {
+        if (*input).size == 4u64 {
+            return CRUST_T_USIZE;
+        }
         return CRUST_T_U64;
     }
     return (*input).kind;
@@ -542,12 +548,26 @@ fn c_emit_prototypes(stage: *CStage) -> unit {
             c_type_arguments(stage, input);
             c_text(stage, ")");
         }
+        if (*(*stage).status.context).builtins[CRUST_T_USIZE as usize].size == 4u64 && !c_private(
+            binding
+        ) {
+            c_text(stage, " __asm__(");
+            c_quote(
+                stage,
+                (*(*binding).source).link_name,
+                c_length((*(*binding).source).link_name)
+            );
+            c_text(stage, ")");
+        }
         c_text(stage, ";\n");
         binding = (*binding).next;
     }
 }
 
 fn c_emit_renames(stage: *CStage) -> unit {
+    if (*(*stage).status.context).builtins[CRUST_T_USIZE as usize].size == 4u64 {
+        return;
+    }
     var buffer: *CBuffer = &(*stage).renames;
     var binding: *CBinding = (*stage).first_binding;
     while binding != null(*CBinding) {

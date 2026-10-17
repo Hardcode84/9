@@ -253,6 +253,9 @@ fn su_layout_diagnostic(arena: read SuArena, location: read SuLocation, code: u3
 fn su_handle_failed(arena: read SuArena) -> bool access(read, CompilerArena) {
     return arena.stage -> context -> error_count != 0usize;
 }
+fn su_handle_layout_limit(arena: read SuArena) -> u64 access(read, CompilerArena) {
+    return crust_layout_limit(arena.stage -> context);
+}
 
 fn su_layout_record(stage: *SuStage, decl: *CrustDecl, depth: usize) -> *SuLayout {
     domain CompilerArena {

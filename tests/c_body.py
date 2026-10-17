@@ -13,11 +13,46 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def wasm_check(harness, work, clang):
+    source = work / "wasm32.c"
+    subprocess.run([harness, "wasm32", ROOT / "tests/wasm32.crs", source], check=True, cwd=ROOT)
+    script = work / "wasm32.mjs"
+    script.write_text(
+        "const {instance}=await WebAssembly.instantiate("
+        "await Bun.file(process.argv[2]).arrayBuffer(),"
+        "{env:{wasm_roundtrip:x=>x^0x55}});"
+        "const status=instance.exports.wasm_probe();"
+        "if(status!==0)throw new Error('wasm32 contract failed: '+status);\n"
+    )
+    for level in (0, 2):
+        output = work / f"wasm32-O{level}.wasm"
+        subprocess.run(
+            [
+                clang,
+                "--target=wasm32",
+                "-ffreestanding",
+                "-nostdlib",
+                f"-O{level}",
+                "-Werror",
+                "-Wl,--no-entry",
+                "-Wl,--export=wasm_probe",
+                "-Wl,--allow-undefined",
+                source,
+                "-o",
+                output,
+            ],
+            check=True,
+        )
+        subprocess.run(["bun", script, output], check=True, timeout=10)
+    print("wasm32: layouts, callbacks, pointer round trips, wrapping and imports passed at O0/O2")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=ROOT / "build")
     parser.add_argument("--cflags", default="-O2 -g")
     parser.add_argument("--ldflags", default="")
+    parser.add_argument("--wasm-clang", type=Path)
     args = parser.parse_args()
     build = args.build.resolve()
     with tempfile.TemporaryDirectory(prefix="crust-c-body-") as directory:
@@ -28,11 +63,13 @@ def main():
         shutil.copyfile(build / "crust-c-library.so", library)
         sources = [
             "api/crust0.crs",
+            "api/crust0_host.crs",
             "api/crust0_stage.crs",
             "stages/c/model.crs",
             "stages/c/api.crs",
             "stages/c/extension.crs",
             "tests/c_body.crs",
+            "tests/c_wasm.crs",
         ]
         subprocess.run(
             [
@@ -59,6 +96,8 @@ def main():
         )
         subprocess.run([str(dag_output)], cwd=ROOT, check=True, timeout=10)
         subprocess.run([str(statement_output)], cwd=ROOT, check=True, timeout=10)
+        if args.wasm_clang:
+            wasm_check(harness, work, args.wasm_clang.resolve())
         result = subprocess.run([str(output)], cwd=ROOT, check=False)
         if result.returncode != 42:
             raise RuntimeError(f"external body returned {result.returncode}, expected 42")

@@ -21,6 +21,22 @@ extern fn shader_emit(
     builtins: *CrustUnit,
     ir: *CrustSource
 ) -> bool = "shader_emit";
+// Emit WGSL from checked shader input. The context owns the returned source.
+extern fn shader_wgsl(
+    context: *CrustContext,
+    config: *ShaderConfig,
+    builtins: *CrustUnit,
+    output: *CrustSource
+) -> bool = "shader_wgsl";
+
+// Check shader source and write WGSL. Compilation failures do not replace output.
+extern fn shader_build_wgsl(
+    context: *CrustContext,
+    source: *CrustSource,
+    config: *ShaderConfig,
+    output: *u8
+) -> bool = "shader_build_wgsl";
+
 // Compile and validate LLVM source; replace output only on success.
 extern fn shader_publish(
     context: *CrustContext,

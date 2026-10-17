@@ -85,6 +85,13 @@ fn main(argc: i32, argv: **u8) -> i32 {
     if argc != 4i32 {
         return 1i32;
     }
+    if body_test_equal(argv[1usize], "wasm32") {
+        return c_wasm_emit(argv[2usize], argv[3usize]);
+    }
+    return body_test_native(argv);
+}
+
+fn body_test_native(argv: **u8) -> i32 {
     if !output_contract() {
         return 30i32;
     }

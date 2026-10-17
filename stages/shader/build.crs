@@ -141,15 +141,40 @@ fn shader_build(
     config: *ShaderConfig,
     output: *u8
 ) -> bool {
-    var builtins: *CrustUnit = shader_prepare(context, config, source -> identity ^ 1u64);
-    var unit_value: *CrustUnit = null(*CrustUnit);
+    var builtins: *CrustUnit = shader_program(context, source, config);
     var ir: CrustSource = uninit;
-    return builtins != null(*CrustUnit) && crust_read(context, source, &unit_value) && crust_collect(
-        context
-    ) && crust_resolve(context) && crust_check(context) && shader_emit(
+    return builtins != null(*CrustUnit) && shader_emit(context, config, builtins, &ir) && shader_publish(
         context,
         config,
-        builtins,
-        &ir
-    ) && shader_publish(context, config, &ir, output);
+        &ir,
+        output
+    );
+}
+
+fn shader_program(context: *CrustContext, source: *CrustSource, config: *ShaderConfig) -> *CrustUnit {
+    var builtins: *CrustUnit = shader_prepare(context, config, source -> identity ^ 1u64);
+    var unit_value: *CrustUnit = null(*CrustUnit);
+    if builtins == null(*CrustUnit) || !crust_read(context, source, &unit_value) || !crust_collect(
+        context
+    ) || !crust_resolve(context) || !crust_check(context) {
+        return null(*CrustUnit);
+    }
+    return builtins;
+}
+
+fn shader_build_wgsl(
+    context: *CrustContext,
+    source: *CrustSource,
+    config: *ShaderConfig,
+    output: *u8
+) -> bool {
+    var builtins: *CrustUnit = shader_program(context, source, config);
+    var result: CrustSource = uninit;
+    if builtins == null(*CrustUnit) || !shader_wgsl(context, config, builtins, &result) {
+        return false;
+    }
+    if crust0_host_write_file(output, result.bytes, result.size) != 0i32 {
+        return native_error(context, "cannot write WGSL output");
+    }
+    return true;
 }

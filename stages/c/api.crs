@@ -37,3 +37,7 @@ extern fn backend_output(
     options: *BackendOptions,
     emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32
 ) -> i32 = "backend_output";
+
+// Initialize an empty application context for the Clang wasm32 C ABI.
+// The allocator and compilation stages use the native host profile.
+extern fn c_context_init_wasm32(context: *CrustContext, allocator: *CrustAllocator) -> unit = "c_context_init_wasm32";

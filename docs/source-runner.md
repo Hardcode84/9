@@ -23,10 +23,10 @@ a C99 compiler, Make, Python 3, and libffi development headers and library.
 The source-selected backend needs GCC, GNU assembler, and GNU `objcopy`.
 `make all` builds only the seed launcher. The root prepares its stages.
 
-The root can create a separate wasm32 application context with
-`crust_context_init_wasm32`. The root and compiler stages retain the native host
-profile. Emit target C with the [C backend](c-backend.md#webassembly-target),
-then select the WebAssembly toolchain through normal host process calls.
+The root can create a separate application context and ask an external backend
+to configure its target layout. The root and compiler stages retain the native
+host profile. Select the target toolchain through normal host process calls.
+The [C backend](c-backend.md#webassembly-target) shows one target profile.
 
 ```sh
 make all

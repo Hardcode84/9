@@ -337,9 +337,6 @@ void crust_arena_destroy(CrustArena *arena);
 void *crust_arena_alloc(CrustArena *arena, size_t size, size_t alignment);
 
 void crust_context_init(CrustContext *ctx, const CrustAllocator *allocator);
-/* Initialize an empty context for a 32-bit WebAssembly target. The compiler
-   and its allocator still run on the build host. */
-void crust_context_init_wasm32(CrustContext *ctx, const CrustAllocator *allocator);
 /* Largest storage layout permitted by the context target's signed index type. */
 uint64_t crust_layout_limit(const CrustContext *ctx);
 void crust_context_destroy(CrustContext *ctx);

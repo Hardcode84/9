@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Initialize an empty application context for the Clang wasm32 C ABI.
+// The allocator and compilation stages use the native host profile.
+fn c_context_init_wasm32(context: *CrustContext, allocator: *CrustAllocator) -> unit {
+    crust_context_init(context, allocator);
+    context -> builtins[CRUST_T_ISIZE as usize].size = 4u64;
+    context -> builtins[CRUST_T_ISIZE as usize].align = 4u32;
+    context -> builtins[CRUST_T_USIZE as usize].size = 4u64;
+    context -> builtins[CRUST_T_USIZE as usize].align = 4u32;
+}

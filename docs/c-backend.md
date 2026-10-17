@@ -417,8 +417,16 @@ conversion boundaries.
 
 ## WebAssembly target
 
-Select `crust_context_init_wasm32` before reading and checking application input.
-The context uses the wasm32 layout from the [specification](crust0-spec.md#2-target-profile).
+Select `c_context_init_wasm32` before reading and checking application input.
+Import the C backend interface to use this helper. It initializes the core
+context and sets its builtin layout table.
+
+The application profile has little-endian memory and 8-bit bytes. `usize`,
+`isize`, data pointers, and function values have size and alignment 4. Other
+scalar layouts match the native profile; 64-bit integers have alignment 8.
+Size types remain distinct from fixed-width integers. Data pointers are
+linear-memory offsets. Function values identify typed table entries. Null
+representations are zero. Object sizes must fit positive `isize`.
 The compiler and its stages still execute on the native build host. Do not use
 this context to evaluate application code on that host.
 

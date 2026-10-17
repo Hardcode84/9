@@ -2,7 +2,7 @@
 
 fn c_wasm_emit(path: *u8, output: *u8) -> i32 {
     var context: CrustContext = uninit;
-    crust_context_init_wasm32(&context, null(*CrustAllocator));
+    c_context_init_wasm32(&context, null(*CrustAllocator));
     var source: CrustSource = make CrustSource {
         path: path,
         bytes: null(*u8),

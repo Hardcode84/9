@@ -35,7 +35,9 @@ jobs:
           sudo apt-get install -y build-essential libffi-dev curl unzip
           python -m pip install pre-commit==4.5.1
       - name: Check all files
-        run: pre-commit run --all-files --show-diff-on-failure
+        uses: pre-commit/action@2c7b3805fd2a0fd8c1884dcaebf91fc102a13ecd # v3.0.1
+        with:
+          extra_args: --all-files
 
   test:
     name: ${{ matrix.suite }}

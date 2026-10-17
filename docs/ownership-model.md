@@ -263,6 +263,18 @@ storage retains the domain alias restrictions: a shared view blocks edits,
 and an exclusive view blocks conflicting reads and writes. Moving or replacing
 a borrowed handle still requires its local loans to end.
 
+An opaque record can store explicit `read` or `mut` loans. Its returned value
+must declare those loans with `from`, as for a transparent view record. The
+fields remain private. A resource that stores a loan retains it through its
+destructor, even after the last explicit use. Moving the resource transfers the
+loan, including when the resource is stored inside another record. Scope cleanup
+and explicit destruction end the loan after cleanup completes. This permits
+a scoped operation token to retain exclusive access until its operation retires.
+
+Loans returned from separate embedded opaque owners can coexist. A loan into
+one owner still prevents access to that owner and destruction of its containing
+record. Domain-managed aliases retain their domain access restrictions.
+
 A domain declaration lists all types in one retention boundary. Each type can
 belong to one domain. The list determines membership, including in imported
 interfaces. Types can appear before or after the domain declaration. A missing

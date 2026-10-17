@@ -217,6 +217,38 @@ def domain_membership_checks(directory, driver, cache, environment):
     return 2
 
 
+def lease_imports(directory, driver, cache, environment):
+    from ownership_leases import EMBEDDED, PROVIDER, embedded_client
+
+    provider = directory / "lease-provider.crs"
+    library = directory / "lease-library.crs"
+    client = directory / "lease-client.crs"
+    provider.write_text(PROVIDER)
+    library.write_text("fn acquire(value:mut i64)->Lease from value {return lease(mut value);}")
+    receipt = publish(driver, cache, [library], "trusted", str(provider))
+    provider.unlink()
+    library.unlink()
+    output = directory / "lease-client"
+    args = import_arguments(driver, cache, receipt, client, output, trusted=True)
+    client.write_text(
+        "fn main(argc:i32,argv:**u8)->i32 {var value:i64=7i64;"
+        "{var token:Lease=acquire(mut value);var next:Lease=move token;}"
+        "return (value!=8i64) as i32;}"
+    )
+    command(args, env=environment)
+    command([str(output)])
+    client.write_text(
+        "fn main(argc:i32,argv:**u8)->i32 {var value:i64=7i64;"
+        "var token:Lease=acquire(mut value);value=9i64;return 0i32;}"
+    )
+    reject_import(args, environment, "active payload loan")
+    for body in EMBEDDED.values():
+        client.write_text(embedded_client(body))
+        command(args, env=environment)
+        command([str(output)])
+    return 1
+
+
 def run(build):
     driver = str(build / "crust-ownership-import-test")
     scratch = build / "ownership-contracts"
@@ -232,6 +264,7 @@ def run(build):
             directory, driver, cache, links, library, client, environment, receipt
         )
         rejected += domain_membership_checks(directory, driver, cache, environment)
+        rejected += lease_imports(directory, driver, cache, environment)
         links.unlink()
         library.unlink()
         output = directory / "client"

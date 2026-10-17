@@ -63,6 +63,12 @@ def main(body):
 
 def good_cases():
     return {
+        "disjoint-heap-fields": "var tree:Tree=tree_new();"
+        "if tree.root==null(*Node) {return 0i32;}"
+        "{var left:mut i64=mut tree.root.value;"
+        "var right:mut i64=mut tree.root.part.value;left=3i64;right=4i64;"
+        "if left!=3i64 || right!=4i64 {trap;}}"
+        "if tree.root.value!=3i64 || tree.root.part.value!=4i64 {trap;}",
         "independent-owners": START + "var other:CellOwner=cell_new(9i64);"
         "var view:read Cell=cell_view(read owner);drop other;if view.value!=7i64 {trap;}",
         "restored-field": START + "var cell:*Cell=move owner.cell;owner.cell=move cell;"
@@ -85,6 +91,14 @@ def good_cases():
 def bad_cases():
     borrowed = START + "var view:read Cell=cell_view(read owner);"
     return {
+        "overlapping-heap-field": (
+            main(
+                "var tree:Tree=tree_new();if tree.root==null(*Node) {return 0i32;}"
+                "var left:mut i64=mut tree.root.value;"
+                "var right:mut i64=mut tree.root.value;left=3i64;right=4i64;"
+            ),
+            "active",
+        ),
         "drop-borrowed-owner": (main(borrowed + "drop owner;drop view;"), "active"),
         "replace-borrowed-owner": (main(borrowed + "refresh(mut owner);drop view;"), "active"),
         "consume-borrowed-owner": (main(borrowed + "consume(move owner);drop view;"), "active"),
@@ -255,4 +269,7 @@ def check_heap(build, directory, sanitize):
     check_imports(build, directory, provider)
     check_opaque(build, directory)
     check_heap_runtime(build, directory, provider, sanitize)
-    print("exclusive heap: 7 positives, 16 rejections, O0/O2, erasure, imports, null/reuse")
+    print(
+        f"exclusive heap: {len(good_cases())} positives, {len(cases)} rejections, "
+        "O0/O2, erasure, imports, null/reuse"
+    )

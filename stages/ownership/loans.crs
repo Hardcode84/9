@@ -198,8 +198,30 @@ fn os_region_field(slot: *OsSlot, object: *OsObject) -> *CrustField {
     return (*slot).field;
 }
 
+fn os_region_owner(
+    check: *OsCheck,
+    state: *OsState,
+    object: *OsObject,
+    location: *CrustLoc
+) -> *OsObject {
+    var depth: usize = 0usize;
+    while object != null(*OsObject) {
+        var owner: *OsObject = os_owner(state, os_root(object));
+        if owner == null(*OsObject) {
+            return object;
+        }
+        object = owner;
+        depth = depth + 1usize;
+        if depth >= 128usize {
+            os_error(check, location, "ownership ancestry exceeds 128");
+            return null(*OsObject);
+        }
+    }
+    return object;
+}
+
 // Only fields in the same concrete storage tree establish disjointness.
-// Owned pointees and opaque aliases still use the ownership overlap rule.
+// Domain-managed aliases retain the ownership overlap rule.
 fn os_regions_overlap(
     check: *OsCheck,
     state: *OsState,
@@ -214,6 +236,16 @@ fn os_regions_overlap(
     var other: *OsObject = (*loan).object;
     if object == null(*OsObject) || other == null(*OsObject) {
         return false;
+    }
+    if os_root(object) != os_root(other) {
+        if (*object).domain != null(*CrustName) || (*other).domain != null(*CrustName) {
+            return os_loan_overlap(check, state, object, other, location);
+        }
+        object = os_region_owner(check, state, object, location);
+        other = os_region_owner(check, state, other, location);
+    }
+    if os_failed(check) {
+        return true;
     }
     if os_root(object) != os_root(other) {
         return os_loan_overlap(check, state, object, other, location);

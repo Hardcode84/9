@@ -126,10 +126,12 @@ fn os_object_fields(
         os_array_fields(check, state, object, initialized);
         return;
     }
-    if (*syntax).kind != CRUST_T_NAME || os_opaque((*object).contract) || os_parameter_type(
-        (*check).stage,
-        syntax
-    ) {
+    if (*syntax).kind != CRUST_T_NAME || (
+        os_opaque((*object).contract) && os_view_mode(check, syntax) < rs_kind(
+            (*(*check).stage).resources,
+            RS_READ
+        )
+    ) || os_parameter_type((*check).stage, syntax) {
         return;
     }
     var global: *RsGlobal = rs_global((*(*check).stage).resources, (*syntax).name);

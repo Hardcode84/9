@@ -8,9 +8,6 @@ fn os_view_mode(check: *OsCheck, syntax: *CrustTypeSyntax) -> u32 {
     if schema == null(*OsRecord) {
         return 1u32;
     }
-    if (*schema).opaque {
-        return 1u32;
-    }
     if (*schema).view_mode != 0u32 {
         return (*schema).view_mode;
     }

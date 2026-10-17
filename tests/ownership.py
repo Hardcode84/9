@@ -11,6 +11,7 @@ from ownership_ending import check_ending
 from ownership_expressions import check_expressions
 from ownership_handles import check_handles
 from ownership_heap import check_heap
+from ownership_leases import check_leases
 from ownership_liveness import check_liveness
 from ownership_loops import check_loops
 from ownership_origins import check_origins
@@ -325,6 +326,7 @@ def run(build, directory, sanitize):
     check_loops(build, directory, sanitize)
     check_ending(build, directory, sanitize)
     check_liveness(build, directory, sanitize)
+    check_leases(build, directory, sanitize)
     check_boundaries(build, directory, sanitize)
     check_heap(build, directory, sanitize)
     check_handles(build, directory, sanitize)

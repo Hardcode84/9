@@ -10,6 +10,7 @@ from pathlib import Path
 
 from ownership import RUNTIME_TREE
 from ownership_arrays import PROGRAM as ARRAYS
+from ownership_leases import EMBEDDED, PROVIDER, embedded_client
 from ownership_loops import LOOPS
 from ownership_origins import RECORDS
 
@@ -106,7 +107,12 @@ def main():
         loops.write_text(LOOPS)
         origins = work / "origins.crs"
         origins.write_text(RECORDS)
+        leases = work / "leases.crs"
+        leases.write_text(embedded_client(EMBEDDED["nested"]))
+        lease_provider = work / "lease-provider.crs"
+        lease_provider.write_text(PROVIDER)
         for source, trusted in [
+            (leases, lease_provider),
             (arrays, ""),
             (origins, ""),
             (loops, ""),

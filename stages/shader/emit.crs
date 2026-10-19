@@ -3,7 +3,7 @@
 fn sp_intrinsics(stage: *SpStage) -> unit {
     sp_text(
         stage,
-        "target triple = \"spirv1.5-unknown-vulkan1.2\"\ndeclare i32 @llvm.spv.thread.id.i32(i32)\ndeclare i32 @llvm.spv.thread.id.in.group.i32(i32)\ndeclare void @llvm.spv.all.memory.barrier.with.group.sync()\n"
+        "target triple = \"spirv1.5-unknown-vulkan1.2\"\ndeclare i32 @llvm.spv.thread.id.i32(i32)\ndeclare i32 @llvm.spv.thread.id.in.group.i32(i32)\ndeclare void @llvm.spv.all.memory.barrier.with.group.sync()\ndeclare void @llvm.spv.group.memory.barrier.with.group.sync()\n"
     );
     if shader_checked(stage -> config) {
         sp_text(
@@ -60,6 +60,15 @@ fn sp_builtin_body(stage: *SpStage, name: *u8, before: *u8, after: *u8) -> unit 
     sp_text(stage, after);
 }
 fn sp_builtins(stage: *SpStage) -> unit {
+    if stage -> config -> stage == SHADER_FRAGMENT && sp_used(stage, "shader_discard") {
+        sp_text(stage, "declare void @llvm.spv.discard()\n");
+        sp_builtin_body(
+            stage,
+            "shader_discard",
+            "define internal void ",
+            "() {\n call void @llvm.spv.discard()\n ret void\n}\n"
+        );
+    }
     sp_builtin_body(
         stage,
         "shader_sqrt",
@@ -86,6 +95,12 @@ fn sp_builtins(stage: *SpStage) -> unit {
     );
     sp_builtin_body(
         stage,
+        "shader_workgroup_barrier",
+        "define internal void ",
+        "() convergent {\n call void @llvm.spv.group.memory.barrier.with.group.sync()\n ret void\n}\n"
+    );
+    sp_builtin_body(
+        stage,
         "shader_failed",
         "define internal i1 ",
         "() {\n %v = load i1, ptr addrspace(10) @sp_failed\n ret i1 %v\n}\n"
@@ -98,6 +113,10 @@ fn sp_builtins(stage: *SpStage) -> unit {
     );
 }
 fn sp_entry(stage: *SpStage) -> unit {
+    if stage -> config -> stage != SHADER_COMPUTE {
+        sp_graphics_entry(stage);
+        return;
+    }
     sp_text(
         stage,
         "define void @main() #0 {\nentry:\n  %global = call i32 @llvm.spv.thread.id.i32(i32 0)\n  %local = call i32 @llvm.spv.thread.id.in.group.i32(i32 0)\n"
@@ -121,7 +140,7 @@ fn sp_entry(stage: *SpStage) -> unit {
         index = index + 1usize;
     }
     if shared {
-        sp_text(stage, "  call void @llvm.spv.all.memory.barrier.with.group.sync()\n");
+        sp_text(stage, "  call void @llvm.spv.group.memory.barrier.with.group.sync()\n");
     }
     sp_text(stage, "  call void ");
     sp_text(stage, ll_global(&stage -> llvm, stage -> entry));
@@ -132,6 +151,9 @@ fn sp_entry(stage: *SpStage) -> unit {
     sp_text(stage, "  ret void\n}\nattributes #0 = { \"hlsl.numthreads\"=\"");
     sp_number(stage, stage -> config -> local_size);
     sp_text(stage, ",1,1\" \"hlsl.shader\"=\"compute\" }\n");
+    sp_float_modes(stage);
+}
+fn sp_float_modes(stage: *SpStage) -> unit {
     if !stage -> floating {
         return;
     }
@@ -164,6 +186,7 @@ fn sp_status(stage: *SpStage) -> unit {
 fn sp_emit(stage: *SpStage) -> bool {
     sp_intrinsics(stage);
     sp_builtins(stage);
+    sp_interfaces_emit(stage);
     var index: usize = 0usize;
     while index < stage -> config -> resource_count && ll_ok(&stage -> llvm) {
         var resource: *ShaderResource = &stage -> config -> resources[index];
@@ -178,6 +201,8 @@ fn sp_emit(stage: *SpStage) -> bool {
         }
         sp_resource_access(stage, resource, false);
         sp_resource_access(stage, resource, true);
+        sp_atomic_access(stage, resource);
+        sp_uniform_access(stage, resource);
         index = index + 1usize;
     }
     var unit_value: *CrustUnit = ll_context(&stage -> llvm) -> units;

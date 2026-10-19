@@ -37,28 +37,40 @@ fn sp_call_check(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> b
         );
     }
     if sp_builtin(stage, declaration) {
-        if !shader_checked(stage -> config) && (
-            c_equal(declaration -> name -> text, "shader_require") || c_equal(
-                declaration -> name -> text,
-                "shader_failed"
-            )
-        ) {
-            return sp_error(stage, "failure builtins require checked execution");
+        if !sp_builtin_policy(stage, declaration) {
+            return false;
         }
     } else {
         if !sp_function_check(stage, declaration) {
             return false;
         }
     }
+    if !sp_uniform_index_check(stage, declaration, input) {
+        return false;
+    }
     if !sp_call_participation(stage, declaration, barrier_allowed) {
         return false;
     }
     var index: usize = 0usize;
     while index < input -> arg_count {
-        if !sp_expression_check(stage, input -> args[index], false) {
+        if !sp_expression_check(stage, input -> args[index], barrier_allowed) {
             return false;
         }
         index = index + 1usize;
+    }
+    return true;
+}
+fn sp_builtin_policy(stage: *SpStage, declaration: *CrustDecl) -> bool {
+    if !sp_graphics_call(stage, declaration) {
+        return false;
+    }
+    if !shader_checked(stage -> config) && (
+        c_equal(declaration -> name -> text, "shader_require") || c_equal(
+            declaration -> name -> text,
+            "shader_failed"
+        )
+    ) {
+        return sp_error(stage, "failure builtins require checked execution");
     }
     return true;
 }
@@ -86,11 +98,7 @@ fn sp_expression_body(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool)
         return true;
     }
     if kind == CRUST_E_GROUP || kind == CRUST_E_UNARY || kind == CRUST_E_CAST || kind == CRUST_E_BINARY {
-        return sp_expression_check(stage, input -> left, false) && sp_expression_check(
-            stage,
-            input -> right,
-            false
-        );
+        return sp_expression_operands(stage, input, barrier_allowed);
     }
     return sp_error(
         stage,
@@ -171,10 +179,10 @@ fn sp_statement_body(stage: *SpStage, input: *CrustStmt, top: bool) -> bool {
             return false;
         }
     }
-    return sp_expression_check(stage, input -> expr, top && kind == CRUST_S_EXPR) && sp_expression_check(
+    return sp_expression_check(stage, input -> expr, top && kind != CRUST_S_WHILE) && sp_expression_check(
         stage,
         input -> value,
-        false
+        top
     ) && sp_statement_check(stage, input -> body, false) && sp_statement_check(
         stage,
         input -> otherwise,
@@ -290,4 +298,27 @@ fn sp_check(stage: *SpStage) -> bool {
         unit_value = unit_value -> next;
     }
     return true;
+}
+
+fn sp_uniform_index_check(stage: *SpStage, declaration: *CrustDecl, input: *CrustExpr) -> bool {
+    if sp_uniform_resource(stage, declaration) != null(*ShaderResource) && !sp_uniform_value(
+        stage,
+        input -> args[0usize]
+    ) {
+        return sp_error(stage, "collective uniform load requires a uniform index");
+    }
+    return true;
+}
+
+fn sp_expression_operands(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> bool {
+    var kind: u32 = input -> kind;
+    var right_uniform: bool = barrier_allowed;
+    if kind == CRUST_E_BINARY && (input -> op == CRUST_OP_AND || input -> op == CRUST_OP_OR) {
+        right_uniform = right_uniform && sp_uniform_value(stage, input -> left);
+    }
+    return sp_expression_check(stage, input -> left, barrier_allowed) && sp_expression_check(
+        stage,
+        input -> right,
+        right_uniform
+    );
 }

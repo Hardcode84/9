@@ -1,0 +1,99 @@
+// SPDX-License-Identifier: Apache-2.0
+host_source(run, "../../stages/build/load.crs");
+if !stage_setup(run, "../..") {
+    return 1i32;
+};
+host_source(run, "../../stages/shader/model.crs");
+host_source(run, "../../stages/shader/api.crs");
+var stages: *StageSession = stage_open(run, "../..", "../../build/stage-cache");
+if stages == null(*StageSession) || !stage_import(stages, "stages/shader/package.crs") {
+    return 1i32;
+};
+if run -> argc != 3i32 {
+    return 2i32;
+};
+var inputs: [ShaderInterface; 3] = make [ShaderInterface; 3] {
+    make ShaderInterface {
+        name: "position",
+        kind: SHADER_BUFFER_F32,
+        components: 4u32,
+        semantic: SHADER_POSITION,
+        slot: 0u32,
+        interpolation: SHADER_SMOOTH,
+        output: true
+    },
+    make ShaderInterface {
+        name: "vertex",
+        kind: SHADER_BUFFER_U32,
+        components: 1u32,
+        semantic: SHADER_VERTEX_INDEX,
+        slot: 0u32,
+        interpolation: SHADER_SMOOTH,
+        output: false
+    },
+    make ShaderInterface {
+        name: "color",
+        kind: SHADER_BUFFER_F32,
+        components: 4u32,
+        semantic: SHADER_LOCATION,
+        slot: 0u32,
+        interpolation: SHADER_SMOOTH,
+        output: true
+    }
+};
+var config: ShaderConfig = make ShaderConfig {
+    resources: null(*ShaderResource),
+    resource_count: 0usize,
+    interfaces: &inputs[0usize],
+    interface_count: 3usize,
+    stage: SHADER_VERTEX,
+    entry: "compute",
+    llvm_directory: run -> argv[0usize],
+    validator: run -> argv[1usize],
+    execution: SHADER_RAW,
+    invocations: 0u32,
+    local_size: 0u32,
+    status_set: 0u32,
+    status_binding: 0u32,
+    preserve_denorms: false
+};
+var context: CrustContext = uninit;
+crust_context_init(&context, null(*CrustAllocator));
+var source: CrustSource = uninit;
+var ok: bool = cache_read(&context, host_path(run, "vertex.crs"), &source);
+if ok {
+    ok = shader_build(
+        &context,
+        &source,
+        &config,
+        native_join(&context, run -> argv[2usize], ".vert.spv")
+    );
+};
+if !ok {
+    crust_run_diagnostic(&context);
+};
+crust_context_destroy(&context);
+if !ok {
+    return 1i32;
+};
+crust_context_init(&context, null(*CrustAllocator));
+inputs[0usize] = inputs[2usize];
+inputs[0usize].output = false;
+inputs[1usize] = inputs[2usize];
+inputs[1usize].name = "target";
+config.interface_count = 2usize;
+config.stage = SHADER_FRAGMENT;
+ok = cache_read(&context, host_path(run, "fragment.crs"), &source);
+if ok {
+    ok = shader_build(
+        &context,
+        &source,
+        &config,
+        native_join(&context, run -> argv[2usize], ".frag.spv")
+    );
+};
+if !ok {
+    crust_run_diagnostic(&context);
+};
+crust_context_destroy(&context);
+return (!ok) as i32;

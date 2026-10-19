@@ -38,7 +38,7 @@ class LinuxHost:
         text = original.read_text(encoding="utf-8")
         text = text.replace('"../../', json.dumps(self.path(ROOT) + "/", ensure_ascii=False)[:-1])
         text = text.replace('"../.."', json.dumps(self.path(ROOT), ensure_ascii=False))
-        root = self.work / "root.crs"
+        root = self.work / f"{original.parent.name}-root.crs"
         root.write_text(text, encoding="utf-8")
         return root
 

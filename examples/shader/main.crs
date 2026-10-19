@@ -13,7 +13,7 @@ if stages == null(*StageSession) || !stage_import(stages, "stages/shader/package
 extern fn puts(text: *u8) -> i32 = "puts";
 if run -> argc != 3i32 && run -> argc != 4i32 && run -> argc != 5i32 {
     puts(
-        "usage: crust examples/shader/main.crs LLVM_DIRECTORY SPIRV_VAL OUTPUT [SOURCE [runtime-f32|runtime-u32|shared-u32]]"
+        "usage: crust examples/shader/main.crs LLVM_DIRECTORY|wgsl SPIRV_VAL OUTPUT [SOURCE [runtime-f32|runtime-u32|shared-u32]]"
     );
     return 1i32;
 };
@@ -62,6 +62,9 @@ if run -> argc == 5i32 {
     }
 };
 var config: ShaderConfig = make ShaderConfig {
+    interfaces: null(*ShaderInterface),
+    interface_count: 0usize,
+    stage: SHADER_COMPUTE,
     resources: &resources[0usize],
     entry: "compute",
     llvm_directory: run -> argv[0usize],
@@ -81,12 +84,14 @@ var source_path: *u8 = host_path(run, "program.crs");
 if run -> argc >= 4i32 {
     source_path = run -> argv[3usize];
 };
-var ok: bool = cache_read(&context, source_path, &source) && shader_build(
-    &context,
-    &source,
-    &config,
-    run -> argv[2usize]
-);
+var ok: bool = cache_read(&context, source_path, &source);
+if ok {
+    if cache_strcmp(run -> argv[0usize], "wgsl") == 0i32 {
+        ok = shader_build_wgsl(&context, &source, &config, run -> argv[2usize]);
+    } else {
+        ok = shader_build(&context, &source, &config, run -> argv[2usize]);
+    }
+};
 if !ok {
     puts(&context.error[0usize]);
 };

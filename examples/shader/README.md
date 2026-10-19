@@ -65,6 +65,22 @@ finite and non-negative. Zero returns zero. The result uses device Float32
 precision. This function does not change invocation status.
 
 The stage supplies the resource functions from the root's resource table.
+
+Unsigned integer buffers and workgroup arrays also supply
+`name_atomic_add(index, value)`, `name_atomic_min(index, value)`,
+`name_atomic_max(index, value)`, `name_atomic_exchange(index, value)`, and
+`name_atomic_or(index, value)`.
+Each function returns the value before the update. Addition wraps modulo
+2 to the power of 32. These operations use relaxed memory ordering. Their
+scope is the device for storage buffers and the workgroup for workgroup arrays.
+Use barriers to make other memory writes visible. An atomic counter alone does
+not publish the data that the counter describes. Separate ordinary loads and
+stores from concurrent atomic updates with the required synchronization.
+
+The checked policy rejects an out-of-bounds atomic access at runtime, records
+invocation failure, and returns zero without an update. A failed invocation
+cannot make a subsequent atomic update. The raw policy requires valid indices.
+The operations are available in SPIR-V and WGSL with the same resource layout.
 The name `values` creates `values_load(index: u32) -> f32` and
 `values_store(index: u32, value: f32) -> unit`. The device source needs no
 foreign declarations for these functions.
@@ -330,3 +346,8 @@ no header. `SHADER_COUNTED` uses length zero and a count header. For a headerles
 buffer whose extent the caller manages, use `SHADER_UNBOUNDED` with length zero
 and raw execution. Images and workgroup arrays use fixed layout. Raw execution
 preserves the selected layout but omits its access checks.
+
+For Vulkan vertex and fragment stages, use the
+[graphics shader interface](../graphics/README.md). Compute configurations
+set `stage` to `SHADER_COMPUTE`, `interfaces` to null, and `interface_count`
+to zero.

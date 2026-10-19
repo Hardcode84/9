@@ -1,0 +1,158 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn sp_uniform_resource(stage: *SpStage, declaration: *CrustDecl) -> *ShaderResource {
+    if !sp_builtin(stage, declaration) {
+        return null(*ShaderResource);
+    }
+    var i: usize = 0usize;
+    while i < stage -> config -> resource_count {
+        var r: *ShaderResource = &stage -> config -> resources[i];
+        if shader_workgroup(r -> kind) && c_equal(
+            declaration -> name -> text,
+            ll_join(&stage -> llvm, r -> name, "_uniform_load")
+        ) {
+            return r;
+        }
+        i = i + 1usize;
+    }
+    return null(*ShaderResource);
+}
+fn sp_uniform_value_body(stage: *SpStage, value: *CrustExpr) -> bool {
+    if value == null(*CrustExpr) {
+        return true;
+    }
+    var kind: u32 = value -> kind;
+    if kind == CRUST_E_INTEGER || kind == CRUST_E_FLOAT || kind == CRUST_E_BOOL {
+        return true;
+    }
+    if kind == CRUST_E_NAME {
+        return value -> symbol -> kind == CRUST_SYM_CONST;
+    }
+    if kind == CRUST_E_GROUP || kind == CRUST_E_CAST || kind == CRUST_E_UNARY || kind == CRUST_E_BINARY {
+        return sp_uniform_value(stage, value -> left) && sp_uniform_value(stage, value -> right);
+    }
+    if kind == CRUST_E_CALL {
+        return sp_uniform_call(stage, value);
+    }
+    return false;
+}
+fn sp_uniform_prelude(out: *CBuffer, r: *ShaderResource) -> unit {
+    if !shader_workgroup(r -> kind) {
+        return;
+    }
+    c_buffer_text(out, "extern fn ");
+    c_buffer_text(out, r -> name);
+    c_buffer_text(out, "_uniform_load(index:u32)->");
+    var type: *u8 = "f32";
+    if r -> kind == SHADER_WORKGROUP_U32 {
+        type = "u32";
+    }
+    c_buffer_text(out, type);
+    c_buffer_text(out, "=\"");
+    c_buffer_text(out, r -> name);
+    c_buffer_text(out, "_uniform_load\";\n");
+}
+fn sp_uniform_access(stage: *SpStage, r: *ShaderResource) -> unit {
+    if !shader_workgroup(r -> kind) {
+        return;
+    }
+    var name: *u8 = ll_join(&stage -> llvm, r -> name, "_uniform_load");
+    if !sp_used(stage, name) {
+        return;
+    }
+    var type: *u8 = sp_resource_type(r);
+    sp_text(stage, "define internal ");
+    sp_text(stage, type);
+    sp_text(stage, " ");
+    sp_text(stage, sp_name(stage, name));
+    sp_text(stage, "(i32 %index) convergent {\nentry:\n");
+    if shader_checked(stage -> config) {
+        sp_resource_bounds(stage, r);
+        sp_text(stage, "  br i1 %bad, label %invalid, label %valid\ninvalid:\n  ret ");
+        sp_text(stage, type);
+        sp_text(stage, " zeroinitializer\nvalid:\n");
+    }
+    sp_text(stage, "  call void @llvm.spv.group.memory.barrier.with.group.sync()\n");
+    sp_resource_pointer(stage, r, "%index");
+    sp_text(stage, "  %value = load ");
+    sp_text(stage, type);
+    sp_text(
+        stage,
+        ", ptr addrspace(3) %p, align 4\n  call void @llvm.spv.group.memory.barrier.with.group.sync()\n  ret "
+    );
+    sp_text(stage, type);
+    sp_text(stage, " %value\n}\n");
+}
+fn wg_uniform_access(stage: *SpStage, r: *ShaderResource) -> unit {
+    if !shader_workgroup(r -> kind) {
+        return;
+    }
+    sp_text(stage, "fn s_");
+    sp_text(stage, r -> name);
+    sp_text(stage, "_uniform_load(index: u32) -> ");
+    wg_resource_type(stage, r);
+    sp_text(stage, " { ");
+    if shader_checked(stage -> config) {
+        sp_text(stage, "if (index >= ");
+        sp_number(stage, r -> length);
+        sp_text(stage, "u) { failed = true; return ");
+        wg_zero(stage, r);
+        sp_text(stage, "; } ");
+    }
+    if sp_atomic_used(stage, r) {
+        sp_text(stage, "workgroupBarrier(); let value = atomicLoad(");
+        wg_atomic_pointer(stage, r);
+        sp_text(stage, "); workgroupBarrier(); return value; }\n");
+    } else {
+        sp_text(stage, "return workgroupUniformLoad(&r_");
+        sp_text(stage, r -> name);
+        sp_text(stage, "[index]); }\n");
+    }
+}
+
+fn sp_uniform_collective_value_body(stage: *SpStage, value: *CrustExpr) -> bool {
+    if value == null(*CrustExpr) {
+        return false;
+    }
+    if value -> kind == CRUST_E_CALL {
+        return sp_uniform_value(stage, value);
+    }
+    if value -> kind == CRUST_E_GROUP || value -> kind == CRUST_E_CAST || value -> kind == CRUST_E_UNARY || value -> kind == CRUST_E_BINARY {
+        return sp_uniform_collective_value(stage, value -> left) || sp_uniform_collective_value(
+            stage,
+            value -> right
+        );
+    }
+    return false;
+}
+
+fn sp_uniform_call(stage: *SpStage, value: *CrustExpr) -> bool {
+    var callee: *CrustExpr = value -> left;
+    while callee -> kind == CRUST_E_GROUP {
+        callee = callee -> left;
+    }
+    return callee -> kind == CRUST_E_NAME && callee -> symbol -> kind == CRUST_SYM_FUNCTION && sp_uniform_resource(
+        stage,
+        callee -> symbol -> decl
+    ) != null(*ShaderResource) && sp_uniform_value(stage, value -> args[0usize]);
+}
+
+fn sp_uniform_value(stage: *SpStage, value: *CrustExpr) -> bool {
+    if stage -> depth >= 512usize {
+        return sp_error(stage, "shader expression depth exceeded");
+    }
+    stage -> depth = stage -> depth + 1usize;
+    var result: bool = sp_uniform_value_body(stage, value);
+    stage -> depth = stage -> depth - 1usize;
+    return result;
+}
+
+fn sp_uniform_collective_value(stage: *SpStage, value: *CrustExpr) -> bool {
+    if stage -> depth >= 512usize {
+        return sp_error(stage, "shader expression depth exceeded");
+    }
+    stage -> depth = stage -> depth + 1usize;
+    var result: bool = sp_uniform_collective_value_body(stage, value);
+    stage -> depth = stage -> depth - 1usize;
+    return result;
+}

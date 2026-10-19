@@ -12,6 +12,31 @@ const SHADER_FIXED: u32 = 0u32;
 const SHADER_COUNTED: u32 = 1u32;
 const SHADER_UNBOUNDED: u32 = 2u32;
 
+const SHADER_COMPUTE: u32 = 0u32;
+const SHADER_VERTEX: u32 = 1u32;
+const SHADER_FRAGMENT: u32 = 2u32;
+const SHADER_LOCATION: u32 = 0u32;
+const SHADER_POSITION: u32 = 1u32;
+const SHADER_VERTEX_INDEX: u32 = 2u32;
+const SHADER_INSTANCE_INDEX: u32 = 3u32;
+const SHADER_FRAG_COORD: u32 = 4u32;
+const SHADER_SMOOTH: u32 = 0u32;
+const SHADER_FLAT: u32 = 1u32;
+const SHADER_NOPERSPECTIVE: u32 = 2u32;
+
+// Each interface provides name_load(component) or name_store(component, value).
+// Components are in [0, components). Each output component must be written.
+// kind is SHADER_BUFFER_F32 or SHADER_BUFFER_U32. Location interfaces use slot.
+record ShaderInterface {
+    name: *u8;
+    kind: u32;
+    components: u32;
+    semantic: u32;
+    slot: u32;
+    interpolation: u32;
+    output: bool;
+}
+
 // Buffers use length elements at stride four. Images use length by height texels.
 // COUNTED buffers use a u32 count header and length zero; payload follows it.
 // UNBOUNDED buffers have no header and require RAW execution and length zero.
@@ -34,10 +59,13 @@ record ShaderResource {
 // RAW execution requires valid arithmetic and accesses; it has no status or automatic initialization.
 record ShaderConfig {
     resources: *ShaderResource;
+    interfaces: *ShaderInterface;
     entry: *u8;
     llvm_directory: *u8;
     validator: *u8;
     resource_count: usize;
+    interface_count: usize;
+    stage: u32;
     execution: u32;
     invocations: u32;
     local_size: u32;

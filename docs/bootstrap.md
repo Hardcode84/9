@@ -633,11 +633,27 @@ The device checker records a collective effect for functions that call barriers
 or other collective functions. Such helpers must return `unit` and have no
 early returns. Call them as direct statements in uniform contexts.
 
+`shader_workgroup_barrier()` synchronizes invocations and workgroup memory.
+Use `shader_barrier()` when the group must also publish storage-buffer or image
+writes. Uniform workgroup loads synchronize only workgroup memory.
+
 Uniform counted loops use an immediately preceding literal-initialized `u32`
 counter, a strict comparison with a literal bound, and one final increment by
 one. Other counter writes and exits are rejected. Failed invocations complete
 these finite loops; ordinary loops retain failure-driven exit. Conditional
 collective calls are rejected. The shader tutorial shows the accepted form.
+
+Workgroup arrays also expose `<name>_uniform_load(index)` for `u32` and
+`f32`. All invocations must call it with the same index in uniform control
+flow. The operation synchronizes the group and returns the shared value to
+every invocation, including failed invocations in checked mode. An invalid
+index records failure and returns zero.
+
+A loop condition can use this collective value with literals, constants, and
+scalar operators. Such loops preserve participation after a checked failure.
+They must have no early returns, breaks, or continues. Their producer must
+establish termination. Mutable local values and ordinary workgroup loads do
+not prove uniform control. Short-circuit operands must preserve participation.
 
 ### Emit WebGPU shaders
 
@@ -662,7 +678,8 @@ floating-point execution modes. A `preserve_denorms` request is rejected.
 Runtime shader compilation and device feature validation belong to the consumer.
 See [WGSL floating-point evaluation](https://www.w3.org/TR/WGSL/#floating-point-evaluation).
 
-Set `WGSL_VALIDATOR` for `make check-shader` to validate the generated WGSL
-fixture. The executable must accept one source file and return a nonzero status
-for invalid WGSL. The fixture covers grouped calls, discarded scalar values,
-resource access, and collective loops.
+Set `WGSL_VALIDATOR` to the Naga 27.0.0 CLI for `make check-shader`. The tests
+validate generated WGSL and translate it to SPIR-V for Vulkan execution. Naga
+accepts the input and output files as positional arguments. The tests cover
+grouped calls, discarded scalar values, resource access, atomics, and collective
+loops.

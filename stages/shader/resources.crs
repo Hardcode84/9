@@ -25,7 +25,12 @@ fn sp_used(stage: *SpStage, name: *u8) -> bool {
     return crust_map_get(&stage -> used, symbol -> decl as usize) != null(*u8);
 }
 fn sp_resource_used(stage: *SpStage, resource: *ShaderResource) -> bool {
-    return sp_used(stage, ll_join(&stage -> llvm, resource -> name, "_load")) || sp_used(
+    return sp_atomic_used(stage, resource) || (
+        shader_workgroup(resource -> kind) && sp_used(
+            stage,
+            ll_join(&stage -> llvm, resource -> name, "_uniform_load")
+        )
+    ) || sp_used(stage, ll_join(&stage -> llvm, resource -> name, "_load")) || sp_used(
         stage,
         ll_join(&stage -> llvm, resource -> name, "_store")
     );

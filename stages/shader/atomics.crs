@@ -1,0 +1,160 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn sp_atomic_kind(r: *ShaderResource) -> bool {
+    return r -> kind == SHADER_BUFFER_U32 || r -> kind == SHADER_WORKGROUP_U32;
+}
+fn sp_atomic_suffix(op: u32) -> *u8 {
+    if op == 0u32 {
+        return "_atomic_add";
+    }
+    if op == 1u32 {
+        return "_atomic_min";
+    }
+    if op == 2u32 {
+        return "_atomic_max";
+    }
+    if op == 3u32 {
+        return "_atomic_exchange";
+    }
+    return "_atomic_or";
+}
+fn sp_atomic_used(stage: *SpStage, r: *ShaderResource) -> bool {
+    if !sp_atomic_kind(r) {
+        return false;
+    }
+    var op: u32 = 0u32;
+    while op < 5u32 {
+        if sp_used(stage, ll_join(&stage -> llvm, r -> name, sp_atomic_suffix(op))) {
+            return true;
+        }
+        op = op + 1u32;
+    }
+    return false;
+}
+fn sp_atomic_prelude(out: *CBuffer, r: *ShaderResource) -> unit {
+    if !sp_atomic_kind(r) {
+        return;
+    }
+    var op: u32 = 0u32;
+    while op < 5u32 {
+        c_buffer_text(out, "extern fn ");
+        c_buffer_text(out, r -> name);
+        c_buffer_text(out, sp_atomic_suffix(op));
+        c_buffer_text(out, "(index:u32,value:u32)->u32=\"");
+        c_buffer_text(out, r -> name);
+        c_buffer_text(out, sp_atomic_suffix(op));
+        c_buffer_text(out, "\";\n");
+        op = op + 1u32;
+    }
+}
+fn sp_atomic_access(stage: *SpStage, r: *ShaderResource) -> unit {
+    if !sp_atomic_kind(r) {
+        return;
+    }
+    var op: u32 = 0u32;
+    while op < 5u32 {
+        var name: *u8 = ll_join(&stage -> llvm, r -> name, sp_atomic_suffix(op));
+        if sp_used(stage, name) {
+            sp_atomic_function(stage, r, name, op);
+        }
+        op = op + 1u32;
+    }
+}
+fn sp_atomic_function(stage: *SpStage, r: *ShaderResource, name: *u8, op: u32) -> unit {
+    sp_text(stage, "define internal i32 ");
+    sp_text(stage, sp_name(stage, name));
+    sp_text(stage, "(i32 %index, i32 %value) {\nentry:\n");
+    if shader_checked(stage -> config) {
+        sp_resource_bounds(stage, r);
+        sp_text(
+            stage,
+            "  br i1 %failed, label %invalid, label %valid\ninvalid:\n  ret i32 0\nvalid:\n"
+        );
+    }
+    sp_payload_pointer(stage, r);
+    sp_text(stage, "  %old_value = atomicrmw ");
+    var operation: *u8 = "add";
+    if op == 1u32 {
+        operation = "umin";
+    }
+    if op == 2u32 {
+        operation = "umax";
+    }
+    if op == 3u32 {
+        operation = "xchg";
+    }
+    if op == 4u32 {
+        operation = "or";
+    }
+    sp_text(stage, operation);
+    sp_text(stage, " ");
+    sp_text(stage, sp_pointer_type(r));
+    sp_text(stage, " %p, i32 %value syncscope(\"");
+    if shader_workgroup(r -> kind) {
+        sp_text(stage, "workgroup");
+    } else {
+        sp_text(stage, "device");
+    }
+    sp_text(stage, "\") monotonic\n  ret i32 %old_value\n}\n");
+}
+fn wg_atomic_pointer(stage: *SpStage, r: *ShaderResource) -> unit {
+    sp_text(stage, "&r_");
+    sp_text(stage, r -> name);
+    if !shader_workgroup(r -> kind) {
+        sp_text(stage, ".data");
+    }
+    sp_text(stage, "[index]");
+}
+fn wg_atomic_access(stage: *SpStage, r: *ShaderResource) -> unit {
+    if !sp_atomic_used(stage, r) {
+        return;
+    }
+    var op: u32 = 0u32;
+    while op < 5u32 {
+        sp_text(stage, "fn s_");
+        sp_text(stage, r -> name);
+        sp_text(stage, sp_atomic_suffix(op));
+        sp_text(stage, "(index: u32, value: u32) -> u32 { ");
+        if shader_checked(stage -> config) {
+            wg_access_check(stage, r, false);
+        }
+        var operation: *u8 = "atomicAdd";
+        if op == 1u32 {
+            operation = "atomicMin";
+        }
+        if op == 2u32 {
+            operation = "atomicMax";
+        }
+        if op == 3u32 {
+            operation = "atomicExchange";
+        }
+        if op == 4u32 {
+            operation = "atomicOr";
+        }
+        sp_text(stage, "return ");
+        sp_text(stage, operation);
+        sp_text(stage, "(");
+        wg_atomic_pointer(stage, r);
+        sp_text(stage, ", value); }\n");
+        op = op + 1u32;
+    }
+}
+fn wg_storage_type(stage: *SpStage, r: *ShaderResource) -> unit {
+    if sp_atomic_used(stage, r) {
+        sp_text(stage, "atomic<u32>");
+    } else {
+        wg_resource_type(stage, r);
+    }
+}
+fn wg_atomic_plain_access(stage: *SpStage, r: *ShaderResource, write: bool) -> unit {
+    if write {
+        sp_text(stage, "atomicStore(");
+    } else {
+        sp_text(stage, "return atomicLoad(");
+    }
+    wg_atomic_pointer(stage, r);
+    if write {
+        sp_text(stage, ", value");
+    }
+    sp_text(stage, "); }\n");
+}

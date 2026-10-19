@@ -43,6 +43,9 @@ fn sp_resource_config(stage: *SpStage, index: usize) -> bool {
         return sp_error(stage, "only a shader image has a nonzero height");
     }
     if shader_workgroup(resource -> kind) {
+        if config -> stage != SHADER_COMPUTE {
+            return sp_error(stage, "workgroup storage requires a compute shader");
+        }
         if resource -> set != 0u32 || resource -> binding != 0u32 || resource -> length > 4096u32 {
             return sp_error(
                 stage,
@@ -74,6 +77,18 @@ fn sp_unique_resource(stage: *SpStage, index: usize) -> bool {
 }
 fn sp_dispatch_config(stage: *SpStage) -> bool {
     var config: *ShaderConfig = stage -> config;
+    if config -> stage > SHADER_FRAGMENT || !sp_identifier(config -> entry) {
+        return sp_error(stage, "invalid shader stage or entry name");
+    }
+    if config -> stage != SHADER_COMPUTE {
+        if config -> execution != SHADER_RAW || config -> invocations != 0u32 || config -> local_size != 0u32 {
+            return sp_error(
+                stage,
+                "graphics shaders require RAW execution and zero dispatch dimensions"
+            );
+        }
+        return true;
+    }
     if config -> execution > SHADER_RAW {
         return sp_error(stage, "invalid shader execution policy");
     }
@@ -113,7 +128,7 @@ fn sp_config(stage: *SpStage) -> bool {
     if shared > 4096u64 {
         return sp_error(stage, "shader workgroup storage exceeds 16 KiB");
     }
-    return true;
+    return sp_interfaces_config(stage);
 }
 fn sp_accessor(out: *CBuffer, resource: *ShaderResource, write: bool) -> unit {
     c_buffer_text(out, "extern fn ");
@@ -153,11 +168,18 @@ fn sp_prelude(stage: *SpStage, identity: u64) -> bool {
         &out,
         "extern fn shader_global_x()->u32=\"shader_global_x\";\nextern fn shader_local_x()->u32=\"shader_local_x\";\nextern fn shader_barrier()->unit=\"shader_barrier\";\nextern fn shader_require(ok:bool)->unit=\"shader_require\";\nextern fn shader_failed()->bool=\"shader_failed\";\n"
     );
+    c_buffer_text(
+        &out,
+        "extern fn shader_workgroup_barrier()->unit=\"shader_workgroup_barrier\";\n"
+    );
     c_buffer_text(&out, "extern fn shader_sqrt(value:f32)->f32=\"shader_sqrt\";\n");
+    sp_interfaces_prelude(stage, &out);
     var index: usize = 0usize;
     while index < stage -> config -> resource_count {
         sp_accessor(&out, &stage -> config -> resources[index], false);
         sp_accessor(&out, &stage -> config -> resources[index], true);
+        sp_atomic_prelude(&out, &stage -> config -> resources[index]);
+        sp_uniform_prelude(&out, &stage -> config -> resources[index]);
         index = index + 1usize;
     }
     var source: *CrustSource = crust_try_alloc(

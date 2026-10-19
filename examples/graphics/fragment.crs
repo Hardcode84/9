@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+fn compute() -> unit {
+    var i: u32 = 0u32;
+    while i < 4u32 {
+        target_store(i, color_load(i));
+        i = i + 1u32;
+    }
+}

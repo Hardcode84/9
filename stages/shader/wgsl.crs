@@ -22,7 +22,7 @@ fn wg_resource(stage: *SpStage, r: *ShaderResource) -> unit {
             sp_text(stage, "count: u32,\n");
         }
         sp_text(stage, "data: array<");
-        wg_resource_type(stage, r);
+        wg_storage_type(stage, r);
         if r -> layout == SHADER_FIXED {
             sp_text(stage, ", ");
             sp_number(stage, r -> length);
@@ -38,7 +38,7 @@ fn wg_resource(stage: *SpStage, r: *ShaderResource) -> unit {
     sp_text(stage, ": ");
     if shader_workgroup(r -> kind) {
         sp_text(stage, "array<");
-        wg_resource_type(stage, r);
+        wg_storage_type(stage, r);
         sp_text(stage, ", ");
         sp_number(stage, r -> length);
         sp_text(stage, ">");
@@ -49,6 +49,8 @@ fn wg_resource(stage: *SpStage, r: *ShaderResource) -> unit {
     sp_text(stage, ";\n");
     wg_access(stage, r, false);
     wg_access(stage, r, true);
+    wg_uniform_access(stage, r);
+    wg_atomic_access(stage, r);
 }
 fn wg_access(stage: *SpStage, r: *ShaderResource, write: bool) -> unit {
     var suffix: *u8 = "_load";
@@ -72,6 +74,10 @@ fn wg_access(stage: *SpStage, r: *ShaderResource, write: bool) -> unit {
     if shader_checked(stage -> config) {
         wg_access_check(stage, r, write);
     }
+    if sp_atomic_used(stage, r) {
+        wg_atomic_plain_access(stage, r, write);
+        return;
+    }
     if !write {
         sp_text(stage, "return ");
     }
@@ -92,7 +98,7 @@ fn wg_module(stage: *SpStage) -> bool {
     }
     sp_text(
         stage,
-        "var<private> global_x: u32;\nvar<private> local_x: u32;\nfn s_shader_global_x() -> u32 { return global_x; }\nfn s_shader_local_x() -> u32 { return local_x; }\nfn s_shader_sqrt(x: f32) -> f32 { return sqrt(x); }\nfn s_shader_barrier() { workgroupBarrier(); storageBarrier(); }\n"
+        "var<private> global_x: u32;\nvar<private> local_x: u32;\nfn s_shader_global_x() -> u32 { return global_x; }\nfn s_shader_local_x() -> u32 { return local_x; }\nfn s_shader_sqrt(x: f32) -> f32 { return sqrt(x); }\nfn s_shader_workgroup_barrier() { workgroupBarrier(); }\nfn s_shader_barrier() { workgroupBarrier(); storageBarrier(); }\n"
     );
     if shader_checked(stage -> config) {
         wg_checks(stage);
@@ -142,6 +148,10 @@ fn shader_wgsl(
 ) -> bool {
     var stage: SpStage = uninit;
     sp_init(&stage, context, config);
+    if config -> stage != SHADER_COMPUTE {
+        ll_destroy(&stage.llvm);
+        return native_error(context, "WGSL graphics emission is not supported");
+    }
     stage.builtins = builtins;
     var success: bool = sp_check(&stage) && wg_module(&stage);
     if success {

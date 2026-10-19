@@ -1,0 +1,286 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn sp_graphics_entry(stage: *SpStage) -> unit {
+    sp_text(stage, "define void @main() #0 {\n call void ");
+    sp_text(stage, ll_global(&stage -> llvm, stage -> entry));
+    sp_text(stage, "()\n ret void\n}\nattributes #0 = { \"hlsl.shader\"=\"");
+    if stage -> config -> stage == SHADER_VERTEX {
+        sp_text(stage, "vertex");
+    } else {
+        sp_text(stage, "pixel");
+    }
+    sp_text(stage, "\" }\n");
+    sp_float_modes(stage);
+}
+
+fn sp_graphics_call(stage: *SpStage, declaration: *CrustDecl) -> bool {
+    if stage -> config -> stage == SHADER_COMPUTE || !stage -> reachable {
+        return true;
+    }
+    var name: *u8 = declaration -> name -> text;
+    if c_equal(name, "shader_global_x") || c_equal(name, "shader_local_x") || c_equal(
+        name,
+        "shader_barrier"
+    ) || c_equal(name, "shader_workgroup_barrier") {
+        return sp_error(
+            stage,
+            "compute invocation and barrier builtins require a compute shader"
+        );
+    }
+    return true;
+}
+
+fn sp_interface_semantic(stage: *SpStage, item: *ShaderInterface) -> bool {
+    var vertex: bool = stage -> config -> stage == SHADER_VERTEX;
+    if item -> semantic == SHADER_LOCATION {
+        if item -> kind == SHADER_BUFFER_U32 && !vertex && !item -> output && item -> interpolation != SHADER_FLAT {
+            return sp_error(stage, "integer fragment inputs require flat interpolation");
+        }
+        return true;
+    }
+    if item -> slot != 0u32 || item -> interpolation != SHADER_SMOOTH {
+        return sp_error(stage, "builtin interfaces require zero slot and interpolation");
+    }
+    return sp_interface_builtin(item, vertex) || sp_error(
+        stage,
+        "invalid shader builtin interface type or direction"
+    );
+}
+fn sp_interface_shape(item: *ShaderInterface, kind: u32, components: u32, output: bool) -> bool {
+    return item -> kind == kind && item -> components == components && item -> output == output;
+}
+fn sp_interface_builtin(item: *ShaderInterface, vertex: bool) -> bool {
+    if item -> semantic == SHADER_POSITION {
+        return vertex && sp_interface_shape(item, SHADER_BUFFER_F32, 4u32, true);
+    }
+    if item -> semantic == SHADER_FRAG_COORD {
+        return !vertex && sp_interface_shape(item, SHADER_BUFFER_F32, 4u32, false);
+    }
+    if item -> semantic == SHADER_VERTEX_INDEX || item -> semantic == SHADER_INSTANCE_INDEX {
+        return vertex && sp_interface_shape(item, SHADER_BUFFER_U32, 1u32, false);
+    }
+    return false;
+}
+fn sp_interface_unique(stage: *SpStage, index: usize) -> bool {
+    var item: *ShaderInterface = &stage -> config -> interfaces[index];
+    var i: usize = 0usize;
+    while i < index {
+        var other: *ShaderInterface = &stage -> config -> interfaces[i];
+        if c_equal(item -> name, other -> name) || (
+            item -> output == other -> output && item -> semantic == other -> semantic && item -> slot == other -> slot
+        ) {
+            return sp_error(stage, "duplicate shader interface name or location");
+        }
+        i = i + 1usize;
+    }
+    i = 0usize;
+    while i < stage -> config -> resource_count {
+        if c_equal(item -> name, stage -> config -> resources[i].name) {
+            return sp_error(stage, "shader interface name conflicts with resource");
+        }
+        i = i + 1usize;
+    }
+    return true;
+}
+fn sp_interfaces_config(stage: *SpStage) -> bool {
+    var config: *ShaderConfig = stage -> config;
+    if config -> interface_count != 0usize && config -> interfaces == null(*ShaderInterface) {
+        return sp_error(stage, "shader interfaces are missing");
+    }
+    if config -> stage == SHADER_COMPUTE && config -> interface_count != 0usize {
+        return sp_error(stage, "compute shaders cannot declare graphics interfaces");
+    }
+    var i: usize = 0usize;
+    while i < config -> interface_count {
+        var item: *ShaderInterface = &config -> interfaces[i];
+        if !sp_identifier(item -> name) || item -> kind > SHADER_BUFFER_U32 || item -> components < 1u32 || item -> components > 4u32 || item -> interpolation > SHADER_NOPERSPECTIVE {
+            return sp_error(stage, "invalid shader interface name, type, width or interpolation");
+        }
+        if !sp_interface_semantic(stage, item) || !sp_interface_unique(stage, i) {
+            return false;
+        }
+        i = i + 1usize;
+    }
+    return true;
+}
+fn sp_interfaces_prelude(stage: *SpStage, out: *CBuffer) -> unit {
+    var i: usize = 0usize;
+    while i < stage -> config -> interface_count {
+        var item: *ShaderInterface = &stage -> config -> interfaces[i];
+        var resource: ShaderResource = make ShaderResource {
+            name: item -> name,
+            kind: item -> kind,
+            layout: SHADER_FIXED,
+            set: 0u32,
+            binding: 0u32,
+            length: item -> components,
+            height: 0u32
+        };
+        sp_accessor(out, &resource, item -> output);
+        i = i + 1usize;
+    }
+    if stage -> config -> stage == SHADER_FRAGMENT {
+        c_buffer_text(out, "extern fn shader_discard()->unit=\"shader_discard\";\n");
+    }
+}
+fn sp_interface_type(stage: *SpStage, item: *ShaderInterface) -> unit {
+    if item -> components > 1u32 {
+        sp_text(stage, "<");
+        sp_number(stage, item -> components);
+        sp_text(stage, " x ");
+    }
+    sp_text(stage, sp_interface_scalar(item));
+    if item -> components > 1u32 {
+        sp_text(stage, ">");
+    }
+}
+fn sp_interface_scalar(item: *ShaderInterface) -> *u8 {
+    if item -> kind == SHADER_BUFFER_F32 {
+        return "float";
+    }
+    return "i32";
+}
+fn sp_interface_address(stage: *SpStage, item: *ShaderInterface) -> unit {
+    sp_text(stage, "ptr addrspace(");
+    sp_number(stage, 7u32 + item -> output as u32);
+    sp_text(stage, ") @sp_io_");
+    sp_text(stage, item -> name);
+}
+fn sp_interface_decoration(stage: *SpStage, item: *ShaderInterface, id: u32) -> unit {
+    sp_text(stage, "!spirv.Decorations !");
+    sp_number(stage, id);
+    sp_text(stage, "\n!");
+    sp_number(stage, id);
+    sp_text(stage, " = !{!");
+    sp_number(stage, id + 1u32);
+    if item -> interpolation != SHADER_SMOOTH {
+        sp_text(stage, ", !");
+        sp_number(stage, id + 2u32);
+    }
+    sp_text(stage, "}\n!");
+    sp_number(stage, id + 1u32);
+    sp_text(stage, " = !{i32 ");
+    var decoration: u32 = 30u32;
+    var value: u32 = item -> slot;
+    if item -> semantic != SHADER_LOCATION {
+        decoration = 11u32;
+        value = 0u32;
+        if item -> semantic == SHADER_VERTEX_INDEX {
+            value = 42u32;
+        }
+        if item -> semantic == SHADER_INSTANCE_INDEX {
+            value = 43u32;
+        }
+        if item -> semantic == SHADER_FRAG_COORD {
+            value = 15u32;
+        }
+    }
+    sp_number(stage, decoration);
+    sp_text(stage, ", i32 ");
+    sp_number(stage, value);
+    sp_text(stage, "}\n");
+    if item -> interpolation != SHADER_SMOOTH {
+        sp_text(stage, "!");
+        sp_number(stage, id + 2u32);
+        sp_text(stage, " = !{i32 ");
+        var interpolation: u32 = 14u32;
+        if item -> interpolation == SHADER_FLAT {
+            interpolation = 14u32;
+        } else {
+            interpolation = 13u32;
+        }
+        sp_number(stage, interpolation);
+        sp_text(stage, "}\n");
+    }
+}
+fn sp_interface_accessor(stage: *SpStage, item: *ShaderInterface) -> unit {
+    sp_text(stage, "define internal ");
+    if item -> output {
+        sp_text(stage, "void");
+    } else {
+        sp_text(stage, sp_interface_scalar(item));
+    }
+    var suffix: *u8 = "_load";
+    if item -> output {
+        suffix = "_store";
+    }
+    sp_text(stage, " ");
+    sp_text(stage, sp_name(stage, ll_join(&stage -> llvm, item -> name, suffix)));
+    sp_text(stage, "(i32 %index");
+    if item -> output {
+        sp_text(stage, ", ");
+        sp_text(stage, sp_interface_scalar(item));
+        sp_text(stage, " %value");
+    }
+    sp_text(stage, ") {\n");
+    if item -> components > 1u32 || !item -> output {
+        sp_text(stage, " %v = load ");
+        sp_interface_type(stage, item);
+        sp_text(stage, ", ");
+        sp_interface_address(stage, item);
+        sp_text(stage, "\n");
+    }
+    if item -> components > 1u32 {
+        sp_text(stage, " %r = ");
+        if item -> output {
+            sp_text(stage, "insertelement ");
+        } else {
+            sp_text(stage, "extractelement ");
+        }
+        sp_interface_type(stage, item);
+        sp_text(stage, " %v, ");
+        if item -> output {
+            sp_text(stage, sp_interface_scalar(item));
+            sp_text(stage, " %value, ");
+        }
+        sp_text(stage, "i32 %index\n");
+    }
+    sp_interface_return(stage, item);
+}
+fn sp_interface_return(stage: *SpStage, item: *ShaderInterface) -> unit {
+    if item -> output {
+        sp_text(stage, " store ");
+        sp_interface_type(stage, item);
+        if item -> components > 1u32 {
+            sp_text(stage, " %r, ");
+        } else {
+            sp_text(stage, " %value, ");
+        }
+        sp_interface_address(stage, item);
+        sp_text(stage, "\n ret void\n}\n");
+    } else {
+        sp_text(stage, " ret ");
+        sp_text(stage, sp_interface_scalar(item));
+        if item -> components > 1u32 {
+            sp_text(stage, " %r\n}\n");
+        } else {
+            sp_text(stage, " %v\n}\n");
+        }
+    }
+}
+fn sp_interfaces_emit(stage: *SpStage) -> unit {
+    var i: usize = 0usize;
+    while i < stage -> config -> interface_count {
+        var item: *ShaderInterface = &stage -> config -> interfaces[i];
+        sp_text(stage, "@sp_io_");
+        sp_text(stage, item -> name);
+        sp_text(stage, " = external hidden thread_local addrspace(");
+        sp_number(stage, 7u32 + item -> output as u32);
+        if item -> output {
+            sp_text(stage, ") global ");
+        } else {
+            sp_text(stage, ") externally_initialized constant ");
+        }
+        sp_interface_type(stage, item);
+        sp_text(stage, ", ");
+        sp_interface_decoration(stage, item, 100u32 + i as u32 * 3u32);
+        var suffix: *u8 = "_load";
+        if item -> output {
+            suffix = "_store";
+        }
+        if sp_used(stage, ll_join(&stage -> llvm, item -> name, suffix)) {
+            sp_interface_accessor(stage, item);
+        }
+        i = i + 1usize;
+    }
+}

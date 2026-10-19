@@ -1,0 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+fn compute() -> unit {
+    var i: u32 = vertex_load(0u32);
+    position_store(0u32, (i % 2u32) as f32 * 2f32 - 1f32);
+    position_store(1u32, (i / 2u32) as f32 * 2f32 - 1f32);
+    position_store(2u32, 0.5f32);
+    position_store(3u32, 1f32);
+    color_store(0u32, 1f32);
+    color_store(1u32, 0.5f32);
+    color_store(2u32, 0f32);
+    color_store(3u32, 1f32);
+}

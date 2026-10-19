@@ -8,9 +8,11 @@ import shlex
 import struct
 from pathlib import Path
 
+from shader_atomics import check_atomics
 from shader_collectives import check_collectives
 from shader_composition import check_composition
 from shader_features import check_features
+from shader_graphics import check_graphics
 from shader_policy import check_policy
 from vulkan.abi import check_abi
 from vulkan.platform import LinuxHost, WindowsHost
@@ -84,10 +86,22 @@ def main():
         run([args.wgsl_validator.resolve(), work / "allocation.wgsl"])
         print("WGSL validation passed", flush=True)
     print("Shader allocation sweeps passed", flush=True)
+    check_graphics(host, compiler, llvm, tools, work, environment)
+    check_atomics(run, compiler, root, llvm, tools, work, native, environment, args.wgsl_validator)
     check_composition(run, compiler, root, llvm, tools, work, native, environment)
     check_features(run, command, tools, source, output, environment)
     check_policy(run, compiler, root, llvm, tools, work, native, environment)
-    check_collectives(run, command, source, output, work, native, environment)
+    check_collectives(
+        run,
+        command,
+        source,
+        output,
+        work,
+        native,
+        environment,
+        args.wgsl_validator,
+        args.spirv_tools,
+    )
     print("Shader composition, features, policy and collectives passed", flush=True)
     cases = {
         "exchange": (
@@ -380,8 +394,8 @@ fn compute()->unit {
     assert output.read_bytes() == previous
     assert not list(work.glob(".crust-*")), "temporary output leaked"
     print(
-        f"Shader: 1 composed, 2 raw, 6 collective, {len(cases)} fixed-size, 4 integer-workgroup and 10 runtime-size Vulkan dispatches, 4 injected enumeration/setup cases, "
-        f"3 feature-emission cases, 11 collective rejections, 2 policy rejections, 3 malformed inputs, 4 invalid runner options, {len(rejected)} source rejections and failed-tool output preservation passed"
+        f"Shader: 1 composed, 2 raw, 18 collective, {len(cases)} fixed-size, 4 integer-workgroup and 10 runtime-size Vulkan dispatches, 4 injected enumeration/setup cases, "
+        f"3 feature-emission cases, 40 collective rejections, 2 policy rejections, 3 malformed inputs, 4 invalid runner options, {len(rejected)} source rejections and failed-tool output preservation passed"
     )
 
 

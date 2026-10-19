@@ -196,18 +196,3 @@ Code changes: `make all`, then applicable checks:
 - C API authority: `include/`. API changes: `make api`, then
   `python3 tools/api.py --check`; update stage consumers. Never hand-edit
   generated API declarations or prelude.
-
-## Beads and commits
-
-Use `br` (beads_rust) from repo. Database: `../.beads`. Never create/commit
-repo-local `.beads`.
-
-1. `git status`; `br ready`. Preserve others' work.
-2. `br update <issue> --status=in_progress`. Create focused issue if none matches.
-   Track newly found defects.
-3. Implement; run required checks.
-4. Stage intended files. `pre-commit run`; `git diff --cached --check`.
-   Hooks edit files: inspect, restage, rerun. All hooks must pass.
-5. `br close <issue>` for completed work; `br sync --flush-only`.
-6. `git commit -s`. One logical change per commit; descriptive subject.
-7. `git status`. Report commit, validation, remaining checkout changes.

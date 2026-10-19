@@ -6,31 +6,16 @@ import argparse
 import os
 import shlex
 import struct
-import subprocess
 from pathlib import Path
 
-from prepare import compile_package
 from shader_collectives import check_collectives
 from shader_composition import check_composition
 from shader_features import check_features
 from shader_policy import check_policy
 from vulkan.abi import check_abi
+from vulkan.platform import LinuxHost, WindowsHost
 
 ROOT = Path(__file__).resolve().parent.parent
-
-
-def run(command, *, expected=0, env=None):
-    result = subprocess.run(
-        [str(value) for value in command],
-        cwd=ROOT,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        timeout=120,
-    )
-    if result.returncode != expected:
-        raise AssertionError(f"{command}\n{result.stdout.decode()}\n{result.stderr.decode()}")
-    return result
 
 
 def main():
@@ -39,18 +24,25 @@ def main():
     parser.add_argument("--llvm", type=Path, required=True)
     parser.add_argument("--spirv-tools", type=Path, required=True)
     parser.add_argument("--vulkan-include", type=Path)
+    parser.add_argument("--vulkan-library", type=Path)
+    parser.add_argument("--profile", choices=("linux_x64", "windows_x64"), default="linux_x64")
     parser.add_argument("--cc", default="cc")
     parser.add_argument("--wgsl-validator", type=Path)
     args = parser.parse_args()
     build = args.build.resolve()
     work = build / "shader-tests"
+    if args.profile == "windows_x64":
+        work = build / "shader tests 雪"
     work.mkdir(parents=True, exist_ok=True)
     llvm = args.llvm.resolve()
     tools = args.spirv_tools.resolve()
+    host_type = WindowsHost if args.profile == "windows_x64" else LinuxHost
+    host = host_type(build, work, shlex.split(args.cc), args.vulkan_library)
+    run, compile_package = host.run, host.compile
     compiler = build / "crust"
     source = work / "program.crs"
     output = work / "program.spv"
-    root = ROOT / "examples/shader/main.crs"
+    root = host.root(ROOT / "examples/shader/main.crs")
     command = [compiler, root, llvm, tools / "spirv-val", output, source]
     native = work / "dispatch"
     flags = [
@@ -65,15 +57,23 @@ def main():
         "-Wvla",
     ]
     if args.vulkan_include:
-        flags += [f"-I{args.vulkan_include.resolve()}"]
-    check_abi(run, build, work, shlex.split(args.cc), flags)
+        flags += ["-I", args.vulkan_include.resolve()]
+    check_abi(run, build, work, host.cc, flags, host.compile, host.profile, host.path)
     compile_package(
         build,
         ROOT / "tests/vulkan/package.crs",
         native,
         ["-O2", "-g"],
-        ["-Wl,-l:libvulkan.so.1"],
+        [host.library],
     )
+    if args.profile == "windows_x64":
+        compile_package(
+            build,
+            ROOT / "tests/shader_alloc_package.crs",
+            build / "shader-alloc",
+            ["-O2"],
+            [build / "libcrust0.a", build / "libcrust0_host.a"],
+        )
     environment = os.environ.copy()
     run(
         [build / "shader-alloc", llvm, tools / "spirv-val", work / "allocation.spv"],
@@ -82,10 +82,13 @@ def main():
     run([build / "shader-alloc", "wgsl", "unused", work / "allocation.wgsl"])
     if args.wgsl_validator:
         run([args.wgsl_validator.resolve(), work / "allocation.wgsl"])
+        print("WGSL validation passed", flush=True)
+    print("Shader allocation sweeps passed", flush=True)
     check_composition(run, compiler, root, llvm, tools, work, native, environment)
     check_features(run, command, tools, source, output, environment)
     check_policy(run, compiler, root, llvm, tools, work, native, environment)
     check_collectives(run, command, source, output, work, native, environment)
+    print("Shader composition, features, policy and collectives passed", flush=True)
     cases = {
         "exchange": (
             (ROOT / "examples/shader/program.crs").read_text(),
@@ -302,10 +305,11 @@ fn compute()->unit {
             )
             run([native, output, expected, "--runtime", str(count)], env=environment)
 
+    print("Shader runtime buffer dispatches passed", flush=True)
     for name, (program, values, status) in cases.items():
         source.write_text(program)
         run(command)
-        assembly = run([tools / "spirv-dis", output]).stdout
+        assembly = run([tools / "spirv-dis", output.name], cwd=output.parent).stdout
         assert b"OpEntryPoint GLCompute" in assembly
         assert b"OpCapability Kernel" not in assembly
         assert b"OpTypeInt 64" not in assembly
@@ -315,14 +319,7 @@ fn compute()->unit {
             [native, output, expected, *(["--twice"] if name == "sticky-status" else [])],
             env=environment,
         )
-    fault_library = work / "faults.so"
-    compile_package(
-        build,
-        ROOT / "tests/vulkan/faults-package.crs",
-        fault_library,
-        ["-O2", "-fPIC"],
-        ["-shared", "-Wl,-l:libvulkan.so.1"],
-    )
+    fault_native, fault_environment = host.failures(native)
     fixture = work / "zero-shared.expected"
     for fault, status, diagnostic in (
         ("incomplete", 0, "injected VK_INCOMPLETE"),
@@ -330,11 +327,14 @@ fn compute()->unit {
         ("enumerate-error", 1, "vkEnumeratePhysicalDevices"),
         ("pool", 1, "vkCreateDescriptorPool"),
     ):
-        injected = environment | {
-            "LD_PRELOAD": str(fault_library),
-            "CRUST_VULKAN_TEST_FAULT": fault,
-        }
-        result = run([native, output, fixture], expected=status, env=injected)
+        injected = (
+            environment
+            | fault_environment
+            | {
+                "CRUST_VULKAN_TEST_FAULT": fault,
+            }
+        )
+        result = run([fault_native, output, fixture], expected=status, env=injected)
         assert diagnostic.encode() in result.stdout, fault
     malformed = work / "malformed.bin"
     for data, diagnostic in ((b"bad", "aligned input"), (bytes(20), "SPIR-V header")):
@@ -373,14 +373,10 @@ fn compute()->unit {
         assert diagnostic.encode() in result.stdout + result.stderr, (name, result)
         assert output.read_bytes() == previous, name
     source.write_text(cases["exchange"][0])
-    run([compiler, root, llvm, "/bin/false", output, source], expected=1)
+    normalizer = host.failing_tool()
+    run([compiler, root, llvm, normalizer, output, source], expected=1)
     assert output.read_bytes() == previous
-    failed_tools = work / "failed-tools" / "bin"
-    failed_tools.mkdir(parents=True, exist_ok=True)
-    normalizer = failed_tools / "opt"
-    normalizer.write_text("#!/bin/sh\nexit 1\n")
-    normalizer.chmod(0o755)
-    run([compiler, root, failed_tools.parent, tools / "spirv-val", output, source], expected=1)
+    run([compiler, root, normalizer.parent.parent, tools / "spirv-val", output, source], expected=1)
     assert output.read_bytes() == previous
     assert not list(work.glob(".crust-*")), "temporary output leaked"
     print(

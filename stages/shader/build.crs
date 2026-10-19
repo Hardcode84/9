@@ -11,7 +11,7 @@ fn sp_tools(stage: *SpStage, driver: *CDriver, output: *u8) -> bool {
         return false;
     }
     var context: *CrustContext = ll_context(&stage -> llvm);
-    var opt: *u8 = ll_join(&stage -> llvm, stage -> config -> llvm_directory, "/bin/opt");
+    var opt: *u8 = ll_join(&stage -> llvm, stage -> config -> llvm_directory, SP_OPT);
     var normalize: [*u8; 7] = make [*u8; 7] {
         opt,
         "-S",
@@ -21,10 +21,10 @@ fn sp_tools(stage: *SpStage, driver: *CDriver, output: *u8) -> bool {
         normalized,
         null(*u8)
     };
-    if !ll_ok(&stage -> llvm) || !cache_tool(context, &normalize[0usize], null(*u8)) {
+    if !ll_ok(&stage -> llvm) || !sp_run(context, &normalize[0usize], 3usize, 5usize) {
         return false;
     }
-    var llc: *u8 = ll_join(&stage -> llvm, stage -> config -> llvm_directory, "/bin/llc");
+    var llc: *u8 = ll_join(&stage -> llvm, stage -> config -> llvm_directory, SP_LLC);
     var arguments: [*u8; 8] = make [*u8; 8] {
         llc,
         "--spirv-ext=+SPV_KHR_float_controls",
@@ -35,7 +35,7 @@ fn sp_tools(stage: *SpStage, driver: *CDriver, output: *u8) -> bool {
         binary,
         null(*u8)
     };
-    if !ll_ok(&stage -> llvm) || !cache_tool(context, &arguments[0usize], null(*u8)) {
+    if !ll_ok(&stage -> llvm) || !sp_run(context, &arguments[0usize], 4usize, 6usize) {
         return false;
     }
     var validate: [*u8; 5] = make [*u8; 5] {
@@ -45,7 +45,7 @@ fn sp_tools(stage: *SpStage, driver: *CDriver, output: *u8) -> bool {
         binary,
         null(*u8)
     };
-    return cache_tool(context, &validate[0usize], null(*u8)) && c_driver_publish(
+    return sp_run(context, &validate[0usize], 3usize, 0usize) && c_driver_publish(
         driver,
         binary,
         output

@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn file_open(path: *u8, mode: *u8) -> *u8 = "fopen";
+extern fn file_seek(file: *u8, offset: i64, origin: i32) -> i32 = "fseek";
+extern fn file_tell(file: *u8) -> i64 = "ftell";

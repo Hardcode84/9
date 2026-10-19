@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+
+const SP_OPT: *u8 = "/bin/opt";
+const SP_LLC: *u8 = "/bin/llc";
+fn sp_run(context: *CrustContext, arguments: **u8, input: usize, output: usize) -> bool {
+    return cache_tool(context, arguments, null(*u8));
+}

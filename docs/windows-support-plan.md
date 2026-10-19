@@ -3,7 +3,8 @@
 # Windows support plan
 
 Status: phases 1 through 4 are implemented for the capabilities listed in the
-[Windows guide](windows.md). Vulkan execution remains a separate validation gate.
+[Windows guide](windows.md). Vulkan execution uses the separate
+`check-windows-shader` gate with explicit tools and a compute driver.
 
 Add native Windows x64 support in stages. First prove that the C99 seed can
 build a compiler stage from source, load it, hand later compilation to it,

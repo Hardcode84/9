@@ -198,12 +198,35 @@ syntax or proof rules.
 
 ### Shader environment
 
-Vulkan execution is a separate Windows gate. A Vulkan runtime alone is not
-sufficient. Validation also needs Windows SPIRV-Tools, Vulkan SDK headers and
-an import library, and the selected WGSL validator. The current execution harness
-links `libvulkan.so.1` and its file ABI uses Linux `long`; that harness must use
-Windows link and file adapters before its results can establish Windows parity.
-The host backend port does not establish this shader execution claim.
+Vulkan execution has a separate Windows gate. Install a Vulkan compute driver,
+Windows SPIRV-Tools, Vulkan headers, and a MinGW-compatible Vulkan import library.
+Select a Windows LLVM build with the SPIR-V target. Check that
+`llc.exe --version` lists `spirv`; a host-only LLVM distribution is insufficient.
+The MSYS2 UCRT64 LLVM package includes this target.
+
+```sh
+UCRT64_PATH=$(cygpath -m /ucrt64)
+make PROFILE=windows_x64 check-windows-shader \
+  LLVM_DIRECTORY="$UCRT64_PATH" SPIRV_TOOLS="$UCRT64_PATH/bin" \
+  VULKAN_INCLUDE="$UCRT64_PATH/include" \
+  VULKAN_LIBRARY="$UCRT64_PATH/lib/libvulkan-1.dll.a" \
+  WGSL_VALIDATOR="$(cygpath -m build/tools/naga.exe)"
+```
+
+The command converts MSYS paths for native Windows Python. Set the validator
+path to its installed location. `WGSL_VALIDATOR` adds validation of generated
+WGSL; omit it only when that separate validation is not required. The test runs native tools
+and dispatches in 512 MiB jobs, including paths with spaces and non-ASCII text.
+Repeat with `AMALGAMATION=0` to test the separate-file seed.
+
+The Vulkan runner uses UTF-16 file opening and signed 64-bit file offsets.
+The shader package selects Windows tool names and runs tools with relative
+temporary file arguments. ABI checks compare the Crust bindings with C headers.
+The execution suite checks shader results, status buffers, allocation failures,
+rejected programs, and output preservation after tool failure. Linked wrappers
+inject enumeration and descriptor-pool failures on Windows. The Linux test
+uses its existing interposition library. See the
+[shader tutorial](../examples/shader/README.md) for the device requirements.
 
 `check-windows` exercises scalar calls and callbacks, mixed and stack arguments,
 file buffer release, allocation failures, runner ownership, missing and mismatched

@@ -5,7 +5,7 @@ import struct
 
 
 def check_composition(run, compiler, root, llvm, tools, work, native, environment):
-    text = root.read_text()
+    text = root.read_text(encoding="utf-8")
     begin = text.index("var ok: bool =")
     end = text.index("if !ok {", begin)
     text = (
@@ -35,9 +35,8 @@ if ok {
 """
         + text[end:]
     )
-    # This root is two directories below the repository, like the tutorial.
     build_root = work / "composition.crs"
-    build_root.write_text(text)
+    build_root.write_text(text, encoding="utf-8")
     source = work / "composition-device.crs"
     source.write_text(
         "fn compute()->unit{var i:u32=shader_global_x();values_store(i,values_load(i)+offset());}"

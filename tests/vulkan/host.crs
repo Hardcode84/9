@@ -6,11 +6,8 @@ extern fn memset(bytes: *u8, value: i32, size: usize) -> *u8 = "memset";
 extern fn memcmp(left: *u8, right: *u8, size: usize) -> i32 = "memcmp";
 extern fn malloc(size: usize) -> *u8 = "malloc";
 extern fn free(bytes: *u8) -> unit = "free";
-extern fn fopen(path: *u8, mode: *u8) -> *u8 = "fopen";
 extern fn fclose(file: *u8) -> i32 = "fclose";
 extern fn fread(bytes: *u8, size: usize, count: usize, file: *u8) -> usize = "fread";
-extern fn fseek(file: *u8, offset: isize, origin: i32) -> i32 = "fseek";
-extern fn ftell(file: *u8) -> isize = "ftell";
 
 fn zero(bytes: *u8, size: usize) -> unit {
     memset(bytes, 0i32, size);
@@ -59,17 +56,17 @@ record Input {
 }
 
 fn read_input(path: *u8, output: *Input) -> bool {
-    var file: *u8 = fopen(path, "rb");
+    var file: *u8 = file_open(path, "rb");
     if file == null(*u8) {
         return error("cannot open input");
     }
-    var size: isize = -1isize;
-    if fseek(file, 0isize, 2i32) == 0i32 {
-        size = ftell(file);
+    var size: i64 = -1i64;
+    if file_seek(file, 0i64, 2i32) == 0i32 {
+        size = file_tell(file);
     }
-    var good: bool = size > 0isize && size % 4isize == 0isize;
+    var good: bool = size > 0i64 && size % 4i64 == 0i64;
     if good {
-        good = fseek(file, 0isize, 0i32) == 0i32;
+        good = file_seek(file, 0i64, 0i32) == 0i32;
     }
     if good {
         output -> size = size as usize;

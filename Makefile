@@ -27,7 +27,7 @@ RUN_LIBS = -lffi -lbcrypt
 API_ROOT = $(BUILD)/profile
 SEED_IMPORT = $(BUILD)/crust.exe.a
 CPPFLAGS += -I$(API_ROOT)/include
-WINDOWS_GOALS = all clean api amalgamate fetch-llvm-release fetch-llvm-main check-llvm-fetch check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership
+WINDOWS_GOALS = all clean api amalgamate fetch-llvm-release fetch-llvm-main check-llvm-fetch check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership check-windows-shader
 ifneq ($(filter-out $(WINDOWS_GOALS) $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a,$(MAKECMDGOALS)),)
 $(error This target is not available for Windows; use the check-windows targets)
 endif
@@ -36,7 +36,7 @@ $(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64 or windows_x64)
 endif
 CPPFLAGS += -Iinclude $(FFI_CFLAGS)
 ifneq ($(PROFILE),windows_x64)
-ifneq ($(filter check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership,$(MAKECMDGOALS)),)
+ifneq ($(filter check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership check-windows-shader,$(MAKECMDGOALS)),)
 $(error check-windows requires PROFILE=windows_x64)
 endif
 endif
@@ -185,6 +185,10 @@ check-windows-asm: all $(BUILD)/windows_limit.exe $(BUILD)/windows_library.dll
 
 check-windows-ownership: all $(BUILD)/windows_limit.exe
 	python3 tests/windows_ownership.py --build $(BUILD)
+
+.PHONY: check-windows-shader
+check-windows-shader: all $(BUILD)/windows_limit.exe $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
+	python3 tests/shader.py --profile windows_x64 --build $(BUILD) --cc '$(CC)' --llvm '$(LLVM_DIRECTORY)' --spirv-tools '$(SPIRV_TOOLS)' --vulkan-include '$(VULKAN_INCLUDE)' --vulkan-library '$(VULKAN_LIBRARY)' $(if $(WGSL_VALIDATOR),--wgsl-validator '$(WGSL_VALIDATOR)')
 
 $(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
 	$(AR) rcs $@ $^

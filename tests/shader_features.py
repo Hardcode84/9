@@ -10,7 +10,7 @@ def check_features(run, command, tools, source, output, environment):
     ):
         source.write_text(program)
         run(command, env=environment)
-        assembly = run([tools / "spirv-dis", output]).stdout
+        assembly = run([tools / "spirv-dis", output.name], cwd=output.parent).stdout
         for absent in (
             b"OpTypeFloat",
             b" Sqrt ",

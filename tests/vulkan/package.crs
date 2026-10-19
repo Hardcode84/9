@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 stage_source(stage, "bindings.crs");
+stage_source(stage, stage_provider(stage -> root, "file_", ".crs"));
 stage_source(stage, "host.crs");
 stage_source(stage, "device.crs");
 stage_source(stage, "resources.crs");

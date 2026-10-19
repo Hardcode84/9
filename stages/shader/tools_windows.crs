@@ -1,0 +1,21 @@
+// SPDX-License-Identifier: Apache-2.0
+
+const SP_OPT: *u8 = "/bin/opt.exe";
+const SP_LLC: *u8 = "/bin/llc.exe";
+// All temporary inputs and outputs share a directory. Relative arguments avoid
+// dependence on a tool's narrow command-line path conversion.
+fn sp_run(context: *CrustContext, arguments: **u8, input: usize, output: usize) -> bool {
+    var directory: *u8 = win_directory_prefix(context, arguments[input]);
+    if directory == null(*u8) {
+        return false;
+    }
+    arguments[input] = win_basename(arguments[input]);
+    if output != 0usize {
+        arguments[output] = win_basename(arguments[output]);
+    }
+    var status: u32 = 1u32;
+    return win_tool_in(context, arguments, null(*u8), &status, directory) && win_status(
+        context,
+        status
+    );
+}

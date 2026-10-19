@@ -9,6 +9,7 @@ stage_source(stage, "collectives.crs");
 stage_source(stage, "expression.crs");
 stage_source(stage, "resources.crs");
 stage_source(stage, "emit.crs");
+stage_source(stage, stage_provider(stage -> root, "tools_", ".crs"));
 stage_source(stage, "build.crs");
 stage_source(stage, "wgsl-expression.crs");
 stage_source(stage, "wgsl-checks.crs");

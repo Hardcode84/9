@@ -254,9 +254,15 @@ make check-shader LLVM_DIRECTORY="$CRUST_LLVM" \
 Use `VULKAN_INCLUDE` if the Vulkan headers are outside the compiler's include
 path. The [Vulkan runner](../../tests/vulkan/package.crs) is written in Crust.
 The shared package builder compiles it and links the Vulkan loader. Its
-[bindings](../../tests/vulkan/bindings.crs) use the Linux x86-64 Vulkan ABI.
+[bindings](../../tests/vulkan/bindings.crs) cover the Linux and Windows x86-64 Vulkan ABI.
 The test compares record sizes, alignments, field offsets, field sizes, and
 constants with the selected C headers before it executes the runner.
+
+On Windows, use `check-windows-shader` with `PROFILE=windows_x64` and a
+MinGW-compatible `VULKAN_LIBRARY`. Select an LLVM build whose `llc.exe --version`
+lists the `spirv` target. The [Windows guide](../../docs/windows.md#shader-environment)
+gives the command and tool requirements. Windows tests include Unicode paths,
+wide file opening, and 64-bit file offsets.
 
 Set `VK_ICD_FILENAMES` to select a software or hardware Vulkan driver.
 The test compiles shaders, validates SPIR-V, dispatches them, and checks both

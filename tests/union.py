@@ -202,7 +202,12 @@ def run(command, **kwargs):
 
 def sanitized_compiler(build, work):
     target = work / "stage-sanitizers"
-    flags = "-O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+    # Line tables keep sanitizer traces useful without full local-variable DWARF.
+    flags = "-O1 -g1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
+    # Inlining lowering helpers into recursion multiplies ASan stack redzones.
+    flags += " -fno-inline-functions-called-once"
+    # Collect GCC's temporary trees earlier for the generated sanitizer fixture.
+    flags += " --param=ggc-min-expand=10 --param=ggc-min-heapsize=32768"
     libraries = [target / f"libcrust0{suffix}.a" for suffix in ("", "_run", "_host")]
     run(["make", f"BUILD={target}", f"CFLAGS={flags}", *libraries])
     executable = target / "crust-union-test"

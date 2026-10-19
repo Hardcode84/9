@@ -66,6 +66,9 @@ The main executable comes from `/proc/self/exe`. Tool dependencies come from
 `ldd`, under the same fixed environment as `cache_tool`. This provider requires
 dynamic Linux ELF tools. Use another explicit provider for other tool formats.
 The loaded-image provider includes loader-selected and explicitly loaded files.
+Tool executables and their libraries are captured as named SHA-256 digests.
+Their full bytes are not retained in compiler arenas. Source inputs still use
+the captured bytes, and native tools must remain unchanged during the request.
 
 [inputs_windows.crs](inputs_windows.crs) captures loaded process images and
 tool-process images through Windows loader notifications. The Windows GCC
@@ -82,3 +85,20 @@ Run `make check-cache` for reuse, source and option edits, captured-byte use,
 corruption, missing files, producer errors, partial output, concurrent
 publication, allocation failures, and the native handoff witness.
 Run `make PROFILE=windows_x64 check-windows-cache` for the Windows provider.
+
+On Linux with a systemd user session, run the extended checks serially with
+a combined 512 MiB memory limit and no swap:
+
+```sh
+systemd-run --user --scope -p MemoryMax=536870912 -p MemorySwapMax=0 \
+  make -j1 check-cache check-union-alloc check-llvm
+```
+
+The union sanitizer fixture keeps `-O1`, line debug information, ASan, and UBSan.
+It omits local-variable debug records to reduce assembler memory use.
+Its GCC options request earlier garbage collection to reduce peak memory.
+The sanitizer build disables inlining of functions called once. This keeps
+large helper frames out of recursive lowering calls and preserves stack space
+for the depth-limit diagnostic. The ordinary union build still uses `-O2`.
+The LLVM check builds three emitter generations and checks cache reuse and
+invalidation. Retain measurement logs in the ignored `build/` directory.

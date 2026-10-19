@@ -251,6 +251,59 @@ var result:CacheArtifact=uninit;
     suite.clean(cache)
 
 
+def check_tool_inputs(suite):
+    root, cache, _, _ = suite.fixture("tool-library")
+    library = root.parent / "dependency.so"
+    tool = root.parent / "tool"
+    source = root.read_text().replace(
+        "var result:CacheArtifact=uninit;",
+        f"""
+var tools:CacheInputs=make CacheInputs{{items:request.inputs,count:request.count,capacity:request.count}};
+var path:*u8={quoted(tool)};
+if !cache_tools(run->context,&tools,&path,1usize,{quoted(cache)}) {{return 1i32;}};
+request.inputs=tools.items;
+request.count=tools.count;
+var result:CacheArtifact=uninit;
+""",
+    )
+    root.write_text(source)
+    for version in (1, 2):
+        subprocess.run(
+            ["cc", "-shared", "-fPIC", "-x", "c", "-", "-o", library],
+            input=f"int dependency(void){{return {version};}}\n".encode(),
+            check=True,
+        )
+        if version == 1:
+            subprocess.run(
+                [
+                    "cc",
+                    "-x",
+                    "c",
+                    "-",
+                    "-x",
+                    "none",
+                    library,
+                    f"-Wl,-rpath,{root.parent}",
+                    "-o",
+                    tool,
+                ],
+                input=b"extern int dependency(void); int main(void){return dependency();}\n",
+                check=True,
+            )
+        assert suite.run(root).stdout == b"miss\n"
+        assert suite.run(root).stdout == b"hit\n"
+    with tool.open("ab") as output:
+        output.write(b"tool revision\n")
+    assert suite.run(root).stdout == b"miss\n"
+    assert suite.run(root).stdout == b"hit\n"
+    library.unlink()
+    assert b"missing tool library" in suite.run(root, expected=1).stderr
+    tool.unlink()
+    assert b"cache tool failed" in suite.run(root, expected=1).stderr
+    assert len(list(cache.iterdir())) == 3
+    suite.clean(cache)
+
+
 def check_allocations(suite):
     root, cache, _, _ = suite.fixture(
         "allocation",
@@ -318,6 +371,7 @@ def main():
     check_artifacts(suite)
     check_producer_snapshot(suite)
     check_loaded_inputs(suite)
+    check_tool_inputs(suite)
     check_allocations(suite)
     check_backend(suite)
     print(f"artifact cache: {suite.checks} process checks passed")

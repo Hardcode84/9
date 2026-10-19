@@ -101,7 +101,7 @@ def run_packages(build, llvm=None):
             factory.write_text(
                 original.replace(quote(llvm.resolve()), quote(work / "missing-llvm"))
             )
-            assert b"cannot read cache file" in check(command, 1, cwd="/").stderr
+            assert b"cache tool failed" in check(command, 1, cwd="/").stderr
         finally:
             factory.write_text(original)
     assert not list((build / "stage-cache").glob("crust-*"))

@@ -75,7 +75,7 @@ fn cache_value_input(
     };
     return cache_add(context, inputs, source);
 }
-fn cache_loaded_inputs(context: *CrustContext, inputs: *CacheInputs) -> bool {
+fn cache_loaded_images(context: *CrustContext, inputs: *CacheInputs) -> bool {
     // Initialize the hash provider before enumerating its loaded implementation.
     var seed: *u8 = win_seed_path(context);
     if seed == null(*u8) || cache_digest(context, seed, null(*u8)) == null(*u8) {
@@ -123,6 +123,21 @@ fn cache_sort_inputs(inputs: *CacheInputs) -> unit {
         sizeof(*CrustSource),
         cache_input_compare
     );
+}
+
+fn cache_loaded_inputs(context: *CrustContext, inputs: *CacheInputs) -> bool {
+    var begin: usize = inputs -> count;
+    if !cache_loaded_images(context, inputs) {
+        return false;
+    }
+    // Loader order is not checker identity. Preserve preceding source inputs.
+    var images: CacheInputs = make CacheInputs {
+        items: inputs -> items + begin as isize,
+        count: inputs -> count - begin,
+        capacity: inputs -> count - begin
+    };
+    cache_sort_inputs(&images);
+    return true;
 }
 // Capture directory membership as well as bytes. Reject links and excessive nesting.
 fn cache_tree(

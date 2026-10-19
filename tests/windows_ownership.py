@@ -112,7 +112,9 @@ if !host_bind(run,crust_run_open(run,library),"ownership_main"){return 1i32;};
         assert hashlib.sha256(cached.read_bytes()).hexdigest() == digest
         output = self.work / "ownership client.exe"
         args = ["import-trusted", self.objects, artifact, digest, "-o", output, client]
+        images = set(self.cache.glob("*/artifact.dll"))
         self.driver(*args)
+        assert set(self.cache.glob("*/artifact.dll")) == images
         assert self.run(output).stdout.replace(b"\r\n", b"\n") == b"OK\n"
         invalid = self.inputs / "invalid-client.crs"
         text = client.read_text(encoding="utf-8")

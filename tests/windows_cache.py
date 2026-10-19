@@ -146,6 +146,32 @@ var result:CacheArtifact=uninit;
         self.root("loaded dependency", body)
         assert len(list(cache.glob("*/artifact.dll"))) == 2
 
+    def loaded_order(self):
+        cache = self.fresh_directory("loaded order")
+        libraries = [self.work / f"order-{index}.dll" for index in (1, 2)]
+        for library in libraries:
+            shutil.copyfile(self.build / "windows_cache_fixture.dll", library)
+        for order in (libraries, list(reversed(libraries))):
+            body = self.request(cache, 'return cache_save(context,path,"complete",8usize);')
+            loads = "".join(
+                f"if crust_run_open(run,{literal(native_path(path))})==null(*u8){{return 1i32;}};"
+                for path in order
+            )
+            body = body.replace(
+                "var result:CacheArtifact=uninit;",
+                loads
+                + """
+var inputs:CacheInputs=make CacheInputs{items:null(**CrustSource),count:0usize,capacity:0usize};
+if !cache_value_input(run -> context,&inputs,"source-prefix","source",6usize){return 1i32;};
+if !cache_loaded_inputs(run -> context,&inputs){return 1i32;};
+if cache_strcmp(inputs.items[0usize] -> path,"source-prefix")!=0i32{return 1i32;};
+request.inputs=inputs.items;request.count=inputs.count;
+var result:CacheArtifact=uninit;
+""",
+            )
+            self.root("loaded order", body)
+        assert len(list(cache.glob("*/artifact.dll"))) == 1
+
     def publication(self):
         fixture = self.build / "windows_cache_fixture.exe"
         library = self.build / "windows_cache_fixture.dll"
@@ -331,6 +357,7 @@ def main():
         "allocations",
         "publication",
         "loaded_dependency",
+        "loaded_order",
         "toolchain",
         "reuse",
         "source_invalidation",

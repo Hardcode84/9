@@ -23,10 +23,11 @@ PLATFORM = windows
 EXE = .exe
 HOST_EXTRA = $(BUILD)/windows_io.o
 # The seed owns the thread stack required by the default evaluator depth limit.
-RUN_LDFLAGS = -municode -Wl,--stack,8388608 -Wl,--export-all-symbols -Wl,--out-implib,$(BUILD)/crust.exe.a
+RUN_LDFLAGS = -municode -Wl,--stack,8388608 -Wl,--exclude-all-symbols -Wl,--out-implib,$(BUILD)/crust.exe.a
 RUN_LIBS = -lffi -lbcrypt
 API_ROOT = $(BUILD)/profile
 SEED_IMPORT = $(BUILD)/crust.exe.a
+SEED_EXPORTS = $(API_ROOT)/include/host_exports.def
 CPPFLAGS += -I$(API_ROOT)/include
 WINDOWS_GOALS = all clean api amalgamate fetch-llvm-release fetch-llvm-main check-llvm-fetch check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership check-windows-shader check-windows-shared-core check-windows-shared-split-core check-windows-shared-ownership check-windows-shared-tooling check-windows-shared-llvm
 ifneq ($(filter-out $(WINDOWS_GOALS) $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a,$(MAKECMDGOALS)),)
@@ -52,7 +53,7 @@ RUNNER = $(BUILD)/eval.o $(BUILD)/eval_ffi.o $(BUILD)/run.o $(BUILD)/run_$(PLATF
 HOST = $(BUILD)/host.o $(BUILD)/host_$(PLATFORM).o $(HOST_EXTRA)
 PRELUDE = $(addprefix $(API_ROOT)/,api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs) stages/host_$(PLATFORM).crs stages/host.crs
 API_HEADERS = $(addprefix include/,$(addsuffix .h,crust0 crust0_host crust0_x64 crust0_stage crust0_eval crust0_run))
-API_GENERATED = $(addprefix $(API_ROOT)/,$(patsubst include/%.h,api/%.crs,$(API_HEADERS)) include/crust0_abi.h include/host_symbols.inc stages/asm/model.crs)
+API_GENERATED = $(addprefix $(API_ROOT)/,$(patsubst include/%.h,api/%.crs,$(API_HEADERS)) include/crust0_abi.h include/host_symbols.inc stages/asm/model.crs) $(SEED_EXPORTS)
 C_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources c/package.crs),$(error Stage package query failed))
 RESOURCE_EXPORTS = $(or $(shell python3 tests/prepare.py --build $(BUILD) --exports resources/package.crs),$(error Stage package query failed))
 OVERLOAD_EXPORTS = $(or $(shell python3 tests/prepare.py --build $(BUILD) --exports overload/package.crs),$(error Stage package query failed))
@@ -129,7 +130,7 @@ $(BUILD)/prelude.inc: tools/prelude.py $(PRELUDE) | $(BUILD)
 $(BUILD)/run_main.o: CPPFLAGS += -I$(BUILD)
 $(BUILD)/run_main.o: $(BUILD)/prelude.inc
 
-$(BUILD)/crust$(EXE) $(SEED_IMPORT) &: $(CORE) $(RUNNER) $(BUILD)/run_main.o $(BUILD)/run_entry_$(PLATFORM).o $(HOST) Makefile
+$(BUILD)/crust$(EXE) $(SEED_IMPORT) &: $(CORE) $(RUNNER) $(BUILD)/run_main.o $(BUILD)/run_entry_$(PLATFORM).o $(HOST) $(SEED_EXPORTS) Makefile
 	$(CC) $(CFLAGS) $(filter-out $(BUILD)/core-mode Makefile,$^) $(RUN_LDFLAGS) $(LDFLAGS) $(FFI_LDFLAGS) $(RUN_LIBS) -o $(BUILD)/crust$(EXE)
 
 $(BUILD)/libcrust0_run.a: $(RUNNER)

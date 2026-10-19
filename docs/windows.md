@@ -83,6 +83,9 @@ compile the rest of the root. No backend is linked into the seed.
 
 Keep `crust.exe.a` and the generated `profile/` directory beside `crust.exe`.
 The import library lets generated stage DLLs call the same seed instance.
+Its exports come from the generated Crust host declarations. CRT entry
+points are not exported. Each DLL must use its own CRT registration functions
+so that its exit callbacks run before the DLL is unloaded.
 Stage DLLs export their own ABI marker and selected package functions.
 The normal loader ownership and ABI checks apply to each generation.
 

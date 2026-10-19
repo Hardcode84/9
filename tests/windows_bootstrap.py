@@ -4,6 +4,7 @@
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -160,9 +161,35 @@ var result:CacheArtifact=uninit;
             failure = self.root("artifact-" + name, source, expected=1)
             assert b"absolute directory" in failure.stderr
 
+    def runtime_directory(self):
+        """Copy PATH-resolved runtime DLLs for a seed already verified to start."""
+        directory = self.fresh_directory("runtime DLLs")
+        search = [self.build, *map(Path, os.environ["PATH"].split(os.pathsep))]
+        system = Path(os.environ["SystemRoot"]).resolve()
+        pending, seen = [self.seed], set()
+        while pending:
+            binary = pending.pop()
+            imports = subprocess.check_output(
+                ["objdump", "-p", binary.name], cwd=binary.parent, timeout=30
+            )
+            for name in re.findall(rb"DLL Name:\s*(\S+)", imports):
+                if name in seen:
+                    continue
+                seen.add(name)
+                candidates = (path / os.fsdecode(name) for path in search)
+                source = next((path.resolve() for path in candidates if path.is_file()), None)
+                if source is None or source.is_relative_to(system):
+                    continue
+                target = directory / source.name
+                shutil.copy2(source, target)
+                pending.append(target)
+        return directory
+
     def missing_dependencies(self):
         cache = self.fresh_directory("missing tools")
-        environment = dict(os.environ, PATH=str(self.work))
+        # Remove compiler tools from PATH while retaining the seed's DLL dependencies.
+        runtime = self.runtime_directory()
+        environment = dict(os.environ, PATH=str(runtime))
         failed = self.root(
             "missing-tools", self.setup() + self.session(cache), expected=1, environment=environment
         )
@@ -172,7 +199,7 @@ var result:CacheArtifact=uninit;
         invalid.mkdir()
         for name in ("gcc.exe", "objcopy.exe"):
             (invalid / name).write_bytes(b"invalid executable")
-        environment["PATH"] = str(invalid)
+        environment["PATH"] = os.pathsep.join(map(str, (invalid, runtime)))
         failed = self.root(
             "invalid-tool", self.setup() + self.session(cache), expected=1, environment=environment
         )

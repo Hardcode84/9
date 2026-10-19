@@ -355,7 +355,7 @@ check-examples: all test-tools
 check-modules: all test-tools
 	python3 tests/modules.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
-check-asm: all test-tools
+check-asm: all test-tools $(BUILD)/crust0
 	python3 tests/asm.py --build $(BUILD) --cc '$(CC)' --ldflags='$(LDFLAGS)'
 
 check-cache: $(BUILD)/crust

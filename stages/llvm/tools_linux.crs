@@ -1,0 +1,15 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn llvm_capture(toolchain: *StageToolchain, directory: *u8) -> bool {
+    var tools: *LlTools = toolchain -> user as *LlTools;
+    return cache_tools(
+        toolchain -> context,
+        &toolchain -> inputs,
+        &tools -> compiler,
+        1usize,
+        toolchain -> directory
+    );
+}
+fn llvm_object_run(request: *StageObject, arguments: **u8) -> bool {
+    return cache_tool(request -> context, arguments, null(*u8));
+}

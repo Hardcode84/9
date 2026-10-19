@@ -512,7 +512,7 @@ fn x64_prepare_expression(
     if expression == null(*CrustExpr) {
         return true;
     }
-    if (*(*expression).type).kind == CRUST_T_F32 {
+    if !X64_FLOAT && (*(*expression).type).kind == CRUST_T_F32 {
         return x64_error(
             (*program).context,
             &(*expression).loc,
@@ -738,7 +738,7 @@ fn crust_x64_prepare(ctx: *CrustContext, result: **CrustX64Program, entry: *Crus
             ctx,
             null(*CrustSource),
             0usize,
-            "assembly emission requires the Linux x86-64 target profile"
+            "assembly emission requires an x86-64 target profile"
         );
         return false;
     }
@@ -777,7 +777,7 @@ fn x64_numeric_signature(program: *CrustX64Program, type: *CrustType, location: 
         floating = floating || type -> params[index] -> kind == CRUST_T_F32;
         index = index + 1usize;
     }
-    if floating {
+    if floating && !X64_FLOAT {
         return x64_error(
             program -> context,
             location,

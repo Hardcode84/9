@@ -1,0 +1,172 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Scalar expressions carry binary32 bits in EAX; the ABI boundary uses XMM registers.
+fn x64_float_expression(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool {
+    var kind: u32 = expression -> kind;
+    if kind == CRUST_E_FLOAT {
+        x64_output_text(emitter, "\tmovl $");
+        x64_output_number(emitter, expression -> integer, 10u64, 0usize);
+        x64_output_text(emitter, ", %eax\n");
+        return true;
+    }
+    if kind == CRUST_E_BINARY && expression -> left -> type -> kind == CRUST_T_F32 {
+        x64_float_binary(emitter, expression);
+        return true;
+    }
+    if kind == CRUST_E_CAST && (
+        expression -> type -> kind == CRUST_T_F32 || expression -> left -> type -> kind == CRUST_T_F32
+    ) {
+        x64_emit_expression(emitter, expression -> left);
+        x64_float_cast(emitter, expression -> left -> type, expression -> type);
+        return true;
+    }
+    if kind == CRUST_E_UNARY && expression -> type -> kind == CRUST_T_F32 && expression -> op == CRUST_OP_NEG {
+        x64_emit_expression(emitter, expression -> left);
+        x64_output_text(emitter, "\txorl $2147483648, %eax\n");
+        return true;
+    }
+    return false;
+}
+fn x64_float_binary(emitter: *CrustX64Emitter, expression: *CrustExpr) -> unit {
+    var plan: *CrustX64Expr = x64_expression_plan(emitter, expression);
+    x64_emit_expression(emitter, expression -> left);
+    x64_save_slot64(emitter, plan -> scratch.offset);
+    x64_emit_expression(emitter, expression -> right);
+    x64_output_text(emitter, "\tmovd %eax, %xmm1\n");
+    x64_load_slot64(emitter, plan -> scratch.offset, "rax");
+    x64_output_text(emitter, "\tmovd %eax, %xmm0\n");
+    var op: u32 = expression -> op;
+    if op >= CRUST_OP_EQ {
+        x64_float_compare(emitter, op);
+        return;
+    }
+    var instructions: [*u8; 4] = make [*u8; 4] {
+        "addss",
+        "subss",
+        "mulss",
+        "divss"
+    };
+    x64_output_text(emitter, "\t");
+    x64_output_text(emitter, instructions[op as usize]);
+    x64_output_text(emitter, " %xmm1, %xmm0\n\tmovd %xmm0, %eax\n");
+}
+fn x64_float_compare(emitter: *CrustX64Emitter, op: u32) -> unit {
+    var conditions: [*u8; 6] = make [*u8; 6] {
+        "e",
+        "ne",
+        "b",
+        "be",
+        "a",
+        "ae"
+    };
+    x64_output_text(emitter, "\tucomiss %xmm1, %xmm0\n\tset");
+    x64_output_text(emitter, conditions[(op - CRUST_OP_EQ) as usize]);
+    x64_output_text(emitter, " %al\n");
+    if op == CRUST_OP_NE {
+        x64_output_text(emitter, "\tsetp %dl\n\torb %dl, %al\n");
+    } else {
+        x64_output_text(emitter, "\tsetnp %dl\n\tandb %dl, %al\n");
+    }
+    x64_output_text(emitter, "\tmovzbl %al, %eax\n");
+}
+fn x64_float_bound(emitter: *CrustX64Emitter, bits: u64) -> unit {
+    x64_output_text(emitter, "\tmovl $");
+    x64_output_number(emitter, bits, 10u64, 0usize);
+    x64_output_text(emitter, ", %edx\n\tmovd %edx, %xmm1\n");
+}
+fn x64_float_integer(emitter: *CrustX64Emitter, type: *CrustType) -> unit {
+    var width: u64 = type -> size * 8u64;
+    var maximum: u64 = ~0u64 >> (64u64 - width);
+    var minimum: u64 = 0u64;
+    var signed_value: bool = crust_type_signed(type);
+    if signed_value {
+        width = width - 1u64;
+        maximum = maximum >> 1u64;
+        minimum = 1u64 << width;
+    }
+    var bound: u64 = (127u64 + width) << 23u64;
+    var low: u64 = x64_next_label(emitter);
+    var high: u64 = x64_next_label(emitter);
+    var nan: u64 = x64_next_label(emitter);
+    var done: u64 = x64_next_label(emitter);
+    x64_output_text(emitter, "\tmovd %eax, %xmm0\n\tucomiss %xmm0, %xmm0\n");
+    x64_emit_jump(emitter, "jp", nan);
+    x64_float_bound(emitter, bound);
+    x64_output_text(emitter, "\tucomiss %xmm1, %xmm0\n");
+    x64_emit_jump(emitter, "jae", high);
+    var lower: u64 = 0u64;
+    if signed_value {
+        lower = bound | 2147483648u64;
+    }
+    x64_float_bound(emitter, lower);
+    x64_output_text(emitter, "\tucomiss %xmm1, %xmm0\n");
+    x64_emit_jump(emitter, "jbe", low);
+    x64_float_convert_integer(emitter, type);
+    x64_emit_jump(emitter, "jmp", done);
+    x64_emit_label(emitter, high);
+    x64_output_text(emitter, "\tmovabsq $");
+    x64_output_number(emitter, maximum, 10u64, 0usize);
+    x64_output_text(emitter, ", %rax\n");
+    x64_emit_jump(emitter, "jmp", done);
+    x64_emit_label(emitter, low);
+    x64_output_text(emitter, "\tmovabsq $");
+    x64_output_number(emitter, minimum, 10u64, 0usize);
+    x64_output_text(emitter, ", %rax\n");
+    x64_emit_jump(emitter, "jmp", done);
+    x64_emit_label(emitter, nan);
+    x64_output_text(emitter, "\txorl %eax, %eax\n");
+    x64_emit_label(emitter, done);
+    x64_normalize(emitter, type);
+}
+fn x64_float_convert_integer(emitter: *CrustX64Emitter, type: *CrustType) -> unit {
+    if type -> size != 8u64 || crust_type_signed(type) {
+        x64_output_text(emitter, "\tcvttss2siq %xmm0, %rax\n");
+        return;
+    }
+    var small: u64 = x64_next_label(emitter);
+    var done: u64 = x64_next_label(emitter);
+    x64_float_bound(emitter, 1593835520u64);
+    x64_output_text(emitter, "\tucomiss %xmm1, %xmm0\n");
+    x64_emit_jump(emitter, "jb", small);
+    x64_output_text(
+        emitter,
+        "\tsubss %xmm1, %xmm0\n\tcvttss2siq %xmm0, %rax\n\tbtcq $63, %rax\n"
+    );
+    x64_emit_jump(emitter, "jmp", done);
+    x64_emit_label(emitter, small);
+    x64_output_text(emitter, "\tcvttss2siq %xmm0, %rax\n");
+    x64_emit_label(emitter, done);
+}
+fn x64_integer_float(emitter: *CrustX64Emitter, type: *CrustType) -> unit {
+    if type -> size != 8u64 || crust_type_signed(type) {
+        x64_output_text(emitter, "\tcvtsi2ssq %rax, %xmm0\n\tmovd %xmm0, %eax\n");
+        return;
+    }
+    var small: u64 = x64_next_label(emitter);
+    var done: u64 = x64_next_label(emitter);
+    x64_output_text(emitter, "\ttestq %rax, %rax\n");
+    x64_emit_jump(emitter, "jns", small);
+    x64_output_text(
+        emitter,
+        "\tmovq %rax, %rdx\n\tandl $1, %edx\n\tshrq $1, %rax\n\torq %rdx, %rax\n\tcvtsi2ssq %rax, %xmm0\n\taddss %xmm0, %xmm0\n"
+    );
+    x64_emit_jump(emitter, "jmp", done);
+    x64_emit_label(emitter, small);
+    x64_output_text(emitter, "\tcvtsi2ssq %rax, %xmm0\n");
+    x64_emit_label(emitter, done);
+    x64_output_text(emitter, "\tmovd %xmm0, %eax\n");
+}
+fn x64_float_cast(emitter: *CrustX64Emitter, before: *CrustType, after: *CrustType) -> unit {
+    if before == after {
+        return;
+    }
+    if after -> kind == CRUST_T_F32 {
+        x64_integer_float(emitter, before);
+        return;
+    }
+    if after -> kind == CRUST_T_BOOL {
+        x64_output_text(emitter, "\tandl $2147483647, %eax\n\tsetne %al\n\tmovzbl %al, %eax\n");
+        return;
+    }
+    x64_float_integer(emitter, after);
+}

@@ -18,16 +18,21 @@ def main():
     parser.add_argument("files", nargs="+")
     args = parser.parse_args()
     paths = [Path(os.path.abspath(path)) for path in args.files]
+    build = "build/windows" if os.name == "nt" else "build"
+    profile = "windows_x64" if os.name == "nt" else "linux_x64"
+    launcher = ROOT / build / ("crust.exe" if os.name == "nt" else "crust")
     try:
         subprocess.run(
-            ["make", "--no-print-directory", "-s", "BUILD=build", "all"], cwd=ROOT, check=True
+            ["make", "--no-print-directory", "-s", f"BUILD={build}", f"PROFILE={profile}", "all"],
+            cwd=ROOT,
+            check=True,
         )
         mode = "--check" if args.check else "--write"
         ordinary = [str(path) for path in paths if path != TEXT_SOURCE]
         if ordinary:
             subprocess.run(
                 [
-                    ROOT / "build/crust",
+                    launcher,
                     "stages/build/run.crs",
                     "stages/format/tool.crs",
                     mode,
@@ -40,7 +45,7 @@ def main():
         if TEXT_SOURCE in paths:
             subprocess.run(
                 [
-                    ROOT / "build/crust",
+                    launcher,
                     "examples/format/reader-switch.crs",
                     mode,
                     "--",

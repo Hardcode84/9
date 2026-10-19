@@ -26,7 +26,7 @@ fn llvm_backend_build(context: *CrustContext, entry: *CrustDecl, options: *Backe
     return result;
 }
 fn llvm_driver_object(driver: *CDriver, source: *u8, output: *u8, mode: u32) -> bool {
-    var compiler: *u8 = c_driver_join(&driver -> stage -> status, LLVM_DIRECTORY, "/bin/clang");
+    var compiler: *u8 = c_driver_join(&driver -> stage -> status, LLVM_DIRECTORY, LLVM_CLANG);
     if compiler == null(*u8) {
         return false;
     }
@@ -34,7 +34,7 @@ fn llvm_driver_object(driver: *CDriver, source: *u8, output: *u8, mode: u32) -> 
     arguments[0usize] = compiler;
     arguments[1usize] = "--no-default-config";
     arguments[2usize] = "-target";
-    arguments[3usize] = "x86_64-unknown-linux-gnu";
+    arguments[3usize] = LLVM_TRIPLE;
     arguments[4usize] = LLVM_LEVELS[LLVM_OPTIMIZATION as usize];
     var index: usize = 0usize;
     while index < driver -> options -> cflag_count {

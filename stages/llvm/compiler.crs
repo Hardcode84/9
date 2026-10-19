@@ -63,7 +63,7 @@ fn llvm_toolchain(toolchain: *StageToolchain, directory: *u8, optimization: u32)
     if tools == null(*LlTools) {
         return false;
     }
-    tools -> compiler = native_join(context, directory, "/bin/clang");
+    tools -> compiler = native_join(context, directory, LLVM_CLANG);
     tools -> optimization = LLVM_LEVELS[optimization as usize];
     toolchain -> user = tools as *u8;
     toolchain -> object = llvm_stage_object;
@@ -81,13 +81,7 @@ fn llvm_toolchain(toolchain: *StageToolchain, directory: *u8, optimization: u32)
         size: 3usize,
         identity: 0u64
     };
-    return cache_add(context, &toolchain -> inputs, recipe) && cache_tools(
-        context,
-        &toolchain -> inputs,
-        &tools -> compiler,
-        1usize,
-        toolchain -> directory
-    );
+    return cache_add(context, &toolchain -> inputs, recipe) && llvm_capture(toolchain, directory);
 }
 fn llvm_stage_object(request: *StageObject) -> bool {
     var tools: *LlTools = request -> user as *LlTools;
@@ -95,7 +89,7 @@ fn llvm_stage_object(request: *StageObject) -> bool {
         tools -> compiler,
         "--no-default-config",
         "-target",
-        "x86_64-unknown-linux-gnu",
+        LLVM_TRIPLE,
         "-fPIC",
         tools -> optimization,
         "-x",
@@ -106,5 +100,5 @@ fn llvm_stage_object(request: *StageObject) -> bool {
         request -> output,
         null(*u8)
     };
-    return cache_tool(request -> context, &arguments[0usize], null(*u8));
+    return llvm_object_run(request, &arguments[0usize]);
 }

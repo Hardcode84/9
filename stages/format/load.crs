@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn format_setup(run: *CrustRun, base: *u8) -> bool {
-    var paths: [*u8; 10] = make [*u8; 10] {
+    var paths: [*u8; 12] = make [*u8; 12] {
+        "stages/native/model.crs",
+        stage_provider(run, "stages/native/", ".crs"),
         "stages/reader/model.crs",
         "stages/reader/lex.crs",
         "stages/highlight/model.crs",
@@ -10,11 +12,11 @@ fn format_setup(run: *CrustRun, base: *u8) -> bool {
         "stages/format/model.crs",
         "stages/format/tokens.crs",
         "stages/format/layout.crs",
-        "stages/format/linux.crs",
+        stage_provider(run, "stages/format/", ".crs"),
         "stages/format/program.crs"
     };
     var index: usize = 0usize;
-    while index < 10usize {
+    while index < 12usize {
         var path: *u8 = stage_path(run, base, paths[index]);
         if path == null(*u8) || !host_source(run, path) {
             return false;

@@ -12,7 +12,7 @@ selected host and target profile is Linux x86-64 with the System V scalar ABI.
 The `windows_x64` profile also builds the seed launcher. It supports interpreted
 roots and explicit DLL inputs with the Windows x64 scalar ABI. The C backend
 supports source bootstrap, native handoff, and validated stage DLL reuse.
-Other backend providers remain Linux-only. See the
+LLVM and ASM package providers also support Windows. See the
 [Windows build guide](windows.md) for the supported boundary and tests.
 
 This implementation is the raw bootstrap language. It does not add ownership,
@@ -43,8 +43,10 @@ make fetch-llvm-release
 make fetch-llvm-main
 ```
 
-The release target downloads and extracts the latest stable official Linux
-x86-64 binary archive. It checks the archive against the SHA-256 digest from
+The release target downloads and extracts the latest stable official archive
+for Linux or Windows x86-64. `--profile` selects either target explicitly.
+Windows release pins and snapshots use a `windows_x64` subdirectory.
+The fetch checks the archive against the SHA-256 digest from
 the GitHub release API. Python must provide `tarfile.data_filter` for safe
 archive extraction; Python 3.12 includes it.
 

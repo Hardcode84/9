@@ -1,0 +1,109 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn asm_wfopen(path: *u16, mode: *u16) -> *u8 = "_wfopen";
+fn asm_open(context: *CrustContext, path: *u8) -> *u8 {
+    var wide: *u16 = win_wide(context, path);
+    var mode: [u16; 3] = make [u16; 3] {
+        119u16,
+        98u16,
+        0u16
+    };
+    if wide == null(*u16) {
+        return null(*u8);
+    }
+    return asm_wfopen(wide, &mode[0usize]);
+}
+fn asm_stage_toolchain(toolchain: *StageToolchain) -> bool {
+    toolchain -> object = asm_stage_object;
+    var context: *CrustContext = toolchain -> context;
+    var wide: *u16 = win_tool_path(context, "as");
+    if wide == null(*u16) {
+        return false;
+    }
+    var path: *u8 = win_utf8(context, wide);
+    if path == null(*u8) {
+        return false;
+    }
+    path = win_existing_path(context, path);
+    if path == null(*u8) {
+        return false;
+    }
+    toolchain -> user = path;
+    var directory: *u8 = win_directory_prefix(context, path);
+    if directory == null(*u8) {
+        return false;
+    }
+    var environment: *u16 = win_tool_environment(context);
+    if environment == null(*u16) {
+        return false;
+    }
+    var count: usize = 0usize;
+    while environment[count] != 0u16 || environment[count + 1usize] != 0u16 {
+        count = count + 1usize;
+    }
+    if !cache_value_input(
+        context,
+        &toolchain -> inputs,
+        "asm-windows-environment",
+        environment as *u8,
+        (count + 2usize) * 2usize
+    ) || !cache_tree(context, &toolchain -> inputs, directory, 0usize) {
+        return false;
+    }
+    return asm_windows_probe(toolchain);
+}
+fn asm_windows_probe(toolchain: *StageToolchain) -> bool {
+    var context: *CrustContext = toolchain -> context;
+    var work: CacheWork = make CacheWork {
+        directory: null(*u8),
+        manifest: null(*u8),
+        digest: null(*u8),
+        artifact: null(*u8),
+        checksum: null(*u8)
+    };
+    var success: bool = cache_work(context, toolchain -> directory, &work);
+    if success {
+        var text: *u8 = ".text\n.globl probe\nprobe: ret\n";
+        var args: [*u8; 6] = make [*u8; 6] {
+            toolchain -> user,
+            "--64",
+            "inputs",
+            "-o",
+            "artifact.dll",
+            null(*u8)
+        };
+        success = cache_save(context, work.manifest, text, native_strlen(text)) && cache_probe(
+            context,
+            &toolchain -> inputs,
+            &args[0usize],
+            work.directory
+        );
+    }
+    if !cache_cleanup(context, &work) {
+        success = false;
+    }
+    cache_sort_inputs(&toolchain -> inputs);
+    return success;
+}
+fn asm_stage_object(request: *StageObject) -> bool {
+    var args: [*u8; 6] = make [*u8; 6] {
+        request -> user,
+        "--64",
+        win_basename(request -> source),
+        "-o",
+        win_basename(request -> output),
+        null(*u8)
+    };
+    var directory: *u8 = win_directory_prefix(request -> context, request -> output);
+    if directory == null(*u8) {
+        return false;
+    }
+    var status: u32 = 1u32;
+    return win_tool_in(
+        request -> context,
+        &args[0usize],
+        null(*u8),
+        &status,
+        directory
+    ) && win_status(request -> context, status);
+}

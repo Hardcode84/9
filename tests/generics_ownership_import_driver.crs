@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
+extern fn gli_strstr(text: *u8, pattern: *u8) -> *u8 = "strstr";
+
 fn gli_read(program: *OgProgram, path: *u8, identity: u64, trusted: bool) -> bool {
     var source: CrustSource = uninit;
     if !cache_read(&(*program).generics.syntax, path, &source) {
@@ -15,8 +17,8 @@ fn gli_read_range(program: *OgProgram, path: *u8) -> bool {
         return false;
     }
     source.identity = 4u64;
-    var first: *u8 = cache_strstr(source.bytes, "// target\n");
-    var last: *u8 = cache_strstr(source.bytes, "// end target\n");
+    var first: *u8 = gli_strstr(source.bytes, "// target\n");
+    var last: *u8 = gli_strstr(source.bytes, "// end target\n");
     if first == null(*u8) || last == null(*u8) {
         return native_error(
             &(*program).generics.syntax,

@@ -28,12 +28,14 @@ fn os_library_location(context: *CrustContext, directory: *u8, receipt: *Ownersh
     }
     var size: usize = native_strlen(directory);
     var artifact: *u8 = (*receipt).artifact;
-    if native_strlen(artifact) != size + 74usize || cache_memcmp(artifact, directory, size) != 0i32 || artifact[
+    if native_strlen(artifact) != size + 65usize + native_strlen(OS_ARTIFACT_SUFFIX) || cache_memcmp(
+        artifact,
+        directory,
         size
-    ] != 47u8 || !os_library_hex(artifact + (size + 1usize) as isize, 64usize) || !c_equal(
-        artifact + (size + 65usize) as isize,
-        "/artifact"
-    ) {
+    ) != 0i32 || artifact[size] != 47u8 || !os_library_hex(
+        artifact + (size + 1usize) as isize,
+        64usize
+    ) || !c_equal(artifact + (size + 65usize) as isize, OS_ARTIFACT_SUFFIX) {
         return os_library_error(
             context,
             "ownership artifact is not an entry in the selected trusted cache"
@@ -51,13 +53,14 @@ fn os_library_location(context: *CrustContext, directory: *u8, receipt: *Ownersh
 fn os_library_capture(
     context: *CrustContext,
     directory: *u8,
+    temporary: *u8,
     receipt: *OwnershipLibrary,
     checker: *u8,
     loaded: *OsLoadedLibrary
 ) -> bool {
     if !os_library_location(context, directory, receipt) || !cache_work(
         context,
-        directory,
+        temporary,
         &(*loaded).files
     ) || !cache_read(context, (*receipt).artifact, &(*loaded).source) {
         return false;
@@ -126,7 +129,10 @@ fn os_import_link(cli: *CCli, imports: *OwnershipImports, loaded: *OsLoadedLibra
     }
     native_memcpy(flags as *u8, (*cli).options.ldflags as *u8, count * sizeof(*u8));
     while loaded != null(*OsLoadedLibrary) {
-        flags[count] = (*loaded).files.checksum;
+        flags[count] = os_import_object_path(cli, &loaded -> files);
+        if flags[count] == null(*u8) {
+            return false;
+        }
         count = count + 1usize;
         loaded = (*loaded).next;
     }
@@ -143,6 +149,10 @@ fn os_import_read(
     first: **OsLoadedLibrary
 ) -> bool {
     var context: *CrustContext = (*(*stage).resources).context;
+    var temporary: *u8 = os_import_directory(cli, imports -> directory);
+    if temporary == null(*u8) {
+        return false;
+    }
     if !os_library_begin(context, (*imports).directory, work) {
         return false;
     }
@@ -165,6 +175,7 @@ fn os_import_read(
         if !os_library_capture(
             context,
             (*imports).directory,
+            temporary,
             &(*imports).libraries[index],
             (*work).checker,
             loaded

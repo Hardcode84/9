@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: Apache-2.0
+
+const OS_LIBRARY_TAG: *u8 = "crust-ownership-library-v2-windows-x64\n";
+const OG_LIBRARY_TAG: *u8 = "crust-generic-ownership-v2-signature-contracts-windows-x64\n";
+const OS_ARTIFACT_SUFFIX: *u8 = "/artifact.dll";
+fn os_cache_absolute(path: *u8) -> bool {
+    return cache_absolute(path);
+}
+fn os_import_directory(cli: *CCli, directory: *u8) -> *u8 {
+    if cli -> mode == 3u32 || cli -> options.output == null(*u8) {
+        return directory;
+    }
+    var context: *CrustContext = cli -> stage.status.context;
+    var output: *u8 = win_path(context, cli -> options.output);
+    if output == null(*u8) {
+        return output;
+    }
+    return win_directory_prefix(context, output);
+}
+fn os_import_object_path(cli: *CCli, work: *CacheWork) -> *u8 {
+    return native_join(
+        cli -> stage.status.context,
+        win_basename(work -> directory),
+        "/checksum"
+    );
+}

@@ -14,14 +14,20 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
 SPEC = importlib.util.spec_from_file_location("fetch_llvm", ROOT / "tools/fetch_llvm.py")
 FETCH = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(FETCH)
 
 
-def archive(channel, payload=b"test", extra=None):
+def archive(channel, payload=b"test", extra=None, profile="linux_x64"):
     output = io.BytesIO()
-    files = ("llvm/CMakeLists.txt",) if channel == "main" else ("bin/llc", "bin/opt")
+    suffix = ".exe" if profile == "windows_x64" else ""
+    files = (
+        ("llvm/CMakeLists.txt",)
+        if channel == "main"
+        else tuple("bin/" + name + suffix for name in ("llc", "opt", "clang"))
+    )
     with tarfile.open(fileobj=output, mode="w:gz") as stream:
         for name in files:
             member = tarfile.TarInfo(f"llvm/{name}")
@@ -34,6 +40,36 @@ def archive(channel, payload=b"test", extra=None):
 
 
 class FetchTests(unittest.TestCase):
+    def test_windows_release_and_locked_reuse(self):
+        self.upstream("release", "llvmorg-23.1.3")
+        key = f"{FETCH.API}/releases/latest"
+        metadata = json.loads(self.routes[key])
+        asset = metadata["assets"][0]
+        asset["name"] = "clang+llvm-23.1.3-x86_64-pc-windows-msvc.tar.xz"
+        data = archive("release", profile="windows_x64")
+        asset["digest"] = "sha256:" + hashlib.sha256(data).hexdigest()
+        self.routes[key] = json.dumps(metadata).encode()
+        self.routes[asset["browser_download_url"]] = data
+        tree = FETCH.fetch("release", self.directory, profile="windows_x64")
+        self.assertTrue((tree / "bin/clang.exe").is_file())
+        self.assertEqual(tree.parent, self.directory / "windows_x64")
+        self.requests.clear()
+        self.assertEqual(
+            tree, FETCH.fetch("release", self.directory, locked=True, profile="windows_x64")
+        )
+        self.assertEqual(self.requests, [])
+        (tree / "bin/clang.exe").unlink()
+        with self.assertRaisesRegex(ValueError, "missing bin/clang.exe"):
+            FETCH.fetch("release", self.directory, locked=True, profile="windows_x64")
+
+    def test_windows_archive_paths(self):
+        for name in ("llvm/bin/tool:stream", "llvm/..\\escape"):
+            data = archive("release", extra=tarfile.TarInfo(name), profile="windows_x64")
+            path = self.directory / "archive"
+            path.write_bytes(data)
+            with self.assertRaisesRegex(ValueError, "nonportable path"):
+                FETCH.unpack(path, self.directory / "unpacked", "release", "windows_x64")
+
     def setUp(self):
         (ROOT / "build").mkdir(exist_ok=True)
         self.work = tempfile.TemporaryDirectory(dir=ROOT / "build", prefix="llvm-fetch-test-")

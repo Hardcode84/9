@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Package the local Linux x86-64 highlighter without a JavaScript build tool."""
+"""Package a native x86-64 highlighter without a JavaScript build tool."""
 
 import argparse
 import json
@@ -13,7 +13,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--binary", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--platform", choices=("linux-x64", "win32-x64"), default="linux-x64")
     args = parser.parse_args()
+    binary = "crust-highlight.exe" if args.platform == "win32-x64" else "crust-highlight"
     directory = Path(__file__).resolve().parent
     package = json.loads((directory / "package.json").read_text())
     manifest = ET.Element(
@@ -29,7 +31,7 @@ def main():
         Id=package["name"],
         Version=package["version"],
         Publisher=package["publisher"],
-        TargetPlatform="linux-x64",
+        TargetPlatform=args.platform,
     )
     ET.SubElement(metadata, "DisplayName").text = package["displayName"]
     ET.SubElement(metadata, "Description").text = package["description"]
@@ -71,7 +73,7 @@ def main():
     ET.SubElement(
         types,
         "Override",
-        PartName="/extension/bin/crust-highlight",
+        PartName="/extension/bin/" + binary,
         ContentType="application/octet-stream",
     )
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -87,7 +89,7 @@ def main():
         ):
             archive.write(directory / name, "extension/" + name)
         archive.write(directory.parents[1] / "LICENSE", "extension/LICENSE")
-        archive.write(args.binary, "extension/bin/crust-highlight")
+        archive.write(args.binary, "extension/bin/" + binary)
     print(args.output)
 
 

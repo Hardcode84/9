@@ -4,6 +4,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <windows.h>
 
 CRUST_ABI_EXPORT;
 
@@ -24,6 +25,8 @@ float seed_callback(float (*callback)(int8_t, float, uint64_t, bool, float, int3
 uint64_t seed_integer_callback(uint64_t (*callback)(uint64_t));
 bool seed_bool_callback(bool (*callback)(bool));
 void seed_write(uint32_t *pointer, uint32_t value);
+int32_t seed_unwind(void);
+int32_t seed_readonly(const char *path, int32_t enabled);
 
 int8_t seed_i8(int8_t value) { return value; }
 uint8_t seed_u8(uint8_t value) { return value; }
@@ -48,3 +51,39 @@ float seed_callback(float (*callback)(int8_t, float, uint64_t, bool, float, int3
 uint64_t seed_integer_callback(uint64_t (*callback)(uint64_t)) { return callback(UINT64_MAX); }
 bool seed_bool_callback(bool (*callback)(bool)) { return callback(true); }
 void seed_write(uint32_t *pointer, uint32_t value) { *pointer = value; }
+
+int32_t seed_readonly(const char *path, int32_t enabled)
+{
+    wchar_t wide[32768];
+    DWORD attributes;
+    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path, -1, wide, 32768) == 0)
+        return 1;
+    attributes = GetFileAttributesW(wide);
+    if (attributes == INVALID_FILE_ATTRIBUTES)
+        return 1;
+    attributes =
+        enabled ? attributes | FILE_ATTRIBUTE_READONLY : attributes & ~FILE_ATTRIBUTE_READONLY;
+    return SetFileAttributesW(wide, attributes) ? 0 : 1;
+}
+
+int32_t seed_unwind(void)
+{
+    CONTEXT context;
+    DWORD64 base = 0, frame = 0, previous;
+    PVOID handler = NULL;
+    PRUNTIME_FUNCTION entry;
+    unsigned int index;
+    RtlCaptureContext(&context);
+    /* Unwind this C frame and then the generated caller with its large frame. */
+    for (index = 0; index < 2; ++index) {
+        entry = RtlLookupFunctionEntry(context.Rip, &base, NULL);
+        if (entry == NULL)
+            return 1;
+        previous = context.Rsp;
+        (void)RtlVirtualUnwind(UNW_FLAG_NHANDLER, base, context.Rip, entry, &context, &handler,
+                               &frame, NULL);
+        if (context.Rsp <= previous || context.Rip == 0)
+            return 2;
+    }
+    return 0;
+}

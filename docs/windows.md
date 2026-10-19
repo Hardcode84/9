@@ -10,8 +10,9 @@ The host uses the Windows x64 scalar ABI and an LLP64 C data model.
 The C backend supports source bootstrap, native DLL handoff, and application
 compilation. The shared package builder selects Windows providers in ordinary
 Crust. Captured inputs select validated, reusable DLL artifacts. LLVM and ASM
-backends, native parallel jobs, and formatter file replacement remain Linux-only.
-The [support plan](windows-support-plan.md) defines the remaining phases.
+package compilers, native jobs, formatter replacement, and ownership imports
+also have Windows providers. The [support plan](windows-support-plan.md) records
+the implementation gates.
 
 ## Build and check
 
@@ -129,8 +130,11 @@ loaded code unchanged during a session. Keep published files unchanged until
 every runner that loaded them has been destroyed. Cache directories must be
 caller-owned and must not have untrusted writers.
 
-Ownership and generic-ownership library formats still use their Linux x64
-tags and Linux providers. This phase does not make those object bundles portable.
+Ownership and generic-ownership library formats use Windows x64 tags and
+Windows cache providers. Ownership object bundles contain COFF objects.
+Their trusted receipts retain the same authority and body-checking rules.
+Imported objects use private scratch files beside the output so that GCC does
+not need to decode absolute Unicode object paths. Linux bundles are rejected.
 The Windows cache tag and generated native ABI digest are distinct from Linux's;
 native DLL loading still checks the marker owned by each selected image.
 
@@ -140,6 +144,66 @@ Windows ACLs control file access; POSIX mode bits do not apply. Paired text and
 symbol outputs reject matching canonical paths and existing hard links.
 
 ## Validation boundary
+
+### Backends and tools
+
+Fetch LLVM explicitly. For a native Windows Python installation:
+
+```sh
+python3 tools/fetch_llvm.py release --profile windows_x64
+```
+
+Set `CRUST_LLVM_DIRECTORY` to the printed directory. Use `--locked` to reuse
+its pin. Compilation never fetches LLVM. Clang emits Windows GNU COFF objects;
+the self-contained MinGW-w64 toolchain remains responsible for linking.
+
+Run these additional checks in both seed build modes:
+
+```sh
+make PROFILE=windows_x64 check-windows-llvm check-windows-asm
+make PROFILE=windows_x64 check-windows-tools check-windows-ownership
+```
+
+The backend tests exercise mixed register and stack arguments, calls and
+callbacks with native C, binary32 casts and NaNs, large frames, actual Windows
+unwinding, cache reuse, and a successor compiler built with the selected backend.
+The LLVM check also builds and runs a standalone executable.
+
+The formatter rejects directories, reparse points, and files with more than
+one hard link. It checks file identity, size, write time, and change time before
+replacement. `ReplaceFileW` preserves the target ACL. A read-only target fails
+without replacement. The caller must own the containing directory. The Python
+formatter wrapper selects the Windows launcher when it runs on Windows.
+
+Native jobs use `_beginthreadex`. Each job owns its mutable state; callbacks
+must be native and remain loaded until all workers finish. Every started worker
+is joined before return, including after a later start fails. Allocation failure
+does not start a worker.
+
+The editor adapter launches native executables without a shell or a console
+window. A Windows VSIX uses `--platform win32-x64` and bundles
+`bin/crust-highlight.exe`. To run from source, configure `crust.highlighter.path`
+as the absolute seed path and `crust.highlighter.arguments` as the absolute path
+to `stages/build/run.crs`, followed by `stages/highlight/tool.crs`.
+Set `CRUST_JS_RUNTIME` to a native JavaScript runtime to include the editor
+process test in `check-windows-tools`. That test covers UTF-8 token output,
+cancellation, and launch failure.
+
+The ownership check runs a trusted direct-pointer provider with a checked
+client, imports it after removing the original provider sources, rejects invalid
+moves and receipts, and compares emitted code before and after proof erasure.
+It also checks independent generic imports, cleanup, and move rejection.
+The existing client-budget audit remains required; the port changes no ownership
+syntax or proof rules.
+
+### Shader environment
+
+Vulkan execution is a separate Windows gate. A Vulkan runtime alone is not
+sufficient. Validation also needs Windows SPIRV-Tools, Vulkan SDK headers and
+an import library, and the selected WGSL validator. The current execution harness
+links `libvulkan.so.1` and its file ABI uses Linux `long`; that harness must use
+Windows link and file adapters before its results can establish Windows parity.
+The host backend port does not establish this shader execution claim.
 
 `check-windows` exercises scalar calls and callbacks, mixed and stack arguments,
 file buffer release, allocation failures, runner ownership, missing and mismatched
@@ -177,10 +241,10 @@ systemd-run --user --scope -p MemoryMax=536870912 -p MemorySwapMax=0 make check
 This limits the process tree to 512 MiB and disables swap for that scope.
 A check stopped by the limit is incomplete; retain its failure log.
 
-The Windows output adapter is tested with an emitter fixture. This checks file
-publication and cleanup independently of a target backend; it does not establish
-Windows ASM emission. Linux checks and allocation sanitizers remain required for
-changes to shared code.
+The Windows output adapter also has an emitter fixture that checks publication
+and cleanup independently of a backend. Native backend tests provide separate
+ABI and execution evidence. Linux checks and allocation sanitizers remain
+required for changes to shared code.
 
 ## Linux baseline
 

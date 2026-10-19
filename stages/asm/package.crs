@@ -1,5 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 stage_include(stage, "sources.crs");
-stage_interface(stage, "../../api/crust0_x64.crs");
+var directory: *u8 = stage_path(stage -> root, stage -> base, "../..");
+var profile: *u8 = host_profile_directory(stage -> root);
+if directory == null(*u8) || profile == null(*u8) {
+    return 1i32;
+};
+directory = stage_path(stage -> root, directory, profile);
+if directory == null(*u8) {
+    return 1i32;
+};
+var api: *u8 = stage_path(stage -> root, directory, "crust0_x64.crs");
+if api == null(*u8) {
+    return 1i32;
+};
+stage_interface(stage, api);
 stage_export(stage, "crust_x64_default_ops");

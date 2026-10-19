@@ -1,0 +1,49 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Select an explicit installation. The generated source is a package input.
+var context: *CrustContext = stage -> root -> context;
+var wide: *u16 = win_env(context, "CRUST_LLVM_DIRECTORY");
+if wide == null(*u16) {
+    return 1i32;
+};
+var directory: *u8 = win_utf8(context, wide);
+if directory == null(*u8) {
+    return 1i32;
+};
+directory = win_existing_path(context, directory);
+if directory == null(*u8) {
+    return 1i32;
+};
+var length: usize = native_strlen(directory);
+var prefix: *u8 = "// SPDX-License-Identifier: Apache-2.0\nconst LLVM_DIRECTORY:*u8=\"";
+var begin: usize = native_strlen(prefix);
+var bytes: *u8 = crust_try_alloc(context, begin + length * 4usize + 4usize, 1usize);
+var source: *CrustSource = crust_try_alloc(
+    context,
+    sizeof(CrustSource),
+    alignof(CrustSource)
+) as *CrustSource;
+if bytes == null(*u8) || source == null(*CrustSource) {
+    return 1i32;
+};
+crust0_host_move_bytes(bytes, prefix, begin);
+var digits: *u8 = "0123456789abcdef";
+var index: usize = 0usize;
+while index < length {
+    var offset: usize = begin + index * 4usize;
+    bytes[offset] = 92u8;
+    bytes[offset + 1usize] = 120u8;
+    bytes[offset + 2usize] = digits[(directory[index] >> 4u8) as usize];
+    bytes[offset + 3usize] = digits[(directory[index] & 15u8) as usize];
+    index = index + 1usize;
+};
+crust0_host_move_bytes(bytes + (begin + length * 4usize) as isize, "\";\n", 4usize);
+*source = make CrustSource {
+    path: "llvm-toolchain-configuration",
+    bytes: bytes,
+    size: begin + length * 4usize + 3usize,
+    identity: stage -> sources.count as u64 + 1u64
+};
+if !cache_add(context, &stage -> sources, source) {
+    return 1i32;
+};

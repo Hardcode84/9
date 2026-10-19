@@ -2,7 +2,8 @@
 
 # Assembly backend in Crust
 
-This library maps checked Crust operations to Linux x86-64 System V assembly.
+This library maps checked Crust operations to Linux x86-64 System V assembly
+or Windows x64 COFF assembly. Source packages select the platform provider.
 The C99 seed contains no assembly emitter. A root can interpret this source,
 compile it, or load its compiled library through the ordinary runner API.
 
@@ -26,6 +27,16 @@ contract. `tools/api.py` generates both the
 [consumer declarations](../../api/crust0_x64.crs) and [model](model.crs).
 A native C consumer links `libcrust_asm.a` before `libcrust0.a`. A source root
 prepares `stages/asm/package.crs` before it calls these functions.
+
+The Windows package compiler uses MinGW-w64 `as` and the shared DLL linker.
+It supports integer and binary32 scalar calls, including native callbacks.
+Each function reserves its outgoing argument area in its fixed frame, saves
+the nonvolatile registers it uses, probes the stack through `___chkstk_ms`,
+and emits Windows unwind records. RSP does not change in the function body.
+Frames that exceed the supported unwind encoding size are rejected.
+Binary32 operations and saturating casts use SSE registers. The Linux provider
+retains its existing binary32 rejection. See the
+[Windows checks](../../tests/windows_backends.py) for ABI and generation tests.
 
 `crust_x64_prepare` requires checked declarations with assigned native names.
 An empty name selects an owned private definition. External declarations need

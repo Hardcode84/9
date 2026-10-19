@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-stage_source(stage, "../../api/crust0.crs");
-stage_source(stage, "../../api/crust0_host.crs");
+stage_api(stage, "crust0.crs");
+stage_api(stage, "crust0_host.crs");
+stage_platform_sources(stage);
 stage_source(stage, "../reader/model.crs");
 stage_source(stage, "../reader/lex.crs");
 stage_source(stage, "../highlight/model.crs");
@@ -10,5 +11,5 @@ stage_source(stage, "../highlight/output.crs");
 stage_source(stage, "model.crs");
 stage_source(stage, "tokens.crs");
 stage_source(stage, "layout.crs");
-stage_source(stage, "linux.crs");
+stage_source(stage, stage_provider(stage -> root, "", ".crs"));
 stage_source(stage, "program.crs");

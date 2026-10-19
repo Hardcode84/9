@@ -2,14 +2,15 @@
 
 stage_include(stage, "../c/sources.crs");
 stage_include(stage, "sources.crs");
-stage_source(stage, "../../api/crust0_run.crs");
+stage_api(stage, "crust0_run.crs");
 stage_source(stage, "../native/model.crs");
-stage_source(stage, "../native/linux.crs");
+stage_source(stage, stage_provider(stage -> root, "../native/", ".crs"));
 stage_source(stage, "../cache/model.crs");
-stage_source(stage, "../cache/linux.crs");
-stage_source(stage, "../cache/artifact_linux.crs");
-stage_source(stage, "../cache/inputs_linux.crs");
+stage_source(stage, stage_provider(stage -> root, "../cache/", ".crs"));
+stage_source(stage, stage_provider(stage -> root, "../cache/artifact_", ".crs"));
+stage_source(stage, stage_provider(stage -> root, "../cache/inputs_", ".crs"));
 stage_source(stage, "../cache/inputs.crs");
 stage_source(stage, "../build/interface.crs");
 stage_source(stage, "../build/names.crs");
 stage_source(stage, "compiler.crs");
+stage_source(stage, stage_provider(stage -> root, "tools_", ".crs"));

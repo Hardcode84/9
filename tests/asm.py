@@ -33,7 +33,7 @@ def main():
         assert not re.search(rb"\bcrust_x64_", names), artifact
     sources = [ROOT / "api/crust0.crs"] + [
         ROOT / "stages/asm" / (part + ".crs")
-        for part in ("model", "output", "plan", "emit", "program")
+        for part in ("model", "target_linux", "output", "plan", "emit", "program")
     ]
     exports = re.findall(r"\b(crust_x64_\w+)\s*\(", (ROOT / "include/crust0_x64.h").read_text())
     exports.append("crust_x64_default_ops")

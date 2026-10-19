@@ -5,7 +5,7 @@
 // through emission. Destroy the stage after the last output-buffer use.
 extern fn ll_init(stage: *LlStage, context: *CrustContext) -> unit = "ll_init";
 extern fn ll_destroy(stage: *LlStage) -> unit = "ll_destroy";
-// Emit Linux x86-64 SysV IR from complete checked raw bodies and native names.
+// Emit host-profile x86-64 IR from complete checked raw bodies and native names.
 // Null entry selects a library. A hosted entry must have fn(i32,**u8)->i32 type.
 // Empty native names select private definitions. Output is header followed by
 // body; renames is an objcopy response file. Failure records a diagnostic.

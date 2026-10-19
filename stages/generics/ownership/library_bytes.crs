@@ -53,7 +53,7 @@ fn og_library_pack_unit(program: *OgProgram, buffer: *CBuffer, unit_value: *Crus
 }
 
 fn og_library_pack(program: *OgProgram, buffer: *CBuffer, checker: *u8) -> bool {
-    c_buffer_text(buffer, "crust-generic-ownership-v2-signature-contracts-linux-x64\n");
+    c_buffer_text(buffer, OG_LIBRARY_TAG);
     c_buffer_bytes(buffer, checker, 64usize);
     var count: usize = 0usize;
     var unit_value: *CrustUnit = (*program).generics.syntax.units;
@@ -202,7 +202,7 @@ fn og_library_unpack(
         offset: 0usize,
         trusted: false
     };
-    var tag: *u8 = "crust-generic-ownership-v2-signature-contracts-linux-x64\n";
+    var tag: *u8 = OG_LIBRARY_TAG;
     var prefix: *u8 = og_library_take(&reader, gs_length(tag) + 64usize);
     if prefix == null(*u8) {
         return false;

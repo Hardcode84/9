@@ -6,14 +6,19 @@
 selects the jobs, worker count, and dependencies. This library adds no scheduler
 or thread state to the C99 core.
 
+Windows x64 uses `_beginthreadex` and joins each native thread before return.
+Linux x64 uses pthreads. Source packages select the provider; both use the same
+job scheduling and allocation rules. Each callback and its mutable data must
+remain live until the call returns.
+
 ```sh
 make test-tools check-parallel
 ```
 
 Load `model.crs`, `api.crs`, and the compiled library through ordinary root
-calls. Include `model.crs` and `linux_x64.crs` when building the library from
-source. The Linux implementation uses pthreads. Other profiles need a separate
-implementation of the same interface.
+calls. Include `sources.crs` through the package builder. It selects `jobs.crs`
+and the Linux or Windows provider. Other profiles need an implementation of
+the same interface.
 
 Each job has an `execute` function and a `user` pointer. The function must be
 native and non-null. Each job owns its mutable state. Jobs may borrow shared

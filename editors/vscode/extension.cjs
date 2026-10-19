@@ -28,7 +28,8 @@ function activate(context) {
             try {
                 const config = vscode.workspace.getConfiguration('crust', document.uri);
                 const configured = vscode.workspace.isTrusted ? config.get('highlighter.path', '') : '';
-                let executable = path.join(context.extensionPath, 'bin', 'crust-highlight');
+                const binary = process.platform === 'win32' ? 'crust-highlight.exe' : 'crust-highlight';
+                let executable = path.join(context.extensionPath, 'bin', binary);
                 let args = [];
                 if (configured) {
                     if (typeof configured !== 'string') throw new Error('Highlighter path must be a string');

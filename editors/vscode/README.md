@@ -18,12 +18,18 @@ code --install-extension build/crust-vscode.vsix
 
 You can also use **Extensions: Install from VSIX...** and select that file.
 The package contains the native highlighter built on this host. It uses the
-host C library. In a remote workspace, install it on the Linux x86-64 host
+host C library. In a remote workspace, install it on the matching host
 where the extension runs.
 
 The package builder uses Python. It does not require npm, a JavaScript
 compiler, or downloaded build packages. The adapter runs in VS Code's
 extension host.
+
+For Windows x64, the package builder accepts `--platform win32-x64` and stores
+the supplied native highlighter as `bin/crust-highlight.exe`. The adapter also
+supports the native seed with a source service. See the
+[Windows guide](../../docs/windows.md#backends-and-tools) for that configuration
+and its process-launch check.
 
 Open a `.crs` file. The extension registers the Crust language and supplies
 semantic tokens. The language default enables semantic highlighting. A user

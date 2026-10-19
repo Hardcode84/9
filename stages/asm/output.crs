@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-extern fn x64_errno() -> *i32 = "__errno_location";
 extern fn x64_strerror(error: i32) -> *u8 = "strerror";
 extern fn x64_strlen(text: *u8) -> usize = "strlen";
 extern fn x64_strcmp(left: *u8, right: *u8) -> i32 = "strcmp";

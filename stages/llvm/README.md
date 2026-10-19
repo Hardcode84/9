@@ -3,7 +3,8 @@
 # LLVM backend
 
 This Crust stage emits LLVM IR from complete, checked raw Crust bodies.
-It targets Linux x86-64 with the System V scalar ABI. The C99 seed stays
+It targets Linux x86-64 with the System V scalar ABI or Windows x64 with the
+Windows scalar ABI. The source package selects the target provider. The C99 seed stays
 unchanged. LLVM runs as an external tool.
 
 Start with the [LLVM tutorial](../../examples/llvm/README.md). Fetch the
@@ -67,6 +68,13 @@ LLVM IR directly. GNU `objcopy` assigns native symbols; GCC links executable
 outputs. Failed tools retain the previous output and remove temporary files.
 The call returns zero, a failed tool's status, or one for another failure.
 It records failures in the caller's context.
+
+On Windows, set `CRUST_LLVM_DIRECTORY` to the absolute path of an explicit LLVM
+installation with `bin/clang.exe`. The default package captures this selection
+as source. The object provider captures the installation tree, child environment,
+and loaded compiler images. Clang emits COFF for `x86_64-w64-windows-gnu`; the
+existing MinGW-w64 provider renames symbols and links DLLs or executables.
+The [Windows guide](../../docs/windows.md) gives acquisition and validation commands.
 
 The [tutorial matrix](../../examples/README.md#test-the-backend-matrix) uses this
 interface after each frontend's lowering. It also uses `og_stage_emit` to
@@ -153,7 +161,7 @@ adapter: the raw seed types have the current 64-bit host layout.
 - Expression evaluation follows source order. Boolean short circuit uses
   branches. General labels and jumps also carry lowered cleanup paths.
 - Boolean storage is one byte. Function calls use `i1 zeroext`. Narrow integer
-  parameters and results carry the System V extension attributes.
+  parameters and results carry the selected host ABI extension attributes.
 - Aggregate assignment takes a snapshot before the destination write. Raw
   pointers keep their alias behavior. The emitter adds no exclusive-access,
   signed-overflow, or object-bound promises.
@@ -190,7 +198,7 @@ record or element type. Record padding and array stride come from that type.
 `ll_element` accepts explicit element, pointer, and index types. An adapter can
 use an address-space-qualified pointer and a 32-bit index. `ll_offset` remains
 available for explicit byte access. Neither helper adds `inbounds` promises.
-The default emitter still uses the Linux x86-64 layout and scalar ABI.
+The default emitter uses the selected x86-64 host layout and scalar ABI.
 
 The emitter supports binary32 literals, arithmetic, comparisons, scalar calls,
 and integer conversions. Floating instructions carry no fast-math flags.
@@ -214,4 +222,4 @@ accepts an explicit LLVM pointer type and index type.
 
 The [Vulkan stage](../../examples/shader/README.md) supplies its module interface,
 resource operations, and failure policy. It reuses scalar, function, and
-structured statement lowering. `ll_emit` remains the Linux host module adapter.
+structured statement lowering. `ll_emit` remains the host module adapter.

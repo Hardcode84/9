@@ -4,47 +4,4 @@ stage_include(stage, "compiler-sources.crs");
 stage_source(stage, "default-toolchain.crs");
 stage_source(stage, "build.crs");
 
-var context: *CrustContext = stage -> root -> context;
-var script: *u8 = stage_path(stage -> root, stage -> base, "../../tools/fetch_llvm.py");
-if script == null(*u8) || !stage_capture(stage, "../../tools/fetch_llvm.py", &stage -> inputs) {
-    return 1i32;
-};
-var work: CacheWork = make CacheWork {
-    directory: null(*u8),
-    manifest: null(*u8),
-    digest: null(*u8),
-    artifact: null(*u8),
-    checksum: null(*u8)
-};
-if !cache_work(context, "/tmp", &work) {
-    return 1i32;
-};
-var arguments: [*u8; 6] = make [*u8; 6] {
-    "/usr/bin/python3",
-    script,
-    "release",
-    "--locked",
-    "--crust",
-    null(*u8)
-};
-var source: *CrustSource = crust_try_alloc(
-    context,
-    sizeof(CrustSource),
-    alignof(CrustSource)
-) as *CrustSource;
-var success: bool = source != null(*CrustSource) && cache_tool(
-    context,
-    &arguments[0usize],
-    work.manifest
-) && cache_read(context, work.manifest, source);
-if !cache_cleanup(context, &work) {
-    success = false;
-};
-if !success {
-    return 1i32;
-};
-source -> path = "llvm-toolchain-configuration";
-source -> identity = stage -> sources.count as u64 + 1u64;
-if !cache_add(context, &stage -> sources, source) {
-    return 1i32;
-};
+stage_include(stage, stage_provider(stage -> root, "configure_", ".crs"));

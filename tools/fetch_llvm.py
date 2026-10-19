@@ -3,7 +3,6 @@
 """Fetch official LLVM release tools or a main source snapshot into a local cache."""
 
 import argparse
-import fcntl
 import hashlib
 import http.client
 import json
@@ -14,6 +13,8 @@ import tarfile
 import tempfile
 import urllib.request
 from pathlib import Path
+
+from fetch_lock import acquire
 
 API = "https://api.github.com/repos/llvm/llvm-project"
 DEFAULT_DIRECTORY = Path(__file__).resolve().parents[1] / "build/toolchains/llvm"
@@ -29,7 +30,7 @@ def read_json(url):
         return json.load(response)
 
 
-def resolve(channel):
+def resolve(channel, profile="linux_x64"):
     if channel == "main":
         revision = read_json(f"{API}/commits/main")["sha"]
         if not re.fullmatch(r"[0-9a-f]{40}", revision):
@@ -44,7 +45,10 @@ def resolve(channel):
     tag = release["tag_name"]
     if release["draft"] or release["prerelease"] or not re.fullmatch(r"llvmorg-\d+\.\d+\.\d+", tag):
         raise ValueError("upstream response is not a stable LLVM release")
-    name = f"LLVM-{tag.removeprefix('llvmorg-')}-Linux-X64.tar.xz"
+    version = tag.removeprefix("llvmorg-")
+    name = f"LLVM-{version}-Linux-X64.tar.xz"
+    if profile == "windows_x64":
+        name = f"clang+llvm-{version}-x86_64-pc-windows-msvc.tar.xz"
     assets = [asset for asset in release["assets"] if asset["name"] == name]
     if len(assets) != 1:
         raise ValueError(f"release has no unique {name} asset")
@@ -88,41 +92,61 @@ def download(pin, destination):
     return {**pin, "sha256": actual}
 
 
-def unpack(archive, destination, channel):
+def unpack(archive, destination, channel, profile="linux_x64"):
     if not hasattr(tarfile, "data_filter"):
         raise ValueError("LLVM extraction requires Python with tarfile.data_filter")
+
+    def checked(member, path):
+        if profile == "windows_x64" and any(
+            character in member.name + member.linkname for character in ("\\", ":")
+        ):
+            raise ValueError("Windows LLVM archive contains a nonportable path")
+        return tarfile.data_filter(member, path)
+
     with tarfile.open(archive) as source:
-        source.extractall(destination, filter="data")
+        source.extractall(destination, filter=checked)
     children = list(destination.iterdir())
     if len(children) != 1 or not children[0].is_dir() or children[0].is_symlink():
         raise ValueError("LLVM archive must contain one top-level directory")
     tree = children[0]
-    required = ("llvm/CMakeLists.txt",) if channel == "main" else ("bin/llc", "bin/opt")
+    validate_tree(tree, channel, profile)
+    return tree
+
+
+def validate_tree(tree, channel, profile):
+    suffix = ".exe" if profile == "windows_x64" else ""
+    required = (
+        ("llvm/CMakeLists.txt",)
+        if channel == "main"
+        else (f"bin/llc{suffix}", f"bin/opt{suffix}", f"bin/clang{suffix}")
+    )
     for path in required:
         if not (tree / path).is_file():
             raise ValueError(f"LLVM archive is missing {path}")
-    return tree
 
 
 def save_json(path, data):
     path.write_text(json.dumps(data, indent=2) + "\n")
 
 
-def fetch(channel, directory, locked=False):
+def fetch(channel, directory, locked=False, profile="linux_x64"):
     """Return an immutable snapshot path; publish its pin only after a successful fetch."""
     directory.mkdir(parents=True, exist_ok=True)
-    with (directory / ".fetch.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
-        return fetch_locked(channel, directory, locked)
+    if channel == "release" and profile == "windows_x64":
+        directory = directory / profile
+        directory.mkdir(parents=True, exist_ok=True)
+    with (directory / ".fetch.lock").open("a+b") as lock:
+        acquire(lock)
+        return fetch_locked(channel, directory, locked, profile)
 
 
-def fetch_locked(channel, directory, locked):
+def fetch_locked(channel, directory, locked, profile="linux_x64"):
     selection = directory / f"{channel}.json"
     if locked:
         pin = json.loads(selection.read_text())
         validate_pin(pin, channel)
     else:
-        pin = resolve(channel)
+        pin = resolve(channel, profile)
     destination = directory / f"{channel}-{pin['revision']}"
     if destination.exists():
         stored = json.loads((destination / ".crust-fetch.json").read_text())
@@ -130,6 +154,7 @@ def fetch_locked(channel, directory, locked):
         expected = {**pin, "sha256": pin["sha256"] or stored["sha256"]}
         if stored != expected:
             raise ValueError(f"LLVM snapshot identity mismatch at {destination}")
+        validate_tree(destination, channel, profile)
         pin = stored
     else:
         with tempfile.TemporaryDirectory(prefix=".fetch-", dir=directory) as work:
@@ -137,7 +162,7 @@ def fetch_locked(channel, directory, locked):
             archive = work / "archive"
             pin = download(pin, archive)
             print(f"Extracting {pin['revision']}", file=sys.stderr, flush=True)
-            tree = unpack(archive, work / "unpacked", channel)
+            tree = unpack(archive, work / "unpacked", channel, profile)
             save_json(tree / ".crust-fetch.json", pin)
             tree.rename(destination)
     with tempfile.TemporaryDirectory(prefix=".pin-", dir=directory) as work:
@@ -151,6 +176,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("channel", choices=("release", "main"))
     parser.add_argument("--directory", type=Path, default=DEFAULT_DIRECTORY)
+    parser.add_argument("--profile", choices=("linux_x64", "windows_x64"))
     parser.add_argument(
         "--locked", action="store_true", help="reuse the recorded pin without resolving upstream"
     )
@@ -158,10 +184,17 @@ def main():
         "--crust", action="store_true", help="print a Crust LLVM_DIRECTORY constant"
     )
     args = parser.parse_args()
-    if args.channel == "release" and (platform.system(), platform.machine()) != ("Linux", "x86_64"):
-        parser.error("release tools currently require Linux x86-64")
+    profile = args.profile
+    if profile is None:
+        profile = {("Linux", "x86_64"): "linux_x64", ("Windows", "AMD64"): "windows_x64"}.get(
+            (platform.system(), platform.machine())
+        )
+    if args.channel == "release" and profile is None:
+        parser.error("release tools require Linux or Windows x86-64, or an explicit --profile")
     try:
-        directory = fetch(args.channel, args.directory.resolve(), args.locked)
+        directory = fetch(
+            args.channel, args.directory.resolve(), args.locked, profile or "linux_x64"
+        )
         if args.crust:
             quoted = "".join(f"\\x{byte:02x}" for byte in str(directory).encode())
             print("// SPDX-License-Identifier: Apache-2.0\n")

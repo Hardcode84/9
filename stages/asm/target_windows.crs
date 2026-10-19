@@ -1,0 +1,207 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn x64_errno() -> *i32 = "_errno";
+const X64_RODATA: *u8 = "\t.section .rdata,\"dr\"\n";
+const X64_FLOAT: bool = true;
+const X64_WIN_REGS: [*u8; 4] = make [*u8; 4] {
+    "rcx",
+    "rdx",
+    "r8",
+    "r9"
+};
+
+fn x64_local_name(emitter: *CrustX64Emitter, kind: *u8, identity: u64) -> unit {
+    x64_output_text(emitter, &emitter -> program -> label_prefix[0usize]);
+    x64_output_text(emitter, kind);
+    x64_output_number(emitter, identity, 10u64, 0usize);
+}
+fn x64_emit_aliases(emitter: *CrustX64Emitter) -> unit {
+    var alias: *CrustX64Alias = emitter -> program -> aliases;
+    while alias != null(*CrustX64Alias) && !emitter -> failed {
+        var name: *u8 = alias -> declaration -> link_name;
+        if name[0usize] != 0u8 {
+            x64_output_text(emitter, "\t.set ");
+            x64_local_name(emitter, "alias_", alias -> identity);
+            x64_output_text(emitter, ", ");
+            x64_symbol_name(emitter, name);
+            x64_output_text(emitter, "\n");
+        }
+        x64_output_text(emitter, X64_RODATA);
+        x64_output_text(emitter, "\t.balign 8\n");
+        x64_local_name(emitter, "pointer_", alias -> identity);
+        x64_output_text(emitter, ":\n\t.quad ");
+        x64_local_name(emitter, "alias_", alias -> identity);
+        x64_output_text(emitter, "\n");
+        alias = alias -> next;
+    }
+}
+fn x64_symbol_address(emitter: *CrustX64Emitter, declaration: *CrustDecl) -> unit {
+    var alias: *CrustX64Alias = crust_map_get(
+        &emitter -> program -> alias_map,
+        declaration as usize
+    ) as *CrustX64Alias;
+    x64_output_text(emitter, "\tmovq ");
+    x64_local_name(emitter, "pointer_", alias -> identity);
+    x64_output_text(emitter, "(%rip), %rax\n");
+}
+fn x64_hosted_entry(emitter: *CrustX64Emitter) -> unit {
+    x64_output_text(emitter, "\t.text\n\t.globl main\nmain:\n");
+    x64_symbol_address(emitter, emitter -> program -> entry);
+    x64_output_text(emitter, "\tjmp *%rax\n");
+}
+fn x64_program_end(emitter: *CrustX64Emitter) -> unit {}
+
+// Reserve outgoing arguments once. RSP stays fixed between prologue and epilogue,
+// so unwind metadata needs no frame register or dynamic-stack recovery.
+fn x64_windows_frame(function: *CrustX64Function) -> u64 {
+    var outgoing: u64 = 32u64;
+    var index: usize = 0usize;
+    while index < function -> expressions.capacity {
+        var entry: *CrustMapEntry = &function -> expressions.entries[index];
+        if entry -> value != null(*u8) {
+            var expression: *CrustExpr = (entry -> value as *CrustX64Expr) -> expression;
+            if expression -> kind == CRUST_E_CALL && expression -> arg_count as u64 > outgoing / 8u64 {
+                outgoing = expression -> arg_count as u64 * 8u64;
+            }
+        }
+        index = index + 1usize;
+    }
+    return function -> frame_size + ((outgoing + 15u64) & ~15u64);
+}
+fn x64_windows_prologue(emitter: *CrustX64Emitter, function: *CrustX64Function, size: u64) -> unit {
+    x64_output_text(emitter, "\t.text\n");
+    x64_definition_visibility(emitter, function -> declaration);
+    x64_output_text(emitter, "\t.seh_proc ");
+    x64_local_name(emitter, "function_", function -> identity);
+    x64_output_text(emitter, "\n");
+    x64_local_name(emitter, "function_", function -> identity);
+    x64_output_text(
+        emitter,
+        ":\n\tpushq %rbp\n\t.seh_pushreg rbp\n\tpushq %rsi\n\t.seh_pushreg rsi\n\tpushq %rdi\n\t.seh_pushreg rdi\n\tmovq %rsp, %rbp\n\tmovl $"
+    );
+    x64_output_number(emitter, size, 10u64, 0usize);
+    x64_output_text(
+        emitter,
+        ", %eax\n\tcall ___chkstk_ms\n\tsubq %rax, %rsp\n\t.seh_stackalloc "
+    );
+    x64_output_number(emitter, size, 10u64, 0usize);
+    x64_output_text(emitter, "\n\t.seh_endprologue\n");
+}
+fn x64_windows_parameter(emitter: *CrustX64Emitter, parameter: *CrustParam, index: usize) -> unit {
+    if index < 4usize {
+        if parameter -> type -> kind == CRUST_T_F32 {
+            x64_output_text(emitter, "\tmovd %xmm");
+            x64_output_number(emitter, index as u64, 10u64, 0usize);
+            x64_output_text(emitter, ", %eax\n");
+        } else {
+            x64_output_text(emitter, "\tmovq %");
+            x64_output_text(emitter, X64_WIN_REGS[index]);
+            x64_output_text(emitter, ", %rax\n");
+        }
+    } else {
+        x64_output_text(emitter, "\tmovq ");
+        x64_output_number(emitter, 32u64 + index as u64 * 8u64, 10u64, 0usize);
+        x64_output_text(emitter, "(%rbp), %rax\n");
+    }
+    var slot: *CrustX64Slot = crust_map_get(
+        &emitter -> function -> symbols,
+        parameter -> symbol as usize
+    ) as *CrustX64Slot;
+    x64_address_slot(emitter, slot -> offset, "rdi");
+    x64_store_value(emitter, parameter -> type);
+}
+fn x64_default_function(emitter: *CrustX64Emitter, function: *CrustX64Function) -> unit {
+    if emitter -> failed {
+        return;
+    }
+    var size: u64 = x64_windows_frame(function);
+    if size > 2147483647u64 || size < function -> frame_size {
+        emitter -> failed = true;
+        x64_error(
+            x64_context(emitter),
+            &function -> declaration -> loc,
+            "Windows assembly frame exceeds unwind encoding limit"
+        );
+        return;
+    }
+    emitter -> function = function;
+    emitter -> return_label = x64_next_label(emitter);
+    x64_windows_prologue(emitter, function, size);
+    var parameter: *CrustParam = function -> declaration -> params;
+    var index: usize = 0usize;
+    while parameter != null(*CrustParam) {
+        x64_windows_parameter(emitter, parameter, index);
+        parameter = parameter -> next;
+        index = index + 1usize;
+    }
+    x64_emit_statement(emitter, function -> declaration -> body);
+    x64_emit_label(emitter, emitter -> return_label);
+    if function -> declaration -> type -> base -> kind == CRUST_T_F32 {
+        x64_output_text(emitter, "\tmovd %eax, %xmm0\n");
+    }
+    x64_output_text(emitter, "\taddq $");
+    x64_output_number(emitter, size, 10u64, 0usize);
+    x64_output_text(
+        emitter,
+        ", %rsp\n\tpopq %rdi\n\tpopq %rsi\n\tpopq %rbp\n\tret\n\t.seh_endproc\n"
+    );
+    x64_definition_binding(emitter, function -> declaration, "function", function -> identity);
+}
+fn x64_emit_call(emitter: *CrustX64Emitter, expression: *CrustExpr) -> unit {
+    if emitter -> failed {
+        return;
+    }
+    var plan: *CrustX64Expr = x64_expression_plan(emitter, expression);
+    x64_emit_expression(emitter, expression -> left);
+    x64_save_slot64(emitter, plan -> scratch.offset);
+    var index: usize = 0usize;
+    while index < expression -> arg_count {
+        x64_emit_expression(emitter, expression -> args[index]);
+        x64_save_slot64(emitter, plan -> arguments.offset - index as u64 * 8u64);
+        index = index + 1usize;
+    }
+    index = 0usize;
+    while index < expression -> arg_count {
+        x64_load_slot64(emitter, plan -> arguments.offset - index as u64 * 8u64, "rax");
+        x64_windows_argument(emitter, expression -> args[index] -> type, index);
+        index = index + 1usize;
+    }
+    x64_load_slot64(emitter, plan -> scratch.offset, "r11");
+    x64_output_text(emitter, "\tcall *%r11\n");
+    if expression -> type -> kind == CRUST_T_F32 {
+        x64_output_text(emitter, "\tmovd %xmm0, %eax\n");
+    }
+    if expression -> type -> kind != CRUST_T_UNIT {
+        x64_normalize(emitter, expression -> type);
+    }
+}
+fn x64_windows_argument(emitter: *CrustX64Emitter, type: *CrustType, index: usize) -> unit {
+    if index >= 4usize {
+        x64_output_text(emitter, "\tmovq %rax, ");
+        x64_output_number(emitter, index as u64 * 8u64, 10u64, 0usize);
+        x64_output_text(emitter, "(%rsp)\n");
+    } else if type -> kind == CRUST_T_F32 {
+        x64_output_text(emitter, "\tmovd %eax, %xmm");
+        x64_output_number(emitter, index as u64, 10u64, 0usize);
+        x64_output_text(emitter, "\n");
+    } else {
+        x64_output_text(emitter, "\tmovq %rax, %");
+        x64_output_text(emitter, X64_WIN_REGS[index]);
+        x64_output_text(emitter, "\n");
+    }
+}
+fn x64_default_constant(emitter: *CrustX64Emitter, declaration: *CrustDecl) -> unit {
+    if emitter -> failed {
+        return;
+    }
+    var identity: u64 = x64_next_label(emitter);
+    x64_output_text(emitter, X64_RODATA);
+    x64_output_text(emitter, "\t.balign ");
+    x64_output_number(emitter, declaration -> type -> align as u64, 10u64, 0usize);
+    x64_output_text(emitter, "\n");
+    x64_definition_visibility(emitter, declaration);
+    x64_local_name(emitter, "data_", identity);
+    x64_output_text(emitter, ":\n");
+    x64_default_constant_value(emitter, declaration -> init);
+    x64_definition_binding(emitter, declaration, "data", identity);
+}

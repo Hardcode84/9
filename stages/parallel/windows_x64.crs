@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn parallel_begin(
+    security: *u8,
+    stack: u32,
+    entry: fn(*u8) -> u32,
+    data: *u8,
+    flags: u32,
+    id: *u32
+) -> usize = "_beginthreadex";
+extern fn parallel_wait(thread: usize, milliseconds: u32) -> u32 = "WaitForSingleObject";
+extern fn parallel_close(thread: usize) -> i32 = "CloseHandle";
+
+fn parallel_windows_entry(data: *u8) -> u32 {
+    parallel_execute(data);
+    return 0u32;
+}
+fn parallel_start(worker: *ParallelWorker) -> bool {
+    worker -> thread = parallel_begin(
+        null(*u8),
+        0u32,
+        parallel_windows_entry,
+        worker as *u8,
+        0u32,
+        null(*u32)
+    );
+    return worker -> thread != 0usize;
+}
+fn parallel_finish(thread: usize) -> bool {
+    var success: bool = parallel_wait(thread, ~0u32) == 0u32;
+    if parallel_close(thread) == 0i32 {
+        success = false;
+    }
+    return success;
+}

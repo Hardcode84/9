@@ -1,0 +1,308 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn x64_errno() -> *i32 = "__errno_location";
+const X64_RODATA: *u8 = "\t.section .rodata\n";
+const X64_FLOAT: bool = false;
+
+fn x64_symbol_address(emitter: *CrustX64Emitter, declaration: *CrustDecl) -> unit {
+    if (*emitter).failed {
+        return;
+    }
+    var alias: *CrustX64Alias = (
+        crust_map_get((&(*(*emitter).program).alias_map), (declaration) as usize)
+    ) as *CrustX64Alias;
+    x64_output_text(emitter, "\tmovq ");
+    x64_output_text(emitter, &((*(*emitter).program).label_prefix)[0usize]);
+    x64_output_text(emitter, "alias_");
+    x64_output_number(emitter, (*alias).identity, 10u64, 0usize);
+    x64_output_text(emitter, "@GOTPCREL(%rip), %rax\n");
+}
+
+fn x64_emit_call(emitter: *CrustX64Emitter, expression: *CrustExpr) -> unit {
+    if (*emitter).failed {
+        return;
+    }
+    var registers: [*u8; 6] = make [*u8; 6] {
+        "rdi",
+        "rsi",
+        "rdx",
+        "rcx",
+        "r8",
+        "r9"
+    };
+    var plan: *CrustX64Expr = x64_expression_plan(emitter, expression);
+    var index: usize = uninit;
+    var choice_0: u64 = uninit;
+    if ((*expression).arg_count > 6usize) {
+        choice_0 = ((((*expression).arg_count - 6usize)) as u64 * 8u64);
+    } else {
+        choice_0 = 0u64;
+    }
+    var stack_size: u64 = choice_0;
+    stack_size = ((stack_size + 15u64) & (~15u64));
+    x64_emit_expression(emitter, (*expression).left);
+    x64_save_slot64(emitter, (*plan).scratch.offset);
+    index = 0usize;
+    while (index < (*expression).arg_count) {
+        x64_emit_expression(emitter, (*expression).args[index]);
+        x64_save_slot64(
+            emitter,
+            ((*plan).arguments.offset - ((index) as u64 * 8u64))
+        );
+        index = index + 1usize;
+    }
+    x64_reserve_stack(emitter, stack_size);
+    index = 6usize;
+    while (index < (*expression).arg_count) {
+        x64_load_slot64(
+            emitter,
+            ((*plan).arguments.offset - ((index) as u64 * 8u64)),
+            "rax"
+        );
+        x64_output_text(emitter, "\tmovabsq $");
+        x64_output_number(emitter, (((index - 6usize)) as u64 * 8u64), 10u64, 0usize);
+        x64_output_text(emitter, ", %r10\n\taddq %rsp, %r10\n\tmovq %rax, (%r10)\n");
+        index = index + 1usize;
+    }
+    index = 0usize;
+    while ((index < (*expression).arg_count) && (index < 6usize)) {
+        x64_load_slot64(
+            emitter,
+            ((*plan).arguments.offset - ((index) as u64 * 8u64)),
+            registers[index]
+        );
+        index = index + 1usize;
+    }
+    x64_load_slot64(emitter, (*plan).scratch.offset, "r11");
+    x64_output_text(emitter, "\tcall *%r11\n");
+    if stack_size != 0u64 {
+        x64_output_text(emitter, "\tmovabsq $");
+        x64_output_number(emitter, stack_size, 10u64, 0usize);
+        x64_output_text(emitter, ", %r10\n\taddq %r10, %rsp\n");
+    }
+    if ((*(*expression).type).kind != CRUST_T_UNIT) {
+        x64_normalize(emitter, (*expression).type);
+    }
+}
+
+fn x64_default_function(emitter: *CrustX64Emitter, function: *CrustX64Function) -> unit {
+    if (*emitter).failed {
+        return;
+    }
+    var registers: [*u8; 6] = make [*u8; 6] {
+        "rdi",
+        "rsi",
+        "rdx",
+        "rcx",
+        "r8",
+        "r9"
+    };
+    var narrow_registers: [[*u8; 6]; 3] = make [[*u8; 6]; 3] {
+        make [*u8; 6] {
+            "dil",
+            "sil",
+            "dl",
+            "cl",
+            "r8b",
+            "r9b"
+        },
+        make [*u8; 6] {
+            "di",
+            "si",
+            "dx",
+            "cx",
+            "r8w",
+            "r9w"
+        },
+        make [*u8; 6] {
+            "edi",
+            "esi",
+            "edx",
+            "ecx",
+            "r8d",
+            "r9d"
+        }
+    };
+    var parameter: *CrustParam = uninit;
+    var index: usize = uninit;
+    (*emitter).function = function;
+    (*emitter).return_label = x64_next_label(emitter);
+    x64_output_text(emitter, "\t.text\n");
+    x64_definition_visibility(emitter, (*function).declaration);
+    x64_output_text(emitter, "\t.type ");
+    x64_output_text(emitter, &((*(*emitter).program).label_prefix)[0usize]);
+    x64_output_text(emitter, "function_");
+    x64_output_number(emitter, (*function).identity, 10u64, 0usize);
+    x64_output_text(emitter, ", @function\n");
+    x64_output_text(emitter, &((*(*emitter).program).label_prefix)[0usize]);
+    x64_output_text(emitter, "function_");
+    x64_output_number(emitter, (*function).identity, 10u64, 0usize);
+    x64_output_text(emitter, ":\n\tpushq %rbp\n\tmovq %rsp, %rbp\n");
+    x64_reserve_stack(emitter, (*function).frame_size);
+    parameter = (*(*function).declaration).params;
+    index = 0usize;
+    while parameter != null(*CrustParam) {
+        var slot: *CrustX64Slot = (
+            crust_map_get((&(*function).symbols), ((*parameter).symbol) as usize)
+        ) as *CrustX64Slot;
+        if ((index < 6usize) && ((*slot).offset <= 2147483647u64)) {
+            var choice_1: u32 = uninit;
+            if ((*(*parameter).type).size == 1u64) {
+                choice_1 = 0u32;
+            } else {
+                var choice_2: u32 = uninit;
+                if ((*(*parameter).type).size == 2u64) {
+                    choice_2 = 1u32;
+                } else {
+                    choice_2 = 2u32;
+                }
+                choice_1 = choice_2;
+            }
+            var width: u32 = choice_1;
+            var reg: *u8 = x64_text_if(
+                ((*(*parameter).type).size == 8u64),
+                registers[index],
+                narrow_registers[(width) as usize][index]
+            );
+            var instruction: *u8 = x64_text_if(
+                ((*(*parameter).type).size == 1u64),
+                "movb",
+                x64_text_if(
+                    ((*(*parameter).type).size == 2u64),
+                    "movw",
+                    x64_text_if(((*(*parameter).type).size == 4u64), "movl", "movq")
+                )
+            );
+            x64_output_text(emitter, "\t");
+            x64_output_text(emitter, instruction);
+            x64_output_text(emitter, " %");
+            x64_output_text(emitter, reg);
+            x64_output_text(emitter, ", -");
+            x64_output_number(emitter, (*slot).offset, 10u64, 0usize);
+            x64_output_text(emitter, "(%rbp)\n");
+            parameter = (*parameter).next;
+            index = index + 1usize;
+            continue;
+        }
+        if (index < 6usize) {
+            x64_output_text(emitter, "\tmovq %");
+            x64_output_text(emitter, registers[index]);
+            x64_output_text(emitter, ", %rax\n");
+        } else {
+            x64_output_text(emitter, "\tmovabsq $");
+            x64_output_number(
+                emitter,
+                (16u64 + (((index - 6usize)) as u64 * 8u64)),
+                10u64,
+                0usize
+            );
+            x64_output_text(emitter, ", %r10\n\taddq %rbp, %r10\n\tmovq (%r10), %rax\n");
+        }
+        x64_address_slot(emitter, (*slot).offset, "r10");
+        if ((*(*parameter).type).size == 1u64) {
+            x64_output_text(emitter, "\tmovb %al, (%r10)\n");
+        } else {
+            if ((*(*parameter).type).size == 2u64) {
+                x64_output_text(emitter, "\tmovw %ax, (%r10)\n");
+            } else {
+                if ((*(*parameter).type).size == 4u64) {
+                    x64_output_text(emitter, "\tmovl %eax, (%r10)\n");
+                } else {
+                    x64_output_text(emitter, "\tmovq %rax, (%r10)\n");
+                }
+            }
+        }
+        parameter = (*parameter).next;
+        index = index + 1usize;
+    }
+    x64_emit_statement(emitter, (*(*function).declaration).body);
+    x64_emit_label(emitter, (*emitter).return_label);
+    x64_output_text(emitter, "\tleave\n\tret\n\t.size ");
+    x64_output_text(emitter, &((*(*emitter).program).label_prefix)[0usize]);
+    x64_output_text(emitter, "function_");
+    x64_output_number(emitter, (*function).identity, 10u64, 0usize);
+    x64_output_text(emitter, ", .-");
+    x64_output_text(emitter, &((*(*emitter).program).label_prefix)[0usize]);
+    x64_output_text(emitter, "function_");
+    x64_output_number(emitter, (*function).identity, 10u64, 0usize);
+    x64_output_text(emitter, "\n");
+    x64_definition_binding(
+        emitter,
+        (*function).declaration,
+        "function",
+        (*function).identity
+    );
+}
+
+fn x64_default_constant(emitter: *CrustX64Emitter, declaration: *CrustDecl) -> unit {
+    if (*emitter).failed {
+        return;
+    }
+    var identity: u64 = x64_next_label(emitter);
+    var section: *u8 = x64_text_if(
+        x64_constant_has_address((*declaration).init),
+        ".data.rel.ro,\"aw\",@progbits",
+        ".rodata"
+    );
+    x64_output_text(emitter, "\t.section ");
+    x64_output_text(emitter, section);
+    x64_output_text(emitter, "\n\t.balign ");
+    x64_output_number(
+        emitter,
+        ((*(*declaration).type).align) as u64,
+        10u64,
+        0usize
+    );
+    x64_output_text(emitter, "\n");
+    x64_definition_visibility(emitter, declaration);
+    x64_output_text(emitter, "\t.type ");
+    x64_output_text(emitter, &((*(*emitter).program).label_prefix)[0usize]);
+    x64_output_text(emitter, "data_");
+    x64_output_number(emitter, identity, 10u64, 0usize);
+    x64_output_text(emitter, ", @object\n");
+    x64_output_text(emitter, &((*(*emitter).program).label_prefix)[0usize]);
+    x64_output_text(emitter, "data_");
+    x64_output_number(emitter, identity, 10u64, 0usize);
+    x64_output_text(emitter, ":\n");
+    x64_default_constant_value(emitter, (*declaration).init);
+    x64_output_text(emitter, "\t.size ");
+    x64_output_text(emitter, &((*(*emitter).program).label_prefix)[0usize]);
+    x64_output_text(emitter, "data_");
+    x64_output_number(emitter, identity, 10u64, 0usize);
+    x64_output_text(emitter, ", ");
+    x64_output_number(emitter, (*(*declaration).type).size, 10u64, 0usize);
+    x64_output_text(emitter, "\n");
+    x64_definition_binding(emitter, declaration, "data", identity);
+}
+
+fn x64_emit_aliases(emitter: *CrustX64Emitter) -> unit {
+    var program: *CrustX64Program = (*emitter).program;
+    var alias: *CrustX64Alias = (*program).aliases;
+    while alias != null(*CrustX64Alias) &&!(*emitter).failed {
+        var name: *u8 = (*(*alias).declaration).link_name;
+        if name[0usize] != 0u8 {
+            x64_output_text(emitter, "\t.globl ");
+            x64_symbol_name(emitter, name);
+            x64_output_text(emitter, "\n\t.weakref ");
+            x64_output_text(emitter, &(*program).label_prefix[0usize]);
+            x64_output_text(emitter, "alias_");
+            x64_output_number(emitter, (*alias).identity, 10u64, 0usize);
+            x64_output_text(emitter, ", ");
+            x64_symbol_name(emitter, name);
+            x64_output_text(emitter, "\n");
+        }
+        alias = (*alias).next;
+    }
+}
+
+fn x64_hosted_entry(emitter: *CrustX64Emitter) -> unit {
+    x64_output_text(emitter, "\t.text\n\t.globl main\n\t.type main, @function\nmain:\n");
+    x64_symbol_address(emitter, emitter -> program -> entry);
+    x64_output_text(emitter, "\tjmp *%rax\n\t.size main, .-main\n");
+}
+fn x64_program_end(emitter: *CrustX64Emitter) -> unit {
+    x64_output_text(emitter, "\t.section .note.GNU-stack,\"\",@progbits\n");
+}
+fn x64_float_expression(emitter: *CrustX64Emitter, expression: *CrustExpr) -> bool {
+    return false;
+}

@@ -27,16 +27,16 @@ RUN_LIBS = -lffi -lbcrypt
 API_ROOT = $(BUILD)/profile
 SEED_IMPORT = $(BUILD)/crust.exe.a
 CPPFLAGS += -I$(API_ROOT)/include
-WINDOWS_GOALS = all clean api amalgamate check-windows check-windows-build check-windows-bootstrap check-windows-cache
+WINDOWS_GOALS = all clean api amalgamate fetch-llvm-release fetch-llvm-main check-llvm-fetch check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership
 ifneq ($(filter-out $(WINDOWS_GOALS) $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a,$(MAKECMDGOALS)),)
-$(error Windows supports seed, C bootstrap, and cache checks; use check-windows, check-windows-bootstrap, or check-windows-cache)
+$(error This target is not available for Windows; use the check-windows targets)
 endif
 else
 $(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64 or windows_x64)
 endif
 CPPFLAGS += -Iinclude $(FFI_CFLAGS)
 ifneq ($(PROFILE),windows_x64)
-ifneq ($(filter check-windows check-windows-build check-windows-bootstrap check-windows-cache,$(MAKECMDGOALS)),)
+ifneq ($(filter check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership,$(MAKECMDGOALS)),)
 $(error check-windows requires PROFILE=windows_x64)
 endif
 endif
@@ -148,8 +148,8 @@ check-windows-build: all $(BUILD)/windows_seed.exe $(BUILD)/windows_library.dll 
 $(BUILD)/windows_limit.exe: tests/windows_limit.c | $(BUILD)
 	$(CC) $(CFLAGS) $(STRICT) -municode $< $(LDFLAGS) -o $@
 
-$(BUILD)/windows_library.dll: tests/windows_library.c $(API_ROOT)/include/crust0_abi.h
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -shared -Wl,--export-all-symbols $< $(LDFLAGS) -o $@
+$(BUILD)/windows_library.dll: tests/windows_library.c tests/native.c $(API_ROOT)/include/crust0_abi.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -shared -Wl,--export-all-symbols tests/windows_library.c tests/native.c $(LDFLAGS) -o $@
 
 $(BUILD)/windows_seed.exe: tests/windows_seed.c $(CORE) $(RUNNER) $(HOST) $(BUILD)/driver_windows.o $(BUILD)/core-mode
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $(filter-out $(BUILD)/core-mode,$^) $(LDFLAGS) $(FFI_LDFLAGS) -lffi -lbcrypt -o $@
@@ -172,6 +172,19 @@ $(BUILD)/windows_cache_fixture.dll: tests/windows_cache_fixture.c $(API_ROOT)/in
 
 check-windows-cache: all $(BUILD)/windows_limit.exe $(BUILD)/windows_process.exe $(BUILD)/windows_cache_fixture.exe $(BUILD)/windows_cache_fixture.dll
 	python3 tests/windows_cache.py --build $(BUILD)
+
+.PHONY: check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership
+check-windows-tools: all $(BUILD)/windows_limit.exe $(BUILD)/windows_library.dll
+	python3 tests/windows_tools.py --build $(BUILD)
+
+check-windows-llvm: all $(BUILD)/windows_limit.exe $(BUILD)/windows_library.dll
+	python3 tests/windows_backends.py --build $(BUILD) --backend llvm --llvm "$(CRUST_LLVM_DIRECTORY)"
+
+check-windows-asm: all $(BUILD)/windows_limit.exe $(BUILD)/windows_library.dll
+	python3 tests/windows_backends.py --build $(BUILD) --backend asm
+
+check-windows-ownership: all $(BUILD)/windows_limit.exe
+	python3 tests/windows_ownership.py --build $(BUILD)
 
 $(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
 	$(AR) rcs $@ $^

@@ -36,7 +36,7 @@ var state: BuildState = make BuildState {
     first: null(fn(*CrustRun, *u8) -> i32),
     output: host_path(run, "../../build/cached-hello")
 };
-var sources: [*u8; 33] = make [*u8; 33] {
+var sources: [*u8; 34] = make [*u8; 34] {
     "../../api/crust0.crs",
     "../../api/crust0_host.crs",
     "../../api/crust0_eval.crs",
@@ -44,6 +44,7 @@ var sources: [*u8; 33] = make [*u8; 33] {
     "../../api/crust0_stage.crs",
     "../../stages/asm/model.crs",
     "../../stages/asm/output.crs",
+    "../../stages/asm/target_linux.crs",
     "../../stages/asm/plan.crs",
     "../../stages/asm/emit.crs",
     "../../stages/asm/program.crs",
@@ -83,7 +84,7 @@ var sources: [*u8; 33] = make [*u8; 33] {
         capacity: 0usize
     };
     var index: usize = 0usize;
-    while index < 33usize {
+    while index < 34usize {
         var path: *u8 = host_path(run, sources[index]);
         if path == null(*u8) || !cache_input(ctx, &inputs, path) {
             return 1i32;
@@ -104,8 +105,8 @@ var sources: [*u8; 33] = make [*u8; 33] {
         return 1i32;
     }
     var producer: BackendBuild = make BackendBuild {
-        source_count: 23usize,
-        seed_count: 10usize
+        source_count: 24usize,
+        seed_count: 11usize
     };
     var request: CacheBuild = make CacheBuild {
         inputs: inputs.items,

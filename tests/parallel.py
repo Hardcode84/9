@@ -83,7 +83,7 @@ def main():
         binary = work / name
         sources = [ROOT / "api/crust0.crs", ROOT / "stages/parallel/model.crs"]
         if wrapped:
-            sources += [ROOT / "stages/parallel/linux_x64.crs"]
+            sources += [ROOT / "stages/parallel/jobs.crs", ROOT / "stages/parallel/linux_x64.crs"]
             libraries = [str(wrapper), "-Wl,--wrap=pthread_create"]
         else:
             sources += [ROOT / "stages/parallel/api.crs"]

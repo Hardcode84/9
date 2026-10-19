@@ -28,12 +28,7 @@ fn og_driver_sources(
         var bytes: *u8 = null(*u8);
         var size: usize = 0usize;
         if crust0_host_read_file((*source).path, &bytes, &size) != 0i32 {
-            c_driver_io_error(
-                &(*cli).driver,
-                "cannot read input",
-                (*source).path,
-                *c_driver_errno()
-            );
+            c_driver_read_error(&(*cli).driver, (*source).path);
             return false;
         }
         (*source).bytes = bytes;

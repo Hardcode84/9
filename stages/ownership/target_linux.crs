@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: Apache-2.0
+
+const OS_LIBRARY_TAG: *u8 = "crust-ownership-library-v2-linux-x64\n";
+const OG_LIBRARY_TAG: *u8 = "crust-generic-ownership-v2-signature-contracts-linux-x64\n";
+const OS_ARTIFACT_SUFFIX: *u8 = "/artifact";
+fn os_cache_absolute(path: *u8) -> bool {
+    return path != null(*u8) && path[0usize] == 47u8;
+}
+fn os_import_directory(cli: *CCli, directory: *u8) -> *u8 {
+    return directory;
+}
+fn os_import_object_path(cli: *CCli, work: *CacheWork) -> *u8 {
+    return work -> checksum;
+}

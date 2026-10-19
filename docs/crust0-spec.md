@@ -74,7 +74,9 @@ The native execution profiles are `linux_x64` and `windows_x64`. Both are
 little endian, with 8-bit bytes and 64-bit data pointers. Linux uses the System V
 AMD64 scalar calling convention. Windows uses the Windows x64 scalar calling
 convention. Windows supports the seed evaluator, explicit native DLL inputs, and
-source-built C backend stages with validated artifact reuse. Other backends remain Linux-only.
+source-built C, LLVM, and ASM stages with validated artifact reuse. The Windows
+ASM provider supports binary32 operations and the Windows scalar ABI; the Linux
+ASM provider still requires C or LLVM for binary32 code.
 
 | Type | Size and alignment in bytes | Value representation |
 |---|---:|---|

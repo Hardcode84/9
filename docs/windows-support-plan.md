@@ -2,9 +2,8 @@
 
 # Windows support plan
 
-Status: phases 1 through 3 are implemented. The [Windows guide](windows.md) defines
-the supported seed, C bootstrap, native handoff, and cache workflows. Phases 4 and later
-remain proposals.
+Status: phases 1 through 4 are implemented for the capabilities listed in the
+[Windows guide](windows.md). Vulkan execution remains a separate validation gate.
 
 Add native Windows x64 support in stages. First prove that the C99 seed can
 build a compiler stage from source, load it, hand later compilation to it,
@@ -142,8 +141,8 @@ Implemented for the self-contained GCC toolchain described in the
 [Windows guide](windows.md). External files use streamed SHA-256 hashes.
 The input provider captures installation files, child environment, loaded
 images, and tool-process image dependencies. The cache publishes complete
-directories and verifies artifact checksums before reuse. Ownership object
-bundle formats remain explicitly Linux-only.
+directories and verifies artifact checksums before reuse. Phase 4 adds distinct
+Windows ownership object bundle formats.
 
 Add Windows providers for hashing, tool identity, dependency capture, temporary
 directories, and atomic artifact publication. Capture the actual compiler,
@@ -164,10 +163,16 @@ Acceptance:
 
 ## Phase 4 Extend backends and tools
 
+Implemented: native LLVM emission and acquisition, Windows ASM package compilation,
+formatter replacement, native jobs, editor launch, and ownership imports.
+The native checks cover callbacks, unwind records, successive compiler generations,
+checked clients, trusted providers, and proof erasure. The Windows guide records
+the supported toolchain and the separate shader environment requirements.
+
 Add LLVM Windows emission and linking after the complete workflow passes.
 Validate target layout, scalar ABI behavior, DLL exports, and native callbacks.
-Extend LLVM acquisition separately; the current release fetch accepts Linux
-x64 only.
+Extend LLVM acquisition separately. The release fetch now accepts Linux x64
+and Windows x64 profiles.
 
 Port ASM calling conventions and object format together. Cover integer and
 floating-point argument placement, shadow space, preserved registers, stack

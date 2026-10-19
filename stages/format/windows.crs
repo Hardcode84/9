@@ -1,0 +1,124 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// FILE_BASIC_INFO and FILE_STANDARD_INFO retain their Windows ABI order.
+record FmBasic {
+    creation: i64;
+    access: i64;
+    write: i64;
+    change: i64;
+    attributes: u32;
+}
+record FmStandard {
+    allocation: i64;
+    size: i64;
+    links: u32;
+    deleting: u8;
+    directory: u8;
+}
+record FmStat {
+    basic: FmBasic;
+    standard: FmStandard;
+    identity: WinFileId;
+}
+extern fn fm_file_info(file: *u8, kind: i32, data: *u8, size: u32) -> i32 = "GetFileInformationByHandleEx";
+
+fn fm_inspect(result: *FmResult, info: *FmStat) -> bool {
+    var context: *CrustContext = result -> lexical.context;
+    var path: *u16 = win_wide(context, result -> lexical.source -> path);
+    if path == null(*u16) {
+        return false;
+    }
+    var file: *u8 = win_open(
+        path,
+        128u32,
+        7u32,
+        null(*WinSecurity),
+        3u32,
+        2097152u32,
+        null(*u8)
+    );
+    if file == ~0usize as *u8 {
+        return fm_error(result, 0usize, "cannot inspect format input");
+    }
+    var success: bool = fm_file_info(
+        file,
+        0i32,
+        &info -> basic as *u8,
+        sizeof(FmBasic) as u32
+    ) != 0i32 && fm_file_info(
+        file,
+        1i32,
+        &info -> standard as *u8,
+        sizeof(FmStandard) as u32
+    ) != 0i32 && win_file_info(file, 18i32, &info -> identity, sizeof(WinFileId) as u32) != 0i32;
+    if !win_close(context, file) {
+        success = false;
+    }
+    if !success {
+        return fm_error(result, 0usize, "cannot inspect format metadata");
+    }
+    if (info -> basic.attributes & 1u32) != 0u32 {
+        return fm_error(result, 0usize, "write requires a writable file");
+    }
+    if (info -> basic.attributes & 1040u32) != 0u32 || info -> standard.links != 1u32 || info -> standard.directory != 0u8 {
+        return fm_error(result, 0usize, "write requires a regular file with one link");
+    }
+    return true;
+}
+fn fm_unchanged(result: *FmResult, before: *FmStat) -> bool {
+    var after: FmStat = uninit;
+    if !fm_inspect(result, &after) {
+        return false;
+    }
+    return (
+        win_compare(
+            &before -> identity as *u8,
+            &after.identity as *u8,
+            sizeof(WinFileId)
+        ) == 0i32 && before -> standard.size == after.standard.size && before -> basic.write == after.basic.write && before -> basic.change == after.basic.change
+    ) || fm_error(result, 0usize, "format input changed during formatting");
+}
+// Replace an unchanged single-link file. ReplaceFileW preserves the target ACL.
+// The caller supplies metadata from before reading and owns the containing directory.
+fn fm_publish(result: *FmResult, before: *FmStat) -> bool {
+    var context: *CrustContext = result -> lexical.context;
+    var directory: *u8 = win_directory_prefix(context, result -> lexical.source -> path);
+    if directory == null(*u8) {
+        return false;
+    }
+    var prefix: *u8 = native_join(context, directory, ".crust-format-");
+    if prefix == null(*u8) {
+        return false;
+    }
+    var temporary: *u8 = win_unique(context, prefix, false);
+    if temporary == null(*u8) {
+        return false;
+    }
+    var target: *u16 = win_wide(context, result -> lexical.source -> path);
+    var source: *u16 = win_wide(context, temporary);
+    var success: bool = target != null(*u16) && source != null(*u16);
+    if success {
+        success = crust0_host_write_file(
+            temporary,
+            result -> output.bytes,
+            result -> output.size
+        ) == 0i32 || fm_error(result, 0usize, "cannot write format temporary");
+    }
+    if success {
+        success = fm_unchanged(result, before);
+    }
+    if success {
+        success = win_replace(
+            target,
+            source,
+            null(*u16),
+            0u32,
+            null(*u8),
+            null(*u8)
+        ) != 0i32 || fm_error(result, 0usize, "cannot replace format input");
+    }
+    if !success {
+        win_remove(context, temporary, false);
+    }
+    return success;
+}

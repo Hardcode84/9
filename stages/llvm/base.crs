@@ -173,7 +173,7 @@ fn ll_abi_type(stage: *LlStage, type: *CrustType, result: bool) -> *u8 {
         return "i1 zeroext";
     }
     var text: *u8 = ll_type(stage, type);
-    if type -> kind <= CRUST_T_U16 {
+    if LLVM_EXTEND_SMALL && type -> kind <= CRUST_T_U16 {
         var extension: *u8 = "zeroext";
         if ll_signed(type) {
             extension = "signext";

@@ -57,26 +57,6 @@ fn x64_emit_string(emitter: *CrustX64Emitter, expression: *CrustExpr) -> unit {
     }
 }
 
-fn x64_emit_aliases(emitter: *CrustX64Emitter) -> unit {
-    var program: *CrustX64Program = (*emitter).program;
-    var alias: *CrustX64Alias = (*program).aliases;
-    while alias != null(*CrustX64Alias) &&!(*emitter).failed {
-        var name: *u8 = (*(*alias).declaration).link_name;
-        if name[0usize] != 0u8 {
-            x64_output_text(emitter, "\t.globl ");
-            x64_symbol_name(emitter, name);
-            x64_output_text(emitter, "\n\t.weakref ");
-            x64_output_text(emitter, &(*program).label_prefix[0usize]);
-            x64_output_text(emitter, "alias_");
-            x64_output_number(emitter, (*alias).identity, 10u64, 0usize);
-            x64_output_text(emitter, ", ");
-            x64_symbol_name(emitter, name);
-            x64_output_text(emitter, "\n");
-        }
-        alias = (*alias).next;
-    }
-}
-
 fn x64_emit_constants(emitter: *CrustX64Emitter) -> unit {
     var unit_value: *CrustUnit = (*x64_context(emitter)).units;
     while unit_value != null(*CrustUnit) &&!(*emitter).failed {
@@ -108,7 +88,7 @@ fn crust_x64_emit_program_with_ops(
     };
     x64_emit_aliases(&emitter);
     x64_emit_constants(&emitter);
-    x64_output_text(&emitter, "\t.section .rodata\n");
+    x64_output_text(&emitter, X64_RODATA);
     var string: *CrustX64String = (*program).strings;
     while string != null(*CrustX64String) && !emitter.failed {
         x64_output_text(&emitter, &(*program).label_prefix[0usize]);
@@ -124,11 +104,9 @@ fn crust_x64_emit_program_with_ops(
         function = (*function).next;
     }
     if (*program).entry != null(*CrustDecl) {
-        x64_output_text(&emitter, "\t.text\n\t.globl main\n\t.type main, @function\nmain:\n");
-        x64_symbol_address(&emitter, (*program).entry);
-        x64_output_text(&emitter, "\tjmp *%rax\n\t.size main, .-main\n");
+        x64_hosted_entry(&emitter);
     }
-    x64_output_text(&emitter, "\t.section .note.GNU-stack,\"\",@progbits\n");
+    x64_program_end(&emitter);
     if emitter.failed {
         return false;
     }

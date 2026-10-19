@@ -49,7 +49,7 @@ fn os_library_begin(context: *CrustContext, directory: *u8, work: *OsLibraryWork
     (*work).checker = null(*u8);
     (*work).provider = null(*u8);
     (*work).trusted = false;
-    if directory == null(*u8) || directory[0usize] != 47u8 {
+    if !os_cache_absolute(directory) {
         return os_library_error(
             context,
             "ownership library requires an absolute trusted cache directory"
@@ -85,7 +85,7 @@ fn os_library_pack(
     interface_source: *CrustSource,
     object: *CrustSource
 ) -> bool {
-    c_buffer_text(buffer, "crust-ownership-library-v2-linux-x64\n");
+    c_buffer_text(buffer, OS_LIBRARY_TAG);
     c_buffer_bytes(buffer, (*work).checker, 64usize);
     c_buffer_bytes(buffer, (*work).provider, 64usize);
     var interface_size: u64 = (*interface_source).size as u64;
@@ -107,7 +107,7 @@ fn os_library_unpack(
     source: *CrustSource,
     bundle: *OsLibraryBundle
 ) -> bool {
-    var tag: *u8 = "crust-ownership-library-v2-linux-x64\n";
+    var tag: *u8 = OS_LIBRARY_TAG;
     var size: usize = native_strlen(tag);
     if (*source).size < size + 152usize || cache_memcmp((*source).bytes, tag, size) != 0i32 {
         return os_library_error(context, "invalid ownership library format or target");

@@ -40,12 +40,7 @@ fn resource_driver_read(cli: *CCli, resources: *RsStage) -> bool {
         var bytes: *u8 = null(*u8);
         var size: usize = 0usize;
         if crust0_host_read_file((*source).path, &bytes, &size) != 0i32 {
-            c_driver_io_error(
-                driver,
-                "cannot read input",
-                (*source).path,
-                *c_driver_errno()
-            );
+            c_driver_read_error(driver, (*source).path);
             return false;
         }
         (*source).bytes = crust_try_copy_string(context, bytes, size);

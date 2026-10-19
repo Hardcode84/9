@@ -26,11 +26,15 @@ fn os_library_location(context: *CrustContext, directory: *u8, receipt: *Ownersh
             "ownership import requires an artifact and a trusted digest receipt"
         );
     }
-    var size: usize = native_strlen(directory);
-    var artifact: *u8 = (*receipt).artifact;
+    var selected: *u8 = os_receipt_path(context, directory);
+    var artifact: *u8 = os_receipt_path(context, (*receipt).artifact);
+    if selected == null(*u8) || artifact == null(*u8) {
+        return false;
+    }
+    var size: usize = native_strlen(selected);
     if native_strlen(artifact) != size + 65usize + native_strlen(OS_ARTIFACT_SUFFIX) || cache_memcmp(
         artifact,
-        directory,
+        selected,
         size
     ) != 0i32 || artifact[size] != 47u8 || !os_library_hex(
         artifact + (size + 1usize) as isize,

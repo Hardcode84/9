@@ -4,7 +4,6 @@
 
 import argparse
 import fnmatch
-import resource
 import shlex
 import shutil
 import subprocess
@@ -12,26 +11,15 @@ import sys
 import tempfile
 from pathlib import Path
 
+from host import WINDOWS, disable_core_dumps, executable, run, status_matches
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def c_backend_sources():
-    return [
-        ROOT / "api" / (name + ".crs") for name in ("crust0", "crust0_host", "crust0_stage")
-    ] + [
-        ROOT / "stages/c" / (name + ".crs")
-        for name in (
-            "model",
-            "base",
-            "types",
-            "emit",
-            "driver_model",
-            "driver_linux",
-            "driver",
-            "program",
-            "main",
-        )
-    ]
+def c_backend_sources(build=ROOT / "build"):
+    from prepare import sources
+
+    return sources(build, "c/package.crs") + [ROOT / "stages/c/main.crs"]
 
 
 def program(body, declarations=""):
@@ -421,7 +409,7 @@ class Failure(Exception):
 class Suite:
     def __init__(self, args, work):
         self.build = args.build.resolve()
-        self.compiler = self.build / "crust-overload"
+        self.compiler = Path(executable(self.build / "crust-overload"))
         self.work = work
         self.timeout = args.timeout
         self.flags = [
@@ -432,15 +420,20 @@ class Suite:
         self.commands = 0
 
     def command(self, command, expected=0):
-        result = subprocess.run(
+        result = run(
             list(map(str, command)),
             cwd=ROOT,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=self.timeout,
+            text_output=True,
         )
         self.commands += 1
-        correct = result.returncode == expected if expected is not None else result.returncode > 0
+        correct = (
+            status_matches(result.returncode, expected)
+            if expected is not None
+            else result.returncode > 0
+        )
         if not correct:
             raise Failure(
                 f"{shlex.join(list(map(str, command)))}: status {result.returncode}; expected {expected}\n"
@@ -506,7 +499,9 @@ class Suite:
             libraries = [
                 "--ldflag=" + str(self.build / name) for name in ("libcrust0.a", "libcrust0_host.a")
             ]
-            self.compile(c_backend_sources(), backend, libraries)
+            if WINDOWS:
+                libraries.append("--ldflag=-lbcrypt")
+            self.compile(c_backend_sources(self.build), backend, libraries)
             target = self.work / "compiled-intrusive"
             self.command(
                 [
@@ -698,7 +693,9 @@ class Suite:
                             if case == "missing"
                             else b"entry must be a defined fn(i32, **u8) -> i32"
                         )
-                        if (tool + ": error: ").encode() + message not in result.stderr:
+                        if (
+                            (tool + ".exe" if WINDOWS else tool) + ": error: "
+                        ).encode() + message not in result.stderr:
                             raise Failure(f"incorrect entry diagnostic: {result.stderr!r}")
                 source = self.source(name + "-gcc", program(""))
                 result = self.command(
@@ -712,7 +709,11 @@ class Suite:
                     ],
                     expected=1,
                 )
-                if (tool + ": error: gcc failed with status 1").encode() not in result.stderr:
+                if (
+                    b"native tool failed (exit status 1)"
+                    if WINDOWS
+                    else (tool + ": error: gcc failed with status 1").encode()
+                ) not in result.stderr:
                     raise Failure(f"incorrect driver name: {result.stderr!r}")
             for borrow in ("read", "mut"):
                 source = self.source(
@@ -810,10 +811,10 @@ def main():
         return 0
     if args.timeout <= 0:
         parser.error("timeout must be positive")
-    if not (args.build / "crust-overload").is_file():
+    if not Path(executable(args.build / "crust-overload")).is_file():
         parser.error("build/crust-overload must be built before these tests")
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    work = Path(tempfile.mkdtemp(prefix="crust-overload-"))
+    disable_core_dumps()
+    work = Path(tempfile.mkdtemp(prefix="crust-overload-", dir=args.build.resolve()))
     suite = Suite(args, work)
     failures = 0
     counts = dict(runtime=0, reject=0, boundary=0)

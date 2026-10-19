@@ -6,6 +6,9 @@ const OS_ARTIFACT_SUFFIX: *u8 = "/artifact.dll";
 fn os_cache_absolute(path: *u8) -> bool {
     return cache_absolute(path);
 }
+fn os_receipt_path(context: *CrustContext, path: *u8) -> *u8 {
+    return win_path(context, path);
+}
 fn os_import_directory(cli: *CCli, directory: *u8) -> *u8 {
     if cli -> mode == 3u32 || cli -> options.output == null(*u8) {
         return directory;

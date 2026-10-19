@@ -2,7 +2,6 @@
 
 import { test, expect, mock } from 'bun:test';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
 const launcher = process.env.CRUST_LAUNCHER;
@@ -44,10 +43,11 @@ mock.module('vscode', () => ({
 const { activate } = await import('./extension.cjs');
 
 test('provider publishes current tokens, discards stale snapshots, and gates custom execution', async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'crust-extension-test-'));
+    const directory = await fs.mkdtemp(path.join(process.cwd(), 'build', 'crust-extension-test-'));
     const context = { extensionPath: directory, subscriptions: [] };
     await fs.mkdir(path.join(directory, 'bin'));
-    await fs.symlink(process.env.CRUST_HIGHLIGHT, path.join(directory, 'bin', 'crust-highlight'));
+    const binary = process.platform === 'win32' ? 'crust-highlight.exe' : 'crust-highlight';
+    await fs.copyFile(process.env.CRUST_HIGHLIGHT, path.join(directory, 'bin', binary));
     const changed = new EventEmitter();
     const cancellation = { isCancellationRequested: false, onCancellationRequested: changed.event };
     const document = { uri: { toString: () => 'untitled:unsaved.crs' }, version: 1, isClosed: false, getText: () => 'fn draft()->unit{}' };

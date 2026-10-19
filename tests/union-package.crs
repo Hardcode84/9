@@ -2,8 +2,8 @@
 
 stage_include(stage, "../stages/union/sources.crs");
 var first: usize = stage -> sources.count;
-stage_source(stage, "../api/crust0_x64.crs");
-stage_source(stage, "../api/crust0_eval.crs");
+stage_api_from(stage, "..", "crust0_x64.crs");
+stage_api_from(stage, "..", "crust0_eval.crs");
 stage_source(stage, "union_alloc.crs");
 stage_source(stage, "union_driver.crs");
 while first < stage -> sources.count {

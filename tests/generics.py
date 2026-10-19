@@ -6,8 +6,9 @@ import argparse
 import shutil
 from pathlib import Path
 
+from host import WINDOWS, api_path
 from prepare import sources as package_sources
-from source_order import ROOT, Suite
+from source_order import ROOT, Suite, string
 
 PROVIDER = """
 record P { value:i64; }
@@ -30,9 +31,10 @@ fn run()->i32 {return helper();}
 
 
 def build_driver(suite, filename, evaluator=False):
-    sources = [ROOT / "api/crust0.crs", ROOT / "api/crust0_host.crs"]
+    api = suite.build / "profile/api" if WINDOWS else ROOT / "api"
+    sources = [api / "crust0.crs", api / "crust0_host.crs"]
     if evaluator:
-        sources.append(ROOT / "api/crust0_eval.crs")
+        sources.append(api / "crust0_eval.crs")
     sources += [
         path for path in package_sources(suite.build, "generics/package.crs") if path not in sources
     ]
@@ -41,7 +43,8 @@ def build_driver(suite, filename, evaluator=False):
     libraries = [suite.build / "libcrust0.a", suite.build / "libcrust0_host.a"]
     if evaluator:
         libraries.insert(0, suite.build / "libcrust0_run.a")
-        libraries += ["-ldl", "-lffi"]
+        libraries += ["-lffi"] if WINDOWS else ["-ldl", "-lffi"]
+    libraries += ["-lbcrypt"] if WINDOWS else []
     flags += [item for flag in [*libraries, *suite.ldflags] for item in ("--ldflag", flag)]
     suite.command(
         [suite.build / "crust-c", "-o", output, *sources, ROOT / f"tests/{filename}.crs", *flags]
@@ -236,7 +239,7 @@ def check_tutorial_assembly(suite, package):
     setup.write_text(
         source.replace(
             "    return ",
-            '    return host_source(root, "../../api/crust0_x64.crs") &&\n'
+            f'    return host_source(root, {string(api_path(suite.build, "crust0_x64.crs"))}) &&\n'
             '        stage_import(stages, "stages/asm/package.crs") &&\n        ',
         )
     )

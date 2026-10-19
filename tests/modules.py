@@ -3,8 +3,10 @@
 """Check source-selected modules, export discovery, and context lifetimes."""
 
 import argparse
+import re
 from pathlib import Path
 
+from host import WINDOWS, failed_output
 from source_order import ROOT, Suite, check_examples, string
 
 
@@ -112,9 +114,16 @@ def check_exports(suite):
     interfaces = [ROOT / "stages/c/api.crs", ROOT / "stages/c/extension.crs"]
     flags = suite.command([*command, *interfaces]).stdout.split()
     assert flags[::2] == [b"--export"] * (len(flags) // 2), flags
-    symbols = suite.command(
-        ["nm", "-D", "--defined-only", suite.build / "crust-c-library.so"]
-    ).stdout.split()[2::3]
+    if WINDOWS:
+        table = suite.command(["objdump", "-p", suite.build / "crust-c-library.so"]).stdout
+        table = table.split(b"[Ordinal/Name Pointer] Table", 1)[1].split(b"\n\n", 1)[0]
+        symbols = [
+            line.split()[-1] for line in table.splitlines() if re.match(rb"\s*\[\s*\d+\]", line)
+        ]
+    else:
+        symbols = suite.command(
+            ["nm", "-D", "--defined-only", suite.build / "crust-c-library.so"]
+        ).stdout.split()[2::3]
     markers = {b"CRUST_ABI_crust0", b"CRUST_ABI_crust0_host", b"CRUST_ABI_crust0_stage"}
     assert set(flags[1::2]) | markers == set(symbols), (flags, symbols)
     invalid = suite.write("aliased-interface.crs", 'extern fn source()->i32="native";')
@@ -126,7 +135,7 @@ def check_exports(suite):
     ):
         result = suite.command([*command, *paths], expected=1)
         assert not result.stdout and message in result.stderr, result
-    with open("/dev/full", "wb") as full:
+    with failed_output() as full:
         result = suite.command([*command, *interfaces], expected=1, stdout=full)
     assert b"cannot write export arguments" in result.stderr, result.stderr
 
@@ -134,7 +143,8 @@ def check_exports(suite):
 def check_allocations(suite):
     fixture = suite.work / "allocation-sweep"
     flags = [item for flag in suite.cflags for item in ("--cflag", flag)]
-    flags += [item for flag in suite.ldflags for item in ("--ldflag", flag)]
+    libraries = [*suite.ldflags, *(["-lbcrypt"] if WINDOWS else [])]
+    flags += [item for flag in libraries for item in ("--ldflag", flag)]
     suite.command(
         [
             suite.build / "crust-c",

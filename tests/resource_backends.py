@@ -3,17 +3,17 @@
 """Run lowered cleanup with ordinary backends after the frontend stage leaves scope."""
 
 import argparse
-import resource
 import signal
-import subprocess
 from pathlib import Path
 
+from host import disable_core_dumps, exit_status
+from host import run as host_run
 from resources import ROOT, runtime_cases
 
 
 def run(command, expected=0, output=None):
-    result = subprocess.run(list(map(str, command)), cwd=ROOT, capture_output=True, timeout=120)
-    if result.returncode != expected or result.stderr:
+    result = host_run(command, cwd=ROOT, capture_output=True, timeout=120, text_output=True)
+    if result.returncode != exit_status(expected) or result.stderr:
         raise RuntimeError(f"{command}\n{result.returncode}\n{result.stdout!r}\n{result.stderr!r}")
     if output is not None and result.stdout != output:
         raise RuntimeError(f"{command}: expected {output!r}, got {result.stdout!r}")
@@ -27,7 +27,7 @@ def main():
     work = build / "resource-backends-cases"
     work.mkdir(exist_ok=True)
     driver = build / "resource-backends"
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    disable_core_dumps()
     cases = runtime_cases()
     for name, text, expected in cases:
         source, assembly, binary = (work / (name + suffix) for suffix in (".crs", ".s", ".exe"))

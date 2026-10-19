@@ -3,10 +3,13 @@
 """Prepare native test drivers through the source-selected Crust packages."""
 
 import argparse
+import json
 import shlex
 import shutil
 import subprocess
 from pathlib import Path
+
+from host import WINDOWS, run
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGES = {
@@ -34,7 +37,7 @@ TOOLS = {
 
 
 def package_query(build, operation, package):
-    return subprocess.check_output(
+    return run(
         [
             build / "crust",
             ROOT / "stages/build/main.crs",
@@ -44,14 +47,49 @@ def package_query(build, operation, package):
         ],
         cwd=ROOT,
         text=True,
-    ).splitlines()
+        stdout=subprocess.PIPE,
+        check=True,
+    ).stdout.splitlines()
 
 
 def sources(build, package):
     return [Path(path) for path in package_query(build, "sources", package)]
 
 
+def link_library(build, library, package):
+    if not WINDOWS:
+        return library
+    from windows_compile import WindowsCompiler
+
+    compiler = WindowsCompiler(build, ["gcc"])
+    obj = compiler.emit_object(ROOT / "stages" / package, library, ["-O2", "-g1"])
+    output = library.with_suffix(".dll.a")
+    compiler.run(
+        [
+            "gcc",
+            "-shared",
+            "-Wl,--export-all-symbols",
+            obj.name,
+            build / "libcrust0.a",
+            build / "libcrust0_host.a",
+            "-lbcrypt",
+            "-Wl,--out-implib," + output.name,
+            "-o",
+            library.name,
+        ],
+        cwd=library.parent,
+    )
+    return output
+
+
 def compile_tool(build, name, cflags, ldflags, seed=False):
+    if WINDOWS:
+        if seed:
+            raise ValueError(
+                "the interpreted legacy bootstrap requires Linux; use the Windows source bootstrap suite"
+            )
+        compile_windows_tool(build, name, cflags, ldflags)
+        return
     inputs = sources(build, PACKAGES[name]) + [ROOT / TOOLS[name]]
     output = build / (f"crust-{name}-seed" if seed else f"crust-{name}")
     libraries = [build / "libcrust0.a", build / "libcrust0_host.a"]
@@ -74,7 +112,31 @@ def compile_tool(build, name, cflags, ldflags, seed=False):
     subprocess.run(command, cwd=ROOT, check=True)
 
 
-def compile_package(build, manifest, output, cflags, ldflags):
+def compile_windows_tool(build, name, cflags, ldflags):
+    from windows_compile import WindowsCompiler
+
+    output = build / f"crust-{name}"
+    package = build / f"{output.name}-package.crs"
+    package.write_text(
+        "// SPDX-License-Identifier: Apache-2.0\n"
+        + f"stage_include(stage,{json.dumps((ROOT / 'stages' / PACKAGES[name]).as_posix())});\n"
+        + f"stage_source(stage,{json.dumps((ROOT / TOOLS[name]).as_posix())});\n"
+        + 'stage_export(stage,"main");\n',
+        encoding="utf-8",
+    )
+    libraries = [build / "libcrust0.a", build / "libcrust0_host.a"]
+    if name == "ccn":
+        libraries.insert(0, build / "libcrust0_run.a")
+        libraries.append("-lffi")
+    WindowsCompiler(build, ["gcc"]).compile(build, package, output, cflags, [*libraries, *ldflags])
+
+
+def compile_package(build, manifest, output, cflags, ldflags, cc="gcc"):
+    if WINDOWS:
+        from windows_compile import WindowsCompiler
+
+        WindowsCompiler(build, [cc]).compile(build, manifest, output, cflags, ldflags)
+        return
     output = Path(output).resolve()
     source, symbols = output.with_suffix(".c"), output.with_suffix(".symbols")
     obj, renamed = output.with_suffix(".input.o"), output.with_suffix(".o")
@@ -86,9 +148,9 @@ def compile_package(build, manifest, output, cflags, ldflags):
             source,
             symbols,
         ],
-        ["gcc", "-std=c99", "-pedantic-errors", *cflags, "-c", source, "-o", obj],
+        [cc, "-std=c99", "-pedantic-errors", *cflags, "-c", source, "-o", obj],
         ["objcopy", f"@{symbols}", obj, renamed],
-        ["gcc", renamed, *ldflags, "-o", output],
+        [cc, renamed, *ldflags, "-o", output],
     ]
     for command in commands:
         subprocess.run(list(map(str, command)), cwd=ROOT, check=True)

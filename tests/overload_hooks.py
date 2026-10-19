@@ -5,9 +5,11 @@
 import argparse
 import shlex
 import shutil
-import subprocess
 import tempfile
 from pathlib import Path
+
+from host import run as host_run
+from prepare import link_library
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -19,13 +21,15 @@ def main():
     parser.add_argument("--ldflags", default="")
     args = parser.parse_args()
     build = args.build.resolve()
-    with tempfile.TemporaryDirectory(prefix="crust-overload-hooks-") as directory:
+    with tempfile.TemporaryDirectory(prefix="crust-overload-hooks-", dir=build) as directory:
         work = Path(directory)
         harness = work / "harness"
         library = work / "ordinary-overload.so"
         shutil.copyfile(build / "crust-overload-library.so", library)
+        library = link_library(build, library, "overload/package.crs")
         backend = work / "ordinary-backend.so"
         shutil.copyfile(build / "crust-c-library.so", backend)
+        backend = link_library(build, backend, "c/package.crs")
         sources = [
             "api/crust0.crs",
             "api/crust0_host.crs",
@@ -40,7 +44,7 @@ def main():
             "stages/reader/parse.crs",
             "tests/overload_hooks.crs",
         ]
-        subprocess.run(
+        host_run(
             [
                 str(build / "crust-c"),
                 "-o",
@@ -60,9 +64,9 @@ def main():
         names = []
         for order in ("first", "shifted"):
             target = work / order
-            subprocess.run([str(harness), str(target), order], cwd=ROOT, check=True, timeout=30)
-            subprocess.run([str(target)], cwd=ROOT, check=True, timeout=30)
-            symbols = subprocess.run(
+            host_run([str(harness), str(target), order], cwd=ROOT, check=True, timeout=30)
+            host_run([str(target)], cwd=ROOT, check=True, timeout=30)
+            symbols = host_run(
                 ["nm", "--defined-only", str(target)],
                 capture_output=True,
                 text=True,

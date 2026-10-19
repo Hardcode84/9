@@ -4,12 +4,12 @@
 
 import argparse
 import fnmatch
-import resource
 import shutil
 import sys
 import tempfile
 from pathlib import Path
 
+from host import disable_core_dumps, executable
 from resources import ROOT, Failure, program, source_report
 from resources import Suite as ResourceSuite
 
@@ -421,10 +421,10 @@ def main():
         for group, name, _, _ in cases:
             print(f"{group}: {name}")
         return 0
-    if not (args.build / "crust-overload-resource").is_file():
+    if not Path(executable(args.build / "crust-overload-resource")).is_file():
         parser.error("build crust-overload-resource before this test")
-    work = Path(tempfile.mkdtemp(prefix="crust-overload-resources-"))
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    work = Path(tempfile.mkdtemp(prefix="crust-overload-resources-", dir=args.build.resolve()))
+    disable_core_dumps()
     suite = Suite(args, work)
     passed = 0
     failures = 0

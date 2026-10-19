@@ -10,6 +10,7 @@ from importlib.metadata import version
 from pathlib import Path
 
 import lizard
+from host import WINDOWS, failed_output
 from source_order import ROOT, Suite
 
 CASES = [
@@ -165,7 +166,7 @@ def check_inputs(suite, commands):
             assert not result.stdout and b": error:" in result.stderr, result
         result = suite.command([*command, "--CCN", 1, root, valid], expected=1)
         assert counts(result.stdout) == {"later": 2, "good": 1}, result
-        with open("/dev/full", "wb") as stream:
+        with failed_output() as stream:
             result = suite.command([*command, valid], expected=2, stdout=stream)
         assert b"cannot write CCN report" in result.stderr, result
 
@@ -216,7 +217,11 @@ def check_tutorial(suite):
 def check_allocations(suite, source):
     fixture = suite.work / "allocation-sweep"
     flags = [item for flag in suite.cflags for item in ("--cflag", flag)]
-    flags += [item for flag in suite.ldflags for item in ("--ldflag", flag)]
+    flags += [
+        item
+        for flag in [*suite.ldflags, *(["-lbcrypt"] if WINDOWS else [])]
+        for item in ("--ldflag", flag)
+    ]
     suite.command(
         [
             suite.build / "crust-c",

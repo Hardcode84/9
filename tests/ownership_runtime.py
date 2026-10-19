@@ -3,8 +3,8 @@
 """Run the intrusive program with exact-address reuse and allocation failures."""
 
 import os
-import subprocess
 
+from host import run
 from ownership_support import command
 
 
@@ -57,8 +57,12 @@ def check_runtime(
         command(["gcc", *flags, renamed, root / "tests/ownership_runtime.c", "-o", executable])
         for failure, output in enumerate(outputs):
             environment = dict(os.environ, CRUST_TEST_ALLOCATION_FAILURE=str(failure))
-            result = subprocess.run(
-                [executable, *arguments], env=environment, capture_output=True, timeout=15
+            result = run(
+                [executable, *arguments],
+                env=environment,
+                capture_output=True,
+                timeout=15,
+                text_output=True,
             )
             expected = 1 if failure else 0
             if result.returncode != expected or result.stdout != output or result.stderr:

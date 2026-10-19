@@ -47,7 +47,6 @@ fn c_driver_compile(driver: *CDriver, compile: fn(*CDriver, *u8, *u8, u32) -> bo
     var original: *u8 = c_driver_temporary(driver, destination, mode);
     var object: *u8 = c_driver_temporary(driver, destination, mode);
     var binary: *u8 = c_driver_temporary(driver, destination, mode);
-    var response_argument: *u8 = c_driver_join(&(*stage).status, "@", response);
     if (*stage).status.failed {
         return false;
     }
@@ -64,11 +63,7 @@ fn c_driver_compile(driver: *CDriver, compile: fn(*CDriver, *u8, *u8, u32) -> bo
     var arguments: **u8 = driver -> command;
     var count: usize = 0usize;
     var index: usize = 0usize;
-    arguments[0usize] = "objcopy";
-    arguments[1usize] = response_argument;
-    arguments[2usize] = original;
-    arguments[3usize] = object;
-    if !c_driver_run(driver, 4usize, mode) {
+    if !c_driver_symbols(driver, response, original, object, mode) {
         return false;
     }
     var result: *u8 = object;

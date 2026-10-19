@@ -1117,3 +1117,139 @@ fn win_gcc_tool_in(
     }
     return success;
 }
+
+record WinSymbolReader {
+    bytes: *u8;
+    size: usize;
+    offset: usize;
+}
+extern fn win_symbol_compare(left: *u8, right: *u8) -> i32 = "strcmp";
+
+fn win_symbol_token(reader: *WinSymbolReader) -> *u8 {
+    while reader -> offset < reader -> size && reader -> bytes[reader -> offset] <= 32u8 {
+        reader -> offset = reader -> offset + 1usize;
+    }
+    if reader -> offset == reader -> size || reader -> bytes[reader -> offset] != 34u8 {
+        return null(*u8);
+    }
+    reader -> offset = reader -> offset + 1usize;
+    var token: *u8 = reader -> bytes + reader -> offset as isize;
+    var count: usize = 0usize;
+    while reader -> offset < reader -> size {
+        var byte: u8 = reader -> bytes[reader -> offset];
+        reader -> offset = reader -> offset + 1usize;
+        if byte == 34u8 {
+            token[count] = 0u8;
+            return token;
+        }
+        if byte == 92u8 {
+            if reader -> offset == reader -> size {
+                return null(*u8);
+            }
+            byte = reader -> bytes[reader -> offset];
+            reader -> offset = reader -> offset + 1usize;
+        }
+        token[count] = byte;
+        count = count + 1usize;
+    }
+    return null(*u8);
+}
+
+fn win_symbol_command(context: *CrustContext, arguments: **u8, directory: *u8) -> bool {
+    var status: u32 = 1u32;
+    return win_tool_in(context, arguments, null(*u8), &status, directory) && win_status(
+        context,
+        status
+    );
+}
+
+// GNU response files use text mode on Windows. SUB must travel in argv instead.
+// Apply one mapping at a time only on this compatibility path to bound argv size.
+fn win_symbol_inline(
+    context: *CrustContext,
+    reader: *WinSymbolReader,
+    source: *u8,
+    output: *u8,
+    directory: *u8
+) -> bool {
+    var copy: [*u8; 4] = make [*u8; 4] {
+        "objcopy",
+        source,
+        output,
+        null(*u8)
+    };
+    if !win_symbol_command(context, &copy[0usize], directory) {
+        return false;
+    }
+    while reader -> offset < reader -> size {
+        var option: *u8 = win_symbol_token(reader);
+        if option == null(*u8) {
+            return native_error(context, "invalid symbol response option");
+        }
+        var mapping: *u8 = win_symbol_token(reader);
+        if mapping == null(*u8) || win_symbol_compare(option, "--redefine-sym") != 0i32 {
+            return native_error(context, "invalid symbol response mapping");
+        }
+        var arguments: [*u8; 5] = make [*u8; 5] {
+            "objcopy",
+            option,
+            mapping,
+            output,
+            null(*u8)
+        };
+        if !win_symbol_command(context, &arguments[0usize], directory) {
+            return false;
+        }
+        while reader -> offset < reader -> size && reader -> bytes[reader -> offset] <= 32u8 {
+            reader -> offset = reader -> offset + 1usize;
+        }
+    }
+    return true;
+}
+
+fn win_symbols(
+    context: *CrustContext,
+    response: *u8,
+    source: *u8,
+    output: *u8,
+    directory: *u8
+) -> bool {
+    var reader: WinSymbolReader = make WinSymbolReader {
+        bytes: null(*u8),
+        size: 0usize,
+        offset: 0usize
+    };
+    if crust0_host_read_file(response, &reader.bytes, &reader.size) != 0i32 {
+        return native_error(context, "cannot read symbol response");
+    }
+    var index: usize = 0usize;
+    while index < reader.size && reader.bytes[index] != 26u8 {
+        index = index + 1usize;
+    }
+    var success: bool = false;
+    if index < reader.size {
+        success = win_symbol_inline(
+            context,
+            &reader,
+            win_basename(source),
+            win_basename(output),
+            directory
+        );
+    } else {
+        var option: *u8 = native_join(context, "@", win_basename(response));
+        var arguments: [*u8; 5] = make [*u8; 5] {
+            "objcopy",
+            option,
+            win_basename(source),
+            win_basename(output),
+            null(*u8)
+        };
+        success = option != null(*u8) && win_symbol_command(
+            context,
+            &arguments[0usize],
+            directory
+        );
+    }
+    crust0_host_free(reader.bytes);
+    return success;
+}

@@ -20,18 +20,14 @@ fn x64_emit_aliases(emitter: *CrustX64Emitter) -> unit {
     while alias != null(*CrustX64Alias) && !emitter -> failed {
         var name: *u8 = alias -> declaration -> link_name;
         if name[0usize] != 0u8 {
-            x64_output_text(emitter, "\t.set ");
+            x64_output_text(emitter, "\t.globl ");
+            x64_symbol_name(emitter, name);
+            x64_output_text(emitter, "\n\t.weakref ");
             x64_local_name(emitter, "alias_", alias -> identity);
             x64_output_text(emitter, ", ");
             x64_symbol_name(emitter, name);
             x64_output_text(emitter, "\n");
         }
-        x64_output_text(emitter, X64_RODATA);
-        x64_output_text(emitter, "\t.balign 8\n");
-        x64_local_name(emitter, "pointer_", alias -> identity);
-        x64_output_text(emitter, ":\n\t.quad ");
-        x64_local_name(emitter, "alias_", alias -> identity);
-        x64_output_text(emitter, "\n");
         alias = alias -> next;
     }
 }
@@ -40,6 +36,15 @@ fn x64_symbol_address(emitter: *CrustX64Emitter, declaration: *CrustDecl) -> uni
         &emitter -> program -> alias_map,
         declaration as usize
     ) as *CrustX64Alias;
+    // Emit one address cell per referenced symbol. Unused declarations must not
+    // introduce relocations or require their native providers at link time.
+    x64_output_text(emitter, "\t.ifndef ");
+    x64_local_name(emitter, "pointer_", alias -> identity);
+    x64_output_text(emitter, "\n\t.section .rdata,\"dr\"\n\t.balign 8\n");
+    x64_local_name(emitter, "pointer_", alias -> identity);
+    x64_output_text(emitter, ":\n\t.quad ");
+    x64_local_name(emitter, "alias_", alias -> identity);
+    x64_output_text(emitter, "\n\t.text\n\t.endif\n");
     x64_output_text(emitter, "\tmovq ");
     x64_local_name(emitter, "pointer_", alias -> identity);
     x64_output_text(emitter, "(%rip), %rax\n");

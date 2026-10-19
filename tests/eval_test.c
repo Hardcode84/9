@@ -1,17 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
-#define _GNU_SOURCE
 #include "crust0_eval.h"
+#include "eval_lookup.h"
 
-#include <dlfcn.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/resource.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 int32_t eval_native_reenter(int32_t (*callback)(int32_t), int32_t value);
 void eval_native_save(int8_t (*callback)(int8_t));
@@ -84,18 +78,16 @@ static void *poison_allocate(void *user, size_t size)
 static bool resolve_native(void *user, CrustDecl *declaration, void **address)
 {
     Resolver *resolver = user;
-    const char *error;
     ++resolver->lookups;
     if (!resolver->enabled) {
         crust_set_error(resolver->context, declaration->loc.source, declaration->loc.offset,
                         "native lookup disabled by test");
         return false;
     }
-    (void)dlerror();
-    *address = dlsym(RTLD_DEFAULT, declaration->link_name);
-    error = dlerror();
-    if (error != NULL) {
-        crust_set_error(resolver->context, declaration->loc.source, declaration->loc.offset, error);
+    *address = eval_test_lookup(declaration->link_name);
+    if (*address == NULL) {
+        crust_set_error(resolver->context, declaration->loc.source, declaration->loc.offset,
+                        "native symbol not found");
         return false;
     }
     return true;
@@ -375,8 +367,8 @@ static void test_explicit_imports(void)
     CrustEval *eval;
     Resolver resolver;
     CrustDecl copy;
-    void *a = dlsym(RTLD_DEFAULT, "native_i32");
-    void *b = dlsym(RTLD_DEFAULT, "native_u64");
+    void *a = eval_test_lookup("native_i32");
+    void *b = eval_test_lookup("native_u64");
     int32_t (*first)(int32_t) = NULL;
     uint64_t (*second)(uint64_t) = NULL;
     crust_context_init(&context, NULL);
@@ -936,52 +928,24 @@ static void test_registration_failures(void)
     }
 }
 
-static void expect_trap(const char *expression)
+static void run_trap(const char *expression)
 {
     char text[256];
     CrustSource source;
     CrustContext context;
     CrustUnit *unit;
     CrustEval *eval;
-    pid_t child;
-    int status = 0;
-    int errors[2];
-    char diagnostic[640];
-    ssize_t length;
     (void)snprintf(text, sizeof(text), "fn f()->unit{\n%s;\n}", expression);
     source = source_text(text);
     crust_context_init(&context, NULL);
     if (!parse(&context, &source, &unit))
-        abort();
+        exit(98);
     eval = crust_eval_create(&context, NULL);
-    if (pipe(errors) != 0)
-        abort();
-    child = fork();
-    if (child == 0) {
-        struct rlimit limit = {0, 0};
-        if (close(errors[0]) != 0 || dup2(errors[1], STDERR_FILENO) < 0 || close(errors[1]) != 0 ||
-            setrlimit(RLIMIT_CORE, &limit) != 0)
-            _exit(98);
-        (void)crust_eval_call(eval, unit->declarations, NULL, 0, NULL);
-        _exit(99);
-    }
-    if (close(errors[1]) != 0)
-        abort();
-    length = read(errors[0], diagnostic, sizeof(diagnostic) - 1);
-    if (length < 0 || close(errors[0]) != 0)
-        abort();
-    diagnostic[length] = 0;
-    if (child < 0 || waitpid(child, &status, 0) != child)
-        abort();
-    check(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT, "required trap ends the process");
-    check(strstr(diagnostic, "eval-test:2:") != NULL &&
-              strstr(diagnostic, "required execution trap") != NULL,
-          "trap reports the original source line and column");
-    crust_eval_destroy(eval);
-    crust_context_destroy(&context);
+    (void)crust_eval_call(eval, unit->declarations, NULL, 0, NULL);
+    exit(99);
 }
 
-static void test_failures(void)
+static void test_failures(bool fatal_callback)
 {
     const char *text =
         "fn huge()->i32{var a:[u8;1000000]=uninit;a[0usize]=42u8;return a[0usize] as i32;}";
@@ -993,8 +957,6 @@ static void test_failures(void)
     CrustEval *eval;
     int32_t value = 0;
     int32_t (*callback)(void) = NULL;
-    pid_t child;
-    int status = 0;
     crust_context_init(&context, &allocator);
     if (!parse(&context, &source, &unit))
         abort();
@@ -1005,18 +967,10 @@ static void test_failures(void)
     check(!crust_eval_call(eval, unit->declarations, NULL, 0, &value) &&
               strstr(context.error, "allocation") != NULL && context.failure == NULL,
           "ordinary evaluator allocation failure returns a diagnostic");
-    child = fork();
-    if (child == 0) {
-        struct rlimit limit = {0, 0};
-        if (setrlimit(RLIMIT_CORE, &limit) != 0 || freopen("/dev/null", "w", stderr) == NULL)
-            _exit(98);
+    if (fatal_callback) {
         (void)callback();
-        _exit(99);
+        exit(99);
     }
-    if (child < 0 || waitpid(child, &status, 0) != child)
-        abort();
-    check(WIFSIGNALED(status) && WTERMSIG(status) == SIGABRT,
-          "callback resource failure aborts instead of returning a fabricated value");
     state.fail = false;
     check(crust_eval_call(eval, unit->declarations, NULL, 0, &value) && value == 42,
           "ordinary evaluation retries after resource recovery");
@@ -1028,21 +982,19 @@ static void test_failures(void)
     crust_eval_destroy(eval);
     crust_context_destroy(&context);
     check(state.live == 0, "context releases all evaluator arena allocations");
-    expect_trap("trap");
-    expect_trap("1u8/0u8");
-    expect_trap("1i64%0i64");
-    expect_trap("-128i8/-1i8");
-    expect_trap("-128i8%-1i8");
-    expect_trap("-9223372036854775808i64/-1i64");
-    expect_trap("-9223372036854775808i64%-1i64");
-    expect_trap("1u8<<8u8");
-    expect_trap("1u64>>64u64");
-    expect_trap("1i16<<-1i16");
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     CrustContext target;
+    if (argc == 3 && strcmp(argv[1], "--trap") == 0)
+        run_trap(argv[2]);
+    if (argc == 2 && strcmp(argv[1], "--callback-failure") == 0) {
+        test_failures(true);
+        return 99;
+    }
+    if (argc != 1)
+        return 98;
     crust_context_init(&target, NULL);
     target.builtins[CRUST_T_ISIZE].size = 4;
     target.builtins[CRUST_T_ISIZE].align = 4;
@@ -1066,7 +1018,7 @@ int main(void)
     test_arithmetic();
     test_conversions_and_comparisons();
     test_registration_failures();
-    test_failures();
+    test_failures(false);
     printf("evaluator: %u/%u checks passed\n", checks - failures, checks);
     return failures == 0 ? 0 : 1;
 }

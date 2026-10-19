@@ -6,6 +6,7 @@ import argparse
 import tempfile
 from pathlib import Path
 
+from host import WINDOWS, executable
 from ownership_boundaries import check_boundaries
 from ownership_ending import check_ending
 from ownership_expressions import check_expressions
@@ -334,7 +335,9 @@ def run(build, directory, sanitize):
     check_handles(build, directory, sanitize)
     check_runtime(build, directory, ROOT, sanitize)
     for artifact in [compiler, build / "crust-ownership-library.so"]:
-        assert b"z3" not in command(["ldd", artifact]).stdout.lower()
+        artifact = executable(artifact)
+        inspector = ["objdump", "-p"] if WINDOWS else ["ldd"]
+        assert b"z3" not in command([*inspector, artifact]).stdout.lower()
         assert b"Z3_" not in command(["nm", "-u", artifact]).stdout
     print(
         f"ownership: two containers, address reuse, O0/O2, erasure, {len(cases)+len(local_rejects())+2} rejections"

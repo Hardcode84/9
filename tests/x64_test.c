@@ -441,9 +441,9 @@ static void test_failure_boundaries(void)
     function.frame_size = INT64_MAX;
     check(!crust_x64_try_prepare_function(program, &function) && fixture.context.failure == NULL,
           "function preparation contains frame-allocation failure");
-    output = fopen("/dev/full", "w");
+    output = fopen(__FILE__, "r");
     if (!output || setvbuf(output, NULL, _IONBF, 0) != 0) {
-        perror("/dev/full");
+        perror("read-only output fixture");
         exit(1);
     }
     memset(&emitter, 0, sizeof(emitter));
@@ -474,7 +474,7 @@ static void test_failure_boundaries(void)
     crust_context_destroy(&fixture.context);
 }
 
-static void test_constant_sections(void)
+static void test_constant_sections(bool coff)
 {
     static const bool relocations[] = {false, false, false, false, true, true, true, true, false};
     Fixture fixture;
@@ -514,6 +514,8 @@ static void test_constant_sections(void)
         }
         expected = relocations[index++] ? "\t.section .data.rel.ro,\"aw\",@progbits\n"
                                         : "\t.section .rodata\n";
+        if (coff)
+            expected = "\t.section .rdata,\"dr\"\n";
         emitter.output = output_file();
         check(crust_x64_try_emit_constant(&emitter, declaration),
               "emit a checked constant independently");
@@ -528,8 +530,11 @@ static void test_constant_sections(void)
     crust_context_destroy(&fixture.context);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    bool coff = argc == 2 && strcmp(argv[1], "coff") == 0;
+    if (argc != 1 && !coff)
+        return 1;
     test_native_contract();
     test_imported_definitions();
     test_private_definitions();
@@ -537,7 +542,7 @@ int main(void)
     test_callback_failure();
     test_place_and_group_operations();
     test_failure_boundaries();
-    test_constant_sections();
+    test_constant_sections(coff);
     printf("x64: %u/%u checks passed\n", checks - failures, checks);
     return failures != 0;
 }

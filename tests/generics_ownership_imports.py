@@ -7,10 +7,16 @@ import hashlib
 import shutil
 from pathlib import Path
 
+from host import WINDOWS
 from ownership_support import execute
+from prepare import sources as package_sources
 from source_order import ROOT, Suite
 
-TAG = b"crust-generic-ownership-v2-signature-contracts-linux-x64\n"
+TAG = (
+    b"crust-generic-ownership-v2-signature-contracts-"
+    + (b"windows" if WINDOWS else b"linux")
+    + b"-x64\n"
+)
 
 HELPERS = """
 fn transfer!(Payload)(value:Payload)->Payload {return move value;}
@@ -40,18 +46,19 @@ fn main(argc:i32,argv:**u8)->i32 {
 
 
 def build_driver(suite):
-    rule = "generic-import-sources: ; @echo $(GENERIC_OWNERSHIP)"
-    result = suite.command(
-        ["make", "--no-print-directory", "-s", "--eval", rule, "generic-import-sources"],
-        cwd=ROOT,
-    )
-    sources = [ROOT / path for path in result.stdout.decode().split()]
+    sources = package_sources(suite.build, "generics/ownership/package.crs")
     sources.append(ROOT / "tests/generics_ownership_import_driver.crs")
     libraries = [suite.build / "libcrust0.a", suite.build / "libcrust0_host.a", *suite.ldflags]
+    if WINDOWS:
+        libraries.append("-lbcrypt")
     flags = [item for flag in suite.cflags for item in ("--cflag", flag)]
     flags += [item for flag in libraries for item in ("--ldflag", flag)]
     driver = suite.work / "generics-ownership-imports"
     suite.command([suite.build / "crust-c", "-o", driver, *sources, *flags])
+    if WINDOWS:
+        # Windows can attach compatibility images on the first launch. Receipts
+        # below require the same loaded-image set in both independent processes.
+        suite.command([driver], expected=2)
     return driver
 
 

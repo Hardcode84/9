@@ -10,6 +10,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+WINDOWS = os.name == "nt"
 EXPECTED_SQLITE = {
     "sqlite3.c": "e3f5d6901e7492af4a1fc8c4d745cae84c264942524c3fbfc02b82a5ca8818c8",
     "sqlite3.h": "abd1514e0351f79393d1be882830afdb40a8099e8257f311f0bfdf8486f11bea",
@@ -29,6 +30,10 @@ STRICT = [
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def executable(path):
+    return Path(str(path) + ".exe") if WINDOWS else path
 
 
 def main():
@@ -60,6 +65,10 @@ def main():
     def command(argv, expected=0, stdout=subprocess.PIPE):
         argv = list(map(str, argv))
         result = subprocess.run(argv, stdout=stdout, stderr=subprocess.PIPE, timeout=120)
+        if WINDOWS:
+            if result.stdout is not None:
+                result.stdout = result.stdout.replace(b"\r\n", b"\n")
+            result.stderr = result.stderr.replace(b"\r\n", b"\n")
         record = {
             "command": argv,
             "status": result.returncode,
@@ -72,7 +81,19 @@ def main():
         return result
 
     obj = args.work / "sqlite3.o"
-    command(["gcc", "-O2", "-g0", "-c", args.sqlite / "sqlite3.c", "-o", obj])
+    command(
+        [
+            "gcc",
+            "-O2",
+            "-g0",
+            "--param=ggc-min-expand=10",
+            "--param=ggc-min-heapsize=32768",
+            "-c",
+            args.sqlite / "sqlite3.c",
+            "-o",
+            obj,
+        ]
+    )
     for name in ("direct", "callbacks", "contracts"):
         command(
             [
@@ -83,11 +104,11 @@ def main():
                 "-I" + str(args.sqlite),
                 Path("benchmarks/resources") / (name + ".c"),
                 obj,
-                "-ldl",
+                *([] if WINDOWS else ["-ldl"]),
                 "-lm",
                 "-pthread",
                 "-o",
-                args.work / name,
+                executable(args.work / name),
             ]
         )
 
@@ -130,7 +151,7 @@ def main():
     ]
     for name, arguments, status, output, error in cases:
         for implementation in ("direct", "callbacks"):
-            result = command([args.work / implementation, *arguments], expected=status)
+            result = command([executable(args.work / implementation), *arguments], expected=status)
             assert result.stdout == output and result.stderr == error, (
                 name,
                 implementation,
@@ -146,19 +167,21 @@ def main():
             }
         )
     for implementation in ("direct", "callbacks"):
-        with open("/dev/full", "wb") as full:
-            result = command([args.work / implementation, normal], expected=1, stdout=full)
+        with open(__file__ if WINDOWS else "/dev/full", "rb" if WINDOWS else "wb") as full:
+            result = command(
+                [executable(args.work / implementation), normal], expected=1, stdout=full
+            )
         assert result.stderr == b"error 10 0 0\n", result
     report["cases"].append(
         {
             "name": "output-failure",
             "status": 1,
-            "stdout_device": "/dev/full",
+            "stdout_device": "read-only handle" if WINDOWS else "/dev/full",
             "stderr": "error 10 0 0\n",
             "implementations": ["direct", "callbacks"],
         }
     )
-    contracts = command([args.work / "contracts", missing_path])
+    contracts = command([executable(args.work / "contracts"), missing_path])
     assert contracts.stderr == b"", contracts.stderr
     report["contract_result"] = contracts.stdout.decode().strip()
     report["application_process_checks"] = 2 * (len(cases) + 1)
@@ -170,8 +193,11 @@ def main():
         )
     }
     report["binary_sha256"] = {
-        str(args.work / name): sha(args.work / name)
-        for name in ("direct", "callbacks", "contracts", "sqlite3.o")
+        str(path): sha(path)
+        for path in [
+            *(executable(args.work / name) for name in ("direct", "callbacks", "contracts")),
+            obj,
+        ]
     }
     report["complete"] = True
     text = json.dumps(report, indent=2) + "\n"

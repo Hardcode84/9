@@ -175,8 +175,7 @@ fn stage_link_inputs(context: *CrustContext, inputs: *CacheInputs, directory: *u
 }
 
 fn stage_api(stage: *StagePackage, name: *u8) -> bool {
-    var path: *u8 = native_join(stage -> root -> context, "../../api/", name);
-    return path != null(*u8) && stage_source(stage, path);
+    return stage_api_from(stage, "../..", name);
 }
 
 fn stage_platform_sources(stage: *StagePackage) -> bool {

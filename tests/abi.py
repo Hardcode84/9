@@ -6,8 +6,10 @@ import argparse
 import json
 import shlex
 import shutil
-import subprocess
+import sys
 from pathlib import Path
+
+from host import WINDOWS, api_path, run
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -25,7 +27,7 @@ class Suite:
         self.count = 0
 
     def run(self, command, expected=0):
-        result = subprocess.run(list(map(str, command)), capture_output=True, timeout=120)
+        result = run(command, capture_output=True, text_output=True, timeout=120)
         assert result.returncode == expected, (command, result)
         self.count += 1
         return result
@@ -42,7 +44,7 @@ class Suite:
         result = self.run([runner, root], expected)
         assert diagnostic in result.stderr, result
         if expected:
-            assert str(library).encode() in result.stderr, result
+            assert library.as_posix().encode() in result.stderr, result
         return result
 
     def library(self, name, api, backend="c", extra=()):
@@ -61,7 +63,17 @@ class Suite:
         if backend != "c":
             self.run(["as", "--64", source.with_suffix(".s"), "-o", obj])
         library = source.with_suffix(".so")
-        self.run([*self.cc, "-shared", obj, *self.ldflags, "-o", library])
+        self.run(
+            [
+                *self.cc,
+                "-shared",
+                obj,
+                *(["-Wl,--out-implib," + str(library.with_suffix(".a"))] if WINDOWS else []),
+                *self.ldflags,
+                "-o",
+                library,
+            ]
+        )
         return library
 
     def changed_seed(self):
@@ -73,23 +85,34 @@ class Suite:
             shutil.copytree(ROOT / directory, checkout / directory)
         (checkout / "stages/asm").mkdir(parents=True)
         shutil.copyfile(ROOT / "stages/host.crs", checkout / "stages/host.crs")
-        shutil.copyfile(ROOT / "stages/host_posix.crs", checkout / "stages/host_posix.crs")
+        platform = "windows" if WINDOWS else "posix"
+        shutil.copyfile(
+            ROOT / f"stages/host_{platform}.crs", checkout / f"stages/host_{platform}.crs"
+        )
         for name in ("Makefile", "crust0_amalg.c"):
             shutil.copyfile(ROOT / name, checkout / name)
+        if WINDOWS:
+            shutil.copytree(self.build / "profile", checkout / "build/profile")
+        api_options = (
+            ["--profile", "windows_x64", "--output-root", checkout / "build/profile"]
+            if WINDOWS
+            else []
+        )
         header = checkout / "include/crust0.h"
         original = header.read_text()
         needle = "struct CrustExpr {\n    CrustLoc loc;"
         assert original.count(needle) == 1
         header.write_text(original.replace(needle, needle + "\n    uint64_t abi_test_padding;"))
-        self.run(["python3", checkout / "tools/api.py", "--check"], expected=1)
+        self.run([sys.executable, checkout / "tools/api.py", "--check", *api_options], expected=1)
         self.run(
             [
                 "make",
                 "--no-print-directory",
                 "-C",
                 checkout,
-                "-j2",
-                "build/crust",
+                "-j1",
+                "all",
+                "PROFILE=" + ("windows_x64" if WINDOWS else "linux_x64"),
                 "BUILD=build",
                 f"CC={self.args.cc}",
                 f"CFLAGS={self.args.cflags}",
@@ -97,14 +120,17 @@ class Suite:
                 f"AMALGAMATION={self.args.amalgamation}",
             ]
         )
-        self.run(["python3", checkout / "tools/api.py", "--check"])
+        self.run([sys.executable, checkout / "tools/api.py", "--check", *api_options])
         return checkout
 
 
 def check_missing(suite, dependency):
     source = suite.work / "unmarked.c"
     source.write_text("int unmarked(void);\nint unmarked(void){return 0;}\n")
-    for name, libraries in (("missing", []), ("dependency-marker", [dependency])):
+    for name, libraries in (
+        ("missing", []),
+        ("dependency-marker", [dependency.with_suffix(".a") if WINDOWS else dependency]),
+    ):
         library = suite.work / f"{name}.so"
         suite.run(
             [
@@ -134,7 +160,7 @@ def main():
     parser.add_argument("--amalgamation", default="1", choices=("0", "1"))
     suite = Suite(parser.parse_args())
     old = [
-        suite.library("old-" + backend, ROOT / "api/crust0.crs", backend)
+        suite.library("old-" + backend, api_path(suite.build, "crust0.crs"), backend)
         for backend in ("c", "asm")
     ]
     for library in old:
@@ -145,15 +171,20 @@ def main():
     for library in old:
         suite.load(runner, library, 1, b"native API digest mismatch")
     suite.load(runner, suite.build / "crust-c-library.so", 1, b"native API digest mismatch")
-    new = suite.library("new", changed / "api/crust0.crs")
+    changed_api = changed / ("build/profile/api" if WINDOWS else "api") / "crust0.crs"
+    new = suite.library("new", changed_api)
     suite.load(runner, new)
     suite.load(suite.runner, new, 1, b"native API digest mismatch")
     mixed = suite.library(
-        "mixed", changed / "api/crust0.crs", extra=[ROOT / "api/crust0_stage.crs"]
+        "mixed",
+        changed_api,
+        extra=[api_path(suite.build, "crust0_stage.crs")],
     )
     suite.load(runner, mixed, 1, b"native API digest mismatch")
     root = suite.work / "stale-source.crs"
-    root.write_text(f'host_source(run, {json.dumps(str(ROOT / "api/crust0_stage.crs"))});\n')
+    root.write_text(
+        f'host_source(run, {json.dumps(str(api_path(suite.build, "crust0_stage.crs")))});\n'
+    )
     result = suite.run([runner, root], 1)
     assert b"native API digest mismatch in host source" in result.stderr, result
     assert b"crust0_stage.crs:5:" in result.stderr, result

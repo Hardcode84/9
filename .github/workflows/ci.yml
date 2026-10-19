@@ -20,11 +20,30 @@ concurrency:
 
 jobs:
   windows:
+    name: windows-${{ matrix.suite }}
     runs-on: windows-2022
-    timeout-minutes: 60
+    timeout-minutes: 90
+    env:
+      LP_NUM_THREADS: '1'
     strategy:
+      fail-fast: false
       matrix:
-        amalgamation: ['1', '0']
+        include:
+          - suite: core
+            amalgamation: '1'
+            targets: check-windows check-windows-bootstrap check-windows-cache check-windows-asm check-windows-shared-core
+          - suite: split-core
+            amalgamation: '0'
+            targets: check-windows check-windows-shared-split-core
+          - suite: ownership
+            amalgamation: '1'
+            targets: check-windows-ownership check-windows-shared-ownership
+          - suite: tooling
+            amalgamation: '1'
+            targets: check-windows-tools check-windows-shared-tooling
+          - suite: llvm
+            amalgamation: '1'
+            targets: check-windows-llvm check-llvm-fetch check-windows-shared-llvm check-windows-shader
     defaults:
       run:
         shell: msys2 {0}
@@ -35,21 +54,53 @@ jobs:
       - uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2
         with:
           msystem: UCRT64
+          path-type: inherit
           update: true
           install: >-
             make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libffi
-            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-clang-x86_64-clang mingw-w64-clang-x86_64-compiler-rt
+            mingw-w64-ucrt-x86_64-rust mingw-w64-ucrt-x86_64-sqlite3 curl unzip
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: '1.3.11'
       - name: Fetch LLVM for Windows
+        if: matrix.suite == 'llvm'
         run: |
           llvm_directory=$(python3 tools/fetch_llvm.py release --profile windows_x64)
           echo "CRUST_LLVM_DIRECTORY=$llvm_directory" >> "$GITHUB_ENV"
-      - name: Build and test Windows backends and tools
+      - name: Install shared validation dependencies
         run: |
+          python3 -m pip install --target build/ci-python lizard==1.21.6
+          echo "PYTHONPATH=$(cygpath -m build/ci-python)" >> "$GITHUB_ENV"
+      - name: Install Windows shader tools
+        if: matrix.suite == 'llvm'
+        run: |
+          pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-llvm mingw-w64-ucrt-x86_64-spirv-tools mingw-w64-ucrt-x86_64-vulkan-headers mingw-w64-ucrt-x86_64-vulkan-loader mingw-w64-ucrt-x86_64-mesa
+          cargo install naga-cli --version 27.0.0 --locked --jobs 1 --root "$(cygpath -m "$RUNNER_TEMP/naga")"
+          echo "WGSL_VALIDATOR=$(cygpath -m "$RUNNER_TEMP/naga/bin/naga.exe")" >> "$GITHUB_ENV"
+          echo "LLVM_DIRECTORY=$(cygpath -m /ucrt64)" >> "$GITHUB_ENV"
+          echo "SPIRV_TOOLS=$(cygpath -m /ucrt64/bin)" >> "$GITHUB_ENV"
+          echo "VULKAN_INCLUDE=$(cygpath -m /ucrt64/include)" >> "$GITHUB_ENV"
+          echo "VULKAN_LIBRARY=$(cygpath -m /ucrt64/lib/libvulkan-1.dll.a)" >> "$GITHUB_ENV"
+          echo "VK_DRIVER_FILES=$(cygpath -w /ucrt64/share/vulkan/icd.d/lvp_icd.x86_64.json)" >> "$GITHUB_ENV"
+      - name: Prepare the pinned SQLite tutorial input
+        if: matrix.suite == 'llvm'
+        run: |
+          mkdir -p .profile-cache/sources
+          curl -fL https://sqlite.org/2025/sqlite-amalgamation-3500400.zip -o .profile-cache/sqlite.download
+          printf '%s  %s\n' 1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032 .profile-cache/sqlite.download | sha256sum -c -
+          unzip -jo .profile-cache/sqlite.download 'sqlite-amalgamation-3500400/sqlite3.[ch]' -d .profile-cache/sources
+          make -j1 PROFILE=windows_x64 check-windows-build
+          build/windows/windows_limit.exe python3 benchmarks/resources/verify.py
+      - name: Build and test Windows suite
+        run: |
+          export PATH="$PATH:/clang64/bin"
+          export CRUST_SANITIZER_CC="$(cygpath -m /clang64/bin/clang.exe)"
           export CRUST_JS_RUNTIME="$(cygpath -m "$(command -v bun)")"
-          make PROFILE=windows_x64 AMALGAMATION=${{ matrix.amalgamation }} all check-windows check-windows-bootstrap check-windows-cache check-windows-llvm check-windows-asm check-windows-tools check-windows-ownership check-llvm-fetch
+          make -j1 PROFILE=windows_x64 AMALGAMATION=${{ matrix.amalgamation }} all ${{ matrix.targets }}
+      - name: Check generated files
+        run: git diff --exit-code
 
   lint:
     runs-on: ubuntu-24.04

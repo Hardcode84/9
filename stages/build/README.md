@@ -75,6 +75,12 @@ Repeated canonical paths contribute one source. Include nesting has a limit of
 declarations share the root namespace. Give helper functions distinct names
 and include each helper definition once per root.
 
+`stage_api_from(stage, base, name)` captures an API for the selected host.
+`base` is the source package root, relative to the current package file.
+Linux selects `base/api/name`. Windows selects `name` from the seed's profile
+API directory. `stage_api(stage, name)` uses `"../.."` as the base for the
+standard stage directories.
+
 Keep reusable source lists in `sources.crs`. Keep the public native exports in
 `package.crs`. A source dependency can then reuse implementation code without
 publishing its functions. To publish another package's API as part of a combined

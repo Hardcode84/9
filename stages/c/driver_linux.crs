@@ -1,5 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
+fn c_driver_symbols(
+    driver: *CDriver,
+    response: *u8,
+    source: *u8,
+    output: *u8,
+    mode: u32
+) -> bool {
+    var option: *u8 = c_driver_join(&driver -> stage -> status, "@", response);
+    if option == null(*u8) {
+        return false;
+    }
+    driver -> command[0usize] = "objcopy";
+    driver -> command[1usize] = option;
+    driver -> command[2usize] = source;
+    driver -> command[3usize] = output;
+    return c_driver_run(driver, 4usize, mode);
+}
+
 // This host interface applies to the Linux x86-64 LP64 profile.
 record CDriverStat {
     device: u64;

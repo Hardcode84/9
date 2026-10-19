@@ -6,6 +6,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from host import WINDOWS
 from llvm import ROOT, check
 
 
@@ -63,7 +64,7 @@ def run_packages(build, llvm=None):
             "llvm_stage_toolchain" if generation == 1 else f"llvm_generation{generation}_toolchain"
         )
         (work / f"package-{generation}.crs").write_text(
-            f'stage_source(stage,{quote(ROOT / "api/crust0.crs")});\n'
+            f'stage_api_from(stage,{quote(ROOT)},"crust0.crs");\n'
             'stage_source(stage,"program.crs");\nstage_export(stage,"answer");\n'
             f"stage_compiler(stage,{quote(compiler)},{quote(compile_name)});\n"
             f"stage_toolchain(stage,{quote(tools_name)});\n"
@@ -84,7 +85,7 @@ def run_packages(build, llvm=None):
         command = [build / "crust", root, work / f"package-{generation}.crs"]
         path = Path(check(command, 42, cwd="/").stdout.decode())
         before = path.stat().st_mtime_ns
-        assert check(command, 42, cwd="/").stdout.decode() == str(path)
+        assert Path(check(command, 42, cwd="/").stdout.decode()) == path
         assert path.stat().st_mtime_ns == before
         artifacts.append(path)
     source.write_text("fn answer()->i32{return 43i32;}\n")
@@ -101,7 +102,10 @@ def run_packages(build, llvm=None):
             factory.write_text(
                 original.replace(quote(llvm.resolve()), quote(work / "missing-llvm"))
             )
-            assert b"cache tool failed" in check(command, 1, cwd="/").stderr
+            diagnostic = (
+                b"cannot enumerate toolchain directory" if WINDOWS else b"cache tool failed"
+            )
+            assert diagnostic in check(command, 1, cwd="/").stderr
         finally:
             factory.write_text(original)
     assert not list((build / "stage-cache").glob("crust-*"))

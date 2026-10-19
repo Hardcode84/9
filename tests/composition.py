@@ -3,15 +3,17 @@
 """Check ordered reader and source services through ownership and native output."""
 
 import argparse
-import subprocess
 import tempfile
 from pathlib import Path
+
+from host import rename_symbols, sanitizer_compiler, sanitizer_flags
+from host import run as host_run
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def run(argv, expected=0):
-    result = subprocess.run([str(arg) for arg in argv], cwd=ROOT, capture_output=True, timeout=60)
+    result = host_run([str(arg) for arg in argv], cwd=ROOT, capture_output=True, timeout=60)
     if result.returncode != expected:
         raise AssertionError((argv, result.returncode, result.stdout, result.stderr))
     return result
@@ -41,6 +43,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="composition-", dir=build) as directory:
         work = Path(directory)
         target = work / "target"
+        generated, symbols = work / "target.c", work / "target.symbols"
         example = (ROOT / "examples/composition/program.crs").read_text()
         # Matching interfaces can rename parameters. Contract identity uses positions.
         prototype = "\nfn choose(other:read Ticket)->i32;\n"
@@ -54,16 +57,21 @@ def main():
         for index, text in enumerate(cases):
             source = work / f"positive-{index}.crs"
             source.write_text(text)
-            run([compiler, source, target])
+            run([compiler, source, generated, symbols])
+            raw, obj = work / "input.o", work / "target.o"
+            flags = sanitizer_flags()
+            run([sanitizer_compiler(), *flags, "-c", generated, "-o", raw])
+            rename_symbols(symbols, raw, obj)
+            run([sanitizer_compiler(), *flags, obj, "-o", target])
             result = run([target])
             assert result.stdout == b"!B", result
         for name, text, diagnostic in rejections():
             source = work / f"{name}.crs"
             source.write_text(text)
-            target.unlink(missing_ok=True)
-            result = run([compiler, source, target], expected=1)
+            generated.unlink(missing_ok=True)
+            result = run([compiler, source, generated, symbols], expected=1)
             assert diagnostic.encode() in result.stderr, (name, result.stderr)
-            assert not target.exists(), name
+            assert not generated.exists(), name
     print("Composition: 4 sanitized runtime cases and 9 rejections passed")
 
 

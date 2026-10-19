@@ -44,22 +44,12 @@ fn union_assembly_build(cli: *CCli, stage: *SuStage) -> i32 {
     }
     var file: *u8 = union_open(cli -> options.output, "wb");
     if file == null(*u8) {
-        c_driver_io_error(
-            &cli -> driver,
-            "cannot open output",
-            cli -> options.output,
-            *c_driver_errno()
-        );
+        c_driver_error(&cli -> driver, "cannot open output");
         return 1i32;
     }
     var success: bool = crust_x64_emit(stage -> context, file, entry);
     if union_close(file) != 0i32 {
-        c_driver_io_error(
-            &cli -> driver,
-            "cannot close output",
-            cli -> options.output,
-            *c_driver_errno()
-        );
+        c_driver_error(&cli -> driver, "cannot close output");
         return 1i32;
     }
     if success {

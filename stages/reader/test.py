@@ -4,17 +4,23 @@
 
 import argparse
 import ast
+import importlib
 import re
 import shlex
-import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+host = importlib.import_module("host")
+WINDOWS = host.WINDOWS
+host_run = host.run
+
 READER = [ROOT / "stages/reader" / name for name in ("model.crs", "lex.crs", "parse.crs")]
 
 
 def run(arguments, **kwargs):
-    subprocess.run([str(argument) for argument in arguments], check=True, cwd=ROOT, **kwargs)
+    host_run([str(argument) for argument in arguments], check=True, cwd=ROOT, **kwargs)
 
 
 def main():
@@ -29,10 +35,11 @@ def main():
     build = args.build.resolve()
     work = args.work.resolve() if args.work else build / "reader-tests"
     work.mkdir(parents=True, exist_ok=True)
+    api = build / "profile/api" if WINDOWS else ROOT / "api"
     sources = [
-        ROOT / "api/crust0.crs",
-        ROOT / "api/crust0_host.crs",
-        ROOT / "api/crust0_eval.crs",
+        api / "crust0.crs",
+        api / "crust0_host.crs",
+        api / "crust0_eval.crs",
         *READER,
         ROOT / "stages/reader/test.crs",
     ]
@@ -60,7 +67,7 @@ def main():
             build / "libcrust0.a",
             build / "libcrust0_host.a",
             "-lffi",
-            "-ldl",
+            *(["-lbcrypt"] if WINDOWS else ["-ldl"]),
             *shlex.split(args.ldflags),
             "-o",
             work / "reader-test",

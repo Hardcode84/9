@@ -4,8 +4,10 @@
 
 import argparse
 import shlex
-import subprocess
 from pathlib import Path
+
+from host import WINDOWS, run
+from prepare import link_library
 
 ROOT = Path(__file__).resolve().parents[1]
 PRELUDE = """
@@ -43,13 +45,16 @@ def main():
     build = args.build.resolve()
     work = build / "parallel-tests"
     work.mkdir(exist_ok=True)
+    library = build / "crust-parallel-library.so"
+    if WINDOWS:
+        library = link_library(build, work / "parallel.dll", "parallel/package.crs")
     flags = [f"--cflag={value}" for value in shlex.split(args.cflags)]
     ldflags = [f"--ldflag={value}" for value in shlex.split(args.ldflags)]
     checks = 0
 
     def command(argv):
         nonlocal checks
-        result = subprocess.run(list(map(str, argv)), cwd=ROOT, capture_output=True, timeout=120)
+        result = run(argv, cwd=ROOT, capture_output=True, timeout=120)
         checks += 1
         if result.returncode or result.stdout or result.stderr:
             raise RuntimeError((argv, result))
@@ -65,7 +70,7 @@ def main():
             "-Werror",
             *shlex.split(args.cflags),
             "-c",
-            ROOT / "tests/parallel_create_linux_x64.c",
+            ROOT / f"tests/parallel_create_{'windows' if WINDOWS else 'linux'}_x64.c",
             "-o",
             wrapper,
         ]
@@ -83,12 +88,15 @@ def main():
         binary = work / name
         sources = [ROOT / "api/crust0.crs", ROOT / "stages/parallel/model.crs"]
         if wrapped:
-            sources += [ROOT / "stages/parallel/jobs.crs", ROOT / "stages/parallel/linux_x64.crs"]
-            libraries = [str(wrapper), "-Wl,--wrap=pthread_create"]
+            profile = "windows_x64" if WINDOWS else "linux_x64"
+            sources += [ROOT / "stages/parallel/jobs.crs", ROOT / f"stages/parallel/{profile}.crs"]
+            wrapped_name = "_beginthreadex" if WINDOWS else "pthread_create"
+            libraries = [str(wrapper), f"-Wl,--wrap={wrapped_name}"]
         else:
             sources += [ROOT / "stages/parallel/api.crs"]
-            libraries = [str(build / "crust-parallel-library.so")]
-        libraries += [str(build / "libcrust0.a"), str(build / "libcrust0_host.a"), "-pthread"]
+            libraries = [str(library)]
+        libraries += [str(build / "libcrust0.a"), str(build / "libcrust0_host.a")]
+        libraries.append("-lbcrypt" if WINDOWS else "-pthread")
         command(
             [
                 build / "crust-c",

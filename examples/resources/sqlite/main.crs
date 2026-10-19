@@ -8,6 +8,7 @@ var stages: *StageSession = stage_open(run, "../../..", "../../../build/stage-ca
 if stages == null(*StageSession) {
     return 1i32;
 };
+host_source(run, stage_provider(run, "target_", ".crs"));
 var backend: ApplicationBackend = uninit;
 if !application_backend(run, stages, &backend, c_backend_build) {
     return 1i32;
@@ -31,7 +32,7 @@ arguments[0usize] = host_path(run, "library.crs");
 arguments[1usize] = "--ldflag";
 arguments[2usize] = host_path(run, "../../../.profile-cache/resources-baseline/sqlite3.o");
 arguments[3usize] = "--ldflag";
-arguments[4usize] = "-ldl";
+arguments[4usize] = SQLITE_SYSTEM_LIBRARY;
 arguments[5usize] = "--ldflag";
 arguments[6usize] = "-lm";
 arguments[7usize] = "--ldflag";

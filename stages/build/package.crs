@@ -42,6 +42,24 @@ fn stage_source(stage: *StagePackage, path: *u8) -> bool {
     return stage_capture(stage, path, &stage -> sources);
 }
 
+// Select a host API. Base names the source package root relative to this manifest.
+fn stage_api_from(stage: *StagePackage, base: *u8, name: *u8) -> bool {
+    var directory: *u8 = host_profile_directory(stage -> root);
+    if directory == null(*u8) {
+        return false;
+    }
+    var root: *u8 = stage_path(stage -> root, stage -> base, base);
+    if root == null(*u8) {
+        return false;
+    }
+    directory = stage_path(stage -> root, root, directory);
+    if directory == null(*u8) {
+        return false;
+    }
+    var path: *u8 = stage_path(stage -> root, directory, name);
+    return path != null(*u8) && stage_source(stage, path);
+}
+
 fn stage_export_as(stage: *StagePackage, name: *u8, link: *u8) -> bool {
     if link[0usize] == 0u8 {
         return native_error(stage -> root -> context, "native stage export name is empty");

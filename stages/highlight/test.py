@@ -3,6 +3,7 @@
 """Check highlighting through the native tool, source runner, and user services."""
 
 import argparse
+import importlib
 import json
 import subprocess
 import sys
@@ -10,6 +11,10 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+host = importlib.import_module("host")
+failed_output = host.failed_output
+host_run = host.run
 
 
 class SourceText(HTMLParser):
@@ -32,9 +37,7 @@ class SourceText(HTMLParser):
 
 
 def run(*arguments, **kwargs):
-    result = subprocess.run(
-        [str(arg) for arg in arguments], cwd=ROOT, capture_output=True, **kwargs
-    )
+    result = host_run([str(arg) for arg in arguments], cwd=ROOT, capture_output=True, **kwargs)
     if result.returncode:
         sys.stderr.buffer.write(result.stdout)
         sys.stderr.buffer.write(result.stderr)
@@ -162,20 +165,20 @@ def main():
     run(tool, "--tokens", malicious)
     assert not effect.exists(), "the highlighter executed its input"
     for operands in ([], ["--wrong", str(actual)], [str(work / "missing.crs")]):
-        failure = subprocess.run([str(tool), *operands], capture_output=True)
+        failure = host_run([str(tool), *operands], capture_output=True)
         assert failure.returncode != 0 and failure.stderr and not failure.stdout
-    with open("/dev/full", "wb") as stream:
-        failure = subprocess.run([str(tool), str(actual)], stdout=stream, stderr=subprocess.PIPE)
+    with failed_output() as stream:
+        failure = host_run([str(tool), str(actual)], stdout=stream, stderr=subprocess.PIPE)
         assert failure.returncode != 0 and b"cannot write" in failure.stderr
 
     budget = work / "budget.crs"
     budget.write_bytes(b";" * 500000)
     assert len(json.loads(run(tool, "--tokens", budget))["spans"]) == 500000
     budget.write_bytes(b";" * 500001)
-    failure = subprocess.run([str(tool), "--tokens", str(budget)], capture_output=True)
+    failure = host_run([str(tool), "--tokens", str(budget)], capture_output=True)
     assert failure.returncode != 0 and not failure.stdout
     assert b"highlight span limit exceeded" in failure.stderr
-    subprocess.run([str(tool), "--html", str(budget)], stdout=subprocess.DEVNULL, check=True)
+    host_run([str(tool), "--html", str(budget)], stdout=subprocess.DEVNULL, check=True)
 
     run(
         build / "crust-c",

@@ -99,6 +99,8 @@ bool crust_run_native_host(CrustRun *run, CrustDecl *declaration, void **result)
 #include "host_symbols.inc"
 #undef CRUST_HOST_SYMBOL
         RUN_SYMBOL(puts),
+        RUN_SYMBOL(fopen),
+        RUN_SYMBOL(fclose),
         RUN_SYMBOL(strlen),
         RUN_SYMBOL(strcmp),
         RUN_SYMBOL(strncmp),
@@ -249,6 +251,7 @@ CrustLibrary *crust_run_native_open(CrustRun *run, CrustLibrary **modules, const
     CrustLibrary *module;
     HMODULE library;
     const char *error;
+    char message[512];
     if (path == NULL || (strchr(path, '/') == NULL && strchr(path, '\\') == NULL)) {
         (void)run_error(run, "native path must contain a directory separator");
         return NULL;
@@ -261,7 +264,8 @@ CrustLibrary *crust_run_native_open(CrustRun *run, CrustLibrary **modules, const
         return NULL;
     error = native_abi_error(library);
     if (error != NULL) {
-        (void)run_error(run, error);
+        (void)snprintf(message, sizeof(message), "cannot load native input '%s': %s", path, error);
+        (void)run_error(run, message);
         if (!FreeLibrary(library)) {
             crust_run_diagnostic(run->context);
             (void)windows_error(run, "cannot unload rejected native input");

@@ -8,8 +8,10 @@ import json
 import shutil
 import sqlite3
 import subprocess
+from contextlib import closing
 from pathlib import Path
 
+from host import WINDOWS
 from run import checked_command
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,7 +36,7 @@ CASES = (
 
 
 def command(arguments, expected=0, **options):
-    return checked_command(arguments, expected=expected, timeout=240, **options)
+    return checked_command(arguments, expected=expected, timeout=240, text_output=True, **options)
 
 
 def configuration(work, llvm, level):
@@ -152,7 +154,7 @@ class Matrix:
         self.root("resources/sqlite/main.crs", selection, ["-o", binary])
         database = self.work / "input.db"
         database.unlink(missing_ok=True)
-        with sqlite3.connect(database) as db:
+        with closing(sqlite3.connect(database)) as db, db:
             db.execute("create table input(seq integer,value)")
             db.executemany("insert into input values(?,?)", [(1, "hello"), (2, 17), (3, None)])
         self.execute(profile, binary, [database], stdout=b"T 68656c6c6f\nI 3137\nN\nrows 3\n")
@@ -197,9 +199,8 @@ class Matrix:
             ["--emit", "-o", output, "--symbols", symbols, source],
         )
         text = output.read_bytes()
-        marker = (
-            b'target triple = "x86_64-unknown-linux-gnu"' if profile.startswith("llvm") else b"r_g"
-        )
+        triple = b"x86_64-w64-windows-gnu" if WINDOWS else b"x86_64-unknown-linux-gnu"
+        marker = b'target triple = "' + triple + b'"' if profile.startswith("llvm") else b"r_g"
         assert marker in text and symbols.stat().st_size
         saved = b"retain previous output\n"
         output.write_bytes(saved)

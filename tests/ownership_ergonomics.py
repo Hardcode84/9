@@ -242,7 +242,9 @@ def check_rust_rejections(directory):
     for name, (case, body, diagnostic) in cases.items():
         path = directory / f"{name}.rs"
         provider = ROOT / "examples" / case / "provider.rs"
-        path.write_text(f'#[path="{provider}"] mod provider; use provider::*; fn main(){{{body}}}')
+        path.write_text(
+            f'#[path="{provider.as_posix()}"] mod provider; use provider::*; fn main(){{{body}}}'
+        )
         result = command(
             ["rustc", "--edition=2024", "--emit=metadata", "-o", directory / f"{name}.rmeta", path],
             expected=1,

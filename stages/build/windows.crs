@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn stage_api(stage: *StagePackage, name: *u8) -> bool {
-    var directory: *u8 = host_profile_directory(stage -> root);
-    if directory == null(*u8) {
-        return false;
-    }
-    var path: *u8 = stage_path(stage -> root, directory, name);
-    return path != null(*u8) && stage_source(stage, path);
+    return stage_api_from(stage, "../..", name);
 }
 fn stage_platform_sources(stage: *StagePackage) -> bool {
     return stage_source(stage, "../native/windows.crs");
@@ -215,17 +210,6 @@ fn stage_tools(
     ) || library == null(*u8) {
         return false;
     }
-    var symbols: *u8 = native_join(context, "@", win_basename(response));
-    if symbols == null(*u8) {
-        return false;
-    }
-    var rename: [*u8; 5] = make [*u8; 5] {
-        "objcopy",
-        symbols,
-        win_basename(object),
-        win_basename(renamed),
-        null(*u8)
-    };
     var link: [*u8; 10] = make [*u8; 10] {
         "gcc",
         "-shared",
@@ -251,7 +235,7 @@ fn stage_tools(
         context,
         source,
         object
-    ) && stage_windows_tool(context, &rename[0usize], directory) && stage_windows_gcc(
+    ) && win_symbols(context, response, object, renamed, directory) && stage_windows_gcc(
         context,
         &link[0usize],
         directory

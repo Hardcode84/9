@@ -6,12 +6,14 @@ import importlib.util
 import json
 import os
 import re
-import resource
 import shlex
 import shutil
 import signal
 import subprocess
 from pathlib import Path
+
+from host import WINDOWS, api_path, disable_core_dumps, failed_output
+from host import executable as host_executable
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("runtime_cases", ROOT / "tests/run.py")
@@ -31,20 +33,19 @@ def string(value):
     return '"' + "".join(result) + '"'
 
 
-def compilation_root(target, library, allocator_checks=False):
+def compilation_root(build, target, library, allocator_checks=False):
     prefix = (
-        f'host_source(run, {string(ROOT / "api/crust0_stage.crs")});\n'
+        f'host_source(run, {string(api_path(build, "crust0_stage.crs"))});\n'
         f'host_import(run,host_open(run,{string(library)}),{string(ROOT / "stages/c/api.crs")});\n'
     )
     allocation = "crust_context_init(&target_context, null(*CrustAllocator));\n"
     release = ""
     if allocator_checks:
         prefix += """
-extern fn target_malloc(size:usize)->*u8 = "malloc";
 record AllocationCount { allocated:usize; released:usize; }
 fn target_allocate(user:*u8, size:usize)->*u8 {
     var counts:*AllocationCount = user as *AllocationCount;
-    var result:*u8 = target_malloc(size);
+    var result:*u8 = crust0_host_alloc(size,16usize);
     if result != null(*u8) { (*counts).allocated = (*counts).allocated + 1usize; }
     return result;
 }
@@ -99,7 +100,7 @@ class Suite:
 
     def command(self, command, expected=0, stdout=subprocess.PIPE, **options):
         result = RUNTIME.checked_command(
-            command, expected=expected, timeout=60, stdout=stdout, **options
+            command, expected=expected, timeout=60, stdout=stdout, text_output=True, **options
         )
         self.checks += 1
         return result
@@ -130,7 +131,7 @@ class Suite:
                 *self.cc,
                 *RUNTIME.STRICT,
                 *self.cflags,
-                "-I" + str(ROOT / "include"),
+                "-I" + str(self.build / "profile/include" if WINDOWS else ROOT / "include"),
                 "-fPIC",
                 "-shared",
                 ROOT / "tests/native.c",
@@ -167,7 +168,7 @@ def check_root(suite):
         'extern fn native_puts(text:*u8)->i32="puts"; native_puts("buffered root output");',
     )
     for argument in ("--help", "--version", buffered_output):
-        with open("/dev/full", "wb") as full:
+        with failed_output() as full:
             failure = suite.command([suite.runner, argument], expected=1, stdout=full)
         assert b"crust: cannot write standard output" in failure.stderr, failure.stderr
     suite.root(
@@ -277,10 +278,10 @@ fn odd(value:u32)->bool { if value==0u32{return false;} return even(value-1u32);
     suite.root(
         "closed-forward-references",
         f"host_source(run,{string(relative)}); if !even(10u32) || !odd(9u32){{return 1i32;}};",
-        cwd="/tmp",
+        cwd=suite.build,
     )
     saved = suite.write("snapshot-input.crs", "immutable snapshot\n")
-    encoded = os.fsencode(saved)
+    encoded = os.fsencode(saved.as_posix())
     body = (
         f"var path_bytes:[u8; {len(encoded)+1}] = make [u8; {len(encoded)+1}] {{"
         + ",".join(f"{byte}u8" for byte in encoded + b"\0")
@@ -288,7 +289,7 @@ fn odd(value:u32)->bool { if value==0u32{return false;} return even(value-1u32);
     )
     body += "var snapshot:*CrustSource=host_input(run,&path_bytes[0usize],99u64);\n"
     body += "if snapshot==null(*CrustSource){return 1i32;}; path_bytes[0usize]=88u8;\n"
-    body += f"if (*snapshot).path[0usize]!=47u8 || (*snapshot).size!={len('immutable snapshot'+chr(10))}usize || (*snapshot).bytes[0usize]!=105u8{{return 2i32;}};\n"
+    body += f"if (*snapshot).path[0usize]!={encoded[0]}u8 || (*snapshot).size!={len('immutable snapshot'+chr(10))}usize || (*snapshot).bytes[0usize]!=105u8{{return 2i32;}};\n"
     suite.root("captured-path-storage", body)
     conflict = suite.write("local-conflict.crs", "fn taken()->unit{}")
     suite.root(
@@ -503,14 +504,24 @@ This input belongs to the selected stages.
             *[item for flag in suite.cflags for item in ("--cflag", flag)],
             "-o",
             obj,
-            ROOT / "api/crust0.crs",
-            ROOT / "api/crust0_host.crs",
-            ROOT / "api/crust0_eval.crs",
-            ROOT / "api/crust0_run.crs",
+            api_path(suite.build, "crust0.crs"),
+            api_path(suite.build, "crust0_host.crs"),
+            api_path(suite.build, "crust0_eval.crs"),
+            api_path(suite.build, "crust0_run.crs"),
             source,
         ]
     )
-    suite.command([*suite.cc, "-shared", obj, *suite.ldflags, "-o", library])
+    suite.command(
+        [
+            *suite.cc,
+            "-shared",
+            obj,
+            *([suite.build / "crust.exe.a"] if WINDOWS else []),
+            *suite.ldflags,
+            "-o",
+            library,
+        ]
+    )
     declarations = """
 extern fn first_reader(current:*CrustRun,user:*u8,output:**u8)->bool="first_reader";
 extern fn first_executor(current:*CrustRun,user:*u8,action:*u8)->bool="first_executor";
@@ -682,7 +693,7 @@ def check_foreign_errors(suite):
                 *suite.cc,
                 *RUNTIME.STRICT,
                 *suite.cflags,
-                "-I" + str(ROOT / "include"),
+                "-I" + str(suite.build / "profile/include" if WINDOWS else ROOT / "include"),
                 "-fPIC",
                 "-shared",
                 path,
@@ -735,14 +746,14 @@ def check_foreign_errors(suite):
 def check_target(suite):
     target = ROOT / "examples/intrusive/raw.crs"
     response = suite.work / "intrusive.rsp"
-    code = compilation_root(target, suite.backend, allocator_checks=True)
+    code = compilation_root(suite.build, target, suite.backend, allocator_checks=True)
     result = suite.root("intrusive-stage", code, ["--emit", "--symbols", response])
     c_path = suite.write("intrusive.c", result.stdout)
     reference = suite.work / "reference.rsp"
     prepared = suite.command([suite.build / "crust-c", "--emit", "--symbols", reference, target])
     assert result.stdout == prepared.stdout and response.read_bytes() == reference.read_bytes()
     prefix = (
-        f'host_source(run,{string(ROOT / "api/crust0_stage.crs")});\n'
+        f'host_source(run,{string(api_path(suite.build, "crust0_stage.crs"))});\n'
         f'host_import(run,host_open(run,{string(suite.backend)}),{string(ROOT / "stages/c/api.crs")});\n'
         f'host_source(run,{string(ROOT / "stages/c/build.crs")});\n'
         f"var captured:*CrustSource=host_input(run,{string(target)},1u64);\n"
@@ -792,12 +803,15 @@ def check_target(suite):
         ]
     )
     assert suite.command([executable]).stdout == b"intrusive: ok\n"
+    executable = host_executable(executable)
     symbols = suite.command(["nm", executable]).stdout
     assert not re.search(
         rb"\b(?:crust_(?:run|eval|context|read|check|collect|resolve)\w*|c_program|c_backend_build|ffi_\w*)\b",
         symbols,
     )
-    needed = suite.command(["readelf", "-dW", executable]).stdout
+    needed = suite.command(
+        ["objdump", "-p", executable] if WINDOWS else ["readelf", "-dW", executable]
+    ).stdout
     assert b"libffi" not in needed and suite.backend.name.encode() not in needed
     later = suite.write(
         "forward-target.crs",
@@ -805,20 +819,20 @@ def check_target(suite):
     )
     suite.root(
         "target-forward",
-        compilation_root(later, suite.backend),
-        ["--emit", "--symbols", "/dev/null"],
+        compilation_root(suite.build, later, suite.backend),
+        ["--emit", "--symbols", suite.work / "forward.symbols"],
     )
     bad = suite.write(
         "host-name-target.crs", "fn main(argc:i32,argv:**u8)->i32{return host_source();}\n"
     )
     result = suite.root(
         "target-separate-names",
-        compilation_root(bad, suite.backend),
-        ["--emit", "--symbols", "/dev/null"],
+        compilation_root(suite.build, bad, suite.backend),
+        ["--emit", "--symbols", suite.work / "bad.symbols"],
         expected=1,
         diagnostic=b"unknown name 'host_source'",
     )
-    assert str(bad).encode() + b":1:" in result.stderr, result.stderr
+    assert bad.as_posix().encode() + b":1:" in result.stderr, result.stderr
     check_backend_reuse(suite)
 
 
@@ -829,7 +843,7 @@ const extra_callback: fn(*Extra) -> i32 = helper;
 fn helper(item: *Extra) -> i32 { return (*item).value; }
 """
     extra = suite.work / "retained-extra.crs"
-    extra.write_text(extra_text)
+    extra.write_bytes(extra_text.encode())
     generated = suite.work / "retained.c"
     symbols = suite.work / "retained.rsp"
     generated.unlink(missing_ok=True)
@@ -886,7 +900,7 @@ fn build(request:*CrustBuild)->i32 {
     return 0i32;
 }"""
     for marker, value in (
-        ("@EXTRA@", str(extra)),
+        ("@EXTRA@", extra.as_posix()),
         ("@EXTRA_TEXT@", extra_text),
         ("@GENERATED@", str(generated)),
         ("@SYMBOLS@", str(symbols)),
@@ -898,7 +912,7 @@ fn build(request:*CrustBuild)->i32 {
 }
 """
     target_path = suite.write("retained-target.crs", target)
-    program = compilation_root(target_path, suite.backend)
+    program = compilation_root(suite.build, target_path, suite.backend)
     program = program.replace(
         "var target_context:CrustContext = uninit;",
         body + "\nvar target_context:CrustContext = uninit;",
@@ -992,7 +1006,7 @@ def check_examples(suite):
     expected = b"Hello from a reader written in CRUST!\nThese lines use the new grammar.\n"
     result = suite.command([suite.runner, reader], cwd=elsewhere)
     assert result.stdout == expected and not result.stderr, result
-    with open("/dev/full", "wb") as full:
+    with failed_output() as full:
         result = suite.command([suite.runner, reader], expected=1, stdout=full, cwd=elsewhere)
     assert b"cannot write text" in result.stderr, result.stderr
     original = reader.read_text()
@@ -1002,7 +1016,7 @@ def check_examples(suite):
     bad_line = original[: original.index("> Hello")].count("\n") + 1
     reader.write_text(original.replace("> Hello", "! Hello"))
     result = suite.command([suite.runner, reader], expected=1, cwd=elsewhere)
-    assert f"{reader}:{bad_line}:1:".encode() in result.stderr, result.stderr
+    assert f"{reader.as_posix()}:{bad_line}:1:".encode() in result.stderr, result.stderr
     assert b"expected '> ' before text" in result.stderr, result.stderr
 
     original = hello.read_text()
@@ -1042,7 +1056,9 @@ def check_examples(suite):
     broken.write_text(original + "fn bad()->i32{return missing_value;}\n")
     retained = (output / "hello").read_bytes()
     result = suite.command([suite.runner, broken], expected=1, cwd=elsewhere)
-    assert f"{broken}:{original.count(chr(10)) + 1}:".encode() in result.stderr, result.stderr
+    assert (
+        f"{broken.as_posix()}:{original.count(chr(10)) + 1}:".encode() in result.stderr
+    ), result.stderr
     assert b"unknown name 'missing_value'" in result.stderr, result.stderr
     assert (output / "hello").read_bytes() == retained
 
@@ -1065,7 +1081,7 @@ def main():
         default="all",
     )
     arguments = parser.parse_args()
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    disable_core_dumps()
     suite = Suite(arguments)
     for name, function in (
         ("root", check_root),

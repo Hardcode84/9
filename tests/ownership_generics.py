@@ -6,6 +6,7 @@ import argparse
 import tempfile
 from pathlib import Path
 
+from host import sanitizer_compiler, sanitizer_flags
 from ownership_support import ROOT, command, execute
 
 PAYLOADS = """
@@ -360,13 +361,22 @@ def check_intrusive(compiler, directory, sanitize):
     for optimization in ("-O0", "-O2"):
         flags = ["-std=c99", "-pedantic-errors", optimization]
         if sanitize:
-            flags += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all", "-no-pie"]
+            flags += sanitizer_flags() + [optimization]
         raw = directory / "intrusive-input.o"
         obj = directory / "intrusive.o"
         binary = directory / f"intrusive{optimization}"
-        command(["gcc", *flags, "-c", generated, "-o", raw])
+        command([sanitizer_compiler() if sanitize else "gcc", *flags, "-c", generated, "-o", raw])
         command(["objcopy", f"@{symbols}", raw, obj])
-        command(["gcc", *flags, obj, ROOT / "tests/ownership_runtime.c", "-o", binary])
+        command(
+            [
+                sanitizer_compiler() if sanitize else "gcc",
+                *flags,
+                obj,
+                ROOT / "tests/ownership_runtime.c",
+                "-o",
+                binary,
+            ]
+        )
         result = command([binary])
         assert result.stdout == b"HFBFOK\n", result.stdout
 

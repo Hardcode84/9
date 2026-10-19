@@ -2,7 +2,7 @@
 
 stage_include(stage, "../stages/ownership/package.crs");
 stage_include(stage, "../stages/llvm/sources.crs");
-stage_source(stage, "../api/crust0_eval.crs");
+stage_api_from(stage, "..", "crust0_eval.crs");
 stage_include(stage, "../stages/asm/sources.crs");
 stage_source(stage, "ownership_input.crs");
 stage_source(stage, "resource_backends.crs");

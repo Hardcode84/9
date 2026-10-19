@@ -3,9 +3,10 @@
 """Compose independent type extensions and execute their lowered program."""
 
 import argparse
-import subprocess
 import tempfile
 from pathlib import Path
+
+from host import run as host_run
 
 
 def main():
@@ -16,12 +17,12 @@ def main():
     with tempfile.TemporaryDirectory(dir=build, prefix="extension-kinds-") as directory:
         target = Path(directory) / "target"
         for order in ("forward", "reverse"):
-            subprocess.run(
+            host_run(
                 [str(build / "kind_composition"), str(target), order],
                 check=True,
                 timeout=60,
             )
-            result = subprocess.run([str(target)], capture_output=True, check=True, timeout=10)
+            result = host_run([str(target)], capture_output=True, check=True, timeout=10)
             if result.stdout != b"BA":
                 raise SystemExit(
                     f"{order}: expected defer then resource cleanup, got {result.stdout!r}"

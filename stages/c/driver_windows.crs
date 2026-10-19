@@ -1,5 +1,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
+fn c_driver_symbols(
+    driver: *CDriver,
+    response: *u8,
+    source: *u8,
+    output: *u8,
+    mode: u32
+) -> bool {
+    var context: *CrustContext = driver -> stage -> status.context;
+    var directory: *u8 = win_directory_prefix(context, output);
+    if directory != null(*u8) && directory[0usize] == 0u8 {
+        directory = ".";
+    }
+    return c_driver_windows_result(
+        driver,
+        directory != null(*u8) && win_symbols(context, response, source, output, directory)
+    );
+}
+
 fn c_driver_read_error(driver: *CDriver, path: *u8) -> bool {
     return c_driver_error(driver, "cannot read input");
 }

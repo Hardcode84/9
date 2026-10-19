@@ -6,7 +6,6 @@ import argparse
 import fnmatch
 import os
 import re
-import resource
 import shutil
 import subprocess
 import tempfile
@@ -14,6 +13,9 @@ from pathlib import Path
 
 import overload
 import overload_resources
+from host import WINDOWS, disable_core_dumps, host_sources, sanitizer_compiler, sanitizer_flags
+from host import executable as host_executable
+from host import run as host_run
 
 ROOT = Path(__file__).resolve().parents[1]
 STAGE = [
@@ -51,8 +53,10 @@ STAGE = [
 ]
 
 
-def cases():
-    yield "plain-c-backend", "plain", [path.read_text() for path in overload.c_backend_sources()]
+def cases(build):
+    yield "plain-c-backend", "plain", [
+        path.read_text() for path in overload.c_backend_sources(build)
+    ]
     yield "plain-format-provider", "plain", [overload.FORMAT_INTERFACE, overload.FORMAT_PROVIDER]
     yield "plain-format-consumer", "plain", [overload.FORMAT_INTERFACE, overload.FORMAT_CALLER]
     yield "plain-format-merged", "plain", [
@@ -108,7 +112,7 @@ fn show(item:mut Token)->unit {unsafe {item.id=item.id+1i32;}}
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=ROOT / "build")
-    parser.add_argument("--cc", default="gcc")
+    parser.add_argument("--cc", default=sanitizer_compiler())
     parser.add_argument("--amalgamation", type=int, choices=(0, 1), default=1)
     parser.add_argument("--case", action="append", default=[])
     parser.add_argument("--no-sanitize", action="store_true")
@@ -117,7 +121,7 @@ def main():
     args = parser.parse_args()
     selected = [
         item
-        for item in cases()
+        for item in cases(args.build.resolve())
         if not args.case or any(fnmatch.fnmatchcase(item[0], pattern) for pattern in args.case)
     ]
     if not selected:
@@ -126,26 +130,29 @@ def main():
         for name, mode, _ in selected:
             print(f"{mode}: {name}")
         return 0
-    compiler = args.build.resolve() / "crust-c"
+    compiler = Path(host_executable(args.build.resolve() / "crust-c"))
     if not compiler.is_file():
         parser.error(f"compiler does not exist: {compiler}")
     work = (
-        args.work.resolve() if args.work else Path(tempfile.mkdtemp(prefix="crust-overload-alloc-"))
+        args.work.resolve()
+        if args.work
+        else Path(tempfile.mkdtemp(prefix="crust-overload-alloc-", dir=args.build.resolve()))
     )
     work.mkdir(parents=True, exist_ok=True)
     environment = dict(os.environ)
     environment["ASAN_OPTIONS"] = "detect_leaks=0:halt_on_error=1"
     environment["UBSAN_OPTIONS"] = "halt_on_error=1:print_stacktrace=1"
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    disable_core_dumps()
 
     def run(command, timeout=120):
-        result = subprocess.run(
+        result = host_run(
             list(map(str, command)),
             cwd=ROOT,
             env=environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=timeout,
+            text_output=True,
         )
         if result.returncode:
             raise RuntimeError(
@@ -159,9 +166,8 @@ def main():
         generated = work / "fixture.c"
         response = work / "fixture.rsp"
         run([compiler, "--emit", "-o", generated, "--symbols", response, *STAGE])
-        flags = ["-std=c99", "-pedantic-errors", "-g", "-O1", "-fno-omit-frame-pointer"]
-        if not args.no_sanitize:
-            flags += ["-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
+        flags = ["-std=c99", "-pedantic-errors"]
+        flags += ["-O1", "-g1"] if args.no_sanitize else sanitizer_flags()
         run([args.cc, *flags, "-c", generated, "-o", work / "fixture.input.o"])
         run(["objcopy", f"@{response}", work / "fixture.input.o", work / "fixture.o"])
         strict = [
@@ -181,16 +187,10 @@ def main():
                 *strict,
                 "-Iinclude",
                 "-Isrc",
-                "-no-pie",
+                *([] if WINDOWS else ["-no-pie"]),
                 work / "fixture.o",
-                *(
-                    ["crust0_amalg.c"]
-                    if args.amalgamation
-                    else ["src/core.c", "src/read.c", "src/check.c"]
-                ),
-                "src/profile_linux_x64.c",
-                "runtime/host.c",
-                "runtime/host_posix.c",
+                *host_sources(args.amalgamation),
+                *(["-lbcrypt"] if WINDOWS else []),
                 "-o",
                 executable,
             ]

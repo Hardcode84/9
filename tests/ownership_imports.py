@@ -4,19 +4,22 @@
 
 import argparse
 import hashlib
+import json
 import os
 import shutil
 import struct
-import subprocess
 import tempfile
 from pathlib import Path
 
+from host import WINDOWS, executable
+from host import run as host_run
+
 ROOT = Path(__file__).resolve().parents[1]
-TAG = b"crust-ownership-library-v2-linux-x64\n"
+TAG = b"crust-ownership-library-v2-" + (b"windows" if WINDOWS else b"linux") + b"-x64\n"
 
 
 def command(args, *, env=None, success=True):
-    result = subprocess.run(args, cwd=ROOT, env=env, text=True, capture_output=True, timeout=120)
+    result = host_run(args, cwd=ROOT, env=env, text=True, capture_output=True, timeout=120)
     if (result.returncode == 0) != success:
         raise AssertionError(f"{args}\nstatus {result.returncode}\n{result.stdout}{result.stderr}")
     if not success and (result.returncode < 0 or not result.stderr):
@@ -114,8 +117,8 @@ def tamper_checks(args, environment, receipt):
 
 
 def changed_checker(directory, driver, args, environment):
-    other = directory / "changed-checker"
-    shutil.copy2(driver, other)
+    other = directory / ("changed-checker.exe" if WINDOWS else "changed-checker")
+    shutil.copy2(executable(driver), other)
     with other.open("ab") as stream:
         stream.write(b"different compiler artifact")
     changed = [str(other), *args[1:]]
@@ -133,15 +136,43 @@ def capture_race(directory, args, environment, receipt, output):
     gcc = shutil.which("gcc")
     assert gcc is not None
     wrapper = tools / "gcc"
-    wrapper.write_text(
-        "#!/usr/bin/python3\nimport os,sys\nfrom pathlib import Path\n"
-        f"marker=Path({str(marker)!r})\n"
-        "if not marker.exists():\n"
-        f"    os.replace({str(replacement)!r}, {str(artifact)!r})\n"
-        "    marker.touch()\n"
-        f"os.execv({gcc!r}, [{gcc!r}, *sys.argv[1:]])\n"
-    )
-    wrapper.chmod(0o700)
+    if WINDOWS:
+        configuration = dict(
+            COMPILER=gcc, REPLACEMENT=replacement, ARTIFACT=artifact, MARKER=marker
+        )
+        (tools / "ownership_race_config.h").write_text(
+            "/* SPDX-License-Identifier: Apache-2.0 */\n"
+            + "".join(
+                f"#define CRUST_RACE_{key} L{json.dumps(str(value))}\n"
+                for key, value in configuration.items()
+            ),
+            encoding="utf-8",
+        )
+        command(
+            [
+                gcc,
+                "-std=c99",
+                "-pedantic-errors",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "-municode",
+                "-I" + str(tools),
+                ROOT / "tests/ownership_race_windows.c",
+                "-o",
+                tools / "gcc.exe",
+            ]
+        )
+    else:
+        wrapper.write_text(
+            "#!/usr/bin/python3\nimport os,sys\nfrom pathlib import Path\n"
+            f"marker=Path({str(marker)!r})\n"
+            "if not marker.exists():\n"
+            f"    os.replace({str(replacement)!r}, {str(artifact)!r})\n"
+            "    marker.touch()\n"
+            f"os.execv({gcc!r}, [{gcc!r}, *sys.argv[1:]])\n"
+        )
+        wrapper.chmod(0o700)
     race_environment = dict(environment, PATH=str(tools) + os.pathsep + environment.get("PATH", ""))
     try:
         command(args, env=race_environment)

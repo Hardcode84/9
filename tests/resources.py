@@ -5,7 +5,6 @@
 import argparse
 import fnmatch
 import re
-import resource
 import shlex
 import shutil
 import signal
@@ -13,6 +12,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+from host import disable_core_dumps, executable, run, status_matches
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMON = """
@@ -1334,14 +1335,16 @@ class Suite:
         command = list(map(str, argv))
         self.commands += 1
         try:
-            result = subprocess.run(command, cwd=cwd, capture_output=True, timeout=self.timeout)
+            result = run(
+                command, cwd=cwd, capture_output=True, timeout=self.timeout, text_output=True
+            )
         except subprocess.TimeoutExpired as error:
             raise Failure(
                 f"timeout after {self.timeout}s: {shlex.join(command)}\n"
                 f"{(error.stdout or b'').decode(errors='replace')}\n"
                 f"{(error.stderr or b'').decode(errors='replace')}"
             ) from error
-        if result.returncode != expected:
+        if not status_matches(result.returncode, expected):
             raise Failure(
                 f"{shlex.join(command)}\nstatus {result.returncode}, expected {expected}\n"
                 f"stdout: {result.stdout!r}\nstderr:\n{result.stderr.decode(errors='replace')}"
@@ -1546,7 +1549,7 @@ class Suite:
             source.write_text(original + "fn invalid()->i32{return missing;}\n")
             result = self.command([runner, source], expected=1, cwd=self.work)
             if (
-                f"{source}:{original.count(chr(10)) + 1}:".encode() not in result.stderr
+                f"{source.as_posix()}:{original.count(chr(10)) + 1}:".encode() not in result.stderr
                 or b"unknown value name" not in result.stderr
                 or result.stdout
             ):
@@ -1614,11 +1617,11 @@ def main():
         return 0
     if args.timeout <= 0:
         parser.error("timeout must be positive")
-    compiler = args.build.resolve() / "crust-resource"
+    compiler = Path(executable(args.build.resolve() / "crust-resource"))
     if not compiler.is_file():
         parser.error(f"compiler does not exist: {compiler}")
-    work = Path(tempfile.mkdtemp(prefix="crust-resources-"))
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    work = Path(tempfile.mkdtemp(prefix="crust-resources-", dir=args.build.resolve()))
+    disable_core_dumps()
     suite = Suite(args, work)
     failures = 0
     counts = dict(runtime=0, reject=0, cli=0)

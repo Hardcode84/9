@@ -3,11 +3,13 @@
 """Check ownership generic allocation failures with instrumented stages and core."""
 
 import argparse
-import os
 import shlex
-import subprocess
 import tempfile
 from pathlib import Path
+
+from host import WINDOWS, host_sources, sanitizer_compiler, sanitizer_environment, sanitizer_flags
+from host import run as host_run
+from prepare import sources
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,16 +17,17 @@ ROOT = Path(__file__).resolve().parents[1]
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=ROOT / "build")
-    parser.add_argument("--cc", default="gcc")
+    parser.add_argument("--cc", default=sanitizer_compiler())
     parser.add_argument("--amalgamation", type=int, choices=(0, 1), default=1)
-    parser.add_argument("--sources", nargs="+", required=True)
+    parser.add_argument("--sources", nargs="+")
     args = parser.parse_args()
-    environment = dict(
-        os.environ, ASAN_OPTIONS="detect_leaks=1:halt_on_error=1", UBSAN_OPTIONS="halt_on_error=1"
-    )
+    args.build = args.build.resolve()
+    if args.sources is None:
+        args.sources = sources(args.build, "generics/ownership/package.crs")
+    environment = sanitizer_environment()
 
     def run(command):
-        result = subprocess.run(
+        result = host_run(
             [str(item) for item in command],
             cwd=ROOT,
             env=environment,
@@ -51,21 +54,10 @@ def main():
                 ROOT / "tests/ownership_generics_alloc.crs",
             ]
         )
-        flags = [
-            "-std=c99",
-            "-pedantic-errors",
-            "-O1",
-            "-g",
-            "-fsanitize=address,undefined",
-            "-fno-sanitize-recover=all",
-            "-fno-omit-frame-pointer",
-        ]
+        flags = ["-std=c99", "-pedantic-errors", *sanitizer_flags()]
         cc = shlex.split(args.cc)
         run([*cc, *flags, "-c", generated, "-o", work / "input.o"])
         run(["objcopy", f"@{symbols}", work / "input.o", work / "stage.o"])
-        core = (
-            ["crust0_amalg.c"] if args.amalgamation else ["src/core.c", "src/read.c", "src/check.c"]
-        )
         run(
             [
                 *cc,
@@ -79,11 +71,9 @@ def main():
                 "-Wvla",
                 "-Iinclude",
                 "-Isrc",
-                "-no-pie",
-                *core,
-                "src/profile_linux_x64.c",
-                "runtime/host.c",
-                "runtime/host_posix.c",
+                *([] if WINDOWS else ["-no-pie"]),
+                *host_sources(args.amalgamation),
+                *(["-lbcrypt"] if WINDOWS else []),
                 work / "stage.o",
                 "-o",
                 work / "sweep",

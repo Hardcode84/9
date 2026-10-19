@@ -5,6 +5,8 @@ import json
 import os
 import shutil
 
+from host import WINDOWS
+
 
 def check(work, seed, run):
     package = work / "asm packages"
@@ -14,7 +16,7 @@ def check(work, seed, run):
     provider = package / "provider.crs"
     provider.write_text("fn answer()->i32{return 23i32;}\n")
     manifest = package / "package.crs"
-    selection = """stage_source(stage,"../api/crust0.crs");
+    selection = """stage_api_from(stage,"..","crust0.crs");
 stage_source(stage,"provider.crs");
 stage_export(stage,"answer");
 stage_compiler(stage,"compiler.crs","asm_stage_compile");
@@ -60,8 +62,8 @@ return answer();
 
 
 def selected_inputs(package, work, seed, run, compiler, root):
-    assembler = package / "assembler"
-    shutil.copy2("/usr/bin/as", assembler)
+    assembler = package / ("assembler.exe" if WINDOWS else "assembler")
+    shutil.copy2(shutil.which("as"), assembler)
     flags = package / "assembler.flags"
     flags.write_text("--gdwarf-4")
     source = package / "toolchain.crs"
@@ -79,10 +81,15 @@ fn selected_object(request:*StageObject)->bool {
     return cache_tool(request->context,&arguments[0usize],null(*u8));
 }
 """.replace(
-            "FLAGS", json.dumps(str(flags))
-        ).replace(
-            "ASSEMBLER", json.dumps(str(assembler))
+            "cache_tools(config->context,&config->inputs,&paths[0usize],1usize,config->directory)",
+            (
+                "cache_file_input(config->context,&config->inputs,paths[0usize])"
+                if WINDOWS
+                else "cache_tools(config->context,&config->inputs,&paths[0usize],1usize,config->directory)"
+            ),
         )
+        .replace("FLAGS", json.dumps(str(flags)))
+        .replace("ASSEMBLER", json.dumps(str(assembler)))
     )
     compiler.write_text(
         """stage_include(stage,"../stages/asm/compiler-package.crs");

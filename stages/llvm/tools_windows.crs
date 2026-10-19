@@ -29,7 +29,10 @@ fn llvm_capture(toolchain: *StageToolchain, directory: *u8) -> bool {
     };
     var success: bool = cache_work(context, toolchain -> directory, &work);
     if success {
-        var source: *u8 = "define i32 @probe() { ret i32 0 }\n";
+        var source: *u8 = native_join(context, "target triple = \"", LLVM_TRIPLE);
+        if source != null(*u8) {
+            source = native_join(context, source, "\"\ndefine i32 @probe() { ret i32 0 }\n");
+        }
         var arguments: [*u8; 12] = make [*u8; 12] {
             tools -> compiler,
             "--no-default-config",
@@ -44,7 +47,12 @@ fn llvm_capture(toolchain: *StageToolchain, directory: *u8) -> bool {
             "artifact.dll",
             null(*u8)
         };
-        success = cache_save(context, work.manifest, source, native_strlen(source)) && cache_probe(
+        success = source != null(*u8) && cache_save(
+            context,
+            work.manifest,
+            source,
+            native_strlen(source)
+        ) && cache_probe(
             context,
             &toolchain -> inputs,
             &arguments[0usize],

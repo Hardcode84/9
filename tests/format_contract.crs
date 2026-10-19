@@ -111,8 +111,8 @@ fn test_sweep(source: *CrustSource) -> unit {
             success = test_stable(&context, &result);
         }
         if success {
-            fm_temporary(&result);
-            success = !result.lexical.failed;
+            var before: FmStat = uninit;
+            success = fm_inspect(&result, &before) && fm_publish(&result, &before);
         }
         var diagnosed: bool = context.error_count != 0usize;
         crust_context_destroy(&context);
@@ -180,8 +180,20 @@ fn test_publication(source: *CrustSource) -> unit {
     ) {
         trap;
     }
-    before.inode = ~before.inode;
+    if crust0_host_write_file(source -> path, "changed while formatting", 24usize) != 0i32 {
+        trap;
+    }
     if fm_publish(&result, &before) || context.error_count == 0usize {
+        trap;
+    }
+    var retained: *u8 = null(*u8);
+    var size: usize = 0usize;
+    if crust0_host_read_file(source -> path, &retained, &size) != 0i32 || size != 24usize {
+        trap;
+    }
+    test_equal(retained, "changed while formatting", size);
+    crust0_host_free(retained);
+    if crust0_host_write_file(source -> path, source -> bytes, source -> size) != 0i32 {
         trap;
     }
     crust_context_destroy(&context);

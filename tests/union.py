@@ -2,10 +2,19 @@
 """Exercise external tagged unions through C, ASM, and the seed evaluator."""
 
 import argparse
+import json
 import os
-import subprocess
 from pathlib import Path
 
+from host import (
+    WINDOWS,
+    api_path,
+    host_sources,
+    sanitizer_compiler,
+    sanitizer_environment,
+    sanitizer_flags,
+)
+from host import run as host_run
 from prepare import compile_package
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -192,7 +201,7 @@ REJECT = {
 
 
 def run(command, **kwargs):
-    result = subprocess.run(
+    result = host_run(
         [str(x) for x in command], cwd=ROOT, capture_output=True, text=True, timeout=180, **kwargs
     )
     if result.returncode:
@@ -202,30 +211,28 @@ def run(command, **kwargs):
 
 def sanitized_compiler(build, work):
     target = work / "stage-sanitizers"
-    # Line tables keep sanitizer traces useful without full local-variable DWARF.
-    flags = "-O1 -g1 -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer"
-    # Inlining lowering helpers into recursion multiplies ASan stack redzones.
-    flags += " -fno-inline-functions-called-once"
-    # Collect GCC's temporary trees earlier for the generated sanitizer fixture.
-    flags += " --param=ggc-min-expand=10 --param=ggc-min-heapsize=32768"
-    libraries = [target / f"libcrust0{suffix}.a" for suffix in ("", "_run", "_host")]
-    run(["make", f"BUILD={target}", f"CFLAGS={flags}", *libraries])
+    target.mkdir(exist_ok=True)
+    flags = sanitizer_flags()
+    platform = "windows" if WINDOWS else "posix"
+    sources = [path for path in host_sources() if path.name != "windows_io.c"]
+    sources += [ROOT / f"src/{name}.c" for name in ("eval", "eval_ffi", "run", f"run_{platform}")]
     executable = target / "crust-union-test"
     compile_package(
         build,
         ROOT / "tests/union-package.crs",
         executable,
-        flags.split(),
+        flags,
         [
-            "-fsanitize=address,undefined",
-            "-no-pie",
-            str(libraries[1]),
-            str(build / "libcrust_asm.a"),
-            str(libraries[0]),
-            str(libraries[2]),
-            "-ldl",
+            *flags,
+            "-I" + str(build / "profile/include" if WINDOWS else ROOT / "include"),
+            "-I" + str(ROOT / "include"),
+            "-I" + str(ROOT / "src"),
+            *sources,
+            build / "libcrust_asm.a",
             "-lffi",
+            *([] if WINDOWS else ["-ldl", "-no-pie"]),
         ],
+        cc=sanitizer_compiler(),
     )
     return executable
 
@@ -245,7 +252,7 @@ def check_inputs(compiler, work):
     run([compiler, *inputs, "-o", output])
     run([output])
     run([compiler, "--library", "--emit", "--export", "main", *inputs, "-o", work / "library.c"])
-    missing = subprocess.run(
+    missing = host_run(
         [str(compiler), "--check", str(work / "absent.crs")],
         cwd=ROOT,
         capture_output=True,
@@ -265,9 +272,7 @@ def main():
     work.mkdir(parents=True, exist_ok=True)
     compiler = build / "crust-union-test"
     if args.sanitize_stage:
-        os.environ.update(
-            ASAN_OPTIONS="detect_leaks=1:halt_on_error=1", UBSAN_OPTIONS="halt_on_error=1"
-        )
+        os.environ.update(sanitizer_environment())
         compiler = sanitized_compiler(build, work)
     source = work / "runtime.crs"
     source.write_text(RUNTIME)
@@ -285,7 +290,7 @@ def main():
     for name, (text, diagnostic) in REJECT.items():
         path = work / f"{name}.crs"
         path.write_text(text)
-        result = subprocess.run(
+        result = host_run(
             [str(compiler), "--check", str(path)],
             cwd=ROOT,
             capture_output=True,
@@ -301,10 +306,10 @@ def main():
     assert run([ROOT / "build/union"]) == "union: OK\n"
     root = work / "same-file.crs"
     root.write_text(
-        'host_source(run,"../../api/crust0_stage.crs");\n'
-        'host_import(run,host_open(run,"../crust-c-library.so"),"../../stages/c/api.crs");\n'
-        'host_import(run,host_open(run,"../crust-union-library.so"),"../../stages/union/api.crs");\n'
-        'host_source(run,"../../stages/union/build.crs");\n'
+        f'host_source(run,{json.dumps(api_path(build, "crust0_stage.crs").as_posix())});\n'
+        f'host_import(run,host_open(run,{json.dumps((build / "crust-c-library.so").as_posix())}),{json.dumps((ROOT / "stages/c/api.crs").as_posix())});\n'
+        f'host_import(run,host_open(run,{json.dumps((build / "crust-union-library.so").as_posix())}),{json.dumps((ROOT / "stages/union/api.crs").as_posix())});\n'
+        f'host_source(run,{json.dumps((ROOT / "stages/union/build.crs").as_posix())});\n'
         'var arguments:[*u8;2]=make [*u8;2]{"-o",host_path(run,"same-file")};\n'
         "return union_build(run->source,run->cursor,2i32,&arguments[0usize], c_backend_build);\n"
         + RUNTIME
@@ -312,26 +317,15 @@ def main():
     run([build / "crust", root])
     run([work / "same-file"])
     sanitized = work / "sanitized"
-    run(
-        [
-            compiler,
-            source,
-            "--cflag=-O1",
-            "--cflag=-fsanitize=address,undefined",
-            "--ldflag=-fsanitize=address,undefined",
-            "--ldflag=-no-pie",
-            "-o",
-            sanitized,
-        ]
-    )
-    run(
-        [sanitized],
-        env=dict(
-            os.environ,
-            ASAN_OPTIONS="detect_leaks=1:halt_on_error=1",
-            UBSAN_OPTIONS="halt_on_error=1",
-        ),
-    )
+    generated = work / "sanitized.c"
+    symbols = work / "sanitized.symbols"
+    run([compiler, "--emit", source, "--symbols", symbols, "-o", generated])
+    flags = sanitizer_flags()
+    raw, obj = work / "sanitized.input.o", work / "sanitized.o"
+    run([sanitizer_compiler(), *flags, "-c", generated, "-o", raw])
+    run(["objcopy", "@" + str(symbols), raw, obj])
+    run([sanitizer_compiler(), *flags, obj, "-o", sanitized])
+    run([sanitized], env=sanitizer_environment())
     print(
         f"union: C + ASM + evaluator + allocation sweep, {len(REJECT)} rejections, root example, ASan/UBSan passed"
     )

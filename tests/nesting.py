@@ -3,8 +3,9 @@
 """Check the documented block boundaries through each complete stage pipeline."""
 
 import argparse
-import subprocess
 from pathlib import Path
+
+from host import run as host_run
 
 
 def main():
@@ -35,7 +36,7 @@ def main():
                     + suffix
                     + "}\n"
                 )
-                result = subprocess.run(
+                result = host_run(
                     [args.build / driver, "--check", source], capture_output=True, timeout=30
                 )
                 assert result.returncode == int(depth > limit), (source, result)

@@ -6,7 +6,6 @@ import argparse
 import os
 import random
 import re
-import resource
 import shlex
 import shutil
 import signal
@@ -15,6 +14,8 @@ import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+from host import WINDOWS, disable_core_dumps, limit_stack, run, status_matches
 
 ROOT = Path(__file__).resolve().parents[1]
 TYPES = {f"{sign}{bits}": (bits, sign == "i") for bits in (8, 16, 32, 64) for sign in "iu"}
@@ -34,7 +35,7 @@ STRICT = [
 
 def checked_command(argv, expected=0, timeout=30, stdout=subprocess.PIPE, **options):
     command = list(map(str, argv))
-    result = subprocess.run(
+    result = run(
         command,
         cwd=options.pop("cwd", ROOT),
         stdout=stdout,
@@ -42,7 +43,9 @@ def checked_command(argv, expected=0, timeout=30, stdout=subprocess.PIPE, **opti
         timeout=timeout,
         **options,
     )
-    correct = result.returncode != 0 if expected is None else result.returncode == expected
+    correct = (
+        result.returncode != 0 if expected is None else status_matches(result.returncode, expected)
+    )
     if not correct:
         raise AssertionError(
             f"{shlex.join(command)}: status {result.returncode}, expected {expected}\n"
@@ -316,6 +319,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--compiler", required=True, type=Path)
     parser.add_argument("--backend", choices=("x64", "c"), default="x64")
+    parser.add_argument("--group", choices=("all", "semantic"), default="all")
     parser.add_argument("--library-dir", type=Path)
     parser.add_argument("--work-dir", type=Path)
     parser.add_argument("--cflags", default="-O2")
@@ -339,12 +343,12 @@ def main():
     cflags = shlex.split(args.cflags)
     c_options = [item for flag in cflags for item in ("--cflag", flag)]
     c_link_options = [item for flag in ldflags for item in ("--ldflag", flag)]
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    disable_core_dumps()
     checks = 0
 
     def command(argv, expected=0, **options):
         nonlocal checks
-        result = checked_command(argv, expected=expected, **options)
+        result = checked_command(argv, expected=expected, text_output=True, **options)
         checks += 1
         return result
 
@@ -376,7 +380,7 @@ def main():
     native = work / "native.o"
     command([*cc, *STRICT, "-O2", "-c", "tests/native.c", "-o", native])
     command([executable("runtime", inputs=["tests/runtime.crs"], libraries=[native])])
-    if args.backend == "c":
+    if args.backend == "c" or WINDOWS:
         command([executable("float", inputs=["tests/float.crs"], libraries=[native])])
     else:
         rejected = command([compiler, "--prepare", "tests/float.crs"], expected=1)
@@ -638,7 +642,10 @@ fn main(argc:i32,argv:**u8)->i32 {
     return 0i32;
 }
 """
-    stack_arguments_executable = executable("stack-arguments", stack_arguments)
+    stack_flags = ["-Wl,--stack,131072"] if WINDOWS else []
+    stack_arguments_executable = executable(
+        "stack-arguments", stack_arguments, libraries=stack_flags
+    )
     command([stack_arguments_executable])
     parameters = ",".join(f"p{index}:i8" for index in range(600))
     values = [index % 127 - 63 for index in range(600)]
@@ -659,6 +666,7 @@ fn main(argc:i32,argv:**u8)->i32 {
 fn exhaust()->unit {var large:[u8;1048576]=uninit;}
 fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
 """,
+            libraries=stack_flags,
         )
         stack_environment = trap_environment()
         # This child must expose the native guard-page signal, including in sanitizer runs.
@@ -667,12 +675,12 @@ fn main(argc:i32,argv:**u8)->i32 {exhaust();return 0i32;}
         )
         for program, expected_status in (
             (stack_arguments_executable, 0),
-            (stack_limit, -signal.SIGSEGV),
+            (stack_limit, 0xC00000FD if WINDOWS else -signal.SIGSEGV),
         ):
             command(
                 [program],
                 expected=expected_status,
-                preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_STACK, (131072, 131072)),
+                **({} if WINDOWS else {"preexec_fn": limit_stack}),
                 env=stack_environment,
             )
 
@@ -787,7 +795,8 @@ fn main(argc:i32,argv:**u8)->i32 {
             raise AssertionError(f"missing diagnostic for {name}: {result.stderr!r}")
 
     api_stems = ("crust0", "crust0_host", "crust0_x64", "crust0_stage", "crust0_eval", "crust0_run")
-    api_paths = [ROOT / "api" / f"{stem}.crs" for stem in api_stems]
+    api_root = build / "profile" if WINDOWS else ROOT
+    api_paths = [api_root / "api" / f"{stem}.crs" for stem in api_stems]
     probe = [
         *(f'#include "{stem}.h"' for stem in api_stems),
         "#include <stdio.h>",
@@ -821,6 +830,9 @@ fn main(argc:i32,argv:**u8)->i32 {
         ]
     )
     print(f"public layouts: {len(layout_checks.splitlines())} C/CRUST0 comparisons passed")
+    if args.group == "semantic":
+        print(f"semantic integration ({args.backend}): {checks} process checks passed")
+        return
 
     stat_fields = {
         "device": "st_dev",
@@ -1179,95 +1191,9 @@ fn main(argc:i32,argv:**u8)->i32 {
         )
         command([work / "library-main"], expected=42)
 
-        stage_sources = [
-            "api/crust0.crs",
-            "api/crust0_host.crs",
-            "api/crust0_stage.crs",
-            *[
-                f"stages/c/{name}.crs"
-                for name in (
-                    "model",
-                    "base",
-                    "types",
-                    "emit",
-                    "driver_model",
-                    "driver_linux",
-                    "driver",
-                    "program",
-                    "main",
-                )
-            ],
-        ]
-        seed = build / "crust-c-seed"
-        generations = [("seed", seed), ("current", compiler)]
-        generated = []
-        for name, stage_compiler in generations:
-            c_path, response = work / f"self-{name}.c", work / f"self-{name}.rsp"
-            command([stage_compiler, "--emit", "-o", c_path, "--symbols", response, *stage_sources])
-            generated.append((c_path.read_bytes(), response.read_bytes()))
-        assert (
-            generated[0] == generated[1]
-        ), "seed and self-compiled C stages emit different artifacts"
-        stage_object = work / "self-backend.o"
-        command([compiler, "--object", "-o", stage_object, *c_options, *stage_sources])
-        references = command(["nm", "-u", stage_object]).stdout.decode()
-        allowed_frontend = {
-            "crust_context_init",
-            "crust_context_destroy",
-            "crust_read",
-            "crust_read_range",
-            "crust_collect",
-            "crust_resolve",
-            "crust_check",
-            "crust_try_alloc",
-            "crust_try_copy_string",
-        }
-        for name in re.findall(r"\bU\s+(\S+)", references):
-            if name.startswith("crust_") and name not in allowed_frontend:
-                raise AssertionError(f"C stage calls a forbidden native compiler helper: {name}")
-        next_compiler = work / "crust-c-next"
-        command(
-            [
-                *cc,
-                "-no-pie",
-                stage_object,
-                build / "libcrust0.a",
-                build / "libcrust0_host.a",
-                *ldflags,
-                "-o",
-                next_compiler,
-            ]
-        )
-        next_c, next_response = work / "self-next.c", work / "self-next.rsp"
-        command([next_compiler, "--emit", "-o", next_c, "--symbols", next_response, *stage_sources])
-        assert generated[1] == (
-            next_c.read_bytes(),
-            next_response.read_bytes(),
-        ), "self-translation changed emitted artifacts"
-        for stage_compiler in (seed, compiler, next_compiler):
-            names = command(["nm", stage_compiler]).stdout
-            assert not re.search(
-                rb"\bcrust_x64_", names
-            ), "C stage contains a native x64 backend dependency"
-        next_object = work / "self-intrusive.o"
-        command(
-            [
-                next_compiler,
-                "--object",
-                "-o",
-                next_object,
-                *c_options,
-                "examples/intrusive/raw.crs",
-            ]
-        )
-        next_program = work / "self-intrusive"
-        command(
-            [*cc, "-no-pie", next_object, build / "libcrust0_host.a", *ldflags, "-o", next_program]
-        )
-        assert command([next_program]).stdout == b"intrusive: ok\n"
-        print(
-            "C stage: seed, self, and next generations emit identical C and exact-symbol response files"
-        )
+        from c_generations import check_generations
+
+        check_generations(command, build, compiler, cc, c_options, ldflags)
     print(f"integration ({args.backend}): {checks} process checks passed")
 
 

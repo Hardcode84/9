@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
+fn os_receipt_path(context: *CrustContext, path: *u8) -> *u8 {
+    return path;
+}
+
 const OS_LIBRARY_TAG: *u8 = "crust-ownership-library-v2-linux-x64\n";
 const OG_LIBRARY_TAG: *u8 = "crust-generic-ownership-v2-signature-contracts-linux-x64\n";
 const OS_ARTIFACT_SUFFIX: *u8 = "/artifact";

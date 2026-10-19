@@ -10,6 +10,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from host import api_path
 from resources import ROOT, Failure, Suite, program, source_report
 
 CELL = "record Cell {first:i32; second:i32;}\n"
@@ -306,10 +307,12 @@ def import_root(suite, output, provider, target, register):
     }
     text = ""
     for path in paths:
+        source = api_path(suite.build, Path(path).name) if path.startswith("api/") else ROOT / path
+        selected = json.dumps(str(source))
         if path in providers:
-            text += f"host_import(run,host_open(run,{json.dumps(str(suite.build / providers[path]))}),{json.dumps(str(ROOT / path))});\n"
+            text += f"host_import(run,host_open(run,{json.dumps(str(suite.build / providers[path]))}),{selected});\n"
         else:
-            text += f"host_source(run,{json.dumps(str(ROOT / path))});\n"
+            text += f"host_source(run,{selected});\n"
     text += """
 fn compile_target(source:*CrustSource,begin:usize)->i32 {
 var context:CrustContext=uninit;
@@ -451,7 +454,7 @@ def main():
         "--allocator", type=Path, help="existing resource allocation fixture executable"
     )
     args = parser.parse_args()
-    work = Path(tempfile.mkdtemp(prefix="crust-resource-returns-"))
+    work = Path(tempfile.mkdtemp(prefix="crust-resource-returns-", dir=args.build.resolve()))
     suite = Suite(args, work)
     cases = [("runtime", *case) for case in runtime_cases()]
     cases += [("reject", *case) for case in reject_cases()]

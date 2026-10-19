@@ -5,6 +5,8 @@
 import argparse
 from pathlib import Path
 
+from host import WINDOWS
+from prepare import link_library
 from source_order import ROOT, Suite
 
 MULTIFILE = (
@@ -131,12 +133,17 @@ def build_driver(suite, filename="generics_source_driver"):
         )
     ]
     libraries = [
-        suite.build / "crust-generics-library.so",
-        suite.build / "crust-c-library.so",
-        suite.build / "crust-asm-library.so",
+        (
+            link_library(suite.build, suite.work / f"{name}.dll", f"{name}/package.crs")
+            if WINDOWS
+            else suite.build / f"crust-{name}-library.so"
+        )
+        for name in ("generics", "c", "asm")
+    ]
+    libraries += [
         suite.build / "libcrust0.a",
         suite.build / "libcrust0_host.a",
-        "-rdynamic",
+        "-lbcrypt" if WINDOWS else "-rdynamic",
     ]
     flags = [item for flag in suite.cflags for item in ("--cflag", flag)]
     flags += [item for flag in [*libraries, *suite.ldflags] for item in ("--ldflag", flag)]

@@ -5,8 +5,10 @@
 import argparse
 import os
 import subprocess
+import sys
 from pathlib import Path
 
+from host import WINDOWS, failed_output, host_sources, run, sanitizer_compiler, sanitizer_flags
 from prepare import compile_package
 from run import checked_command
 
@@ -26,8 +28,8 @@ class Suite:
         self.contract = self.work / "contracts"
         package = self.work / "executable.crs"
         package.write_text(
-            f'stage_include(stage,"{ROOT}/stages/format/sources.crs");\n'
-            f'stage_source(stage,"{ROOT}/stages/format/main.crs");\n'
+            f'stage_include(stage,"{ROOT.as_posix()}/stages/format/sources.crs");\n'
+            f'stage_source(stage,"{ROOT.as_posix()}/stages/format/main.crs");\n'
             'stage_export(stage,"main");\n'
         )
         libraries = [self.build / "libcrust0.a", self.build / "libcrust0_host.a"]
@@ -107,12 +109,12 @@ class Suite:
         effect = self.work / "effect"
         effect.unlink(missing_ok=True)
         path = self.source(
-            "effect.crs", f'crust0_host_write_file("{effect}","bad",3usize);'.encode()
+            "effect.crs", f'crust0_host_write_file("{effect.as_posix()}","bad",3usize);'.encode()
         )
         command([self.tool, path])
         assert not effect.exists()
-        with open("/dev/full", "wb") as stream:
-            failed = subprocess.run([self.tool, path], stdout=stream, stderr=subprocess.PIPE)
+        with failed_output() as stream:
+            failed = run([self.tool, path], stdout=stream, stderr=subprocess.PIPE)
         assert failed.returncode == 2 and b"cannot write" in failed.stderr
 
     def publication(self):
@@ -121,7 +123,9 @@ class Suite:
         path.chmod(0o754)
         command([self.tool, "--check", path], 1)
         command([self.tool, "--write", path])
-        assert path.read_bytes() == b"fn f() -> unit {}\n" and path.stat().st_mode & 0o777 == 0o754
+        assert path.read_bytes() == b"fn f() -> unit {}\n"
+        if not WINDOWS:
+            assert path.stat().st_mode & 0o777 == 0o754
         saved = path.stat()
         command([self.tool, "--check", path])
         command([self.tool, "--write", path])
@@ -140,13 +144,17 @@ class Suite:
         directory.mkdir(exist_ok=True)
         target = directory / "source.crs"
         target.write_bytes(original)
-        directory.chmod(0o555)
+        protected = target if WINDOWS else directory
+        protected.chmod(0o444 if WINDOWS else 0o555)
         try:
             command([self.tool, "--write", target], 2)
             assert target.read_bytes() == original
         finally:
-            directory.chmod(0o755)
-        long_name = self.source("x" * 250, original)
+            protected.chmod(0o644 if WINDOWS else 0o755)
+        long_name = self.work / ("x" * 250)
+        if WINDOWS:
+            long_name = Path("\\\\?\\" + str(long_name))
+        long_name.write_bytes(original)
         command([self.tool, "--write", long_name])
         command([self.tool, "--check", long_name])
         assert not list(self.work.rglob(".crust-format-*"))
@@ -169,39 +177,37 @@ class Suite:
     def hook(self):
         path = self.source("hook input.crs", b"fn f()->unit{}")
         wrapper = ROOT / "tools/format_crust.py"
-        command(["python3", wrapper, "--check", path], 1)
-        command(["python3", wrapper, path])
+        command([sys.executable, wrapper, "--check", path], 1)
+        command([sys.executable, wrapper, path])
         assert path.read_bytes() == b"fn f() -> unit {}\n"
-        command(["python3", wrapper, "--check", path])
+        command([sys.executable, wrapper, "--check", path])
         link = self.work / "hook-link.crs"
         link.unlink(missing_ok=True)
         link.symlink_to(path)
-        command(["python3", wrapper, link], 2)
+        command([sys.executable, wrapper, link], 2)
         assert path.read_bytes() == b"fn f() -> unit {}\n"
         link.unlink()
-        command(["python3", ROOT / "tools/api.py", "--check"])
+        command([sys.executable, ROOT / "tools/api.py", "--check"])
 
     def sanitize(self, source):
         output = self.work / "contracts-sanitized"
-        flags = [
-            "-O1",
-            "-g",
-            "-fsanitize=address,undefined",
-            "-fno-omit-frame-pointer",
-            "-fno-sanitize-recover=all",
-        ]
+        flags = sanitizer_flags()
         libraries = [
             *flags,
             "-std=c99",
             "-pedantic-errors",
             "-I" + str(ROOT / "include"),
             "-I" + str(ROOT / "src"),
-            ROOT / "crust0_amalg.c",
-            ROOT / "src/profile_linux_x64.c",
-            ROOT / "runtime/host.c",
-            ROOT / "runtime/host_posix.c",
+            *[path for path in host_sources() if path.name != "windows_io.c"],
         ]
-        compile_package(self.build, ROOT / "tests/format-package.crs", output, flags, libraries)
+        compile_package(
+            self.build,
+            ROOT / "tests/format-package.crs",
+            output,
+            flags,
+            libraries,
+            cc=sanitizer_compiler(),
+        )
         command([output, "sweep", source])
 
 

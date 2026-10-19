@@ -4,10 +4,11 @@
 
 import argparse
 import json
-import resource
 import signal
+import sys
 from pathlib import Path
 
+from host import WINDOWS, disable_core_dumps, rename_symbols
 from resources import runtime_cases
 from run import TYPES, checked_command, integer_cases
 
@@ -15,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def check(command, expected=0, **kwargs):
-    return checked_command(command, expected=expected, timeout=180, **kwargs)
+    return checked_command(command, expected=expected, timeout=180, text_output=True, **kwargs)
 
 
 class Suite:
@@ -58,6 +59,7 @@ class Suite:
             [
                 self.llvm / "bin/clang",
                 "--no-default-config",
+                *(["--target=x86_64-w64-windows-gnu"] if WINDOWS else []),
                 "-x",
                 "ir",
                 f"-O{level}",
@@ -67,8 +69,18 @@ class Suite:
                 obj,
             ]
         )
-        check(["objcopy", "@" + str(ir) + ".symbols", obj, renamed])
-        check(["gcc", renamed, *libraries, self.build / "libcrust0_host.a", "-o", binary])
+        rename_symbols(str(ir) + ".symbols", obj, renamed)
+        check(
+            [
+                "gcc",
+                renamed,
+                *libraries,
+                self.build / "libcrust0_host.a",
+                *(["-lbcrypt"] if WINDOWS else []),
+                "-o",
+                binary,
+            ]
+        )
         return binary
 
     def execute(self, ir, expected=0, output=None, libraries=()):
@@ -290,7 +302,7 @@ def sqlite(suite):
         connection.execute("create table input(seq integer, value)")
         connection.executemany("insert into input values(?,?)", [(1, "hello"), (2, 17), (3, None)])
     for level in (0, 2):
-        binary = suite.binary(ir, level, ["-l:libsqlite3.so.0"])
+        binary = suite.binary(ir, level, ["-lsqlite3" if WINDOWS else "-l:libsqlite3.so.0"])
         normal = check([binary, database])
         assert normal.stdout == b"T 68656c6c6f\nI 3137\nN\nrows 3\n" and not normal.stderr
         failed = check([binary, suite.work / "absent-parent/input.db"], 1)
@@ -303,12 +315,22 @@ def main():
     parser.add_argument("--build", type=Path, default=Path("build"))
     parser.add_argument("--llvm", type=Path)
     args = parser.parse_args()
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    disable_core_dumps()
     build = args.build.resolve()
     llvm = args.llvm
     if llvm is None:
         llvm = Path(
-            check(["python3", "tools/fetch_llvm.py", "release", "--locked"]).stdout.decode().strip()
+            check(
+                [
+                    sys.executable,
+                    "tools/fetch_llvm.py",
+                    "release",
+                    "--locked",
+                    *(["--profile", "windows_x64"] if WINDOWS else []),
+                ]
+            )
+            .stdout.decode()
+            .strip()
         )
     suite = Suite(build, llvm.resolve())
     check([suite.driver, "allocation", "tests/runtime.crs"])

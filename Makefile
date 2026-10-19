@@ -22,12 +22,13 @@ BUILD ?= build/windows
 PLATFORM = windows
 EXE = .exe
 HOST_EXTRA = $(BUILD)/windows_io.o
-RUN_LDFLAGS = -municode -Wl,--export-all-symbols -Wl,--out-implib,$(BUILD)/crust.exe.a
+# The seed owns the thread stack required by the default evaluator depth limit.
+RUN_LDFLAGS = -municode -Wl,--stack,8388608 -Wl,--export-all-symbols -Wl,--out-implib,$(BUILD)/crust.exe.a
 RUN_LIBS = -lffi -lbcrypt
 API_ROOT = $(BUILD)/profile
 SEED_IMPORT = $(BUILD)/crust.exe.a
 CPPFLAGS += -I$(API_ROOT)/include
-WINDOWS_GOALS = all clean api amalgamate fetch-llvm-release fetch-llvm-main check-llvm-fetch check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership check-windows-shader
+WINDOWS_GOALS = all clean api amalgamate fetch-llvm-release fetch-llvm-main check-llvm-fetch check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership check-windows-shader check-windows-shared-core check-windows-shared-split-core check-windows-shared-ownership check-windows-shared-tooling check-windows-shared-llvm
 ifneq ($(filter-out $(WINDOWS_GOALS) $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a,$(MAKECMDGOALS)),)
 $(error This target is not available for Windows; use the check-windows targets)
 endif
@@ -36,7 +37,7 @@ $(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64 or windows_x64)
 endif
 CPPFLAGS += -Iinclude $(FFI_CFLAGS)
 ifneq ($(PROFILE),windows_x64)
-ifneq ($(filter check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership check-windows-shader,$(MAKECMDGOALS)),)
+ifneq ($(filter check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership check-windows-shader check-windows-shared-core check-windows-shared-split-core check-windows-shared-ownership check-windows-shared-tooling check-windows-shared-llvm,$(MAKECMDGOALS)),)
 $(error check-windows requires PROFILE=windows_x64)
 endif
 endif
@@ -293,7 +294,7 @@ $(BUILD)/core_test $(BUILD)/check_test $(BUILD)/x64_test $(BUILD)/parallel_test:
 $(BUILD)/arena_test: tests/arena_$(PROFILE)_test.c $(BUILD)/libcrust0.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -Wl,--wrap=madvise -o $@
 
-$(BUILD)/eval_test: tests/eval_test.c tests/native.c $(BUILD)/eval.o $(BUILD)/eval_ffi.o $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
+$(BUILD)/eval_test: tests/eval_test.c tests/eval_lookup_posix.c tests/native.c $(BUILD)/eval.o $(BUILD)/eval_ffi.o $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ -rdynamic $(LDFLAGS) -ldl -lffi -o $@
 
 api:
@@ -307,10 +308,10 @@ check: all $(BUILD)/crust0 $(BUILD)/core_test $(BUILD)/arena_test $(BUILD)/read_
 	$(BUILD)/arena_test
 	$(BUILD)/read_test
 	$(BUILD)/check_test
-	$(BUILD)/host_test
+	$(BUILD)/host_test $(BUILD)/host-test.tmp /dev/full
 	$(BUILD)/parallel_test
 	$(BUILD)/x64_test
-	$(BUILD)/eval_test
+	python3 tests/eval.py --build $(BUILD)
 	python3 tools/api.py --check
 	python3 tests/run.py --compiler $(BUILD)/crust0 --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
@@ -411,3 +412,7 @@ check-tutorials: all test-tools
 check-shader: all test-tools
 	python3 tests/prepare.py --build $(BUILD) --compile-package tests/shader_alloc_package.crs --output $(BUILD)/shader-alloc --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(LDFLAGS)'
 	python3 tests/shader.py --build $(BUILD) --cc '$(CC)' --llvm '$(LLVM_DIRECTORY)' --spirv-tools '$(SPIRV_TOOLS)' $(if $(VULKAN_INCLUDE),--vulkan-include '$(VULKAN_INCLUDE)') $(if $(WGSL_VALIDATOR),--wgsl-validator '$(WGSL_VALIDATOR)')
+
+.PHONY: check-windows-shared-core check-windows-shared-split-core check-windows-shared-ownership check-windows-shared-tooling check-windows-shared-llvm
+check-windows-shared-core check-windows-shared-split-core check-windows-shared-ownership check-windows-shared-tooling check-windows-shared-llvm: all $(BUILD)/windows_limit.exe $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a
+	$(BUILD)/windows_limit.exe python3 tests/windows_shared.py --build $(BUILD) --suite $(patsubst check-windows-shared-%,%,$@) --amalgamation $(AMALGAMATION) --ldflags='$(LDFLAGS) $(FFI_LDFLAGS)'

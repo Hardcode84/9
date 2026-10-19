@@ -30,22 +30,12 @@ fn rb_assembly(cli: *CCli, entry: *CrustDecl) -> bool {
     var context: *CrustContext = cli -> stage.status.context;
     var file: *u8 = rb_open(cli -> options.output, "wb");
     if file == null(*u8) {
-        c_driver_io_error(
-            &cli -> driver,
-            "cannot open output",
-            cli -> options.output,
-            *c_driver_errno()
-        );
+        c_driver_error(&cli -> driver, "cannot open output");
         return false;
     }
     var success: bool = crust_x64_emit(context, file, entry);
     if rb_close(file) != 0i32 {
-        c_driver_io_error(
-            &cli -> driver,
-            "cannot close output",
-            cli -> options.output,
-            *c_driver_errno()
-        );
+        c_driver_error(&cli -> driver, "cannot close output");
         return false;
     }
     return success;

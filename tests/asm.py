@@ -5,8 +5,11 @@
 import argparse
 import re
 import shlex
-import subprocess
 from pathlib import Path
+
+from host import WINDOWS, executable
+from host import run as host_run
+from prepare import sources as package_sources
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,20 +24,19 @@ def main():
     work = build / "asm-generations"
     work.mkdir(exist_ok=True)
     cc = shlex.split(args.cc)
-    ldflags = shlex.split(args.ldflags)
+    ldflags = shlex.split(args.ldflags) + (["-lbcrypt"] if WINDOWS else [])
 
     def run(command):
-        result = subprocess.run(list(map(str, command)), cwd=ROOT, capture_output=True, timeout=60)
+        result = host_run(
+            list(map(str, command)), cwd=ROOT, capture_output=True, text_output=True, timeout=120
+        )
         assert result.returncode == 0, (command, result)
         return result.stdout
 
     for artifact in ("crust", "libcrust0.a"):
-        names = run(["nm", "-g", build / artifact])
+        names = run(["nm", "-g", executable(build / artifact)])
         assert not re.search(rb"\bcrust_x64_", names), artifact
-    sources = [ROOT / "api/crust0.crs"] + [
-        ROOT / "stages/asm" / (part + ".crs")
-        for part in ("model", "target_linux", "output", "plan", "emit", "program")
-    ]
+    sources = package_sources(build, "asm/package.crs")
     exports = re.findall(r"\b(crust_x64_\w+)\s*\(", (ROOT / "include/crust0_x64.h").read_text())
     exports.append("crust_x64_default_ops")
     options = [item for name in exports for item in ("--export", name)]
@@ -53,7 +55,7 @@ def main():
                 "-no-pie",
                 obj,
                 build / "driver.o",
-                build / "driver_posix.o",
+                build / ("driver_windows.o" if WINDOWS else "driver_posix.o"),
                 build / "libcrust0.a",
                 build / "libcrust0_host.a",
                 *ldflags,

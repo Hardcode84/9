@@ -1,6 +1,182 @@
 // SPDX-License-Identifier: Apache-2.0
 
 extern fn cache_strcmp(left: *u8, right: *u8) -> i32 = "strcmp";
+extern fn cache_memcmp(left: *u8, right: *u8, size: usize) -> i32 = "memcmp";
+extern fn cache_file_read(
+    file: *u8,
+    bytes: *u8,
+    size: u32,
+    count: *u32,
+    overlapped: *u8
+) -> i32 = "ReadFile";
+extern fn cache_file_write(
+    file: *u8,
+    bytes: *u8,
+    size: u32,
+    count: *u32,
+    overlapped: *u8
+) -> i32 = "WriteFile";
+extern fn cache_hash_open(handle: **u8, name: *u16, provider: *u16, flags: u32) -> i32 = "BCryptOpenAlgorithmProvider";
+extern fn cache_hash_close(handle: *u8, flags: u32) -> i32 = "BCryptCloseAlgorithmProvider";
+extern fn cache_hash_create(
+    provider: *u8,
+    handle: **u8,
+    object: *u8,
+    size: u32,
+    secret: *u8,
+    secret_size: u32,
+    flags: u32
+) -> i32 = "BCryptCreateHash";
+extern fn cache_hash_data(handle: *u8, bytes: *u8, size: u32, flags: u32) -> i32 = "BCryptHashData";
+extern fn cache_hash_finish(handle: *u8, bytes: *u8, size: u32, flags: u32) -> i32 = "BCryptFinishHash";
+extern fn cache_hash_destroy(handle: *u8) -> i32 = "BCryptDestroyHash";
+
+fn cache_write(context: *CrustContext, file: *u8, bytes: *u8, size: usize) -> bool {
+    while size != 0usize {
+        var chunk: u32 = 65536u32;
+        if size < chunk as usize {
+            chunk = size as u32;
+        }
+        var count: u32 = 0u32;
+        if cache_file_write(file, bytes, chunk, &count, null(*u8)) == 0i32 || count != chunk {
+            return win_fail(context, "cannot write cache file");
+        }
+        bytes = bytes + count as isize;
+        size = size - count as usize;
+    }
+    return true;
+}
+fn cache_save(context: *CrustContext, path: *u8, bytes: *u8, size: usize) -> bool {
+    var file: *u8 = win_stream(context, path, false);
+    if file == null(*u8) {
+        return false;
+    }
+    var success: bool = cache_write(context, file, bytes, size);
+    if !win_close(context, file) {
+        success = false;
+    }
+    return success;
+}
+
+// Stream file bytes through the system SHA-256 provider; retain only the digest.
+fn cache_digest(context: *CrustContext, path: *u8, scratch: *u8) -> *u8 {
+    var name: [u16; 7] = make [u16; 7] {
+        83u16,
+        72u16,
+        65u16,
+        50u16,
+        53u16,
+        54u16,
+        0u16
+    };
+    var provider: *u8 = null(*u8);
+    var hash: *u8 = null(*u8);
+    var digest: [u8; 32] = uninit;
+    var success: bool = cache_hash_open(&provider, &name[0usize], null(*u16), 0u32) >= 0i32;
+    if success {
+        success = cache_hash_create(
+            provider,
+            &hash,
+            null(*u8),
+            0u32,
+            null(*u8),
+            0u32,
+            0u32
+        ) >= 0i32;
+    }
+    if success {
+        success = cache_hash_file(context, path, hash) && cache_hash_finish(
+            hash,
+            &digest[0usize],
+            32u32,
+            0u32
+        ) >= 0i32;
+    }
+    if hash != null(*u8) && cache_hash_destroy(hash) < 0i32 {
+        success = false;
+    }
+    if provider != null(*u8) && cache_hash_close(provider, 0u32) < 0i32 {
+        success = false;
+    }
+    if !success {
+        native_error(context, "cannot hash cache input");
+        return null(*u8);
+    }
+    var output: *u8 = crust_try_alloc(context, 65usize, 1usize);
+    if output == null(*u8) {
+        return output;
+    }
+    var hex: *u8 = "0123456789abcdef";
+    var index: usize = 0usize;
+    while index < 32usize {
+        output[index * 2usize] = hex[(digest[index] >> 4u8) as usize];
+        output[index * 2usize + 1usize] = hex[(digest[index] & 15u8) as usize];
+        index = index + 1usize;
+    }
+    output[64usize] = 0u8;
+    return output;
+}
+fn cache_hash_file(context: *CrustContext, path: *u8, hash: *u8) -> bool {
+    var file: *u8 = win_stream(context, path, true);
+    if file == null(*u8) {
+        return false;
+    }
+    var bytes: [u8; 65536] = uninit;
+    var success: bool = true;
+    while success {
+        var count: u32 = 0u32;
+        if cache_file_read(file, &bytes[0usize], 65536u32, &count, null(*u8)) == 0i32 {
+            success = win_fail(context, "cannot read cache input");
+            break;
+        }
+        if count == 0u32 {
+            break;
+        }
+        success = cache_hash_data(hash, &bytes[0usize], count, 0u32) >= 0i32;
+    }
+    if !win_close(context, file) {
+        success = false;
+    }
+    return success;
+}
+
+fn cache_work(context: *CrustContext, directory: *u8, work: *CacheWork) -> bool {
+    var prefix: *u8 = native_join(context, directory, "/.build-");
+    if prefix == null(*u8) {
+        return false;
+    }
+    var path: *u8 = win_unique(context, prefix, true);
+    if path == null(*u8) {
+        return false;
+    }
+    work -> directory = path;
+    work -> manifest = native_join(context, path, "/inputs");
+    work -> digest = native_join(context, path, "/digest");
+    work -> artifact = native_join(context, path, "/artifact.dll");
+    work -> checksum = native_join(context, path, "/checksum");
+    return work -> manifest != null(*u8) && work -> digest != null(*u8) && work -> artifact != null(
+        *u8
+    ) && work -> checksum != null(*u8);
+}
+fn cache_cleanup(context: *CrustContext, work: *CacheWork) -> bool {
+    var success: bool = true;
+    if !cache_remove(context, work -> manifest) {
+        success = false;
+    }
+    if !cache_remove(context, work -> digest) {
+        success = false;
+    }
+    if !cache_remove(context, work -> artifact) {
+        success = false;
+    }
+    if !cache_remove(context, work -> checksum) {
+        success = false;
+    }
+    if work -> directory != null(*u8) && !win_remove(context, work -> directory, true) {
+        success = false;
+    }
+    return success;
+}
 
 fn cache_directory(context: *CrustContext, path: *u8) -> bool {
     var wide: *u16 = win_wide(context, path);
@@ -21,6 +197,9 @@ fn cache_directory(context: *CrustContext, path: *u8) -> bool {
     );
 }
 fn cache_remove(context: *CrustContext, path: *u8) -> bool {
+    if path == null(*u8) {
+        return true;
+    }
     return win_remove(context, path, false);
 }
 fn cache_tool(context: *CrustContext, arguments: **u8, output: *u8) -> bool {

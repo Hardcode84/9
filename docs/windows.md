@@ -9,8 +9,8 @@ The host uses the Windows x64 scalar ABI and an LLP64 C data model.
 
 The C backend supports source bootstrap, native DLL handoff, and application
 compilation. The shared package builder selects Windows providers in ordinary
-Crust. Each request builds a fresh artifact. Cache reuse, LLVM and ASM backends,
-native parallel jobs, and formatter file replacement remain Linux-only.
+Crust. Captured inputs select validated, reusable DLL artifacts. LLVM and ASM
+backends, native parallel jobs, and formatter file replacement remain Linux-only.
 The [support plan](windows-support-plan.md) defines the remaining phases.
 
 ## Build and check
@@ -18,7 +18,7 @@ The [support plan](windows-support-plan.md) defines the remaining phases.
 Use an MSYS2 UCRT64 shell with GNU Make, MinGW-w64 GCC, libffi, and native Python.
 The CI job installs these packages: `make`, `mingw-w64-ucrt-x86_64-gcc`,
 `mingw-w64-ucrt-x86_64-libffi`, and `mingw-w64-ucrt-x86_64-python`.
-Run `make PROFILE=windows_x64 all check-windows check-windows-bootstrap`. Repeat with
+Run `make PROFILE=windows_x64 all check-windows check-windows-bootstrap check-windows-cache`. Repeat with
 `AMALGAMATION=0` to check the separate-file core.
 
 The default output is `build/windows/crust.exe`. It runs from PowerShell or
@@ -40,11 +40,12 @@ on a Windows host. A cross-build alone does not validate runtime behavior.
 The host interface exposes the generated seed declarations from `crust0`,
 `crust0_host`, `crust0_eval`, and `crust0_run`. It also exposes these C functions:
 `puts`, `strlen`, `strcmp`, `strncmp`, `memcpy`, `memmove`, `memset`, `memcmp`,
-`malloc`, `calloc`, `realloc`, `free`, `abort`, and `exit`.
+`malloc`, `calloc`, `realloc`, `free`, `qsort`, `abort`, and `exit`.
 The Windows process and file provider also uses the explicit Win32 host symbols
 listed in [run_windows.c](../src/run_windows.c). They cover UTF conversion,
-paths, files, handles, process creation and status, environment lookup, and
-`BCryptGenRandom`. Other externs require an explicit library binding. Loading a DLL does not add
+paths, files, handles, process creation and status, environment lookup, image
+enumeration, loader notifications, random bytes, and BCrypt SHA-256 operations.
+Other externs require an explicit library binding. Loading a DLL does not add
 its exports to the host interface.
 
 Use the host release function for host allocations and file-read buffers.
@@ -94,11 +95,44 @@ and pass relative scratch filenames. This avoids ANSI conversion of absolute
 Unicode paths in GCC child tools. User compiler and linker flags remain unchanged;
 relative paths in those flags must refer to the output directory.
 
-Each Windows artifact request creates a private directory and returns `hit=false`.
-Failed builds remove their outputs and scratch files. Successful artifacts belong
-to the caller. Keep them until every runner that loaded them has been destroyed,
-then remove them. This provider does not implement content-addressed reuse or
-claim complete Windows dependency capture. These are phase 3 requirements.
+For a GCC installation path that contains non-ASCII characters, the provider
+adds relative search prefixes through a temporary directory junction. The
+junction points to the original installation and is removed after the command.
+This requires a local toolchain and an output filesystem that supports directory
+junctions. A failure to create or remove the junction is an error. The cache
+captures the original files, not the temporary junction name.
+
+Each Windows artifact request hashes its ordered input snapshots with a Windows
+x64 format tag. A hit verifies the DLL checksum. A miss builds in a private
+directory and publishes the DLL and checksum together with a directory rename.
+A concurrent losing producer verifies the winner and removes its own files.
+Failed builds remove owned scratch files. An interrupted process can leave a
+private `.build-` directory; it is never a cache entry. The caller can remove
+such directories after their producers stop. Publication does not promise
+power-loss durability.
+
+The default GCC provider requires one self-contained installation with `gcc`
+and `objcopy` in its `bin` directory. Its headers, libraries, helper executables,
+and configuration must stay inside that installation. Reparse points and
+directory nesting deeper than 32 levels are rejected. Custom specs or plugins
+that read external files need a separate toolchain provider with explicit inputs.
+The provider hashes every installation file, including directory membership,
+and captures the exact child environment. A compile, object-copy, and DLL-link
+probe captures the actual executable and DLL images loaded by the tools and
+their children. The probe requires Windows debugging APIs. Failure to capture
+an input rejects the request before cache lookup.
+
+The seed, its loaded images, the seed import archive, producer source snapshots,
+package inputs, options, and export mappings also contribute to the key.
+External file hashing uses a fixed 64 KiB buffer. Keep tools, configuration, and
+loaded code unchanged during a session. Keep published files unchanged until
+every runner that loaded them has been destroyed. Cache directories must be
+caller-owned and must not have untrusted writers.
+
+Ownership and generic-ownership library formats still use their Linux x64
+tags and Linux providers. This phase does not make those object bundles portable.
+The Windows cache tag and generated native ABI digest are distinct from Linux's;
+native DLL loading still checks the marker owned by each selected image.
 
 The C driver creates temporary files beside the destination. It replaces existing
 files through `ReplaceFileW` and publishes new files through `MoveFileExW`.
@@ -122,6 +156,11 @@ quoting, redirection, the child environment, exit status, missing tools and impo
 libraries, failed linking, output preservation, paired output aliases, and DLL
 deletion after runner destruction. Cleanup is also tested with a context
 allocator that rejects every allocation.
+
+`check-windows-cache` checks cold and warm native builds, input invalidation,
+checksums, failed and interrupted builds, concurrent publication, and allocation
+failures. Concurrent storage tests share one 512 MiB job; they do not compile
+backends concurrently. Toolchain copies and timing evidence stay in `build/`.
 
 Native test processes run serially in Windows jobs with a 512 MiB combined
 memory limit per process tree. Closing a test job terminates its remaining

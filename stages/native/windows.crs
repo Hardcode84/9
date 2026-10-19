@@ -123,6 +123,16 @@ extern fn win_wait(process: *u8, milliseconds: u32) -> u32 = "WaitForSingleObjec
 extern fn win_exit_code(process: *u8, status: *u32) -> i32 = "GetExitCodeProcess";
 extern fn win_terminate(process: *u8, status: u32) -> i32 = "TerminateProcess";
 extern fn win_close_handle(handle: *u8) -> i32 = "CloseHandle";
+extern fn win_device_control(
+    file: *u8,
+    operation: u32,
+    input: *u8,
+    input_size: u32,
+    output: *u8,
+    output_size: u32,
+    count: *u32,
+    overlapped: *u8
+) -> i32 = "DeviceIoControl";
 extern fn win_equal_path(
     left: *u16,
     left_size: i32,
@@ -698,19 +708,7 @@ fn win_tool_in(
         return false;
     }
     var startup: WinStartup = uninit;
-    win_memset(&startup as *u8, 0i32, sizeof(WinStartup));
-    startup.size = sizeof(WinStartup) as u32;
-    startup.flags = 256u32;
-    startup.input = win_stream(context, "NUL", true);
-    startup.error = win_inherit(context, 4294967284u32);
-    if output == null(*u8) {
-        startup.output = win_inherit(context, 4294967285u32);
-    } else {
-        startup.output = win_stream(context, output, false);
-    }
-    var success: bool = startup.input != null(*u8) && startup.output != null(*u8) && startup.error != null(
-        *u8
-    );
+    var success: bool = win_tool_streams(context, &startup, output);
     if success {
         success = win_tool_start(
             context,
@@ -722,13 +720,35 @@ fn win_tool_in(
             current
         );
     }
-    if !win_close(context, startup.input) {
+    if !win_tool_streams_close(context, &startup) {
         success = false;
     }
-    if !win_close(context, startup.output) {
+    return success;
+}
+fn win_tool_streams(context: *CrustContext, startup: *WinStartup, output: *u8) -> bool {
+    win_memset(startup as *u8, 0i32, sizeof(WinStartup));
+    startup -> size = sizeof(WinStartup) as u32;
+    startup -> flags = 256u32;
+    startup -> input = win_stream(context, "NUL", true);
+    startup -> error = win_inherit(context, 4294967284u32);
+    if output == null(*u8) {
+        startup -> output = win_inherit(context, 4294967285u32);
+    } else {
+        startup -> output = win_stream(context, output, false);
+    }
+    return startup -> input != null(*u8) && startup -> output != null(*u8) && startup -> error != null(
+        *u8
+    );
+}
+fn win_tool_streams_close(context: *CrustContext, startup: *WinStartup) -> bool {
+    var success: bool = true;
+    if !win_close(context, startup -> input) {
         success = false;
     }
-    if !win_close(context, startup.error) {
+    if !win_close(context, startup -> output) {
+        success = false;
+    }
+    if !win_close(context, startup -> error) {
         success = false;
     }
     return success;
@@ -795,4 +815,305 @@ fn win_basename(path: *u8) -> *u8 {
         index = index + 1usize;
     }
     return path + base as isize;
+}
+
+record WinToolAlias {
+    arguments: **u8;
+    path: *u8;
+}
+// REPARSE_DATA_BUFFER mount-point payload, in foreign ABI order.
+record WinMountPoint {
+    tag: u32;
+    size: u16;
+    reserved: u16;
+    substitute_offset: u16;
+    substitute_size: u16;
+    print_offset: u16;
+    print_size: u16;
+    path: [u16; 8192];
+}
+fn win_directory_link(context: *CrustContext, path: *u8, target: *u8) -> bool {
+    if target[0usize] == 0u8 || target[1usize] != 58u8 {
+        return native_error(
+            context,
+            "Unicode GCC installations require a local toolchain directory"
+        );
+    }
+    var prefix: *u8 = native_join(context, "\\??\\", target);
+    if prefix == null(*u8) {
+        return false;
+    }
+    var wide: *u16 = win_wide(context, prefix);
+    var name: *u16 = win_wide(context, path);
+    if wide == null(*u16) || name == null(*u16) {
+        return false;
+    }
+    var data: WinMountPoint = uninit;
+    win_memset(&data as *u8, 0i32, sizeof(WinMountPoint));
+    var count: usize = 0usize;
+    while wide[count] != 0u16 && count < 8190usize {
+        data.path[count] = wide[count];
+        if wide[count] == 47u16 {
+            data.path[count] = 92u16;
+        }
+        count = count + 1usize;
+    }
+    if count == 8190usize {
+        return native_error(context, "toolchain junction target is too long");
+    }
+    data.tag = 2684354563u32;
+    data.size = (8usize + (count + 2usize) * 2usize) as u16;
+    data.substitute_size = (count * 2usize) as u16;
+    data.print_offset = ((count + 1usize) * 2usize) as u16;
+    var file: *u8 = win_open(
+        name,
+        1073741824u32,
+        0u32,
+        null(*WinSecurity),
+        3u32,
+        35651584u32,
+        null(*u8)
+    );
+    if file == ~0usize as *u8 {
+        return win_fail(context, "cannot open toolchain junction");
+    }
+    var written: u32 = 0u32;
+    var success: bool = win_device_control(
+        file,
+        589988u32,
+        &data as *u8,
+        data.size as u32 + 8u32,
+        null(*u8),
+        0u32,
+        &written,
+        null(*u8)
+    ) != 0i32;
+    if !success {
+        win_fail(context, "cannot create toolchain junction");
+    }
+    if !win_close(context, file) {
+        success = false;
+    }
+    return success;
+}
+fn win_ascii(text: *u8) -> bool {
+    var index: usize = 0usize;
+    while text[index] != 0u8 {
+        if text[index] >= 128u8 {
+            return false;
+        }
+        index = index + 1usize;
+    }
+    return true;
+}
+fn win_gcc_query(context: *CrustContext, compiler: *u8, query: *u8, directory: *u8) -> *u8 {
+    var prefix: *u8 = native_join(context, directory, "/.crust-query-");
+    if prefix == null(*u8) {
+        return null(*u8);
+    }
+    var path: *u8 = win_unique(context, prefix, false);
+    if path == null(*u8) {
+        return path;
+    }
+    var arguments: [*u8; 3] = make [*u8; 3] {
+        compiler,
+        query,
+        null(*u8)
+    };
+    var status: u32 = 1u32;
+    var bytes: *u8 = null(*u8);
+    var size: usize = 0usize;
+    var success: bool = win_tool_in(
+        context,
+        &arguments[0usize],
+        path,
+        &status,
+        directory
+    ) && win_status(context, status);
+    if success && crust0_host_read_file(path, &bytes, &size) != 0i32 {
+        success = native_error(context, "cannot read GCC path query");
+    }
+    if !win_remove(context, path, false) {
+        success = false;
+    }
+    var result: *u8 = null(*u8);
+    if success {
+        while size != 0usize && (
+            bytes[size - 1usize] == 10u8 || bytes[size - 1usize] == 13u8
+        ) {
+            size = size - 1usize;
+        }
+        result = crust_try_copy_string(context, bytes, size);
+    }
+    crust0_host_free(bytes);
+    if result == null(*u8) {
+        return result;
+    }
+    return win_existing_path(context, result);
+}
+fn win_gcc_prefix(
+    context: *CrustContext,
+    compiler: *u8,
+    root: *u8,
+    alias: *u8,
+    query: *u8,
+    directory: *u8
+) -> *u8 {
+    var file: *u8 = win_gcc_query(context, compiler, query, directory);
+    if file == null(*u8) {
+        return file;
+    }
+    var size: usize = native_strlen(root);
+    if native_strlen(file) <= size || win_compare(file, root, size) != 0i32 || file[size] != 47u8 {
+        native_error(context, "GCC dependency is outside its installation");
+        return null(*u8);
+    }
+    var relative: *u8 = win_directory_prefix(context, file + size as isize);
+    if relative == null(*u8) {
+        return relative;
+    }
+    var path: *u8 = native_join(context, win_basename(alias), relative);
+    if path == null(*u8) {
+        return path;
+    }
+    return native_join(context, "-B", path);
+}
+fn win_gcc_arguments(
+    context: *CrustContext,
+    arguments: **u8,
+    root: *u8,
+    directory: *u8,
+    alias: *WinToolAlias
+) -> bool {
+    var count: usize = 0usize;
+    while arguments[count] != null(*u8) {
+        count = count + 1usize;
+    }
+    if count > 4096usize {
+        return native_error(context, "too many GCC arguments");
+    }
+    var selected: **u8 = crust_try_alloc(
+        context,
+        (count + 7usize) * sizeof(*u8),
+        alignof(*u8)
+    ) as **u8;
+    if selected == null(**u8) {
+        return false;
+    }
+    var base: *u8 = win_basename(alias -> path);
+    var prefix: *u8 = native_join(context, "-B", base);
+    if prefix == null(*u8) {
+        return false;
+    }
+    selected[0usize] = arguments[0usize];
+    selected[1usize] = native_join(context, prefix, "/bin/");
+    selected[2usize] = win_gcc_prefix(
+        context,
+        arguments[0usize],
+        root,
+        alias -> path,
+        "-print-prog-name=cc1",
+        directory
+    );
+    selected[3usize] = win_gcc_prefix(
+        context,
+        arguments[0usize],
+        root,
+        alias -> path,
+        "-print-libgcc-file-name",
+        directory
+    );
+    selected[4usize] = win_gcc_prefix(
+        context,
+        arguments[0usize],
+        root,
+        alias -> path,
+        "-print-file-name=dllcrt2.o",
+        directory
+    );
+    selected[5usize] = "-isystem";
+    selected[6usize] = native_join(context, base, "/include");
+    var index: usize = 1usize;
+    while index < 7usize {
+        if selected[index] == null(*u8) {
+            return false;
+        }
+        index = index + 1usize;
+    }
+    index = 1usize;
+    while index <= count {
+        selected[index + 6usize] = arguments[index];
+        index = index + 1usize;
+    }
+    alias -> arguments = selected;
+    return true;
+}
+// Older MinGW tools convert absolute installation paths through the ANSI code page.
+// Relative ASCII prefixes through an owned junction preserve the selected inputs.
+fn win_gcc_prepare(
+    context: *CrustContext,
+    arguments: **u8,
+    directory: *u8,
+    alias: *WinToolAlias
+) -> bool {
+    *alias = make WinToolAlias {
+        arguments: arguments,
+        path: null(*u8)
+    };
+    var executable: *u16 = win_tool_path(context, arguments[0usize]);
+    if executable == null(*u16) {
+        return false;
+    }
+    var compiler: *u8 = win_utf8(context, executable);
+    if compiler == null(*u8) {
+        return false;
+    }
+    if win_ascii(compiler) {
+        return true;
+    }
+    compiler = win_existing_path(context, compiler);
+    if compiler == null(*u8) {
+        return false;
+    }
+    var bin: *u8 = win_directory_prefix(context, compiler);
+    if bin == null(*u8) {
+        return false;
+    }
+    var size: usize = native_strlen(bin);
+    if size < 5usize || win_compare(bin + (size - 5usize) as isize, "/bin/", 5usize) != 0i32 {
+        return native_error(context, "Unicode GCC installation requires a bin directory");
+    }
+    var root: *u8 = crust_try_copy_string(context, bin, size - 5usize);
+    var prefix: *u8 = native_join(context, directory, "/.crust-tools-");
+    if root == null(*u8) || prefix == null(*u8) {
+        return false;
+    }
+    alias -> path = win_unique(context, prefix, true);
+    return alias -> path != null(*u8) && win_directory_link(context, alias -> path, root) && win_gcc_arguments(
+        context,
+        arguments,
+        root,
+        directory,
+        alias
+    );
+}
+fn win_gcc_cleanup(context: *CrustContext, alias: *WinToolAlias) -> bool {
+    return alias -> path == null(*u8) || win_remove(context, alias -> path, true);
+}
+fn win_gcc_tool_in(
+    context: *CrustContext,
+    arguments: **u8,
+    output: *u8,
+    status: *u32,
+    directory: *u8
+) -> bool {
+    var alias: WinToolAlias = uninit;
+    var success: bool = win_gcc_prepare(context, arguments, directory, &alias);
+    if success {
+        success = win_tool_in(context, alias.arguments, output, status, directory);
+    }
+    if !win_gcc_cleanup(context, &alias) {
+        success = false;
+    }
+    return success;
 }

@@ -20,7 +20,7 @@ another stage can supply its own function bodies. Use the
 
 The shared [package loader](../build/README.md) interprets C emission for its
 first native backend build. On Linux, it validates cached input and output bytes
-on later runs. On Windows, it builds fresh artifacts without cache reuse. Other
+on later runs. Windows uses its own input and artifact providers for reuse. Other
 stages use the resulting native compiler. See the [Windows guide](../../docs/windows.md).
 
 ## 1. Select the backend

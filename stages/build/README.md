@@ -4,9 +4,9 @@
 
 A compilation program prepares its stages from source. Make builds the C99
 seed. The code in this directory selects source inputs, prepares the C backend,
-and loads native libraries. Linux reuses validated libraries through the
-[artifact cache](../cache/README.md). Windows builds fresh DLLs through the same
-package orchestration; see the [Windows guide](../../docs/windows.md).
+and loads native libraries. Linux and Windows reuse validated libraries through
+the [artifact cache](../cache/README.md) and the same package orchestration.
+See the [Windows guide](../../docs/windows.md) for toolchain input requirements.
 
 ## Use a stage
 
@@ -28,8 +28,8 @@ host_source(run, "../../stages/c/build.crs");
 
 `stage_setup` loads the shared preparation functions and their interfaces.
 Call it once in a root. `stage_open` captures the toolchain inputs and obtains
-native C backend code. Its first build interprets C emission. Later Linux calls
-reuse the cached library. Windows requests always build fresh artifacts. A
+native C backend code. Its first build interprets C emission. Later calls
+reuse the cached library when its captured inputs match. A
 session keeps its code loaded until the root ends.
 The C backend's consumer interface is available after setup.
 
@@ -164,14 +164,17 @@ input list. It must set `object` to `fn(*StageObject) -> bool`. It can set `user
 to context-owned configuration storage. Keep these values live through the build.
 
 The factory adds all tools, loaded tool libraries, target settings, pass options,
-and other configuration values to `inputs`. Use `cache_tools` to capture native
-tools and their library dependencies. Use `cache_read` and `cache_add` for other
+and other configuration values to `inputs`. On Linux, use `cache_tools` to capture
+native tools and their library dependencies. On Windows, use `cache_probe` with
+representative tool commands and capture their data files separately. Use
+`cache_read` and `cache_add` for other
 inputs. Compile from those captured values. Keep installed tool files fixed
 while the build runs. The [ASM factory](../asm/compiler.crs) shows this contract.
 
 The object callback receives the emitted input path, an object output path,
 a diagnostic context, and the factory's `user` value. It must write a complete
-position-independent object for the Linux x86-64 host profile. The input path
+object for the selected host: position-independent ELF on Linux x64, or COFF
+for a Windows x64 DLL. The input path
 has no format-specific suffix; select the format in the tool arguments. The
 shared builder owns these paths and removes partial output on failure. A callback
 must remove any additional temporary files that it creates.

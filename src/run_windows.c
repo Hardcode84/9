@@ -13,6 +13,7 @@
 #include <windows.h>
 
 #include <bcrypt.h>
+#include <psapi.h>
 
 struct CrustLibrary {
     HMODULE handle;
@@ -112,6 +113,23 @@ bool crust_run_native_host(CrustRun *run, CrustDecl *declaration, void **result)
         RUN_SYMBOL(abort),
         RUN_SYMBOL(exit),
         RUN_SYMBOL(GetLastError),
+        RUN_SYMBOL(qsort),
+        RUN_SYMBOL(K32EnumProcessModules),
+        RUN_SYMBOL(FindFirstFileW),
+        RUN_SYMBOL(FindNextFileW),
+        RUN_SYMBOL(FindClose),
+        RUN_SYMBOL(WaitForDebugEvent),
+        RUN_SYMBOL(ContinueDebugEvent),
+        RUN_SYMBOL(DebugActiveProcessStop),
+        RUN_SYMBOL(ReadFile),
+        RUN_SYMBOL(DeviceIoControl),
+        RUN_SYMBOL(WriteFile),
+        RUN_SYMBOL(BCryptOpenAlgorithmProvider),
+        RUN_SYMBOL(BCryptCloseAlgorithmProvider),
+        RUN_SYMBOL(BCryptCreateHash),
+        RUN_SYMBOL(BCryptHashData),
+        RUN_SYMBOL(BCryptFinishHash),
+        RUN_SYMBOL(BCryptDestroyHash),
         RUN_SYMBOL(MultiByteToWideChar),
         RUN_SYMBOL(WideCharToMultiByte),
         RUN_SYMBOL(GetFullPathNameW),

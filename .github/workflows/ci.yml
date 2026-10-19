@@ -39,8 +39,8 @@ jobs:
           install: >-
             make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libffi
             mingw-w64-ucrt-x86_64-python
-      - name: Build and test the native seed and C bootstrap
-        run: make PROFILE=windows_x64 AMALGAMATION=${{ matrix.amalgamation }} all check-windows check-windows-bootstrap
+      - name: Build and test the native seed, C bootstrap, and cache
+        run: make PROFILE=windows_x64 AMALGAMATION=${{ matrix.amalgamation }} all check-windows check-windows-bootstrap check-windows-cache
 
   lint:
     runs-on: ubuntu-24.04

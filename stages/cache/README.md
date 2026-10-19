@@ -7,11 +7,10 @@ It is ordinary Crust code. The seed does not select a cache, discover inputs,
 or skip root actions. The [backend tutorial](../../examples/cached-backend/README.md)
 uses it to prepare and load native compiler stages.
 
-The content-addressed cache is Linux-only. The Windows package builder selects
-[artifact_windows.crs](artifact_windows.crs), which always builds fresh output
-and returns `hit=false`. It does not claim complete dependency capture or reuse.
-Keep successful DLLs until their runners close, then remove them. See the
-[Windows guide](../../docs/windows.md).
+Linux and Windows select separate platform providers. The Windows package
+builder selects [artifact_windows.crs](artifact_windows.crs) and captures the
+self-contained toolchain described in the [Windows guide](../../docs/windows.md).
+Keep published files unchanged until their runners close.
 
 ## Contract
 
@@ -41,7 +40,9 @@ and execution results are not cache artifacts.
 
 The key is SHA-256 over a format tag and each input's length-delimited path and
 bytes, in order. The Linux adapter invokes `sha256sum` without a shell. It does
-not hash source bytes in an interpreted byte loop.
+not hash source bytes in an interpreted byte loop. Windows uses BCrypt SHA-256
+with a fixed 64 KiB input buffer. Platform-specific format tags prevent reuse
+between Linux x64 and Windows x64.
 
 Every request uses a private temporary directory. A miss builds the file and
 records its checksum. A directory rename publishes both together. Concurrent
@@ -66,6 +67,12 @@ The main executable comes from `/proc/self/exe`. Tool dependencies come from
 dynamic Linux ELF tools. Use another explicit provider for other tool formats.
 The loaded-image provider includes loader-selected and explicitly loaded files.
 
+[inputs_windows.crs](inputs_windows.crs) captures loaded process images and
+tool-process images through Windows loader notifications. The Windows GCC
+provider also hashes all files in its installation and captures its child
+environment. File digests are retained as named snapshots; large tool files
+are not retained in compiler arenas. Changes during a session are not supported.
+
 The backend recipe uses only the assembler and linker. Its assembly contains
 no file includes, and the link command supplies its libc file explicitly.
 A different recipe must also capture its headers, link scripts, libraries,
@@ -74,3 +81,4 @@ configuration, environment, and other reads as applicable.
 Run `make check-cache` for reuse, source and option edits, captured-byte use,
 corruption, missing files, producer errors, partial output, concurrent
 publication, allocation failures, and the native handoff witness.
+Run `make PROFILE=windows_x64 check-windows-cache` for the Windows provider.

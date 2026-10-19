@@ -2,8 +2,8 @@
 
 # Windows support plan
 
-Status: phases 1 and 2 are implemented. The [Windows guide](windows.md) defines
-the supported seed, C bootstrap, and native handoff workflows. Phases 3 and later
+Status: phases 1 through 3 are implemented. The [Windows guide](windows.md) defines
+the supported seed, C bootstrap, native handoff, and cache workflows. Phases 4 and later
 remain proposals.
 
 Add native Windows x64 support in stages. First prove that the C99 seed can
@@ -106,8 +106,7 @@ Implemented with the C backend and the shared package builder. The
 [Windows checks](../tests/windows_bootstrap.py) cover empty-directory bootstrap,
 a native callback witness before successor compilation, a second backend
 DLL, hello execution, process behavior, failed builds, and unload cleanup.
-The Windows artifact provider always builds fresh output. It does not claim
-phase 3 cache reuse or complete dependency capture.
+Phase 3 adds validated reuse to this bootstrap workflow.
 
 The shared preparation graph selects native, build, and artifact providers
 from the host profile. The Windows C bootstrap does not require the ASM backend.
@@ -138,6 +137,13 @@ dependency and revise the stage boundary before continuing. Do not expand the
 C evaluator solely to hide slow interpreted bootstrap.
 
 ## Phase 3 Make cache behavior correct on Windows
+
+Implemented for the self-contained GCC toolchain described in the
+[Windows guide](windows.md). External files use streamed SHA-256 hashes.
+The input provider captures installation files, child environment, loaded
+images, and tool-process image dependencies. The cache publishes complete
+directories and verifies artifact checksums before reuse. Ownership object
+bundle formats remain explicitly Linux-only.
 
 Add Windows providers for hashing, tool identity, dependency capture, temporary
 directories, and atomic artifact publication. Capture the actual compiler,

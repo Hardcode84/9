@@ -11,6 +11,10 @@ from pathlib import Path
 from windows import ROOT, literal, native_path
 
 
+def process_arguments(fixture):
+    return [native_path(fixture), "", "two words", 'a"b', "end\\", '\\"', "line\nbreak", "雪"]
+
+
 class Suite:
     def __init__(self, build):
         self.build = build.resolve()
@@ -19,21 +23,25 @@ class Suite:
         self.seed = self.build / "crust.exe"
         self.limiter = self.build / "windows_limit.exe"
 
-    def run(self, executable, *arguments, expected=0, environment=None):
+    def run(self, executable, *arguments, expected=0, environment=None, stdin=None):
         result = subprocess.run(
             [str(self.limiter), native_path(executable), *map(str, arguments)],
             cwd=ROOT,
             capture_output=True,
             timeout=120,
             env=environment,
+            input=stdin,
         )
-        assert result.returncode == expected, (result.returncode, result.stdout, result.stderr)
+        allowed = expected if isinstance(expected, tuple) else (expected,)
+        assert result.returncode in allowed, (result.returncode, result.stdout, result.stderr)
         return result
 
-    def root(self, name, body, expected=0, environment=None):
+    def root(self, name, body, expected=0, environment=None, stdin=None):
         source = self.work / f"{name}.crs"
         source.write_text("// SPDX-License-Identifier: Apache-2.0\n" + body, encoding="utf-8")
-        return self.run(self.seed, native_path(source), expected=expected, environment=environment)
+        return self.run(
+            self.seed, native_path(source), expected=expected, environment=environment, stdin=stdin
+        )
 
     def setup(self):
         return (
@@ -81,10 +89,11 @@ if !host_bind(run,crust_run_open(run,second),"second_backend"){return 1i32;};
         assert self.run(output).stdout.replace(b"\r\n", b"\n") == b"Hello, world!\n"
         artifacts = list(cache.glob("*/artifact.dll"))
         assert len(artifacts) == 2
-        assert len(list(cache.glob("*/*"))) == 2, "build scratch survived"
+        assert len(list(cache.glob("*/*"))) == 4, "build scratch survived"
         # Deletion must succeed after runner destruction releases both DLLs.
         for artifact in artifacts:
             artifact.unlink()
+            (artifact.parent / "checksum").unlink()
             artifact.parent.rmdir()
         output.unlink()
 
@@ -107,7 +116,7 @@ if !host_bind(run,crust_run_open(run,second),"second_backend"){return 1i32;};
 
     def processes(self, fixture):
         capture = self.work / "captured output.txt"
-        args = [native_path(fixture), "", "two words", 'a"b', "end\\", '\\"', "line\nbreak", "雪"]
+        args = process_arguments(fixture)
         source = self.setup()
         source += (
             "var arguments:[*u8;9]=make [*u8;9]{" + ",".join(map(literal, args)) + ",null(*u8)};\n"
@@ -159,7 +168,8 @@ var result:CacheArtifact=uninit;
         )
         assert b"cannot find native tool" in failed.stderr
         assert not list(cache.iterdir())
-        invalid = self.fresh_directory("invalid tools")
+        invalid = self.fresh_directory("invalid tools") / "bin"
+        invalid.mkdir()
         for name in ("gcc.exe", "objcopy.exe"):
             (invalid / name).write_bytes(b"invalid executable")
         environment["PATH"] = str(invalid)

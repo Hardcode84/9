@@ -27,16 +27,16 @@ RUN_LIBS = -lffi -lbcrypt
 API_ROOT = $(BUILD)/profile
 SEED_IMPORT = $(BUILD)/crust.exe.a
 CPPFLAGS += -I$(API_ROOT)/include
-WINDOWS_GOALS = all clean api amalgamate check-windows check-windows-build check-windows-bootstrap
+WINDOWS_GOALS = all clean api amalgamate check-windows check-windows-build check-windows-bootstrap check-windows-cache
 ifneq ($(filter-out $(WINDOWS_GOALS) $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a,$(MAKECMDGOALS)),)
-$(error Windows supports seed and C bootstrap checks; use check-windows or check-windows-bootstrap)
+$(error Windows supports seed, C bootstrap, and cache checks; use check-windows, check-windows-bootstrap, or check-windows-cache)
 endif
 else
 $(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64 or windows_x64)
 endif
 CPPFLAGS += -Iinclude $(FFI_CFLAGS)
 ifneq ($(PROFILE),windows_x64)
-ifneq ($(filter check-windows check-windows-build check-windows-bootstrap,$(MAKECMDGOALS)),)
+ifneq ($(filter check-windows check-windows-build check-windows-bootstrap check-windows-cache,$(MAKECMDGOALS)),)
 $(error check-windows requires PROFILE=windows_x64)
 endif
 endif
@@ -162,6 +162,16 @@ $(BUILD)/windows_process.exe: tests/windows_process.c Makefile | $(BUILD)
 
 check-windows-bootstrap: all $(BUILD)/windows_limit.exe $(BUILD)/windows_process.exe
 	python3 tests/windows_bootstrap.py --build $(BUILD)
+
+.PHONY: check-windows-cache
+$(BUILD)/windows_cache_fixture.exe: tests/windows_cache_fixture.c $(API_ROOT)/include/crust0_abi.h Makefile | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $< -municode $(LDFLAGS) -o $@
+
+$(BUILD)/windows_cache_fixture.dll: tests/windows_cache_fixture.c $(API_ROOT)/include/crust0_abi.h Makefile | $(BUILD)
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $< -shared -Wl,--export-all-symbols $(LDFLAGS) -o $@
+
+check-windows-cache: all $(BUILD)/windows_limit.exe $(BUILD)/windows_process.exe $(BUILD)/windows_cache_fixture.exe $(BUILD)/windows_cache_fixture.dll
+	python3 tests/windows_cache.py --build $(BUILD)
 
 $(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
 	$(AR) rcs $@ $^

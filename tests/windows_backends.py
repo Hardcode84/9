@@ -76,8 +76,35 @@ if !cache_manifest(run -> context,&{name}_trace,{literal(native_path(path))}){{r
         body += "if library==null(*u8){return 1i32;};return (crust_run_open(run,library)==null(*u8)) as i32;"
         self.root("asm API", body)
 
+    def llvm_trace_compiler(self, compiler):
+        source = self.work / "llvm-trace.crs"
+        trace = self.work / "llvm-toolchain.inputs"
+        source.write_text(
+            "// SPDX-License-Identifier: Apache-2.0\n"
+            "fn trace_toolchain(toolchain:*StageToolchain)->bool {\n"
+            "if !llvm_stage_toolchain(toolchain){return false;}\n"
+            "var request:CacheBuild=make CacheBuild{inputs:toolchain -> inputs.items,count:toolchain -> inputs.count,build:null(fn(*CrustContext,*CacheBuild,*u8)->bool),user:null(*u8)};\n"
+            f"return cache_manifest(toolchain -> context,&request,{literal(native_path(trace))});\n"
+            "}\n",
+            encoding="utf-8",
+        )
+        package = self.work / "llvm-trace-package.crs"
+        package.write_text(
+            "// SPDX-License-Identifier: Apache-2.0\n"
+            f"stage_include(stage,{literal(native_path(compiler))});\n"
+            f"stage_source(stage,{literal(source.name)});\n"
+            'stage_export(stage,"trace_toolchain");\n',
+            encoding="utf-8",
+        )
+        return package
+
     def packages(self, backend):
         cache = self.fresh_directory(backend + " package cache")
+        compiler = ROOT / f"stages/{backend}/compiler-package.crs"
+        toolchain = f"{backend}_stage_toolchain"
+        if backend == "llvm":
+            compiler = self.llvm_trace_compiler(compiler)
+            toolchain = "trace_toolchain"
         source = self.work / (backend + " program.crs")
         signature = "fn(fn(f32)->f32,i32," + ",".join(["f32"] * 9) + ")->f32"
         floats = (ROOT / "tests/float.crs").read_text(encoding="utf-8")
@@ -96,8 +123,8 @@ if !cache_manifest(run -> context,&{name}_trace,{literal(native_path(path))}){{r
         package.write_text(
             "// SPDX-License-Identifier: Apache-2.0\n"
             + f'stage_api(stage,"crust0.crs");stage_source(stage,{literal(source.name)});'
-            + f"stage_compiler(stage,{literal(native_path(ROOT / ('stages/' + backend + '/compiler-package.crs')))},\"{backend}_stage_compile\");"
-            + f'stage_toolchain(stage,"{backend}_stage_toolchain");stage_export(stage,"answer");stage_export(stage,"mixed");stage_export(stage,"relay");stage_export(stage,"unwind");stage_export(stage,"float_test");\n',
+            + f'stage_compiler(stage,{literal(native_path(compiler))},"{backend}_stage_compile");'
+            + f'stage_toolchain(stage,"{toolchain}");stage_export(stage,"answer");stage_export(stage,"mixed");stage_export(stage,"relay");stage_export(stage,"unwind");stage_export(stage,"float_test");\n',
             encoding="utf-8",
         )
         body = self.setup() + self.session(cache)
@@ -125,6 +152,8 @@ if unwind(seed_unwind)!=0i32{return 12i32;};return answer();"""
         self.root(backend + " packages", body, expected=42)
         artifacts = {path: path.stat().st_mtime_ns for path in cache.glob("*/artifact.dll")}
         traces = [self.work / f"{backend}-{name}.inputs" for name in ("host", "gcc")]
+        if backend == "llvm":
+            traces.append(self.work / "llvm-toolchain.inputs")
         before = {path: self.cache_inputs(path) for path in traces}
         self.root(backend + " reuse", body, expected=42)
         current = {path: path.stat().st_mtime_ns for path in cache.glob("*/artifact.dll")}
@@ -144,16 +173,15 @@ if unwind(seed_unwind)!=0i32{return 12i32;};return answer();"""
                 f"added: {sorted(str(path) for path in current.keys() - artifacts.keys())}\n"
                 f"removed: {sorted(str(path) for path in artifacts.keys() - current.keys())}\n"
                 f"modified: {sorted(str(path) for path in artifacts.keys() & current.keys() if artifacts[path] != current[path])}\n"
-                f"Host and GCC input differences:\n{details or '(none)'}"
+                f"Captured input differences:\n{details or '(none)'}"
             )
         print(backend + " native ABI, large frame, floats, and reuse passed", flush=True)
-        compiler = ROOT / f"stages/{backend}/compiler-package.crs"
         successor = self.work / f"{backend} successor-package.crs"
         successor.write_text(
             "// SPDX-License-Identifier: Apache-2.0\n"
             + f"stage_include(stage,{literal(native_path(compiler))});"
             + f'stage_compiler(stage,{literal(native_path(compiler))},"{backend}_stage_compile");'
-            + f'stage_toolchain(stage,"{backend}_stage_toolchain");\n',
+            + f'stage_toolchain(stage,"{toolchain}");\n',
             encoding="utf-8",
         )
         package.write_text(

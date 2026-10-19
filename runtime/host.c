@@ -1,12 +1,11 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 
 #include "crust0_host.h"
+#include "host_platform.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-void crust0_host_free(void *data) { free(data); }
 
 void crust0_host_move_bytes(void *dst, const void *src, size_t size)
 {
@@ -24,7 +23,7 @@ int32_t crust0_host_read_file(const char *path, unsigned char **data, size_t *si
     int status = 0;
     *data = NULL;
     *size = 0;
-    file = fopen(path, "rb");
+    file = crust_host_open(path, "rb");
     if (file == NULL) {
         return 1;
     }
@@ -37,7 +36,7 @@ int32_t crust0_host_read_file(const char *path, unsigned char **data, size_t *si
                 status = 1;
                 break;
             }
-            allocation = realloc(buffer, next);
+            allocation = crust_host_resize(buffer, next);
             if (allocation == NULL) {
                 status = 1;
                 break;
@@ -63,7 +62,7 @@ int32_t crust0_host_read_file(const char *path, unsigned char **data, size_t *si
         status = 1;
     }
     if (status != 0 || used == 0) {
-        free(buffer);
+        crust0_host_free(buffer);
     } else {
         *data = buffer;
         *size = used;
@@ -71,7 +70,7 @@ int32_t crust0_host_read_file(const char *path, unsigned char **data, size_t *si
     return status;
 }
 
-static int write_bytes(FILE *file, const unsigned char *data, size_t size)
+int crust_host_write_bytes(FILE *file, const unsigned char *data, size_t size)
 {
     while (size != 0) {
         size_t count = fwrite(data, 1, size, file);
@@ -86,28 +85,13 @@ static int write_bytes(FILE *file, const unsigned char *data, size_t size)
 
 int32_t crust0_host_write_file(const char *path, const unsigned char *data, size_t size)
 {
-    FILE *file = fopen(path, "wb");
+    FILE *file = crust_host_open(path, "wb");
     int status;
     if (file == NULL) {
         return 1;
     }
-    status = write_bytes(file, data, size);
+    status = crust_host_write_bytes(file, data, size);
     if (fclose(file) != 0) {
-        status = 1;
-    }
-    return status;
-}
-
-int32_t crust0_host_write_stream(uint32_t stream, const unsigned char *data, size_t size)
-{
-    FILE *file;
-    int status;
-    if (stream != 1 && stream != 2) {
-        return 1;
-    }
-    file = stream == 1 ? stdout : stderr;
-    status = write_bytes(file, data, size);
-    if (fflush(file) != 0) {
         status = 1;
     }
     return status;

@@ -70,9 +70,11 @@ representation; section 12 describes its construction and replacement APIs.
 
 ## 2 Target profile
 
-The native execution profile is Linux x86-64, little endian, with 8-bit bytes
-and 64-bit data pointers. It uses the System V AMD64 scalar calling convention.
-This is a bounded bootstrap target, not a claim of kernel or full C support.
+The native execution profiles are `linux_x64` and `windows_x64`. Both are
+little endian, with 8-bit bytes and 64-bit data pointers. Linux uses the System V
+AMD64 scalar calling convention. Windows uses the Windows x64 scalar calling
+convention. Windows currently supports the seed evaluator and explicit native
+DLL inputs; source bootstrap and application backends remain Linux-only.
 
 | Type | Size and alignment in bytes | Value representation |
 |---|---:|---|
@@ -591,7 +593,7 @@ The initial profile uses these C boundary types:
 | `i16`, `u16` | `short`, `unsigned short` |
 | `i32`, `u32` | `int`, `unsigned int` |
 | `f32` | `float` |
-| `i64`, `u64` | `long`, `unsigned long` in the selected LP64 profile |
+| `i64`, `u64` | `long`, `unsigned long` on Linux; `long long`, `unsigned long long` on Windows |
 | `isize`, `usize` | Pointer-sized signed or unsigned integer |
 | `*T` | Native data pointer |
 | Function value | Native function pointer with the mapped signature |
@@ -659,7 +661,8 @@ The contracts are as follows:
   origins and copies initialization state as specified in section 8. A zero
   extent permits null pointers. A nonzero extent requires live readable source
   storage and live writable destination storage, but no value interpretation.
-- File paths must be readable zero-terminated strings. `host_read_file` requires
+- File paths must be readable zero-terminated strings. Windows paths use UTF-8;
+  invalid UTF-8 returns failure. `host_read_file` requires
   distinct writable output slots that do not overlap the path. It reads bytes
   until end of file and returns 0 on success. It stores an allocated buffer and
   its length. The live buffer is readable and writable, has alignment at least

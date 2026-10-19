@@ -325,7 +325,7 @@ def main():
     parser.add_argument(
         "--jobs",
         type=positive_jobs,
-        default=4,
+        default=1,
         help="maximum concurrent trap checks (default: %(default)s)",
     )
     args = parser.parse_args()

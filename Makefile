@@ -5,13 +5,38 @@ AR ?= ar
 AS ?= as
 ASFLAGS ?= --64
 CFLAGS ?= -O2 -g
-CPPFLAGS += -Iinclude
 STRICT = -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla
-BUILD ?= build
 PROFILE ?= linux_x64
 AMALGAMATION ?= 1
-ifneq ($(PROFILE),linux_x64)
-$(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64)
+ifeq ($(PROFILE),linux_x64)
+BUILD ?= build
+PLATFORM = posix
+EXE =
+HOST_EXTRA =
+RUN_LDFLAGS = -rdynamic
+RUN_LIBS = -ldl -lffi
+API_ROOT = .
+else ifeq ($(PROFILE),windows_x64)
+BUILD ?= build/windows
+PLATFORM = windows
+EXE = .exe
+HOST_EXTRA = $(BUILD)/windows_io.o
+RUN_LDFLAGS = -municode -Wl,--export-all-symbols
+RUN_LIBS = -lffi
+API_ROOT = $(BUILD)/profile
+CPPFLAGS += -I$(API_ROOT)/include
+WINDOWS_GOALS = all clean api amalgamate check-windows check-windows-build
+ifneq ($(filter-out $(WINDOWS_GOALS) $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a,$(MAKECMDGOALS)),)
+$(error Windows currently supports the seed only; use all or check-windows)
+endif
+else
+$(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64 or windows_x64)
+endif
+CPPFLAGS += -Iinclude $(FFI_CFLAGS)
+ifneq ($(PROFILE),windows_x64)
+ifneq ($(filter check-windows check-windows-build,$(MAKECMDGOALS)),)
+$(error check-windows requires PROFILE=windows_x64)
+endif
 endif
 ifeq ($(AMALGAMATION),1)
 CORE = $(BUILD)/crust0_amalg.o $(BUILD)/profile_$(PROFILE).o
@@ -20,11 +45,11 @@ CORE = $(BUILD)/core.o $(BUILD)/read.o $(BUILD)/check.o $(BUILD)/profile_$(PROFI
 else
 $(error Unsupported AMALGAMATION '$(AMALGAMATION)'; expected 0 or 1)
 endif
-RUNNER = $(BUILD)/eval.o $(BUILD)/eval_ffi_$(PROFILE).o $(BUILD)/run.o $(BUILD)/run_posix.o
-HOST = $(BUILD)/host.o $(BUILD)/host_posix.o
-PRELUDE = api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs stages/host.crs
+RUNNER = $(BUILD)/eval.o $(BUILD)/eval_ffi.o $(BUILD)/run.o $(BUILD)/run_$(PLATFORM).o
+HOST = $(BUILD)/host.o $(BUILD)/host_$(PLATFORM).o $(HOST_EXTRA)
+PRELUDE = $(addprefix $(API_ROOT)/,api/crust0.crs api/crust0_host.crs api/crust0_eval.crs api/crust0_run.crs) stages/host_$(PLATFORM).crs stages/host.crs
 API_HEADERS = $(addprefix include/,$(addsuffix .h,crust0 crust0_host crust0_x64 crust0_stage crust0_eval crust0_run))
-API_GENERATED = $(patsubst include/%.h,api/%.crs,$(API_HEADERS)) include/crust0_abi.h stages/asm/model.crs
+API_GENERATED = $(addprefix $(API_ROOT)/,$(patsubst include/%.h,api/%.crs,$(API_HEADERS)) include/crust0_abi.h include/host_symbols.inc stages/asm/model.crs)
 C_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources c/package.crs),$(error Stage package query failed))
 RESOURCE_EXPORTS = $(or $(shell python3 tests/prepare.py --build $(BUILD) --exports resources/package.crs),$(error Stage package query failed))
 OVERLOAD_EXPORTS = $(or $(shell python3 tests/prepare.py --build $(BUILD) --exports overload/package.crs),$(error Stage package query failed))
@@ -42,7 +67,7 @@ OVERLOAD_RESOURCE_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUIL
 
 .PHONY: all clean check witness api test-tools check-highlight check-ccn check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native check-asm check-cache
 .PHONY: amalgamate check-amalgamation FORCE
-all: $(BUILD)/crust
+all: $(BUILD)/crust$(EXE)
 
 .PHONY: fetch-llvm-release fetch-llvm-main check-llvm-fetch
 fetch-llvm-release:
@@ -61,9 +86,9 @@ test-tools: $(BUILD)/crust $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUIL
 $(BUILD)/crust-c $(BUILD)/crust-c-seed $(BUILD)/crust-highlight $(BUILD)/crust-ccn $(BUILD)/crust-resource $(BUILD)/crust-overload $(BUILD)/crust-overload-resource $(BUILD)/crust-asm-library.o: test-tools
 
 $(API_GENERATED) &: tools/api.py $(API_HEADERS)
-	python3 tools/api.py
+	python3 tools/api.py --profile $(PROFILE) --output-root $(API_ROOT)
 
-$(BUILD)/run_posix.o: include/crust0_abi.h
+$(BUILD)/run_$(PLATFORM).o: $(API_ROOT)/include/crust0_abi.h $(API_ROOT)/include/host_symbols.inc
 
 $(BUILD):
 	mkdir -p $@
@@ -84,10 +109,10 @@ $(BUILD)/crust0_amalg.o: crust0_amalg.c | $(BUILD)
 $(BUILD)/core-mode: FORCE | $(BUILD)
 	@set -e; crust_mode_tmp='$@.tmp.'$$$$; \
 	trap 'rm -f "$$crust_mode_tmp"' 0; \
-	printf '%s\n' '$(AMALGAMATION)' > "$$crust_mode_tmp"; \
+	printf '%s\n' '$(PROFILE) $(AMALGAMATION)' > "$$crust_mode_tmp"; \
 	if ! cmp -s "$$crust_mode_tmp" '$@'; then mv "$$crust_mode_tmp" '$@'; fi
 
-$(BUILD)/crust $(BUILD)/crust0 $(BUILD)/libcrust0.a: $(BUILD)/core-mode
+$(BUILD)/crust$(EXE) $(BUILD)/crust0 $(BUILD)/libcrust0.a: $(BUILD)/core-mode
 
 $(HOST): $(BUILD)/%.o: runtime/%.c include/crust0_host.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@
@@ -96,16 +121,16 @@ $(BUILD)/crust0: $(BUILD)/crust-asm-library.o $(CORE) $(BUILD)/driver.o $(BUILD)
 	$(CC) $(CFLAGS) $(filter-out $(BUILD)/core-mode,$^) $(LDFLAGS) -o $@
 
 $(BUILD)/prelude.inc: tools/prelude.py $(PRELUDE) | $(BUILD)
-	python3 tools/prelude.py $@
+	python3 tools/prelude.py $@ --profile $(PROFILE) --api-root $(API_ROOT)
 
 $(BUILD)/run_main.o: CPPFLAGS += -I$(BUILD)
 $(BUILD)/run_main.o: $(BUILD)/prelude.inc
-$(BUILD)/eval.o: CPPFLAGS += -Isrc/$(PROFILE)
 
-$(BUILD)/crust: $(CORE) $(RUNNER) $(BUILD)/run_main.o $(HOST)
-	$(CC) $(CFLAGS) $(filter-out $(BUILD)/core-mode,$^) -rdynamic $(LDFLAGS) -ldl -lffi -o $@
+$(BUILD)/crust$(EXE): $(CORE) $(RUNNER) $(BUILD)/run_main.o $(BUILD)/run_entry_$(PLATFORM).o $(HOST)
+	$(CC) $(CFLAGS) $(filter-out $(BUILD)/core-mode,$^) $(RUN_LDFLAGS) $(LDFLAGS) $(FFI_LDFLAGS) $(RUN_LIBS) -o $@
 
 $(BUILD)/libcrust0_run.a: $(RUNNER)
+	rm -f $@
 	$(AR) rcs $@ $^
 
 $(BUILD)/libcrust0.a: $(CORE) Makefile
@@ -114,6 +139,21 @@ $(BUILD)/libcrust0.a: $(CORE) Makefile
 
 $(BUILD)/libcrust0_host.a: $(HOST)
 	$(AR) rcs $@ $^
+
+.PHONY: check-windows check-windows-build
+check-windows-build: all $(BUILD)/windows_seed.exe $(BUILD)/windows_library.dll $(BUILD)/windows_limit.exe
+
+$(BUILD)/windows_limit.exe: tests/windows_limit.c | $(BUILD)
+	$(CC) $(CFLAGS) $(STRICT) -municode $< $(LDFLAGS) -o $@
+
+$(BUILD)/windows_library.dll: tests/windows_library.c $(API_ROOT)/include/crust0_abi.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -shared -Wl,--export-all-symbols $< $(LDFLAGS) -o $@
+
+$(BUILD)/windows_seed.exe: tests/windows_seed.c $(CORE) $(RUNNER) $(HOST) $(BUILD)/driver_windows.o $(BUILD)/core-mode
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $(filter-out $(BUILD)/core-mode,$^) $(LDFLAGS) $(FFI_LDFLAGS) -lffi -lbcrypt -o $@
+
+check-windows: check-windows-build
+	python3 tests/windows.py --build $(BUILD) --cc '$(CC)'
 
 $(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
 	$(AR) rcs $@ $^
@@ -218,11 +258,11 @@ $(BUILD)/core_test $(BUILD)/check_test $(BUILD)/x64_test $(BUILD)/parallel_test:
 $(BUILD)/arena_test: tests/arena_$(PROFILE)_test.c $(BUILD)/libcrust0.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -Wl,--wrap=madvise -o $@
 
-$(BUILD)/eval_test: tests/eval_test.c tests/native.c $(BUILD)/eval.o $(BUILD)/eval_ffi_$(PROFILE).o $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
+$(BUILD)/eval_test: tests/eval_test.c tests/native.c $(BUILD)/eval.o $(BUILD)/eval_ffi.o $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ -rdynamic $(LDFLAGS) -ldl -lffi -o $@
 
 api:
-	python3 tools/api.py
+	python3 tools/api.py --profile $(PROFILE) --output-root $(API_ROOT)
 
 check-amalgamation:
 	python3 tools/check_amalgamation.py --cc '$(CC)' --cflags='$(CFLAGS) $(STRICT)'

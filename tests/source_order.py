@@ -996,6 +996,9 @@ def check_examples(suite):
         result = suite.command([suite.runner, reader], expected=1, stdout=full, cwd=elsewhere)
     assert b"cannot write text" in result.stderr, result.stderr
     original = reader.read_text()
+    reader.write_bytes(original.replace("\n", "\r\n").encode())
+    result = suite.command([suite.runner, reader], cwd=elsewhere)
+    assert result.stdout == expected and not result.stderr, result
     bad_line = original[: original.index("> Hello")].count("\n") + 1
     reader.write_text(original.replace("> Hello", "! Hello"))
     result = suite.command([suite.runner, reader], expected=1, cwd=elsewhere)
@@ -1053,7 +1056,7 @@ def main():
     parser.add_argument(
         "--jobs",
         type=RUNTIME.positive_jobs,
-        default=4,
+        default=1,
         help="maximum concurrent trap checks (default: %(default)s)",
     )
     parser.add_argument(

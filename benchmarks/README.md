@@ -17,6 +17,7 @@ removed during cleanup also has an unchanged local copy under
 | --- | --- |
 | C, C++, and Rust frontend profiles | [Method and commands](../docs/exploration/compiler-profiles.md) |
 | Seed checking, assembly, and memory use | [Bootstrap guide](../docs/bootstrap.md#validation-and-measurements) |
+| Linux baseline for the Windows seed port | [Windows baseline procedure](../docs/windows.md#linux-baseline) |
 | Seed AST layout and frontend memory | [AST layout experiment](ast-layout/README.md) |
 | Pointer-field syntax and stage token counts | [Pointer-field measurements](pointer-fields/README.md) |
 | C emission | [C backend guide](../docs/c-backend.md#compilation-measurements) |

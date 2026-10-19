@@ -2,7 +2,8 @@
 
 # Windows support plan
 
-Status: proposal. Windows support is not an implemented contract.
+Status: phased implementation. The [Windows seed guide](windows.md) defines
+the phase 1 support boundary. Later phases remain proposals.
 
 Add native Windows x64 support in stages. First prove that the C99 seed can
 build a compiler stage from source, load it, hand later compilation to it,
@@ -33,13 +34,13 @@ parallel jobs, editor integration, and shader tooling as separate capabilities.
 MSVC, Windows ARM64, and 32-bit Windows are outside the initial scope.
 Reject unsupported profiles explicitly.
 
-## Current dependencies
+## Dependencies at the start of the port
 
 | Area | Current implementation | Required change |
 | --- | --- | --- |
 | Build | [Makefile](../Makefile) accepts only `linux_x64` and selects POSIX objects | Add a Windows profile, file suffixes, platform objects, and linker options |
 | Host layout | [Linux profile](../src/profile_linux_x64.c) requires LP64 and Linux allocation and locale APIs | Define Windows host assumptions and provide allocation and numeric parsing adapters |
-| Native calls | [libffi adapter](../src/eval_ffi_linux_x64.c) uses the default host ABI | Validate Windows scalar calls, returns, and closures; share only demonstrated common code |
+| Native calls | [libffi adapter](../src/eval_ffi.c) uses the default host ABI | Validate Windows scalar calls, returns, and closures; share only demonstrated common code |
 | Libraries | [POSIX runner](../src/run_posix.c) uses ELF loader inspection | Add DLL loading, export resolution, ABI validation, and unload operations |
 | Memory | [Host allocation](../runtime/host_posix.c) uses `posix_memalign`; [host release](../runtime/host.c) uses `free` | Preserve matching allocation and release operations for every buffer owner |
 | Source paths | [Host stage](../stages/host.crs) uses slash-based path rules | Define drive, UNC, relative path, and Unicode handling |

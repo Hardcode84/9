@@ -4,11 +4,11 @@
 fn text_highlight(result: *HlResult, begin: usize, end: usize, user: *u8) -> bool {
     var bytes: *u8 = (*(*result).source).bytes;
     while begin < end {
-        if bytes[begin] == 10u8 {
+        if bytes[begin] == 10u8 || bytes[begin] == 13u8 {
             begin = begin + 1usize;
         } else {
             var finish: usize = begin;
-            while finish < end && bytes[finish] != 10u8 {
+            while finish < end && bytes[finish] != 10u8 && bytes[finish] != 13u8 {
                 finish = finish + 1usize;
             }
             if finish - begin >= 2usize && bytes[begin] == 62u8 && bytes[begin + 1usize] == 32u8 {

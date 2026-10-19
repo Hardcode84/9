@@ -1,0 +1,75 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn seed_i8(value: i8) -> i8 = "seed_i8";
+extern fn seed_u8(value: u8) -> u8 = "seed_u8";
+extern fn seed_i16(value: i16) -> i16 = "seed_i16";
+extern fn seed_u16(value: u16) -> u16 = "seed_u16";
+extern fn seed_i32(value: i32) -> i32 = "seed_i32";
+extern fn seed_u32(value: u32) -> u32 = "seed_u32";
+extern fn seed_i64(value: i64) -> i64 = "seed_i64";
+extern fn seed_u64(value: u64) -> u64 = "seed_u64";
+extern fn seed_f32(value: f32) -> f32 = "seed_f32";
+extern fn seed_bool(value: bool) -> bool = "seed_bool";
+extern fn seed_pointer(value: *u8) -> *u8 = "seed_pointer";
+extern fn seed_mixed(a: i8, b: f32, c: u64, d: bool, e: f32, f: i32, g: u8, h: f32) -> f32 = "seed_mixed";
+extern fn seed_callback(callback: fn(i8, f32, u64, bool, f32, i32, u8, f32) -> f32) -> f32 = "seed_callback";
+extern fn seed_integer_callback(callback: fn(u64) -> u64) -> u64 = "seed_integer_callback";
+extern fn seed_bool_callback(callback: fn(bool) -> bool) -> bool = "seed_bool_callback";
+extern fn seed_write(pointer: *u32, value: u32) -> unit = "seed_write";
+
+fn mixed_callback(a: i8, b: f32, c: u64, d: bool, e: f32, f: i32, g: u8, h: f32) -> f32 {
+    var truth: f32 = 0f32;
+    if d {
+        truth = 1f32;
+    }
+    return a as f32 + b + c as f32 + truth + e + f as f32 + g as f32 + h;
+}
+
+fn integer_callback(value: u64) -> u64 {
+    return value - 1u64;
+}
+fn bool_callback(value: bool) -> bool {
+    return !value;
+}
+
+fn small_integers() -> bool {
+    return seed_i8(-128i8) == -128i8 && seed_u8(255u8) == 255u8 && seed_i16(-32768i16) == -32768i16 && seed_u16(
+        65535u16
+    ) == 65535u16;
+}
+
+fn large_integers() -> bool {
+    return seed_i32(-2147483648i32) == -2147483648i32 && seed_u32(4294967295u32) == 4294967295u32 && seed_i64(
+        -9223372036854775808i64
+    ) == -9223372036854775808i64 && seed_u64(~0u64) == ~0u64;
+}
+
+fn test_calls() -> i32 {
+    if !small_integers() || !large_integers() {
+        return 1i32;
+    }
+    if seed_f32(1.25f32) != 1.25f32 || !seed_bool(true) || seed_bool(false) {
+        return 2i32;
+    }
+    var value: u32 = 0u32;
+    if seed_pointer(&value as *u8) != &value as *u8 {
+        return 3i32;
+    }
+    seed_write(&value, 42u32);
+    if value != 42u32 {
+        return 4i32;
+    }
+    if seed_mixed(-8i8, 0.5f32, 16u64, true, 1.25f32, -32i32, 255u8, 2.5f32) != 236.25f32 {
+        return 5i32;
+    }
+    if seed_callback(mixed_callback) != 236.25f32 {
+        return 6i32;
+    }
+    if seed_integer_callback(integer_callback) != (~0u64) - 1u64 {
+        return 7i32;
+    }
+    if seed_bool_callback(bool_callback) {
+        return 8i32;
+    }
+    return 0i32;
+}

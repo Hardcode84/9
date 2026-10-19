@@ -11,6 +11,8 @@
 #include <string.h>
 #include <unistd.h>
 
+const char *crust_run_profile_name(void) { return "x86-64 System V"; }
+
 struct CrustLibrary {
     void *handle;
     CrustRun *owner;

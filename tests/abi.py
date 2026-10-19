@@ -73,6 +73,7 @@ class Suite:
             shutil.copytree(ROOT / directory, checkout / directory)
         (checkout / "stages/asm").mkdir(parents=True)
         shutil.copyfile(ROOT / "stages/host.crs", checkout / "stages/host.crs")
+        shutil.copyfile(ROOT / "stages/host_posix.crs", checkout / "stages/host_posix.crs")
         for name in ("Makefile", "crust0_amalg.c"):
             shutil.copyfile(ROOT / name, checkout / name)
         header = checkout / "include/crust0.h"

@@ -94,7 +94,7 @@ static bool read_root(CrustContext *context, CrustSource *source, const char *pa
     return true;
 }
 
-int main(int argc, char **argv)
+int crust_run_main(int argc, char **argv)
 {
     CrustContext context;
     CrustSource source_input;
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
         return flush_output(0);
     }
     if (strcmp(argv[1], "--version") == 0) {
-        puts("crust " CRUST_VERSION " (source runner, x86-64 System V)");
+        printf("crust " CRUST_VERSION " (source runner, %s)\n", crust_run_profile_name());
         return flush_output(0);
     }
     crust_context_init(&context, NULL);
@@ -141,6 +141,6 @@ done:
         status = 1;
     status = flush_output(status);
     crust_context_destroy(&context);
-    free(bytes);
+    crust0_host_free(bytes);
     return status;
 }

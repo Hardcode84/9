@@ -1,0 +1,82 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn host_separator(byte: u8) -> bool {
+    return byte == 47u8 || byte == 92u8;
+}
+
+fn host_path_prefix(run: *CrustRun, path: *u8, size: usize) -> usize {
+    var base: *u8 = run -> source -> path;
+    if size >= 2usize && path[1usize] == 58u8 {
+        return 0usize;
+    }
+    if host_separator(path[0usize]) {
+        if size >= 2usize && host_separator(path[1usize]) {
+            return 0usize;
+        }
+        // A rooted path inherits the root source drive, never a later working directory.
+        if base[1usize] == 58u8 {
+            return 2usize;
+        }
+        crust_set_error(
+            run -> context,
+            run -> source,
+            run -> cursor,
+            "rooted path requires a drive"
+        );
+        return ~0usize;
+    }
+    var prefix: usize = 0usize;
+    var index: usize = 0usize;
+    while base[index] != 0u8 {
+        if host_separator(base[index]) {
+            prefix = index + 1usize;
+        }
+        index = index + 1usize;
+    }
+    return prefix;
+}
+
+// Resolve UTF-8 paths against the captured root. Drive-relative paths are ambiguous.
+fn host_path(run: *CrustRun, path: *u8) -> *u8 {
+    if path == null(*u8) || path[0usize] == 0u8 {
+        crust_set_error(run -> context, run -> source, run -> cursor, "input path is empty");
+        return null(*u8);
+    }
+    var size: usize = 0usize;
+    while path[size] != 0u8 {
+        size = size + 1usize;
+    }
+    if size >= 2usize && path[1usize] == 58u8 {
+        if size < 3usize || !host_separator(path[2usize]) {
+            crust_set_error(
+                run -> context,
+                run -> source,
+                run -> cursor,
+                "drive-relative input path"
+            );
+            return null(*u8);
+        }
+    }
+    var prefix: usize = host_path_prefix(run, path, size);
+    if prefix == ~0usize {
+        return null(*u8);
+    }
+    if size >= ~0usize - prefix {
+        crust_set_error(run -> context, run -> source, run -> cursor, "input path is too long");
+        return null(*u8);
+    }
+    var result: *u8 = crust_try_alloc(run -> context, prefix + size + 1usize, 1usize);
+    if result == null(*u8) {
+        return result;
+    }
+    crust0_host_move_bytes(result, run -> source -> path, prefix);
+    crust0_host_move_bytes(result + prefix as isize, path, size + 1usize);
+    var index: usize = 0usize;
+    while index < prefix + size {
+        if result[index] == 92u8 {
+            result[index] = 47u8;
+        }
+        index = index + 1usize;
+    }
+    return result;
+}

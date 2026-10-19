@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Relative paths use the root source directory. Returned storage belongs to run.context.
+fn host_path(run: *CrustRun, path: *u8) -> *u8 {
+    if path == null(*u8) || path[0usize] == 0u8 {
+        crust_set_error(
+            (*run).context,
+            (*run).source,
+            (*run).cursor,
+            "input path is empty"
+        );
+        return null(*u8);
+    }
+    var size: usize = 0usize;
+    while path[size] != 0u8 {
+        size = size + 1usize;
+    }
+    if path[0usize] == 47u8 {
+        return crust_try_copy_string((*run).context, path, size);
+    }
+    var base: *u8 = (*(*run).source).path;
+    var prefix: usize = 0usize;
+    var index: usize = 0usize;
+    while base[index] != 0u8 {
+        if base[index] == 47u8 {
+            prefix = index + 1usize;
+        }
+        index = index + 1usize;
+    }
+    if size >= (~0usize) - prefix {
+        crust_set_error(
+            (*run).context,
+            (*run).source,
+            (*run).cursor,
+            "input path is too long"
+        );
+        return null(*u8);
+    }
+    var result: *u8 = crust_try_alloc((*run).context, prefix + size + 1usize, 1usize);
+    if result == null(*u8) {
+        return result;
+    }
+    index = 0usize;
+    while index < prefix {
+        result[index] = base[index];
+        index = index + 1usize;
+    }
+    index = 0usize;
+    while index <= size {
+        result[prefix + index] = path[index];
+        index = index + 1usize;
+    }
+    return result;
+}

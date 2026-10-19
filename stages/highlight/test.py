@@ -143,6 +143,15 @@ def main():
     assert (b"Hello from a reader written in CRUST!", "string") in [
         (raw[begin:end], tokens["tokenTypes"][kind]) for begin, end, kind, _ in tokens["spans"]
     ]
+    crlf = work / "reader-switch-crlf.crs"
+    crlf.write_bytes(custom.read_text().replace("\n", "\r\n").encode())
+    tokens = json.loads(
+        run(build / "crust", "examples/highlight/reader-switch.crs", "--tokens", crlf)
+    )
+    raw = crlf.read_bytes()
+    assert (b"Hello from a reader written in CRUST!", "string") in [
+        (raw[begin:end], tokens["tokenTypes"][kind]) for begin, end, kind, _ in tokens["spans"]
+    ]
     unresolved = json.loads(
         run(build / "crust", "examples/highlight/reader-switch.crs", "--tokens", actual)
     )

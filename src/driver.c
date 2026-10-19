@@ -264,7 +264,7 @@ int main(int argc, char **argv)
     }
     crust_context_destroy(&ctx);
     for (index = 0; index < options.source_count; ++index) {
-        free((void *)options.sources[index].bytes);
+        crust0_host_free((void *)options.sources[index].bytes);
     }
     free(options.sources);
     return status;

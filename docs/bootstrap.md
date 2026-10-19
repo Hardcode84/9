@@ -9,6 +9,11 @@ check, and emit textual x86-64 assembly. GNU
 assembler produces object code, and GCC links it. The
 selected host and target profile is Linux x86-64 with the System V scalar ABI.
 
+The `windows_x64` profile also builds the seed launcher. It supports interpreted
+roots and explicit DLL inputs with the Windows x64 scalar ABI. Application
+backends, source bootstrap, and cache providers are not yet ported. See the
+[Windows build guide](windows.md) for the supported boundary and tests.
+
 This implementation is the raw bootstrap language. It does not add ownership,
 cleanup, imports, or macros. The direct-list example uses raw
 memory preconditions. It is not evidence of a checked lifetime rule.
@@ -173,12 +178,13 @@ libraries are separate. The prelude generator embeds the installed API and
 host helper sources. The native bridge links libffi; ordinary target programs
 do not need that library.
 
-The Makefile selects the `linux_x64` profile and rejects other profile names.
+The Makefile defaults to `linux_x64`. It also accepts `windows_x64` for the
+seed and rejects other profile names. Each profile selects its platform files.
 `src/profile_linux_x64.c` checks the required host representation.
 `src/driver_posix.c` publishes output files. `src/run_posix.c` captures root
-paths and manages loaded native code. `src/eval_ffi_linux_x64.c` implements
+paths and manages loaded native code. `src/eval_ffi.c` implements
 native calls and callbacks. `runtime/host_posix.c` provides aligned allocation.
-The build selects `src/linux_x64/eval_storage.h` for scalar memory access without
+The x64 hosts share `src/eval_storage.h` for scalar memory access without
 an extra call on each access. These private interfaces use portable C99 types.
 Compiler policy and evaluation do not include OS or libffi headers.
 

@@ -23,6 +23,11 @@ a C99 compiler, Make, Python 3, and libffi development headers and library.
 The source-selected backend needs GCC, GNU assembler, and GNU `objcopy`.
 `make all` builds only the seed launcher. The root prepares its stages.
 
+The Windows seed uses the `windows_x64` profile and Windows x64 scalar ABI.
+It executes interpreted roots and explicit DLL imports. The source-selected
+application stages in the examples below still require Linux. See the
+[Windows build guide](windows.md).
+
 The root can create a separate application context and ask an external backend
 to configure its target layout. The root and compiler stages retain the native
 host profile. Select the target toolchain through normal host process calls.
@@ -253,6 +258,13 @@ after a host working-directory change. The root operand's directory is used
 even when the operand is a symbolic link. A loaded source does not change the
 base directory. All retained paths and source bytes are copies.
 
+On Windows, paths and launcher arguments use UTF-8. Both slash forms are
+accepted. Absolute drive paths and UNC paths retain their roots. A path that
+starts with one separator inherits the root source drive; this form is rejected
+when the root source is a UNC path. Drive-relative paths such as `C:input` are
+rejected. Returned helper paths use forward slashes. File access rejects invalid
+UTF-8. UNC access requires an available share and the caller's normal permissions.
+
 The helpers implement one flat host namespace. There is no implicit file
 search, deduplication, import graph, package resolver, or source execution in
 `host_source`. Loading the same definitions twice is an error. A module library
@@ -307,7 +319,11 @@ cannot verify a native function signature.
 The C APIs are `crust_run_open`, `crust_run_import`, and `crust_run_import_unit`.
 A handle belongs to its runner. Complete calls before runner destruction.
 Only shared libraries are input to `host_open`. `crust_run_open` requires a path
-containing `/`; it does not search for a bare library name.
+containing `/` on Linux, or either directory separator on Windows; it does not
+search for a bare library name. Windows loads dependencies from the selected
+DLL's directory and the system directory. A forwarded export does not count as
+an export owned by the selected DLL. The same ownership rule applies to ABI
+markers. The Windows host interface is listed in the [Windows guide](windows.md).
 Preparing an object, archive,
 or changed native library is an explicit build operation in source. The
 launcher does not invoke a hidden compiler or linker to prepare root actions.

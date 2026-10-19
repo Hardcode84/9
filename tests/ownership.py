@@ -347,7 +347,7 @@ def main():
     parser.add_argument("--sanitize", action="store_true")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="ownership-local-", dir=args.build) as temporary:
-        run(args.build.resolve(), Path(temporary), args.sanitize)
+        run(args.build.resolve(), Path(temporary).resolve(), args.sanitize)
 
 
 if __name__ == "__main__":

@@ -76,7 +76,11 @@ def prepare(build, ldflags, suite="all"):
         host.compile(build, package, build / name, ["-O2", "-g1"], libraries)
         if name == "crust-ownership-import-test":
             # Let Windows settle first-launch compatibility images before receipts.
-            host.run([build / name], expected=2)
+            result = host.run([build / name], expected=1)
+            assert (
+                b"expected publish CACHE SOURCES or import CACHE ARTIFACT DIGEST SOURCES"
+                in result.stderr
+            )
     packages = ["c"]
     if ownership:
         packages += ["ownership", "overload", "union", "resources"]

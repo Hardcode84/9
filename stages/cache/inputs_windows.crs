@@ -1,0 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// Fresh builds do not use input hashes. Capture the seed as an explicit input;
+// a reusable cache must also capture the complete Windows dependency closure.
+fn cache_loaded_inputs(context: *CrustContext, inputs: *CacheInputs) -> bool {
+    var seed: *u8 = win_seed_path(context);
+    return seed != null(*u8) && cache_input(context, inputs, seed);
+}

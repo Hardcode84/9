@@ -843,7 +843,9 @@ fn main(argc:i32,argv:**u8)->i32 {
         "reserved": "__glibc_reserved",
     }
     stat_record = re.search(
-        r"^record CDriverStat \{.*?^\}", (ROOT / "stages/c/driver.crs").read_text(), re.M | re.S
+        r"^record CDriverStat \{.*?^\}",
+        (ROOT / "stages/c/driver_linux.crs").read_text(),
+        re.M | re.S,
     ).group()
     probe = [
         "#define _POSIX_C_SOURCE 200809L",
@@ -1183,7 +1185,17 @@ fn main(argc:i32,argv:**u8)->i32 {
             "api/crust0_stage.crs",
             *[
                 f"stages/c/{name}.crs"
-                for name in ("model", "base", "types", "emit", "driver", "program", "main")
+                for name in (
+                    "model",
+                    "base",
+                    "types",
+                    "emit",
+                    "driver_model",
+                    "driver_linux",
+                    "driver",
+                    "program",
+                    "main",
+                )
             ],
         ]
         seed = build / "crust-c-seed"

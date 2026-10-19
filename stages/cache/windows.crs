@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: Apache-2.0
+
+extern fn cache_strcmp(left: *u8, right: *u8) -> i32 = "strcmp";
+
+fn cache_directory(context: *CrustContext, path: *u8) -> bool {
+    var wide: *u16 = win_wide(context, path);
+    if wide == null(*u16) {
+        return false;
+    }
+    if win_mkdir(wide, null(*WinSecurity)) != 0i32 {
+        return true;
+    }
+    var code: u32 = win_last_error();
+    if code != 183u32 {
+        return win_error(context, "cannot create artifact directory", code);
+    }
+    var attributes: u32 = win_attributes(wide);
+    return (attributes != ~0u32 && (attributes & 16u32) != 0u32) || native_error(
+        context,
+        "artifact path is not a directory"
+    );
+}
+fn cache_remove(context: *CrustContext, path: *u8) -> bool {
+    return win_remove(context, path, false);
+}
+fn cache_tool(context: *CrustContext, arguments: **u8, output: *u8) -> bool {
+    var status: u32 = 1u32;
+    if !win_tool(context, arguments, output, &status) {
+        return false;
+    }
+    return win_status(context, status);
+}

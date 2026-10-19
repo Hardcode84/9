@@ -184,3 +184,15 @@ fn native_link_image(context: *CrustContext, session: *NativeSession, image: *Na
     }
     return native_tool(context, arguments);
 }
+
+extern fn stage_realpath(path: *u8, result: *u8) -> *u8 = "realpath";
+fn stage_resolve(context: *CrustContext, path: *u8) -> *u8 {
+    var resolved: *u8 = stage_realpath(path, null(*u8));
+    if resolved == null(*u8) {
+        native_error(context, "cannot resolve stage source path");
+        return null(*u8);
+    }
+    var owned: *u8 = crust_try_copy_string(context, resolved, native_strlen(resolved));
+    crust0_host_free(resolved);
+    return owned;
+}

@@ -7,6 +7,12 @@ It is ordinary Crust code. The seed does not select a cache, discover inputs,
 or skip root actions. The [backend tutorial](../../examples/cached-backend/README.md)
 uses it to prepare and load native compiler stages.
 
+The content-addressed cache is Linux-only. The Windows package builder selects
+[artifact_windows.crs](artifact_windows.crs), which always builds fresh output
+and returns `hit=false`. It does not claim complete dependency capture or reuse.
+Keep successful DLLs until their runners close, then remove them. See the
+[Windows guide](../../docs/windows.md).
+
 ## Contract
 
 `CacheBuild` supplies ordered input snapshots, a build function, and user data.
@@ -52,9 +58,9 @@ Publication is atomic between processes; no power-loss durability is promised.
 
 ## Input providers
 
-[inputs.crs](inputs.crs) captures files, the runner's retained source snapshots,
-and the actual loaded native images. Use the retained snapshots for producer
-code: a file edit after `host_source` does not change the code already checked.
+[inputs.crs](inputs.crs) captures files and the runner's retained source snapshots.
+[inputs_linux.crs](inputs_linux.crs) captures the actual loaded native images.
+Use the retained snapshots for producer code: a file edit after `host_source` does not change the code already checked.
 The main executable comes from `/proc/self/exe`. Tool dependencies come from
 `ldd`, under the same fixed environment as `cache_tool`. This provider requires
 dynamic Linux ELF tools. Use another explicit provider for other tool formats.

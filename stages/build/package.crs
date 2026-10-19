@@ -23,12 +23,7 @@ fn stage_capture(package: *StagePackage, path: *u8, inputs: *CacheInputs) -> boo
     if selected == null(*u8) {
         return false;
     }
-    var resolved: *u8 = stage_realpath(selected, null(*u8));
-    if resolved == null(*u8) {
-        return native_error(context, "cannot resolve stage source path");
-    }
-    var owned: *u8 = crust_try_copy_string(context, resolved, native_strlen(resolved));
-    crust0_host_free(resolved);
+    var owned: *u8 = stage_resolve(context, selected);
     if owned == null(*u8) {
         return false;
     }

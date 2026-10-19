@@ -20,7 +20,6 @@ record StageBuild {
     compile: fn(*StageCompile) -> bool;
     interpreted: bool;
 }
-extern fn stage_realpath(path: *u8, result: *u8) -> *u8 = "realpath";
 
 record StageSession {
     toolchain: StageToolchain;

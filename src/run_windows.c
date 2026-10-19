@@ -12,6 +12,8 @@
 #include <string.h>
 #include <windows.h>
 
+#include <bcrypt.h>
+
 struct CrustLibrary {
     HMODULE handle;
     CrustRun *owner;
@@ -91,14 +93,51 @@ char *crust_run_root_path(CrustContext *context, const char *path)
 bool crust_run_native_host(CrustRun *run, CrustDecl *declaration, void **result)
 {
     static const CrustHostSymbol symbols[] = {
-#define CRUST_HOST_SYMBOL(name) {#name, (void (*)(void))name},
+#define RUN_SYMBOL(name) {#name, (void (*)(void))name}
+#define CRUST_HOST_SYMBOL(name) RUN_SYMBOL(name),
 #include "host_symbols.inc"
-        CRUST_HOST_SYMBOL(puts) CRUST_HOST_SYMBOL(strlen) CRUST_HOST_SYMBOL(strcmp)
-            CRUST_HOST_SYMBOL(strncmp) CRUST_HOST_SYMBOL(memcpy) CRUST_HOST_SYMBOL(memmove)
-                CRUST_HOST_SYMBOL(memset) CRUST_HOST_SYMBOL(memcmp) CRUST_HOST_SYMBOL(malloc)
-                    CRUST_HOST_SYMBOL(calloc) CRUST_HOST_SYMBOL(realloc) CRUST_HOST_SYMBOL(free)
-                        CRUST_HOST_SYMBOL(abort) CRUST_HOST_SYMBOL(exit)
 #undef CRUST_HOST_SYMBOL
+        RUN_SYMBOL(puts),
+        RUN_SYMBOL(strlen),
+        RUN_SYMBOL(strcmp),
+        RUN_SYMBOL(strncmp),
+        RUN_SYMBOL(memcpy),
+        RUN_SYMBOL(memmove),
+        RUN_SYMBOL(memset),
+        RUN_SYMBOL(memcmp),
+        RUN_SYMBOL(malloc),
+        RUN_SYMBOL(calloc),
+        RUN_SYMBOL(realloc),
+        RUN_SYMBOL(free),
+        RUN_SYMBOL(abort),
+        RUN_SYMBOL(exit),
+        RUN_SYMBOL(GetLastError),
+        RUN_SYMBOL(MultiByteToWideChar),
+        RUN_SYMBOL(WideCharToMultiByte),
+        RUN_SYMBOL(GetFullPathNameW),
+        RUN_SYMBOL(GetFinalPathNameByHandleW),
+        RUN_SYMBOL(GetModuleFileNameW),
+        RUN_SYMBOL(GetFileAttributesW),
+        RUN_SYMBOL(CreateDirectoryW),
+        RUN_SYMBOL(RemoveDirectoryW),
+        RUN_SYMBOL(CreateFileW),
+        RUN_SYMBOL(DeleteFileW),
+        RUN_SYMBOL(MoveFileExW),
+        RUN_SYMBOL(ReplaceFileW),
+        RUN_SYMBOL(GetFileInformationByHandleEx),
+        RUN_SYMBOL(BCryptGenRandom),
+        RUN_SYMBOL(GetEnvironmentVariableW),
+        RUN_SYMBOL(SearchPathW),
+        RUN_SYMBOL(GetCurrentProcess),
+        RUN_SYMBOL(GetStdHandle),
+        RUN_SYMBOL(DuplicateHandle),
+        RUN_SYMBOL(CreateProcessW),
+        RUN_SYMBOL(WaitForSingleObject),
+        RUN_SYMBOL(GetExitCodeProcess),
+        RUN_SYMBOL(TerminateProcess),
+        RUN_SYMBOL(CloseHandle),
+        RUN_SYMBOL(CompareStringOrdinal),
+#undef RUN_SYMBOL
     };
     size_t index;
     char message[512];

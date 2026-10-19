@@ -19,8 +19,9 @@ another stage can supply its own function bodies. Use the
 [backend reference](../../docs/c-backend.md) for the full API and output contract.
 
 The shared [package loader](../build/README.md) interprets C emission for its
-first native backend build. It validates cached input and output bytes on later
-runs. Other stages use the resulting native compiler.
+first native backend build. On Linux, it validates cached input and output bytes
+on later runs. On Windows, it builds fresh artifacts without cache reuse. Other
+stages use the resulting native compiler. See the [Windows guide](../../docs/windows.md).
 
 ## 1. Select the backend
 
@@ -147,7 +148,8 @@ Read these files in this order:
 | [emit.crs](emit.crs) | `c_emit_with_body` registers bindings, emits bodies, and assembles output |
 | [types.crs](types.crs) | Type dependencies, layout checks, compatible native aliases, and rename entries |
 | [base.crs](base.crs) | Arena storage, buffer growth, integer formatting, and maps |
-| [driver.crs](driver.crs) | Output files, process argument arrays, tool status, and temporary file cleanup |
+| [driver_model.crs](driver_model.crs), [driver.crs](driver.crs) | Backend options and output orchestration |
+| [driver_linux.crs](driver_linux.crs), [driver_windows.crs](driver_windows.crs) | Platform file operations, processes, and temporary cleanup |
 
 The main boundary is:
 

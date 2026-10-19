@@ -52,3 +52,15 @@ fn host_path(run: *CrustRun, path: *u8) -> *u8 {
     }
     return result;
 }
+
+fn host_platform_name() -> *u8 {
+    return "linux";
+}
+
+fn host_absolute(path: *u8) -> bool {
+    return path[0usize] == 47u8;
+}
+
+fn host_profile_directory(run: *CrustRun) -> *u8 {
+    return "api";
+}

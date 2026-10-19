@@ -2,8 +2,9 @@
 
 # Windows support plan
 
-Status: phased implementation. The [Windows seed guide](windows.md) defines
-the phase 1 support boundary. Later phases remain proposals.
+Status: phases 1 and 2 are implemented. The [Windows guide](windows.md) defines
+the supported seed, C bootstrap, and native handoff workflows. Phases 3 and later
+remain proposals.
 
 Add native Windows x64 support in stages. First prove that the C99 seed can
 build a compiler stage from source, load it, hand later compilation to it,
@@ -45,7 +46,7 @@ Reject unsupported profiles explicitly.
 | Memory | [Host allocation](../runtime/host_posix.c) uses `posix_memalign`; [host release](../runtime/host.c) uses `free` | Preserve matching allocation and release operations for every buffer owner |
 | Source paths | [Host stage](../stages/host.crs) uses slash-based path rules | Define drive, UNC, relative path, and Unicode handling |
 | Native stages | [Linux native operations](../stages/native/linux.crs) use POSIX processes and shared libraries | Add Windows process, temporary-file, link, and cleanup operations |
-| Cache | [Cache operations](../stages/cache/linux.crs) and [input capture](../stages/cache/inputs.crs) use Linux tools and loader data | Capture Windows toolchain and library inputs under a defined execution environment |
+| Cache | [Cache operations](../stages/cache/linux.crs) and [input capture](../stages/cache/inputs_linux.crs) use Linux tools and loader data | Capture Windows toolchain and library inputs under a defined execution environment |
 | ABI identity | [API generator](../tools/api.py) includes a Linux LP64 identity | Generate distinct profile identities and reject incompatible artifacts |
 | C output | [C emitter](../stages/c/emit.crs) requires Linux GCC for its 64-bit output | Add a Windows output profile and audit GNU extensions, symbols, and C type assumptions |
 | LLVM output | [LLVM emitter](../stages/llvm/program.crs) selects a Linux target triple | Add Windows target layout, ABI, exports, and toolchain configuration |
@@ -101,10 +102,15 @@ Acceptance:
 
 ## Phase 2 Prove source bootstrap and native handoff
 
-Use the C backend as the first candidate. Audit its actual preparation graph
-before implementation. The current shared setup loads Linux native and cache
-providers. Any dependency on the ASM bootstrap must be resolved through a
-source-selected Windows path or an explicitly scoped ASM port.
+Implemented with the C backend and the shared package builder. The
+[Windows checks](../tests/windows_bootstrap.py) cover empty-directory bootstrap,
+a native callback witness before successor compilation, a second backend
+DLL, hello execution, process behavior, failed builds, and unload cleanup.
+The Windows artifact provider always builds fresh output. It does not claim
+phase 3 cache reuse or complete dependency capture.
+
+The shared preparation graph selects native, build, and artifact providers
+from the host profile. The Windows C bootstrap does not require the ASM backend.
 
 Run a bounded experiment with the [hello application](../examples/hello/main.crs).
 Start with only the seed, repository sources, and the selected host toolchain.

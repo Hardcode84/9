@@ -1,24 +1,24 @@
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
-# Windows seed support
+# Windows support
 
 The `windows_x64` profile runs the C99 seed natively on Windows 10 or later,
 on x86-64. It supports interpreted root actions, public compiler APIs, host
 allocation and binary file operations, and explicit native DLL imports.
 The host uses the Windows x64 scalar ABI and an LLP64 C data model.
 
-Application backends, source bootstrap, cache providers, native parallel jobs,
-and formatter file replacement remain Linux-only. A Windows seed build does
-not establish support for those stages. Make rejects their check targets under
-the Windows profile. The [support plan](windows-support-plan.md) defines the
-remaining phases.
+The C backend supports source bootstrap, native DLL handoff, and application
+compilation. The shared package builder selects Windows providers in ordinary
+Crust. Each request builds a fresh artifact. Cache reuse, LLVM and ASM backends,
+native parallel jobs, and formatter file replacement remain Linux-only.
+The [support plan](windows-support-plan.md) defines the remaining phases.
 
 ## Build and check
 
 Use an MSYS2 UCRT64 shell with GNU Make, MinGW-w64 GCC, libffi, and native Python.
 The CI job installs these packages: `make`, `mingw-w64-ucrt-x86_64-gcc`,
 `mingw-w64-ucrt-x86_64-libffi`, and `mingw-w64-ucrt-x86_64-python`.
-Run `make PROFILE=windows_x64 all check-windows`. Repeat with
+Run `make PROFILE=windows_x64 all check-windows check-windows-bootstrap`. Repeat with
 `AMALGAMATION=0` to check the separate-file core.
 
 The default output is `build/windows/crust.exe`. It runs from PowerShell or
@@ -41,7 +41,10 @@ The host interface exposes the generated seed declarations from `crust0`,
 `crust0_host`, `crust0_eval`, and `crust0_run`. It also exposes these C functions:
 `puts`, `strlen`, `strcmp`, `strncmp`, `memcpy`, `memmove`, `memset`, `memcmp`,
 `malloc`, `calloc`, `realloc`, `free`, `abort`, and `exit`.
-Other externs require an explicit library binding. Loading a DLL does not add
+The Windows process and file provider also uses the explicit Win32 host symbols
+listed in [run_windows.c](../src/run_windows.c). They cover UTF conversion,
+paths, files, handles, process creation and status, environment lookup, and
+`BCryptGenRandom`. Other externs require an explicit library binding. Loading a DLL does not add
 its exports to the host interface.
 
 Use the host release function for host allocations and file-read buffers.
@@ -69,6 +72,39 @@ callback before destroying the runner. DLL dependency lookup uses the selected
 library directory and the system directory. Forwarded exports and forwarded
 ABI markers cannot satisfy ownership checks.
 
+## Source bootstrap
+
+Put native MinGW-w64 GCC and binutils in `PATH`. From the repository directory,
+run `build/windows/crust.exe examples/hello/main.crs`, then `build/hello`.
+The root builds the C backend, loads its DLL, and calls the native backend to
+compile the rest of the root. No backend is linked into the seed.
+
+Keep `crust.exe.a` and the generated `profile/` directory beside `crust.exe`.
+The import library lets generated stage DLLs call the same seed instance.
+Stage DLLs export their own ABI marker and selected package functions.
+The normal loader ownership and ABI checks apply to each generation.
+
+Tools run without a shell. Arguments use Windows quoting and UTF-16 conversion.
+The child environment contains only the captured `PATH`, `SystemRoot`, `TEMP`,
+`TMP`, and `LC_ALL=C`; the first four variables are required. Standard input is
+`NUL`. Standard output is inherited or redirected to the selected file. Standard
+error is inherited. Process and stream handles close after completion.
+The Windows providers use the output directory as the tool working directory
+and pass relative scratch filenames. This avoids ANSI conversion of absolute
+Unicode paths in GCC child tools. User compiler and linker flags remain unchanged;
+relative paths in those flags must refer to the output directory.
+
+Each Windows artifact request creates a private directory and returns `hit=false`.
+Failed builds remove their outputs and scratch files. Successful artifacts belong
+to the caller. Keep them until every runner that loaded them has been destroyed,
+then remove them. This provider does not implement content-addressed reuse or
+claim complete Windows dependency capture. These are phase 3 requirements.
+
+The C driver creates temporary files beside the destination. It replaces existing
+files through `ReplaceFileW` and publishes new files through `MoveFileExW`.
+Windows ACLs control file access; POSIX mode bits do not apply. Paired text and
+symbol outputs reject matching canonical paths and existing hard links.
+
 ## Validation boundary
 
 `check-windows` exercises scalar calls and callbacks, mixed and stack arguments,
@@ -78,6 +114,14 @@ root-relative paths, LF and CRLF reader switching, and output publication failur
 UNC syntax is checked
 without requiring an external share. Access to a real UNC share depends on the
 test environment and is not covered by the local suite.
+
+`check-windows-bootstrap` starts with an empty artifact directory. It checks the
+native callback binding before successor compilation, builds a second backend,
+and uses it to compile and run hello. It also checks Unicode paths, argument
+quoting, redirection, the child environment, exit status, missing tools and import
+libraries, failed linking, output preservation, paired output aliases, and DLL
+deletion after runner destruction. Cleanup is also tested with a context
+allocator that rejects every allocation.
 
 Native test processes run serially in Windows jobs with a 512 MiB combined
 memory limit per process tree. Closing a test job terminates its remaining

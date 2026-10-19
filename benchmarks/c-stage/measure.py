@@ -35,6 +35,8 @@ STAGE_SOURCES = [
         "stages/c/base.crs",
         "stages/c/types.crs",
         "stages/c/emit.crs",
+        "stages/c/driver_model.crs",
+        "stages/c/driver_linux.crs",
         "stages/c/driver.crs",
         "stages/c/program.crs",
         "stages/c/main.crs",

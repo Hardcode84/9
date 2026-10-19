@@ -10,8 +10,9 @@ assembler produces object code, and GCC links it. The
 selected host and target profile is Linux x86-64 with the System V scalar ABI.
 
 The `windows_x64` profile also builds the seed launcher. It supports interpreted
-roots and explicit DLL inputs with the Windows x64 scalar ABI. Application
-backends, source bootstrap, and cache providers are not yet ported. See the
+roots and explicit DLL inputs with the Windows x64 scalar ABI. The C backend
+supports source bootstrap, native handoff, and fresh stage DLL builds. Cache
+reuse and other backend providers remain Linux-only. See the
 [Windows build guide](windows.md) for the supported boundary and tests.
 
 This implementation is the raw bootstrap language. It does not add ownership,

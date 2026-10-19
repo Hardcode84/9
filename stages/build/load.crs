@@ -3,19 +3,30 @@
 // Load shared preparation code once. Base is the source package directory,
 // relative to the root. Keep the root live through all stage calls.
 fn stage_setup(root: *CrustRun, base: *u8) -> bool {
-    var paths: [*u8; 16] = make [*u8; 16] {
-        // Compiler contexts, source trees, and runner interfaces.
-        "api/crust0_stage.crs",
+    var directory: *u8 = host_profile_directory(root);
+    if directory == null(*u8) {
+        return false;
+    }
+    directory = stage_path(root, base, directory);
+    if directory == null(*u8) {
+        return false;
+    }
+    var api: *u8 = stage_path(root, directory, "crust0_stage.crs");
+    if api == null(*u8) || !host_source(root, api) {
+        return false;
+    }
+    var paths: [*u8; 17] = make [*u8; 17] {
         // Target frontend and backend callback contracts.
         "stages/c/api.crs",
         // Native library and process support.
         "stages/native/model.crs",
-        "stages/native/linux.crs",
-        // Content-based artifact caching and captured dependency inputs.
+        stage_provider(root, "stages/native/", ".crs"),
+        // Artifact storage and captured dependency inputs.
         "stages/cache/model.crs",
-        "stages/cache/linux.crs",
-        "stages/cache/artifact.crs",
         "stages/cache/inputs.crs",
+        stage_provider(root, "stages/cache/", ".crs"),
+        stage_provider(root, "stages/cache/artifact_", ".crs"),
+        stage_provider(root, "stages/cache/inputs_", ".crs"),
         // Package, compiler, and object-toolchain contracts.
         "stages/build/interface.crs",
         "stages/build/model.crs",
@@ -26,13 +37,17 @@ fn stage_setup(root: *CrustRun, base: *u8) -> bool {
         "stages/build/compiler.crs",
         // C bootstrap emission and the host GCC object toolchain.
         "stages/build/c.crs",
+        stage_provider(root, "stages/build/", ".crs"),
         // Compile package sources and link native stage libraries.
         "stages/build/compile.crs",
         // Prepare sessions and reuse or build cached stage packages.
         "stages/build/library.crs"
     };
     var index: usize = 0usize;
-    while index < 16usize {
+    while index < 17usize {
+        if paths[index] == null(*u8) {
+            return false;
+        }
         var path: *u8 = stage_path(root, base, paths[index]);
         if path == null(*u8) || !host_source(root, path) {
             return false;
@@ -43,7 +58,7 @@ fn stage_setup(root: *CrustRun, base: *u8) -> bool {
 }
 
 fn stage_path(root: *CrustRun, base: *u8, path: *u8) -> *u8 {
-    if path[0usize] == 47u8 {
+    if host_absolute(path) {
         return host_path(root, path);
     }
     var a: usize = 0usize;
@@ -104,4 +119,28 @@ fn application_setup(root: *CrustRun, base: *u8) -> bool {
         index = index + 1usize;
     }
     return true;
+}
+
+fn stage_provider(root: *CrustRun, prefix: *u8, suffix: *u8) -> *u8 {
+    var platform: *u8 = host_platform_name();
+    var a: usize = 0usize;
+    var b: usize = 0usize;
+    var c: usize = 0usize;
+    while prefix[a] != 0u8 {
+        a = a + 1usize;
+    }
+    while platform[b] != 0u8 {
+        b = b + 1usize;
+    }
+    while suffix[c] != 0u8 {
+        c = c + 1usize;
+    }
+    var result: *u8 = crust_try_alloc(root -> context, a + b + c + 1usize, 1usize);
+    if result == null(*u8) {
+        return result;
+    }
+    crust0_host_move_bytes(result, prefix, a);
+    crust0_host_move_bytes(result + a as isize, platform, b);
+    crust0_host_move_bytes(result + (a + b) as isize, suffix, c + 1usize);
+    return result;
 }

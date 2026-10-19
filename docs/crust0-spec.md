@@ -73,8 +73,8 @@ representation; section 12 describes its construction and replacement APIs.
 The native execution profiles are `linux_x64` and `windows_x64`. Both are
 little endian, with 8-bit bytes and 64-bit data pointers. Linux uses the System V
 AMD64 scalar calling convention. Windows uses the Windows x64 scalar calling
-convention. Windows currently supports the seed evaluator and explicit native
-DLL inputs; source bootstrap and application backends remain Linux-only.
+convention. Windows supports the seed evaluator, explicit native DLL inputs, and
+source-built C backend stages. Cache reuse and other backends remain Linux-only.
 
 | Type | Size and alignment in bytes | Value representation |
 |---|---:|---|

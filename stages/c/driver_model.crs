@@ -1,0 +1,50 @@
+// SPDX-License-Identifier: Apache-2.0
+
+record CDriverTemp {
+    path: *u8;
+    next: *CDriverTemp;
+}
+
+// Mode 0 emits an executable, 1 an object, 2 backend text, and 3 builds text
+// without publication. Native outputs require a file path. Null or "-" selects
+// stdout for text. Symbols selects a separate response file in mode 2.
+// Keep option strings and compiler/linker flag arrays live until emission returns.
+record BackendOptions {
+    output: *u8;
+    symbols: *u8;
+    cflags: **u8;
+    cflag_count: usize;
+    ldflags: **u8;
+    ldflag_count: usize;
+    mode: u32;
+}
+
+record CDriver {
+    stage: *CStage;
+    options: *BackendOptions;
+    command: **u8;
+    temporary: *CDriverTemp;
+    process_status: i32;
+}
+
+fn c_driver_buffer(status: *CStatus, result: *CBuffer) -> unit {
+    *result = make CBuffer {
+        status: status,
+        data: null(*u8),
+        size: 0usize,
+        capacity: 0usize
+    };
+}
+
+fn c_driver_join(status: *CStatus, left: *u8, right: *u8) -> *u8 {
+    var buffer: CBuffer = uninit;
+    c_driver_buffer(status, &buffer);
+    c_buffer_text(&buffer, left);
+    c_buffer_text(&buffer, right);
+    return c_buffer_end(&buffer);
+}
+
+fn c_driver_error(driver: *CDriver, message: *u8) -> bool {
+    c_error(&(*(*driver).stage).status, null(*CrustSource), 0usize, message);
+    return false;
+}

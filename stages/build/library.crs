@@ -401,14 +401,6 @@ fn stage_native_callback(
     );
 }
 
-fn stage_link_inputs(context: *CrustContext, inputs: *CacheInputs, directory: *u8) -> bool {
-    var paths: [*u8; 2] = make [*u8; 2] {
-        "/usr/bin/objcopy",
-        "/usr/bin/ld"
-    };
-    return cache_tools(context, inputs, &paths[0usize], 2usize, directory);
-}
-
 fn stage_selection_input(
     context: *CrustContext,
     inputs: *CacheInputs,

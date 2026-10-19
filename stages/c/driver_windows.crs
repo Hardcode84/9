@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn c_driver_read_error(driver: *CDriver, path: *u8) -> bool {
+    return c_driver_error(driver, "cannot read input");
+}
+fn c_driver_windows_result(driver: *CDriver, success: bool) -> bool {
+    if !success {
+        driver -> stage -> status.failed = true;
+    }
+    return success;
+}
+// Windows output access uses ACLs. A nonzero value enables temporary creation;
+// POSIX mode bits have no meaning for this provider.
+fn c_driver_output_mode(driver: *CDriver, path: *u8) -> u32 {
+    return 1u32;
+}
+fn c_driver_temporary(driver: *CDriver, destination: *u8, mode: u32) -> *u8 {
+    var status: *CStatus = &driver -> stage -> status;
+    var item: *CDriverTemp = c_alloc(status, sizeof(CDriverTemp), alignof(CDriverTemp)) as *CDriverTemp;
+    if item == null(*CDriverTemp) {
+        return null(*u8);
+    }
+    var directory: *u8 = win_directory_prefix(status -> context, destination);
+    var prefix: *u8 = null(*u8);
+    if directory != null(*u8) {
+        prefix = native_join(status -> context, directory, ".crust-");
+    }
+    var path: *u8 = null(*u8);
+    if prefix != null(*u8) {
+        path = win_unique(status -> context, prefix, false);
+    }
+    if path == null(*u8) {
+        status -> failed = true;
+        return path;
+    }
+    * item = make CDriverTemp {
+        path: path,
+        next: driver -> temporary
+    };
+    driver -> temporary = item;
+    return path;
+}
+fn c_driver_cleanup(driver: *CDriver, keep: *u8) -> bool {
+    var success: bool = true;
+    var item: *CDriverTemp = driver -> temporary;
+    while item != null(*CDriverTemp) {
+        if keep == null(*u8) || !c_equal(keep, item -> path) {
+            if !win_remove(driver -> stage -> status.context, item -> path, false) {
+                success = false;
+            }
+        }
+        item = item -> next;
+    }
+    return c_driver_windows_result(driver, success);
+}
+fn c_driver_output_kind(driver: *CDriver, path: *u8) -> i32 {
+    var context: *CrustContext = driver -> stage -> status.context;
+    var wide: *u16 = win_wide(context, path);
+    if wide == null(*u16) {
+        driver -> stage -> status.failed = true;
+        return -1i32;
+    }
+    var attributes: u32 = win_attributes(wide);
+    if attributes != ~0u32 {
+        if (attributes & 1040u32) != 0u32 {
+            return 2i32;
+        }
+        return 1i32;
+    }
+    var code: u32 = win_last_error();
+    if code == 2u32 {
+        return 0i32;
+    }
+    c_driver_windows_result(driver, win_error(context, "cannot inspect output", code));
+    return -1i32;
+}
+fn c_driver_write(driver: *CDriver, path: *u8, buffer: *CBuffer) -> bool {
+    return crust0_host_write_file(path, buffer -> data, buffer -> size) == 0i32 || c_driver_error(
+        driver,
+        "cannot write output"
+    );
+}
+fn c_driver_publish(driver: *CDriver, temporary: *u8, output: *u8) -> bool {
+    var kind: i32 = c_driver_output_kind(driver, output);
+    if kind < 0i32 {
+        return false;
+    }
+    if kind == 2i32 {
+        return c_driver_error(driver, "output changed to a nonregular file");
+    }
+    return c_driver_windows_result(
+        driver,
+        win_publish(driver -> stage -> status.context, temporary, output)
+    );
+}
+fn c_driver_run(driver: *CDriver, count: usize, mode: u32) -> bool {
+    driver -> command[count] = null(*u8);
+    var status: u32 = 1u32;
+    var context: *CrustContext = driver -> stage -> status.context;
+    var directory: *u8 = win_directory_prefix(context, driver -> temporary -> path);
+    if directory == null(*u8) {
+        return c_driver_windows_result(driver, false);
+    }
+    if directory[0usize] == 0u8 {
+        directory = ".";
+    }
+    c_driver_relative(driver, count);
+    if driver -> stage -> status.failed {
+        return false;
+    }
+    if !c_driver_windows_result(
+        driver,
+        win_tool_in(context, driver -> command, null(*u8), &status, directory)
+    ) {
+        return false;
+    }
+    driver -> process_status = status as i32;
+    return c_driver_windows_result(driver, win_status(context, status));
+}
+fn c_driver_file_id(driver: *CDriver, path: *u8, identity: *WinFileId) -> bool {
+    var context: *CrustContext = driver -> stage -> status.context;
+    var wide: *u16 = win_wide(context, path);
+    if wide == null(*u16) {
+        return false;
+    }
+    var file: *u8 = win_open(
+        wide,
+        128u32,
+        7u32,
+        null(*WinSecurity),
+        3u32,
+        0u32,
+        null(*u8)
+    );
+    if file == ~0usize as *u8 {
+        return win_fail(context, "cannot inspect paired output");
+    }
+    var success: bool = win_file_info(file, 18i32, identity, sizeof(WinFileId) as u32) != 0i32;
+    if !success {
+        win_fail(context, "cannot identify paired output");
+    }
+    if !win_close(context, file) {
+        success = false;
+    }
+    return success;
+}
+fn c_driver_canonical(driver: *CDriver, path: *u8) -> *u8 {
+    var context: *CrustContext = driver -> stage -> status.context;
+    var full: *u8 = win_path(context, path);
+    if full == null(*u8) {
+        return full;
+    }
+    var kind: i32 = c_driver_output_kind(driver, full);
+    if kind < 0i32 {
+        return null(*u8);
+    }
+    if kind != 0i32 {
+        return win_existing_path(context, full);
+    }
+    var parent: *u8 = win_directory_prefix(context, full);
+    if parent == null(*u8) {
+        return parent;
+    }
+    var resolved: *u8 = win_existing_path(context, parent);
+    if resolved == null(*u8) {
+        return resolved;
+    }
+    var prefix: *u8 = native_join(context, resolved, "/");
+    if prefix == null(*u8) {
+        return prefix;
+    }
+    return native_join(context, prefix, full + native_strlen(parent) as isize);
+}
+fn c_driver_distinct_outputs(driver: *CDriver) -> bool {
+    var context: *CrustContext = driver -> stage -> status.context;
+    var a: *u8 = c_driver_canonical(driver, driver -> options -> output);
+    var b: *u8 = c_driver_canonical(driver, driver -> options -> symbols);
+    if a == null(*u8) || b == null(*u8) {
+        return c_driver_windows_result(driver, false);
+    }
+    var aw: *u16 = win_wide(context, a);
+    var bw: *u16 = win_wide(context, b);
+    if aw == null(*u16) || bw == null(*u16) {
+        return c_driver_windows_result(driver, false);
+    }
+    var comparison: i32 = win_equal_path(aw, -1i32, bw, -1i32, 1i32);
+    if comparison == 0i32 {
+        return c_driver_windows_result(
+            driver,
+            win_fail(context, "cannot compare paired outputs")
+        );
+    }
+    if comparison == 2i32 {
+        return c_driver_error(driver, "text and symbol outputs must name separate destinations");
+    }
+    return c_driver_distinct_files(driver, a, b);
+}
+fn c_driver_distinct_files(driver: *CDriver, a: *u8, b: *u8) -> bool {
+    var ak: i32 = c_driver_output_kind(driver, a);
+    var bk: i32 = c_driver_output_kind(driver, b);
+    if ak < 0i32 || bk < 0i32 {
+        return false;
+    }
+    if ak == 0i32 || bk == 0i32 {
+        return true;
+    }
+    var ai: WinFileId = uninit;
+    var bi: WinFileId = uninit;
+    if !c_driver_file_id(driver, a, &ai) || !c_driver_file_id(driver, b, &bi) {
+        return c_driver_windows_result(driver, false);
+    }
+    return win_compare(&ai as *u8, &bi as *u8, sizeof(WinFileId)) != 0i32 || c_driver_error(
+        driver,
+        "text and symbol outputs must name separate files"
+    );
+}
+
+// Driver temporaries share one output directory. Relative names avoid lossy
+// ANSI path conversion in native GCC child tools. User flags remain unchanged.
+fn c_driver_relative(driver: *CDriver, count: usize) -> unit {
+    var index: usize = 1usize;
+    while index < count {
+        var argument: *u8 = driver -> command[index];
+        var prefix: bool = argument[0usize] == 64u8;
+        if prefix {
+            argument = argument + 1isize;
+        }
+        var item: *CDriverTemp = driver -> temporary;
+        while item != null(*CDriverTemp) {
+            if c_equal(argument, item -> path) {
+                var base: *u8 = win_basename(argument);
+                if prefix {
+                    base = c_driver_join(&driver -> stage -> status, "@", base);
+                }
+                driver -> command[index] = base;
+                break;
+            }
+            item = item -> next;
+        }
+        index = index + 1usize;
+    }
+}

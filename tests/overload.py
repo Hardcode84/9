@@ -20,7 +20,17 @@ def c_backend_sources():
         ROOT / "api" / (name + ".crs") for name in ("crust0", "crust0_host", "crust0_stage")
     ] + [
         ROOT / "stages/c" / (name + ".crs")
-        for name in ("model", "base", "types", "emit", "driver", "program", "main")
+        for name in (
+            "model",
+            "base",
+            "types",
+            "emit",
+            "driver_model",
+            "driver_linux",
+            "driver",
+            "program",
+            "main",
+        )
     ]
 
 

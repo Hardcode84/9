@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  windows-seed:
+  windows:
     runs-on: windows-2022
     timeout-minutes: 30
     strategy:
@@ -39,8 +39,8 @@ jobs:
           install: >-
             make mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libffi
             mingw-w64-ucrt-x86_64-python
-      - name: Build and test the native seed
-        run: make PROFILE=windows_x64 AMALGAMATION=${{ matrix.amalgamation }} all check-windows
+      - name: Build and test the native seed and C bootstrap
+        run: make PROFILE=windows_x64 AMALGAMATION=${{ matrix.amalgamation }} all check-windows check-windows-bootstrap
 
   lint:
     runs-on: ubuntu-24.04

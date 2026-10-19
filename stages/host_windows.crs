@@ -80,3 +80,92 @@ fn host_path(run: *CrustRun, path: *u8) -> *u8 {
     }
     return result;
 }
+
+fn host_platform_name() -> *u8 {
+    return "windows";
+}
+
+fn host_absolute(path: *u8) -> bool {
+    return host_separator(path[0usize]) || (path[0usize] != 0u8 && path[1usize] == 58u8);
+}
+
+extern fn host_module_path(module: *u8, path: *u16, size: u32) -> u32 = "GetModuleFileNameW";
+extern fn host_utf8(
+    page: u32,
+    flags: u32,
+    text: *u16,
+    size: i32,
+    output: *u8,
+    count: i32,
+    replacement: *u8,
+    used: *i32
+) -> i32 = "WideCharToMultiByte";
+// The Windows seed is installed beside its generated profile declarations.
+fn host_profile_directory(run: *CrustRun) -> *u8 {
+    var wide: *u16 = crust_try_alloc(run -> context, 65536usize, 2usize) as *u16;
+    if wide == null(*u16) {
+        return null(*u8);
+    }
+    var count: u32 = host_module_path(null(*u8), wide, 32768u32);
+    if count == 0u32 || count >= 32768u32 {
+        crust_set_error(
+            run -> context,
+            run -> source,
+            run -> cursor,
+            "cannot locate seed executable"
+        );
+        return null(*u8);
+    }
+    var size: i32 = host_utf8(
+        65001u32,
+        128u32,
+        wide,
+        -1i32,
+        null(*u8),
+        0i32,
+        null(*u8),
+        null(*i32)
+    );
+    if size == 0i32 {
+        crust_set_error(
+            run -> context,
+            run -> source,
+            run -> cursor,
+            "invalid seed executable path"
+        );
+        return null(*u8);
+    }
+    var result: *u8 = crust_try_alloc(run -> context, size as usize + 12usize, 1usize);
+    if result == null(*u8) {
+        return result;
+    }
+    if host_utf8(
+        65001u32,
+        128u32,
+        wide,
+        -1i32,
+        result,
+        size,
+        null(*u8),
+        null(*i32)
+    ) == 0i32 {
+        crust_set_error(
+            run -> context,
+            run -> source,
+            run -> cursor,
+            "cannot convert seed path"
+        );
+        return null(*u8);
+    }
+    var index: usize = 0usize;
+    var end: usize = 0usize;
+    while result[index] != 0u8 {
+        if host_separator(result[index]) {
+            result[index] = 47u8;
+            end = index + 1usize;
+        }
+        index = index + 1usize;
+    }
+    crust0_host_move_bytes(result + end as isize, "profile/api", 12usize);
+    return result;
+}

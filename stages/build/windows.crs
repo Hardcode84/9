@@ -1,0 +1,142 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn stage_api(stage: *StagePackage, name: *u8) -> bool {
+    var directory: *u8 = host_profile_directory(stage -> root);
+    if directory == null(*u8) {
+        return false;
+    }
+    var path: *u8 = stage_path(stage -> root, directory, name);
+    return path != null(*u8) && stage_source(stage, path);
+}
+fn stage_platform_sources(stage: *StagePackage) -> bool {
+    return stage_source(stage, "../native/windows.crs");
+}
+fn stage_import_library(context: *CrustContext) -> *u8 {
+    var seed: *u8 = win_seed_path(context);
+    if seed == null(*u8) {
+        return null(*u8);
+    }
+    return native_join(context, seed, ".a");
+}
+fn stage_link_inputs(context: *CrustContext, inputs: *CacheInputs, directory: *u8) -> bool {
+    var library: *u8 = stage_import_library(context);
+    return library != null(*u8) && cache_input(context, inputs, library);
+}
+fn stage_c_toolchain(toolchain: *StageToolchain) -> bool {
+    toolchain -> object = stage_c_object;
+    return win_tool_path(toolchain -> context, "gcc") != null(*u16) && win_tool_path(
+        toolchain -> context,
+        "objcopy"
+    ) != null(*u16);
+}
+fn stage_gcc(context: *CrustContext, source: *u8, output: *u8, preprocess: bool) -> bool {
+    var arguments: [*u8; 13] = make [*u8; 13] {
+        "gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O2",
+        "-fstack-clash-protection",
+        "-Wno-overlength-strings",
+        "-x",
+        "c",
+        source,
+        "-o",
+        output,
+        "-c",
+        null(*u8)
+    };
+    if preprocess {
+        arguments[11usize] = "-E";
+    }
+    var directory: *u8 = win_directory_prefix(context, output);
+    if directory == null(*u8) {
+        return false;
+    }
+    arguments[8usize] = win_basename(source);
+    arguments[10usize] = win_basename(output);
+    return stage_windows_tool(context, &arguments[0usize], directory);
+}
+fn stage_tools(
+    context: *CrustContext,
+    inputs: *CacheInputs,
+    toolchain: *StageToolchain,
+    output: *u8
+) -> bool {
+    var source: *u8 = native_join(context, output, ".input");
+    var response: *u8 = native_join(context, output, ".symbols");
+    var object: *u8 = native_join(context, output, ".o");
+    var renamed: *u8 = native_join(context, output, ".renamed");
+    var library: *u8 = stage_import_library(context);
+    if source == null(*u8) || response == null(*u8) || object == null(*u8) || renamed == null(
+        *u8
+    ) || library == null(*u8) {
+        return false;
+    }
+    var symbols: *u8 = native_join(context, "@", win_basename(response));
+    if symbols == null(*u8) {
+        return false;
+    }
+    var rename: [*u8; 5] = make [*u8; 5] {
+        "objcopy",
+        symbols,
+        win_basename(object),
+        win_basename(renamed),
+        null(*u8)
+    };
+    var link: [*u8; 10] = make [*u8; 10] {
+        "gcc",
+        "-shared",
+        "-Wl,--export-all-symbols",
+        win_basename(renamed),
+        "seed.a",
+        "-lbcrypt",
+        "-o",
+        win_basename(output),
+        "-Wl,--no-insert-timestamp",
+        null(*u8)
+    };
+    var directory: *u8 = win_directory_prefix(context, output);
+    if directory == null(*u8) {
+        return false;
+    }
+    var copied: *u8 = native_join(context, directory, "seed.a");
+    if copied == null(*u8) {
+        return false;
+    }
+    var success: bool = stage_copy_import(context, library, copied) && stage_object_compile(
+        toolchain,
+        context,
+        source,
+        object
+    ) && stage_windows_tool(context, &rename[0usize], directory) && stage_windows_tool(
+        context,
+        &link[0usize],
+        directory
+    );
+    if !win_remove(context, copied, false) {
+        success = false;
+    }
+    return success;
+}
+
+fn stage_c_object(request: *StageObject) -> bool {
+    return stage_gcc(request -> context, request -> source, request -> output, false);
+}
+
+fn stage_windows_tool(context: *CrustContext, arguments: **u8, directory: *u8) -> bool {
+    var status: u32 = 1u32;
+    if !win_tool_in(context, arguments, null(*u8), &status, directory) {
+        return false;
+    }
+    return win_status(context, status);
+}
+fn stage_copy_import(context: *CrustContext, source: *u8, target: *u8) -> bool {
+    var bytes: *u8 = null(*u8);
+    var size: usize = 0usize;
+    if crust0_host_read_file(source, &bytes, &size) != 0i32 {
+        return native_error(context, "cannot read seed import library");
+    }
+    var success: bool = crust0_host_write_file(target, bytes, size) == 0i32;
+    crust0_host_free(bytes);
+    return success || native_error(context, "cannot copy seed import library");
+}

@@ -4,7 +4,9 @@
 
 A compilation program prepares its stages from source. Make builds the C99
 seed. The code in this directory selects source inputs, prepares the C backend,
-and reuses validated native libraries through the [artifact cache](../cache/README.md).
+and loads native libraries. Linux reuses validated libraries through the
+[artifact cache](../cache/README.md). Windows builds fresh DLLs through the same
+package orchestration; see the [Windows guide](../../docs/windows.md).
 
 ## Use a stage
 
@@ -26,11 +28,12 @@ host_source(run, "../../stages/c/build.crs");
 
 `stage_setup` loads the shared preparation functions and their interfaces.
 Call it once in a root. `stage_open` captures the toolchain inputs and obtains
-native C backend code. Its first build interprets C emission. Later calls
-reuse the cached library. A session keeps its code loaded until the root ends.
+native C backend code. Its first build interprets C emission. Later Linux calls
+reuse the cached library. Windows requests always build fresh artifacts. A
+session keeps its code loaded until the root ends.
 The C backend's consumer interface is available after setup.
 
-Select another stage with the same session:
+Select another stage with the same session (this ownership example requires Linux):
 
 ```crust
 host_source(run, "../../stages/ownership/api.crs");

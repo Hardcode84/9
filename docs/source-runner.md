@@ -25,7 +25,8 @@ The source-selected backend needs GCC, GNU assembler, and GNU `objcopy`.
 
 The Windows seed uses the `windows_x64` profile and Windows x64 scalar ABI.
 It executes interpreted roots and explicit DLL imports. The source-selected
-application stages in the examples below still require Linux. See the
+C backend supports source bootstrap and native handoff. Other backend and cache
+reuse providers still require Linux. See the
 [Windows build guide](windows.md).
 
 The root can create a separate application context and ask an external backend

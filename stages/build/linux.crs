@@ -1,0 +1,188 @@
+// SPDX-License-Identifier: Apache-2.0
+
+fn stage_gcc(context: *CrustContext, source: *u8, output: *u8, preprocess: bool) -> bool {
+    var arguments: [*u8; 17] = make [*u8; 17] {
+        "/usr/bin/gcc",
+        "-std=c99",
+        "-pedantic-errors",
+        "-O2",
+        "-fPIC",
+        "-fno-semantic-interposition",
+        "-fstack-clash-protection",
+        "-Wno-overlength-strings",
+        "-x",
+        "c",
+        source,
+        "-o",
+        output,
+        "-c",
+        null(*u8),
+        null(*u8),
+        null(*u8)
+    };
+    if preprocess {
+        arguments[13usize] = "-E";
+        arguments[14usize] = "-P";
+        arguments[15usize] = "-dD";
+    }
+    return cache_tool(context, &arguments[0usize], null(*u8));
+}
+
+fn stage_c_toolchain(toolchain: *StageToolchain) -> bool {
+    var context: *CrustContext = toolchain -> context;
+    var inputs: *CacheInputs = &toolchain -> inputs;
+    var directory: *u8 = toolchain -> directory;
+    toolchain -> object = stage_c_object;
+    var work: CacheWork = make CacheWork {
+        directory: null(*u8),
+        manifest: null(*u8),
+        digest: null(*u8),
+        artifact: null(*u8),
+        checksum: null(*u8)
+    };
+    if !cache_work(context, directory, &work) {
+        cache_cleanup(context, &work);
+        return false;
+    }
+    var query: [*u8; 3] = make [*u8; 3] {
+        "/usr/bin/gcc",
+        "-print-prog-name=cc1",
+        null(*u8)
+    };
+    var success: bool = cache_tool(context, &query[0usize], work.digest);
+    var compiler: CrustSource = uninit;
+    if success {
+        success = cache_read(context, work.digest, &compiler);
+    }
+    if success {
+        if compiler.size == 0usize || compiler.bytes[0usize] != 47u8 {
+            success = native_error(context, "GCC must report an absolute cc1 path");
+        } else {
+            compiler.bytes[compiler.size - 1usize] = 0u8;
+            var paths: [*u8; 3] = make [*u8; 3] {
+                "/usr/bin/gcc",
+                compiler.bytes,
+                "/usr/bin/as"
+            };
+            success = cache_tools(context, inputs, &paths[0usize], 3usize, directory);
+        }
+    }
+    var headers: *u8 = "#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#include <limits.h>\n";
+    if success {
+        success = cache_save(context, work.manifest, headers, native_strlen(headers));
+    }
+    if success {
+        success = stage_gcc(context, work.manifest, work.digest, true);
+    }
+    if success {
+        var captured: *CrustSource = crust_try_alloc(
+            context,
+            sizeof(CrustSource),
+            alignof(CrustSource)
+        ) as *CrustSource;
+        success = captured != null(*CrustSource) && cache_read(context, work.digest, captured);
+        if success {
+            captured -> path = "stage-system-headers";
+            success = cache_add(context, inputs, captured);
+        }
+    }
+    if success {
+        success = stage_gcc_specs(context, inputs, work.digest);
+    }
+    if !cache_cleanup(context, &work) {
+        success = false;
+    }
+    return success;
+}
+
+fn stage_gcc_specs(context: *CrustContext, inputs: *CacheInputs, scratch: *u8) -> bool {
+    var arguments: [*u8; 3] = make [*u8; 3] {
+        "/usr/bin/gcc",
+        "-dumpspecs",
+        null(*u8)
+    };
+    if !cache_tool(context, &arguments[0usize], scratch) {
+        return false;
+    }
+    var captured: *CrustSource = crust_try_alloc(
+        context,
+        sizeof(CrustSource),
+        alignof(CrustSource)
+    ) as *CrustSource;
+    if captured == null(*CrustSource) || !cache_read(context, scratch, captured) {
+        return false;
+    }
+    captured -> path = "stage-gcc-specs";
+    return cache_add(context, inputs, captured);
+}
+
+fn stage_tools(
+    context: *CrustContext,
+    inputs: *CacheInputs,
+    toolchain: *StageToolchain,
+    output: *u8
+) -> bool {
+    var source: *u8 = native_join(context, output, ".input");
+    var response: *u8 = native_join(context, output, ".symbols");
+    if response == null(*u8) {
+        return false;
+    }
+    var symbols: *u8 = native_join(context, "@", response);
+    var object: *u8 = native_join(context, output, ".o");
+    var renamed: *u8 = native_join(context, output, ".renamed");
+    var libc: *u8 = cache_libc(context, inputs);
+    if source == null(*u8) || symbols == null(*u8) || object == null(*u8) || renamed == null(*u8) || libc == null(
+        *u8
+    ) {
+        return false;
+    }
+    var rename: [*u8; 5] = make [*u8; 5] {
+        "/usr/bin/objcopy",
+        symbols,
+        object,
+        renamed,
+        null(*u8)
+    };
+    var link: [*u8; 14] = make [*u8; 14] {
+        "/usr/bin/ld",
+        "-shared",
+        "-Bsymbolic",
+        "-z",
+        "text",
+        "-z",
+        "relro",
+        "-z",
+        "now",
+        renamed,
+        libc,
+        "-o",
+        output,
+        null(*u8)
+    };
+    return stage_object_compile(toolchain, context, source, object) && cache_tool(
+        context,
+        &rename[0usize],
+        null(*u8)
+    ) && cache_tool(context, &link[0usize], null(*u8));
+}
+
+fn stage_link_inputs(context: *CrustContext, inputs: *CacheInputs, directory: *u8) -> bool {
+    var paths: [*u8; 2] = make [*u8; 2] {
+        "/usr/bin/objcopy",
+        "/usr/bin/ld"
+    };
+    return cache_tools(context, inputs, &paths[0usize], 2usize, directory);
+}
+
+fn stage_api(stage: *StagePackage, name: *u8) -> bool {
+    var path: *u8 = native_join(stage -> root -> context, "../../api/", name);
+    return path != null(*u8) && stage_source(stage, path);
+}
+
+fn stage_platform_sources(stage: *StagePackage) -> bool {
+    return true;
+}
+
+fn stage_c_object(request: *StageObject) -> bool {
+    return stage_gcc(request -> context, request -> source, request -> output, false);
+}

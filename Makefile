@@ -16,25 +16,27 @@ HOST_EXTRA =
 RUN_LDFLAGS = -rdynamic
 RUN_LIBS = -ldl -lffi
 API_ROOT = .
+SEED_IMPORT =
 else ifeq ($(PROFILE),windows_x64)
 BUILD ?= build/windows
 PLATFORM = windows
 EXE = .exe
 HOST_EXTRA = $(BUILD)/windows_io.o
-RUN_LDFLAGS = -municode -Wl,--export-all-symbols
-RUN_LIBS = -lffi
+RUN_LDFLAGS = -municode -Wl,--export-all-symbols -Wl,--out-implib,$(BUILD)/crust.exe.a
+RUN_LIBS = -lffi -lbcrypt
 API_ROOT = $(BUILD)/profile
+SEED_IMPORT = $(BUILD)/crust.exe.a
 CPPFLAGS += -I$(API_ROOT)/include
-WINDOWS_GOALS = all clean api amalgamate check-windows check-windows-build
+WINDOWS_GOALS = all clean api amalgamate check-windows check-windows-build check-windows-bootstrap
 ifneq ($(filter-out $(WINDOWS_GOALS) $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a,$(MAKECMDGOALS)),)
-$(error Windows currently supports the seed only; use all or check-windows)
+$(error Windows supports seed and C bootstrap checks; use check-windows or check-windows-bootstrap)
 endif
 else
 $(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64 or windows_x64)
 endif
 CPPFLAGS += -Iinclude $(FFI_CFLAGS)
 ifneq ($(PROFILE),windows_x64)
-ifneq ($(filter check-windows check-windows-build,$(MAKECMDGOALS)),)
+ifneq ($(filter check-windows check-windows-build check-windows-bootstrap,$(MAKECMDGOALS)),)
 $(error check-windows requires PROFILE=windows_x64)
 endif
 endif
@@ -67,7 +69,7 @@ OVERLOAD_RESOURCE_LIBRARY = $(or $(shell python3 tests/prepare.py --build $(BUIL
 
 .PHONY: all clean check witness api test-tools check-highlight check-ccn check-vscode check-overload check-overload-alloc check-c check-stage check-examples check-resources check-resource-alloc check-reader check-modules check-native check-asm check-cache
 .PHONY: amalgamate check-amalgamation FORCE
-all: $(BUILD)/crust$(EXE)
+all: $(BUILD)/crust$(EXE) $(SEED_IMPORT)
 
 .PHONY: fetch-llvm-release fetch-llvm-main check-llvm-fetch
 fetch-llvm-release:
@@ -126,8 +128,8 @@ $(BUILD)/prelude.inc: tools/prelude.py $(PRELUDE) | $(BUILD)
 $(BUILD)/run_main.o: CPPFLAGS += -I$(BUILD)
 $(BUILD)/run_main.o: $(BUILD)/prelude.inc
 
-$(BUILD)/crust$(EXE): $(CORE) $(RUNNER) $(BUILD)/run_main.o $(BUILD)/run_entry_$(PLATFORM).o $(HOST)
-	$(CC) $(CFLAGS) $(filter-out $(BUILD)/core-mode,$^) $(RUN_LDFLAGS) $(LDFLAGS) $(FFI_LDFLAGS) $(RUN_LIBS) -o $@
+$(BUILD)/crust$(EXE) $(SEED_IMPORT) &: $(CORE) $(RUNNER) $(BUILD)/run_main.o $(BUILD)/run_entry_$(PLATFORM).o $(HOST) Makefile
+	$(CC) $(CFLAGS) $(filter-out $(BUILD)/core-mode Makefile,$^) $(RUN_LDFLAGS) $(LDFLAGS) $(FFI_LDFLAGS) $(RUN_LIBS) -o $(BUILD)/crust$(EXE)
 
 $(BUILD)/libcrust0_run.a: $(RUNNER)
 	rm -f $@
@@ -140,7 +142,7 @@ $(BUILD)/libcrust0.a: $(CORE) Makefile
 $(BUILD)/libcrust0_host.a: $(HOST)
 	$(AR) rcs $@ $^
 
-.PHONY: check-windows check-windows-build
+.PHONY: check-windows check-windows-build check-windows-bootstrap
 check-windows-build: all $(BUILD)/windows_seed.exe $(BUILD)/windows_library.dll $(BUILD)/windows_limit.exe
 
 $(BUILD)/windows_limit.exe: tests/windows_limit.c | $(BUILD)
@@ -154,6 +156,12 @@ $(BUILD)/windows_seed.exe: tests/windows_seed.c $(CORE) $(RUNNER) $(HOST) $(BUIL
 
 check-windows: check-windows-build
 	python3 tests/windows.py --build $(BUILD) --cc '$(CC)'
+
+$(BUILD)/windows_process.exe: tests/windows_process.c Makefile | $(BUILD)
+	$(CC) $(CFLAGS) $(STRICT) -municode $< $(LDFLAGS) -o $@
+
+check-windows-bootstrap: all $(BUILD)/windows_limit.exe $(BUILD)/windows_process.exe
+	python3 tests/windows_bootstrap.py --build $(BUILD)
 
 $(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
 	$(AR) rcs $@ $^

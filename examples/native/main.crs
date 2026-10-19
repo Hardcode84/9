@@ -50,7 +50,7 @@ var session: NativeSession = make NativeSession {
     libraries: &libraries[0usize],
     library_count: 2usize
 };
-var sources: [*u8; 17] = make [*u8; 17] {
+var sources: [*u8; 19] = make [*u8; 19] {
     "../../api/crust0.crs",
     "../../api/crust0_host.crs",
     "../../api/crust0_eval.crs",
@@ -61,6 +61,8 @@ var sources: [*u8; 17] = make [*u8; 17] {
     "../../stages/c/base.crs",
     "../../stages/c/types.crs",
     "../../stages/c/emit.crs",
+    "../../stages/c/driver_model.crs",
+    "../../stages/c/driver_linux.crs",
     "../../stages/c/driver.crs",
     "../../stages/c/program.crs",
     "../../stages/native/model.crs",
@@ -83,7 +85,7 @@ var exports: [*u8; 4] = make [*u8; 4] {
         run,
         &session,
         &sources[0usize],
-        17usize,
+        19usize,
         &exports[0usize],
         4usize
     );

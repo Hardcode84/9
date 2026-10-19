@@ -1,0 +1,798 @@
+// SPDX-License-Identifier: Apache-2.0
+
+// These records mirror the Windows x64 ABI, including its member order.
+record WinSecurity {
+    size: u32;
+    descriptor: *u8;
+    inherit: i32;
+}
+record WinStartup {
+    size: u32;
+    reserved: *u16;
+    desktop: *u16;
+    title: *u16;
+    x: u32;
+    y: u32;
+    width: u32;
+    height: u32;
+    columns: u32;
+    rows: u32;
+    fill: u32;
+    flags: u32;
+    show: u16;
+    reserved_size: u16;
+    reserved_bytes: *u8;
+    input: *u8;
+    output: *u8;
+    error: *u8;
+}
+record WinProcess {
+    process: *u8;
+    thread: *u8;
+    process_id: u32;
+    thread_id: u32;
+}
+record WinFileId {
+    volume: u64;
+    identity: [u8; 16];
+}
+
+extern fn native_strlen(text: *u8) -> usize = "strlen";
+extern fn native_memcpy(target: *u8, source: *u8, size: usize) -> *u8 = "memcpy";
+extern fn win_memset(target: *u8, value: i32, size: usize) -> *u8 = "memset";
+extern fn win_compare(left: *u8, right: *u8, size: usize) -> i32 = "memcmp";
+extern fn win_last_error() -> u32 = "GetLastError";
+extern fn win_to_wide(
+    page: u32,
+    flags: u32,
+    text: *u8,
+    size: i32,
+    output: *u16,
+    count: i32
+) -> i32 = "MultiByteToWideChar";
+extern fn win_to_utf8(
+    page: u32,
+    flags: u32,
+    text: *u16,
+    size: i32,
+    output: *u8,
+    count: i32,
+    replacement: *u8,
+    used: *i32
+) -> i32 = "WideCharToMultiByte";
+extern fn win_full_path(path: *u16, size: u32, output: *u16, part: **u16) -> u32 = "GetFullPathNameW";
+extern fn win_final_path(file: *u8, path: *u16, size: u32, flags: u32) -> u32 = "GetFinalPathNameByHandleW";
+extern fn win_module_path(module: *u8, path: *u16, size: u32) -> u32 = "GetModuleFileNameW";
+extern fn win_attributes(path: *u16) -> u32 = "GetFileAttributesW";
+extern fn win_mkdir(path: *u16, security: *WinSecurity) -> i32 = "CreateDirectoryW";
+extern fn win_rmdir(path: *u16) -> i32 = "RemoveDirectoryW";
+extern fn win_open(
+    path: *u16,
+    access: u32,
+    share: u32,
+    security: *WinSecurity,
+    creation: u32,
+    flags: u32,
+    template: *u8
+) -> *u8 = "CreateFileW";
+extern fn win_delete(path: *u16) -> i32 = "DeleteFileW";
+extern fn win_move(source: *u16, target: *u16, flags: u32) -> i32 = "MoveFileExW";
+extern fn win_replace(
+    target: *u16,
+    source: *u16,
+    backup: *u16,
+    flags: u32,
+    exclude: *u8,
+    reserved: *u8
+) -> i32 = "ReplaceFileW";
+extern fn win_file_info(file: *u8, kind: i32, info: *WinFileId, size: u32) -> i32 = "GetFileInformationByHandleEx";
+extern fn win_random(algorithm: *u8, bytes: *u8, size: u32, flags: u32) -> i32 = "BCryptGenRandom";
+extern fn win_environment(name: *u16, value: *u16, size: u32) -> u32 = "GetEnvironmentVariableW";
+extern fn win_search(
+    path: *u16,
+    name: *u16,
+    extension: *u16,
+    size: u32,
+    output: *u16,
+    part: **u16
+) -> u32 = "SearchPathW";
+extern fn win_current_process() -> *u8 = "GetCurrentProcess";
+extern fn win_standard(kind: u32) -> *u8 = "GetStdHandle";
+extern fn win_duplicate(
+    source_process: *u8,
+    source: *u8,
+    target_process: *u8,
+    target: **u8,
+    access: u32,
+    inherit: i32,
+    options: u32
+) -> i32 = "DuplicateHandle";
+extern fn win_create_process(
+    application: *u16,
+    command: *u16,
+    process_security: *WinSecurity,
+    thread_security: *WinSecurity,
+    inherit: i32,
+    flags: u32,
+    environment: *u16,
+    directory: *u16,
+    startup: *WinStartup,
+    process: *WinProcess
+) -> i32 = "CreateProcessW";
+extern fn win_wait(process: *u8, milliseconds: u32) -> u32 = "WaitForSingleObject";
+extern fn win_exit_code(process: *u8, status: *u32) -> i32 = "GetExitCodeProcess";
+extern fn win_terminate(process: *u8, status: u32) -> i32 = "TerminateProcess";
+extern fn win_close_handle(handle: *u8) -> i32 = "CloseHandle";
+extern fn win_equal_path(
+    left: *u16,
+    left_size: i32,
+    right: *u16,
+    right_size: i32,
+    ignore_case: i32
+) -> i32 = "CompareStringOrdinal";
+
+fn native_error(context: *CrustContext, message: *u8) -> bool {
+    crust_set_error(context, null(*CrustSource), 0usize, message);
+    return false;
+}
+fn native_abi_name(name: *u8) -> bool {
+    var prefix: *u8 = "CRUST_ABI_";
+    var index: usize = 0usize;
+    while index < 10usize {
+        if name[index] != prefix[index] {
+            return false;
+        }
+        index = index + 1usize;
+    }
+    return true;
+}
+fn native_join(context: *CrustContext, left: *u8, right: *u8) -> *u8 {
+    var a: usize = native_strlen(left);
+    var b: usize = native_strlen(right);
+    if a >= ~0usize - b {
+        native_error(context, "native path is too long");
+        return null(*u8);
+    }
+    var result: *u8 = crust_try_alloc(context, a + b + 1usize, 1usize);
+    if result != null(*u8) {
+        native_memcpy(result, left, a);
+        native_memcpy(result + a as isize, right, b + 1usize);
+    }
+    return result;
+}
+fn win_error(context: *CrustContext, operation: *u8, code: u32) -> bool {
+    return win_number_error(context, operation, " (Windows error ", code);
+}
+fn win_status(context: *CrustContext, status: u32) -> bool {
+    return status == 0u32 || win_number_error(
+        context,
+        "native tool failed",
+        " (exit status ",
+        status
+    );
+}
+fn win_number_error(context: *CrustContext, operation: *u8, separator: *u8, code: u32) -> bool {
+    var digits: [u8; 11] = uninit;
+    var index: usize = 10usize;
+    digits[index] = 0u8;
+    while true {
+        index = index - 1usize;
+        digits[index] = (code % 10u32) as u8 + 48u8;
+        code = code / 10u32;
+        if code == 0u32 {
+            break;
+        }
+    }
+    var prefix: *u8 = native_join(context, operation, separator);
+    if prefix == null(*u8) {
+        return false;
+    }
+    var number: *u8 = native_join(context, prefix, &digits[index]);
+    if number == null(*u8) {
+        return false;
+    }
+    var message: *u8 = native_join(context, number, ")");
+    return message != null(*u8) && native_error(context, message);
+}
+fn win_fail(context: *CrustContext, operation: *u8) -> bool {
+    return win_error(context, operation, win_last_error());
+}
+fn win_close(context: *CrustContext, handle: *u8) -> bool {
+    if handle == null(*u8) || handle == ~0usize as *u8 {
+        return true;
+    }
+    return win_close_handle(handle) != 0i32 || win_fail(context, "cannot close handle");
+}
+fn win_wide(context: *CrustContext, text: *u8) -> *u16 {
+    var count: i32 = win_to_wide(65001u32, 8u32, text, -1i32, null(*u16), 0i32);
+    if count == 0i32 {
+        win_fail(context, "invalid UTF-8 path or argument");
+        return null(*u16);
+    }
+    var result: *u16 = crust_try_alloc(context, count as usize * 2usize, 2usize) as *u16;
+    if result != null(*u16) && win_to_wide(65001u32, 8u32, text, -1i32, result, count) == 0i32 {
+        win_fail(context, "cannot convert UTF-8");
+        return null(*u16);
+    }
+    return result;
+}
+fn win_utf8(context: *CrustContext, text: *u16) -> *u8 {
+    var count: i32 = win_to_utf8(
+        65001u32,
+        128u32,
+        text,
+        -1i32,
+        null(*u8),
+        0i32,
+        null(*u8),
+        null(*i32)
+    );
+    if count == 0i32 {
+        win_fail(context, "invalid UTF-16 path");
+        return null(*u8);
+    }
+    var result: *u8 = crust_try_alloc(context, count as usize, 1usize);
+    if result != null(*u8) && win_to_utf8(
+        65001u32,
+        128u32,
+        text,
+        -1i32,
+        result,
+        count,
+        null(*u8),
+        null(*i32)
+    ) == 0i32 {
+        win_fail(context, "cannot convert UTF-16");
+        return null(*u8);
+    }
+    return result;
+}
+fn win_slashes(path: *u8) -> *u8 {
+    var index: usize = 0usize;
+    while path[index] != 0u8 {
+        if path[index] == 92u8 {
+            path[index] = 47u8;
+        }
+        index = index + 1usize;
+    }
+    return path;
+}
+fn win_path(context: *CrustContext, path: *u8) -> *u8 {
+    var input: *u16 = win_wide(context, path);
+    if input == null(*u16) {
+        return null(*u8);
+    }
+    var count: u32 = win_full_path(input, 0u32, null(*u16), null(**u16));
+    if count == 0u32 {
+        win_fail(context, "cannot resolve path");
+        return null(*u8);
+    }
+    var output: *u16 = crust_try_alloc(context, count as usize * 2usize, 2usize) as *u16;
+    if output == null(*u16) {
+        return null(*u8);
+    }
+    var size: u32 = win_full_path(input, count, output, null(**u16));
+    if size == 0u32 || size >= count {
+        win_fail(context, "cannot resolve path");
+        return null(*u8);
+    }
+    var result: *u8 = win_utf8(context, output);
+    if result == null(*u8) {
+        return result;
+    }
+    return win_slashes(result);
+}
+fn win_existing_path(context: *CrustContext, path: *u8) -> *u8 {
+    var input: *u16 = win_wide(context, path);
+    if input == null(*u16) {
+        return null(*u8);
+    }
+    var handle: *u8 = win_open(
+        input,
+        128u32,
+        7u32,
+        null(*WinSecurity),
+        3u32,
+        33554432u32,
+        null(*u8)
+    );
+    if handle == ~0usize as *u8 {
+        win_fail(context, "cannot open source path");
+        return null(*u8);
+    }
+    var count: u32 = win_final_path(handle, null(*u16), 0u32, 0u32);
+    var output: *u16 = null(*u16);
+    if count != 0u32 {
+        output = crust_try_alloc(context, (count as usize + 1usize) * 2usize, 2usize) as *u16;
+    }
+    var size: u32 = 0u32;
+    if output != null(*u16) {
+        size = win_final_path(handle, output, count + 1u32, 0u32);
+    }
+    if size == 0u32 || size > count {
+        win_fail(context, "cannot resolve source path");
+        win_close(context, handle);
+        return null(*u8);
+    }
+    if !win_close(context, handle) {
+        return null(*u8);
+    }
+    var result: *u8 = win_utf8(context, output);
+    if result == null(*u8) {
+        return result;
+    }
+    win_slashes(result);
+    // GetFinalPathNameByHandle supplies an extended DOS or UNC prefix.
+    if result[4usize] == 85u8 && result[5usize] == 78u8 && result[6usize] == 67u8 {
+        return native_join(context, "//", result + 8isize);
+    }
+    return result + 4isize;
+}
+fn win_seed_path(context: *CrustContext) -> *u8 {
+    var output: *u16 = crust_try_alloc(context, 65536usize, 2usize) as *u16;
+    if output == null(*u16) {
+        return null(*u8);
+    }
+    var count: u32 = win_module_path(null(*u8), output, 32768u32);
+    if count == 0u32 || count >= 32768u32 {
+        win_fail(context, "cannot locate seed executable");
+        return null(*u8);
+    }
+    var result: *u8 = win_utf8(context, output);
+    if result == null(*u8) {
+        return result;
+    }
+    return win_slashes(result);
+}
+fn win_directory_prefix(context: *CrustContext, path: *u8) -> *u8 {
+    var size: usize = native_strlen(path);
+    while size != 0usize && path[size - 1usize] != 47u8 && path[size - 1usize] != 92u8 {
+        size = size - 1usize;
+    }
+    return crust_try_copy_string(context, path, size);
+}
+// Cleanup must not allocate through the context that may have just failed.
+fn win_remove(context: *CrustContext, path: *u8, directory: bool) -> bool {
+    var storage: [u16; 32768] = uninit;
+    var wide: *u16 = &storage[0usize];
+    if win_to_wide(65001u32, 8u32, path, -1i32, wide, 32768i32) == 0i32 {
+        return native_error(context, "cannot convert cleanup path");
+    }
+    var status: i32 = 0i32;
+    if directory {
+        status = win_rmdir(wide);
+    } else {
+        status = win_delete(wide);
+    }
+    if status != 0i32 {
+        return true;
+    }
+    var code: u32 = win_last_error();
+    return code == 2u32 || code == 3u32 || win_error(context, "cannot remove temporary", code);
+}
+fn win_unique(context: *CrustContext, prefix: *u8, directory: bool) -> *u8 {
+    var length: usize = native_strlen(prefix);
+    if length > 32700usize {
+        native_error(context, "temporary path is too long");
+        return null(*u8);
+    }
+    var path: *u8 = crust_try_alloc(context, length + 33usize, 1usize);
+    if path == null(*u8) {
+        return path;
+    }
+    native_memcpy(path, prefix, length);
+    path[length + 32usize] = 0u8;
+    var digits: *u8 = "0123456789abcdef";
+    var attempt: usize = 0usize;
+    while attempt < 128usize {
+        var random: [u8; 16] = uninit;
+        if win_random(null(*u8), &random[0usize], 16u32, 2u32) != 0i32 {
+            native_error(context, "cannot obtain temporary randomness");
+            return null(*u8);
+        }
+        var index: usize = 0usize;
+        while index < 16usize {
+            path[length + index * 2usize] = digits[(random[index] >> 4u8) as usize];
+            path[length + index * 2usize + 1usize] = digits[(random[index] & 15u8) as usize];
+            index = index + 1usize;
+        }
+        if win_unique_create(context, path, directory) {
+            return path;
+        }
+        if context -> error_count != 0usize {
+            return null(*u8);
+        }
+        attempt = attempt + 1usize;
+    }
+    native_error(context, "temporary name collision limit reached");
+    return null(*u8);
+}
+fn win_unique_create(context: *CrustContext, path: *u8, directory: bool) -> bool {
+    var wide: *u16 = win_wide(context, path);
+    if wide == null(*u16) {
+        return false;
+    }
+    if directory {
+        if win_mkdir(wide, null(*WinSecurity)) != 0i32 {
+            return true;
+        }
+    } else {
+        var handle: *u8 = win_open(
+            wide,
+            1073741824u32,
+            0u32,
+            null(*WinSecurity),
+            1u32,
+            128u32,
+            null(*u8)
+        );
+        if handle != ~0usize as *u8 {
+            if win_close(context, handle) {
+                return true;
+            }
+            win_remove(context, path, false);
+            return false;
+        }
+    }
+    var code: u32 = win_last_error();
+    if code == 80u32 || code == 183u32 {
+        return false;
+    }
+    return win_error(context, "cannot create temporary", code);
+}
+fn win_publish(context: *CrustContext, source: *u8, target: *u8) -> bool {
+    var from: *u16 = win_wide(context, source);
+    var to: *u16 = win_wide(context, target);
+    if from == null(*u16) || to == null(*u16) {
+        return false;
+    }
+    if win_attributes(to) != ~0u32 {
+        return win_replace(to, from, null(*u16), 0u32, null(*u8), null(*u8)) != 0i32 || win_fail(
+            context,
+            "cannot replace output"
+        );
+    }
+    var code: u32 = win_last_error();
+    if code != 2u32 {
+        return win_error(context, "cannot inspect output", code);
+    }
+    return win_move(from, to, 0u32) != 0i32 || win_fail(context, "cannot publish output");
+}
+
+fn win_quote(output: *u8, input: *u8) -> *u8 {
+    *output = 34u8;
+    output = output + 1isize;
+    while *input != 0u8 {
+        var slashes: usize = 0usize;
+        while *input == 92u8 {
+            slashes = slashes + 1usize;
+            input = input + 1isize;
+        }
+        if *input == 34u8 || *input == 0u8 {
+            slashes = slashes * 2usize;
+        }
+        while slashes != 0usize {
+            *output = 92u8;
+            output = output + 1isize;
+            slashes = slashes - 1usize;
+        }
+        if *input == 0u8 {
+            break;
+        }
+        if *input == 34u8 {
+            *output = 92u8;
+            output = output + 1isize;
+        }
+        * output = *input;
+        output = output + 1isize;
+        input = input + 1isize;
+    }
+    * output = 34u8;
+    output[1usize] = 32u8;
+    return output + 2isize;
+}
+fn win_command(context: *CrustContext, arguments: **u8) -> *u16 {
+    var count: usize = 1usize;
+    var index: usize = 0usize;
+    while arguments[index] != null(*u8) {
+        var size: usize = native_strlen(arguments[index]);
+        if size > 32766usize || count > 131068usize - size * 2usize - 3usize {
+            native_error(context, "tool command is too long");
+            return null(*u16);
+        }
+        count = count + size * 2usize + 3usize;
+        index = index + 1usize;
+    }
+    var bytes: *u8 = crust_try_alloc(context, count, 1usize);
+    if bytes == null(*u8) {
+        return null(*u16);
+    }
+    var cursor: *u8 = bytes;
+    index = 0usize;
+    while arguments[index] != null(*u8) {
+        cursor = win_quote(cursor, arguments[index]);
+        index = index + 1usize;
+    }
+    * cursor = 0u8;
+    var result: *u16 = win_wide(context, bytes);
+    if result == null(*u16) {
+        return result;
+    }
+    index = 0usize;
+    while result[index] != 0u16 {
+        index = index + 1usize;
+    }
+    if index >= 32767usize {
+        native_error(context, "tool command exceeds Windows limit");
+        return null(*u16);
+    }
+    return result;
+}
+fn win_env(context: *CrustContext, name: *u8) -> *u16 {
+    var key: *u16 = win_wide(context, name);
+    if key == null(*u16) {
+        return null(*u16);
+    }
+    var count: u32 = win_environment(key, null(*u16), 0u32);
+    if count == 0u32 {
+        win_fail(context, "required tool environment variable is absent");
+        return null(*u16);
+    }
+    var value: *u16 = crust_try_alloc(context, count as usize * 2usize, 2usize) as *u16;
+    if value == null(*u16) {
+        return value;
+    }
+    var size: u32 = win_environment(key, value, count);
+    if size == 0u32 || size >= count {
+        win_fail(context, "cannot capture tool environment");
+        return null(*u16);
+    }
+    return value;
+}
+fn win_tool_environment(context: *CrustContext) -> *u16 {
+    var names: [*u8; 4] = make [*u8; 4] {
+        "PATH",
+        "SystemRoot",
+        "TEMP",
+        "TMP"
+    };
+    var values: [*u8; 5] = uninit;
+    var size: usize = 1usize;
+    var index: usize = 0usize;
+    while index < 4usize {
+        var wide: *u16 = win_env(context, names[index]);
+        if wide == null(*u16) {
+            return null(*u16);
+        }
+        var value: *u8 = win_utf8(context, wide);
+        var key: *u8 = native_join(context, names[index], "=");
+        if value == null(*u8) || key == null(*u8) {
+            return null(*u16);
+        }
+        values[index + 1usize] = native_join(context, key, value);
+        if values[index + 1usize] == null(*u8) {
+            return null(*u16);
+        }
+        size = size + native_strlen(values[index + 1usize]) + 1usize;
+        index = index + 1usize;
+    }
+    values[0usize] = "LC_ALL=C";
+    size = size + 9usize;
+    var output: *u16 = crust_try_alloc(context, size * 2usize, 2usize) as *u16;
+    if output == null(*u16) {
+        return output;
+    }
+    var cursor: usize = 0usize;
+    index = 0usize;
+    while index < 5usize {
+        var value: *u16 = win_wide(context, values[index]);
+        if value == null(*u16) {
+            return null(*u16);
+        }
+        var offset: usize = 0usize;
+        while value[offset] != 0u16 {
+            output[cursor] = value[offset];
+            cursor = cursor + 1usize;
+            offset = offset + 1usize;
+        }
+        output[cursor] = 0u16;
+        cursor = cursor + 1usize;
+        index = index + 1usize;
+    }
+    output[cursor] = 0u16;
+    return output;
+}
+fn win_tool_path(context: *CrustContext, name: *u8) -> *u16 {
+    var path: *u16 = win_env(context, "PATH");
+    var file: *u16 = win_wide(context, name);
+    var extension: *u16 = win_wide(context, ".exe");
+    if path == null(*u16) || file == null(*u16) || extension == null(*u16) {
+        return null(*u16);
+    }
+    var count: u32 = win_search(
+        path,
+        file,
+        extension,
+        0u32,
+        null(*u16),
+        null(**u16)
+    );
+    if count == 0u32 {
+        win_fail(context, "cannot find native tool in PATH");
+        return null(*u16);
+    }
+    var output: *u16 = crust_try_alloc(context, (count as usize + 1usize) * 2usize, 2usize) as *u16;
+    if output == null(*u16) {
+        return output;
+    }
+    var size: u32 = win_search(path, file, extension, count + 1u32, output, null(**u16));
+    if size == 0u32 || size > count {
+        win_fail(context, "cannot resolve native tool");
+        return null(*u16);
+    }
+    return output;
+}
+fn win_inherit(context: *CrustContext, kind: u32) -> *u8 {
+    var result: *u8 = null(*u8);
+    var process: *u8 = win_current_process();
+    if win_duplicate(process, win_standard(kind), process, &result, 0u32, 1i32, 2u32) == 0i32 {
+        win_fail(context, "cannot inherit standard stream");
+    }
+    return result;
+}
+fn win_stream(context: *CrustContext, path: *u8, reading: bool) -> *u8 {
+    var wide: *u16 = win_wide(context, path);
+    if wide == null(*u16) {
+        return null(*u8);
+    }
+    var security: WinSecurity = make WinSecurity {
+        size: sizeof(WinSecurity) as u32,
+        descriptor: null(*u8),
+        inherit: 1i32
+    };
+    var access: u32 = 1073741824u32;
+    var creation: u32 = 2u32;
+    if reading {
+        access = 2147483648u32;
+        creation = 3u32;
+    }
+    var handle: *u8 = win_open(
+        wide,
+        access,
+        3u32,
+        &security,
+        creation,
+        128u32,
+        null(*u8)
+    );
+    if handle == ~0usize as *u8 {
+        win_fail(context, "cannot open tool stream");
+        return null(*u8);
+    }
+    return handle;
+}
+// Arguments are null-terminated UTF-8 strings. No shell is involved. Children
+// receive only PATH, SystemRoot, TEMP, TMP and LC_ALL; stdin is the NUL device.
+fn win_tool(context: *CrustContext, arguments: **u8, output: *u8, status: *u32) -> bool {
+    return win_tool_in(context, arguments, output, status, null(*u8));
+}
+fn win_tool_in(
+    context: *CrustContext,
+    arguments: **u8,
+    output: *u8,
+    status: *u32,
+    directory: *u8
+) -> bool {
+    var current: *u16 = null(*u16);
+    if directory != null(*u8) {
+        current = win_wide(context, directory);
+        if current == null(*u16) {
+            return false;
+        }
+    }
+
+    var command: *u16 = win_command(context, arguments);
+    var environment: *u16 = win_tool_environment(context);
+    var executable: *u16 = win_tool_path(context, arguments[0usize]);
+    if command == null(*u16) || environment == null(*u16) || executable == null(*u16) {
+        return false;
+    }
+    var startup: WinStartup = uninit;
+    win_memset(&startup as *u8, 0i32, sizeof(WinStartup));
+    startup.size = sizeof(WinStartup) as u32;
+    startup.flags = 256u32;
+    startup.input = win_stream(context, "NUL", true);
+    startup.error = win_inherit(context, 4294967284u32);
+    if output == null(*u8) {
+        startup.output = win_inherit(context, 4294967285u32);
+    } else {
+        startup.output = win_stream(context, output, false);
+    }
+    var success: bool = startup.input != null(*u8) && startup.output != null(*u8) && startup.error != null(
+        *u8
+    );
+    if success {
+        success = win_tool_start(
+            context,
+            executable,
+            command,
+            environment,
+            &startup,
+            status,
+            current
+        );
+    }
+    if !win_close(context, startup.input) {
+        success = false;
+    }
+    if !win_close(context, startup.output) {
+        success = false;
+    }
+    if !win_close(context, startup.error) {
+        success = false;
+    }
+    return success;
+}
+fn win_tool_start(
+    context: *CrustContext,
+    executable: *u16,
+    command: *u16,
+    environment: *u16,
+    startup: *WinStartup,
+    status: *u32,
+    current: *u16
+) -> bool {
+    var process: WinProcess = uninit;
+    if win_create_process(
+        executable,
+        command,
+        null(*WinSecurity),
+        null(*WinSecurity),
+        1i32,
+        1024u32,
+        environment,
+        current,
+        startup,
+        &process
+    ) == 0i32 {
+        return win_fail(context, "cannot start native tool");
+    }
+    var success: bool = win_wait(process.process, ~0u32) == 0u32;
+    if !success {
+        win_fail(context, "cannot wait for native tool");
+        if win_terminate(process.process, 1u32) == 0i32 {
+            win_fail(context, "cannot terminate native tool");
+        } else {
+            if win_wait(process.process, ~0u32) != 0u32 {
+                win_fail(context, "cannot wait after termination");
+            }
+        }
+    } else {
+        success = win_exit_code(process.process, status) != 0i32;
+        if !success {
+            win_fail(context, "cannot read native tool status");
+        }
+    }
+    if !win_close(context, process.thread) {
+        success = false;
+    }
+    if !win_close(context, process.process) {
+        success = false;
+    }
+    return success;
+}
+fn stage_resolve(context: *CrustContext, path: *u8) -> *u8 {
+    return win_existing_path(context, path);
+}
+
+fn win_basename(path: *u8) -> *u8 {
+    var index: usize = 0usize;
+    var base: usize = 0usize;
+    while path[index] != 0u8 {
+        if path[index] == 47u8 || path[index] == 92u8 {
+            base = index + 1usize;
+        }
+        index = index + 1usize;
+    }
+    return path + base as isize;
+}

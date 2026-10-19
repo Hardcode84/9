@@ -5,6 +5,8 @@ host_source(run, "model.crs");
 host_source(run, "base.crs");
 host_source(run, "types.crs");
 host_source(run, "emit.crs");
+host_source(run, "driver_model.crs");
+host_source(run, "driver_linux.crs");
 host_source(run, "driver.crs");
 host_source(run, "program.crs");
 host_source(run, "build.crs");

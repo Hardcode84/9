@@ -30,9 +30,10 @@ class Suite:
                 "stages/native/model.crs",
                 "stages/native/linux.crs",
                 "stages/cache/model.crs",
-                "stages/cache/linux.crs",
-                "stages/cache/artifact.crs",
                 "stages/cache/inputs.crs",
+                "stages/cache/linux.crs",
+                "stages/cache/artifact_linux.crs",
+                "stages/cache/inputs_linux.crs",
             )
         )
 

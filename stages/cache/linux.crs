@@ -67,26 +67,6 @@ fn cache_directory(context: *CrustContext, path: *u8) -> bool {
     return native_error(context, "cannot create cache directory");
 }
 
-fn cache_read(context: *CrustContext, path: *u8, result: *CrustSource) -> bool {
-    var bytes: *u8 = null(*u8);
-    var size: usize = 0usize;
-    if crust0_host_read_file(path, &bytes, &size) != 0i32 {
-        return native_error(context, "cannot read cache file");
-    }
-    var copy: *u8 = crust_try_copy_string(context, bytes, size);
-    crust0_host_free(bytes);
-    if copy == null(*u8) {
-        return false;
-    }
-    * result = make CrustSource {
-        path: path,
-        bytes: copy,
-        size: size,
-        identity: 0u64
-    };
-    return true;
-}
-
 fn cache_write(context: *CrustContext, file: *u8, bytes: *u8, size: usize) -> bool {
     if cache_fwrite(bytes, 1usize, size, file) == size {
         return true;

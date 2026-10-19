@@ -20,7 +20,10 @@ consumer declarations, links the library, and calls `c_program` or
 
 ## Build and use
 
-The selected host and target are Linux x86-64, LP64, and the System V ABI.
+The default host and target are Linux x86-64, LP64, and the System V ABI.
+The Windows x64 provider uses LLP64 and the Windows scalar ABI. It supports
+source bootstrap and application compilation with native MinGW-w64 tools;
+see the [Windows guide](windows.md). The commands below use the Linux launcher.
 GCC and GNU `objcopy` must be available through `PATH`.
 
 ```sh
@@ -110,7 +113,8 @@ The source files have these responsibilities:
 | `base.crs` | Arena, text buffers, number conversion, and maps |
 | `types.crs` | C types, layout checks, native bindings, and symbol text |
 | `emit.crs` | Checked expressions and statements to C text |
-| `driver.crs` | Reusable backend call, output files, and native processes |
+| `driver_model.crs`, `driver.crs` | Reusable backend call and output orchestration |
+| `driver_linux.crs`, `driver_windows.crs` | Platform file and process operations |
 | `program.crs` | Source input, frontend calls, names, options, and `c_program` |
 | `main.crs` | Standalone command-line entry |
 | `api.crs` | Consumer declarations for the two public calls and output options |
@@ -360,6 +364,7 @@ build/crust-c -o build/crust-c-sanitize \
   --ldflag build/libcrust0.a --ldflag build/libcrust0_host.a \
   api/crust0.crs api/crust0_host.crs api/crust0_stage.crs \
   stages/c/model.crs stages/c/base.crs stages/c/types.crs stages/c/emit.crs \
+  stages/c/driver_model.crs stages/c/driver_linux.crs \
   stages/c/driver.crs stages/c/program.crs stages/c/main.crs
 ASAN_OPTIONS=detect_leaks=1 python3 tests/run.py --backend c \
   --compiler build/crust-c-sanitize --work-dir build/tests-c-sanitize \

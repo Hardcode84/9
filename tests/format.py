@@ -155,8 +155,11 @@ class Suite:
         if WINDOWS:
             long_name = Path("\\\\?\\" + str(long_name))
         long_name.write_bytes(original)
-        command([self.tool, "--write", long_name])
-        command([self.tool, "--check", long_name])
+        # MSYS2 pathlib can render forward slashes. Extended Win32 paths require
+        # backslashes; keep the native spelling as a string for subprocess.
+        argument = str(long_name).replace("/", "\\") if WINDOWS else long_name
+        command([self.tool, "--write", argument])
+        command([self.tool, "--check", argument])
         assert not list(self.work.rglob(".crust-format-*"))
 
     def custom(self):

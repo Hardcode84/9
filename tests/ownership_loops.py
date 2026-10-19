@@ -322,7 +322,7 @@ def main():
     parser.add_argument("--sanitize", action="store_true")
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="ownership-loops-", dir=args.build) as temporary:
-        check_loops(args.build.resolve(), Path(temporary), args.sanitize)
+        check_loops(args.build.resolve(), Path(temporary).resolve(), args.sanitize)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@
 
 import argparse
 import hashlib
+import shutil
 from pathlib import Path
 
 from generics_ownership_imports import CLIENT, HELPERS
@@ -69,6 +70,8 @@ class OwnershipSuite(Suite):
         print("Windows generic ownership independent import, cleanup, and move rejection passed")
 
     def prepare(self):
+        self.libraries = {}
+        self.publication_images = {}
         self.cache = self.fresh_directory("ownership stage cache")
         self.objects = self.fresh_directory("ownership object cache")
         self.inputs = self.fresh_directory("ownership input")
@@ -86,13 +89,38 @@ class OwnershipSuite(Suite):
             encoding="utf-8",
         )
 
-    def driver(self, *args, expected=0):
+    def checker_library(self):
+        if self.package in self.libraries:
+            return self.libraries[self.package]
         body = self.setup() + self.session(self.cache)
         body += f"var library:*u8=stage_library(stages,{literal(native_path(self.package))});"
         body += """if library==null(*u8){return 1i32;};
+return crust0_host_write_stream(1u32,library,native_strlen(library));
+"""
+        library = self.root("ownership build", body).stdout.decode("utf-8")
+        self.libraries[self.package] = library
+        return library
+
+    def driver(self, *args, expected=0, extra_image=None):
+        # Build in a separate process: a cold bootstrap can retain additional
+        # images that are absent when the same stage comes from the cache.
+        library = self.checker_library()
+        body = self.setup() + f"var library:*u8={literal(library)};"
+        if extra_image is not None:
+            body += f"if crust_run_open(run,{literal(native_path(extra_image))})==null(*u8){{return 1i32;}};"
+        body += """
 extern fn ownership_main(argc:i32,argv:**u8)->i32="ownership_main";
 if !host_bind(run,crust_run_open(run,library),"ownership_main"){return 1i32;};
+var images:CacheInputs=make CacheInputs{items:null(**CrustSource),count:0usize,capacity:0usize};
+if !cache_loaded_inputs(run -> context,&images){return 1i32;};
+var index:usize=0usize;
+while index<images.count{
+    var image:*CrustSource=images.items[index];
+    if crust0_host_write_stream(2u32,image -> path,native_strlen(image -> path))!=0i32||crust0_host_write_stream(2u32," ",1usize)!=0i32||crust0_host_write_stream(2u32,image -> bytes,image -> size)!=0i32||crust0_host_write_stream(2u32,"\\n",1usize)!=0i32{return 1i32;}
+    index=index+1usize;
+};
 """
+        command = args[0]
         args = ["ownership", *[native_path(arg) if isinstance(arg, Path) else arg for arg in args]]
         body += (
             f"var args:[*u8;{len(args)}]=make [*u8;{len(args)}]{{"
@@ -100,7 +128,19 @@ if !host_bind(run,crust_run_open(run,library),"ownership_main"){return 1i32;};
             + "};"
         )
         body += f"return ownership_main({len(args)}i32,&args[0usize]);"
-        return self.root("ownership run", body, expected=expected)
+        try:
+            result = self.root("ownership run", body, expected=expected)
+        except AssertionError as error:
+            published = self.publication_images.get(self.package, b"(no publication)")
+            raise AssertionError(
+                f"Publication images:\n{published.decode('utf-8')}\n{error}"
+            ) from error
+        loaded = {line.rsplit(b" ", 1)[0].decode("utf-8") for line in result.stderr.splitlines()}
+        cached = {native_path(path) for path in self.cache.glob("*/artifact.dll")}
+        assert loaded & cached == {library}, "bootstrap images leaked into the checker process"
+        if command == "publish":
+            self.publication_images[self.package] = result.stderr
+        return result
 
     def contracts(self):
         links, provider, client = fixture(self.inputs)
@@ -116,6 +156,12 @@ if !host_bind(run,crust_run_open(run,library),"ownership_main"){return 1i32;};
         self.driver(*args)
         assert set(self.cache.glob("*/artifact.dll")) == images
         assert self.run(output).stdout.replace(b"\r\n", b"\n") == b"OK\n"
+        extra = self.work / "additional checker image.dll"
+        shutil.copyfile(
+            next(path for path in images if native_path(path) == self.checker_library()), extra
+        )
+        rejected = self.driver(*args, expected=1, extra_image=extra)
+        assert b"checker host or loaded images changed" in rejected.stderr
         invalid = self.inputs / "invalid-client.crs"
         text = client.read_text(encoding="utf-8")
         changed = text.replace(

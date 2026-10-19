@@ -3,8 +3,11 @@
 """Prove Windows source-built LLVM and ASM packages under bounded native jobs."""
 
 import argparse
+import difflib
+import hashlib
 import os
 import re
+import struct
 from pathlib import Path
 
 from windows import ROOT, literal, native_path
@@ -40,6 +43,32 @@ fn answer()->i32 {
 
 
 class BackendSuite(Suite):
+    def cache_inputs(self, path):
+        data = path.read_bytes()
+        offset = data.index(b"\n") + 1
+        inputs = []
+        while offset < len(data):
+            size = struct.unpack_from("<Q", data, offset)[0]
+            offset += 8
+            name = data[offset : offset + size].decode("utf-8")
+            offset += size
+            size = struct.unpack_from("<Q", data, offset)[0]
+            offset += 8
+            digest = hashlib.sha256(data[offset : offset + size]).hexdigest()
+            offset += size
+            inputs.append(f"{name}: {size} bytes, {digest}\n")
+        return inputs
+
+    def trace_inputs(self, backend):
+        body = ""
+        for name, field in (("host", "inputs"), ("gcc", "toolchain.inputs")):
+            path = self.work / f"{backend}-{name}.inputs"
+            body += f"""
+var {name}_trace:CacheBuild=make CacheBuild{{inputs:stages -> {field}.items,count:stages -> {field}.count,build:null(fn(*CrustContext,*CacheBuild,*u8)->bool),user:null(*u8)}};
+if !cache_manifest(run -> context,&{name}_trace,{literal(native_path(path))}){{return 1i32;}};
+"""
+        return body
+
     def asm_api(self):
         cache = self.fresh_directory("asm API cache")
         body = self.setup() + self.session(cache)
@@ -72,6 +101,7 @@ class BackendSuite(Suite):
             encoding="utf-8",
         )
         body = self.setup() + self.session(cache)
+        body += self.trace_inputs(backend)
         body += f"var library:*u8=stage_library(stages,{literal(native_path(package))});"
         body += """if library==null(*u8){return 1i32;};
 extern fn answer()->i32="answer";
@@ -94,8 +124,28 @@ if seed_callback(mixed)!=236.25f32 || relay(seed_mixed)!=236.25f32{return 11i32;
 if unwind(seed_unwind)!=0i32{return 12i32;};return answer();"""
         self.root(backend + " packages", body, expected=42)
         artifacts = {path: path.stat().st_mtime_ns for path in cache.glob("*/artifact.dll")}
+        traces = [self.work / f"{backend}-{name}.inputs" for name in ("host", "gcc")]
+        before = {path: self.cache_inputs(path) for path in traces}
         self.root(backend + " reuse", body, expected=42)
-        assert artifacts == {path: path.stat().st_mtime_ns for path in cache.glob("*/artifact.dll")}
+        current = {path: path.stat().st_mtime_ns for path in cache.glob("*/artifact.dll")}
+        if artifacts != current:
+            details = "".join(
+                line
+                for path in traces
+                for line in difflib.unified_diff(
+                    before[path],
+                    self.cache_inputs(path),
+                    fromfile=f"first/{path.name}",
+                    tofile=f"reuse/{path.name}",
+                )
+            )
+            raise AssertionError(
+                f"{backend} cache reuse changed artifacts:\n"
+                f"added: {sorted(str(path) for path in current.keys() - artifacts.keys())}\n"
+                f"removed: {sorted(str(path) for path in artifacts.keys() - current.keys())}\n"
+                f"modified: {sorted(str(path) for path in artifacts.keys() & current.keys() if artifacts[path] != current[path])}\n"
+                f"Host and GCC input differences:\n{details or '(none)'}"
+            )
         print(backend + " native ABI, large frame, floats, and reuse passed", flush=True)
         compiler = ROOT / f"stages/{backend}/compiler-package.crs"
         successor = self.work / f"{backend} successor-package.crs"

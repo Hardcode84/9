@@ -50,6 +50,7 @@ record OsRecord {
     view_mode: u32;
     send_result: u32;
     share_result: u32;
+    plain_result: u32;
     opaque: bool;
     stable: bool;
     scoped: bool;

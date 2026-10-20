@@ -38,8 +38,21 @@ fn main(argc:i32,argv:**u8)->i32 {
 """
 
 
+def check_plain_storage_dag(compiler, directory):
+    source = directory / "plain-storage-dag.crs"
+    source.write_text(
+        "record R0{value:i64;}"
+        + "".join(f"record R{i}{{a:R{i-1};b:R{i-1};}}" for i in range(1, 33))
+        + "record End{value:[R32;1];}"
+        + "fn main(argc:i32,argv:**u8)->i32{return 0i32;}"
+    )
+    # Declaration checking must visit the type graph, not its expanded layout.
+    command([compiler, "--check", source], timeout=10)
+
+
 def check_arrays(build, directory, sanitize):
     compiler = build / "crust-ownership-test"
+    check_plain_storage_dag(compiler, directory)
     path = directory / "arrays.crs"
     path.write_text(PROGRAM)
     generated, symbols = path.with_suffix(".c"), path.with_suffix(".rsp")

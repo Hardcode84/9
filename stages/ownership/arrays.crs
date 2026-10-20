@@ -11,19 +11,26 @@ fn os_plain_storage(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {
     }
     if (*syntax).kind == CRUST_T_NAME {
         var schema: *OsRecord = os_record((*check).stage, syntax);
-        valid = schema != null(*OsRecord) && !os_affine(check, syntax);
-        if valid {
-            valid =!(*schema).opaque && (*schema).domain == null(*CrustName);
-        }
-        if valid {
-            var field: *CrustField = (*(*schema).declaration).fields;
-            while field != null(*CrustField) && valid {
-                valid = os_plain_storage(check, (*field).syntax_type);
-                field = (*field).next;
-            }
-        }
+        valid = schema != null(*OsRecord) && os_plain_record(check, schema, syntax);
     }
     (*check).depth = (*check).depth - 1usize;
+    return valid;
+}
+fn os_plain_record(check: *OsCheck, schema: *OsRecord, syntax: *CrustTypeSyntax) -> bool {
+    if (*schema).plain_result != 0u32 {
+        return (*schema).plain_result == 2u32;
+    }
+    var valid: bool = !os_affine(check, syntax) &&!(*schema).opaque && (*schema).domain == null(
+        *CrustName
+    );
+    var field: *CrustField = (*(*schema).declaration).fields;
+    while field != null(*CrustField) && valid && !os_failed(check) {
+        valid = os_plain_storage(check, (*field).syntax_type);
+        field = (*field).next;
+    }
+    if !os_failed(check) {
+        (*schema).plain_result = 1u32 + valid as u32;
+    }
     return valid;
 }
 fn os_array_validate(check: *OsCheck, syntax: *CrustTypeSyntax) -> bool {

@@ -45,6 +45,58 @@ def symbol_export(work, seed):
     run([seed, root], expected=31)
 
 
+def package_helpers(work, seed):
+    for name, value in (("left", 17), ("right", 23)):
+        package = work / name
+        package.mkdir()
+        (package / "provider.crs").write_text(f"fn answer()->i32{{return {value}i32;}}")
+        (package / "helpers.crs").write_text(
+            "record Choice {value:i32;}"
+            f"fn package_helper()->i32{{var choice:Choice=make Choice{{value:{value}i32}};return choice.value;}}"
+        )
+        (package / "package.crs").write_text(
+            'stage_include(stage,"helpers.crs");'
+            f"if package_helper()!={value}i32{{return 1i32;}};"
+            'stage_api_from(stage,"..","crust0.crs");'
+            'stage_source(stage,"provider.crs");stage_export(stage,"answer");'
+        )
+    root = work / "helpers-main.crs"
+    prefix = (
+        'host_source(run,"stages/build/load.crs");'
+        'if !stage_setup(run,"."){return 1i32;};'
+        'var stages:*StageSession=stage_open(run,".","build/stage-cache");'
+        "if stages==null(*StageSession){return 1i32;};"
+    )
+    root.write_text(
+        prefix + 'var left:*u8=stage_library(stages,"left/package.crs");'
+        'var right:*u8=stage_library(stages,"right/package.crs");'
+        'var again:*u8=stage_library(stages,"left/package.crs");'
+        "if left==null(*u8)||right==null(*u8)||again==null(*u8){return 1i32;};"
+        "if cache_strcmp(left,again)!=0i32{return 2i32;};"
+        'extern fn left_answer()->i32="answer";'
+        'extern fn right_answer()->i32="answer";'
+        'if !host_bind(run,crust_run_open(run,left),"left_answer"){return 3i32;};'
+        'if !host_bind(run,crust_run_open(run,right),"right_answer"){return 4i32;};'
+        "fn package_helper()->i32{return 5i32;}"
+        "return left_answer()+right_answer()+package_helper();"
+    )
+    run([seed, root], expected=45)
+    run([seed, root], expected=45)
+    root.write_text(
+        prefix + 'var package:StagePackage=uninit;stage_init(&package,run,".");'
+        'if !stage_include(&package,"left/helpers.crs"){return 1i32;};'
+        'if !stage_include(&package,"left/package.crs"){return 2i32;};'
+        "var library:*u8=stage_package_library(stages,&package);"
+        "if library==null(*u8){return 3i32;};"
+        'extern fn answer()->i32="answer";'
+        'if !host_bind(run,crust_run_open(run,library),"answer"){return 4i32;};'
+        "return answer();"
+    )
+    run([seed, root], expected=17)
+    root.write_text(prefix + 'stage_library(stages,"left/package.crs");package_helper();')
+    assert b"unknown name 'package_helper'" in run([seed, root], expected=1).stderr
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--build", type=Path, default=Path("build"))
@@ -128,6 +180,7 @@ var artifact:*u8=result.path;""",
     rejected = run([seed, root], expected=1, cwd="/")
     assert b"cache artifact checksum mismatch" in rejected.stderr
     symbol_export(work, seed)
+    package_helpers(work, seed)
     print(
         "stage packages: seed-only hello, reuse, transitive source edits, rejection, snapshots, and corruption passed"
     )

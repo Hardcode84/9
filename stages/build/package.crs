@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn stage_init(package: *StagePackage, root: *CrustRun, base: *u8) -> unit {
+    package -> scope = make StageScope {
+        globals: make CrustMap {
+            entries: null(*CrustMapEntry),
+            count: 0usize,
+            capacity: 0usize
+        },
+        units: null(*CrustUnit),
+        last_unit: null(*CrustUnit)
+    };
     package -> root = root;
     package -> base = base;
     package -> sources = make CacheInputs {
@@ -194,23 +203,80 @@ fn stage_include(stage: *StagePackage, path: *u8) -> bool {
         return false;
     }
     stage -> depth = stage -> depth + 1usize;
+    var success: bool = stage_run_package(stage, source);
+    stage -> depth = stage -> depth - 1usize;
+    stage -> base = saved;
+    return success;
+}
+
+fn stage_run_package(stage: *StagePackage, source: *CrustSource) -> bool {
+    var context: *CrustContext = stage -> root -> context;
+    var saved: StageScope = make StageScope {
+        globals: context -> globals,
+        units: context -> units,
+        last_unit: context -> last_unit
+    };
+    if stage -> depth == 1usize && !stage_scope_enter(stage) {
+        return false;
+    }
     var child: CrustRun = uninit;
-    var success: bool = crust_run_init(
-        &child,
-        stage -> root -> context,
-        source,
-        0i32,
-        null(**u8)
-    );
+    var success: bool = crust_run_init(&child, context, source, 0i32, null(**u8));
     if success {
         success = stage_bind(&child, &stage) && crust_run_loop(&child) && child.status == 0i32;
     }
     if !crust_run_destroy(&child) {
         success = false;
     }
-    stage -> depth = stage -> depth - 1usize;
-    stage -> base = saved;
+    if stage -> depth == 1usize {
+        stage_scope_leave(stage, &saved);
+    }
     return success;
+}
+
+fn stage_scope_enter(stage: *StagePackage) -> bool {
+    var context: *CrustContext = stage -> root -> context;
+    if stage -> scope.globals.entries == null(*CrustMapEntry) {
+        var index: usize = 0usize;
+        while index < context -> globals.capacity {
+            var entry: *CrustMapEntry = &context -> globals.entries[index];
+            if entry -> key != 0usize && !crust_try_map_set(
+                context,
+                &stage -> scope.globals,
+                entry -> key,
+                entry -> value
+            ) {
+                return false;
+            }
+            index = index + 1usize;
+        }
+    }
+    // Borrow the caller unit prefix only while this package executes.
+    context -> globals = stage -> scope.globals;
+    if context -> last_unit == null(*CrustUnit) {
+        context -> units = stage -> scope.units;
+    } else {
+        context -> last_unit -> next = stage -> scope.units;
+    }
+    if stage -> scope.last_unit != null(*CrustUnit) {
+        context -> last_unit = stage -> scope.last_unit;
+    }
+    return true;
+}
+
+fn stage_scope_leave(stage: *StagePackage, saved: *StageScope) -> unit {
+    var context: *CrustContext = stage -> root -> context;
+    stage -> scope.globals = context -> globals;
+    stage -> scope.units = context -> units;
+    if saved -> last_unit != null(*CrustUnit) {
+        stage -> scope.units = saved -> last_unit -> next;
+        saved -> last_unit -> next = null(*CrustUnit);
+    }
+    if context -> last_unit != saved -> last_unit {
+        stage -> scope.last_unit = context -> last_unit;
+    }
+    context -> globals = saved -> globals;
+    context -> units = saved -> units;
+    context -> last_unit = saved -> last_unit;
 }
 
 fn stage_export(stage: *StagePackage, name: *u8) -> bool {

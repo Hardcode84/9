@@ -72,8 +72,11 @@ stage_source(stage, "program.crs");
 package file. Paths in these calls start at the current package file's directory.
 Repeated canonical paths contribute one source. Include nesting has a limit of
 64. An included package can add sources and exports to its caller. Package
-declarations share the root namespace. Give helper functions distinct names
-and include each helper definition once per root.
+declarations belong to that `StagePackage`. The first include inherits the
+root bindings visible at that point. Later includes in the same package can
+use earlier helpers. Helpers remain private to the package; separate packages
+can use the same helper names. Each fresh package executes its own actions.
+The root context owns the captured declarations until context destruction.
 
 `stage_api_from(stage, base, name)` captures an API for the selected host.
 `base` is the source package root, relative to the current package file.

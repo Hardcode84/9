@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
+record StageScope {
+    globals: CrustMap;
+    units: *CrustUnit;
+    last_unit: *CrustUnit;
+}
+
 record StagePackage {
+    scope: StageScope;
     sources: CacheInputs;
     inputs: CacheInputs;
     options: CacheInputs;

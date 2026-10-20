@@ -71,11 +71,14 @@ Unsigned integer buffers and workgroup arrays also supply
 `name_atomic_max(index, value)`, `name_atomic_exchange(index, value)`, and
 `name_atomic_or(index, value)`.
 Each function returns the value before the update. Addition wraps modulo
-2 to the power of 32. These operations use relaxed memory ordering. Their
-scope is the device for storage buffers and the workgroup for workgroup arrays.
-Use barriers to make other memory writes visible. An atomic counter alone does
-not publish the data that the counter describes. Separate ordinary loads and
-stores from concurrent atomic updates with the required synchronization.
+2 to the power of 32. The portable ordering guarantee is relaxed. SPIR-V uses
+acquire-release ordering to satisfy Vulkan storage-class memory semantics; WGSL
+uses relaxed ordering. The scope is the device for storage buffers and the
+workgroup for workgroup arrays.
+Use barriers to make other memory writes visible. Portable code must not use
+an atomic counter alone to publish the data that the counter describes. Separate
+ordinary loads and stores from concurrent atomic updates with the required
+synchronization.
 
 The checked policy rejects an out-of-bounds atomic access at runtime, records
 invocation failure, and returns zero without an update. A failed invocation

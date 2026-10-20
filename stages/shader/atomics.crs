@@ -95,7 +95,8 @@ fn sp_atomic_function(stage: *SpStage, r: *ShaderResource, name: *u8, op: u32) -
     } else {
         sp_text(stage, "device");
     }
-    sp_text(stage, "\") monotonic\n  ret i32 %old_value\n}\n");
+    // LLVM includes storage-class semantics; Vulkan requires non-relaxed ordering.
+    sp_text(stage, "\") acq_rel\n  ret i32 %old_value\n}\n");
 }
 fn wg_atomic_pointer(stage: *SpStage, r: *ShaderResource) -> unit {
     sp_text(stage, "&r_");

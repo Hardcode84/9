@@ -55,8 +55,12 @@ def check_atomics(run, compiler, root, llvm, tools, work, native, environment, v
         ):
             assert token in assembly, token
         constants = dict(re.findall(r"(%\w+) = OpConstant %\w+ (\d+)", assembly))
-        scopes = re.findall(r"OpAtomic\w+ %\w+ %\w+ (%\w+)", assembly)
-        assert scopes and all(constants[scope] == ("2" if shared else "1") for scope in scopes)
+        operands = re.findall(r"OpAtomic\w+ %\w+ %\w+ (%\w+) (%\w+)", assembly)
+        assert operands
+        for scope, semantics in operands:
+            assert constants[scope] == ("2" if shared else "1")
+            # AcquireRelease plus the storage class selected for this resource.
+            assert int(constants[semantics]) == 8 | (256 if shared else 64)
         payload = struct.pack("<4f", *([4.0] * 4)) if shared else struct.pack("<4I", 4, 5, 8, 9)
         expected.write_bytes(payload + struct.pack("<4I", 0, 0, 0, 0))
         run([native, output, expected], env=environment)

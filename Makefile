@@ -180,7 +180,7 @@ check-ownership-generics: all test-tools $(BUILD)/crust-ownership-generics-test$
 	$(BUILD)/crust-ownership-generics-clone$(EXE)
 	python3 tests/ownership_generics.py --build $(BUILD) --sanitize
 	python3 tests/generics_ownership_imports.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
-	python3 tests/ownership_generics_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --sources $(GENERIC_OWNERSHIP)
+	python3 tests/ownership_generics_alloc.py --build $(BUILD) --amalgamation $(AMALGAMATION) --sources $(GENERIC_OWNERSHIP)
 
 .PHONY: test-tools check-generics
 
@@ -248,7 +248,7 @@ check-ownership-ergonomics: all test-tools $(BUILD)/crust-ownership-test$(EXE)
 	python3 tests/ownership_ergonomics.py --build $(BUILD)
 
 check-ownership-alloc: all test-tools
-	python3 tests/ownership_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --sources $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_alloc.crs
+	python3 tests/ownership_alloc.py --build $(BUILD) --amalgamation $(AMALGAMATION) --sources $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_alloc.crs
 
 $(BUILD)/intrusive.s: $(BUILD)/crust0$(EXE) examples/intrusive/raw.crs
 	$(BUILD)/crust0$(EXE) -S -o $@ examples/intrusive/raw.crs
@@ -332,10 +332,10 @@ check-overload: all test-tools $(BUILD)/crust0$(EXE) $(BUILD)/composition-test$(
 	python3 tests/composition.py --build $(BUILD)
 
 check-overload-alloc: all test-tools
-	python3 tests/overload_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION)
+	python3 tests/overload_alloc.py --build $(BUILD) --amalgamation $(AMALGAMATION)
 
 check-resource-alloc: all test-tools
-	python3 tests/resources_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION)
+	python3 tests/resources_alloc.py --build $(BUILD) --amalgamation $(AMALGAMATION)
 
 check-examples: all test-tools
 	python3 tests/source_order.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)' --group examples

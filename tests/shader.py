@@ -69,6 +69,9 @@ def main():
         [host.library],
     )
     environment = os.environ.copy()
+    discovery = dict(environment, VK_LOADER_DEBUG="error,warn")
+    run([native, "--check-device"], env=discovery)
+    print("Vulkan driver and device profile passed", flush=True)
     run(
         [build / "shader-alloc", llvm, tools / "spirv-val", work / "allocation.spv"],
         env=environment,

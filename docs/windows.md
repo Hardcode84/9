@@ -217,6 +217,14 @@ WGSL; omit it only when that separate validation is not required. The test runs 
 and dispatches directly, including paths with spaces and non-ASCII text.
 Repeat with `AMALGAMATION=0` to test the separate-file seed.
 
+GitHub-hosted Windows runners execute as administrators. The Vulkan loader ignores
+`VK_DRIVER_FILES` in elevated processes. CI registers the installed Lavapipe
+manifest as an enabled DWORD value in the 64-bit machine registry under
+`SOFTWARE\Khronos\Vulkan\Drivers`. The shared test runner checks driver
+discovery, instance creation, and the required device profile before shader
+allocation and compilation tests. Loader diagnostics are included on failure. A non-elevated local run with
+`VK_DRIVER_FILES` does not verify this registry-based discovery path.
+
 The Vulkan runner uses UTF-16 file opening and signed 64-bit file offsets.
 The shader package selects Windows tool names and runs tools with relative
 temporary file arguments. ABI checks compare the Crust bindings with C headers.

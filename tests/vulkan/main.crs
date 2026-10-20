@@ -75,7 +75,21 @@ fn valid_arguments(argc: i32, argv: **u8) -> bool {
     var count: *u8 = argv[4usize];
     return count[0usize] >= 48u8 && count[0usize] <= 52u8 && count[1usize] == 0u8;
 }
+fn check_device() -> i32 {
+    var v: Vulkan = uninit;
+    zero(&v as *u8, sizeof(Vulkan));
+    var good: bool = device_open(&v);
+    device_close(&v);
+    if good {
+        puts("Vulkan device profile passed");
+        return 0i32;
+    }
+    return 1i32;
+}
 fn main(argc: i32, argv: **u8) -> i32 {
+    if argc == 2i32 && strcmp(argv[1usize], "--check-device") == 0i32 {
+        return check_device();
+    }
     if !valid_arguments(argc, argv) {
         puts("expected SPIRV_FILE EXPECTED_FILE [--twice|--runtime COUNT(0..4)]");
         return 2i32;

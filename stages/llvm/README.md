@@ -36,8 +36,8 @@ LLVM IR and a symbol response file. Its object callback runs the pinned Clang
 with `-O0` and `-fPIC`. The shared builder applies the symbol map with `objcopy`,
 links the shared library, and publishes it in the cache.
 
-The package builder captures emitter sources, tool configuration, Clang bytes,
-and loaded tool libraries before cache lookup. It also captures its linker and
+The package builder captures emitter sources, tool configuration, and Clang
+bytes before cache lookup. It also captures its linker and
 symbol tools. Source, optimization, or tool changes select a different artifact.
 LLVM package compilation accepts no source options. Put checks and source
 transformations in a compiler callback before emission.
@@ -71,8 +71,10 @@ It records failures in the caller's context.
 
 On Windows, set `CRUST_LLVM_DIRECTORY` to the absolute path of an explicit LLVM
 installation with `bin/clang.exe`. The default package captures this selection
-as source. The object provider captures the installation tree, child environment,
-and loaded compiler images. Clang emits COFF for `x86_64-w64-windows-gnu`; the
+as source. The object provider captures the child environment and Clang
+executable. It disables default configuration files. It does not probe tool
+dependencies, inspect loaded libraries, or hash headers. Keep the installation
+fixed while reusing a cache; use a fresh cache after changing untracked inputs. Clang emits COFF for `x86_64-w64-windows-gnu`; the
 existing MinGW-w64 provider renames symbols and links DLLs or executables.
 The [Windows guide](../../docs/windows.md) gives acquisition and validation commands.
 
@@ -223,3 +225,25 @@ accepts an explicit LLVM pointer type and index type.
 The [Vulkan stage](../../examples/shader/README.md) supplies its module interface,
 resource operations, and failure policy. It reuses scalar, function, and
 structured statement lowering. `ll_emit` remains the host module adapter.
+
+## Measure tutorial cache reuse
+
+From the repository root, run this command with the build and LLVM installation
+paths. It compiles and runs the ownership tutorial twice at O2. Each run checks
+for `BC` followed by a newline. The command reports end-to-end elapsed time,
+including target tools. It does not measure frontend time separately. The first
+run includes bootstrap when the tutorial cache has no matching entry; the second
+run measures reuse. Keep the inputs, flags, and machine load fixed for comparisons.
+
+```sh
+PYTHONPATH=tests python3 - build/windows-common build/toolchains/llvm/windows_x64/release-llvmorg-23.1.3 <<'PY'
+import sys
+from pathlib import Path
+from tutorials import Matrix
+matrix = Matrix(Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve())
+profile, selection = matrix.profiles[2]
+for _ in range(2):
+    matrix.root("ownership-basics/main.crs", selection)
+    matrix.execute(profile, matrix.output / "ownership-basics", stdout=b"BC\n")
+PY
+```

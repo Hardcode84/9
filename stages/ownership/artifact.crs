@@ -55,7 +55,7 @@ fn os_library_begin(context: *CrustContext, directory: *u8, work: *OsLibraryWork
             "ownership library requires an absolute trusted cache directory"
         );
     }
-    if !cache_work(context, directory, &(*work).files) || !cache_loaded_inputs(
+    if !cache_work(context, directory, &(*work).files) || !cache_host_input(
         context,
         &(*work).inputs
     ) {

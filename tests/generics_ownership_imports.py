@@ -192,7 +192,7 @@ def check_tampering(suite, driver, args, receipt):
     with changed.open("ab") as stream:
         stream.write(b"different checker image")
     result = suite.command([changed, *args[1:]], expected=1)
-    assert b"checker or loaded images changed" in result.stderr, result.stderr
+    assert b"checker host changed" in result.stderr, result.stderr
 
 
 def check_frozen_domains(suite, driver):

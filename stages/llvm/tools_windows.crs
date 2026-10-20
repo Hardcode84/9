@@ -3,67 +3,11 @@
 fn llvm_capture(toolchain: *StageToolchain, directory: *u8) -> bool {
     var context: *CrustContext = toolchain -> context;
     var tools: *LlTools = toolchain -> user as *LlTools;
-    var environment: *u16 = win_tool_environment(context);
-    if environment == null(*u16) {
-        return false;
-    }
-    var size: usize = 0usize;
-    while environment[size] != 0u16 || environment[size + 1usize] != 0u16 {
-        size = size + 1usize;
-    }
-    if !cache_value_input(
+    return cache_environment(context, &toolchain -> inputs) && cache_file_input(
         context,
         &toolchain -> inputs,
-        "llvm-windows-environment",
-        environment as *u8,
-        (size + 2usize) * 2usize
-    ) || !cache_tree(context, &toolchain -> inputs, directory, 0usize) {
-        return false;
-    }
-    var work: CacheWork = make CacheWork {
-        directory: null(*u8),
-        manifest: null(*u8),
-        digest: null(*u8),
-        artifact: null(*u8),
-        checksum: null(*u8)
-    };
-    var success: bool = cache_work(context, toolchain -> directory, &work);
-    if success {
-        var source: *u8 = native_join(context, "target triple = \"", LLVM_TRIPLE);
-        if source != null(*u8) {
-            source = native_join(context, source, "\"\ndefine i32 @probe() { ret i32 0 }\n");
-        }
-        var arguments: [*u8; 12] = make [*u8; 12] {
-            tools -> compiler,
-            "--no-default-config",
-            "-target",
-            LLVM_TRIPLE,
-            tools -> optimization,
-            "-x",
-            "ir",
-            "-c",
-            "inputs",
-            "-o",
-            "artifact.dll",
-            null(*u8)
-        };
-        success = source != null(*u8) && cache_save(
-            context,
-            work.manifest,
-            source,
-            native_strlen(source)
-        ) && cache_probe(
-            context,
-            &toolchain -> inputs,
-            &arguments[0usize],
-            work.directory
-        );
-    }
-    if !cache_cleanup(context, &work) {
-        success = false;
-    }
-    cache_sort_inputs(&toolchain -> inputs);
-    return success;
+        tools -> compiler
+    );
 }
 fn llvm_object_run(request: *StageObject, arguments: **u8) -> bool {
     var directory: *u8 = win_directory_prefix(request -> context, request -> output);

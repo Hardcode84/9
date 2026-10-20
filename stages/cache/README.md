@@ -60,26 +60,18 @@ Publication is atomic between processes; no power-loss durability is promised.
 ## Input providers
 
 [inputs.crs](inputs.crs) captures files and the runner's retained source snapshots.
-[inputs_linux.crs](inputs_linux.crs) captures the actual loaded native images.
-Use the retained snapshots for producer code: a file edit after `host_source` does not change the code already checked.
-The main executable comes from `/proc/self/exe`. Tool dependencies come from
-`ldd`, under the same fixed environment as `cache_tool`. This provider requires
-dynamic Linux ELF tools. Use another explicit provider for other tool formats.
-The loaded-image provider includes loader-selected and explicitly loaded files.
-Tool executables and their libraries are captured as named SHA-256 digests.
-Their full bytes are not retained in compiler arenas. Source inputs still use
-the captured bytes, and native tools must remain unchanged during the request.
+Use the retained snapshots for producer code: a file edit after `host_source`
+does not change the code already checked. The platform providers capture the
+host executable and explicitly selected tool executables. Tool digests use
+SHA-256; their full bytes are not retained in compiler arenas. The Windows
+provider also captures the child environment.
 
-[inputs_windows.crs](inputs_windows.crs) captures loaded process images and
-tool-process images through Windows loader notifications. The Windows GCC
-provider also hashes all files in its installation and captures its child
-environment. File digests are retained as named snapshots; large tool files
-are not retained in compiler arenas. Changes during a session are not supported.
-
-The backend recipe uses only the assembler and linker. Its assembly contains
-no file includes, and the link command supplies its libc file explicitly.
-A different recipe must also capture its headers, link scripts, libraries,
-configuration, environment, and other reads as applicable.
+Providers do not inspect loaded modules, run dependency probes, scan installation
+directories, or hash system headers. Declare additional file inputs with
+`cache_input`. Keep the host and toolchain installations fixed while reusing a
+cache. Use a fresh cache after changing untracked libraries, headers, helper
+tools, or system configuration. Cache identity covers declared inputs; it does
+not prove that an installation is unchanged.
 
 Run `make check-cache` for reuse, source and option edits, captured-byte use,
 corruption, missing files, producer errors, partial output, concurrent

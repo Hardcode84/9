@@ -168,14 +168,4 @@ fn cache_cleanup(context: *CrustContext, work: *CacheWork) -> bool {
     return success;
 }
 
-// Prefix of the Linux dl_phdr_info ABI. The loader owns these borrowed bytes.
-record CacheLoadedImage {
-    base: usize;
-    name: *u8;
-}
-record CacheLoadedInputs {
-    context: *CrustContext;
-    inputs: *CacheInputs;
-}
-extern fn cache_images(callback: fn(*CacheLoadedImage, usize, *u8) -> i32, user: *u8) -> i32 = "dl_iterate_phdr";
 extern fn cache_strcmp(left: *u8, right: *u8) -> i32 = "strcmp";

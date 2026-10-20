@@ -71,7 +71,6 @@ class OwnershipSuite(Suite):
 
     def prepare(self):
         self.libraries = {}
-        self.publication_images = {}
         self.cache = self.fresh_directory("ownership stage cache")
         self.objects = self.fresh_directory("ownership object cache")
         self.inputs = self.fresh_directory("ownership input")
@@ -102,8 +101,6 @@ return crust0_host_write_stream(1u32,library,native_strlen(library));
         return library
 
     def driver(self, *args, expected=0, extra_image=None):
-        # Build in a separate process: a cold bootstrap can retain additional
-        # images that are absent when the same stage comes from the cache.
         library = self.checker_library()
         body = self.setup() + f"var library:*u8={literal(library)};"
         if extra_image is not None:
@@ -111,16 +108,7 @@ return crust0_host_write_stream(1u32,library,native_strlen(library));
         body += """
 extern fn ownership_main(argc:i32,argv:**u8)->i32="ownership_main";
 if !host_bind(run,crust_run_open(run,library),"ownership_main"){return 1i32;};
-var images:CacheInputs=make CacheInputs{items:null(**CrustSource),count:0usize,capacity:0usize};
-if !cache_loaded_inputs(run -> context,&images){return 1i32;};
-var index:usize=0usize;
-while index<images.count{
-    var image:*CrustSource=images.items[index];
-    if crust0_host_write_stream(2u32,image -> path,native_strlen(image -> path))!=0i32||crust0_host_write_stream(2u32," ",1usize)!=0i32||crust0_host_write_stream(2u32,image -> bytes,image -> size)!=0i32||crust0_host_write_stream(2u32,"\\n",1usize)!=0i32{return 1i32;}
-    index=index+1usize;
-};
 """
-        command = args[0]
         args = ["ownership", *[native_path(arg) if isinstance(arg, Path) else arg for arg in args]]
         body += (
             f"var args:[*u8;{len(args)}]=make [*u8;{len(args)}]{{"
@@ -128,19 +116,7 @@ while index<images.count{
             + "};"
         )
         body += f"return ownership_main({len(args)}i32,&args[0usize]);"
-        try:
-            result = self.root("ownership run", body, expected=expected)
-        except AssertionError as error:
-            published = self.publication_images.get(self.package, b"(no publication)")
-            raise AssertionError(
-                f"Publication images:\n{published.decode('utf-8')}\n{error}"
-            ) from error
-        loaded = {line.rsplit(b" ", 1)[0].decode("utf-8") for line in result.stderr.splitlines()}
-        cached = {native_path(path) for path in self.cache.glob("*/artifact.dll")}
-        assert loaded & cached == {library}, "bootstrap images leaked into the checker process"
-        if command == "publish":
-            self.publication_images[self.package] = result.stderr
-        return result
+        return self.root("ownership run", body, expected=expected)
 
     def contracts(self):
         links, provider, client = fixture(self.inputs)
@@ -160,8 +136,7 @@ while index<images.count{
         shutil.copyfile(
             next(path for path in images if native_path(path) == self.checker_library()), extra
         )
-        rejected = self.driver(*args, expected=1, extra_image=extra)
-        assert b"checker host or loaded images changed" in rejected.stderr
+        self.driver(*args, extra_image=extra)
         invalid = self.inputs / "invalid-client.crs"
         text = client.read_text(encoding="utf-8")
         changed = text.replace(

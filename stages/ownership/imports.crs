@@ -101,10 +101,7 @@ fn os_library_capture(
         );
     }
     if cache_memcmp(checker, (*loaded).bundle.checker, 64usize) != 0i32 {
-        return os_library_error(
-            context,
-            "ownership library checker host or loaded images changed"
-        );
+        return os_library_error(context, "ownership library checker host changed");
     }
     return cache_save(
         context,

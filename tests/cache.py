@@ -205,7 +205,7 @@ var result:CacheArtifact=uninit;
     suite.clean(cache)
 
 
-def check_loaded_inputs(suite):
+def check_declared_inputs(suite):
     root, cache, _, _ = suite.fixture("loaded-library")
     library = root.parent / "provider.so"
     source = root.read_text()
@@ -217,12 +217,13 @@ var loaded:CacheInputs=make CacheInputs{items:null(**CrustSource),count:0usize,c
 cache_add((*run).context,&loaded,input);
 cache_add((*run).context,&loaded,dependency);
 cache_add((*run).context,&loaded,(*run).source);
-cache_loaded_inputs((*run).context,&loaded);
+cache_input((*run).context,&loaded,LIBRARY);
 request.inputs=loaded.items;
 request.count=loaded.count;
 var result:CacheArtifact=uninit;
 """,
     )
+    source = source.replace("LIBRARY", quoted(library))
     root.write_text(source)
     for version in (1, 2):
         subprocess.run(
@@ -260,7 +261,7 @@ def check_tool_inputs(suite):
         f"""
 var tools:CacheInputs=make CacheInputs{{items:request.inputs,count:request.count,capacity:request.count}};
 var path:*u8={quoted(tool)};
-if !cache_tools(run->context,&tools,&path,1usize,{quoted(cache)}) {{return 1i32;}};
+if !cache_input(run->context,&tools,{quoted(library)}) || !cache_tools(run->context,&tools,&path,1usize,{quoted(cache)}) {{return 1i32;}};
 request.inputs=tools.items;
 request.count=tools.count;
 var result:CacheArtifact=uninit;
@@ -297,7 +298,8 @@ var result:CacheArtifact=uninit;
     assert suite.run(root).stdout == b"miss\n"
     assert suite.run(root).stdout == b"hit\n"
     library.unlink()
-    assert b"missing tool library" in suite.run(root, expected=1).stderr
+    assert b"cannot read cache file" in suite.run(root, expected=1).stderr
+    library.write_bytes(b"restored input")
     tool.unlink()
     assert b"cache tool failed" in suite.run(root, expected=1).stderr
     assert len(list(cache.iterdir())) == 3
@@ -370,7 +372,7 @@ def main():
     suite = Suite(args.build)
     check_artifacts(suite)
     check_producer_snapshot(suite)
-    check_loaded_inputs(suite)
+    check_declared_inputs(suite)
     check_tool_inputs(suite)
     check_allocations(suite)
     check_backend(suite)

@@ -1,45 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Foreign ABI order: WIN32_FIND_DATAW and DEBUG_EVENT on Windows x64.
-record CacheFind {
-    attributes: u32;
-    times: [u32; 6];
-    high: u32;
-    low: u32;
-    reserved: [u32; 2];
-    name: [u16; 260];
-    alternate: [u16; 14];
-}
-record CacheDebugEvent {
-    code: u32;
-    process: u32;
-    thread: u32;
-    data: [u64; 20];
-}
-record CacheDebugProcess {
-    next: *CacheDebugProcess;
-    handle: *u8;
-    id: u32;
-}
-record CacheDebugState {
-    processes: *CacheDebugProcess;
-    active: usize;
-    count: usize;
-}
-extern fn cache_modules(process: *u8, modules: **u8, size: u32, needed: *u32) -> i32 = "K32EnumProcessModules";
-extern fn cache_find_first(pattern: *u16, data: *CacheFind) -> *u8 = "FindFirstFileW";
-extern fn cache_find_next(search: *u8, data: *CacheFind) -> i32 = "FindNextFileW";
-extern fn cache_find_close(search: *u8) -> i32 = "FindClose";
-extern fn cache_debug_wait(event: *CacheDebugEvent, milliseconds: u32) -> i32 = "WaitForDebugEvent";
-extern fn cache_debug_continue(process: u32, thread: u32, status: u32) -> i32 = "ContinueDebugEvent";
-extern fn cache_debug_stop(process: u32) -> i32 = "DebugActiveProcessStop";
-extern fn cache_qsort(
-    base: *u8,
-    count: usize,
-    size: usize,
-    compare: fn(*u8, *u8) -> i32
-) -> unit = "qsort";
-
 // Digest external files instead of retaining toolchain-sized byte buffers.
 fn cache_file_input(context: *CrustContext, inputs: *CacheInputs, path: *u8) -> bool {
     var index: usize = 0usize;
@@ -75,33 +35,25 @@ fn cache_value_input(
     };
     return cache_add(context, inputs, source);
 }
-fn cache_loaded_images(context: *CrustContext, inputs: *CacheInputs) -> bool {
-    // Initialize the hash provider before enumerating its loaded implementation.
-    var seed: *u8 = win_seed_path(context);
-    if seed == null(*u8) || cache_digest(context, seed, null(*u8)) == null(*u8) {
-        return false;
-    }
-    var modules: [*u8; 1024] = uninit;
-    var needed: u32 = 0u32;
-    if cache_modules(
-        win_current_process(),
-        &modules[0usize],
-        sizeof([*u8; 1024]) as u32,
-        &needed
-    ) == 0i32 {
-        return win_fail(context, "cannot enumerate loaded images");
-    }
-    if needed as usize > sizeof([*u8; 1024]) {
-        return native_error(context, "too many loaded images");
-    }
+// The caller keeps the host installation fixed for the cache lifetime.
+fn cache_host_input(context: *CrustContext, inputs: *CacheInputs) -> bool {
+    var path: *u8 = win_seed_path(context);
+    return path != null(*u8) && cache_file_input(context, inputs, path);
+}
+fn cache_tools(
+    context: *CrustContext,
+    inputs: *CacheInputs,
+    paths: **u8,
+    count: usize,
+    directory: *u8
+) -> bool {
     var index: usize = 0usize;
-    while index < needed as usize / sizeof(*u8) {
-        var buffer: [u16; 32768] = uninit;
-        var size: u32 = win_module_path(modules[index], &buffer[0usize], 32768u32);
-        if size == 0u32 || size >= 32768u32 {
-            return win_fail(context, "cannot resolve loaded image");
+    while index < count {
+        var wide: *u16 = win_tool_path(context, paths[index]);
+        if wide == null(*u16) {
+            return false;
         }
-        var path: *u8 = win_utf8(context, &buffer[0usize]);
+        var path: *u8 = win_utf8(context, wide);
         if path == null(*u8) || !cache_file_input(context, inputs, win_slashes(path)) {
             return false;
         }
@@ -110,291 +62,20 @@ fn cache_loaded_images(context: *CrustContext, inputs: *CacheInputs) -> bool {
     return true;
 }
 
-fn cache_input_compare(left: *u8, right: *u8) -> i32 {
-    return cache_strcmp(
-        (*(left as **CrustSource)) -> path,
-        (*(right as **CrustSource)) -> path
-    );
-}
-fn cache_sort_inputs(inputs: *CacheInputs) -> unit {
-    cache_qsort(
-        inputs -> items as *u8,
-        inputs -> count,
-        sizeof(*CrustSource),
-        cache_input_compare
-    );
-}
-
-fn cache_loaded_inputs(context: *CrustContext, inputs: *CacheInputs) -> bool {
-    var begin: usize = inputs -> count;
-    if !cache_loaded_images(context, inputs) {
-        return false;
-    }
-    // Loader order is not checker identity. Preserve preceding source inputs.
-    var images: CacheInputs = make CacheInputs {
-        items: inputs -> items + begin as isize,
-        count: inputs -> count - begin,
-        capacity: inputs -> count - begin
-    };
-    cache_sort_inputs(&images);
-    return true;
-}
-// Capture directory membership as well as bytes. Reject links and excessive nesting.
-fn cache_tree(
-    context: *CrustContext,
-    inputs: *CacheInputs,
-    directory: *u8,
-    depth: usize
-) -> bool {
-    if depth == 32usize {
-        return native_error(context, "toolchain directory nesting exceeds 32");
-    }
-    if !cache_value_input(context, inputs, directory, "directory", 9usize) {
-        return false;
-    }
-    var pattern: *u8 = native_join(context, directory, "/*");
-    if pattern == null(*u8) {
-        return false;
-    }
-    var wide: *u16 = win_wide(context, pattern);
-    if wide == null(*u16) {
-        return false;
-    }
-    var data: CacheFind = uninit;
-    var search: *u8 = cache_find_first(wide, &data);
-    if search == ~0usize as *u8 {
-        return win_fail(context, "cannot enumerate toolchain directory");
-    }
-    var success: bool = true;
-    while success {
-        success = cache_tree_item(context, inputs, directory, &data, depth);
-        if cache_find_next(search, &data) == 0i32 {
-            if win_last_error() != 18u32 {
-                success = win_fail(context, "cannot enumerate toolchain file");
-            }
-            break;
-        }
-    }
-    if cache_find_close(search) == 0i32 {
-        success = win_fail(context, "cannot close toolchain directory");
-    }
-    return success;
-}
-fn cache_tree_item(
-    context: *CrustContext,
-    inputs: *CacheInputs,
-    directory: *u8,
-    data: *CacheFind,
-    depth: usize
-) -> bool {
-    var name: *u8 = win_utf8(context, &data -> name[0usize]);
-    if name == null(*u8) {
-        return false;
-    }
-    if cache_strcmp(name, ".") == 0i32 || cache_strcmp(name, "..") == 0i32 {
-        return true;
-    }
-    if (data -> attributes & 1024u32) != 0u32 {
-        return native_error(context, "toolchain reparse points are unsupported");
-    }
-    var prefix: *u8 = native_join(context, directory, "/");
-    if prefix == null(*u8) {
-        return false;
-    }
-    var path: *u8 = native_join(context, prefix, name);
-    if path == null(*u8) {
-        return false;
-    }
-    if (data -> attributes & 16u32) != 0u32 {
-        return cache_tree(context, inputs, path, depth + 1usize);
-    }
-    var digest: *u8 = cache_digest(context, path, null(*u8));
-    return digest != null(*u8) && cache_value_input(context, inputs, path, digest, 64usize);
-}
-
-fn cache_debug_file(context: *CrustContext, inputs: *CacheInputs, file: *u8) -> bool {
-    if file == null(*u8) {
-        return native_error(context, "tool loader did not provide an image file");
-    }
-    var buffer: [u16; 32768] = uninit;
-    var size: u32 = win_final_path(file, &buffer[0usize], 32768u32, 0u32);
-    var success: bool = size != 0u32 && size < 32768u32;
-    if success {
-        var path: *u8 = win_utf8(context, &buffer[0usize]);
-        success = path != null(*u8) && cache_file_input(context, inputs, win_slashes(path));
-    } else {
-        win_fail(context, "cannot resolve tool image");
-    }
-    if !win_close(context, file) {
-        success = false;
-    }
-    return success;
-}
-
-// Windows owns debug-event process/thread handles and closes them on exit events.
-fn cache_debug_events(context: *CrustContext, inputs: *CacheInputs) -> bool {
-    var state: CacheDebugState = make CacheDebugState {
-        processes: null(*CacheDebugProcess),
-        active: 0usize,
-        count: 0usize
-    };
-    var success: bool = true;
-    while true {
-        var event: CacheDebugEvent = uninit;
-        if cache_debug_wait(&event, 30000u32) == 0i32 {
-            win_fail(context, "cannot wait for tool dependency probe");
-            cache_debug_abort(context, state.processes);
-            return false;
-        }
-        if event.code == 3u32 && !cache_debug_created(context, &state, &event) {
-            success = false;
-        }
-        if event.code == 3u32 || event.code == 6u32 {
-            if !cache_debug_file(context, inputs, event.data[0usize] as usize as *u8) {
-                success = false;
-            }
-        }
-        if event.code == 5u32 {
-            state.active = state.active - 1usize;
-            cache_debug_exited(state.processes, event.process);
-            if (event.data[0usize] as u32) != 0u32 {
-                success = win_status(context, event.data[0usize] as u32);
-            }
-        }
-        var continuation: u32 = 65538u32;
-        if event.code == 1u32 && event.data[0usize] as u32 != 2147483651u32 {
-            continuation = 2147549185u32;
-        }
-        if cache_debug_continue(event.process, event.thread, continuation) == 0i32 {
-            win_fail(context, "cannot continue tool dependency probe");
-            cache_debug_abort(context, state.processes);
-            return false;
-        }
-        if state.active == 0usize {
-            break;
-        }
-    }
-    return success;
-}
-fn cache_debug_created(
-    context: *CrustContext,
-    state: *CacheDebugState,
-    event: *CacheDebugEvent
-) -> bool {
-    state -> active = state -> active + 1usize;
-    var item: *CacheDebugProcess = null(*CacheDebugProcess);
-    if state -> count < 128usize {
-        item = crust_try_alloc(
-            context,
-            sizeof(CacheDebugProcess),
-            alignof(CacheDebugProcess)
-        ) as *CacheDebugProcess;
-    } else {
-        native_error(context, "tool dependency probe exceeds 128 processes");
-    }
-    if item == null(*CacheDebugProcess) {
-        if win_terminate(event -> data[1usize] as usize as *u8, 1u32) == 0i32 {
-            win_fail(context, "cannot terminate uncaptured tool");
-        }
-        return false;
-    }
-    * item = make CacheDebugProcess {
-        next: state -> processes,
-        handle: event -> data[1usize] as usize as *u8,
-        id: event -> process
-    };
-    state -> processes = item;
-    state -> count = state -> count + 1usize;
-    return true;
-}
-fn cache_debug_exited(processes: *CacheDebugProcess, id: u32) -> unit {
-    while processes != null(*CacheDebugProcess) {
-        if processes -> id == id {
-            processes -> handle = null(*u8);
-            return;
-        }
-        processes = processes -> next;
-    }
-}
-fn cache_debug_abort(context: *CrustContext, processes: *CacheDebugProcess) -> unit {
-    while processes != null(*CacheDebugProcess) {
-        if processes -> handle != null(*u8) {
-            if win_terminate(processes -> handle, 1u32) == 0i32 {
-                win_fail(context, "cannot terminate dependency probe");
-            }
-            if cache_debug_stop(processes -> id) == 0i32 {
-                win_fail(context, "cannot detach dependency probe");
-            }
-        }
-        processes = processes -> next;
-    }
-}
-fn cache_probe(
-    context: *CrustContext,
-    inputs: *CacheInputs,
-    arguments: **u8,
-    directory: *u8
-) -> bool {
-    var command: *u16 = win_command(context, arguments);
+fn cache_environment(context: *CrustContext, inputs: *CacheInputs) -> bool {
     var environment: *u16 = win_tool_environment(context);
-    var executable: *u16 = win_tool_path(context, arguments[0usize]);
-    var current: *u16 = win_wide(context, directory);
-    if command == null(*u16) || environment == null(*u16) || executable == null(*u16) || current == null(
-        *u16
-    ) {
+    if environment == null(*u16) {
         return false;
     }
-    var startup: WinStartup = uninit;
-    var success: bool = win_tool_streams(context, &startup, null(*u8));
-    if success {
-        success = cache_probe_start(
-            context,
-            inputs,
-            executable,
-            command,
-            environment,
-            current,
-            &startup
-        );
+    var size: usize = 0usize;
+    while environment[size] != 0u16 || environment[size + 1usize] != 0u16 {
+        size = size + 1usize;
     }
-    if !win_tool_streams_close(context, &startup) {
-        success = false;
-    }
-    return success;
-}
-fn cache_probe_start(
-    context: *CrustContext,
-    inputs: *CacheInputs,
-    executable: *u16,
-    command: *u16,
-    environment: *u16,
-    current: *u16,
-    startup: *WinStartup
-) -> bool {
-    var process: WinProcess = uninit;
-    if win_create_process(
-        executable,
-        command,
-        null(*WinSecurity),
-        null(*WinSecurity),
-        1i32,
-        1025u32,
-        environment,
-        current,
-        startup,
-        &process
-    ) == 0i32 {
-        return win_fail(context, "cannot start tool dependency probe");
-    }
-    var success: bool = cache_debug_events(context, inputs);
-    if win_wait(process.process, 30000u32) != 0u32 {
-        success = win_fail(context, "cannot wait for dependency probe shutdown");
-    }
-    if !win_close(context, process.thread) {
-        success = false;
-    }
-    if !win_close(context, process.process) {
-        success = false;
-    }
-    return success;
+    return cache_value_input(
+        context,
+        inputs,
+        "windows-tool-environment",
+        environment as *u8,
+        (size + 2usize) * 2usize
+    );
 }

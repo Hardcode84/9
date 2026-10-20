@@ -3,7 +3,7 @@
 // Include library_model.crs. Directory is absolute and caller-owned with no
 // untrusted writers. Retain the returned path and digest in trusted build state.
 // Check the provider, emit its object, and publish its complete source interface.
-// The checker host and its loaded images must remain unchanged during the call.
+// Keep the checker host installation fixed while reusing ownership bundles.
 // Receipt strings belong to request.context. Copy them before destroying it.
 extern fn ownership_publish(
     request: *CrustBuild,

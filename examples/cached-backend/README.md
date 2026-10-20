@@ -15,7 +15,7 @@ build/crust examples/cached-backend/main.crs
 ```
 
 No prepared backend is required. Use a Linux x86-64 system with GNU assembler,
-GNU linker, GCC, `objcopy`, `sha256sum`, and `ldd`. The target prints
+GNU linker, GCC, `objcopy`, and `sha256sum`. The target prints
 `Hello from a bootstrapped native stage!`.
 
 ## Follow the source

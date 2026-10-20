@@ -122,7 +122,7 @@ def changed_checker(directory, driver, args, environment):
     with other.open("ab") as stream:
         stream.write(b"different compiler artifact")
     changed = [str(other), *args[1:]]
-    reject_import(changed, environment, "checker host or loaded images changed")
+    reject_import(changed, environment, "checker host changed")
 
 
 def capture_race(directory, args, environment, receipt, output):

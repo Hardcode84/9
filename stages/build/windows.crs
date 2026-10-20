@@ -15,157 +15,28 @@ fn stage_import_library(context: *CrustContext) -> *u8 {
 }
 fn stage_link_inputs(context: *CrustContext, inputs: *CacheInputs, directory: *u8) -> bool {
     var library: *u8 = stage_import_library(context);
-    return library != null(*u8) && cache_input(context, inputs, library);
+    var paths: [*u8; 2] = make [*u8; 2] {
+        "gcc",
+        "objcopy"
+    };
+    return library != null(*u8) && cache_input(context, inputs, library) && cache_environment(
+        context,
+        inputs
+    ) && cache_tools(context, inputs, &paths[0usize], 2usize, directory);
 }
 fn stage_c_toolchain(toolchain: *StageToolchain) -> bool {
     toolchain -> object = stage_c_object;
-    var context: *CrustContext = toolchain -> context;
-    var directory: *u8 = stage_windows_installation(context);
-    if directory == null(*u8) || !stage_windows_probe(toolchain) || !cache_tree(
-        context,
+    var paths: [*u8; 2] = make [*u8; 2] {
+        "gcc",
+        "objcopy"
+    };
+    return cache_environment(toolchain -> context, &toolchain -> inputs) && cache_tools(
+        toolchain -> context,
         &toolchain -> inputs,
-        directory,
-        0usize
-    ) {
-        return false;
-    }
-    cache_sort_inputs(&toolchain -> inputs);
-    return true;
-}
-fn stage_windows_tool_directory(context: *CrustContext, name: *u8) -> *u8 {
-    var wide: *u16 = win_tool_path(context, name);
-    if wide == null(*u16) {
-        return null(*u8);
-    }
-    var path: *u8 = win_utf8(context, wide);
-    if path == null(*u8) {
-        return path;
-    }
-    path = win_existing_path(context, path);
-    if path == null(*u8) {
-        return path;
-    }
-    return win_directory_prefix(context, path);
-}
-fn stage_windows_installation(context: *CrustContext) -> *u8 {
-    var bin: *u8 = stage_windows_tool_directory(context, "gcc");
-    var other: *u8 = stage_windows_tool_directory(context, "objcopy");
-    if bin == null(*u8) || other == null(*u8) {
-        return null(*u8);
-    }
-    if cache_strcmp(bin, other) != 0i32 {
-        native_error(context, "GCC and objcopy must belong to one self-contained toolchain");
-        return null(*u8);
-    }
-    var size: usize = native_strlen(bin);
-    if size < 5usize || cache_strcmp(bin + (size - 5usize) as isize, "/bin/") != 0i32 {
-        native_error(context, "Windows toolchain must use a self-contained bin directory");
-        return null(*u8);
-    }
-    return crust_try_copy_string(context, bin, size - 5usize);
-}
-
-fn stage_windows_environment(context: *CrustContext, inputs: *CacheInputs) -> bool {
-    var environment: *u16 = win_tool_environment(context);
-    if environment == null(*u16) {
-        return false;
-    }
-    var size: usize = 0usize;
-    while environment[size] != 0u16 || environment[size + 1usize] != 0u16 {
-        size = size + 1usize;
-    }
-    return cache_value_input(
-        context,
-        inputs,
-        "windows-tool-environment",
-        environment as *u8,
-        (size + 2usize) * 2usize
+        &paths[0usize],
+        2usize,
+        toolchain -> directory
     );
-}
-fn stage_windows_probe(toolchain: *StageToolchain) -> bool {
-    var context: *CrustContext = toolchain -> context;
-    var work: CacheWork = make CacheWork {
-        directory: null(*u8),
-        manifest: null(*u8),
-        digest: null(*u8),
-        artifact: null(*u8),
-        checksum: null(*u8)
-    };
-    var success: bool = stage_windows_environment(context, &toolchain -> inputs) && cache_work(
-        context,
-        toolchain -> directory,
-        &work
-    );
-    if success {
-        success = stage_windows_probe_build(context, &toolchain -> inputs, &work);
-    }
-    if !cache_cleanup(context, &work) {
-        success = false;
-    }
-    return success;
-}
-fn stage_windows_probe_build(
-    context: *CrustContext,
-    inputs: *CacheInputs,
-    work: *CacheWork
-) -> bool {
-    var source: *u8 = "#include <stdint.h>\n#include <stddef.h>\n#include <stdbool.h>\n#include <limits.h>\nint crust_probe(void){return sizeof(uintptr_t)==8;}\n";
-    if !cache_save(context, work -> manifest, source, native_strlen(source)) {
-        return false;
-    }
-    var compile: [*u8; 12] = make [*u8; 12] {
-        "gcc",
-        "-std=c99",
-        "-pedantic-errors",
-        "-O2",
-        "-fstack-clash-protection",
-        "-x",
-        "c",
-        "inputs",
-        "-c",
-        "-o",
-        "artifact.dll",
-        null(*u8)
-    };
-    var copy: [*u8; 4] = make [*u8; 4] {
-        "objcopy",
-        "artifact.dll",
-        "digest",
-        null(*u8)
-    };
-    var link: [*u8; 9] = make [*u8; 9] {
-        "gcc",
-        "-shared",
-        "-Wl,--export-all-symbols",
-        "digest",
-        "-lbcrypt",
-        "-o",
-        "artifact.dll",
-        "-Wl,--no-insert-timestamp",
-        null(*u8)
-    };
-    return stage_windows_gcc_probe(context, inputs, &compile[0usize], work -> directory) && cache_probe(
-        context,
-        inputs,
-        &copy[0usize],
-        work -> directory
-    ) && stage_windows_gcc_probe(context, inputs, &link[0usize], work -> directory);
-}
-fn stage_windows_gcc_probe(
-    context: *CrustContext,
-    inputs: *CacheInputs,
-    arguments: **u8,
-    directory: *u8
-) -> bool {
-    var alias: WinToolAlias = uninit;
-    var success: bool = win_gcc_prepare(context, arguments, directory, &alias);
-    if success {
-        success = cache_probe(context, inputs, alias.arguments, directory);
-    }
-    if !win_gcc_cleanup(context, &alias) {
-        success = false;
-    }
-    return success;
 }
 fn stage_gcc(context: *CrustContext, source: *u8, output: *u8, preprocess: bool) -> bool {
     var arguments: [*u8; 13] = make [*u8; 13] {

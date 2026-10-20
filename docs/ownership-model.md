@@ -414,8 +414,9 @@ interfaces and links captured objects. No provider body is read at import.
 
 `OwnershipLibrary` retains the artifact path, digest, and explicit `trusted`
 status. The receipt binds interface bytes, object bytes, selected trust, and
-checker images. The root must preserve all three fields. A copied interface or
-an artifact with a different trust flag cannot authorize unchecked bodies.
+the checker host executable. Keep the checker installation fixed while reusing
+bundles; loaded libraries are not inspected. The root must preserve all three
+fields. A copied interface or an artifact with a different trust flag cannot authorize unchecked bodies.
 Publication requires a target source or root source in the request, in addition
 to any separately supplied trusted implementation sources.
 Imported record domains are fixed by the captured provider interface. A client

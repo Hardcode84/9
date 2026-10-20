@@ -22,15 +22,6 @@ fn backend_tools(
         object,
         null(*u8)
     };
-    var inputs: CacheInputs = make CacheInputs {
-        items: request -> inputs,
-        count: request -> count,
-        capacity: request -> count
-    };
-    var libc: *u8 = cache_libc(context, &inputs);
-    if libc == null(*u8) {
-        return false;
-    }
     var link: [*u8; 14] = make [*u8; 14] {
         "/usr/bin/ld",
         "-shared",
@@ -42,7 +33,7 @@ fn backend_tools(
         "-z",
         "now",
         object,
-        libc,
+        "-lc",
         "-o",
         output,
         null(*u8)

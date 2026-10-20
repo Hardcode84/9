@@ -104,7 +104,7 @@ fn stage_open(root: *CrustRun, base: *u8, directory: *u8) -> *StageSession {
     if session -> directory == null(*u8) || !cache_directory(context, session -> directory) || !cache_loaded_sources(
         root,
         &session -> inputs
-    ) || !cache_loaded_inputs(context, &session -> inputs) || !stage_link_inputs(
+    ) || !cache_host_input(context, &session -> inputs) || !stage_link_inputs(
         context,
         &session -> inputs,
         session -> directory

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-// Capture the Linux x86-64 assembler and its loaded libraries.
+// Capture the Linux x86-64 assembler executable.
 fn asm_stage_toolchain(toolchain: *StageToolchain) -> bool {
     toolchain -> object = asm_stage_object;
     var paths: [*u8; 1] = make [*u8; 1] {

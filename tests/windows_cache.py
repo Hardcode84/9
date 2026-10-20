@@ -12,21 +12,10 @@ import time
 from pathlib import Path
 
 from windows import ROOT, literal, native_path
-from windows_bootstrap import Suite, process_arguments
+from windows_bootstrap import Suite
 
 
 class CacheSuite(Suite):
-    def probe_stdio(self):
-        args = process_arguments(self.build / "windows_process.exe")
-        body = self.setup()
-        body += "var inputs:CacheInputs=make CacheInputs{items:null(**CrustSource),count:0usize,capacity:0usize};\n"
-        body += (
-            "var arguments:[*u8;9]=make [*u8;9]{" + ",".join(map(literal, args)) + ",null(*u8)};\n"
-        )
-        body += f"return (!cache_probe(run -> context,&inputs,&arguments[0usize],{literal(native_path(self.work))})) as i32;\n"
-        result = self.root("probe stdio", body, stdin=b"must not reach the probe\n")
-        assert result.stdout.replace(b"\r\n", b"\n") == b"arguments and environment passed\n"
-
     def source_invalidation(self):
         cache = self.fresh_directory("source invalidation")
         provider = self.work / "cache-provider.crs"
@@ -49,45 +38,27 @@ class CacheSuite(Suite):
         self.root("source invalidation", body, expected=43)
         assert len(list(cache.glob("*/artifact.dll"))) == 3
 
-    def copy_toolchain(self, source, target):
-        body = (
-            self.setup()
-            + """
-var wide:*u16=win_env(run -> context,"SystemRoot");
-if wide==null(*u16){return 1i32;};
-var path:*u8=win_utf8(run -> context,wide);
-if path==null(*u8){return 1i32;};
-return crust0_host_write_stream(1u32,path,native_strlen(path));
-"""
-        )
-        system = self.root("system directory", body).stdout.decode("utf-8")
-        executable = system + "/System32/robocopy.exe"
-        if os.name != "nt":
-            executable = subprocess.check_output(["wslpath", "-u", executable], text=True).strip()
-        # Native copy avoids thousands of metadata round trips through WSL.
-        self.run(
-            Path(executable),
-            native_path(source),
-            native_path(target),
-            "/E",
-            "/R:0",
-            "/W:0",
-            "/NFL",
-            "/NDL",
-            "/NJH",
-            "/NJS",
-            expected=tuple(range(8)),
-        )
-
     def toolchain_invalidation(self):
         selected = shutil.which("gcc.exe")
         assert selected, "native Windows GCC is required"
-        installed = Path(selected).resolve().parent.parent
-        copied = self.fresh_directory("toolchain 雪")
-        self.copy_toolchain(installed, copied)
+        copied = self.fresh_directory("toolchain ÃƒÆ’Ã‚Â©ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂºÃƒâ€šÃ‚Âª")
+        (copied / "bin").mkdir()
+        shutil.copyfile(selected, copied / "bin/gcc.exe")
+        shutil.copyfile(shutil.which("objcopy.exe"), copied / "bin/objcopy.exe")
+        header = copied / "unused.h"
+        header.write_bytes(b"/* not a cache input */\n")
         cache = self.fresh_directory("toolchain invalidation")
         environment = dict(os.environ, PATH=str(copied / "bin") + os.pathsep + os.environ["PATH"])
-        body = self.setup() + self.session(cache) + "return 0i32;\n"
+        body = self.request(cache, 'return cache_save(context,path,"complete",8usize);')
+        body = body.replace(
+            "var result:CacheArtifact=uninit;",
+            f"""
+var toolchain:StageToolchain=make StageToolchain{{inputs:make CacheInputs{{items:null(**CrustSource),count:0usize,capacity:0usize}},context:run -> context,directory:{literal(native_path(cache))},object:null(fn(*StageObject)->bool),user:null(*u8)}};
+if !stage_c_toolchain(&toolchain){{return 1i32;}};
+request.inputs=toolchain.inputs.items;request.count=toolchain.inputs.count;
+var result:CacheArtifact=uninit;
+""",
+        )
 
         def prepare(expected):
             self.root("toolchain invalidation", body, environment=environment)
@@ -100,30 +71,26 @@ return crust0_host_write_stream(1u32,path,native_strlen(path));
         with (copied / "bin/gcc.exe").open("ab") as stream:
             stream.write(b"cache identity test\n")
         prepare(2)
-        header = next(copied.rglob("stddef.h"))
         with header.open("ab") as stream:
             stream.write(b"\n/* cache header identity test */\n")
-        prepare(3)
+        prepare(2)
         # Environment changes must also invalidate, even with identical tool files.
         temporary = self.fresh_directory("tool temporary")
         environment["TEMP"] = native_path(temporary)
         if os.name != "nt":
             environment["WSLENV"] = environment.get("WSLENV", "") + ":TEMP"
-        prepare(4)
-        libraries = list(copied.rglob("libbcrypt.a"))
-        assert libraries
-        for library in libraries:
-            library.unlink()
-        failure = self.root("toolchain invalidation", body, expected=1, environment=environment)
-        assert b"bcrypt" in failure.stderr
-        assert not list(cache.glob(".build-*"))
+        prepare(3)
         (copied / "bin/gcc.exe").unlink()
-        # Keep PATH restricted so a different installed compiler cannot mask absence.
-        environment["PATH"] = str(copied / "bin")
+        # An explicit missing path must not select another installed compiler.
+        body = body.replace(
+            "if !stage_c_toolchain(&toolchain)",
+            f'var paths:[*u8;1]=make [*u8;1]{{{literal(native_path(copied / "bin/gcc.exe"))}}};'
+            + "if !cache_tools(run -> context,&toolchain.inputs,&paths[0usize],1usize,toolchain.directory)",
+        )
         failure = self.root("toolchain invalidation", body, expected=1, environment=environment)
         assert b"cannot find native tool" in failure.stderr
 
-    def loaded_dependency(self):
+    def declared_dependency(self):
         cache = self.fresh_directory("loaded dependency")
         library = self.work / "dependency.dll"
         shutil.copyfile(self.build / "windows_cache_fixture.dll", library)
@@ -133,7 +100,7 @@ return crust0_host_write_stream(1u32,path,native_strlen(path));
             f"""
 if crust_run_open(run,{literal(native_path(library))})==null(*u8){{return 1i32;}};
 var inputs:CacheInputs=make CacheInputs{{items:null(**CrustSource),count:0usize,capacity:0usize}};
-if !cache_loaded_inputs(run -> context,&inputs){{return 1i32;}};
+if !cache_file_input(run -> context,&inputs,{literal(native_path(library))}){{return 1i32;}};
 request.inputs=inputs.items;request.count=inputs.count;
 var result:CacheArtifact=uninit;
 """,
@@ -145,32 +112,6 @@ var result:CacheArtifact=uninit;
             stream.write(b"changed native dependency\n")
         self.root("loaded dependency", body)
         assert len(list(cache.glob("*/artifact.dll"))) == 2
-
-    def loaded_order(self):
-        cache = self.fresh_directory("loaded order")
-        libraries = [self.work / f"order-{index}.dll" for index in (1, 2)]
-        for library in libraries:
-            shutil.copyfile(self.build / "windows_cache_fixture.dll", library)
-        for order in (libraries, list(reversed(libraries))):
-            body = self.request(cache, 'return cache_save(context,path,"complete",8usize);')
-            loads = "".join(
-                f"if crust_run_open(run,{literal(native_path(path))})==null(*u8){{return 1i32;}};"
-                for path in order
-            )
-            body = body.replace(
-                "var result:CacheArtifact=uninit;",
-                loads
-                + """
-var inputs:CacheInputs=make CacheInputs{items:null(**CrustSource),count:0usize,capacity:0usize};
-if !cache_value_input(run -> context,&inputs,"source-prefix","source",6usize){return 1i32;};
-if !cache_loaded_inputs(run -> context,&inputs){return 1i32;};
-if cache_strcmp(inputs.items[0usize] -> path,"source-prefix")!=0i32{return 1i32;};
-request.inputs=inputs.items;request.count=inputs.count;
-var result:CacheArtifact=uninit;
-""",
-            )
-            self.root("loaded order", body)
-        assert len(list(cache.glob("*/artifact.dll"))) == 1
 
     def publication(self):
         fixture = self.build / "windows_cache_fixture.exe"
@@ -311,7 +252,7 @@ return (!cache_artifact(run -> context,{literal(native_path(cache))},&request,&r
             + f"""
 var toolchain:StageToolchain=make StageToolchain{{inputs:make CacheInputs{{items:null(**CrustSource),count:0usize,capacity:0usize}},context:run -> context,directory:{literal(native_path(cache))},object:null(fn(*StageObject)->bool),user:null(*u8)}};
 if !stage_c_toolchain(&toolchain){{return 1i32;}};
-if toolchain.inputs.count<10usize{{return 2i32;}};
+if toolchain.object==null(fn(*StageObject)->bool){{return 2i32;}};
 return 0i32;
 """
         )
@@ -320,7 +261,7 @@ return 0i32;
 
     def storage(self):
         cache = self.fresh_directory("cache storage")
-        payload = self.work / "hash input 雪"
+        payload = self.work / "hash input ÃƒÆ’Ã‚Â©ÃƒÂ¢Ã¢â€šÂ¬Ã‚ÂºÃƒâ€šÃ‚Âª"
         payload.write_bytes(b"abc")
         body = (
             self.setup()
@@ -351,13 +292,11 @@ return 0i32;
 
 def main():
     cases = (
-        "probe_stdio",
         "storage",
         "failures",
         "allocations",
         "publication",
-        "loaded_dependency",
-        "loaded_order",
+        "declared_dependency",
         "toolchain",
         "reuse",
         "source_invalidation",

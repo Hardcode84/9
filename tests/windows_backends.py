@@ -151,16 +151,15 @@ if seed_callback(mixed)!=236.25f32 || relay(seed_mixed)!=236.25f32{return 11i32;
 if unwind(seed_unwind)!=0i32{return 12i32;};return answer();"""
         self.root(backend + " packages", body, expected=42)
         artifacts = {path: path.stat().st_mtime_ns for path in cache.glob("*/artifact.dll")}
-        if backend == "llvm":
-            # Windows can load apphelp.dll only on Clang's first launch. That
-            # dependency change requires a new key; compare reuse after warming.
-            self.root(backend + " warm", body, expected=42)
-            assert all(path.stat().st_mtime_ns == stamp for path, stamp in artifacts.items())
-            artifacts = {path: path.stat().st_mtime_ns for path in cache.glob("*/artifact.dll")}
         traces = [self.work / f"{backend}-{name}.inputs" for name in ("host", "gcc")]
         if backend == "llvm":
             traces.append(self.work / "llvm-toolchain.inputs")
         before = {path: self.cache_inputs(path) for path in traces}
+        if backend == "llvm":
+            captured = "".join(before[self.work / "llvm-toolchain.inputs"]).lower()
+            assert "/bin/clang.exe:" in captured, captured
+            assert ".dll:" not in captured, captured
+            assert "/bin/llvm-as.exe:" not in captured, captured
         self.root(backend + " reuse", body, expected=42)
         current = {path: path.stat().st_mtime_ns for path in cache.glob("*/artifact.dll")}
         if artifacts != current:

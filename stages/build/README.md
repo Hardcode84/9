@@ -169,13 +169,11 @@ cache lookup. Its request contains a context, the cache directory, and an empty
 input list. It must set `object` to `fn(*StageObject) -> bool`. It can set `user`
 to context-owned configuration storage. Keep these values live through the build.
 
-The factory adds all tools, loaded tool libraries, target settings, pass options,
-and other configuration values to `inputs`. On Linux, use `cache_tools` to capture
-native tools and their library dependencies. On Windows, use `cache_probe` with
-representative tool commands and capture their data files separately. Use
-`cache_read` and `cache_add` for other
-inputs. Compile from those captured values. Keep installed tool files fixed
-while the build runs. The [ASM factory](../asm/compiler.crs) shows this contract.
+The factory adds selected tool executables, target settings, pass options, and
+other explicit configuration values to `inputs`. Use `cache_tools` to capture
+named executables. Use `cache_read` and `cache_add` for additional declared
+inputs. Compile from those captured values. Keep the installation fixed while
+reusing the cache. The [ASM factory](../asm/compiler.crs) shows this contract.
 
 The object callback receives the emitted input path, an object output path,
 a diagnostic context, and the factory's `user` value. It must write a complete
@@ -204,10 +202,10 @@ and link this output with its selected test flags.
 
 ## Cache inputs and failures
 
-A session captures the seed executable, loaded native libraries, preparation
-sources, and shared link tools. Its default C toolchain also captures GCC,
-its assembler, specifications, and system header output. A library key includes these inputs,
-all included package files, captured declaration units, selected exports, and
+A session captures the seed executable, preparation sources, and shared link
+tools. Its default C toolchain captures the selected compiler executables.
+It does not inspect libraries, preprocess headers for identity, or scan
+installations. A library key includes these inputs, all included package files, captured declaration units, selected exports, and
 the compiled backend used to emit it. A selected compiler adds its native
 image and entry name to the key. A selected toolchain adds its factory name and
 captured inputs. Source options are also key inputs. Changes to transitive
@@ -219,7 +217,8 @@ that already captured the source.
 
 Package programs run with the root's authority. When a package reads another
 configuration input, add its captured bytes to `stage.inputs` with `cache_add`.
-Keep the installed toolchain fixed during preparation. The caller owns the cache
+Keep the installed toolchain fixed while reusing the cache. Use a fresh cache
+after changing untracked headers, libraries, helper tools, or system configuration. The caller owns the cache
 directory and its parent must exist. Keep cached files unchanged and live while loaded code
 uses them. Do not share this directory with untrusted writers.
 

@@ -115,23 +115,18 @@ private `.build-` directory; it is never a cache entry. The caller can remove
 such directories after their producers stop. Publication does not promise
 power-loss durability.
 
-The default GCC provider requires one self-contained installation with `gcc`
-and `objcopy` in its `bin` directory. Its headers, libraries, helper executables,
-and configuration must stay inside that installation. Reparse points and
-directory nesting deeper than 32 levels are rejected. Custom specs or plugins
-that read external files need a separate toolchain provider with explicit inputs.
-The provider hashes every installation file, including directory membership,
-and captures the exact child environment. A compile, object-copy, and DLL-link
-probe captures the actual executable and DLL images loaded by the tools and
-their children. The probe requires Windows debugging APIs. Failure to capture
-an input rejects the request before cache lookup.
+The default GCC provider captures the selected `gcc` and `objcopy` executables
+and the exact child environment. It does not scan the installation, hash system
+headers, inspect loaded DLLs, or run dependency probes.
 
-The seed, its loaded images, the seed import archive, producer source snapshots,
-package inputs, options, and export mappings also contribute to the key.
-External file hashing uses a fixed 64 KiB buffer. Keep tools, configuration, and
-loaded code unchanged during a session. Keep published files unchanged until
-every runner that loaded them has been destroyed. Cache directories must be
-caller-owned and must not have untrusted writers.
+The seed executable, seed import archive, producer source snapshots, package
+inputs, options, and export mappings also contribute to the key. External file
+hashing uses a fixed 64 KiB buffer. Keep the host and toolchain installations
+fixed while reusing the cache. Use a fresh cache after changing untracked
+libraries, headers, helper tools, or configuration. Add other required file
+inputs explicitly. Keep published files unchanged until every runner that loaded
+them has been destroyed. Cache directories must be caller-owned and must not
+have untrusted writers.
 
 Ownership and generic-ownership library formats use Windows x64 tags and
 Windows cache providers. Ownership object bundles contain COFF objects.

@@ -102,9 +102,7 @@ def run_packages(build, llvm=None):
             factory.write_text(
                 original.replace(quote(llvm.resolve()), quote(work / "missing-llvm"))
             )
-            diagnostic = (
-                b"cannot enumerate toolchain directory" if WINDOWS else b"cache tool failed"
-            )
+            diagnostic = b"cannot hash cache input" if WINDOWS else b"cache tool failed"
             assert diagnostic in check(command, 1, cwd="/").stderr
         finally:
             factory.write_text(original)

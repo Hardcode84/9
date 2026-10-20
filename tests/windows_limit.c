@@ -90,6 +90,7 @@ int wmain(int argc, wchar_t **argv)
     HANDLE job;
     wchar_t *command;
     DWORD status;
+    const char *unlimited = getenv("CRUST_TEST_UNLIMITED_MEMORY");
     if (argc < 2)
         return 1;
     command = command_line(argc, argv);
@@ -97,9 +98,11 @@ int wmain(int argc, wchar_t **argv)
         return 1;
     job = CreateJobObjectW(NULL, NULL);
     memset(&limits, 0, sizeof(limits));
-    limits.BasicLimitInformation.LimitFlags =
-        JOB_OBJECT_LIMIT_JOB_MEMORY | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-    limits.JobMemoryLimit = (SIZE_T)512 * 1024 * 1024;
+    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (unlimited == NULL || strcmp(unlimited, "1") != 0) {
+        limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_JOB_MEMORY;
+        limits.JobMemoryLimit = (SIZE_T)512 * 1024 * 1024;
+    }
     if (job == NULL ||
         !SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits))) {
         if (job != NULL && !CloseHandle(job))

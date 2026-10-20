@@ -25,6 +25,10 @@ jobs:
     timeout-minutes: 90
     env:
       LP_NUM_THREADS: '1'
+      CRUST_TEST_UNLIMITED_MEMORY: '1'
+      PROFILE: windows_x64
+      AMALGAMATION: ${{ matrix.amalgamation }}
+      TEST_TARGETS: ${{ matrix.targets }}
     strategy:
       fail-fast: false
       matrix:
@@ -91,14 +95,17 @@ jobs:
           curl -fL https://sqlite.org/2025/sqlite-amalgamation-3500400.zip -o .profile-cache/sqlite.download
           printf '%s  %s\n' 1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032 .profile-cache/sqlite.download | sha256sum -c -
           unzip -jo .profile-cache/sqlite.download 'sqlite-amalgamation-3500400/sqlite3.[ch]' -d .profile-cache/sources
-          make -j1 PROFILE=windows_x64 check-windows-build
+          make -j"$(nproc)" check-windows-build
           build/windows/windows_limit.exe python3 benchmarks/resources/verify.py
-      - name: Build and test Windows suite
+      - name: Build seed
+        run: make -j"$(nproc)" all
+      - name: Run suite
         run: |
           export PATH="$PATH:/clang64/bin"
           export CRUST_SANITIZER_CC="$(cygpath -m /clang64/bin/clang.exe)"
           export CRUST_JS_RUNTIME="$(cygpath -m "$(command -v bun)")"
-          make -j1 PROFILE=windows_x64 AMALGAMATION=${{ matrix.amalgamation }} all ${{ matrix.targets }}
+          read -r -a targets <<< "$TEST_TARGETS"
+          make -j"$(nproc)" "${targets[@]}"
       - name: Check generated files
         run: git diff --exit-code
 

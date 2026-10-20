@@ -252,8 +252,10 @@ checksums, failed and interrupted builds, concurrent publication, and allocation
 failures. Concurrent storage tests share one 512 MiB job; they do not compile
 backends concurrently. Toolchain copies and timing evidence stay in `build/`.
 
-Native test processes run serially in Windows jobs with a 512 MiB combined
-memory limit per process tree. Closing a test job terminates its remaining
+Windows CI runs Make targets in parallel with one job per available CPU.
+CI sets `CRUST_TEST_UNLIMITED_MEMORY=1` to disable the test process tree memory
+limit. Local runs default to a 512 MiB combined memory limit per process tree.
+Closing a test job terminates its remaining
 children. Allocation rejection tests use invalid inputs and injected context
 allocator failures; they do not request large live allocations.
 

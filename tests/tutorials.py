@@ -5,9 +5,11 @@
 import argparse
 import hashlib
 import json
+import shlex
 import shutil
 import sqlite3
 import subprocess
+import time
 from contextlib import closing
 from pathlib import Path
 
@@ -36,7 +38,17 @@ CASES = (
 
 
 def command(arguments, expected=0, **options):
-    return checked_command(arguments, expected=expected, timeout=240, text_output=True, **options)
+    print(f"Tutorials: running {shlex.join(map(str, arguments))}", flush=True)
+    started = time.monotonic()
+    try:
+        result = checked_command(
+            arguments, expected=expected, timeout=240, text_output=True, **options
+        )
+    except Exception:
+        print(f"Tutorials: failed after {time.monotonic() - started:.1f}s", flush=True)
+        raise
+    print(f"Tutorials: finished in {time.monotonic() - started:.1f}s", flush=True)
+    return result
 
 
 def configuration(work, llvm, level):
@@ -297,6 +309,7 @@ def main():
         for profile, selection in matrix.profiles:
             if args.profile and profile not in args.profile:
                 continue
+            print(f"Tutorials: {profile} starting", flush=True)
             matrix.applications(profile, selection)
             matrix.sqlite(profile, selection)
             matrix.rejections(profile, selection)

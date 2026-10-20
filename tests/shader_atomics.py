@@ -45,7 +45,7 @@ def check_atomics(run, compiler, root, llvm, tools, work, native, environment, v
         if mode:
             command.append(mode)
         run(command, env=environment)
-        assembly = run([tools / "spirv-dis", output]).stdout.decode()
+        assembly = run([tools / "spirv-dis", output.name], cwd=output.parent).stdout.decode()
         for token in (
             "OpAtomicIAdd",
             "OpAtomicUMin",

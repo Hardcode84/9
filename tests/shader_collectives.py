@@ -174,7 +174,9 @@ def check_collectives(
         "fn compute()->unit{shader_workgroup_barrier();var x:f32=scratch_uniform_load(0u32);values_store(shader_local_x(),x);}"
     )
     run(command, env=environment)
-    assembly = run([spirv_tools / "spirv-dis", output], env=environment).stdout.decode()
+    assembly = run(
+        [spirv_tools / "spirv-dis", output.name], env=environment, cwd=output.parent
+    ).stdout.decode()
     constants = dict(re.findall(r"(%\w+) = OpConstant %\w+ (\d+)", assembly))
     barriers = re.findall(r"OpControlBarrier (%\w+) (%\w+) (%\w+)", assembly)
     assert barriers and all(

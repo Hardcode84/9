@@ -21,8 +21,8 @@ def check_graphics(host, compiler, llvm, tools, work, environment):
     selected.write_text(source, encoding="utf-8")
     command = [compiler, selected, llvm, tools / "spirv-val", output]
     run(command, env=environment)
-    vertex = run([tools / "spirv-dis", str(output) + ".vert.spv"]).stdout
-    fragment = run([tools / "spirv-dis", str(output) + ".frag.spv"]).stdout
+    vertex = run([tools / "spirv-dis", output.name + ".vert.spv"], cwd=output.parent).stdout
+    fragment = run([tools / "spirv-dis", output.name + ".frag.spv"], cwd=output.parent).stdout
     for token in (b"OpEntryPoint Vertex", b"BuiltIn Position", b"BuiltIn VertexIndex"):
         assert token in vertex, token
     for token in (b"OpEntryPoint Fragment", b"OriginUpperLeft", b"Location 0"):

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Prove Windows source-built LLVM and ASM packages under bounded native jobs."""
+"""Prove Windows source-built LLVM and ASM packages."""
 
 import argparse
 import difflib

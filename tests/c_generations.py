@@ -67,3 +67,30 @@ def check_generations(command, build, compiler, cc, c_options, ldflags):
     )
     assert command([program]).stdout == b"intrusive: ok\n"
     print("C bootstrap: three equal generations, backend-free tools, intrusive output passed")
+
+
+def main():
+    import argparse
+    import shlex
+    from pathlib import Path
+
+    from run import checked_command
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--build", type=Path, default=ROOT / "build")
+    parser.add_argument("--cc", default="gcc")
+    parser.add_argument("--ldflags", default="")
+    args = parser.parse_args()
+    build = args.build.resolve()
+    check_generations(
+        checked_command,
+        build,
+        build / "crust-c",
+        shlex.split(args.cc),
+        [],
+        shlex.split(args.ldflags),
+    )
+
+
+if __name__ == "__main__":
+    main()

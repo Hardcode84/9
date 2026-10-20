@@ -84,7 +84,7 @@ configuration, environment, and other reads as applicable.
 Run `make check-cache` for reuse, source and option edits, captured-byte use,
 corruption, missing files, producer errors, partial output, concurrent
 publication, allocation failures, and the native handoff witness.
-Run `make PROFILE=windows_x64 check-windows-cache` for the Windows provider.
+Run `make PROFILE=windows_x64 check-cache` for the Windows provider.
 
 On Linux with a systemd user session, run the extended checks serially with
 a combined 512 MiB memory limit and no swap:

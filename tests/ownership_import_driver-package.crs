@@ -1,0 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage, "../stages/ownership/sources.crs");
+stage_source(stage, "ownership_input.crs");
+stage_source(stage, "ownership_import_driver.crs");
+stage_export(stage, "main");

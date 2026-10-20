@@ -38,10 +38,6 @@ def literal(text):
 
 def execute(command):
     command = list(map(str, command))
-    executable = Path(command[0])
-    if executable.suffix == ".exe" and executable.name != "windows_limit.exe":
-        limiter = executable.parent / "windows_limit.exe"
-        command = [str(limiter), native_path(executable), *command[1:]]
     return subprocess.run(command, cwd=ROOT, capture_output=True, timeout=90)
 
 

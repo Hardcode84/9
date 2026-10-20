@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Test source-owned Windows bootstrap. All native children share a 512 MiB job."""
+"""Test source-owned Windows bootstrap."""
 
 import argparse
 import os
@@ -22,11 +22,10 @@ class Suite:
         self.work = self.build / "bootstrap tests 雪"
         self.work.mkdir(exist_ok=True)
         self.seed = self.build / "crust.exe"
-        self.limiter = self.build / "windows_limit.exe"
 
     def run(self, executable, *arguments, expected=0, environment=None, stdin=None):
         result = subprocess.run(
-            [str(self.limiter), native_path(executable), *map(str, arguments)],
+            [native_path(executable), *map(str, arguments)],
             cwd=ROOT,
             capture_output=True,
             timeout=120,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Exercise native Windows formatter and jobs under the 512 MiB job limit."""
+"""Exercise native Windows formatter and jobs."""
 
 import argparse
 import os

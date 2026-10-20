@@ -68,14 +68,6 @@ def main():
         ["-O2", "-g"],
         [host.library],
     )
-    if args.profile == "windows_x64":
-        compile_package(
-            build,
-            ROOT / "tests/shader_alloc_package.crs",
-            build / "shader-alloc",
-            ["-O2"],
-            [build / "libcrust0.a", build / "libcrust0_host.a"],
-        )
     environment = os.environ.copy()
     run(
         [build / "shader-alloc", llvm, tools / "spirv-val", work / "allocation.spv"],

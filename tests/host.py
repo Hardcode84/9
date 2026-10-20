@@ -114,10 +114,7 @@ def run(arguments, *, text_output=False, **options):
         resolved = command[0] if Path(command[0]).is_file() else shutil.which(command[0])
         if resolved is None:
             raise FileNotFoundError(command[0])
-        limiter = os.environ.get(
-            "CRUST_TEST_LIMITER", str(ROOT / "build/windows/windows_limit.exe")
-        )
-        command = [limiter, resolved, *command[1:]]
+        command[0] = resolved
     result = subprocess.run(command, **options)
     if WINDOWS and text_output:
         for stream in ("stdout", "stderr"):

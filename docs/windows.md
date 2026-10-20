@@ -19,7 +19,7 @@ the implementation gates.
 Use an MSYS2 UCRT64 shell with GNU Make, MinGW-w64 GCC, libffi, and native Python.
 The CI job installs these packages: `make`, `mingw-w64-ucrt-x86_64-gcc`,
 `mingw-w64-ucrt-x86_64-libffi`, and `mingw-w64-ucrt-x86_64-python`.
-Run `make PROFILE=windows_x64 all check-windows check-windows-bootstrap check-windows-cache`. Repeat with
+Run `make PROFILE=windows_x64 all check check-native check-cache`. Repeat with
 `AMALGAMATION=0` to check the separate-file core.
 
 The default output is `build/windows/crust.exe`. It runs from PowerShell or
@@ -33,8 +33,8 @@ libffi installation. Mark third-party headers as system headers, for example
 with `-isystem/path/to/libffi/include`; this does not relax checks on Crust code.
 
 A Linux cross-build can use `CC=x86_64-w64-mingw32-gcc` and a Windows libffi
-installation. `check-windows` can execute those binaries through WSL interop
-on a Windows host. A cross-build alone does not validate runtime behavior.
+installation. Run the shared checks from a native MSYS2 UCRT64 shell.
+A cross-build alone does not validate runtime behavior.
 
 ## Native interface
 
@@ -163,8 +163,8 @@ the self-contained MinGW-w64 toolchain remains responsible for linking.
 Run these additional checks in both seed build modes:
 
 ```sh
-make PROFILE=windows_x64 check-windows-llvm check-windows-asm
-make PROFILE=windows_x64 check-windows-tools check-windows-ownership
+make PROFILE=windows_x64 check-llvm check-asm
+make PROFILE=windows_x64 check-format check-parallel check-vscode check-ownership
 ```
 
 The backend tests exercise mixed register and stack arguments, calls and
@@ -189,7 +189,7 @@ window. A Windows VSIX uses `--platform win32-x64` and bundles
 as the absolute seed path and `crust.highlighter.arguments` as the absolute path
 to `stages/build/run.crs`, followed by `stages/highlight/tool.crs`.
 Set `CRUST_JS_RUNTIME` to a native JavaScript runtime to include the editor
-process test in `check-windows-tools`. That test covers UTF-8 token output,
+process test in `check-vscode`. That test covers UTF-8 token output,
 cancellation, and launch failure.
 
 The ownership check runs a trusted direct-pointer provider with a checked
@@ -201,7 +201,7 @@ syntax or proof rules.
 
 ### Shader environment
 
-Vulkan execution has a separate Windows gate. Install a Vulkan compute driver,
+Vulkan execution uses the shared `check-shader` target. Install a Vulkan compute driver,
 Windows SPIRV-Tools, Vulkan headers, and a MinGW-compatible Vulkan import library.
 Select a Windows LLVM build with the SPIR-V target. Check that
 `llc.exe --version` lists `spirv`; a host-only LLVM distribution is insufficient.
@@ -209,7 +209,7 @@ The MSYS2 UCRT64 LLVM package includes this target.
 
 ```sh
 UCRT64_PATH=$(cygpath -m /ucrt64)
-make PROFILE=windows_x64 check-windows-shader \
+make PROFILE=windows_x64 check-shader \
   LLVM_DIRECTORY="$UCRT64_PATH" SPIRV_TOOLS="$UCRT64_PATH/bin" \
   VULKAN_INCLUDE="$UCRT64_PATH/include" \
   VULKAN_LIBRARY="$UCRT64_PATH/lib/libvulkan-1.dll.a" \
@@ -219,7 +219,7 @@ make PROFILE=windows_x64 check-windows-shader \
 The command converts MSYS paths for native Windows Python. Set the validator
 path to its installed location. `WGSL_VALIDATOR` adds validation of generated
 WGSL; omit it only when that separate validation is not required. The test runs native tools
-and dispatches in 512 MiB jobs, including paths with spaces and non-ASCII text.
+and dispatches directly, including paths with spaces and non-ASCII text.
 Repeat with `AMALGAMATION=0` to test the separate-file seed.
 
 The Vulkan runner uses UTF-16 file opening and signed 64-bit file offsets.
@@ -231,7 +231,7 @@ inject enumeration and descriptor-pool failures on Windows. The Linux test
 uses its existing interposition library. See the
 [shader tutorial](../examples/shader/README.md) for the device requirements.
 
-`check-windows` exercises scalar calls and callbacks, mixed and stack arguments,
+`check` exercises scalar calls and callbacks, mixed and stack arguments,
 file buffer release, allocation failures, runner ownership, missing and mismatched
 ABI markers, forwarded exports, decimal rounding, Unicode command arguments,
 root-relative paths, LF and CRLF reader switching, and output publication failure.
@@ -239,7 +239,7 @@ UNC syntax is checked
 without requiring an external share. Access to a real UNC share depends on the
 test environment and is not covered by the local suite.
 
-`check-windows-bootstrap` starts with an empty artifact directory. It checks the
+`check-native` starts with an empty artifact directory. It checks the
 native callback binding before successor compilation, builds a second backend,
 and uses it to compile and run hello. It also checks Unicode paths, argument
 quoting, redirection, the child environment, exit status, missing tools and import
@@ -247,27 +247,17 @@ libraries, failed linking, output preservation, paired output aliases, and DLL
 deletion after runner destruction. Cleanup is also tested with a context
 allocator that rejects every allocation.
 
-`check-windows-cache` checks cold and warm native builds, input invalidation,
+`check-cache` checks cold and warm native builds, input invalidation,
 checksums, failed and interrupted builds, concurrent publication, and allocation
-failures. Concurrent storage tests share one 512 MiB job; they do not compile
-backends concurrently. Toolchain copies and timing evidence stay in `build/`.
+failures. Concurrent storage tests do not compile backends concurrently.
+Toolchain copies and timing evidence stay in `build/`.
 
-Windows CI runs Make targets in parallel with one job per available CPU.
-CI sets `CRUST_TEST_UNLIMITED_MEMORY=1` to disable the test process tree memory
-limit. Local runs default to a 512 MiB combined memory limit per process tree.
-Closing a test job terminates its remaining
-children. Allocation rejection tests use invalid inputs and injected context
-allocator failures; they do not request large live allocations.
-
-Run local Linux validation one job at a time with an aggregate memory limit.
-For a host with systemd user scopes, use:
-
-```sh
-systemd-run --user --scope -p MemoryMax=536870912 -p MemorySwapMax=0 make check
-```
-
-This limits the process tree to 512 MiB and disables swap for that scope.
-A check stopped by the limit is incomplete; retain its failure log.
+Linux and Windows use one CI suite matrix and the same Make test targets.
+CI runs Make targets in parallel with one job per available CPU. Shared fixture
+preparation builds each target's prerequisites. Platform contract cases run from
+the corresponding shared targets. Test processes run directly, without a job
+wrapper or a test-wide memory cap. Allocation rejection tests use invalid inputs
+and injected context allocator failures; they do not request large live allocations.
 
 The Windows output adapter also has an emitter fixture that checks publication
 and cleanup independently of a backend. Native backend tests provide separate

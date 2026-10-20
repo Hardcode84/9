@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage, "../stages/generics/ownership/sources.crs");
+stage_source(stage, "ownership_generics_clone.crs");
+stage_export(stage, "main");

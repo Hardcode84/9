@@ -577,7 +577,7 @@ requires Vulkan headers, the Vulkan loader, and a compute driver. Use
 `VULKAN_INCLUDE` for a separate header directory. See the
 [shader tutorial](../examples/shader/README.md) for device requirements and
 commands. The target builds test fixtures; the Crust root prepares the stage.
-On Windows, use `PROFILE=windows_x64 check-windows-shader` and set
+On Windows, use `PROFILE=windows_x64 check-shader` and set
 `VULKAN_LIBRARY` to a MinGW-compatible import library. Select Windows LLVM tools
 with the SPIR-V target. See the [Windows gate](windows.md#shader-environment).
 

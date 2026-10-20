@@ -274,7 +274,7 @@ The shared package builder compiles it and links the Vulkan loader. Its
 The test compares record sizes, alignments, field offsets, field sizes, and
 constants with the selected C headers before it executes the runner.
 
-On Windows, use `check-windows-shader` with `PROFILE=windows_x64` and a
+On Windows, use `check-shader` with `PROFILE=windows_x64` and a
 MinGW-compatible `VULKAN_LIBRARY`. Select an LLVM build whose `llc.exe --version`
 lists the `spirv` target. The [Windows guide](../../docs/windows.md#shader-environment)
 gives the command and tool requirements. Windows tests include Unicode paths,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
-"""Windows cache contracts, with each native process tree capped at 512 MiB."""
+"""Windows cache contracts."""
 
 import argparse
 import hashlib

@@ -5,6 +5,7 @@ AR ?= ar
 AS ?= as
 ASFLAGS ?= --64
 CFLAGS ?= -O2 -g
+JS_RUNTIME ?= bun
 STRICT = -std=c99 -pedantic-errors -Wall -Wextra -Werror -Wstrict-prototypes -Wmissing-prototypes -Wshadow -Wvla
 PROFILE ?= linux_x64
 AMALGAMATION ?= 1
@@ -17,6 +18,11 @@ RUN_LDFLAGS = -rdynamic
 RUN_LIBS = -ldl -lffi
 API_ROOT = .
 SEED_IMPORT =
+HOST_LIBS = -ldl
+EVAL_EXPORT = -rdynamic
+TEST_GROUP = all
+HOST_FAILURE = /dev/full
+ARENA_TEST = $(BUILD)/arena_test$(EXE)
 else ifeq ($(PROFILE),windows_x64)
 BUILD ?= build/windows
 PLATFORM = windows
@@ -26,22 +32,19 @@ HOST_EXTRA = $(BUILD)/windows_io.o
 RUN_LDFLAGS = -municode -Wl,--stack,8388608 -Wl,--exclude-all-symbols -Wl,--out-implib,$(BUILD)/crust.exe.a
 RUN_LIBS = -lffi -lbcrypt
 API_ROOT = $(BUILD)/profile
+HOST_LIBS = -lbcrypt
+EVAL_EXPORT = -Wl,--export-all-symbols
+TEST_GROUP = semantic
+HOST_FAILURE = $(BUILD)
+X64_FORMAT = coff
 SEED_IMPORT = $(BUILD)/crust.exe.a
 SEED_EXPORTS = $(API_ROOT)/include/host_exports.def
 CPPFLAGS += -I$(API_ROOT)/include
-WINDOWS_GOALS = all clean api amalgamate fetch-llvm-release fetch-llvm-main check-llvm-fetch check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership check-windows-shader check-windows-shared-core check-windows-shared-split-core check-windows-shared-ownership check-windows-shared-tooling check-windows-shared-llvm
-ifneq ($(filter-out $(WINDOWS_GOALS) $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a,$(MAKECMDGOALS)),)
-$(error This target is not available for Windows; use the check-windows targets)
-endif
+
 else
 $(error Unsupported PROFILE '$(PROFILE)'; expected linux_x64 or windows_x64)
 endif
 CPPFLAGS += -Iinclude $(FFI_CFLAGS)
-ifneq ($(PROFILE),windows_x64)
-ifneq ($(filter check-windows check-windows-build check-windows-bootstrap check-windows-cache check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership check-windows-shader check-windows-shared-core check-windows-shared-split-core check-windows-shared-ownership check-windows-shared-tooling check-windows-shared-llvm,$(MAKECMDGOALS)),)
-$(error check-windows requires PROFILE=windows_x64)
-endif
-endif
 ifeq ($(AMALGAMATION),1)
 CORE = $(BUILD)/crust0_amalg.o $(BUILD)/profile_$(PROFILE).o
 else ifeq ($(AMALGAMATION),0)
@@ -84,10 +87,10 @@ check-llvm-fetch:
 	python3 tests/llvm_fetch.py
 
 .PHONY: test-tools
-test-tools: $(BUILD)/crust $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a
+test-tools: $(BUILD)/crust$(EXE) $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a
 	python3 tests/prepare.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
-$(BUILD)/crust-c $(BUILD)/crust-c-seed $(BUILD)/crust-highlight $(BUILD)/crust-ccn $(BUILD)/crust-resource $(BUILD)/crust-overload $(BUILD)/crust-overload-resource $(BUILD)/crust-asm-library.o: test-tools
+$(BUILD)/crust-c$(EXE) $(BUILD)/crust-c-seed$(EXE) $(BUILD)/crust-highlight$(EXE) $(BUILD)/crust-ccn$(EXE) $(BUILD)/crust-resource$(EXE) $(BUILD)/crust-overload$(EXE) $(BUILD)/crust-overload-resource$(EXE) $(BUILD)/crust-asm-library.o: test-tools
 
 $(API_GENERATED) &: tools/api.py $(API_HEADERS)
 	python3 tools/api.py --profile $(PROFILE) --output-root $(API_ROOT)
@@ -116,13 +119,13 @@ $(BUILD)/core-mode: FORCE | $(BUILD)
 	printf '%s\n' '$(PROFILE) $(AMALGAMATION)' > "$$crust_mode_tmp"; \
 	if ! cmp -s "$$crust_mode_tmp" '$@'; then mv "$$crust_mode_tmp" '$@'; fi
 
-$(BUILD)/crust$(EXE) $(BUILD)/crust0 $(BUILD)/libcrust0.a: $(BUILD)/core-mode
+$(BUILD)/crust$(EXE) $(BUILD)/crust0$(EXE) $(BUILD)/libcrust0.a: $(BUILD)/core-mode
 
 $(HOST): $(BUILD)/%.o: runtime/%.c include/crust0_host.h | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -MMD -MP -c $< -o $@
 
-$(BUILD)/crust0: $(BUILD)/crust-asm-library.o $(CORE) $(BUILD)/driver.o $(BUILD)/driver_posix.o $(HOST)
-	$(CC) $(CFLAGS) $(filter-out $(BUILD)/core-mode,$^) $(LDFLAGS) -o $@
+$(BUILD)/crust0$(EXE): $(BUILD)/crust-asm-library.o $(CORE) $(BUILD)/driver.o $(BUILD)/driver_$(PLATFORM).o $(HOST)
+	$(CC) $(CFLAGS) $(filter-out $(BUILD)/core-mode,$^) $(LDFLAGS) $(HOST_LIBS) -o $@
 
 $(BUILD)/prelude.inc: tools/prelude.py $(PRELUDE) | $(BUILD)
 	python3 tools/prelude.py $@ --profile $(PROFILE) --api-root $(API_ROOT)
@@ -144,53 +147,20 @@ $(BUILD)/libcrust0.a: $(CORE) Makefile
 $(BUILD)/libcrust0_host.a: $(HOST)
 	$(AR) rcs $@ $^
 
-.PHONY: check-windows check-windows-build check-windows-bootstrap
-check-windows-build: all $(BUILD)/windows_seed.exe $(BUILD)/windows_library.dll $(BUILD)/windows_limit.exe
-
-$(BUILD)/windows_limit.exe: tests/windows_limit.c | $(BUILD)
-	$(CC) $(CFLAGS) $(STRICT) -municode $< $(LDFLAGS) -o $@
-
 $(BUILD)/windows_library.dll: tests/windows_library.c tests/native.c $(API_ROOT)/include/crust0_abi.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -shared -Wl,--export-all-symbols tests/windows_library.c tests/native.c $(LDFLAGS) -o $@
 
 $(BUILD)/windows_seed.exe: tests/windows_seed.c $(CORE) $(RUNNER) $(HOST) $(BUILD)/driver_windows.o $(BUILD)/core-mode
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $(filter-out $(BUILD)/core-mode,$^) $(LDFLAGS) $(FFI_LDFLAGS) -lffi -lbcrypt -o $@
 
-check-windows: check-windows-build
-	python3 tests/windows.py --build $(BUILD) --cc '$(CC)'
-
 $(BUILD)/windows_process.exe: tests/windows_process.c Makefile | $(BUILD)
 	$(CC) $(CFLAGS) $(STRICT) -municode $< $(LDFLAGS) -o $@
 
-check-windows-bootstrap: all $(BUILD)/windows_limit.exe $(BUILD)/windows_process.exe
-	python3 tests/windows_bootstrap.py --build $(BUILD)
-
-.PHONY: check-windows-cache
 $(BUILD)/windows_cache_fixture.exe: tests/windows_cache_fixture.c $(API_ROOT)/include/crust0_abi.h Makefile | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $< -municode $(LDFLAGS) -o $@
 
 $(BUILD)/windows_cache_fixture.dll: tests/windows_cache_fixture.c $(API_ROOT)/include/crust0_abi.h Makefile | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $< -shared -Wl,--export-all-symbols $(LDFLAGS) -o $@
-
-check-windows-cache: all $(BUILD)/windows_limit.exe $(BUILD)/windows_process.exe $(BUILD)/windows_cache_fixture.exe $(BUILD)/windows_cache_fixture.dll
-	python3 tests/windows_cache.py --build $(BUILD)
-
-.PHONY: check-windows-tools check-windows-llvm check-windows-asm check-windows-ownership
-check-windows-tools: all $(BUILD)/windows_limit.exe $(BUILD)/windows_library.dll
-	python3 tests/windows_tools.py --build $(BUILD)
-
-check-windows-llvm: all $(BUILD)/windows_limit.exe $(BUILD)/windows_library.dll
-	python3 tests/windows_backends.py --build $(BUILD) --backend llvm --llvm "$(CRUST_LLVM_DIRECTORY)"
-
-check-windows-asm: all $(BUILD)/windows_limit.exe $(BUILD)/windows_library.dll
-	python3 tests/windows_backends.py --build $(BUILD) --backend asm
-
-check-windows-ownership: all $(BUILD)/windows_limit.exe
-	python3 tests/windows_ownership.py --build $(BUILD)
-
-.PHONY: check-windows-shader
-check-windows-shader: all $(BUILD)/windows_limit.exe $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
-	python3 tests/shader.py --profile windows_x64 --build $(BUILD) --cc '$(CC)' --llvm '$(LLVM_DIRECTORY)' --spirv-tools '$(SPIRV_TOOLS)' --vulkan-include '$(VULKAN_INCLUDE)' --vulkan-library '$(VULKAN_LIBRARY)' $(if $(WGSL_VALIDATOR),--wgsl-validator '$(WGSL_VALIDATOR)')
 
 $(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
 	$(AR) rcs $@ $^
@@ -198,16 +168,16 @@ $(BUILD)/libcrust_asm.a: $(BUILD)/crust-asm-library.o
 GENERIC_OWNERSHIP = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources generics/ownership/package.crs),$(error Stage package query failed))
 
 # Native test drivers embed stage sources. Rebuild after source package preparation.
-$(BUILD)/crust-ownership-generics-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_generics_driver.crs Makefile test-tools
-	$< -o $@ $(GENERIC_OWNERSHIP) tests/ownership_input.crs tests/ownership_generics_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/crust-ownership-generics-test$(EXE): tests/ownership_generics_driver-package.crs test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/ownership_generics_driver-package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(HOST_LIBS) $(LDFLAGS)'
 
 .PHONY: test-tools check-ownership-generics
 
-$(BUILD)/crust-ownership-generics-clone: $(BUILD)/crust-c tests/ownership_generics_clone.crs Makefile test-tools
-	$< -o $@ $(GENERIC_OWNERSHIP) tests/ownership_generics_clone.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/crust-ownership-generics-clone$(EXE): tests/ownership_generics_clone-package.crs test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/ownership_generics_clone-package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(HOST_LIBS) $(LDFLAGS)'
 
-check-ownership-generics: all test-tools $(BUILD)/crust-ownership-generics-test $(BUILD)/crust-ownership-generics-clone
-	$(BUILD)/crust-ownership-generics-clone
+check-ownership-generics: all test-tools $(BUILD)/crust-ownership-generics-test$(EXE) $(BUILD)/crust-ownership-generics-clone$(EXE)
+	$(BUILD)/crust-ownership-generics-clone$(EXE)
 	python3 tests/ownership_generics.py --build $(BUILD) --sanitize
 	python3 tests/generics_ownership_imports.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 	python3 tests/ownership_generics_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --sources $(GENERIC_OWNERSHIP)
@@ -220,18 +190,22 @@ check-generics: all test-tools
 
 .PHONY: test-tools check-union check-union-alloc
 
-$(BUILD)/crust-union-test: $(BUILD)/crust-c api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a test-tools
-	python3 tests/prepare.py --build $(BUILD) --compile-package tests/union-package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0_run.a -ldl -lffi $(BUILD)/libcrust_asm.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(LDFLAGS)'
+$(BUILD)/crust-union-test$(EXE): $(BUILD)/crust-c$(EXE) api/crust0_x64.crs api/crust0_eval.crs tests/union_alloc.crs tests/union_driver.crs $(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/union-package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0_run.a $(RUN_LIBS) $(BUILD)/libcrust_asm.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(LDFLAGS)'
 
-check-union: all test-tools $(BUILD)/crust-union-test
+check-union: all test-tools $(BUILD)/crust-union-test$(EXE)
 	python3 tests/union.py --build $(BUILD)
 
-check-union-alloc: all test-tools $(BUILD)/crust-union-test
+# Both union modes publish fixtures in union-tests.
+check-union-alloc: all test-tools check-union $(BUILD)/crust-union-test$(EXE)
 	python3 tests/union.py --build $(BUILD) --sanitize-stage
 
 .PHONY: check-format
 check-format: all test-tools
 	python3 tests/format.py --build $(BUILD)
+ifeq ($(PROFILE),windows_x64)
+	python3 tests/windows_tools.py --build $(BUILD) --case formatter
+endif
 
 check-highlight: all test-tools
 	python3 stages/highlight/test.py --build $(BUILD)
@@ -239,64 +213,70 @@ check-highlight: all test-tools
 check-ccn: all test-tools
 	python3 tests/ccn.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
-check-vscode: test-tools $(BUILD)/crust
-	CRUST_HIGHLIGHT=$(abspath $(BUILD))/crust-highlight CRUST_LAUNCHER=$(abspath $(BUILD))/crust bun test ./editors/vscode
+check-vscode: test-tools $(BUILD)/crust$(EXE)
+	CRUST_HIGHLIGHT=$(abspath $(BUILD))/crust-highlight$(EXE) CRUST_LAUNCHER=$(abspath $(BUILD))/crust$(EXE) $(JS_RUNTIME) test ./editors/vscode
+ifeq ($(PROFILE),windows_x64)
+	python3 tests/windows_tools.py --build $(BUILD) --case editor
+endif
 
-$(BUILD)/crust-ownership-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_driver.crs Makefile test-tools
-	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/crust-ownership-test$(EXE): tests/ownership_driver-package.crs test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/ownership_driver-package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(HOST_LIBS) $(LDFLAGS)'
 
-$(BUILD)/crust-ownership-erasure: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_erasure.crs Makefile test-tools
-	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_erasure.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/crust-ownership-erasure$(EXE): tests/ownership_erasure-package.crs test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/ownership_erasure-package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(HOST_LIBS) $(LDFLAGS)'
 
-$(BUILD)/crust-ownership-import-test: $(BUILD)/crust-c tests/ownership_input.crs tests/ownership_import_driver.crs Makefile test-tools
-	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_import_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/crust-ownership-import-test$(EXE): tests/ownership_import_driver-package.crs test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/ownership_import_driver-package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(HOST_LIBS) $(LDFLAGS)'
 
 .PHONY: check-ownership-imports
-check-ownership-imports: $(BUILD)/crust-ownership-import-test
+check-ownership-imports: $(BUILD)/crust-ownership-import-test$(EXE)
 	python3 tests/ownership_imports.py --build $(BUILD)
 
 .PHONY: test-tools check-ownership check-ownership-alloc check-ownership-ergonomics
 
-check-ownership: all test-tools $(BUILD)/crust-ownership-test $(BUILD)/crust-ownership-erasure $(BUILD)/crust-ownership-import-test
+check-ownership: all test-tools $(BUILD)/crust-ownership-test$(EXE) $(BUILD)/crust-ownership-erasure$(EXE) $(BUILD)/crust-ownership-import-test$(EXE)
 	python3 tests/ownership.py --build $(BUILD)
 	python3 tests/ownership_index.py --build $(BUILD)
 	python3 tests/ownership_views.py --build $(BUILD)
 	python3 tests/ownership_native.py --build $(BUILD)
 	python3 tests/ownership_arrays.py --build $(BUILD)
+ifeq ($(PROFILE),windows_x64)
+	python3 tests/windows_ownership.py --build $(BUILD)
+endif
 
-check-ownership-ergonomics: all test-tools $(BUILD)/crust-ownership-test
+check-ownership-ergonomics: all test-tools $(BUILD)/crust-ownership-test$(EXE)
 	python3 tests/ownership_ergonomics.py --build $(BUILD)
 
 check-ownership-alloc: all test-tools
 	python3 tests/ownership_alloc.py --build $(BUILD) --cc '$(CC)' --amalgamation $(AMALGAMATION) --sources $(OWNERSHIP_LIBRARY) tests/ownership_input.crs tests/ownership_alloc.crs
 
-$(BUILD)/intrusive.s: $(BUILD)/crust0 examples/intrusive/raw.crs
-	$(BUILD)/crust0 -S -o $@ examples/intrusive/raw.crs
+$(BUILD)/intrusive.s: $(BUILD)/crust0$(EXE) examples/intrusive/raw.crs
+	$(BUILD)/crust0$(EXE) -S -o $@ examples/intrusive/raw.crs
 
 $(BUILD)/intrusive.o: $(BUILD)/intrusive.s
 	$(AS) $(ASFLAGS) $< -o $@
 
-$(BUILD)/intrusive: $(BUILD)/intrusive.o $(BUILD)/libcrust0_host.a
+$(BUILD)/intrusive$(EXE): $(BUILD)/intrusive.o $(BUILD)/libcrust0_host.a
 	$(CC) -no-pie $^ $(LDFLAGS) -o $@
 
-$(BUILD)/intrusive-c: benchmarks/bootstrap/intrusive.c $(BUILD)/libcrust0_host.a
+$(BUILD)/intrusive-c$(EXE): benchmarks/bootstrap/intrusive.c $(BUILD)/libcrust0_host.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -o $@
 
-witness: $(BUILD)/intrusive $(BUILD)/intrusive-c
-	$(BUILD)/intrusive
-	$(BUILD)/intrusive-c
+witness: $(BUILD)/intrusive$(EXE) $(BUILD)/intrusive-c$(EXE)
+	$(BUILD)/intrusive$(EXE)
+	$(BUILD)/intrusive-c$(EXE)
 
-$(BUILD)/%_test: tests/%_test.c $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -pthread -o $@
+$(BUILD)/%_test$(EXE): tests/%_test.c $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) $(HOST_LIBS) -pthread -o $@
 
-$(BUILD)/core_test $(BUILD)/check_test $(BUILD)/x64_test $(BUILD)/parallel_test: $(BUILD)/%_test: tests/%_test.c $(BUILD)/libcrust_asm.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -pthread -o $@
+$(BUILD)/core_test$(EXE) $(BUILD)/check_test$(EXE) $(BUILD)/x64_test$(EXE) $(BUILD)/parallel_test$(EXE): $(BUILD)/%_test$(EXE): tests/%_test.c $(BUILD)/libcrust_asm.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) $(HOST_LIBS) -pthread -o $@
 
-$(BUILD)/arena_test: tests/arena_$(PROFILE)_test.c $(BUILD)/libcrust0.a
+$(BUILD)/arena_test$(EXE): tests/arena_$(PROFILE)_test.c $(BUILD)/libcrust0.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(LDFLAGS) -Wl,--wrap=madvise -o $@
 
-$(BUILD)/eval_test: tests/eval_test.c tests/eval_lookup_posix.c tests/native.c $(BUILD)/eval.o $(BUILD)/eval_ffi.o $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ -rdynamic $(LDFLAGS) -ldl -lffi -o $@
+$(BUILD)/eval_test$(EXE): tests/eval_test.c tests/eval_lookup_$(PLATFORM).c tests/native.c $(BUILD)/eval.o $(BUILD)/eval_ffi.o $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) $^ $(EVAL_EXPORT) $(LDFLAGS) $(RUN_LIBS) -o $@
 
 api:
 	python3 tools/api.py --profile $(PROFILE) --output-root $(API_ROOT)
@@ -304,41 +284,47 @@ api:
 check-amalgamation:
 	python3 tools/check_amalgamation.py --cc '$(CC)' --cflags='$(CFLAGS) $(STRICT)'
 
-check: all $(BUILD)/crust0 $(BUILD)/core_test $(BUILD)/arena_test $(BUILD)/read_test $(BUILD)/check_test $(BUILD)/host_test $(BUILD)/parallel_test $(BUILD)/x64_test $(BUILD)/eval_test
-	$(BUILD)/core_test
-	$(BUILD)/arena_test
-	$(BUILD)/read_test
-	$(BUILD)/check_test
-	$(BUILD)/host_test $(BUILD)/host-test.tmp /dev/full
-	$(BUILD)/parallel_test
-	$(BUILD)/x64_test
+check: all $(BUILD)/crust0$(EXE) $(BUILD)/core_test$(EXE) $(ARENA_TEST) $(BUILD)/read_test$(EXE) $(BUILD)/check_test$(EXE) $(BUILD)/host_test$(EXE) $(BUILD)/parallel_test$(EXE) $(BUILD)/x64_test$(EXE) $(BUILD)/eval_test$(EXE)
+	$(BUILD)/core_test$(EXE)
+	$(ARENA_TEST)
+	$(BUILD)/read_test$(EXE)
+	$(BUILD)/check_test$(EXE)
+	$(BUILD)/host_test$(EXE) $(BUILD)/host-test.tmp $(HOST_FAILURE)
+	$(BUILD)/parallel_test$(EXE)
+	$(BUILD)/x64_test$(EXE) $(X64_FORMAT)
 	python3 tests/eval.py --build $(BUILD)
-	python3 tools/api.py --check
-	python3 tests/run.py --compiler $(BUILD)/crust0 --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+	python3 tools/api.py --profile $(PROFILE) --output-root $(API_ROOT) --check
+	python3 tests/run.py --group $(TEST_GROUP) --compiler $(BUILD)/crust0$(EXE) --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+ifeq ($(PROFILE),windows_x64)
+	python3 tests/windows.py --build $(BUILD) --cc '$(CC)'
+endif
 
 check-c: test-tools
-	python3 tests/run.py --backend c --compiler $(BUILD)/crust-c --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+	python3 tests/run.py --group $(TEST_GROUP) --backend c --compiler $(BUILD)/crust-c$(EXE) --cc '$(CC)' --assembler '$(AS) $(ASFLAGS)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 	python3 tests/c_body.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+ifeq ($(PROFILE),windows_x64)
+	python3 tests/c_generations.py --build $(BUILD) --cc '$(CC)' --ldflags='$(LDFLAGS)'
+endif
 
 check-reader: all test-tools
 	python3 stages/reader/test.py --build $(BUILD) --cc '$(CC)' --ldflags='$(LDFLAGS)'
 
-$(BUILD)/kind_composition: $(BUILD)/crust-c tests/kind_wrapper.crs tests/kind_composition.crs Makefile test-tools
-	$< -o $@ $(RESOURCE_LIBRARY) tests/kind_wrapper.crs tests/kind_composition.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/kind_composition$(EXE): tests/kind_composition-package.crs test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/kind_composition-package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(HOST_LIBS) $(LDFLAGS)'
 
-$(BUILD)/resource-backends: $(BUILD)/crust-c tests/resource_backends.crs tests/resource_backends_package.crs tests/ownership_input.crs api/crust0_eval.crs test-tools
-	python3 tests/prepare.py --build $(BUILD) --compile-package tests/resource_backends_package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0_run.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a -ldl -lffi $(LDFLAGS)'
+$(BUILD)/resource-backends$(EXE): $(BUILD)/libcrust_asm.a $(BUILD)/crust-c$(EXE) tests/resource_backends.crs tests/resource_backends_package.crs tests/ownership_input.crs api/crust0_eval.crs test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/resource_backends_package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0_run.a $(BUILD)/libcrust_asm.a $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(RUN_LIBS) $(LDFLAGS)'
 
-check-resources: all test-tools $(BUILD)/kind_composition $(BUILD)/resource-backends
+check-resources: all test-tools $(BUILD)/kind_composition$(EXE) $(BUILD)/resource-backends$(EXE)
 	python3 tests/resources.py --build $(BUILD)
 	python3 tests/resource_returns.py --build $(BUILD)
 	python3 tests/resource_backends.py --build $(BUILD)
 	python3 tests/extension_kinds.py --build $(BUILD)
 
-$(BUILD)/composition-test: $(BUILD)/crust-c   examples/composition/build.crs tests/composition_driver.crs Makefile test-tools
-	$< -o $@ $(OWNERSHIP_LIBRARY) $(OVERLOAD) examples/composition/build.crs tests/composition_driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
+$(BUILD)/composition-test$(EXE): tests/composition_driver-package.crs test-tools
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/composition_driver-package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(HOST_LIBS) $(LDFLAGS)'
 
-check-overload: all test-tools $(BUILD)/crust0 $(BUILD)/composition-test
+check-overload: all test-tools $(BUILD)/crust0$(EXE) $(BUILD)/composition-test$(EXE)
 	python3 tests/overload.py --build $(BUILD)
 	python3 tests/overload_resources.py --build $(BUILD)
 	python3 tests/overload_hooks.py --build $(BUILD) --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
@@ -357,15 +343,26 @@ check-examples: all test-tools
 check-modules: all test-tools
 	python3 tests/modules.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
 
-check-asm: all test-tools $(BUILD)/crust0
+check-asm: all test-tools $(BUILD)/crust0$(EXE)
 	python3 tests/asm.py --build $(BUILD) --cc '$(CC)' --ldflags='$(LDFLAGS)'
+ifeq ($(PROFILE),windows_x64)
+	python3 tests/windows_backends.py --build $(BUILD) --backend asm
+endif
 
-check-cache: $(BUILD)/crust
+check-cache: $(BUILD)/crust$(EXE)
 	python3 tests/stage_packages.py --build $(BUILD)
+ifeq ($(PROFILE),windows_x64)
+	python3 tests/windows_cache.py --build $(BUILD)
+else
 	python3 tests/cache.py --build $(BUILD)
+endif
 
 check-native: all test-tools
+ifeq ($(PROFILE),windows_x64)
+	python3 tests/windows_bootstrap.py --build $(BUILD)
+else
 	python3 tests/native.py --build $(BUILD)
+endif
 
 PARALLEL = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources parallel/package.crs),$(error Stage package query failed))
 
@@ -373,6 +370,9 @@ PARALLEL = $(or $(shell python3 tests/prepare.py --build $(BUILD) --sources para
 
 check-parallel: all test-tools
 	python3 tests/parallel.py --build $(BUILD) --cc '$(CC)' --cflags='$(CFLAGS)' --ldflags='$(LDFLAGS)'
+ifeq ($(PROFILE),windows_x64)
+	python3 tests/windows_tools.py --build $(BUILD) --case parallel
+endif
 
 clean:
 	rm -rf $(BUILD)
@@ -382,7 +382,7 @@ clean:
 $(BUILD)/ownership-clock.o: benchmarks/ownership/clock_linux_x64.c | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -c $< -o $@
 
-$(BUILD)/ownership-cost: $(BUILD)/crust-c tests/ownership_input.crs benchmarks/ownership/driver.crs $(BUILD)/ownership-clock.o test-tools
+$(BUILD)/ownership-cost$(EXE): $(BUILD)/crust-c$(EXE) tests/ownership_input.crs benchmarks/ownership/driver.crs $(BUILD)/ownership-clock.o test-tools
 	$< -o $@ $(OWNERSHIP_LIBRARY) tests/ownership_input.crs benchmarks/ownership/driver.crs $(foreach flag,$(CFLAGS),--cflag $(flag)) --ldflag $(BUILD)/ownership-clock.o --ldflag $(BUILD)/libcrust0.a --ldflag $(BUILD)/libcrust0_host.a $(foreach flag,$(LDFLAGS),--ldflag $(flag))
 
 .PHONY: ownership-benchmark-config
@@ -398,22 +398,29 @@ check-stage: all test-tools
 $(BUILD)/llvm-alloc-wrap.o: tests/c_stage_alloc.c | $(BUILD)
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(STRICT) -c $< -o $@
 
-$(BUILD)/llvm-test-driver: $(BUILD)/crust-c tests/llvm_driver.crs tests/llvm_alloc.crs tests/llvm_driver_package.crs $(BUILD)/llvm-alloc-wrap.o test-tools
+$(BUILD)/llvm-test-driver$(EXE): $(BUILD)/crust-c$(EXE) tests/llvm_driver.crs tests/llvm_alloc.crs tests/llvm_driver_package.crs $(BUILD)/llvm-alloc-wrap.o test-tools
 	python3 tests/prepare.py --build $(BUILD) --compile-package tests/llvm_driver_package.crs --output $@ --cflags='$(CFLAGS)' --ldflags='$(BUILD)/llvm-alloc-wrap.o -Wl,--wrap=crust0_host_alloc -Wl,--wrap=crust0_host_free $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(LDFLAGS)'
 
-check-llvm: all test-tools $(BUILD)/llvm-test-driver $(BUILD)/resource-backends
-	python3 tests/llvm.py --build $(BUILD)
-	python3 tests/llvm_packages.py --build $(BUILD)
+check-llvm: all test-tools $(BUILD)/llvm-test-driver$(EXE) $(BUILD)/resource-backends$(EXE)
+	python3 tests/llvm.py --build $(BUILD) $(if $(CRUST_LLVM_DIRECTORY),--llvm "$(CRUST_LLVM_DIRECTORY)")
+	python3 tests/llvm_packages.py --build $(BUILD) $(if $(CRUST_LLVM_DIRECTORY),--llvm "$(CRUST_LLVM_DIRECTORY)")
+ifeq ($(PROFILE),windows_x64)
+	python3 tests/windows_backends.py --build $(BUILD) --backend llvm --llvm "$(CRUST_LLVM_DIRECTORY)"
+endif
 
 .PHONY: check-tutorials
 check-tutorials: all test-tools
-	python3 tests/tutorials.py --build $(BUILD)
+	python3 tests/tutorials.py --build $(BUILD) $(if $(CRUST_LLVM_DIRECTORY),--llvm "$(CRUST_LLVM_DIRECTORY)")
 
 .PHONY: check-shader
 check-shader: all test-tools
-	python3 tests/prepare.py --build $(BUILD) --compile-package tests/shader_alloc_package.crs --output $(BUILD)/shader-alloc --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(LDFLAGS)'
-	python3 tests/shader.py --build $(BUILD) --cc '$(CC)' --llvm '$(LLVM_DIRECTORY)' --spirv-tools '$(SPIRV_TOOLS)' $(if $(VULKAN_INCLUDE),--vulkan-include '$(VULKAN_INCLUDE)') $(if $(WGSL_VALIDATOR),--wgsl-validator '$(WGSL_VALIDATOR)')
+	python3 tests/prepare.py --build $(BUILD) --compile-package tests/shader_alloc_package.crs --output $(BUILD)/shader-alloc$(EXE) --cflags='$(CFLAGS)' --ldflags='$(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(LDFLAGS)'
+	python3 tests/shader.py --profile $(PROFILE) --build $(BUILD) --cc '$(CC)' --llvm '$(LLVM_DIRECTORY)' --spirv-tools '$(SPIRV_TOOLS)' $(if $(VULKAN_INCLUDE),--vulkan-include '$(VULKAN_INCLUDE)') $(if $(VULKAN_LIBRARY),--vulkan-library '$(VULKAN_LIBRARY)') $(if $(WGSL_VALIDATOR),--wgsl-validator '$(WGSL_VALIDATOR)')
 
-.PHONY: check-windows-shared-core check-windows-shared-split-core check-windows-shared-ownership check-windows-shared-tooling check-windows-shared-llvm
-check-windows-shared-core check-windows-shared-split-core check-windows-shared-ownership check-windows-shared-tooling check-windows-shared-llvm: all $(BUILD)/windows_limit.exe $(BUILD)/libcrust0.a $(BUILD)/libcrust0_host.a $(BUILD)/libcrust0_run.a
-	$(BUILD)/windows_limit.exe python3 tests/windows_shared.py --build $(BUILD) --suite $(patsubst check-windows-shared-%,%,$@) --amalgamation $(AMALGAMATION) --ldflags='$(LDFLAGS) $(FFI_LDFLAGS)'
+
+ifeq ($(PROFILE),windows_x64)
+check: $(BUILD)/windows_seed.exe $(BUILD)/windows_library.dll
+check-native: $(BUILD)/windows_process.exe
+check-cache: $(BUILD)/windows_process.exe $(BUILD)/windows_cache_fixture.exe $(BUILD)/windows_cache_fixture.dll
+check-format check-asm check-llvm: $(BUILD)/windows_library.dll
+endif

@@ -1,0 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+
+stage_include(stage, "../stages/ownership/sources.crs");
+stage_include(stage, "../stages/overload/local-sources.crs");
+stage_source(stage, "../examples/composition/build.crs");
+stage_source(stage, "composition_driver.crs");
+stage_export(stage, "main");

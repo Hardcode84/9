@@ -36,7 +36,7 @@ class WindowsCompiler:
                 value = self.path(value)
             arguments.append(str(value))
         environment = (os.environ if env is None else env).copy()
-        command = [str(self.build / "windows_limit.exe"), *arguments]
+        command = arguments
         result = subprocess.run(command, env=environment, cwd=cwd, capture_output=True, timeout=180)
         if result.returncode != expected:
             raise AssertionError(

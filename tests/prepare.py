@@ -132,12 +132,13 @@ def compile_windows_tool(build, name, cflags, ldflags):
 
 
 def compile_package(build, manifest, output, cflags, ldflags, cc="gcc"):
+    output = Path(output).resolve()
+    ldflags = [str(Path(flag).resolve()) if Path(flag).is_file() else flag for flag in ldflags]
     if WINDOWS:
         from windows_compile import WindowsCompiler
 
         WindowsCompiler(build, [cc]).compile(build, manifest, output, cflags, ldflags)
         return
-    output = Path(output).resolve()
     source, symbols = output.with_suffix(".c"), output.with_suffix(".symbols")
     obj, renamed = output.with_suffix(".input.o"), output.with_suffix(".o")
     commands = [
@@ -193,6 +194,13 @@ def main():
             shutil.copyfile(artifact, destination)
     for name in TOOLS:
         compile_tool(build, name, shlex.split(args.cflags), shlex.split(args.ldflags))
+    if WINDOWS:
+        from windows_compile import WindowsCompiler
+
+        WindowsCompiler(build, ["gcc"]).emit_object(
+            ROOT / "stages/asm/package.crs", build / "crust-asm-library", shlex.split(args.cflags)
+        )
+        return
     # The seed driver is emitted through interpretation for the generation test.
     compile_tool(build, "c", shlex.split(args.cflags), shlex.split(args.ldflags), seed=True)
     asm_sources = sources(build, PACKAGES["asm"])

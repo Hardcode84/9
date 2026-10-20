@@ -282,6 +282,13 @@ def lease_imports(directory, driver, cache, environment):
 
 def run(build):
     driver = str(build / "crust-ownership-import-test")
+    if WINDOWS:
+        # Settle first-launch compatibility images before recording checker inputs.
+        result = command([driver], success=False)
+        assert (
+            "expected publish CACHE SOURCES or import CACHE ARTIFACT DIGEST SOURCES"
+            in result.stderr
+        )
     scratch = build / "ownership-contracts"
     scratch.mkdir(exist_ok=True)
     environment = dict(os.environ)

@@ -148,7 +148,7 @@ static ArgumentResult parse_arguments(DriverOptions *options, int argc, char **a
             usage(stdout);
             return ARGUMENTS_DONE;
         } else if (strcmp(arg, "--version") == 0) {
-            puts("crust0 " CRUST_VERSION " (x86-64 System V)");
+            puts("crust0 " CRUST_VERSION);
             return ARGUMENTS_DONE;
         } else if (!parse_argument(options, argc, argv, &argument))
             return ARGUMENTS_ERROR;

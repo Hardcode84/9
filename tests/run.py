@@ -352,6 +352,11 @@ def main():
         checks += 1
         return result
 
+    if args.backend == "x64":
+        version = command([compiler, "--version"])
+        assert re.fullmatch(rb"crust0 [0-9]+(?:\.[0-9]+)+\n", version.stdout), version.stdout
+        assert not version.stderr, version.stderr
+
     def assemble(source):
         output = source.with_suffix(".s.o")
         command([*assembler, source, "-o", output])

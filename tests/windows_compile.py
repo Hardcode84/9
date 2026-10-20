@@ -31,7 +31,7 @@ class WindowsCompiler:
         arguments = [self.path(self.executable(command[0]))]
         for value in command[1:]:
             if isinstance(value, Path):
-                if not value.suffix and value.with_suffix(".exe").is_file():
+                if not value.exists() and not value.suffix and value.with_suffix(".exe").is_file():
                     value = value.with_suffix(".exe")
                 value = self.path(value)
             arguments.append(str(value))

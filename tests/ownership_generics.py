@@ -381,6 +381,35 @@ def check_intrusive(compiler, directory, sanitize):
         assert result.stdout == b"HFBFOK\n", result.stdout
 
 
+def check_capabilities(compiler, directory):
+    from ownership_transfers import CASES, PROVIDER, VALID
+
+    provider = directory / "capability-provider.crs"
+    provider.write_text(PROVIDER)
+    source = directory / "capability-client.crs"
+    source.write_text(VALID)
+    command([compiler, "trusted", provider, "--check", source])
+    for name, (text, diagnostic) in CASES.items():
+        source.write_text(text)
+        result = command(
+            [compiler, "trusted", provider, "--library", "--check", source], expected=1
+        )
+        assert diagnostic in result.stderr.decode(), (name, result.stderr)
+    for text in (
+        "fn boundary!(T)(value:T)->unit transfers(value){}",
+        "record Box!(T){value:T;}" "fn boundary!(T)(value:Box!(T))->unit transfers(value){}",
+    ):
+        source.write_text(text)
+        result = command([compiler, "--library", "--check", source], expected=1)
+        assert b"transfer requires transferable storage" in result.stderr, result.stderr
+    source.write_text(
+        "fn boundary!(T)(value:read Shared)->unit transfers(value){}"
+        "fn main(argc:i32,argv:**u8)->i32{"
+        "var value:Shared=shared_new();boundary!(i64)(read value);return 0i32;}"
+    )
+    command([compiler, "trusted", provider, "--check", source])
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--build", default="build", type=Path)
@@ -390,6 +419,7 @@ def main():
     compiler = build / "crust-ownership-generics-test"
     with tempfile.TemporaryDirectory(prefix="ownership-generics-", dir=build) as temporary:
         directory = Path(temporary)
+        check_capabilities(compiler, directory)
         check_payloads(compiler, directory, options.sanitize)
         check_indirect(compiler, directory, options.sanitize)
         check_rejections(compiler, directory)

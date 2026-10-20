@@ -48,6 +48,13 @@ and `alignof` produce a symbolic layout query whose value is supplied during
 specialization. Owning arrays require aggregate ownership state; this profile
 accepts record storage and rejects owning array interfaces.
 
+A `transfers` clause requires a proven send or share capability. A symbolic
+type parameter has no such capability. A transfer boundary that depends on
+that parameter is rejected when the definition is checked, including unused
+definitions. Concrete parameter types can use `transfers` in generic functions.
+Trusted opaque `send` and `share` assertions retain their meaning through
+specialization and library import.
+
 ## Compilation flow
 
 ```mermaid

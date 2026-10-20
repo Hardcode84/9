@@ -51,6 +51,9 @@ fn os_abstract_collect(stage: *OsStage) -> bool {
     if !os_failed(&check) {
         os_resolve_functions(&check);
     }
+    if !os_failed(&check) {
+        os_check_transfers(&check);
+    }
     return !os_failed(&check);
 }
 

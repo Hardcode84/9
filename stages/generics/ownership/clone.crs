@@ -143,6 +143,8 @@ fn og_clone_record(clone: *GsClone, source: *OsRecord, target: *CrustDecl) -> un
     (*contract).opaque = (*source).opaque;
     (*contract).stable = (*source).stable;
     (*contract).scoped = (*source).scoped;
+    (*contract).send = (*source).send;
+    (*contract).share = (*source).share;
     rs_put(
         &(*program).resources,
         &(*program).ownership.records,
@@ -169,6 +171,7 @@ fn og_clone_function(clone: *GsClone, source: *OsFunction, target: *CrustDecl) -
     (*function).origins = og_clone_origins(clone, (*source).origins);
     (*function).initializes = og_clone_fields(clone, (*source).initializes);
     (*function).modifies = og_clone_fields(clone, (*source).modifies);
+    (*function).transfers = og_clone_fields(clone, (*source).transfers);
     (*function).native = og_clone_native(clone, (*source).native);
     (*function).effect = (*source).effect;
     (*function).foreign = (*source).foreign;

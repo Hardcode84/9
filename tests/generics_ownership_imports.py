@@ -130,6 +130,27 @@ def check_checked_library(suite, driver, sanitize):
     return args, receipt
 
 
+def check_transfer_contracts(suite, driver):
+    from ownership_transfers import PROVIDER, VALID
+
+    provider = suite.write("capabilities/provider.crs", PROVIDER)
+    cache, receipt = publish(suite, driver, "capabilities", [provider], trusted=True)
+    provider.unlink()
+    client = suite.write("capabilities/client.crs", VALID)
+    compile_client(suite, driver, "capabilities/valid", cache, receipt, [client], b"", False)
+    for name, text in (
+        ("authority", "fn bad(v:LocalAuthority)->unit transfers(v){}"),
+        ("borrow", "fn bad(v:read Exclusive)->unit transfers(v){}"),
+        ("generic", "fn bad!(T)(v:read T)->unit transfers(v){}"),
+    ):
+        client.write_text(text + "fn main(argc:i32,argv:**u8)->i32{return 0i32;}")
+        result = suite.command(
+            import_args(suite, driver, f"capabilities/{name}", cache, receipt, [client]),
+            expected=1,
+        )
+        assert b"transfer requires transferable storage" in result.stderr, result.stderr
+
+
 def check_trusted_container(suite, driver, sanitize):
     original = ROOT / "examples/generics/ownership"
     provider = suite.write("container/provider.crs", (original / "provider.crs").read_bytes())
@@ -257,6 +278,7 @@ def main():
     suite.work.mkdir(exist_ok=True)
     driver = build_driver(suite)
     args, receipt = check_checked_library(suite, driver, arguments.sanitize)
+    check_transfer_contracts(suite, driver)
     check_trusted_container(suite, driver, arguments.sanitize)
     check_ranged_provider(suite, driver, arguments.sanitize)
     check_tampering(suite, driver, args, receipt)

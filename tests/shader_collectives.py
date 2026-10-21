@@ -158,3 +158,42 @@ def check_collectives(
     assert barriers and all(
         tuple(constants[item] for item in barrier) == ("2", "2", "264") for barrier in barriers
     ), assembly
+
+    check_image_barrier(
+        run, command, source, output, work, native, environment, wgsl_validator, spirv_tools
+    )
+
+
+def check_image_barrier(run, command, source, output, work, native, environment, validator, tools):
+    source.write_text(
+        "fn compute()->unit{var i:u32=shader_local_x();"
+        "pixels_store(i,0u32,i as f32);shader_all_memory_barrier();"
+        "values_store(i,pixels_load(i^1u32,0u32));}"
+    )
+    expected = work / "image-barrier.expected"
+    expected.write_bytes(struct.pack("<4f4I", 1, 0, 3, 2, 0, 0, 0, 0))
+    run(command, env=environment)
+    binaries = [output]
+    if validator:
+        wgsl = work / "image-barrier.wgsl"
+        selected = command.copy()
+        selected[2], selected[4] = "wgsl", wgsl
+        run(selected, env=environment)
+        translated = work / "image-barrier-wgsl.spv"
+        translate_wgsl(run, validator, wgsl, translated, environment)
+        binaries.append(translated)
+    for binary in binaries:
+        assembly = run(
+            [tools / "spirv-dis", binary.name], env=environment, cwd=binary.parent
+        ).stdout.decode()
+        constants = dict(re.findall(r"(%\w+) = OpConstant %\w+ (\d+)", assembly))
+        barriers = re.findall(r"OpControlBarrier (%\w+) (%\w+) (%\w+)", assembly)
+        memory = 0
+        for execution, _scope, semantics in barriers:
+            assert constants[execution] == "2", assembly
+            bits = int(constants[semantics])
+            assert bits & 8, assembly  # AcquireRelease ordering.
+            memory |= bits
+        # Buffer, workgroup, and image memory must all be ordered.
+        assert memory & 0x940 == 0x940, assembly
+        run([native, binary, expected], env=environment)

@@ -104,7 +104,7 @@ fn wg_module(stage: *SpStage) -> bool {
     }
     sp_text(
         stage,
-        "var<private> global_x: u32;\nvar<private> local_x: u32;\nfn s_shader_global_x() -> u32 { return global_x; }\nfn s_shader_local_x() -> u32 { return local_x; }\nfn s_shader_sqrt(x: f32) -> f32 { return sqrt(x); }\nfn s_shader_workgroup_barrier() { workgroupBarrier(); }\nfn s_shader_all_memory_barrier() { workgroupBarrier(); storageBarrier(); }\n"
+        "var<private> global_x: u32;\nvar<private> local_x: u32;\nfn s_shader_global_x() -> u32 { return global_x; }\nfn s_shader_local_x() -> u32 { return local_x; }\nfn s_shader_sqrt(x: f32) -> f32 { return sqrt(x); }\nfn s_shader_workgroup_barrier() { workgroupBarrier(); }\nfn s_shader_all_memory_barrier() { workgroupBarrier(); storageBarrier(); textureBarrier(); }\n"
     );
     if shader_checked(stage -> config) {
         wg_checks(stage);

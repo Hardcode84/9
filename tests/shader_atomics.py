@@ -15,31 +15,36 @@ def check_atomics(run, compiler, root, llvm, tools, work, native, environment, v
     expected = work / "atomics.expected"
     program = """fn compute()->unit {
         var lane:u32=shader_local_x();
-        if lane==0u32 { DATA_store(0u32,0u32); DATA_store(1u32,100u32);
-                       DATA_store(2u32,0u32); DATA_store(3u32,0u32); }
-        shader_barrier();
+        if lane==0u32 { DATA_atomic_store(0u32,0u32); DATA_atomic_store(1u32,100u32);
+                       DATA_atomic_store(2u32,0u32); DATA_atomic_store(3u32,0u32); }
+        shader_all_memory_barrier();
         DATA_atomic_add(0u32,1u32);
         DATA_atomic_min(1u32,lane+5u32);
         DATA_atomic_max(2u32,lane+5u32);
         DATA_atomic_or(3u32,1u32 << lane);
         var previous:u32=DATA_atomic_or(3u32,1u32 << lane);
         shader_require((previous & (1u32 << lane)) != 0u32);
-        shader_barrier();
+        shader_all_memory_barrier();
         if lane==0u32 {
             var old:u32=DATA_atomic_exchange(3u32,9u32);
             shader_require(old==15u32);
         }
-        shader_barrier();
+        shader_all_memory_barrier();
         OUTPUT
     }"""
     for shared in (False, True):
         mode = "shared-u32" if shared else None
         text = template
         if not shared:
-            text = text.replace("kind: SHADER_BUFFER_F32,", "kind: SHADER_BUFFER_U32,", 1)
+            text = text.replace("kind: SHADER_BUFFER_F32,", "kind: SHADER_BUFFER_ATOMIC_U32,", 1)
+        if shared:
+            text = text.replace(
+                "resources[1usize].kind = SHADER_WORKGROUP_U32",
+                "resources[1usize].kind = SHADER_WORKGROUP_ATOMIC_U32",
+            )
         fixture.write_text(text)
         data = "scratch" if shared else "values"
-        store = "values_store(lane,scratch_uniform_load(0u32) as f32);" if shared else ""
+        store = "values_store(lane,scratch_atomic_load(0u32) as f32);" if shared else ""
         source.write_text(program.replace("DATA", data).replace("OUTPUT", store))
         command = [compiler, fixture, llvm, tools / "spirv-val", output, source]
         if mode:
@@ -55,7 +60,9 @@ def check_atomics(run, compiler, root, llvm, tools, work, native, environment, v
         ):
             assert token in assembly, token
         constants = dict(re.findall(r"(%\w+) = OpConstant %\w+ (\d+)", assembly))
-        operands = re.findall(r"OpAtomic\w+ %\w+ %\w+ (%\w+) (%\w+)", assembly)
+        operands = re.findall(
+            r"OpAtomic(?:IAdd|UMin|UMax|Exchange|Or) %\w+ %\w+ (%\w+) (%\w+)", assembly
+        )
         assert operands
         for scope, semantics in operands:
             assert constants[scope] == ("2" if shared else "1")
@@ -104,3 +111,40 @@ def check_atomics(run, compiler, root, llvm, tools, work, native, environment, v
             if validator:
                 translate_wgsl(run, validator, wgsl, translated, environment)
                 run([native, translated, expected], env=environment)
+
+
+def check_atomic_interfaces(run, compiler, root, llvm, tools, work, environment):
+    template = root.read_text().replace('"../../', f'"{root.parents[2]}/')
+    fixture = work / "atomic-interface-main.crs"
+    source = work / "atomic-interface.crs"
+    for shared in (False, True):
+        name = "scratch" if shared else "values"
+        original = "SHADER_WORKGROUP_F32" if shared else "SHADER_BUFFER_F32"
+        for atomic in (False, True):
+            kind = (
+                "SHADER_"
+                + ("WORKGROUP_" if shared else "BUFFER_")
+                + ("ATOMIC_" if atomic else "")
+                + "U32"
+            )
+            fixture.write_text(template.replace(original, kind, 1))
+            valid = "atomic_" if atomic else ""
+            invalid = "" if atomic else "atomic_"
+            for backend in (llvm, "wgsl"):
+                output = work / (
+                    "atomic-interface.wgsl" if backend == "wgsl" else "atomic-interface.spv"
+                )
+                command = [compiler, fixture, backend, tools / "spirv-val", output, source]
+                source.write_text(
+                    f"fn compute()->unit{{{name}_{valid}store(shader_local_x(),{name}_{valid}load(shader_local_x()));}}"
+                )
+                run(command, env=environment)
+                previous = output.read_bytes()
+                if backend == "wgsl":
+                    assert ("atomic<u32>" in previous.decode()) == atomic
+                for operation in (f"{invalid}load(0u32)", f"{invalid}store(0u32,1u32)"):
+                    # Even dead source cannot silently change a resource's type.
+                    source.write_text(f"fn compute()->unit{{if false{{{name}_{operation};}}}}")
+                    result = run(command, expected=1, env=environment)
+                    assert b"unknown name" in result.stdout + result.stderr
+                    assert output.read_bytes() == previous

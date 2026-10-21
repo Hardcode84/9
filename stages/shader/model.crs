@@ -5,6 +5,8 @@ const SHADER_BUFFER_U32: u32 = 1u32;
 const SHADER_IMAGE_R32F: u32 = 2u32;
 const SHADER_WORKGROUP_F32: u32 = 3u32;
 const SHADER_WORKGROUP_U32: u32 = 4u32;
+const SHADER_BUFFER_ATOMIC_U32: u32 = 5u32;
+const SHADER_WORKGROUP_ATOMIC_U32: u32 = 6u32;
 
 const SHADER_CHECKED: u32 = 0u32;
 const SHADER_RAW: u32 = 1u32;
@@ -75,9 +77,19 @@ record ShaderConfig {
 }
 
 fn shader_workgroup(kind: u32) -> bool {
-    return kind == SHADER_WORKGROUP_F32 || kind == SHADER_WORKGROUP_U32;
+    return kind == SHADER_WORKGROUP_F32 || kind == SHADER_WORKGROUP_U32 || kind == SHADER_WORKGROUP_ATOMIC_U32;
 }
 
 fn shader_checked(config: *ShaderConfig) -> bool {
     return config -> execution == SHADER_CHECKED;
+}
+
+fn shader_atomic(kind: u32) -> bool {
+    return kind == SHADER_BUFFER_ATOMIC_U32 || kind == SHADER_WORKGROUP_ATOMIC_U32;
+}
+fn shader_integer(kind: u32) -> bool {
+    return kind == SHADER_BUFFER_U32 || kind == SHADER_WORKGROUP_U32 || shader_atomic(kind);
+}
+fn shader_buffer(kind: u32) -> bool {
+    return kind == SHADER_BUFFER_F32 || kind == SHADER_BUFFER_U32 || kind == SHADER_BUFFER_ATOMIC_U32;
 }

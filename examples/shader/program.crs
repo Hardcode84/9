@@ -7,6 +7,6 @@ fn compute() -> unit {
     var index: u32 = shader_global_x();
     var lane: u32 = shader_local_x();
     scratch_store(lane, add_two(values_load(index)));
-    shader_barrier();
+    shader_all_memory_barrier();
     values_store(index, scratch_load(lane ^ 1u32));
 }

@@ -16,7 +16,7 @@ fn sp_scalar(stage: *SpStage, type: *CrustType) -> bool {
 fn sp_builtin(stage: *SpStage, declaration: *CrustDecl) -> bool {
     return declaration -> loc.source == stage -> builtins -> source;
 }
-fn sp_call_check(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> bool {
+fn sp_call_check(stage: *SpStage, input: *CrustExpr) -> bool {
     var callee: *CrustExpr = input -> left;
     while callee -> kind == CRUST_E_GROUP {
         callee = callee -> left;
@@ -45,15 +45,9 @@ fn sp_call_check(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> b
             return false;
         }
     }
-    if !sp_uniform_index_check(stage, declaration, input) {
-        return false;
-    }
-    if !sp_call_participation(stage, declaration, barrier_allowed) {
-        return false;
-    }
     var index: usize = 0usize;
     while index < input -> arg_count {
-        if !sp_expression_check(stage, input -> args[index], barrier_allowed) {
+        if !sp_expression_check(stage, input -> args[index]) {
             return false;
         }
         index = index + 1usize;
@@ -74,7 +68,7 @@ fn sp_builtin_policy(stage: *SpStage, declaration: *CrustDecl) -> bool {
     }
     return true;
 }
-fn sp_expression_check(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> bool {
+fn sp_expression_check(stage: *SpStage, input: *CrustExpr) -> bool {
     if input == null(*CrustExpr) {
         return true;
     }
@@ -82,30 +76,33 @@ fn sp_expression_check(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool
         return sp_error(stage, "shader expression depth exceeded");
     }
     stage -> depth = stage -> depth + 1usize;
-    var success: bool = sp_expression_body(stage, input, barrier_allowed);
+    var success: bool = sp_expression_body(stage, input);
     stage -> depth = stage -> depth - 1usize;
     return success;
 }
-fn sp_expression_body(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> bool {
+fn sp_expression_body(stage: *SpStage, input: *CrustExpr) -> bool {
     if !sp_scalar(stage, input -> type) {
         return false;
     }
     var kind: u32 = input -> kind;
     if kind == CRUST_E_CALL {
-        return sp_call_check(stage, input, barrier_allowed);
+        return sp_call_check(stage, input);
     }
     if kind == CRUST_E_INTEGER || kind == CRUST_E_FLOAT || kind == CRUST_E_BOOL || kind == CRUST_E_NAME {
         return true;
     }
     if kind == CRUST_E_GROUP || kind == CRUST_E_UNARY || kind == CRUST_E_CAST || kind == CRUST_E_BINARY {
-        return sp_expression_operands(stage, input, barrier_allowed);
+        return sp_expression_check(stage, input -> left) && sp_expression_check(
+            stage,
+            input -> right
+        );
     }
     return sp_error(
         stage,
         "shader expression requires scalar values and explicit resource accessors"
     );
 }
-fn sp_statement_check(stage: *SpStage, input: *CrustStmt, top: bool) -> bool {
+fn sp_statement_check(stage: *SpStage, input: *CrustStmt) -> bool {
     if input == null(*CrustStmt) {
         return true;
     }
@@ -113,33 +110,17 @@ fn sp_statement_check(stage: *SpStage, input: *CrustStmt, top: bool) -> bool {
         return sp_error(stage, "shader statement depth exceeded");
     }
     stage -> depth = stage -> depth + 1usize;
-    var success: bool = sp_statement_body(stage, input, top);
+    var success: bool = sp_statement_body(stage, input);
     stage -> depth = stage -> depth - 1usize;
     return success;
 }
-fn sp_statement_contract(stage: *SpStage, input: *CrustStmt, top: bool) -> bool {
+fn sp_statement_contract(stage: *SpStage, input: *CrustStmt) -> bool {
     var kind: u32 = input -> kind;
     if kind == CRUST_S_TRAP {
-        return sp_error(
-            stage,
-            "shader trap cannot preserve barrier participation; use shader_require"
-        );
+        return sp_error(stage, "shader trap is unsupported; use shader_require");
     }
     if kind == CRUST_S_LABEL || kind == CRUST_S_GOTO {
         return sp_error(stage, "shader control flow requires structured if and while statements");
-    }
-    if kind == CRUST_S_RETURN && (!top || input -> next != null(*CrustStmt)) {
-        crust_try_map_set(
-            ll_context(&stage -> llvm),
-            &stage -> early_returns,
-            stage -> current as usize,
-            stage -> current as *u8
-        );
-    }
-    if kind == CRUST_S_RETURN && stage -> current == stage -> entry && (
-        !top || input -> next != null(*CrustStmt)
-    ) {
-        return sp_error(stage, "shader entry return must be its final top-level statement");
     }
     if input -> uninitialized {
         return sp_error(stage, "shader locals require an initializer");
@@ -149,46 +130,30 @@ fn sp_statement_contract(stage: *SpStage, input: *CrustStmt, top: bool) -> bool 
     }
     return true;
 }
-fn sp_statement_body(stage: *SpStage, input: *CrustStmt, top: bool) -> bool {
+fn sp_statement_body(stage: *SpStage, input: *CrustStmt) -> bool {
     var kind: u32 = input -> kind;
     if kind == CRUST_S_BLOCK {
         var child: *CrustStmt = input -> body;
         while child != null(*CrustStmt) {
-            if !sp_statement_check(stage, child, false) {
+            if !sp_statement_check(stage, child) {
                 return false;
             }
             child = child -> next;
         }
         return true;
     }
-    if !sp_statement_contract(stage, input, top) {
+    if !sp_statement_contract(stage, input) {
         return false;
     }
-    if kind == CRUST_S_WHILE && crust_map_get(&stage -> uniform_loops, input as usize) != null(
-        *u8
-    ) {
-        return sp_uniform_loop(stage, input, top);
-    }
-    if kind == CRUST_S_WHILE {
-        if !crust_try_map_set(
-            ll_context(&stage -> llvm),
-            &stage -> loop_conditions,
-            input -> expr as usize,
-            input as *u8
-        ) {
-            return false;
-        }
-    }
-    return sp_expression_check(stage, input -> expr, top && kind != CRUST_S_WHILE) && sp_expression_check(
+    return sp_expression_check(stage, input -> expr) && sp_expression_check(
         stage,
-        input -> value,
-        top
-    ) && sp_statement_check(stage, input -> body, false) && sp_statement_check(
+        input -> value
+    ) && sp_statement_check(stage, input -> body) && sp_statement_check(
         stage,
-        input -> otherwise,
-        false
+        input -> otherwise
     );
 }
+
 fn sp_function_check(stage: *SpStage, declaration: *CrustDecl) -> bool {
     var context: *CrustContext = ll_context(&stage -> llvm);
     var state: *u8 = crust_map_get(&stage -> functions, declaration as usize);
@@ -214,21 +179,12 @@ fn sp_function_check(stage: *SpStage, declaration: *CrustDecl) -> bool {
     if !crust_try_map_set(context, &stage -> functions, declaration as usize, 1usize as *u8) {
         return false;
     }
-    if !sp_scan_loops(stage, declaration -> body) {
-        return false;
-    }
-    var previous: *CrustDecl = stage -> current;
-    stage -> current = declaration;
     var child: *CrustStmt = declaration -> body -> body;
     while child != null(*CrustStmt) {
-        if !sp_statement_check(stage, child, true) {
+        if !sp_statement_check(stage, child) {
             return false;
         }
         child = child -> next;
-    }
-    stage -> current = previous;
-    if !sp_collective_result(stage, declaration) {
-        return false;
     }
     return crust_try_map_set(
         context,
@@ -246,9 +202,6 @@ fn sp_find_entry(stage: *SpStage) -> unit {
             declaration -> link_name = "";
             if sp_builtin(stage, declaration) {
                 declaration -> link_name = declaration -> name -> text;
-                if c_equal(declaration -> name -> text, "shader_barrier") {
-                    stage -> barrier = declaration;
-                }
             } else {
                 if c_equal(declaration -> name -> text, stage -> config -> entry) {
                     stage -> entry = declaration;
@@ -298,27 +251,4 @@ fn sp_check(stage: *SpStage) -> bool {
         unit_value = unit_value -> next;
     }
     return true;
-}
-
-fn sp_uniform_index_check(stage: *SpStage, declaration: *CrustDecl, input: *CrustExpr) -> bool {
-    if sp_uniform_resource(stage, declaration) != null(*ShaderResource) && !sp_uniform_value(
-        stage,
-        input -> args[0usize]
-    ) {
-        return sp_error(stage, "collective uniform load requires a uniform index");
-    }
-    return true;
-}
-
-fn sp_expression_operands(stage: *SpStage, input: *CrustExpr, barrier_allowed: bool) -> bool {
-    var kind: u32 = input -> kind;
-    var right_uniform: bool = barrier_allowed;
-    if kind == CRUST_E_BINARY && (input -> op == CRUST_OP_AND || input -> op == CRUST_OP_OR) {
-        right_uniform = right_uniform && sp_uniform_value(stage, input -> left);
-    }
-    return sp_expression_check(stage, input -> left, barrier_allowed) && sp_expression_check(
-        stage,
-        input -> right,
-        right_uniform
-    );
 }

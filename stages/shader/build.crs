@@ -61,15 +61,9 @@ fn sp_init(stage: *SpStage, context: *CrustContext, config: *ShaderConfig) -> un
     stage -> used = stage -> llvm.types;
     stage -> reachable = false;
     stage -> floating = false;
-    stage -> loop_conditions = stage -> llvm.types;
-    stage -> collective = stage -> llvm.types;
-    stage -> early_returns = stage -> llvm.types;
-    stage -> uniform_loops = stage -> llvm.types;
     stage -> config = config;
     stage -> builtins = null(*CrustUnit);
     stage -> entry = null(*CrustDecl);
-    stage -> barrier = null(*CrustDecl);
-    stage -> current = null(*CrustDecl);
     stage -> depth = 0usize;
 }
 fn shader_prepare(context: *CrustContext, config: *ShaderConfig, identity: u64) -> *CrustUnit {

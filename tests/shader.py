@@ -8,7 +8,7 @@ import shlex
 import struct
 from pathlib import Path
 
-from shader_atomics import check_atomics
+from shader_atomics import check_atomic_interfaces, check_atomics
 from shader_collectives import check_collectives
 from shader_composition import check_composition
 from shader_features import check_features
@@ -83,6 +83,7 @@ def main():
     print("Shader allocation sweeps passed", flush=True)
     check_graphics(host, compiler, llvm, tools, work, environment)
     check_atomics(run, compiler, root, llvm, tools, work, native, environment, args.wgsl_validator)
+    check_atomic_interfaces(run, compiler, root, llvm, tools, work, environment)
     check_composition(run, compiler, root, llvm, tools, work, native, environment)
     check_features(run, command, tools, source, output, environment)
     check_policy(run, compiler, root, llvm, tools, work, native, environment)
@@ -110,7 +111,7 @@ fn compute()->unit {
  var i:u32=shader_global_x(); var lane:u32=shader_local_x();
  shader_require(lane!=2u32);
  scratch_store(lane,values_load(i)+2f32);
- shader_barrier(); values_store(i,scratch_load(lane^1u32));
+ shader_all_memory_barrier(); values_store(i,scratch_load(lane^1u32));
 }
 """,
             [4, 3, 3, 0],
@@ -121,7 +122,7 @@ fn compute()->unit {
 fn compute()->unit {
  var i:u32=shader_global_x();
  var x:f32=values_load(i+1u32);
- shader_barrier(); values_store(i,x);
+ shader_all_memory_barrier(); values_store(i,x);
 }
 """,
             [2, 3, 4, 4],
@@ -132,7 +133,7 @@ fn compute()->unit {
 fn divide(a:i32,b:i32)->i32{return a/b;}
 fn compute()->unit {
  var i:u32=shader_global_x(); var x:i32=divide(6i32,i as i32-2i32);
- shader_barrier(); values_store(i,x as f32);
+ shader_all_memory_barrier(); values_store(i,x as f32);
 }
 """,
             [-3, -6, 3, 6],
@@ -142,8 +143,8 @@ fn compute()->unit {
             """
 fn compute()->unit {
  var i:u32=shader_global_x();
- while true {shader_require(false);}
- shader_barrier(); values_store(i,99f32);
+ while !shader_failed() {shader_require(false);}
+ shader_all_memory_barrier(); values_store(i,99f32);
 }
 """,
             [1, 2, 3, 4],
@@ -153,7 +154,7 @@ fn compute()->unit {
             """
 fn compute()->unit {
  var i:u32=shader_global_x(); pixels_store(i,0u32,values_load(i)+2f32);
- shader_barrier(); values_store(i,pixels_load(i^1u32,0u32));
+ shader_all_memory_barrier(); values_store(i,pixels_load(i^1u32,0u32));
 }
 """,
             [4, 3, 6, 5],
@@ -163,8 +164,8 @@ fn compute()->unit {
             """
 fn compute()->unit {
  var i:u32=shader_global_x(); pixels_store(i,0u32,values_load(i));
- shader_barrier(); var x:f32=pixels_load(i,1u32);
- shader_barrier(); values_store(i,x);
+ shader_all_memory_barrier(); var x:f32=pixels_load(i,1u32);
+ shader_all_memory_barrier(); values_store(i,x);
 }
 """,
             [1, 2, 3, 4],
@@ -231,23 +232,23 @@ fn compute()->unit {
     }
     shared_cases = [
         (
-            "scratch_store(shader_local_x(), 16777217u32 + shader_local_x());shader_barrier();"
+            "scratch_store(shader_local_x(), 16777217u32 + shader_local_x());shader_all_memory_barrier();"
             "values_store(shader_global_x(), (scratch_load((shader_local_x()+1u32)%4u32)-16777216u32) as f32);",
             [2.0, 3.0, 4.0, 1.0],
             [0, 0, 0, 0],
         ),
         (
-            "shader_barrier();values_store(shader_global_x(),scratch_load(shader_local_x()) as f32);",
+            "shader_all_memory_barrier();values_store(shader_global_x(),scratch_load(shader_local_x()) as f32);",
             [0.0] * 4,
             [0] * 4,
         ),
         (
-            "scratch_store(shader_local_x()+4u32, 0xffffffffu32);shader_barrier();",
+            "scratch_store(shader_local_x()+4u32, 0xffffffffu32);shader_all_memory_barrier();",
             [1.0, 2.0, 3.0, 4.0],
             [1] * 4,
         ),
         (
-            "scratch_store(shader_local_x(),0xffffffffu32);shader_barrier();"
+            "scratch_store(shader_local_x(),0xffffffffu32);shader_all_memory_barrier();"
             "shader_require(scratch_load((shader_local_x()+1u32)%4u32)==0xffffffffu32);",
             [1.0, 2.0, 3.0, 4.0],
             [0] * 4,
@@ -269,7 +270,7 @@ fn compute()->unit {
         ),
         (
             "runtime-f32",
-            "fn compute()->unit { var i:u32=shader_global_x(); var value:f32=values_load(i+1u32); shader_barrier(); values_store(i,value); }",
+            "fn compute()->unit { var i:u32=shader_global_x(); var value:f32=values_load(i+1u32); shader_all_memory_barrier(); values_store(i,value); }",
             [2, 3, 4, 4],
             [0, 0, 0, 1],
         ),
@@ -301,7 +302,7 @@ fn compute()->unit {
         source.write_text(
             "fn compute()->unit {var i:u32=shader_global_x();values_store(i,"
             + operation
-            + ");shader_barrier();}"
+            + ");shader_all_memory_barrier();}"
         )
         run(command + [mode], env=environment)
         for count in (0, 1, 3):
@@ -356,14 +357,6 @@ fn compute()->unit {
         result = run([native, output, fixture, *options], expected=2, env=environment)
         assert b"COUNT(0..4)" in result.stdout
     rejected = {
-        "divergent barrier": (
-            "fn compute()->unit{if shader_local_x()==0u32{shader_barrier();}}",
-            "uniform statement",
-        ),
-        "early return": (
-            "fn compute()->unit{if shader_local_x()==0u32{return;}shader_barrier();}",
-            "final top-level",
-        ),
         "trap": ("fn compute()->unit{trap;}", "shader_require"),
         "pointer": ("fn compute()->unit{var p:*u32=null(*u32);}", "shader values"),
         "usize": ("fn compute()->unit{var i:usize=1usize;}", "shader values"),
@@ -389,8 +382,8 @@ fn compute()->unit {
     assert output.read_bytes() == previous
     assert not list(work.glob(".crust-*")), "temporary output leaked"
     print(
-        f"Shader: 1 composed, 2 raw, 18 collective, {len(cases)} fixed-size, 4 integer-workgroup and 10 runtime-size Vulkan dispatches, 4 injected enumeration/setup cases, "
-        f"3 feature-emission cases, 40 collective rejections, 2 policy rejections, 3 malformed inputs, 4 invalid runner options, {len(rejected)} source rejections and failed-tool output preservation passed"
+        f"Shader: 1 composed, 2 raw, collective helper and loop cases, {len(cases)} fixed-size, 4 integer-workgroup and 10 runtime-size Vulkan dispatches, 4 injected enumeration/setup cases, "
+        f"3 feature-emission cases, 2 policy rejections, 3 malformed inputs, 4 invalid runner options, {len(rejected)} source rejections and failed-tool output preservation passed"
     )
 
 

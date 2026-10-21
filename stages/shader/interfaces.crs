@@ -20,7 +20,7 @@ fn sp_graphics_call(stage: *SpStage, declaration: *CrustDecl) -> bool {
     var name: *u8 = declaration -> name -> text;
     if c_equal(name, "shader_global_x") || c_equal(name, "shader_local_x") || c_equal(
         name,
-        "shader_barrier"
+        "shader_all_memory_barrier"
     ) || c_equal(name, "shader_workgroup_barrier") {
         return sp_error(
             stage,

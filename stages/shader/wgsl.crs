@@ -57,6 +57,12 @@ fn wg_access(stage: *SpStage, r: *ShaderResource, write: bool) -> unit {
     if write {
         suffix = "_store";
     }
+    if shader_atomic(r -> kind) {
+        suffix = "_atomic_load";
+        if write {
+            suffix = "_atomic_store";
+        }
+    }
     sp_text(stage, "fn s_");
     sp_text(stage, r -> name);
     sp_text(stage, suffix);
@@ -74,8 +80,8 @@ fn wg_access(stage: *SpStage, r: *ShaderResource, write: bool) -> unit {
     if shader_checked(stage -> config) {
         wg_access_check(stage, r, write);
     }
-    if sp_atomic_used(stage, r) {
-        wg_atomic_plain_access(stage, r, write);
+    if sp_atomic_kind(r) {
+        wg_atomic_load_store(stage, r, write);
         return;
     }
     if !write {
@@ -98,7 +104,7 @@ fn wg_module(stage: *SpStage) -> bool {
     }
     sp_text(
         stage,
-        "var<private> global_x: u32;\nvar<private> local_x: u32;\nfn s_shader_global_x() -> u32 { return global_x; }\nfn s_shader_local_x() -> u32 { return local_x; }\nfn s_shader_sqrt(x: f32) -> f32 { return sqrt(x); }\nfn s_shader_workgroup_barrier() { workgroupBarrier(); }\nfn s_shader_barrier() { workgroupBarrier(); storageBarrier(); }\n"
+        "var<private> global_x: u32;\nvar<private> local_x: u32;\nfn s_shader_global_x() -> u32 { return global_x; }\nfn s_shader_local_x() -> u32 { return local_x; }\nfn s_shader_sqrt(x: f32) -> f32 { return sqrt(x); }\nfn s_shader_workgroup_barrier() { workgroupBarrier(); }\nfn s_shader_all_memory_barrier() { workgroupBarrier(); storageBarrier(); }\n"
     );
     if shader_checked(stage -> config) {
         wg_checks(stage);

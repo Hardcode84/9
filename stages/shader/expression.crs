@@ -64,20 +64,5 @@ fn sp_expression_value(function: *LlFunction, input: *CrustExpr) -> *u8 {
     return ll_expression(function, input);
 }
 fn sp_expression(function: *LlFunction, input: *CrustExpr) -> *u8 {
-    var value: *u8 = sp_expression_value(function, input);
-    var stage: *SpStage = function -> stage -> user as *SpStage;
-    if shader_checked(stage -> config) && crust_map_get(
-        &stage -> loop_conditions,
-        input as usize
-    ) != null(*u8) {
-        var active: *u8 = ll_instruction(
-            function,
-            "xor",
-            "i1",
-            sp_failed(function),
-            "true"
-        );
-        return ll_instruction(function, "and", "i1", value, active);
-    }
-    return value;
+    return sp_expression_value(function, input);
 }

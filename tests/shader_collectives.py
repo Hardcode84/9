@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Check collective helpers, bounded loops and failed-lane participation."""
+"""Execute barrier helpers, loops and failed-lane participation."""
 
 import re
 import struct
@@ -10,7 +10,7 @@ from shader_wgsl import translate_wgsl
 def check_collectives(
     run, command, source, output, work, native, environment, wgsl_validator=None, spirv_tools=None
 ):
-    helper = "fn sync()->unit{shader_barrier();} fn nested()->unit{sync();}"
+    helper = "fn sync()->unit{shader_all_memory_barrier();} fn nested()->unit{sync();}"
     cases = [
         (helper + "fn compute()->unit{nested();}", [1, 2, 3, 4], [0] * 4),
         (
@@ -47,7 +47,7 @@ def check_collectives(
             [0, 0, 1, 0],
         ),
         (
-            "fn rounds()->unit{var i:u32=0u32;while i<2u32{shader_barrier();i=i+1u32;}}"
+            "fn rounds()->unit{var i:u32=0u32;while i<2u32{shader_all_memory_barrier();i=i+1u32;}}"
             "fn compute()->unit{rounds();}",
             [1, 2, 3, 4],
             [0] * 4,
@@ -82,6 +82,21 @@ def check_collectives(
             ),
         ]
     )
+    cases.extend(
+        [
+            (
+                "fn sync(n:u32)->bool{var i:u32=0u32;while i<n{shader_workgroup_barrier();i=i+2u32;}return true;}"
+                "fn compute()->unit{if sync(4u32){values_store(shader_local_x(),7f32);}}",
+                [7] * 4,
+                [0] * 4,
+            ),
+            (
+                "fn compute()->unit{if 1u32==2u32{return;}shader_workgroup_barrier();values_store(shader_local_x(),7f32);}",
+                [7] * 4,
+                [0] * 4,
+            ),
+        ]
+    )
     for failed in (False, True):
         cases.append(
             (
@@ -91,7 +106,7 @@ def check_collectives(
                 FAILURE
                 while scratch_uniform_load(3u32)>0f32 {
                     values_store(lane,values_load(lane)+1f32);
-                    shader_barrier();
+                    shader_all_memory_barrier();
                     if lane==0u32 { scratch_store(3u32,scratch_load(3u32)-1f32); }
                 }
             }""".replace(
@@ -109,7 +124,11 @@ def check_collectives(
         )
     )
     cases += [
-        (program.replace("shader_barrier()", "shader_workgroup_barrier()"), values, status)
+        (
+            program.replace("shader_all_memory_barrier()", "shader_workgroup_barrier()"),
+            values,
+            status,
+        )
         for program, values, status in cases
     ]
     for program, values, status in cases:
@@ -127,49 +146,6 @@ def check_collectives(
             translated = work / "collective-wgsl.spv"
             translate_wgsl(run, wgsl_validator, wgsl, translated, environment)
             run([native, translated, expected], env=environment)
-    rejected = [
-        helper + "fn compute()->unit{if shader_local_x()==0u32{nested();}}",
-        "fn sync()->unit{if shader_local_x()==0u32{return;}shader_barrier();}fn compute()->unit{sync();}",
-        "fn sync()->bool{shader_barrier();return true;}fn compute()->unit{sync();}",
-        helper + "fn compute()->unit{var i:u32=shader_local_x();while i<4u32{sync();i=i+1u32;}}",
-        helper
-        + "fn compute()->unit{var i:u32=0u32;while i<4u32{sync();if shader_local_x()==0u32{break;}i=i+1u32;}}",
-        helper
-        + "fn compute()->unit{var i:u32=0u32;while i<4u32{sync();if shader_local_x()==0u32{continue;}i=i+1u32;}}",
-        helper
-        + "fn compute()->unit{var i:u32=0u32;while i<4u32{sync();i=shader_local_x();i=i+1u32;}}",
-        helper
-        + "fn compute()->unit{var i:u32=0u32;while i<4u32{sync();(i)=shader_local_x();i=i+1u32;}}",
-        helper + "fn compute()->unit{var i:u32=0u32;while i<4u32{sync();return;i=i+1u32;}}",
-        helper
-        + "fn compute()->unit{if shader_local_x()==0u32{var i:u32=0u32;while i<4u32{sync();i=i+1u32;}}}",
-        helper + "fn compute()->unit{var i:u32=0u32;while i<4u32{sync();i=i+2u32;}}",
-    ]
-    rejected.extend(
-        [
-            "fn compute()->unit{while scratch_uniform_load(0u32)>0f32{"
-            "if shader_local_x()==0u32{break;}}}",
-            "fn compute()->unit{while scratch_uniform_load(0u32)>0f32{"
-            "if shader_local_x()==0u32{continue;}}}",
-            "fn compute()->unit{while scratch_uniform_load(0u32)>shader_local_x() as f32{}}",
-            "fn compute()->unit{scratch_uniform_load(shader_local_x());}",
-            "fn compute()->unit{if shader_local_x()==0u32{scratch_uniform_load(0u32);}}",
-            "fn compute()->unit{var x:bool=shader_local_x()==0u32 && scratch_uniform_load(0u32)>0f32;}",
-            "fn compute()->unit{while scratch_load(0u32)>0f32{shader_barrier();}}",
-            "fn compute()->unit{while scratch_uniform_load(0u32)>0f32{if shader_local_x()==0u32{break;}shader_barrier();}}",
-            "fn compute()->unit{var n:u32=0u32;if shader_local_x()==0u32{n=1u32;}while n<3u32{shader_barrier();n=n+1u32;}}",
-        ]
-    )
-    rejected += [
-        program.replace("shader_barrier()", "shader_workgroup_barrier()") for program in rejected
-    ]
-    previous = output.read_bytes()
-    for program in rejected:
-        source.write_text(program)
-        result = run(command, expected=1, env=environment)
-        assert b"collective" in result.stdout + result.stderr, result
-        assert output.read_bytes() == previous
-
     source.write_text(
         "fn compute()->unit{shader_workgroup_barrier();var x:f32=scratch_uniform_load(0u32);values_store(shader_local_x(),x);}"
     )

@@ -25,18 +25,34 @@ fn sp_used(stage: *SpStage, name: *u8) -> bool {
     return crust_map_get(&stage -> used, symbol -> decl as usize) != null(*u8);
 }
 fn sp_resource_used(stage: *SpStage, resource: *ShaderResource) -> bool {
-    return sp_atomic_used(stage, resource) || (
-        shader_workgroup(resource -> kind) && sp_used(
+    var suffix: *u8 = "_load";
+    var store: *u8 = "_store";
+    if shader_atomic(resource -> kind) {
+        var op: u32 = 0u32;
+        while op < 5u32 {
+            if sp_used(
+                stage,
+                ll_join(&stage -> llvm, resource -> name, sp_atomic_suffix(op))
+            ) {
+                return true;
+            }
+            op = op + 1u32;
+        }
+        suffix = "_atomic_load";
+        store = "_atomic_store";
+    }
+    return (
+        shader_workgroup(resource -> kind) && !shader_atomic(resource -> kind) && sp_used(
             stage,
             ll_join(&stage -> llvm, resource -> name, "_uniform_load")
         )
-    ) || sp_used(stage, ll_join(&stage -> llvm, resource -> name, "_load")) || sp_used(
+    ) || sp_used(stage, ll_join(&stage -> llvm, resource -> name, suffix)) || sp_used(
         stage,
-        ll_join(&stage -> llvm, resource -> name, "_store")
+        ll_join(&stage -> llvm, resource -> name, store)
     );
 }
 fn sp_resource_type(resource: *ShaderResource) -> *u8 {
-    if resource -> kind == SHADER_BUFFER_U32 || resource -> kind == SHADER_WORKGROUP_U32 {
+    if shader_integer(resource -> kind) {
         return "i32";
     }
     return "float";
@@ -45,7 +61,7 @@ fn sp_handle_type(resource: *ShaderResource) -> *u8 {
     if resource -> kind == SHADER_IMAGE_R32F {
         return "target(\"spirv.Image\", float, 1, 0, 0, 0, 2, 3)";
     }
-    if resource -> kind == SHADER_BUFFER_U32 {
+    if (resource -> kind == SHADER_BUFFER_U32 || resource -> kind == SHADER_BUFFER_ATOMIC_U32) {
         return "target(\"spirv.VulkanBuffer\", [0 x i32], 12, 1)";
     }
     return "target(\"spirv.VulkanBuffer\", [0 x float], 12, 1)";
@@ -54,7 +70,7 @@ fn sp_suffix(resource: *ShaderResource) -> *u8 {
     if resource -> kind == SHADER_IMAGE_R32F {
         return "tspirv.Image_f32_1_0_0_0_2_3t";
     }
-    if resource -> kind == SHADER_BUFFER_U32 {
+    if (resource -> kind == SHADER_BUFFER_U32 || resource -> kind == SHADER_BUFFER_ATOMIC_U32) {
         return "tspirv.VulkanBuffer_a0i32_12_1t";
     }
     return "tspirv.VulkanBuffer_a0f32_12_1t";
@@ -147,6 +163,12 @@ fn sp_resource_access(stage: *SpStage, resource: *ShaderResource, write: bool) -
         suffix = "_store";
         result = "void";
     }
+    if shader_atomic(resource -> kind) {
+        suffix = "_atomic_load";
+        if write {
+            suffix = "_atomic_store";
+        }
+    }
     if !sp_used(stage, ll_join(&stage -> llvm, resource -> name, suffix)) {
         return;
     }
@@ -196,6 +218,10 @@ fn sp_payload_pointer(stage: *SpStage, resource: *ShaderResource) -> unit {
     }
 }
 fn sp_resource_operation(stage: *SpStage, resource: *ShaderResource, write: bool) -> unit {
+    if shader_atomic(resource -> kind) {
+        sp_atomic_load_store(stage, resource, write);
+        return;
+    }
     var type: *u8 = sp_resource_type(resource);
     if write {
         var value: *u8 = "%value";

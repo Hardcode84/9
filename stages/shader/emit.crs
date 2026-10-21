@@ -89,7 +89,7 @@ fn sp_builtins(stage: *SpStage) -> unit {
     );
     sp_builtin_body(
         stage,
-        "shader_barrier",
+        "shader_all_memory_barrier",
         "define internal void ",
         "() convergent {\n call void @llvm.spv.all.memory.barrier.with.group.sync()\n ret void\n}\n"
     );

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 fn sp_atomic_kind(r: *ShaderResource) -> bool {
-    return r -> kind == SHADER_BUFFER_U32 || r -> kind == SHADER_WORKGROUP_U32;
+    return shader_atomic(r -> kind);
 }
 fn sp_atomic_suffix(op: u32) -> *u8 {
     if op == 0u32 {
@@ -17,19 +17,6 @@ fn sp_atomic_suffix(op: u32) -> *u8 {
         return "_atomic_exchange";
     }
     return "_atomic_or";
-}
-fn sp_atomic_used(stage: *SpStage, r: *ShaderResource) -> bool {
-    if !sp_atomic_kind(r) {
-        return false;
-    }
-    var op: u32 = 0u32;
-    while op < 5u32 {
-        if sp_used(stage, ll_join(&stage -> llvm, r -> name, sp_atomic_suffix(op))) {
-            return true;
-        }
-        op = op + 1u32;
-    }
-    return false;
 }
 fn sp_atomic_prelude(out: *CBuffer, r: *ShaderResource) -> unit {
     if !sp_atomic_kind(r) {
@@ -107,7 +94,7 @@ fn wg_atomic_pointer(stage: *SpStage, r: *ShaderResource) -> unit {
     sp_text(stage, "[index]");
 }
 fn wg_atomic_access(stage: *SpStage, r: *ShaderResource) -> unit {
-    if !sp_atomic_used(stage, r) {
+    if !sp_atomic_kind(r) {
         return;
     }
     var op: u32 = 0u32;
@@ -141,13 +128,13 @@ fn wg_atomic_access(stage: *SpStage, r: *ShaderResource) -> unit {
     }
 }
 fn wg_storage_type(stage: *SpStage, r: *ShaderResource) -> unit {
-    if sp_atomic_used(stage, r) {
+    if sp_atomic_kind(r) {
         sp_text(stage, "atomic<u32>");
     } else {
         wg_resource_type(stage, r);
     }
 }
-fn wg_atomic_plain_access(stage: *SpStage, r: *ShaderResource, write: bool) -> unit {
+fn wg_atomic_load_store(stage: *SpStage, r: *ShaderResource, write: bool) -> unit {
     if write {
         sp_text(stage, "atomicStore(");
     } else {
@@ -158,4 +145,31 @@ fn wg_atomic_plain_access(stage: *SpStage, r: *ShaderResource, write: bool) -> u
         sp_text(stage, ", value");
     }
     sp_text(stage, "); }\n");
+}
+
+fn sp_atomic_load_store(stage: *SpStage, resource: *ShaderResource, write: bool) -> unit {
+    var value: *u8 = "%value";
+    if write && shader_workgroup(resource -> kind) && shader_checked(stage -> config) {
+        sp_text(stage, "  %safe = select i1 %failed, i32 0, i32 %value\n");
+        value = "%safe";
+    }
+    if write {
+        sp_text(stage, "  store atomic i32 ");
+        sp_text(stage, value);
+        sp_text(stage, ", ");
+    } else {
+        sp_text(stage, "  %value = load atomic i32, ");
+    }
+    sp_text(stage, sp_pointer_type(resource));
+    sp_text(stage, " %p syncscope(\"");
+    if shader_workgroup(resource -> kind) {
+        sp_text(stage, "workgroup");
+    } else {
+        sp_text(stage, "device");
+    }
+    if write {
+        sp_text(stage, "\") release, align 4\n  ret void\n");
+    } else {
+        sp_text(stage, "\") acquire, align 4\n  ret i32 %value\n");
+    }
 }

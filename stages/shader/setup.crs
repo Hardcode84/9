@@ -23,7 +23,7 @@ fn sp_resource_layout(stage: *SpStage, resource: *ShaderResource) -> bool {
     if resource -> layout == SHADER_FIXED {
         return resource -> length != 0u32;
     }
-    if resource -> kind > SHADER_BUFFER_U32 || resource -> length != 0u32 {
+    if !shader_buffer(resource -> kind) || resource -> length != 0u32 {
         return false;
     }
     return resource -> layout == SHADER_COUNTED || (
@@ -33,7 +33,7 @@ fn sp_resource_layout(stage: *SpStage, resource: *ShaderResource) -> bool {
 fn sp_resource_config(stage: *SpStage, index: usize) -> bool {
     var config: *ShaderConfig = stage -> config;
     var resource: *ShaderResource = &config -> resources[index];
-    if !sp_identifier(resource -> name) || !sp_resource_layout(stage, resource) || resource -> kind > SHADER_WORKGROUP_U32 {
+    if !sp_identifier(resource -> name) || !sp_resource_layout(stage, resource) || resource -> kind > SHADER_WORKGROUP_ATOMIC_U32 {
         return sp_error(
             stage,
             "shader resource requires an identifier, supported kind and valid layout/length"
@@ -137,13 +137,19 @@ fn sp_accessor(out: *CBuffer, resource: *ShaderResource, write: bool) -> unit {
     if write {
         suffix = "_store";
     }
+    if shader_atomic(resource -> kind) {
+        suffix = "_atomic_load";
+        if write {
+            suffix = "_atomic_store";
+        }
+    }
     c_buffer_text(out, suffix);
     c_buffer_text(out, "(index:u32");
     if resource -> kind == SHADER_IMAGE_R32F {
         c_buffer_text(out, ",y:u32");
     }
     var type: *u8 = "f32";
-    if resource -> kind == SHADER_BUFFER_U32 || resource -> kind == SHADER_WORKGROUP_U32 {
+    if shader_integer(resource -> kind) {
         type = "u32";
     }
     if write {
@@ -166,7 +172,7 @@ fn sp_prelude(stage: *SpStage, identity: u64) -> bool {
     ll_buffer(&stage -> llvm, &out);
     c_buffer_text(
         &out,
-        "extern fn shader_global_x()->u32=\"shader_global_x\";\nextern fn shader_local_x()->u32=\"shader_local_x\";\nextern fn shader_barrier()->unit=\"shader_barrier\";\nextern fn shader_require(ok:bool)->unit=\"shader_require\";\nextern fn shader_failed()->bool=\"shader_failed\";\n"
+        "extern fn shader_global_x()->u32=\"shader_global_x\";\nextern fn shader_local_x()->u32=\"shader_local_x\";\nextern fn shader_all_memory_barrier()->unit=\"shader_all_memory_barrier\";\nextern fn shader_require(ok:bool)->unit=\"shader_require\";\nextern fn shader_failed()->bool=\"shader_failed\";\n"
     );
     c_buffer_text(
         &out,

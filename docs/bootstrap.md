@@ -585,7 +585,8 @@ with the SPIR-V target. See the [Windows gate](windows.md#shader-environment).
 
 A `ShaderResource` with `layout: SHADER_COUNTED` and length zero selects a
 runtime-sized storage buffer.
-This form supports `SHADER_BUFFER_F32` and `SHADER_BUFFER_U32` resources only.
+This form supports `SHADER_BUFFER_F32`, `SHADER_BUFFER_U32`, and
+`SHADER_BUFFER_ATOMIC_U32` resources.
 The first four bytes contain a `u32` payload element count. Four-byte payload elements
 follow that header. The caller must bind a descriptor range that covers the
 header and all declared elements. Keep the header unchanged during dispatch.
@@ -627,33 +628,38 @@ to satisfy access, initialization, arithmetic, and synchronization preconditions
 Failure builtins are rejected in raw code. `SHADER_UNBOUNDED` buffers have no
 header, require length zero, and are available only with raw execution.
 
-### Collective control flow
+### Atomics and barriers
 
-The device checker records a collective effect for functions that call barriers
-or other collective functions. Such helpers must return `unit` and have no
-early returns. Call them as direct statements in uniform contexts.
+Declare atomic storage with `SHADER_BUFFER_ATOMIC_U32` or
+`SHADER_WORKGROUP_ATOMIC_U32`. These resources provide `_atomic_load`,
+`_atomic_store`, `_atomic_add`, `_atomic_min`, `_atomic_max`,
+`_atomic_exchange`, and `_atomic_or`. Ordinary resources provide `_load`
+and `_store`. Resource declarations determine the access operations and the
+emitted storage type.
 
-`shader_workgroup_barrier()` synchronizes invocations and workgroup memory.
-Use `shader_barrier()` when the group must also publish storage-buffer or image
-writes. Uniform workgroup loads synchronize only workgroup memory.
+Atomic operations have a portable relaxed-order guarantee. Use barriers to
+publish other memory accesses. SPIR-V loads use acquire order, stores use
+release order, and updates use acquire-release order. WGSL uses relaxed order.
+The scope is device for storage buffers and workgroup for workgroup arrays.
 
-Uniform counted loops use an immediately preceding literal-initialized `u32`
-counter, a strict comparison with a literal bound, and one final increment by
-one. Other counter writes and exits are rejected. Failed invocations complete
-these finite loops; ordinary loops retain failure-driven exit. Conditional
-collective calls are rejected. The shader tutorial shows the accepted form.
+`shader_workgroup_barrier()` waits for the workgroup and orders workgroup
+memory. `shader_all_memory_barrier()` also orders storage-buffer and image
+memory. The caller must ensure that all invocations in the workgroup reach
+the same dynamic barrier in uniform control flow. The shader stage emits
+these operations directly. It performs no barrier-participation analysis and
+requires no helper-function annotations. WGSL consumers apply the standard
+[uniformity checks](https://www.w3.org/TR/WGSL/#uniformity).
 
-Workgroup arrays also expose `<name>_uniform_load(index)` for `u32` and
-`f32`. All invocations must call it with the same index in uniform control
-flow. The operation synchronizes the group and returns the shared value to
-every invocation, including failed invocations in checked mode. An invalid
-index records failure and returns zero.
+Ordinary workgroup arrays also provide `<name>_uniform_load(index)`. All
+invocations must call it with the same index in uniform control flow. It
+synchronizes workgroup memory before and after the read and returns the shared
+value, including to failed invocations in checked mode. An invalid index
+records failure and returns zero.
 
-A loop condition can use this collective value with literals, constants, and
-scalar operators. Such loops preserve participation after a checked failure.
-They must have no early returns, breaks, or continues. Their producer must
-establish termination. Mutable local values and ordinary workgroup loads do
-not prove uniform control. Short-circuit operands must preserve participation.
+Checked failure does not change loop conditions or insert an early exit.
+The caller must preserve barrier participation and loop termination after a
+failure. An invocation-local loop can test `shader_failed()` explicitly when
+it contains no group synchronization.
 
 ### Emit WebGPU shaders
 
@@ -663,14 +669,14 @@ context-owned WGSL. `shader_build_wgsl` combines reading, checking, emission, an
 file publication. It needs no LLVM executable or SPIR-V translator.
 
 The same device subset, resource declarations, reachability checks, and
-collective control-flow rules apply. Resources use their configured bind groups
+synchronization preconditions apply. Resources use their configured bind groups
 and bindings. R32F images use `r32float` storage textures with read and
 write access. Runtime-sized counted buffers retain their leading length word.
 Workgroup arrays use WGSL workgroup storage.
 
 Checked mode retains sticky failure, checked access and integer arithmetic,
 zero values after failure, and a per-invocation status word. Failed invocations
-still participate in accepted uniform collective loops. Raw mode requires the
+follow the source control flow. Raw mode requires the
 caller to meet the same access and arithmetic preconditions as raw SPIR-V.
 
 WGSL uses WebGPU floating-point rules. It cannot promise the SPIR-V target's

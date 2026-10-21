@@ -17,7 +17,7 @@ fn wg_access_check(stage: *SpStage, resource: *ShaderResource, write: bool) -> u
     sp_text(stage, "; failed = failed || bad; ");
     if write {
         if shader_workgroup(resource -> kind) {
-            if sp_atomic_used(stage, resource) {
+            if shader_atomic(resource -> kind) {
                 sp_text(stage, "if (bad) { return; } if (failed) { atomicStore(");
                 wg_atomic_pointer(stage, resource);
                 sp_text(stage, ", 0u); return; } ");

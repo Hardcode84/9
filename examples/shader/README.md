@@ -50,7 +50,7 @@ fn compute() -> unit {
     var index: u32 = shader_global_x();
     var lane: u32 = shader_local_x();
     scratch_store(lane, add_two(values_load(index)));
-    shader_barrier();
+    shader_all_memory_barrier();
     values_store(index, scratch_load(lane ^ 1u32));
 }
 ```
@@ -66,23 +66,27 @@ precision. This function does not change invocation status.
 
 The stage supplies the resource functions from the root's resource table.
 
-Unsigned integer buffers and workgroup arrays also supply
+Declare `SHADER_BUFFER_ATOMIC_U32` or `SHADER_WORKGROUP_ATOMIC_U32`
+to use atomic storage. These resources supply
+`name_atomic_load(index)`, `name_atomic_store(index, value)`,
 `name_atomic_add(index, value)`, `name_atomic_min(index, value)`,
 `name_atomic_max(index, value)`, `name_atomic_exchange(index, value)`, and
 `name_atomic_or(index, value)`.
-Each function returns the value before the update. Addition wraps modulo
+Each read-modify-write function returns the value before the update.
+Atomic loads return the current value. Atomic stores return `unit`. Addition wraps modulo
 2 to the power of 32. The portable ordering guarantee is relaxed. SPIR-V uses
 acquire-release ordering to satisfy Vulkan storage-class memory semantics; WGSL
 uses relaxed ordering. The scope is the device for storage buffers and the
 workgroup for workgroup arrays.
 Use barriers to make other memory writes visible. Portable code must not use
-an atomic counter alone to publish the data that the counter describes. Separate
-ordinary loads and stores from concurrent atomic updates with the required
-synchronization.
+an atomic counter alone to publish the data that the counter describes. Use atomic accessors for atomic resources. Ordinary resources use `_load` and
+`_store`. A later dispatch can bind an ordinary view of the same range after
+the host inserts the required memory dependency.
 
 The checked policy rejects an out-of-bounds atomic access at runtime, records
 invocation failure, and returns zero without an update. A failed invocation
-cannot make a subsequent atomic update. The raw policy requires valid indices.
+cannot make a subsequent read-modify-write update. A valid atomic workgroup
+store writes zero after failure, as an ordinary workgroup store does. The raw policy requires valid indices.
 The operations are available in SPIR-V and WGSL with the same resource layout.
 The name `values` creates `values_load(index: u32) -> f32` and
 `values_store(index: u32, value: f32) -> unit`. The device source needs no
@@ -168,7 +172,7 @@ For example, this device body copies values through the image:
 fn compute() -> unit {
     var index: u32 = shader_global_x();
     pixels_store(index, 0u32, values_load(index) + 2f32);
-    shader_barrier();
+    shader_all_memory_barrier();
     values_store(index, pixels_load(index ^ 1u32, 0u32));
 }
 ```
@@ -183,30 +187,21 @@ the operation.
 
 After failure, device reads produce zero and buffer/image writes are skipped.
 A valid workgroup write stores zero. An invalid workgroup write is skipped.
-Loops stop when they next test their condition. Barriers still execute.
+Control flow follows the source after failure. Barriers still execute.
 `shader_failed()` reads the state. The entry wrapper ORs `1` into this
 invocation's status element on failure. Success preserves the previous value.
 Clear the status buffer before a dispatch sequence. Insert storage-buffer memory
 dependencies between dispatches that use the same status range. Earlier writes
 remain visible; this mechanism provides no rollback.
 
-A barrier or a call to a collective helper must be a direct statement in a
-uniform context. A collective helper is a function that calls a barrier or
-another collective helper. It returns `unit` and has no early returns. Its
-optional return must be the final statement. Calls under conditional branches
-are rejected. Entry returns must also be final. Recursive calls and calls to
-the entry are rejected.
-
-A counted loop is uniform when its immediately preceding statement declares a
-`u32` counter with a literal initializer, its condition is `counter < LITERAL`,
-and its final statement is `counter = counter + 1u32`. Its body must have no
-other counter assignments, `break`, `continue`, or `return`. These rules prove
-that every participating invocation executes the same finite number of rounds.
-Nested counted loops follow the same rules. Conditional contexts remain
-nonuniform even when a loop inside them has a fixed count.
+All invocations in a workgroup must reach each dynamic barrier in uniform
+control flow. The caller is responsible for this condition. Helper functions
+need no synchronization annotations. Crust performs no barrier-participation
+analysis. The WGSL consumer applies its standard uniformity checks.
+Recursive calls and calls to the entry are rejected.
 
 ```crs
-fn synchronize() -> unit { shader_barrier(); }
+fn synchronize() -> unit { shader_all_memory_barrier(); }
 fn compute() -> unit {
     var round: u32 = 0u32;
     while round < 4u32 {
@@ -217,13 +212,12 @@ fn compute() -> unit {
 }
 ```
 
-In checked execution, failed invocations complete counted loops and continue
-through collective helpers. Their checked accesses retain the failure rules.
-Other loops stop when invocation failure is set. Helpers without collectives
-can use ordinary local returns and loops. The caller must ensure that ordinary
-loops terminate and that concurrent memory accesses have no races.
+The caller must preserve barrier participation and loop termination after a
+checked failure. Loops keep their source conditions. For an invocation-local
+loop without synchronization, test `shader_failed()` when failure must stop
+that loop. Concurrent accesses must obey the GPU memory rules.
 
-`shader_barrier()` waits for the workgroup and orders workgroup, buffer, and
+`shader_all_memory_barrier()` waits for the workgroup and orders workgroup, buffer, and
 image memory. Workgroups synchronize with each other through separate Vulkan
 dispatches and host barriers. Bindings must have the declared extents, and the
 status buffer must have a separate range. Fixed-size bounds checks use the declared
@@ -299,7 +293,7 @@ resources.
 
 The [package](../../stages/shader/package.crs) includes the shared LLVM emitter.
 The seed reads and checks the device program. The shader stage then checks
-its device types, resource calls, call graph, and barrier placement.
+its device types, resource calls, and call graph.
 Resource functions are recognized by declaration identity.
 
 The LLVM emitter uses `i1` for device booleans. Resource lowering uses explicit
@@ -335,7 +329,7 @@ other resources keep their default types.
 The tutorial selects `execution: SHADER_CHECKED`. This mode checks resource
 indices and integer division/shifts, reports sticky failure to the status buffer,
 and initializes workgroup arrays to zero. Failed invocations continue through
-barriers under the checked control-flow rules.
+the source control flow.
 
 Select `SHADER_RAW` explicitly for caller-validated accesses and arithmetic.
 This mode has no status descriptor, failure state, bounds checks, or automatic

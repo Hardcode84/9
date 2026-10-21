@@ -28,7 +28,7 @@ def check_policy(run, compiler, root, llvm, tools, work, native, environment):
     expected.write_bytes(struct.pack("<4f4I", 1, 2, 3, 4, 0, 0, 0, 0))
     run([native, output, expected], env=environment)
     source.write_text(
-        "fn compute()->unit {var i:u32=shader_local_x();scratch_store(i,values_load(i)+2f32);shader_barrier();values_store(i,scratch_load(i));}"
+        "fn compute()->unit {var i:u32=shader_local_x();scratch_store(i,values_load(i)+2f32);shader_all_memory_barrier();values_store(i,scratch_load(i));}"
     )
     run(command, env=environment)
     assembly = run([tools / "spirv-dis", output.name], cwd=output.parent).stdout

@@ -25,12 +25,6 @@ fn wg_control(stage: *SpStage, input: *CrustStmt) -> unit {
     }
     sp_text(stage, keyword);
     wg_expression(stage, input -> expr);
-    if shader_checked(stage -> config) && crust_map_get(
-        &stage -> loop_conditions,
-        input -> expr as usize
-    ) != null(*u8) {
-        sp_text(stage, " && !failed");
-    }
     sp_text(stage, ") ");
     wg_block(stage, input -> body);
     if input -> otherwise != null(*CrustStmt) {

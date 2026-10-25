@@ -211,6 +211,51 @@ def check_domain(build, directory):
     assert b"active domain loan" in result.stderr, result.stderr
 
 
+def check_function_values(build, directory, sanitize):
+    provider = directory / "callback-provider.crs"
+    provider.write_text(
+        "record Number {value:i64;}"
+        "fn invoke(callback:fn(read Number,mut Number)->bool,"
+        "source:read Number,target:mut Number)->bool {"
+        "return callback(read source,mut target);}"
+    )
+    client = directory / "callback-client.crs"
+    client.write_text(
+        "fn copy(source:read Number,target:mut Number)->bool {"
+        "target.value=source.value;return true;}"
+        + main_body(
+            "var a:Number=make Number{value:37i64};"
+            "var b:Number=make Number{value:0i64};"
+            "if !invoke(copy,read a,mut b)||b.value!=37i64 {trap;}"
+        )
+    )
+    generated, symbols = client.with_suffix(".c"), client.with_suffix(".rsp")
+    compiler = build / "crust-ownership-test"
+    command(
+        [compiler, "trusted", provider, "--emit", "--symbols", symbols, "-o", generated, client]
+    )
+    execute(generated, symbols, directory, "callback-client", sanitize, b"")
+    cases = {
+        "callback-domain": (
+            "record Cell {value:i64;}domain Cells(Cell);"
+            "fn effect()->unit access(read,Cells) {}"
+            "fn accept(callback:fn()->unit)->unit {}" + main_body("accept(effect);"),
+            "function value cannot erase an ownership contract",
+        ),
+        "callback-transfer": (
+            "fn effect(value:read i64)->unit transfers(value) {}"
+            "fn accept(callback:fn(read i64)->unit)->unit {}" + main_body("accept(effect);"),
+            "function value cannot erase an ownership contract",
+        ),
+        "callback-return-loan": (
+            "fn borrow(value:read i64)->read i64 from value {return read value;}"
+            "fn accept(callback:fn(read i64)->read i64)->unit {}" + main_body("accept(borrow);"),
+            "borrowed views in indirect function types",
+        ),
+    }
+    rejected(compiler, directory, cases)
+
+
 def check_expressions(build, directory, sanitize):
     source = directory / "expressions.crs"
     source.write_text(HELPERS + main_body(BODY))
@@ -230,6 +275,7 @@ def check_expressions(build, directory, sanitize):
     command([build / "crust-ownership-erasure", source])
     execute(generated, symbols, directory, "native-expressions", sanitize, b"")
     rejected(compiler, directory, bad_cases())
+    check_function_values(build, directory, sanitize)
     check_domain(build, directory)
     check_import(build, directory)
     print(

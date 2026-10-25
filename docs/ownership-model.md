@@ -461,6 +461,14 @@ The provider must treat those bytes as immutable static storage. Checked code
 cannot index or write through that pointer. This rule does not permit arbitrary
 raw pointers at a checked call boundary.
 
+Named checked functions can be passed as callback values to trusted providers.
+The function must have no domain effect, returned loan, initialization,
+modification, transfer, or foreign contract that the function-pointer type would
+erase. Parameter borrow modes remain part of the callback type. A callback
+contains no captured storage. Indirect calls in checked code still require an
+ownership interface. A trusted provider must call the callback with valid
+arguments and retain all loans for their required duration.
+
 ## Transfer and sharing capabilities
 
 Execution context is a property of values and library APIs. Ordinary functions

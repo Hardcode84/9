@@ -660,6 +660,9 @@ fn os_load(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
 }
 
 fn os_constant(check: *OsCheck, global: *RsGlobal, location: *CrustLoc) -> *OsValue {
+    if (*(*global).source).kind == CRUST_D_FUNCTION {
+        return os_function_value(check, global, location);
+    }
     if (*(*global).source).kind != CRUST_D_CONST {
         os_error(check, location, "value requires a visible local or constant");
         return null(*OsValue);
@@ -743,4 +746,21 @@ fn os_copy_record(check: *OsCheck, state: *OsState, slot: *OsSlot, value: *OsVal
     (*copy).place = null(*OsSlot);
     (*copy).borrow_scope = null(*OsScope);
     return copy;
+}
+
+// A named checked function carries no storage or captured loans.
+fn os_function_value(check: *OsCheck, global: *RsGlobal, location: *CrustLoc) -> *OsValue {
+    var contract: *OsFunction = os_function(
+        (*check).stage,
+        (*(*global).source).name
+    );
+    if (*global).unsafe_call || (*global).drop_only || (*contract).effect != 0u32 || (*contract).origins != null(
+        *OsOrigin
+    ) || (*contract).initializes != null(*OsField) || (*contract).has_modifies || (*contract).transfers != null(
+        *OsField
+    ) || (*contract).foreign != 0u32 {
+        os_error(check, location, "function value cannot erase an ownership contract");
+        return null(*OsValue);
+    }
+    return os_value(check, (*global).syntax, null(*OsObject), false);
 }

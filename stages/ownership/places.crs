@@ -660,7 +660,12 @@ fn os_load(check: *OsCheck, state: *OsState, expression: *CrustExpr) -> *OsValue
 }
 
 fn os_constant(check: *OsCheck, global: *RsGlobal, location: *CrustLoc) -> *OsValue {
-    if (*(*global).source).kind == CRUST_D_FUNCTION {
+    if (*(*global).source).kind == CRUST_D_FUNCTION || (
+        (*(*global).source).kind == CRUST_D_EXTERN && os_imported(
+            (*check).stage,
+            (*global).source
+        )
+    ) {
         return os_function_value(check, global, location);
     }
     if (*(*global).source).kind != CRUST_D_CONST {

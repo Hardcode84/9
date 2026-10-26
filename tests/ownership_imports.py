@@ -280,6 +280,55 @@ def lease_imports(directory, driver, cache, environment):
     return 1
 
 
+def opaque_initializer_import(directory, driver, cache, environment):
+    provider = directory / "initializer-provider.crs"
+    provider.write_text(
+        "resource Empty{active:bool;value:i64;} opaque manual drop finish;"
+        "fn finish(v:mut Empty)->unit{}"
+        "fn initialize(v:*Empty)->unit initializes(v){v->active=false;}"
+        "fn empty()->Empty{var v:Empty=uninit;initialize(&v);return move v;}"
+    )
+    library = directory / "initializer-library.crs"
+    library.write_text("fn available()->bool{return true;}")
+    receipt = publish(driver, cache, [library], "trusted", str(provider))
+    provider.unlink()
+    library.unlink()
+    client = directory / "initializer-client.crs"
+    client.write_text("fn main(argc:i32,argv:**u8)->i32{var v:Empty=empty();drop v;return 0i32;}")
+    output = directory / "initializer-client"
+    args = import_arguments(driver, cache, receipt, client, output, trusted=True)
+    command(args, env=environment)
+    command([str(output)])
+    reject_import([args[0], "import", *args[2:]], environment, "trust contract differs")
+    client.write_text(
+        'extern fn forged(v:*Empty)->unit initializes(v)="forged";'
+        "fn main(argc:i32,argv:**u8)->i32{return 0i32;}"
+    )
+    reject_import(args, environment, "initializes requires edit access")
+    return 2
+
+
+def callback_import(directory, driver, cache, environment):
+    provider = directory / "callback-provider.crs"
+    provider.write_text(
+        "fn identity(v:i64)->i64{return v;}" "fn restricted(v:i64)->i64 transfers(v){return v;}"
+    )
+    trusted = directory / "callback-invoke.crs"
+    trusted.write_text("fn invoke(f:fn(i64)->i64)->i64{return f(37i64);}")
+    receipt = publish(driver, cache, [provider], "trusted", str(trusted))
+    provider.unlink()
+    trusted.unlink()
+    client = directory / "callback-client.crs"
+    client.write_text("fn main(argc:i32,argv:**u8)->i32{return (invoke(identity)!=37i64) as i32;}")
+    output = directory / "callback-client"
+    args = import_arguments(driver, cache, receipt, client, output, trusted=True)
+    command(args, env=environment)
+    command([str(output)])
+    client.write_text(client.read_text().replace("invoke(identity)", "invoke(restricted)"))
+    reject_import(args, environment, "function value cannot erase an ownership contract")
+    return 1
+
+
 def run(build):
     driver = str(build / "crust-ownership-import-test")
     if WINDOWS:
@@ -303,6 +352,8 @@ def run(build):
         )
         rejected += domain_membership_checks(directory, driver, cache, environment)
         rejected += lease_imports(directory, driver, cache, environment)
+        rejected += opaque_initializer_import(directory, driver, cache, environment)
+        rejected += callback_import(directory, driver, cache, environment)
         from ownership_transfers import check_transfer_imports
 
         rejected += check_transfer_imports(directory, driver, cache, environment)

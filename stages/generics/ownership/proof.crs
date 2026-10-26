@@ -36,6 +36,11 @@ fn og_proof_atom(program: *OgProgram, definition: *GpDefinition, index: usize) -
     ) {
         return null(*CrustTypeSyntax);
     }
+    var parameter: *OsParameter = crust_map_get(
+        &(*program).ownership.parameters,
+        name as usize
+    ) as *OsParameter;
+    (*parameter).transfer = og_parameter_transfers(program, definition, index);
     var syntax: CrustTypeSyntax = uninit;
     syntax.loc = (*(*definition).source).loc;
     return gp_named_type(context, &syntax, name);

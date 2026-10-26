@@ -59,6 +59,12 @@ to consume an owner, or defer a helper that takes the owner by value.
 Resources drop in reverse declaration order. Destructors run before embedded
 resource fields drop, in reverse field order. A destructor must consume its
 owned native fields and leave embedded resources initialized for cleanup.
+A trusted opaque resource can declare `manual drop`. Its destructor owns cleanup
+of every active field. The stage omits implicit field cleanup for this type.
+The provider can keep an inactive inline payload uninitialized. It must maintain
+a valid abstract owner at every public boundary. Transparent resources cannot
+use this contract. Trusted domain-free opaque initializers can declare
+`initializes(output)` without a domain effect; they must produce a droppable owner.
 A trap ends the process; it does not unwind resources.
 
 `defer call(...)` captures arguments at registration and invokes a unit-returning
@@ -81,14 +87,19 @@ fn transfer!(Value)(value: Value) -> Value { return move value; }
 A by-value parameter requires an integer, `bool`, or a sized movable record
 with closed ownership and domain-free cleanup. Generic records and unused
 parameters use this contract too. The checker follows nested fields and owned
-storage. Native owned handles end those paths. Stored loans, opaque storage,
-stable or scoped values, and domain-bound records fail that value contract.
+storage. Native owned handles end those paths. Stored loans, stable or scoped
+values, and domain-bound records fail that value contract. Closed opaque types
+can contain hidden pointers, but cannot declare stored loans in nested fields.
 
 A function parameter used only through pointers, `read`, or `mut` can denote
 any sized type. Uses within a generic type application require the closed-value
 contract. The checker derives these requirements from the signature. It rejects
 calls that pass an indirect parameter to a generic with a stronger contract.
 Concrete borrow signatures must satisfy the specialized type's domain authority.
+A `transfers` clause on a direct parameter adds the required transfer or sharing
+capability to its symbolic type. Each concrete argument must satisfy that
+capability. The inference follows arrays and loans; it does not infer through
+generic container types.
 
 The body is checked once with distinct symbolic identities for its parameters.
 Parameter values are affine. Transfers require `move`; shared and exclusive

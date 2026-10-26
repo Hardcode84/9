@@ -670,6 +670,19 @@ trust in their receipts. See the [stage contract](ownership-model.md#independent
 The guarantee depends on the root selecting the checker and correct trusted
 implementations. Selecting the raw seed provides raw-pointer semantics.
 
+### Trusted optional storage
+
+A trusted opaque resource can use `manual drop destructor`. Its destructor
+must release all active fields. The stage adds no automatic field cleanup for
+that resource. This contract permits an inline payload that is inactive in some
+states. A transparent resource cannot use `manual`. Ordinary resources retain
+automatic field cleanup after their destructor.
+
+A trusted initializer can use `initializes(output)` for a domain-free opaque
+owner. On return, the complete abstract owner must be valid and droppable. The
+provider controls which hidden fields are active. Checked clients cannot access
+those fields. Domain-bound owners retain their domain access requirements.
+
 ## 10. Reuse a definition for several payload types
 
 The [generic ownership tutorial](../examples/generics/ownership/README.md)
@@ -686,6 +699,16 @@ record with closed ownership and cleanup that requires no domain access.
 The body uses `move` because the value can own resources. A call such as
 `transfer!(Ticket)(move ticket)` supplies the concrete resource type. A plain
 record can also be passed, with its ordinary copy behavior at the call boundary.
+
+Closed opaque payloads are permitted when their cleanup requires no domain
+access. Declared stored loans are rejected, including loans in nested fields.
+Trusted hidden pointers stay inside the opaque provider.
+
+A generic function can require `transfers(value)` for a direct type parameter.
+The definition then checks with that transfer capability, and each call checks
+the concrete argument. A transferred `read Value` requires sharing capability.
+This inference also applies through arrays. It does not infer capabilities
+through a generic container such as `Box!(Value)`.
 
 The same tutorial uses a generic intrusive node and owner. The root selects the
 pointer provider once. Each new payload gets its own layout and complete cleanup.

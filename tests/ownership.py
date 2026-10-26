@@ -215,7 +215,11 @@ def local_rejects():
             "active",
         ),
     }
-    cases.update({name: (source, diagnostic) for name, source, diagnostic in consumption_rejects()})
+    for name, source, diagnostic in consumption_rejects():
+        if name.startswith("resource-field-move-"):
+            source = source.replace("{unsafe {", "{")[:-1]
+            diagnostic = "resource destruction requires initialized owner fields"
+        cases[name] = (source, diagnostic)
     return cases
 
 

@@ -13,6 +13,7 @@ fn os_abstract_parameter(stage: *OsStage, name: *CrustName, closed: bool) -> boo
         return false;
     }
     (*parameter).closed = closed;
+    (*parameter).transfer = 0u32;
     rs_put(resources, &(*stage).parameters, name as usize, parameter as *u8);
     rs_put(resources, &(*resources).affine_types, name as usize, name as *u8);
     return!(*resources).failed;

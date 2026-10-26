@@ -76,6 +76,10 @@ fn os_read_record_clause(reader: *CrustReader, contract: *OsRecord) -> bool {
 }
 
 fn os_read_drop(reader: *CrustReader, stage: *OsStage, declaration: *CrustDecl) -> unit {
+    var manual: bool = rr_is_name(reader, "manual");
+    if manual {
+        rr_next(reader);
+    }
     if !rr_is_name(reader, "drop") {
         rr_error(
             reader,
@@ -90,6 +94,7 @@ fn os_read_drop(reader: *CrustReader, stage: *OsStage, declaration: *CrustDecl) 
         return;
     }
     (*resource).declaration = declaration;
+    (*resource).manual = manual;
     (*resource).drop_name = os_read_reference(reader, stage, CRUST_D_FUNCTION);
     (*resource).next = (*(*stage).resources).resources;
     (*(*stage).resources).resources = resource;

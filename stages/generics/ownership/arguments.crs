@@ -82,7 +82,7 @@ fn og_payload_record(arguments: *OgArguments, syntax: *CrustTypeSyntax) -> bool 
         );
         return false;
     }
-    if (*schema).opaque || (*schema).stable || (*schema).scoped || (*schema).view_mode >= rs_kind(
+    if (*schema).stable || (*schema).scoped || (*schema).view_mode >= rs_kind(
         (*stage).resources,
         RS_READ
     ) || (*schema).domain != null(*CrustName) {
@@ -114,6 +114,9 @@ fn og_payload_record(arguments: *OgArguments, syntax: *CrustTypeSyntax) -> bool 
         (*syntax).name as usize,
         schema as *u8
     );
+    if (*schema).opaque {
+        return og_opaque_fields(arguments, schema);
+    }
     var field: *CrustField = (*(*schema).declaration).fields;
     while field != null(*CrustField) && !os_failed(check) {
         if !og_payload_field(arguments, schema, field) {
@@ -184,4 +187,36 @@ fn og_arguments(program: *OgProgram) -> bool {
         instance = (*instance).next;
     }
     return !os_failed(&arguments.check);
+}
+
+fn og_opaque_payload(arguments: *OgArguments, syntax: *CrustTypeSyntax) -> bool {
+    var resources: *RsStage = (*(*arguments).check.stage).resources;
+    if (*syntax).kind == rs_kind(resources, RS_READ) || (*syntax).kind == rs_kind(
+        resources,
+        RS_MUT
+    ) {
+        os_error(
+            &(*arguments).check,
+            &(*syntax).loc,
+            "generic payload cannot retain borrowed fields"
+        );
+        return false;
+    }
+    if (*syntax).kind == CRUST_T_NAME {
+        return og_payload(arguments, syntax);
+    }
+    if (*syntax).kind == CRUST_T_ARRAY {
+        return og_opaque_payload(arguments, (*syntax).base);
+    }
+    return true;
+}
+fn og_opaque_fields(arguments: *OgArguments, schema: *OsRecord) -> bool {
+    var field: *CrustField = (*(*schema).declaration).fields;
+    while field != null(*CrustField) {
+        if !og_opaque_payload(arguments, (*field).syntax_type) {
+            return false;
+        }
+        field = (*field).next;
+    }
+    return true;
 }

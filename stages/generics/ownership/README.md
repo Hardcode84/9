@@ -32,7 +32,7 @@ separate symbolic identities, even when a caller supplies the same type for both
 
 For a closed record, argument validation follows inline fields and
 `owns(field: storage)` targets. A native owned scalar or pointer-shaped handle
-ends that path. Stored loans, raw pointer fields, opaque storage, stable or
+ends that path. Stored loans, raw pointer fields in transparent records, stable or
 scoped values, and domain-bound records fail the closed-value contract.
 
 An indirect parameter keeps its weaker contract in calls to other generics.

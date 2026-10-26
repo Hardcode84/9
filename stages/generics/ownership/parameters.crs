@@ -86,8 +86,71 @@ fn og_parameter_argument(
     index: usize
 ) -> bool {
     var syntax: *CrustTypeSyntax = (*instance).arguments[index];
+    var flags: u32 = og_parameter_transfers(program, (*instance).definition, index);
+    if (
+        (flags & 1u32) != 0u32 && !os_transfer_type(&(*arguments).check, syntax, false)
+    ) || (
+        (flags & 2u32) != 0u32 && !os_transfer_type(&(*arguments).check, syntax, true)
+    ) {
+        os_error(
+            &(*arguments).check,
+            &(*syntax).loc,
+            "generic argument does not satisfy transfers contract"
+        );
+        return false;
+    }
     if og_parameter_closed(program, (*instance).definition, index) {
         return og_payload(arguments, syntax);
     }
     return os_abstract_type(&(*arguments).check, syntax, false);
+}
+
+fn og_transfer_use(
+    program: *OgProgram,
+    syntax: *CrustTypeSyntax,
+    name: *CrustName,
+    shared: bool
+) -> u32 {
+    if (*syntax).kind == CRUST_T_NAME && (*syntax).name == name {
+        if shared {
+            return 2u32;
+        }
+        return 1u32;
+    }
+    if (*syntax).kind == rs_kind(&(*program).parsed_resources, RS_READ) {
+        return og_transfer_use(program, (*syntax).base, name, true);
+    }
+    if (*syntax).kind == rs_kind(&(*program).parsed_resources, RS_MUT) || (*syntax).kind == CRUST_T_ARRAY {
+        return og_transfer_use(program, (*syntax).base, name, shared);
+    }
+    return 0u32;
+}
+fn og_parameter_transfers(program: *OgProgram, definition: *GpDefinition, index: usize) -> u32 {
+    var source: *CrustDecl = (*definition).source;
+    var function: *OsFunction = crust_map_get(
+        &(*program).parsed.functions,
+        source as usize
+    ) as *OsFunction;
+    if function == null(*OsFunction) {
+        return 0u32;
+    }
+    var name: *CrustName = (*(*definition).parameters).names[index];
+    var flags: u32 = 0u32;
+    var item: *OsField = (*function).transfers;
+    while item != null(*OsField) {
+        var parameter: *CrustParam = (*source).params;
+        while parameter != null(*CrustParam) {
+            if (*parameter).name == (*item).name {
+                flags = flags | og_transfer_use(
+                    program,
+                    (*parameter).syntax_type,
+                    name,
+                    false
+                );
+            }
+            parameter = (*parameter).next;
+        }
+        item = (*item).next;
+    }
+    return flags;
 }

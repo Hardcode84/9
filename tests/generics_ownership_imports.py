@@ -141,14 +141,17 @@ def check_transfer_contracts(suite, driver):
     for name, text in (
         ("authority", "fn bad(v:LocalAuthority)->unit transfers(v){}"),
         ("borrow", "fn bad(v:read Exclusive)->unit transfers(v){}"),
-        ("generic", "fn bad!(T)(v:read T)->unit transfers(v){}"),
+        (
+            "generic",
+            "fn bad!(T)(v:read T)->unit transfers(v){} fn use(v:read Exclusive)->unit{bad!(Exclusive)(read v);}",
+        ),
     ):
         client.write_text(text + "fn main(argc:i32,argv:**u8)->i32{return 0i32;}")
         result = suite.command(
             import_args(suite, driver, f"capabilities/{name}", cache, receipt, [client]),
             expected=1,
         )
-        assert b"transfer requires transferable storage" in result.stderr, result.stderr
+        assert b"transfer" in result.stderr, result.stderr
 
 
 def check_trusted_container(suite, driver, sanitize):

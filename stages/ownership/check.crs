@@ -14,6 +14,14 @@ fn os_validate_record(check: *OsCheck, global: *RsGlobal) -> unit {
         os_error(check, &(*declaration).loc, "owned fields require a resource destructor");
         return;
     }
+    if (*global).resource != null(*RsResource) && (*(*global).resource).manual &&!(*contract).opaque {
+        os_error(
+            check,
+            &(*declaration).loc,
+            "manual cleanup requires a trusted opaque resource"
+        );
+        return;
+    }
     if (*contract).opaque {
         os_validate_opaque(check, global, contract);
         return;

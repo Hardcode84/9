@@ -515,7 +515,7 @@ fn rs_move_pointer(
     if (*stage).failed {
         return null(*RsValue);
     }
-    if rs_owns(stage, (*place).syntax) {
+    if rs_owns(stage, (*place).syntax) &&!(*stage).delegate_memory {
         rs_error(
             stage,
             location,
@@ -528,6 +528,7 @@ fn rs_move_pointer(
         return null(*RsValue);
     }
     (*place).mode = 0u32;
+    (*place).owned = rs_owns(stage, (*place).syntax);
     // The fresh capture cannot change the address of the consumed place.
     var result: *RsValue = rs_capture(function, output, place, location);
     return result;

@@ -240,6 +240,12 @@ fn os_resolve_output(check: *OsCheck, contract: *OsFunction, name: *CrustName) -
         (*check).stage,
         (*(*parameter).syntax_type).base
     );
+    if schema != null(*OsRecord) && (*schema).opaque && (*schema).domain == null(*CrustName) && os_trusted(
+        (*check).stage,
+        declaration
+    ) {
+        return;
+    }
     if schema == null(*OsRecord) || (*schema).domain != (*contract).domain || (*contract).effect < OS_EDIT {
         os_error(
             check,

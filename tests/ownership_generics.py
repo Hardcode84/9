@@ -295,11 +295,13 @@ def check_rejections(compiler, directory):
         result = command([compiler, "--library", "--check", source], expected=1)
         assert message in result.stderr.decode(), (name, result.stderr)
     trusted = directory / "opaque.crs"
-    trusted.write_text("record Hidden{value:i64;} opaque;record Outer{value:Hidden;}")
+    trusted.write_text(
+        "record Plain{value:i64;} record Hidden{value:read Plain;} opaque;record Outer{value:Hidden;}"
+    )
     source = directory / "nested-opaque.crs"
     source.write_text(DEFINITIONS + "fn use(value:Outer)->unit{discard!(Outer)(move value);}")
     result = command([compiler, "trusted", trusted, "--library", "--check", source], expected=1)
-    assert b"domain-free cleanup" in result.stderr, result.stderr
+    assert b"borrowed fields" in result.stderr, result.stderr
 
 
 def check_payloads(compiler, directory, sanitize):
@@ -330,7 +332,7 @@ def check_indirect(compiler, directory, sanitize):
     )
     generated, symbols = emit_c(compiler, directory, "indirect", [source], provider)
     execute(generated, symbols, directory, "indirect", sanitize, b"")
-    for name, code in (
+    for _name, code in (
         (
             "unused",
             "fn size!(T)()->usize{return sizeof(T);}fn use()->usize{return size!(Hidden)();}",
@@ -341,10 +343,7 @@ def check_indirect(compiler, directory, sanitize):
         ),
     ):
         source.write_text(code)
-        result = command(
-            [compiler, "trusted", provider, "--library", "--check", source], expected=1
-        )
-        assert b"movable closed record" in result.stderr, (name, result.stderr)
+        command([compiler, "trusted", provider, "--library", "--check", source])
 
 
 def check_intrusive(compiler, directory, sanitize):
@@ -396,18 +395,68 @@ def check_capabilities(compiler, directory):
         )
         assert diagnostic in result.stderr.decode(), (name, result.stderr)
     for text in (
-        "fn boundary!(T)(value:T)->unit transfers(value){}",
         "record Box!(T){value:T;}" "fn boundary!(T)(value:Box!(T))->unit transfers(value){}",
     ):
         source.write_text(text)
         result = command([compiler, "--library", "--check", source], expected=1)
         assert b"transfer requires transferable storage" in result.stderr, result.stderr
     source.write_text(
+        "fn send!(T)(v:T)->T transfers(v){return move v;}"
+        "fn share!(T)(v:read T)->unit transfers(v){}"
+        "fn main(argc:i32,argv:**u8)->i32{var a:Shared=shared_new();"
+        "share!(Shared)(read a);var b:Shared=send!(Shared)(move a);return 0i32;}"
+    )
+    command([compiler, "trusted", provider, "--check", source])
+    for text in (
+        "fn send!(T)(v:T)->unit transfers(v){} fn use(v:LocalAuthority)->unit{send!(LocalAuthority)(move v);}",
+        "fn share!(T)(v:read T)->unit transfers(v){} fn use(v:read Exclusive)->unit{share!(Exclusive)(read v);}",
+    ):
+        source.write_text(text)
+        result = command(
+            [compiler, "trusted", provider, "--library", "--check", source], expected=1
+        )
+        assert b"transfer" in result.stderr, result.stderr
+    source.write_text(
         "fn boundary!(T)(value:read Shared)->unit transfers(value){}"
         "fn main(argc:i32,argv:**u8)->i32{"
         "var value:Shared=shared_new();boundary!(i64)(read value);return 0i32;}"
     )
     command([compiler, "trusted", provider, "--check", source])
+
+
+def check_manual_storage(compiler, directory, sanitize):
+    provider = directory / "manual-provider.crs"
+    provider.write_text(
+        """
+resource Optional!(T){active:bool;value:T;} opaque manual drop optional_drop!(T);
+fn optional_drop!(T)(owner:mut Optional!(T))->unit{
+ if owner.active {var p:*T=&owner.value;drop *p;}
+}
+fn optional_init!(T)(owner:*Optional!(T))->unit initializes(owner){owner->active=false;}
+fn optional_empty!(T)()->Optional!(T){var o:Optional!(T)=uninit;optional_init!(T)(&o);return move o;}
+fn optional_some!(T)(v:T)->Optional!(T){return make Optional!(T){active:true,value:move v};}
+fn optional_take!(T)(o:mut Optional!(T))->T{if !o.active{trap;}o.active=false;var p:*T=&o.value;return move *p;}
+"""
+    )
+    client = directory / "manual-client.crs"
+    client.write_text(
+        PAYLOADS
+        + """
+fn main(argc:i32,argv:**u8)->i32{
+ var empty:Optional!(Ticket)=optional_empty!(Ticket)();drop empty;
+ var full:Optional!(Ticket)=optional_some!(Ticket)(make Ticket{value:65i64});
+ var value:Ticket=optional_take!(Ticket)(mut full);drop full;drop value;
+ var other:Optional!(Ticket)=optional_some!(Ticket)(make Ticket{value:66i64});drop other;
+ return 0i32;
+}
+"""
+    )
+    generated, symbols = emit_c(compiler, directory, "manual", [client], provider)
+    execute(generated, symbols, directory, "manual", sanitize, b"AB")
+    bad = directory / "manual-bad.crs"
+    bad.write_text("resource Bad{value:i64;} manual drop destroy;fn destroy(v:mut Bad)->unit{}")
+    result = command([compiler, "--library", "--check", bad], expected=1)
+    assert b"manual cleanup requires a trusted opaque resource" in result.stderr, result.stderr
 
 
 def main():
@@ -419,6 +468,7 @@ def main():
     compiler = build / "crust-ownership-generics-test"
     with tempfile.TemporaryDirectory(prefix="ownership-generics-", dir=build) as temporary:
         directory = Path(temporary)
+        check_manual_storage(compiler, directory, options.sanitize)
         check_capabilities(compiler, directory)
         check_payloads(compiler, directory, options.sanitize)
         check_indirect(compiler, directory, options.sanitize)

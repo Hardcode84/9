@@ -215,6 +215,9 @@ fn rs_drop_helper(stage: *RsStage, global: *RsGlobal) -> *CrustDecl {
         last: null(*CrustStmt)
     };
     var field: *CrustField = (*(*global).source).fields;
+    if (*global).resource != null(*RsResource) && (*(*global).resource).manual {
+        field = null(*CrustField);
+    }
     while field != null(*CrustField) &&!(*stage).failed {
         if rs_owns(stage, (*field).syntax_type) {
             var field_place: *CrustExpr = rs_expr_node(stage, CRUST_E_FIELD, location);

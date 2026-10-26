@@ -24,6 +24,17 @@ fn os_transfer_type_inner(check: *OsCheck, syntax: *CrustTypeSyntax, shared: boo
     if kind == rs_kind(resources, RS_MUT) {
         return !shared && os_transfer_type(check, (*syntax).base, false);
     }
+    if os_parameter_type((*check).stage, syntax) {
+        var parameter: *OsParameter = crust_map_get(
+            &(*(*check).stage).parameters,
+            (*syntax).name as usize
+        ) as *OsParameter;
+        var flag: u32 = 1u32;
+        if shared {
+            flag = 2u32;
+        }
+        return ((*parameter).transfer & flag) != 0u32;
+    }
     var schema: *OsRecord = os_record((*check).stage, syntax);
     if schema == null(*OsRecord) {
         return false;

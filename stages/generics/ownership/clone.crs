@@ -221,6 +221,7 @@ fn og_clone_resource(clone: *GsClone, source: *RsResource, target: *CrustDecl) -
         return;
     }
     (*resource).declaration = target;
+    (*resource).manual = (*source).manual;
     (*resource).drop_name = og_clone_reference(
         clone,
         (*source).drop_name,

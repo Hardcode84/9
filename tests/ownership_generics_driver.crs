@@ -1,5 +1,52 @@
 // SPDX-License-Identifier: Apache-2.0
 
+// Check the probe program's 32-bit type layouts in the native test process.
+fn layout_probe(context: *CrustContext, entry: *CrustDecl, options: *BackendOptions) -> i32 {
+    if (*context).builtins[CRUST_T_USIZE as usize].size != 4u64 || (*context).builtins[
+        CRUST_T_ISIZE as usize
+    ].align != 4u32 {
+        crust_set_error(
+            context,
+            null(*CrustSource),
+            0usize,
+            "scalar target layout was lost"
+        );
+        return 1i32;
+    }
+    var unit_value: *CrustUnit = (*context).units;
+    while unit_value != null(*CrustUnit) {
+        var declaration: *CrustDecl = (*unit_value).declarations;
+        while declaration != null(*CrustDecl) {
+            if (*declaration).kind == CRUST_D_RECORD {
+                var result: *CrustType = (*declaration).type;
+                var fields: *CrustField = (*(*result).record_decl).fields;
+                var pointer: *CrustType = (*(*(*entry).params).next).type;
+                if (*result).size != 8u64 || (*result).align != 4u32 || (*(*fields).next).offset != 4u64 || (
+                    *pointer
+                ).size != 4u64 || (*pointer).align != 4u32 {
+                    crust_set_error(
+                        context,
+                        null(*CrustSource),
+                        0usize,
+                        "record or pointer target layout was lost"
+                    );
+                    return 1i32;
+                }
+                return 0i32;
+            }
+            declaration = (*declaration).next;
+        }
+        unit_value = (*unit_value).next;
+    }
+    crust_set_error(
+        context,
+        null(*CrustSource),
+        0usize,
+        "layout probe requires an instantiated record"
+    );
+    return 1i32;
+}
+
 fn main(argc: i32, argv: **u8) -> i32 {
     var context: CrustContext = uninit;
     crust_context_init(&context, null(*CrustAllocator));
@@ -10,9 +57,13 @@ fn main(argc: i32, argv: **u8) -> i32 {
         argc: argc - 1i32,
         argv: argv + 1isize
     };
-    if argc > 1i32 && c_equal(argv[1usize], "wasm32") {
-        crust_context_destroy(&context);
-        c_context_init_wasm32(&context, null(*CrustAllocator));
+    var emit: fn(*CrustContext, *CrustDecl, *BackendOptions) -> i32 = c_backend_build;
+    if argc > 1i32 && c_equal(argv[1usize], "layout32") {
+        context.builtins[CRUST_T_ISIZE as usize].size = 4u64;
+        context.builtins[CRUST_T_ISIZE as usize].align = 4u32;
+        context.builtins[CRUST_T_USIZE as usize].size = 4u64;
+        context.builtins[CRUST_T_USIZE as usize].align = 4u32;
+        emit = layout_probe;
         request.argc = request.argc - 1i32;
         request.argv = request.argv + 1isize;
     }
@@ -23,7 +74,7 @@ fn main(argc: i32, argv: **u8) -> i32 {
     }
     var result: i32 = 1i32;
     if context.error_count == 0usize {
-        result = ownership_generics_program(&request, trusted, count, c_backend_build);
+        result = ownership_generics_program(&request, trusted, count, emit);
     }
     if context.error_count != 0usize {
         c_driver_diagnostic(&context, argv[0usize]);

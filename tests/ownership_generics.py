@@ -438,6 +438,9 @@ fn optional_some!(T)(v:T)->Optional!(T){return make Optional!(T){active:true,val
 fn optional_take!(T)(o:mut Optional!(T))->T{if !o.active{trap;}o.active=false;var p:*T=&o.value;return move *p;}
 """
     )
+    tutorial = (ROOT / "docs/ownership.md").read_text().split("### Trusted optional storage", 1)[1]
+    initialize = tutorial.split("```crs\n", 1)[1].split("```", 1)[0]
+    provider.write_text(provider.read_text() + initialize)
     client = directory / "manual-client.crs"
     client.write_text(
         PAYLOADS
@@ -447,16 +450,50 @@ fn main(argc:i32,argv:**u8)->i32{
  var full:Optional!(Ticket)=optional_some!(Ticket)(make Ticket{value:65i64});
  var value:Ticket=optional_take!(Ticket)(mut full);drop full;drop value;
  var other:Optional!(Ticket)=optional_some!(Ticket)(make Ticket{value:66i64});drop other;
+ var filled:Optional!(Ticket)=optional_empty!(Ticket)();
+ optional_put!(Ticket)(mut filled,make Ticket{value:67i64});drop filled;
  return 0i32;
 }
 """
     )
     generated, symbols = emit_c(compiler, directory, "manual", [client], provider)
-    execute(generated, symbols, directory, "manual", sanitize, b"AB")
+    execute(generated, symbols, directory, "manual", sanitize, b"ABC")
     bad = directory / "manual-bad.crs"
     bad.write_text("resource Bad{value:i64;} manual drop destroy;fn destroy(v:mut Bad)->unit{}")
     result = command([compiler, "--library", "--check", bad], expected=1)
     assert b"manual cleanup requires a trusted opaque resource" in result.stderr, result.stderr
+
+
+def check_tagged_storage(compiler, directory, sanitize):
+    provider = directory / "choice-provider.crs"
+    provider.write_text(
+        """
+resource Choice!(Left,Right){which:u32;first:Left;second:Right;} opaque manual drop destroy!(Left,Right);
+fn destroy!(Left,Right)(x:mut Choice!(Left,Right))->unit{
+ if x.which==1u32{var p:*Left=&x.first;drop *p;}
+ if x.which==2u32{var p:*Right=&x.second;drop *p;}
+}
+fn vacant!(Left,Right)(p:*Choice!(Left,Right))->unit initializes(p){p->which=0u32;}
+fn first!(Left,Right)(v:Left)->Choice!(Left,Right){var r:Choice!(Left,Right)=uninit;vacant!(Left,Right)(&r);var dst:*Left=&r.first;*dst=move v;r.which=1u32;return move r;}
+fn second!(Left,Right)(v:Right)->Choice!(Left,Right){var r:Choice!(Left,Right)=uninit;vacant!(Left,Right)(&r);var dst:*Right=&r.second;*dst=move v;r.which=2u32;return move r;}
+fn take!(Left,Right)(r:mut Choice!(Left,Right))->Right{if r.which!=2u32{trap;}r.which=0u32;var p:*Right=&r.second;return move *p;}
+"""
+    )
+    client = directory / "choice-client.crs"
+    client.write_text(
+        """
+extern fn emit(c:i32)->i32 foreign(scalar)="putchar";
+resource Token{value:i32;} drop finish;fn finish(t:mut Token)->unit{emit(t.value);}
+fn main(argc:i32,argv:**u8)->i32{
+ var a:Choice!(Token,i64)=first!(Token,i64)(make Token{value:65i32});drop a;
+ var b:Choice!(i64,Token)=second!(i64,Token)(make Token{value:66i32});var t:Token=take!(i64,Token)(mut b);drop b;drop t;
+ var inside:Choice!(Token,i64)=first!(Token,i64)(make Token{value:67i32});
+ var outside:Choice!(i64,Choice!(Token,i64))=second!(i64,Choice!(Token,i64))(move inside);drop outside;return 0i32;
+}
+"""
+    )
+    generated, symbols = emit_c(compiler, directory, "choice", [client], provider)
+    execute(generated, symbols, directory, "choice", sanitize, b"ABC")
 
 
 def main():
@@ -469,6 +506,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix="ownership-generics-", dir=build) as temporary:
         directory = Path(temporary)
         check_manual_storage(compiler, directory, options.sanitize)
+        check_tagged_storage(compiler, directory, options.sanitize)
         check_capabilities(compiler, directory)
         check_payloads(compiler, directory, options.sanitize)
         check_indirect(compiler, directory, options.sanitize)

@@ -683,6 +683,26 @@ owner. On return, the complete abstract owner must be valid and droppable. The
 provider controls which hidden fields are active. Checked clients cannot access
 those fields. Domain-bound owners retain their domain access requirements.
 
+To construct an inactive resource field, use a raw pointer write inside the
+trusted provider. Direct field assignment performs replacement cleanup. Its
+destination must already contain a live value. The raw pointer form below
+requires inactive storage and transfers one owner into that storage:
+
+```crs
+fn optional_put!(T)(owner: mut Optional!(T), value: T) -> unit {
+    if owner.active { trap; }
+    var destination: *T = &owner.value;
+    *destination = move value;
+    owner.active = true;
+}
+```
+
+Here `Optional!(T)` has an `active: bool` field, a `value: T` field, and a
+trusted manual destructor. The provider must keep the flag consistent with
+the payload lifetime. To replace an active value, first destroy or move out
+that value, then use the same initialization operation. This rule also applies
+to tagged owners with several payload types.
+
 ## 10. Reuse a definition for several payload types
 
 The [generic ownership tutorial](../examples/generics/ownership/README.md)

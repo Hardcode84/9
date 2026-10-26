@@ -61,7 +61,10 @@ resource fields drop, in reverse field order. A destructor must consume its
 owned native fields and leave embedded resources initialized for cleanup.
 A trusted opaque resource can declare `manual drop`. Its destructor owns cleanup
 of every active field. The stage omits implicit field cleanup for this type.
-The provider can keep an inactive inline payload uninitialized. It must maintain
+The provider can keep an inactive inline payload uninitialized. Initialize
+such a field through a raw pointer write in trusted code. Direct field
+assignment performs replacement cleanup and requires a live destination.
+The provider must maintain
 a valid abstract owner at every public boundary. Transparent resources cannot
 use this contract. Trusted domain-free opaque initializers can declare
 `initializes(output)` without a domain effect; they must produce a droppable owner.

@@ -48,10 +48,13 @@ and `alignof` produce a symbolic layout query whose value is supplied during
 specialization. Owning arrays require aggregate ownership state; this profile
 accepts record storage and rejects owning array interfaces.
 
-A `transfers` clause requires a proven send or share capability. A symbolic
-type parameter has no such capability. A transfer boundary that depends on
-that parameter is rejected when the definition is checked, including unused
-definitions. Concrete parameter types can use `transfers` in generic functions.
+A `transfers` clause on a direct type parameter supplies a send requirement
+for that parameter. A transferred `read T` supplies a share requirement.
+The checker follows loans and arrays when it derives these requirements;
+the ordinary array storage rules still apply. Each concrete argument and each
+generic caller must satisfy the declared requirement. For a generic container
+such as `Box!(T)`, the checker uses the established capabilities of `T` and
+rejects an unproven container transfer.
 Trusted opaque `send` and `share` assertions retain their meaning through
 specialization and library import.
 

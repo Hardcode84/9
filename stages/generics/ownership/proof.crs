@@ -96,6 +96,8 @@ fn og_proof_prepare(proof: *OgProgram, original: *OgProgram) -> bool {
         &(*original).generics.context.arena.allocator,
         (*original).generics.namespace
     );
+    gs_context_layout(&(*proof).generics.context, &(*original).generics.context);
+    gs_context_layout(&(*proof).generics.syntax, &(*original).generics.syntax);
     (*proof).generics.syntax.units = (*original).generics.syntax.units;
     (*proof).generics.syntax.last_unit = (*original).generics.syntax.last_unit;
     (*proof).generics.parameters = (*original).generics.parameters;

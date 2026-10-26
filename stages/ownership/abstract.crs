@@ -105,6 +105,18 @@ fn os_abstract_declaration(check: *OsCheck, declaration: *CrustDecl) -> unit {
         return;
     }
     if (*declaration).kind == CRUST_D_RECORD {
+        var schema: *OsRecord = crust_map_get(
+            &(*(*check).stage).records,
+            declaration as usize
+        ) as *OsRecord;
+        if schema != null(*OsRecord) && (*schema).opaque && (
+            os_trusted((*check).stage, declaration) || os_imported(
+                (*check).stage,
+                declaration
+            )
+        ) {
+            return;
+        }
         var field: *CrustField = (*declaration).fields;
         while field != null(*CrustField) && !os_failed(check) {
             os_abstract_type(check, (*field).syntax_type, false);

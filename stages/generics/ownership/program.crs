@@ -104,6 +104,8 @@ fn ownership_generics_program(
 ) -> i32 {
     var program: OgProgram = uninit;
     og_init(&program, &(*(*request).context).arena.allocator, 0u64);
+    gs_context_layout(&program.generics.context, (*request).context);
+    gs_context_layout(&program.generics.syntax, (*request).context);
     var cli: CCli = uninit;
     var ready: bool = c_driver_init(&cli, &program.generics.context, (*request).argc);
     cli.root = (*request).source;

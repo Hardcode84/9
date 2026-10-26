@@ -2,7 +2,8 @@
 
 // Include stages/c/api.crs for BackendOptions.
 // Check generic payload contracts and ownership, then build the selected sources.
-// Input context is empty. Trusted sources are selected by the compilation program.
+// Input context is empty and supplies the target scalar layout.
+// Trusted sources are selected by the compilation program.
 extern fn ownership_generics_program(
     request: *CrustBuild,
     trusted: *CrustSource,

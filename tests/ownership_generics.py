@@ -496,15 +496,92 @@ fn main(argc:i32,argv:**u8)->i32{
     execute(generated, symbols, directory, "choice", sanitize, b"ABC")
 
 
+def check_opaque_owner_array(compiler, directory, sanitize):
+    provider = directory / "owner-array.crs"
+    provider.write_text(
+        """
+extern fn emit(c:i32)->i32="putchar";
+resource Token{value:i32;} opaque drop token_drop;
+fn token_drop(t:mut Token)->unit{emit(t.value);}
+record Storage{values:[Token;2];} opaque;
+fn use_storage()->unit{
+ var s:Storage=make Storage{values:make [Token;2]{make Token{value:65i32},make Token{value:66i32}}};
+}
+"""
+    )
+    client = directory / "owner-array-client.crs"
+    client.write_text(
+        "fn identity!(T)(v:T)->T{return move v;}fn main(argc:i32,argv:**u8)->i32{use_storage();return identity!(i32)(0i32);}"
+    )
+    generated, symbols = emit_c(compiler, directory, "owner-array", [client], provider)
+    execute(generated, symbols, directory, "owner-array", sanitize, b"BA")
+    client.write_text("fn bad(s:read Storage)->i32{return s.values[0usize].value;}")
+    result = command([compiler, "trusted", provider, "--library", "--check", client], expected=1)
+    assert b"opaque" in result.stderr, result.stderr
+
+
+def check_wasm_layout(compiler, directory, clang):
+    source = directory / "generic-wasm.crs"
+    source.write_text(
+        """
+record Box!(T){tag:u8;value:T;}
+fn identity!(T)(value:T)->T{return move value;}
+fn wasm_probe()->i32{
+ var b:Box!(usize)=make Box!(usize){tag:1u8,value:identity!(usize)(7usize)};
+ if sizeof(usize)!=4usize || sizeof(*u8)!=4usize || sizeof(Box!(usize))!=8usize || alignof(Box!(usize))!=4usize {return 1i32;}
+ return (b.value!=7usize) as i32;
+}
+"""
+    )
+    generated = directory / "generic-wasm.c"
+    command(
+        [
+            compiler,
+            "wasm32",
+            "--library",
+            "--emit",
+            "--export",
+            "wasm_probe",
+            "-o",
+            generated,
+            source,
+        ]
+    )
+    script = directory / "generic-wasm.mjs"
+    script.write_text(
+        "const {instance}=await WebAssembly.instantiate(await Bun.file(process.argv[2]).arrayBuffer(),{});if(instance.exports.wasm_probe())throw Error('generic wasm layout');"
+    )
+    for level in [0, 2]:
+        output = directory / f"generic-wasm-O{level}.wasm"
+        command(
+            [
+                clang,
+                "--target=wasm32",
+                "-nostdlib",
+                f"-O{level}",
+                "-Wl,--no-entry",
+                "-Wl,--export=wasm_probe",
+                generated,
+                "-o",
+                output,
+            ]
+        )
+        command(["bun", script, output])
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--build", default="build", type=Path)
     parser.add_argument("--sanitize", action="store_true")
+    parser.add_argument("--wasm-clang", type=Path)
     options = parser.parse_args()
     build = (ROOT / options.build).resolve()
     compiler = build / "crust-ownership-generics-test"
     with tempfile.TemporaryDirectory(prefix="ownership-generics-", dir=build) as temporary:
         directory = Path(temporary)
+        check_opaque_owner_array(compiler, directory, options.sanitize)
+        if options.wasm_clang:
+            check_wasm_layout(compiler, directory, options.wasm_clang.resolve())
         check_manual_storage(compiler, directory, options.sanitize)
         check_tagged_storage(compiler, directory, options.sanitize)
         check_capabilities(compiler, directory)

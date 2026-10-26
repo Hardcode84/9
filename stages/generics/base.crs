@@ -99,3 +99,13 @@ fn gs_instance_error(instance: *GsInstance) -> bool {
     );
     return true;
 }
+
+// Copy scalar target layouts into an empty compilation context.
+fn gs_context_layout(target: *CrustContext, source: *CrustContext) -> unit {
+    var index: usize = 0usize;
+    while index < CRUST_T_POINTER as usize {
+        (*target).builtins[index].size = (*source).builtins[index].size;
+        (*target).builtins[index].align = (*source).builtins[index].align;
+        index = index + 1usize;
+    }
+}

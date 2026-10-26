@@ -87,8 +87,8 @@ record OsOrigin {
     index: usize;
 }
 record OsParameter {
-    closed: bool;
     transfer: u32;
+    closed: bool;
 }
 record OsChoice {
     value: *OsValue;
